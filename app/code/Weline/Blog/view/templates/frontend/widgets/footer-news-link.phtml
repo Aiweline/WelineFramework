@@ -1,0 +1,44 @@
+<?php
+/**
+ * 页脚「了解我们」扩展：新闻中心（博客 news 分类）。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {footer-news-link}
+ * @widget.name {页脚新闻中心链接}
+ * @widget.description {页脚了解我们扩展槽：指向博客新闻分类；默认注入 footer-about-links。}
+ * @widget.type {footer}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {footer-about-links}
+ * @widget.supports {["footer-news-link","layout-footer-about-links"]}
+ * @widget.default_injections {[{ "layout_type":"*", "slot":"footer-about-links", "area":"footer", "sort_order":10, "required":true, "reason":"页脚了解我们默认展示新闻中心（博客 news 分类）", "config":{"label":"新闻中心","category_slug":"news"} }]}
+ *
+ * @param label {default="新闻中心",type="string",label="链接文字"}
+ * @param category_slug {default="news",type="string",label="博客分类 slug"}
+ */
+
+use Weline\Blog\Api\Uri\BlogNamespace;
+use Weline\Blog\Service\BlogNewsCategoryBootstrap;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('footer-news-link');
+$wc = $scope->cssClass;
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$labelSource = trim((string)($this->getData('label') ?? '')) ?: '新闻中心';
+$label = WidgetI18n::label($labelSource, '新闻中心');
+$slug = trim(strtolower((string)($this->getData('category_slug') ?? '')));
+if ($slug === '') {
+    $slug = BlogNewsCategoryBootstrap::NEWS_SLUG;
+}
+$categoryPath = BlogNamespace::categoryPublicPath($slug);
+?>
+<a class="footer-about-link footer-news-link <?= $esc($wc) ?>"
+   weline-code="<?= $esc($scope->code) ?>"
+   data-uid="<?= $esc($scope->uid) ?>"
+   data-js-ns="<?= $esc($scope->jsNs) ?>"
+   data-testid="footer-news-link"
+   data-category-slug="<?= $esc($slug) ?>"
+   href="<?= $esc($categoryPath) ?>"><?= $esc($label) ?></a>

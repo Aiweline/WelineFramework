@@ -1,0 +1,9 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$hit = is_array($this->getData('hit') ?? null) ? $this->getData('hit') : [];
+$payload = is_array($hit['payload'] ?? null) ? $hit['payload'] : $hit;
+$contentKind = (string)($payload['content_kind'] ?? 'blog_post');
+$partial = $contentKind === 'cms_page'
+    ? 'Weline_Blog::templates/frontend/search/partials/search-hit-cms.phtml'
+    : 'Weline_Blog::templates/frontend/search/partials/search-hit-post.phtml';
+echo $this->fetch($partial, ['hit' => $hit, 'payload' => $payload]);

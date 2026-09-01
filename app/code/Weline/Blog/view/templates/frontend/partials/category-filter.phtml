@@ -1,0 +1,46 @@
+<?php
+/**
+ * Blog category sidebar filter (Amazon-style left nav).
+ *
+ * @var list<array<string,mixed>> $blog_categories
+ * @var int $blog_active_category_id
+ */
+$categories = is_array($blog_categories ?? null) ? $blog_categories : [];
+$activeId = (int)($blog_active_category_id ?? 0);
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="amazon-blog-filter"
+     data-testid="blog-category-filter"
+     data-blog-category-filter>
+    <h2 class="amazon-blog-filter__title"><lang>博客分类</lang></h2>
+    <ul class="amazon-blog-filter__list" role="list">
+        <li>
+            <a class="amazon-blog-filter__option<?= $activeId <= 0 ? ' is-active' : '' ?>"
+               href="@url{'blog'}"
+               <?= $activeId <= 0 ? 'aria-current="page"' : '' ?>>
+                <lang>全部文章</lang>
+            </a>
+        </li>
+        <?php foreach ($categories as $category): ?>
+            <?php
+            if (!is_array($category)) {
+                continue;
+            }
+            $id = (int)($category['category_id'] ?? 0);
+            $label = trim((string)($category['name'] ?? ''));
+            $url = trim((string)($category['url'] ?? ''));
+            if ($id <= 0 || $label === '' || $url === '') {
+                continue;
+            }
+            $isActive = $id === $activeId;
+            ?>
+            <li>
+                <a class="amazon-blog-filter__option<?= $isActive ? ' is-active' : '' ?>"
+                   href="<?= $escape($url) ?>"
+                   <?= $isActive ? 'aria-current="page"' : '' ?>>
+                    <?= $escape($label) ?>
+                </a>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</div>

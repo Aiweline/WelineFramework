@@ -1,0 +1,153 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
+
+$article = is_array($this->getData('blog_article') ?? null) ? $this->getData('blog_article') : [];
+$postContent = (string)($this->getData('post_content') ?? '');
+$related = is_array($this->getData('blog_related_articles') ?? null) ? $this->getData('blog_related_articles') : [];
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$title = trim((string)($article['title'] ?? ''));
+$excerpt = trim((string)($article['excerpt'] ?? ''));
+$publishedAt = trim((string)($article['published_at'] ?? ''));
+$updatedAt = trim((string)($article['updated_at'] ?? ''));
+$author = trim((string)($article['author'] ?? ''));
+$keywordsRaw = trim((string)($article['keywords'] ?? ''));
+$categories = is_array($article['categories'] ?? null) ? $article['categories'] : [];
+$sourceRef = is_array($article['source_ref'] ?? null) ? $article['source_ref'] : [];
+$categoryLabel = '';
+foreach ($categories as $name) {
+    $name = trim((string)$name);
+    if ($name !== '') {
+        $categoryLabel = $name;
+        break;
+    }
+}
+$categoryUrl = trim((string)($sourceRef['category_url'] ?? ''));
+$cover = StorefrontImagePlaceholder::resolve(
+    (string)($article['cover_image'] ?? ''),
+    (int)($sourceRef['post_id'] ?? 0),
+);
+$hasRealCover = StorefrontImagePlaceholder::isUsable((string)($article['cover_image'] ?? ''));
+
+$plainContent = trim(strip_tags($postContent));
+$contentLength = function_exists('mb_strlen') ? mb_strlen($plainContent, 'UTF-8') : strlen($plainContent);
+$readingMinutes = max(1, (int)ceil($contentLength / 400));
+
+$keywordTags = [];
+if ($keywordsRaw !== '') {
+    foreach (preg_split('/[,，;；|]/u', $keywordsRaw) ?: [] as $tag) {
+        $tag = trim((string)$tag);
+        if ($tag !== '') {
+            $keywordTags[] = $tag;
+        }
+    }
+}
+$keywordsLabelEsc = $escape((string)__('关键词'));
+?>
+<article class="amazon-blog-article" data-testid="blog-post-detail">
+    <nav class="amazon-blog-article__breadcrumb" aria-label="<?= $escape((string)__('面包屑')) ?>">
+        <a href="@url{'blog'}"><lang>博客</lang></a>
+        <?php if ($categoryLabel !== ''): ?>
+            <span aria-hidden="true">›</span>
+            <?php if ($categoryUrl !== ''): ?>
+                <a href="<?= $escape($categoryUrl) ?>"><?= $escape($categoryLabel) ?></a>
+            <?php else: ?>
+                <span><?= $escape($categoryLabel) ?></span>
+            <?php endif; ?>
+        <?php endif; ?>
+        <span aria-hidden="true">›</span>
+        <span aria-current="page"><?= $escape($title !== '' ? $title : (string)__('文章')) ?></span>
+    </nav>
+
+    <header class="amazon-blog-article__header">
+        <h1 class="amazon-blog-article__title"><?= $escape($title) ?></h1>
+        <div class="amazon-blog-article__byline">
+            <?php if ($author !== ''): ?>
+                <span class="amazon-blog-article__author-inline"><lang>作者</lang>：<?= $escape($author) ?></span>
+            <?php endif; ?>
+            <?php if ($publishedAt !== ''): ?>
+                <time datetime="<?= $escape($publishedAt) ?>"><?= $escape($publishedAt) ?></time>
+            <?php endif; ?>
+            <?php if ($updatedAt !== '' && $updatedAt !== $publishedAt): ?>
+                <span><lang>更新于</lang> <?= $escape($updatedAt) ?></span>
+            <?php endif; ?>
+            <span><?= $escape((string)$readingMinutes) ?> <lang>分钟阅读</lang></span>
+            <?php if ($categoryLabel !== ''): ?>
+                <?php if ($categoryUrl !== ''): ?>
+                    <a class="amazon-blog-article__category" href="<?= $escape($categoryUrl) ?>"><?= $escape($categoryLabel) ?></a>
+                <?php else: ?>
+                    <span class="amazon-blog-article__category"><?= $escape($categoryLabel) ?></span>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
+        <?php if ($excerpt !== ''): ?>
+            <p class="amazon-blog-article__excerpt"><?= $escape($excerpt) ?></p>
+        <?php endif; ?>
+    </header>
+
+    <?php if ($keywordTags !== []): ?>
+        <div class="amazon-blog-article__keywords" aria-label="<?= $keywordsLabelEsc ?>">
+            <?php foreach ($keywordTags as $tag): ?>
+                <span class="amazon-blog-article__keyword"><?= $escape($tag) ?></span>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
+    <?php if ($hasRealCover): ?>
+        <figure class="amazon-blog-article__cover">
+            <img src="<?= $escape($cover['src']) ?>"
+                 alt="<?= $escape($title) ?>"
+                 data-storefront-img="1"
+                 data-fallback="<?= $escape($cover['fallback']) ?>"
+                 loading="eager"
+                 decoding="async">
+        </figure>
+    <?php endif; ?>
+
+    <div class="amazon-blog-article__content" data-testid="blog-post-content">
+        <?= $postContent ?>
+    </div>
+
+    <?php if ($related !== []): ?>
+        <section class="amazon-blog-article__related" aria-labelledby="blog-related-heading" weline-code="blog.article.related">
+            <h2 id="blog-related-heading"><lang>相关文章</lang></h2>
+            <div class="amazon-blog-listing__grid amazon-blog-listing__grid--related">
+                <?php foreach ($related as $row): ?>
+                    <?php
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $rTitle = trim((string)($row['title'] ?? ''));
+                    $rUrl = trim((string)($row['public_url'] ?? ''));
+                    $rExcerpt = trim((string)($row['excerpt'] ?? ''));
+                    $rAuthor = trim((string)($row['author'] ?? ''));
+                    $rRef = is_array($row['source_ref'] ?? null) ? $row['source_ref'] : [];
+                    $rImage = StorefrontImagePlaceholder::resolve(
+                        (string)($row['cover_image'] ?? ''),
+                        (int)($rRef['post_id'] ?? 0),
+                    );
+                    ?>
+                    <article class="blog-storefront__card is-clickable">
+                        <?php if ($rUrl !== ''): ?>
+                            <a class="blog-storefront__card-hit" href="<?= $escape($rUrl) ?>" aria-label="<?= $escape($rTitle) ?>"></a>
+                        <?php endif; ?>
+                        <div class="blog-storefront__media">
+                            <img src="<?= $escape($rImage['src']) ?>" alt="" loading="lazy" decoding="async"
+                                 data-storefront-img="1" data-fallback="<?= $escape($rImage['fallback']) ?>">
+                        </div>
+                        <div class="blog-storefront__body">
+                            <h3><?= $escape($rTitle) ?></h3>
+                            <?php if ($rAuthor !== ''): ?>
+                                <p class="blog-storefront__meta"><span><?= $escape($rAuthor) ?></span></p>
+                            <?php endif; ?>
+                            <?php if ($rExcerpt !== ''): ?>
+                                <p class="blog-storefront__excerpt"><?= $escape($rExcerpt) ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php endif; ?>
+</article>
