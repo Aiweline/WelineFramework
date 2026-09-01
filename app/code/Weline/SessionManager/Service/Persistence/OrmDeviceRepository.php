@@ -80,6 +80,37 @@ final class OrmDeviceRepository implements DeviceRepositoryInterface
         return $model->getId() ? $this->deviceRecord((array)$model->getData()) : null;
     }
 
+    public function findActiveDevicesByInstallKey(
+        string $area,
+        string $principalId,
+        string $installKeyDigest,
+    ): array {
+        $installKeyDigest = trim($installKeyDigest);
+        if ($installKeyDigest === '' || preg_match('/^[a-f0-9]{64}$/D', $installKeyDigest) !== 1) {
+            return [];
+        }
+        $rows = $this->newDevice()
+            ->where(AuthenticatedDevice::schema_fields_AUTH_AREA, $area)
+            ->where(AuthenticatedDevice::schema_fields_PRINCIPAL_ID, $principalId)
+            ->where(AuthenticatedDevice::schema_fields_INSTALL_KEY_DIGEST, $installKeyDigest)
+            ->select()
+            ->fetchArray();
+        $active = [];
+        foreach ($rows as $row) {
+            $record = $this->deviceRecord($row);
+            if ((int)($record['revoked_at'] ?? 0) > 0) {
+                continue;
+            }
+            $active[] = $record;
+        }
+        usort(
+            $active,
+            static fn(array $left, array $right): int => ((int)($right['last_seen_at'] ?? 0))
+                <=> ((int)($left['last_seen_at'] ?? 0)),
+        );
+        return $active;
+    }
+
     public function insertDevice(array $record): array
     {
         $model = $this->newDevice();
