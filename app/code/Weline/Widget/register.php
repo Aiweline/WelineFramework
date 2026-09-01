@@ -15,7 +15,7 @@ Register::register(
     Register::MODULE,
     'Weline_Widget',
     __DIR__,
-    '1.0.1',
+    '1.0.4',
     '可视化编辑器模块，支持通过拖放方式组织页面，使用 w:widget 标签存储和渲染部件。',
     [
         'Weline_Framework',

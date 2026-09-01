@@ -33,6 +33,35 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         return 'config_' . $layoutId . '_' . str_replace('.', '_', $key);
     }
 
+    /**
+     * Hex identity is node_uid only; keep data-layout-id for non-hex legacy keys.
+     *
+     * @return array<string, string>
+     */
+    public static function widgetIdentityAttrMap(int|string $layoutId): array
+    {
+        $raw = \trim((string)$layoutId);
+        $nodeUid = \strtolower($raw);
+        if ($nodeUid !== '' && \preg_match('/^[a-f0-9]{32}$/D', $nodeUid) === 1) {
+            return ['data-node-uid' => $nodeUid];
+        }
+        if ($raw !== '' && $raw !== '0') {
+            return ['data-layout-id' => $raw];
+        }
+
+        return [];
+    }
+
+    public static function widgetIdentityAttrHtml(int|string $layoutId): string
+    {
+        $parts = [];
+        foreach (self::widgetIdentityAttrMap($layoutId) as $name => $value) {
+            $parts[] = $name . '="' . \htmlspecialchars($value, \ENT_QUOTES | \ENT_SUBSTITUTE, 'UTF-8') . '"';
+        }
+
+        return \implode(' ', $parts);
+    }
+
     protected function buildAttrString(array $attrs): string
     {
         $parts = [];
@@ -114,6 +143,91 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         }
 
         return ' data-preview-url="' . htmlspecialchars($previewUrl) . '"';
+    }
+
+    protected function mediaOptionValue(array $param, string $key): string
+    {
+        $mediaOptions = is_array($param['media_options'] ?? null) ? $param['media_options'] : [];
+        $value = $mediaOptions[$key] ?? $param[$key] ?? '';
+        return is_scalar($value) ? trim((string)$value) : '';
+    }
+
+    protected function gcdPositiveInt(int $a, int $b): int
+    {
+        $a = abs($a);
+        $b = abs($b);
+        while ($b !== 0) {
+            $tmp = $b;
+            $b = $a % $b;
+            $a = $tmp;
+        }
+
+        return $a > 0 ? $a : 1;
+    }
+
+    /**
+     * Resolve hard aspect-ratio constraint for media pickers.
+     * Prefer explicit aspect_ratio; otherwise derive from both recommend dimensions.
+     */
+    protected function resolveMediaAspectRatio(array $param): string
+    {
+        $explicit = $this->mediaOptionValue($param, 'aspect_ratio');
+        if ($explicit !== '' && preg_match('/^\d+(?:\.\d+)?\s*[:xX×\/]\s*\d+(?:\.\d+)?$/', $explicit) === 1) {
+            return preg_replace('/\s+/', '', $explicit) ?? $explicit;
+        }
+        $width = (int)$this->mediaOptionValue($param, 'recommend_width');
+        $height = (int)$this->mediaOptionValue($param, 'recommend_height');
+        if ($width > 0 && $height > 0) {
+            $g = $this->gcdPositiveInt($width, $height);
+
+            return ($width / $g) . ':' . ($height / $g);
+        }
+
+        return '';
+    }
+
+    protected function mediaImageSelectDataAttrs(array $param): string
+    {
+        $defaultDir = $this->mediaOptionValue($param, 'default_directory') ?: 'banner';
+        $recommendW = $this->mediaOptionValue($param, 'recommend_width');
+        $recommendH = $this->mediaOptionValue($param, 'recommend_height');
+        $aspectRatio = $this->resolveMediaAspectRatio($param);
+        $attrs = ' data-default-dir="' . htmlspecialchars($defaultDir) . '"';
+        if ($recommendW !== '') {
+            $attrs .= ' data-recommend-w="' . htmlspecialchars($recommendW) . '"';
+        }
+        if ($recommendH !== '') {
+            $attrs .= ' data-recommend-h="' . htmlspecialchars($recommendH) . '"';
+        }
+        if ($aspectRatio !== '') {
+            $attrs .= ' data-aspect-ratio="' . htmlspecialchars($aspectRatio) . '"';
+        }
+
+        return $attrs;
+    }
+
+    protected function mediaImagePreviewShellAttrs(array $param): string
+    {
+        $aspectRatio = $this->resolveMediaAspectRatio($param);
+        if ($aspectRatio === '') {
+            return '';
+        }
+        $cssRatio = str_replace(':', ' / ', $aspectRatio);
+
+        return ' data-aspect-ratio="' . htmlspecialchars($aspectRatio) . '"'
+            . ' style="aspect-ratio:' . htmlspecialchars($cssRatio) . ';"';
+    }
+
+    protected function mediaImageAspectBadgeHtml(array $param): string
+    {
+        $aspectRatio = $this->resolveMediaAspectRatio($param);
+        if ($aspectRatio === '') {
+            return '';
+        }
+
+        return '<span class="w-param-image-aspect-badge">'
+            . htmlspecialchars((string)__('比例 %{1}', $aspectRatio))
+            . '</span>';
     }
 
     protected function legacyImagePreviewUrl(mixed $value): string
@@ -210,7 +324,9 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         $html .= '</label>';
 
         if ($translatable) {
-            $dataAttrs = 'data-field="' . htmlspecialchars($key) . '" data-layout-id="' . htmlspecialchars((string)$layoutId) . '"';
+            $identityHtml = self::widgetIdentityAttrHtml($layoutId);
+            $dataAttrs = 'data-field="' . htmlspecialchars($key) . '"'
+                . ($identityHtml !== '' ? ' ' . $identityHtml : '');
             if (!empty($context['array_key'])) {
                 $dataAttrs .= ' data-array-key="' . htmlspecialchars($context['array_key']) . '"';
             }
@@ -241,7 +357,9 @@ abstract class AbstractParamType implements WidgetParamTypeInterface
         $p = self::CSS_PREFIX;
         $panelId = 'i18n_panel_' . $layoutId . '_' . str_replace('.', '_', $key);
 
-        $dataAttrs = 'data-field="' . htmlspecialchars($key) . '" data-layout-id="' . htmlspecialchars((string)$layoutId) . '"';
+        $identityHtml = self::widgetIdentityAttrHtml($layoutId);
+        $dataAttrs = 'data-field="' . htmlspecialchars($key) . '"'
+            . ($identityHtml !== '' ? ' ' . $identityHtml : '');
         if (!empty($context['array_key'])) {
             $dataAttrs .= ' data-array-key="' . htmlspecialchars($context['array_key']) . '"';
         }

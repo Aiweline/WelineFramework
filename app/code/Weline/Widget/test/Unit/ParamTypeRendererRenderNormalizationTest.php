@@ -182,6 +182,31 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         $this->assertStringContainsString('type="hidden"', $html);
         $this->assertStringNotContainsString('placeholder="图片URL"', $html);
 
+        $ratioHtml = $renderer->renderField('hero_image', [
+            'type' => 'media_image',
+            'label' => '主图',
+            'media_options' => [
+                'default_directory' => 'banner',
+                'aspect_ratio' => '16:9',
+                'recommend_width' => '1920',
+                'recommend_height' => '1080',
+            ],
+        ], '', 687);
+        $this->assertStringContainsString('data-aspect-ratio="16:9"', $ratioHtml);
+        $this->assertStringContainsString('aspect-ratio:16 / 9', $ratioHtml);
+        $this->assertStringContainsString('w-param-image-aspect-badge', $ratioHtml);
+        $this->assertStringContainsString('data-recommend-w="1920"', $ratioHtml);
+
+        $derivedHtml = $renderer->renderField('banner_image', [
+            'type' => 'media_image',
+            'label' => '横幅',
+            'media_options' => [
+                'recommend_width' => '1920',
+                'recommend_height' => '600',
+            ],
+        ], '', 687);
+        $this->assertStringContainsString('data-aspect-ratio="16:5"', $derivedHtml);
+
         $typedHtml = $renderer->renderField('background_image', [
             'type' => 'image',
             'label' => '背景图片',
@@ -222,6 +247,29 @@ class ParamTypeRendererRenderNormalizationTest extends TestCore
         $this->assertStringContainsString('var mediaSelectionChanged = false;', $script);
         $this->assertStringContainsString('mediaSelectionChanged = true;', $script);
         $this->assertStringContainsString('if (!mediaSelectionChanged) return;', $script);
+    }
+
+    public function testThemeMediaPickerBuildsScopeLockRootAndStartPath(): void
+    {
+        $script = (string)file_get_contents(BP . '/app/code/Weline/Widget/view/statics/js/widget-param-types.js');
+        $theme = (string)file_get_contents(
+            BP . '/app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor-widget-param.js'
+        );
+
+        foreach ([$script, $theme] as $source) {
+            $this->assertStringContainsString('function buildThemeMediaLockRoot(themeEl)', $source);
+            $this->assertStringContainsString('function buildThemeMediaStartPath(themeEl, defaultDir)', $source);
+            $this->assertStringContainsString('function appendThemeMediaScopeLockParams(params, themeEl, defaultDir)', $source);
+            $this->assertStringContainsString("parts = ['websites', scope.website_code, scope.store_code]", $source);
+            $this->assertStringContainsString("channel.toLowerCase() !== 'default'", $source);
+            $this->assertStringContainsString("params.push('lockPath=1')", $source);
+            $this->assertStringContainsString("params.push('lockRoot=' + encodeURIComponent(lockRoot))", $source);
+            $this->assertStringContainsString('appendThemeMediaScopeLockParams(params, themeEl, defaultDir)', $source);
+            $this->assertStringNotContainsString(
+                "params = ['path=' + encodeURIComponent(defaultDir), 'target='",
+                $source
+            );
+        }
     }
 
     public function testQuerySelectIsDeclarativeAndKeepsAsyncBehaviourInTheOwnedModule(): void

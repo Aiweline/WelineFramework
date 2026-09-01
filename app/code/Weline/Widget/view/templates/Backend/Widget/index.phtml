@@ -41,7 +41,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 (function () {
     'use strict';
 
-    var WIDGET_DETAIL_URL = <?= json_encode($this->getBackendUrl('widget/backend/widget/detail'), $jsonForScriptFlags) ?>;
+    var WIDGET_DETAIL_URL = "@backend-url{'widget/backend/widget/detail'}";
 
     function escapeHtml(str) {
         if (str === null || str === undefined) return '';
@@ -235,7 +235,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                                         <button type="submit" class="w-button flex-fill" data-tone="primary">
                                             <w:icon name="search" size="sm"></w:icon><?= __('筛选') ?>
                                         </button>
-                                        <a href="<?= $this->getBackendUrl('widget/backend/widget') ?>" class="w-button" title="<?= __('重置筛选') ?>" data-w-border="border" data-tone="neutral">
+                                        <a href="@backend-url{'widget/backend/widget'}" class="w-button" title="<?= __('重置筛选') ?>" data-w-border="border" data-tone="neutral">
                                             <w:icon name="refresh" size="sm"></w:icon>
                                         </a>
                                     </div>

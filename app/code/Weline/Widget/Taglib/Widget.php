@@ -202,11 +202,11 @@ class Widget implements TaglibInterface
             }
             $cacheKey = md5($type . '|' . $name . '|' . $templatePath . '|' . serialize($params));
             
-            // 检查缓存（form_key 不能缓存，否则 key 不对）
+            // form_key / challenge_token 随请求变化，不可复用缓存 HTML
             $renderCache = self::renderCache();
             if (isset($renderCache[$cacheKey])) {
                 $cached = $renderCache[$cacheKey];
-                if (!str_contains($cached, 'name="form_key"')) {
+                if (self::isCacheableWidgetHtml($cached)) {
                     return $cached;
                 }
             }
@@ -226,7 +226,7 @@ class Widget implements TaglibInterface
         // 使用覆盖的模板
         if (!empty($template)) {
             $result = self::renderTemplate($template, $params);
-            if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
+            if ($cacheKey !== null && self::isCacheableWidgetHtml($result)) {
                 self::cacheRender($cacheKey, $result);
             }
             return $result;
@@ -236,7 +236,7 @@ class Widget implements TaglibInterface
         $widgetTemplate = $widget['template'] ?? '';
         if (!empty($widgetTemplate)) {
             $result = self::renderTemplate($widgetTemplate, $params);
-            if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
+            if ($cacheKey !== null && self::isCacheableWidgetHtml($result)) {
                 self::cacheRender($cacheKey, $result);
             }
             return $result;
@@ -246,7 +246,7 @@ class Widget implements TaglibInterface
         $widgetTemplateContent = (string)($widget['template_content'] ?? '');
         if ($widgetTemplateContent !== '') {
             $result = self::renderRuntimeTemplateContent($widgetTemplateContent, $params);
-            if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
+            if ($cacheKey !== null && self::isCacheableWidgetHtml($result)) {
                 self::cacheRender($cacheKey, $result);
             }
             return $result;
@@ -262,7 +262,7 @@ class Widget implements TaglibInterface
                 $name = $widget['code'] ?? '';
                 $templatePath = $module . '::widgets/' . $type . '/' . $name . '.phtml';
                 $result = self::renderTemplate($templatePath, $params);
-                if ($cacheKey !== null && !str_contains($result, 'name="form_key"')) {
+                if ($cacheKey !== null && self::isCacheableWidgetHtml($result)) {
                     self::cacheRender($cacheKey, $result);
                 }
                 return $result;
@@ -270,6 +270,13 @@ class Widget implements TaglibInterface
         }
 
         return '<!-- Widget 错误: 未找到模板或 Block 类 -->';
+    }
+
+    private static function isCacheableWidgetHtml(string $html): bool
+    {
+        return !str_contains($html, 'name="form_key"')
+            && !str_contains($html, 'name="challenge_token"')
+            && !str_contains($html, 'data-w-challenge-token');
     }
 
     /**
