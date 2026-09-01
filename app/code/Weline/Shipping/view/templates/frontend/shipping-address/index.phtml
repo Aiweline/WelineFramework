@@ -1,7 +1,6 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
 $addresses = $this->getData('addresses') ?? [];
-$frontendUrl = $this->getUrl('');
 $dialogJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
 $dialogMessages = [
     'confirmTitle' => (string)__('确认操作'),
@@ -15,7 +14,7 @@ $dialogMessages = [
 <div class="shipping-address-list">
     <div class="page-header" style="--w-mb:var(--weline-space-6);">
         <h2><?= __('发货地址管理') ?></h2>
-        <a href="<?= $frontendUrl ?>shipping/address/form" class="w-button" data-tone="primary">
+        <a href="@url{'shipping/address/form'}" class="w-button" data-tone="primary">
             <w:icon name="plus" size="sm"></w:icon> <?= __('新增地址') ?>
         </a>
     </div>
@@ -43,7 +42,7 @@ $dialogMessages = [
                         <?php endif; ?>
                     </div>
                     <div class="address-actions">
-                        <a href="<?= $frontendUrl ?>shipping/address/form?id=<?= $address->getId() ?>" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
+                        <a href="@url{'shipping/address/form'|['id' => $address->getId()]}" class="w-button" data-tone="primary" data-variant="outline" data-size="sm">
                             <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
                         </a>
                         <?php if (!$address->isDefault()): ?>

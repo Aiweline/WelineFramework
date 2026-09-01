@@ -167,8 +167,9 @@ class RegionService
         return $regionList;
     }
 
-    public function getAllActiveList(?string $ensureCountryCode = null): array
+    public function getAllActiveList(?string $ensureCountryCode = null, string $countryCatalog = 'installed'): array
     {
+        $countryCatalog = in_array($countryCatalog, ['installed', 'global'], true) ? $countryCatalog : 'installed';
         if ($ensureCountryCode) {
             $this->cascadeEnsure->ensureCountry($ensureCountryCode);
         }
@@ -181,11 +182,62 @@ class RegionService
             ->fetch();
 
         $regionList = $this->toRegionList($regions->getItems());
-        if (empty($regionList)) {
+        if ($countryCatalog === 'global') {
+            if ($regionList === []) {
+                return $this->getGlobalCountriesAsRegions();
+            }
+
+            return $this->mergeFallbackRegions($this->applyGlobalCountryCatalog($regionList));
+        }
+
+        if ($regionList === []) {
             $regionList = $this->getInstalledCountriesAsRegions();
         }
 
         return $this->mergeFallbackRegions($regionList);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function applyGlobalCountryCatalog(array $regions): array
+    {
+        $subdivisions = array_values(array_filter(
+            $regions,
+            static fn(array $region): bool => ($region['region_type'] ?? '') !== Region::TYPE_COUNTRY
+        ));
+
+        return array_merge($this->getGlobalCountriesAsRegions(), $subdivisions);
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function getGlobalCountriesAsRegions(): array
+    {
+        try {
+            $names = IntlCountries::getNames($this->intlLocale());
+        } catch (\Throwable) {
+            $names = IntlCountries::getNames('en');
+        }
+
+        $result = [];
+        foreach ($names as $code => $name) {
+            $code = strtoupper((string)$code);
+            $displayName = (string)$name;
+            $result[] = [
+                'region_id' => 0,
+                'parent_region_id' => 0,
+                'country_code' => $code,
+                'region_code' => $code,
+                'region_name' => $displayName,
+                'region_default_name' => $displayName,
+                'region_locale' => $this->currentLocale(),
+                'region_type' => Region::TYPE_COUNTRY,
+                'postal_code_pattern' => '',
+                'postal_code' => '',
+            ];
+        }
+
+        usort($result, static fn(array $a, array $b): int => strcmp((string)$a['region_name'], (string)$b['region_name']));
+
+        return $result;
     }
 
     /**

@@ -172,9 +172,15 @@ Frontend 仅用于后台地址页的客户候选列表；Shipping 通过
 - 功能：在Header的账户下拉菜单中添加"发货地址管理"和"收货地址管理"链接
 
 ### 个人中心侧边栏
-- Hook文件：`view/hooks/account.sidebar.phtml`
+- Hook文件：`view/hooks/account.sidebar.group.addresses.phtml`
 - Hook名称：`account.sidebar`
 - 功能：在个人中心侧边栏添加"发货地址"和"收货地址"菜单项
+
+### 结账收货地址部件（Widget + Slot）
+- 注册：`extends/module/Weline_Widget/Weline_Shipping/widget.php` → `checkout-shipping-address`
+- 默认注入：`layout_type=checkout` / `slot=checkout-shipping-address`（`required=true`）
+- 模板：`view/templates/frontend/widgets/checkout-shipping-address.phtml`
+- 交互：已存地址选择标签 + `<w:theme:address code="checkout-shipping-address">` 级联；Checkout 仅保留槽位，禁止裸拼国家/省/市 input
 
 ## 安装
 

@@ -20,11 +20,18 @@ class Region extends FrontendController
     {
         try {
             $countryCode = strtoupper(trim((string)$this->request->getParam('country_code', '')));
+            $catalog = strtolower(trim((string)$this->request->getParam('catalog', 'installed')));
+            if (!in_array($catalog, ['installed', 'global'], true)) {
+                $catalog = 'installed';
+            }
 
             return $this->json([
                 'success' => true,
                 'message' => __('Get regions success'),
-                'data' => $this->regionService->getAllActiveList($countryCode !== '' ? $countryCode : null),
+                'data' => $this->regionService->getAllActiveList(
+                    $countryCode !== '' ? $countryCode : null,
+                    $catalog
+                ),
             ]);
         } catch (\Throwable $throwable) {
             return $this->json([

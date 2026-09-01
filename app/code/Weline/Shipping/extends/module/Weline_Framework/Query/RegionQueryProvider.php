@@ -24,7 +24,10 @@ class RegionQueryProvider implements QueryProviderInterface
             'list' => $this->regionService->getAllActiveList(
                 trim((string)($params['country_code'] ?? '')) !== ''
                     ? strtoupper(trim((string)$params['country_code']))
-                    : null
+                    : null,
+                in_array(($catalog = strtolower(trim((string)($params['catalog'] ?? 'installed')))), ['installed', 'global'], true)
+                    ? $catalog
+                    : 'installed'
             ),
             'children' => $this->regionService->getChildrenList(
                 isset($params['parent_region_id']) && $params['parent_region_id'] !== ''
@@ -53,7 +56,10 @@ class RegionQueryProvider implements QueryProviderInterface
                     'graph' => true,
                     'cost' => 2,
                     'cache_ttl' => 30,
-                    'params' => [],
+                    'params' => [
+                        'country_code' => ['type' => 'string', 'max_length' => 8],
+                        'catalog' => ['type' => 'string', 'enum' => ['installed', 'global']],
+                    ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'List active shipping regions',
                 ],

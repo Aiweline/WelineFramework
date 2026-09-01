@@ -1,0 +1,35 @@
+<?php
+/**
+ * 页脚「帮助中心」扩展：退换政策入口。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {footer-returns-policy-link}
+ * @widget.name {页脚退换政策链接}
+ * @widget.description {页脚帮助中心扩展槽：退换货政策入口；默认注入 footer-help-links。}
+ * @widget.type {footer}
+ * @widget.area {frontend}
+ * @widget.position {["footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {footer-help-links}
+ * @widget.supports {["footer-returns-policy-link","layout-footer-help-links"]}
+ * @widget.default_injections {[{ "layout_type":"*", "slot":"footer-help-links", "area":"footer", "sort_order":30, "required":true, "reason":"页脚帮助中心默认展示退换政策", "config":{"label":"退换政策"} }]}
+ *
+ * @param label {default="退换政策",type="string",label="链接文字"}
+ */
+
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('footer-returns-policy-link');
+$wc = $scope->cssClass;
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$labelSource = trim((string)($this->getData('label') ?? '')) ?: '退换政策';
+$label = WidgetI18n::label($labelSource, '退换政策');
+?>
+<a class="footer-help-link footer-returns-policy-link <?= $esc($wc) ?>"
+   weline-code="<?= $esc($scope->code) ?>"
+   data-uid="<?= $esc($scope->uid) ?>"
+   data-js-ns="<?= $esc($scope->jsNs) ?>"
+   data-testid="footer-returns-policy-link"
+   href="@url{'guide/returns'}"><?= $esc($label) ?></a>
