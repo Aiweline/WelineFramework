@@ -1,0 +1,88 @@
+<?php
+/** @var string $prefill_token */
+/** @var string $probe_path */
+/** @var bool $is_online_host */
+/** @var bool $is_local */
+$prefill_token = (string) ($prefill_token ?? '');
+$probe_path = (string) ($probe_path ?? '/payment/dev-relay/probe');
+?>
+<!doctype html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>DevRelay Probe Demo</title>
+    <style>
+        :root { color-scheme: light dark; font-family: ui-sans-serif, system-ui, sans-serif; }
+        body { max-width: 720px; margin: 40px auto; padding: 0 16px; line-height: 1.5; }
+        label { display: block; font-weight: 600; margin: 12px 0 6px; }
+        input, button, textarea { width: 100%; box-sizing: border-box; padding: 10px 12px; font: inherit; }
+        button { cursor: pointer; margin-top: 16px; background: #0f766e; color: #fff; border: 0; border-radius: 8px; }
+        button:disabled { opacity: .6; cursor: wait; }
+        pre { background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; overflow: auto; font-size: 12px; }
+        .hint { color: #64748b; font-size: 13px; }
+        .ok { color: #059669; }
+        .bad { color: #dc2626; }
+    </style>
+</head>
+<body>
+    <h1>DevRelay 探针演示</h1>
+    <p class="hint">
+        本页在<strong>线上中转站</strong>向当前活跃会话注入合成 webhook 事件。
+        本机须已开启静默中继（Weline 面板或 <code>payment:devrelay:start</code>），即可在面板看到重放结果。
+    </p>
+    <?php if (!empty($is_local)): ?>
+        <p class="bad">当前是本机环境：请打开线上 demo 地址发送探针。</p>
+    <?php endif; ?>
+    <label for="token">用户 API Token（Bearer）</label>
+    <input id="token" type="password" autocomplete="off" placeholder="粘贴线上用户 API Token"
+           value="<?= htmlspecialchars($prefill_token, ENT_QUOTES) ?>" />
+    <label for="marker">marker（可选）</label>
+    <input id="marker" type="text" placeholder="browser_test" />
+    <button id="send" type="button">发送探针</button>
+    <p id="msg" class="hint"></p>
+    <pre id="out">{}</pre>
+    <script>
+    (function () {
+        var probePath = <?= json_encode($probe_path, JSON_UNESCAPED_SLASHES) ?>;
+        var btn = document.getElementById('send');
+        var msg = document.getElementById('msg');
+        var out = document.getElementById('out');
+        btn.addEventListener('click', function () {
+            var token = document.getElementById('token').value.trim();
+            var marker = document.getElementById('marker').value.trim() || ('browser_' + Date.now());
+            if (!token) {
+                msg.textContent = '请填写 Token';
+                msg.className = 'bad';
+                return;
+            }
+            btn.disabled = true;
+            msg.textContent = '发送中…';
+            msg.className = 'hint';
+            fetch(probePath, {
+                method: 'POST',
+                headers: {
+                    'Authorization': 'Bearer ' + token,
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({ marker: marker })
+            }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); })
+              .then(function (res) {
+                  out.textContent = JSON.stringify(res.j, null, 2);
+                  if (res.ok && res.j && res.j.success) {
+                      msg.textContent = '已注入 event=' + (((res.j.data || {}).event || {}).event_code || '') + '；请看本机 Weline 面板 DevRelay 中继';
+                      msg.className = 'ok';
+                  } else {
+                      msg.textContent = (res.j && res.j.message) || '失败';
+                      msg.className = 'bad';
+                  }
+              }).catch(function (e) {
+                  msg.textContent = String(e);
+                  msg.className = 'bad';
+              }).finally(function () { btn.disabled = false; });
+        });
+    })();
+    </script>
+</body>
+</html>

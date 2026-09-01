@@ -71,6 +71,9 @@ final class FakeProvider implements ProviderInterface
         return [
             'title' => (string)__('本地测试支付'),
             'description' => (string)__('仅用于本地开发验证，不会产生真实扣款。'),
+            'icon_url' => 'Weline_Payment::img/payment/fake-card.svg',
+            'icon' => 'Weline_Payment::img/payment/fake-card.svg',
+            'checkout_mode' => 'template',
             'checkout_template_code' => 'fake_card',
             'config_template_code' => 'fake_card',
         ];

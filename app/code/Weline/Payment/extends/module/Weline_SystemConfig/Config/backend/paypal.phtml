@@ -1,0 +1,252 @@
+<?php
+/**
+ * @meta.title {default="PayPal 支付方式",description="PayPal Provider 配置模板标题"}
+ * @meta.description {default="配置 PayPal 沙箱与正式环境凭据及回调地址。"}
+ * @config.area {backend}
+ * @config.sort {55}
+ * @config.acl {Weline_Payment::payment_method}
+ */
+?>
+
+<w:config:group code="paypal_runtime" label="PayPal 运行配置" description="PayPal 支付方式启用状态与排序。" sort="10">
+    <w:config:field
+        key="payment/method/paypal/enabled"
+        label="启用 PayPal"
+        description="启用后 PayPal 可在通过配置测试后参与结账。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/paypal/is_default"
+        label="设为默认支付方式"
+        description="当前 scope 下多个支付方式可用时优先选择 PayPal。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website,store" />
+
+    <w:config:field
+        key="payment/method/paypal/sort_order"
+        label="排序"
+        description="结账页支付方式排序，数字越小越靠前。"
+        type="number"
+        value-type="int"
+        default="20"
+        scope="global,website,store"
+        validation="min:0|max:9999" />
+
+    <w:config:field
+        key="payment/method/paypal/icon"
+        label="支付图标"
+        description="覆盖 Provider 默认图标。从图库选择图片，或留空使用 Provider 自带图标。"
+        type="image"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:1024" />
+
+    <w:config:field
+        key="payment/method/paypal/default_currency"
+        label="默认支付货币"
+        description="可支付对象没有指定目标支付货币时使用的默认货币。"
+        type="select"
+        value-type="string"
+        default="USD"
+        scope="global,website,store"
+        options="USD:USD,EUR:EUR,GBP:GBP,CAD:CAD,AUD:AUD,JPY:JPY,HKD:HKD,SGD:SGD"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="payment/method/paypal/supported_currencies"
+        label="支持货币"
+        description="PayPal 可以在这些货币下展示。"
+        type="multiselect"
+        value-type="json"
+        default="USD,EUR,GBP,CAD,AUD,JPY,HKD,SGD"
+        scope="global,website,store"
+        options="USD:USD,EUR:EUR,GBP:GBP,CAD:CAD,AUD:AUD,JPY:JPY,HKD:HKD,SGD:SGD"
+        validation="required|in_options" />
+
+    <w:config:field
+        key="payment/method/paypal/supported_countries"
+        label="支持国家"
+        description="PayPal 可以在这些国家下选择。"
+        type="multiselect"
+        value-type="json"
+        default="US,GB,DE,CA,AU,FR,IT,ES,JP,HK,SG"
+        scope="global,website,store"
+        options="US:US,GB:GB,DE:DE,CA:CA,AU:AU,FR:FR,IT:IT,ES:ES,JP:JP,HK:HK,SG:SG"
+        validation="in_options" />
+</w:config:group>
+
+<w:config:group code="paypal_sandbox" label="PayPal 沙箱环境" description="使用 Weline 平台内置沙箱 REST 应用，一键授权后自动写入凭据，无需去 PayPal Developer 手动创建 App。" sort="20">
+    <w:config:adapter
+        code="paypal.sandbox.authorize"
+        label="沙箱一键授权"
+        label-connected="沙箱已授权"
+        description="自动创建/写入沙箱 REST App 凭据并跳转 PayPal Sandbox 登录。授权前请将下方 Return URL 原样登记到 PayPal Developer App。"
+        backend-url="payment/backend/connect/authorize?method_code=paypal&environment=sandbox"
+        action-label="沙箱一键授权"
+        action-label-connected="重新授权"
+        connected-key="payment/method/paypal/sandbox_oauth_connected_at"
+        callback-path="payment/frontend/callback/return"
+        callback-label="登记到 PayPal App 的 Return URL（含当前范围）" />
+
+    <w:config:adapter
+        code="paypal.sandbox.test"
+        label="沙箱连接测试"
+        description="自动确保沙箱凭据已写入，并校验能否换取 Access Token。"
+        backend-url="payment/backend/connect/test?method_code=paypal&environment=sandbox"
+        action-label="测试沙箱连接" />
+
+    <w:config:adapter
+        code="paypal.sandbox.revoke"
+        label="撤销沙箱授权"
+        description="清除本地保存的沙箱 OAuth Token 与商户 Payer ID（不会删除已自动写入的平台 App 凭据）。"
+        backend-url="payment/backend/connect/revoke?method_code=paypal&environment=sandbox"
+        action-label="撤销沙箱授权" />
+
+    <w:config:field
+        key="payment/method/paypal/sandbox_credentials_source"
+        label="沙箱凭据来源"
+        description="platform 表示由平台一键授权自动创建；custom 表示人工覆盖。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:32" />
+
+    <w:config:field
+        key="payment/method/paypal/sandbox_credentials_provisioned_at"
+        label="沙箱凭据自动创建时间"
+        description="平台 REST App 凭据写入当前 scope 的时间。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:32" />
+
+    <w:config:field
+        key="payment/method/paypal/sandbox_merchant_payer_id"
+        label="沙箱商户 Payer ID"
+        description="一键授权成功后自动写入，用于确认沙箱商户账户已连接。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:64" />
+
+    <w:config:field
+        key="payment/method/paypal/sandbox_oauth_connected_at"
+        label="沙箱授权时间"
+        description="最近一次沙箱 OAuth 授权完成时间。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:32" />
+
+    <w:config:hint type="warning">
+【沙箱一键授权 · Return URL】
+- 每一层 Scope（Global / Website / Store / Channel）的 OAuth redirect_uri 都带 target_scope，必须与 PayPal Developer App 白名单完全一致。
+- 先切换顶部范围，复制授权按钮旁的 Return URL，粘贴到 PayPal App → Sandbox → Return URL，再点「沙箱一键授权」。
+- 平台级 Client ID/Secret 在「PayPal 平台沙箱 REST App 凭据」页维护；也可在下方「高级覆盖」按 Scope 单独填写。
+    </w:config:hint>
+</w:config:group>
+
+<w:config:group code="paypal_sandbox_override" label="PayPal 沙箱凭据（Global / Website 可配）" description="可在 Global 或 Website Scope 填写；留空则回退使用平台沙箱凭据。" sort="25">
+    <w:config:field
+        key="payment/method/paypal/sandbox_client_id"
+        label="沙箱 Client ID"
+        description="当前 Scope 的 Sandbox Client ID。留空则使用平台沙箱凭据。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:255" />
+
+    <w:config:field
+        key="payment/method/paypal/sandbox_client_secret"
+        label="沙箱 Client Secret"
+        description="当前 Scope 的 Sandbox Secret。留空则使用平台沙箱凭据。"
+        type="password"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:255" />
+</w:config:group>
+
+<w:config:group code="paypal_live" label="PayPal 正式环境" description="生产收款使用的 Live 凭据。" sort="30">
+    <w:config:field
+        key="payment/method/paypal/live_client_id"
+        label="正式 Client ID"
+        description="PayPal Developer Dashboard 中 Live REST App 的 Client ID。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:255" />
+
+    <w:config:field
+        key="payment/method/paypal/live_client_secret"
+        label="正式 Client Secret"
+        description="PayPal Developer Dashboard 中 Live REST App 的 Secret。"
+        type="password"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:255" />
+
+    <w:config:adapter
+        code="paypal.live.authorize"
+        label="正式环境一键授权"
+        label-connected="正式已授权"
+        description="使用 Live Client ID/Secret 完成 PayPal 正式商户 OAuth 授权。授权前请将下方 Return URL 原样登记到 PayPal Developer App（Live）。"
+        backend-url="payment/backend/connect/authorize?method_code=paypal&environment=live"
+        action-label="正式一键授权"
+        action-label-connected="重新授权"
+        connected-key="payment/method/paypal/live_oauth_connected_at"
+        callback-path="payment/frontend/callback/return"
+        callback-label="登记到 PayPal App 的 Return URL（含当前范围）" />
+
+    <w:config:adapter
+        code="paypal.live.test"
+        label="正式连接测试"
+        description="校验 Live Client 凭据能否成功换取 Access Token。"
+        backend-url="payment/backend/connect/test?method_code=paypal&environment=live"
+        action-label="测试正式连接" />
+</w:config:group>
+
+<w:config:group code="paypal_callbacks" label="PayPal 回调与 Webhook" description="PayPal 跳转回站点与 Webhook 验签配置。" sort="40">
+    <w:config:field
+        key="payment/method/paypal/return_url"
+        label="Return URL"
+        description="PayPal 支付成功后跳转回站点的 URL。须含 target_scope=当前配置范围（三段 storage_scope）；路径固定为 payment/frontend/callback/return。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:500" />
+
+    <w:config:field
+        key="payment/method/paypal/cancel_url"
+        label="Cancel URL"
+        description="PayPal 支付取消后跳转回站点的 URL。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:500" />
+
+    <w:config:field
+        key="payment/method/paypal/webhook_id"
+        label="Webhook ID"
+        description="PayPal Developer Dashboard 中注册的 Webhook ID，用于正式环境验签。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:255" />
+</w:config:group>

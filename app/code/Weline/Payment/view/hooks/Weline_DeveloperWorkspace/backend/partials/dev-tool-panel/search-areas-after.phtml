@@ -1,0 +1,656 @@
+<?php
+/**
+ * Weline_Payment - 开发面板：DevRelay 作为「高级维护」二级 Tab
+ * Hook：Weline_DeveloperWorkspace::backend::partials::dev-tool-panel::search-areas-after
+ *
+ * 布局：左侧看 SSE 日志，右侧短按钮发送；状态详情常显近实时刷新。
+ *
+ * @hook-priority 210
+ * @hook-sort-order 110
+ * @hook-solo false
+ */
+
+$tabTitle = (string)__('DevRelay 中继');
+$statusUrl = '/payment/dev-relay/worker-status';
+$probeUrl = '/payment/dev-relay/panel-probe';
+$stopUrl = '/payment/dev-relay/worker-stop';
+$hint = (string)__('左：SSE 日志 · 右：发送');
+$liveTitle = (string)__('SSE 实时详情');
+$webhookTitle = (string)__('Provider Webhook（复制到支付后台）');
+$copyLabel = (string)__('复制');
+$copiedLabel = (string)__('已复制');
+$searchPlaceholder = (string)__('搜索支付方式 / Provider / 端点编码');
+?>
+<div id="dev-tool-search-area-payment-dev-relay" style="display: none;"></div>
+<style>
+    #dev-tool-panel .payment-dev-relay-panel { color:#0f172a; font-size:13px; line-height:1.45; }
+    #dev-tool-panel .payment-dev-relay-panel__status {
+        margin-bottom:10px; padding:8px 12px; border-radius:8px;
+        background:#f1f5f9; border:1px solid #cbd5e1; font-weight:700; color:#0f172a;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__status.is-running {
+        background:#ecfdf5; border-color:#6ee7b7; color:#065f46;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__webhooks {
+        margin:0 0 10px; padding:10px 12px; border-radius:8px;
+        border:1px solid #93c5fd; background:#eff6ff;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__webhooks-title {
+        margin:0 0 4px; font-weight:800; color:#1e3a8a; font-size:13px;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__webhooks-hint {
+        margin:0 0 8px; color:#1e40af; font-size:11px; line-height:1.4;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__webhook-picker {
+        display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr) auto; gap:8px;
+        align-items:center; margin-bottom:8px;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__webhook-search,
+    #dev-tool-panel .payment-dev-relay-panel__webhook-select {
+        width:100%; min-height:32px; padding:6px 8px; border-radius:6px;
+        border:1px solid #64748b; background:#fff; color:#0f172a; font-size:12px;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__webhook-meta {
+        grid-column:1 / -1; font-size:11px; font-weight:700; color:#334155;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__webhook-row {
+        display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px;
+        align-items:center; margin-bottom:0;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__webhook-input {
+        width:100%; min-height:32px; padding:6px 8px; border-radius:6px;
+        border:1px solid #64748b; background:#fff; color:#0f172a; font-size:12px;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__webhook-copy {
+        min-height:32px; padding:6px 10px; border-radius:6px; border:1px solid #1d4ed8;
+        background:#2563eb; color:#fff; font-weight:800; cursor:pointer; font-size:12px;
+        white-space:nowrap;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__webhook-copy:hover { background:#1d4ed8; }
+    @media (max-width: 900px) {
+        #dev-tool-panel .payment-dev-relay-panel__webhook-picker {
+            grid-template-columns:1fr;
+        }
+    }
+    #dev-tool-panel .payment-dev-relay-panel__split {
+        display:grid;
+        grid-template-columns: minmax(0, 1fr) 156px;
+        gap:10px;
+        align-items:stretch;
+        min-width:0;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__left,
+    #dev-tool-panel .payment-dev-relay-panel__right {
+        min-width:0;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__right {
+        display:flex;
+        flex-direction:column;
+        gap:8px;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__hint {
+        margin:0;
+        color:#64748b;
+        font-size:11px;
+        line-height:1.35;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__probe {
+        width:100%;
+        min-height:36px;
+        margin:0;
+        border:0;
+        border-radius:8px;
+        background:#059669;
+        color:#fff;
+        font-size:13px;
+        font-weight:800;
+        cursor:pointer;
+        padding:8px 10px;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__probe:disabled { opacity:.65; cursor:wait; }
+    #dev-tool-panel .payment-dev-relay-panel__probe:hover:not(:disabled) { background:#047857; }
+    #dev-tool-panel .payment-dev-relay-panel__msg {
+        min-height:32px;
+        max-height:72px;
+        overflow:auto;
+        margin:0;
+        font-weight:700;
+        color:#475569;
+        font-size:12px;
+        line-height:1.35;
+        word-break:break-word;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__section {
+        display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+        margin:0 0 6px; font-weight:800; color:#0f172a;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__live {
+        display:inline-flex; align-items:center; gap:6px;
+        padding:2px 8px; border-radius:999px; font-size:11px; font-weight:800;
+        background:#ecfdf5; color:#047857; border:1px solid #6ee7b7;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__live-dot {
+        width:7px; height:7px; border-radius:50%; background:#10b981;
+        box-shadow:0 0 0 0 rgba(16,185,129,.7);
+        animation: weline-devrelay-pulse 1.4s infinite;
+    }
+    @keyframes weline-devrelay-pulse {
+        0% { box-shadow:0 0 0 0 rgba(16,185,129,.55); }
+        70% { box-shadow:0 0 0 8px rgba(16,185,129,0); }
+        100% { box-shadow:0 0 0 0 rgba(16,185,129,0); }
+    }
+    #dev-tool-panel .payment-dev-relay-panel__meta {
+        margin-left:auto; font-size:11px; font-weight:600; color:#64748b;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__events {
+        max-height:140px; overflow:auto; border:1px solid #94a3b8; border-radius:8px;
+        padding:8px; background:#fff; color:#0f172a; margin-bottom:8px;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__row {
+        display:flex; gap:8px; flex-wrap:wrap; margin:0;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__btn {
+        min-height:32px; padding:6px 10px; border-radius:8px; border:1px solid #475569;
+        background:#fff; color:#0f172a; font-weight:700; cursor:pointer; font-size:12px;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__btn--danger { border-color:#b91c1c; color:#b91c1c; }
+    #dev-tool-panel .payment-dev-relay-panel__stream {
+        margin:0; border:1px solid #334155; border-radius:8px; overflow:hidden;
+        background:#0f172a;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__stream-head {
+        display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+        padding:6px 10px; background:#1e293b; color:#e2e8f0; font-weight:800; font-size:12px;
+    }
+    #dev-tool-panel .payment-dev-relay-panel__stream pre {
+        margin:0; max-height:280px; overflow:auto; font-size:11px; line-height:1.45;
+        background:#0f172a; color:#e2e8f0; padding:10px 12px; white-space:pre-wrap;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+</style>
+<script>
+(function () {
+    'use strict';
+
+    var CHILD_ID = 'payment-dev-relay';
+    var CHILD_TITLE = <?= json_encode($tabTitle, JSON_UNESCAPED_UNICODE) ?>;
+    var STATUS_URL = <?= json_encode($statusUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var PROBE_URL = <?= json_encode($probeUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var STOP_URL = <?= json_encode($stopUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var HINT = <?= json_encode($hint, JSON_UNESCAPED_UNICODE) ?>;
+    var LIVE_TITLE = <?= json_encode($liveTitle, JSON_UNESCAPED_UNICODE) ?>;
+    var WEBHOOK_TITLE = <?= json_encode($webhookTitle, JSON_UNESCAPED_UNICODE) ?>;
+    var COPY_LABEL = <?= json_encode($copyLabel, JSON_UNESCAPED_UNICODE) ?>;
+    var COPIED_LABEL = <?= json_encode($copiedLabel, JSON_UNESCAPED_UNICODE) ?>;
+    var SEARCH_PLACEHOLDER = <?= json_encode($searchPlaceholder, JSON_UNESCAPED_UNICODE) ?>;
+    var WEBHOOK_STORAGE_KEY = 'weline.devrelay.webhook.endpoint_code';
+    var POLL_MS = 1000;
+    var timer = null;
+    var lastStatus = {};
+    var lastWebhooksFp = '';
+    var webhookEndpoints = [];
+    var selectedEndpointCode = '';
+    var activeHost = null;
+    var shellReady = false;
+    var lastFingerprint = '';
+    var fetching = false;
+
+    function escapeHtml(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function nowLabel() {
+        try {
+            return new Date().toLocaleTimeString();
+        } catch (e) {
+            return String(Date.now());
+        }
+    }
+
+    function postJson(url, body) {
+        return fetch(url, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: JSON.stringify(body || {})
+        }).then(function (r) { return r.json(); });
+    }
+
+    function setMsg(text, ok) {
+        if (!activeHost) return;
+        var el = activeHost.querySelector('#weline-devrelay-msg');
+        if (!el) return;
+        var raw = String(text || '');
+        // 长错误放到左侧 SSE 详情，右侧只留短摘要
+        if (raw.length > 120) {
+            var liveEl = activeHost.querySelector('#weline-devrelay-live');
+            if (liveEl) {
+                liveEl.textContent = raw + '\n\n' + (liveEl.textContent || '');
+                liveEl.scrollTop = 0;
+            }
+            raw = raw.slice(0, 100).replace(/\s+/g, ' ') + '…（详见左侧）';
+        }
+        el.textContent = raw;
+        el.style.color = ok === true ? '#047857' : (ok === false ? '#b91c1c' : '#475569');
+    }
+
+    function eventsHtml(recent) {
+        return recent.slice(0, 12).map(function (row) {
+            return '<div style="margin:4px 0;">' +
+                (row.ok ? '✅' : '❌') + ' ' + escapeHtml(row.event_code || '') +
+                (row.error ? (' · ' + escapeHtml(row.error)) : '') +
+                (row.at ? (' <span style="color:#475569;">' + escapeHtml(row.at) + '</span>') : '') +
+                '</div>';
+        }).join('') || '<div style="color:#475569;">暂无本机重放事件 · 等待 SSE…</div>';
+    }
+
+    function ensureShell() {
+        if (!activeHost) return;
+        if (shellReady && activeHost.querySelector('.payment-dev-relay-panel')) {
+            return;
+        }
+        activeHost.innerHTML =
+            '<div class="payment-dev-relay-panel">' +
+                '<div id="weline-devrelay-status" class="payment-dev-relay-panel__status">加载中…</div>' +
+                '<div class="payment-dev-relay-panel__webhooks">' +
+                    '<div class="payment-dev-relay-panel__webhooks-title">' + escapeHtml(WEBHOOK_TITLE) + '</div>' +
+                    '<p id="weline-devrelay-webhook-hint" class="payment-dev-relay-panel__webhooks-hint"></p>' +
+                    '<div class="payment-dev-relay-panel__webhook-picker">' +
+                        '<input type="search" id="weline-devrelay-webhook-search" class="payment-dev-relay-panel__webhook-search" placeholder="' + escapeHtml(SEARCH_PLACEHOLDER) + '" autocomplete="off" />' +
+                        '<select id="weline-devrelay-webhook-select" class="payment-dev-relay-panel__webhook-select"></select>' +
+                        '<button type="button" id="weline-devrelay-webhook-copy" class="payment-dev-relay-panel__webhook-copy">' + escapeHtml(COPY_LABEL) + '</button>' +
+                    '</div>' +
+                    '<div id="weline-devrelay-webhook-meta" class="payment-dev-relay-panel__webhook-meta"></div>' +
+                    '<div class="payment-dev-relay-panel__webhook-row">' +
+                        '<input id="weline-devrelay-webhook-url" class="payment-dev-relay-panel__webhook-input" readonly value="" data-weline-webhook-url />' +
+                    '</div>' +
+                '</div>' +
+                '<div class="payment-dev-relay-panel__split">' +
+                    '<div class="payment-dev-relay-panel__left">' +
+                        '<div class="payment-dev-relay-panel__section">' +
+                            '<span>本机 SSE 重放</span>' +
+                            '<span class="payment-dev-relay-panel__live"><span class="payment-dev-relay-panel__live-dot"></span>LIVE</span>' +
+                            '<span id="weline-devrelay-updated" class="payment-dev-relay-panel__meta"></span>' +
+                        '</div>' +
+                        '<div id="weline-devrelay-events" class="payment-dev-relay-panel__events"></div>' +
+                        '<div class="payment-dev-relay-panel__stream">' +
+                            '<div class="payment-dev-relay-panel__stream-head">' +
+                                '<span>' + escapeHtml(LIVE_TITLE) + '</span>' +
+                                '<span class="payment-dev-relay-panel__live"><span class="payment-dev-relay-panel__live-dot"></span>SSE</span>' +
+                            '</div>' +
+                            '<pre id="weline-devrelay-live">等待 SSE 状态…</pre>' +
+                        '</div>' +
+                    '</div>' +
+                    '<div class="payment-dev-relay-panel__right">' +
+                        '<button type="button" id="weline-devrelay-send" class="payment-dev-relay-panel__probe">发送探测</button>' +
+                        '<p class="payment-dev-relay-panel__hint">' + escapeHtml(HINT) + '</p>' +
+                        '<div id="weline-devrelay-msg" class="payment-dev-relay-panel__msg"></div>' +
+                        '<div class="payment-dev-relay-panel__row">' +
+                            '<button type="button" id="weline-devrelay-refresh" class="payment-dev-relay-panel__btn">刷新</button>' +
+                            '<button type="button" id="weline-devrelay-stop" class="payment-dev-relay-panel__btn payment-dev-relay-panel__btn--danger">关闭</button>' +
+                        '</div>' +
+                    '</div>' +
+                '</div>' +
+            '</div>';
+        shellReady = true;
+        lastWebhooksFp = '';
+        bindActions();
+    }
+
+    function copyText(text, btn) {
+        var done = function () {
+            if (!btn) return;
+            var old = btn.textContent;
+            btn.textContent = COPIED_LABEL;
+            setTimeout(function () { btn.textContent = old || COPY_LABEL; }, 1200);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(function () {
+                fallbackCopy(text); done();
+            });
+            return;
+        }
+        fallbackCopy(text);
+        done();
+    }
+
+    function fallbackCopy(text) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.setAttribute('readonly', 'readonly');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); } catch (e) {}
+        document.body.removeChild(ta);
+    }
+
+    function readStoredEndpointCode() {
+        try {
+            return String(localStorage.getItem(WEBHOOK_STORAGE_KEY) || '');
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function writeStoredEndpointCode(code) {
+        try {
+            if (code) {
+                localStorage.setItem(WEBHOOK_STORAGE_KEY, code);
+            }
+        } catch (e) {}
+    }
+
+    function findEndpoint(code) {
+        for (var i = 0; i < webhookEndpoints.length; i++) {
+            if (String(webhookEndpoints[i].endpoint_code || '') === String(code || '')) {
+                return webhookEndpoints[i];
+            }
+        }
+        return null;
+    }
+
+    function filteredEndpoints(query) {
+        var q = String(query || '').trim().toLowerCase();
+        if (!q) {
+            return webhookEndpoints.slice();
+        }
+        return webhookEndpoints.filter(function (ep) {
+            return String(ep.search_text || ep.label || ep.endpoint_code || '').indexOf(q) !== -1;
+        });
+    }
+
+    function applySelectedEndpoint(code, options) {
+        options = options || {};
+        var ep = findEndpoint(code) || webhookEndpoints[0] || null;
+        selectedEndpointCode = ep ? String(ep.endpoint_code || '') : '';
+        if (selectedEndpointCode) {
+            writeStoredEndpointCode(selectedEndpointCode);
+        }
+        if (!activeHost) return;
+        var select = activeHost.querySelector('#weline-devrelay-webhook-select');
+        var meta = activeHost.querySelector('#weline-devrelay-webhook-meta');
+        var urlInput = activeHost.querySelector('#weline-devrelay-webhook-url');
+        if (select && selectedEndpointCode && select.value !== selectedEndpointCode) {
+            var exists = false;
+            Array.prototype.forEach.call(select.options, function (opt) {
+                if (opt.value === selectedEndpointCode) exists = true;
+            });
+            if (exists) {
+                select.value = selectedEndpointCode;
+            }
+        }
+        if (meta) {
+            meta.textContent = ep
+                ? ((ep.label || ep.endpoint_code || '') + (options.emptyFiltered ? ' · 无匹配项时回退当前选择' : ''))
+                : '暂无可用端点';
+        }
+        if (urlInput) {
+            urlInput.value = ep && ep.url ? String(ep.url) : '';
+        }
+    }
+
+    function renderWebhookOptions(query) {
+        if (!activeHost) return;
+        var select = activeHost.querySelector('#weline-devrelay-webhook-select');
+        if (!select) return;
+        var list = filteredEndpoints(query);
+        var html = list.map(function (ep) {
+            var code = String(ep.endpoint_code || '');
+            var label = String(ep.label || code);
+            return '<option value="' + escapeHtml(code) + '">' + escapeHtml(label) + '</option>';
+        }).join('');
+        if (!html) {
+            html = '<option value="">无匹配端点</option>';
+        }
+        select.innerHTML = html;
+        var preferred = selectedEndpointCode || readStoredEndpointCode();
+        if (preferred && findEndpoint(preferred) && list.some(function (ep) { return ep.endpoint_code === preferred; })) {
+            applySelectedEndpoint(preferred);
+        } else if (list.length) {
+            applySelectedEndpoint(list[0].endpoint_code);
+        } else if (preferred && findEndpoint(preferred)) {
+            // 过滤为空时仍保留已选完整 URL
+            select.innerHTML = '<option value="' + escapeHtml(preferred) + '">' +
+                escapeHtml((findEndpoint(preferred) || {}).label || preferred) + '</option>';
+            applySelectedEndpoint(preferred, { emptyFiltered: true });
+        } else {
+            applySelectedEndpoint('');
+        }
+    }
+
+    function bindWebhookPicker() {
+        if (!activeHost) return;
+        var search = activeHost.querySelector('#weline-devrelay-webhook-search');
+        var select = activeHost.querySelector('#weline-devrelay-webhook-select');
+        var copyBtn = activeHost.querySelector('#weline-devrelay-webhook-copy');
+        if (search && !search._welineBound) {
+            search._welineBound = true;
+            search.addEventListener('input', function () {
+                renderWebhookOptions(search.value);
+            });
+        }
+        if (select && !select._welineBound) {
+            select._welineBound = true;
+            select.addEventListener('change', function () {
+                applySelectedEndpoint(select.value);
+            });
+        }
+        if (copyBtn && !copyBtn._welineBound) {
+            copyBtn._welineBound = true;
+            copyBtn.addEventListener('click', function () {
+                var urlInput = activeHost.querySelector('#weline-devrelay-webhook-url');
+                if (urlInput && urlInput.value) {
+                    copyText(urlInput.value, copyBtn);
+                }
+            });
+        }
+    }
+
+    function patchWebhooks(webhooks) {
+        if (!activeHost) return;
+        var hintEl = activeHost.querySelector('#weline-devrelay-webhook-hint');
+        var data = webhooks || {};
+        var endpoints = Array.isArray(data.endpoints) ? data.endpoints : [];
+        var fp = JSON.stringify(endpoints);
+        if (hintEl) {
+            hintEl.textContent = data.hint || '搜索并选择支付方式后，复制线上官方回调到对应支付后台 Webhook。';
+        }
+        if (fp === lastWebhooksFp && webhookEndpoints.length) {
+            bindWebhookPicker();
+            return;
+        }
+        lastWebhooksFp = fp;
+        webhookEndpoints = endpoints.slice();
+        selectedEndpointCode = readStoredEndpointCode();
+        if (!findEndpoint(selectedEndpointCode) && webhookEndpoints.length) {
+            selectedEndpointCode = String(webhookEndpoints[0].endpoint_code || '');
+        }
+        bindWebhookPicker();
+        var search = activeHost.querySelector('#weline-devrelay-webhook-search');
+        renderWebhookOptions(search ? search.value : '');
+    }
+
+    function patchLive(status) {
+        ensureShell();
+        if (!activeHost) return;
+
+        var running = !!status.running;
+        var credOk = !!status.credentials_ready;
+        var recent = Array.isArray(status.recent_events) ? status.recent_events : [];
+        var fingerprint = JSON.stringify({
+            running: running,
+            pid: status.pid || 0,
+            ok: status.relayed_ok || 0,
+            fail: status.relayed_fail || 0,
+            cred: credOk,
+            err: status.last_error || '',
+            events: recent
+        });
+
+        var statusEl = activeHost.querySelector('#weline-devrelay-status');
+        if (statusEl) {
+            statusEl.className = 'payment-dev-relay-panel__status' + (running ? ' is-running' : '');
+            statusEl.textContent =
+                (running ? '中继运行中' : '中继未运行') +
+                (status.pid ? (' · pid=' + String(status.pid)) : '') +
+                ' · 成功 ' + String(status.relayed_ok || 0) +
+                ' / 失败 ' + String(status.relayed_fail || 0) +
+                ' · 凭证 ' + (credOk ? '已记住' : '未记住');
+        }
+
+        var updated = activeHost.querySelector('#weline-devrelay-updated');
+        if (updated) {
+            updated.textContent = '更新于 ' + nowLabel();
+        }
+
+        var eventsEl = activeHost.querySelector('#weline-devrelay-events');
+        if (eventsEl && fingerprint !== lastFingerprint) {
+            var nearBottom = (eventsEl.scrollTop + eventsEl.clientHeight) >= (eventsEl.scrollHeight - 24);
+            eventsEl.innerHTML = eventsHtml(recent);
+            if (nearBottom) {
+                eventsEl.scrollTop = eventsEl.scrollHeight;
+            }
+        }
+
+        var liveEl = activeHost.querySelector('#weline-devrelay-live');
+        if (liveEl) {
+            var nearBottomLive = (liveEl.scrollTop + liveEl.clientHeight) >= (liveEl.scrollHeight - 24);
+            liveEl.textContent = JSON.stringify(status, null, 2);
+            if (nearBottomLive || fingerprint !== lastFingerprint) {
+                liveEl.scrollTop = liveEl.scrollHeight;
+            }
+        }
+
+        lastFingerprint = fingerprint;
+
+        var msg = activeHost.querySelector('#weline-devrelay-msg');
+        var msgEmpty = !msg || !String(msg.textContent || '').trim();
+        if (msgEmpty) {
+            if (!credOk) {
+                setMsg('尚未记住 Token：先到支付后台开启一次中继。', false);
+            } else if (!running) {
+                setMsg('凭证已记住。点「发送探测」拉起中继；失败则后台开一次。', true);
+            } else {
+                setMsg('中继在跑，左侧 SSE 每秒刷新。', true);
+            }
+        }
+    }
+
+    function render(payload) {
+        if (!activeHost) return;
+        var status = (payload && payload.status) || lastStatus || {};
+        lastStatus = status;
+        patchLive(status);
+        patchWebhooks(payload && payload.provider_webhooks);
+    }
+
+    function bindActions() {
+        if (!activeHost) return;
+        var send = activeHost.querySelector('#weline-devrelay-send');
+        var refresh = activeHost.querySelector('#weline-devrelay-refresh');
+        var stop = activeHost.querySelector('#weline-devrelay-stop');
+        if (send) send.onclick = function () {
+            send.disabled = true;
+            setMsg('探测中…');
+            postJson(PROBE_URL, { marker: 'panel_' + Date.now().toString(36) })
+                .then(function (r) {
+                    if (r.status) {
+                        render({ status: r.status });
+                    } else {
+                        refreshStatus(true);
+                    }
+                    if (!r.success) {
+                        setMsg(r.message || '探测失败', false);
+                        return;
+                    }
+                    var code = (((r.data || {}).event || {}).event_code) || '';
+                    var ok = Number(((r.status || {}).relayed_ok) || 0);
+                    setMsg('已探测 ' + code + ' · 成功=' + ok, true);
+                })
+                .catch(function (e) { setMsg(String(e), false); })
+                .finally(function () { send.disabled = false; });
+        };
+        if (refresh) refresh.onclick = function () { refreshStatus(true); };
+        if (stop) stop.onclick = function () {
+            postJson(STOP_URL, {}).then(function (r) {
+                render({ status: (r && r.status) || {} });
+                setMsg(r.success ? '已关闭中继（凭证保留）' : (r.message || '关闭失败'), !!r.success);
+            }).catch(function (e) { setMsg(String(e), false); });
+        };
+    }
+
+    function refreshStatus(force) {
+        if (!activeHost) return;
+        if (fetching && !force) return;
+        fetching = true;
+        fetch(STATUS_URL, { credentials: 'same-origin', headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) { render(data || {}); })
+            .catch(function (err) {
+                render({ status: { running: false, last_error: String(err), credentials_ready: false } });
+            })
+            .finally(function () { fetching = false; });
+    }
+
+    function clearTimer() {
+        if (timer) {
+            clearInterval(timer);
+            timer = null;
+        }
+    }
+
+    function activate(host) {
+        activeHost = host || null;
+        shellReady = false;
+        lastFingerprint = '';
+        clearTimer();
+        if (!activeHost) return;
+        ensureShell();
+        refreshStatus(true);
+        timer = setInterval(function () {
+            if (!activeHost || !document.body.contains(activeHost)) {
+                clearTimer();
+                return;
+            }
+            if (!activeHost.querySelector('.payment-dev-relay-panel')) {
+                clearTimer();
+                return;
+            }
+            refreshStatus(false);
+        }, POLL_MS);
+    }
+
+    function registerChild() {
+        var manifest = {
+            id: CHILD_ID,
+            title: CHILD_TITLE,
+            order: 20,
+            activate: activate
+        };
+        window.__WELINE_ADVANCED_MAINTENANCE_CHILDREN__ = window.__WELINE_ADVANCED_MAINTENANCE_CHILDREN__ || {};
+        window.__WELINE_ADVANCED_MAINTENANCE_CHILDREN__[CHILD_ID] = manifest;
+        if (window.WelineAdvancedMaintenance && typeof window.WelineAdvancedMaintenance.registerChild === 'function') {
+            window.WelineAdvancedMaintenance.registerChild(manifest);
+            return;
+        }
+        setTimeout(registerChild, 50);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', registerChild);
+    } else {
+        registerChild();
+    }
+})();
+</script>

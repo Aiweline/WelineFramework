@@ -61,6 +61,8 @@
 ## doc 目录
 
 - `app/code/Weline/Payment/doc/README.md`
+- `app/code/Weline/Payment/doc/payment-shell.md` — 万能支付壳边界、结账三层、NextAction/iframe、幂等、第三方摘要
+- `app/code/Weline/Payment/doc/provider-development.md`
 - `app/code/Weline/Payment/doc/extends.md`
 - `app/code/Weline/Payment/doc/facade-v2.md`
 - `app/code/Weline/Payment/doc/hook/frontend/checkout/payment-form-after.md`

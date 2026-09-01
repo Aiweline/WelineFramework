@@ -29,9 +29,17 @@ class Dashboard extends BackendController
     #[Acl('Weline_Payment::payment_dashboard_index', '查看支付统计驾驶舱', 'grid', '查看支付统计驾驶舱')]
     public function index(): string
     {
+        $rawTarget = \trim((string)$this->request->getParam('target_scope', $this->request->getParam('scope', '')));
+        $usable = $rawTarget === 'global'
+            || ($rawTarget !== '' && \preg_match('/^[a-z0-9_-]+(?:\.[a-z0-9_-]+){2}$/D', \strtolower($rawTarget)) === 1);
+        if (!$usable) {
+            return $this->redirect('*/backend/dashboard/index', [
+                'target_scope' => 'default.default.default',
+            ]);
+        }
         try {
             $target = ObjectManager::getInstance(PaymentObjectScopeService::class)->fromExplicitTarget([
-                'target_scope' => (string)$this->request->getParam('target_scope', ''),
+                'target_scope' => $rawTarget,
             ]);
             $grant = ObjectManager::getInstance(BackendObjectAuthorizationGuardInterface::class)
                 ->requireForQuery(ObjectAction::VIEW, $target);
@@ -39,17 +47,14 @@ class Dashboard extends BackendController
             $this->request->getResponse()->setCode(403);
 
             return $exception->getMessage();
-        } catch (\Throwable) {
-            $this->request->getResponse()->setCode(403);
-
-            return (string)__('操作授权条件不满足');
         }
         /** @var DashboardBlock $dashboardBlock */
         $dashboardBlock = ObjectManager::make(DashboardBlock::class);
 
         $this->assign('dashboard_block', $dashboardBlock);
         $this->assign('dashboard', $dashboardBlock->getDashboardData($target));
-        $this->assign('target_scope', $target->isGlobal() ? 'global' : $target->toLegacyScopeString());
+        $legacy = \trim($target->isGlobal() ? 'global' : $target->toLegacyScopeString());
+        $this->assign('target_scope', $legacy !== '' ? $legacy : 'default.default.default');
         $this->assign('expected_grant_version', $grant->matchedGrantVersion);
         $this->assign('title', __('支付诊断'));
 

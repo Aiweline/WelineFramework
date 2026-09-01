@@ -230,7 +230,7 @@ $amountList = static function (array $amounts) use ($escape): string {
                                         <td><?= $escape($row['key'] ?? '') ?></td>
                                         <td class="w-text" data-align="end"><?= $countValue($row['count'] ?? 0) ?></td>
                                         <td>
-                                            <a class="w-button" href="<?= $this->getUrl('*/backend/transaction/index', ['method_code' => $row['key'] ?? '']) ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                            <a class="w-button" href="@url{'*/backend/transaction/index'|['method_code' => $row['key'] ?? '']}" data-tone="primary" data-variant="outline" data-size="sm">
                                                 <?= __('交易') ?>
                                             </a>
                                         </td>
@@ -351,7 +351,7 @@ $amountList = static function (array $amounts) use ($escape): string {
                                 <?php foreach (array_keys($statusKeys) as $statusKey): ?>
                                     <tr>
                                         <td>
-                                            <a href="<?= $this->getUrl('*/backend/transaction/index', ['status' => $statusKey]) ?>">
+                                            <a href="@url{'*/backend/transaction/index'|['status' => $statusKey]}">
                                                 <?= $escape($statusKey) ?>
                                             </a>
                                         </td>
