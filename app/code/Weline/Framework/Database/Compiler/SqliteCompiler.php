@@ -41,7 +41,7 @@ final class SqliteCompiler extends AbstractCompiler
 
         foreach ($allItems as $insertKey => $row) {
             $insertKey += 1;
-            $rowHasExplicitIdentity = $identityField !== '' && !empty($row[$identityField]);
+            $rowHasExplicitIdentity = $identityField !== '' && !$this->isAbsentIdentityValue($row, $identityField);
             if ($identityField !== '' && !$rowHasExplicitIdentity) {
                 unset($row[$identityField]);
                 $hasGeneratedIdentity = true;

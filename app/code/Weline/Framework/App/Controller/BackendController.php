@@ -156,6 +156,7 @@ class BackendController extends PcController
             
             if (!$this->isBackendWhitelistedRoute($routeUrlPath, $whitelist_url)) {
                 if ($this->isSseLikeRequest()) {
+                    $this->discardUnauthenticatedSessionCookies();
                     throw new ResponseTerminateException(
                         Response::json([
                             'error' => 'UNAUTHORIZED',
@@ -368,6 +369,28 @@ class BackendController extends PcController
             || \str_contains($requestUri, 'component-config-stream')
             || \str_contains($requestUri, 'page-content-stream')
             || (\str_contains($requestUri, '/ai-generate/') && \str_contains($requestUri, '-stream'));
+    }
+
+    /**
+     * SSE 未登录时丢弃本请求新铸造的 Session Set-Cookie，避免覆盖浏览器里仍有效的登录 Cookie。
+     */
+    private function discardUnauthenticatedSessionCookies(): void
+    {
+        try {
+            $collector = \Weline\Framework\Http\HeaderCollector::getInstance();
+        } catch (\Throwable) {
+            return;
+        }
+        foreach ($collector->getCookies() as $cookie) {
+            if (!\is_array($cookie)) {
+                continue;
+            }
+            $name = (string)($cookie['name'] ?? '');
+            if ($name === '' || \preg_match('/^WELINE_SESSID(?:_[1-9]\d{0,4})?(?:_w\d+)?$/D', $name) !== 1) {
+                continue;
+            }
+            $collector->removeCookie($name);
+        }
     }
 
     /**

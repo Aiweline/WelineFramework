@@ -124,6 +124,59 @@ return [
             'owners' => ['type' => 'array', 'required' => true, 'description' => '当前请求词典 owner 列表'],
         ],
     ],
+    'Weline_Framework_Phrase::dictionary_compile' => [
+        'name' => __('Phrase 词典编译'),
+        'description' => __('i18n:collect 读取 CSV 后、写入 generated/language 前触发。观察者（如 I18n）可 merge 源码扫描结果、DB 词条到 locals_words / words_by_module / source_translations。'),
+        'doc' => 'phrase/词典编译.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'module' => ['type' => 'string|null', 'required' => false, 'description' => '限定模块名，null 表示全部'],
+            'locals_words' => ['type' => 'array', 'required' => true, 'description' => 'locale => [word => translate]'],
+            'words_by_module' => ['type' => 'array', 'required' => true, 'description' => 'locale => module => [word => translate]，含 all_words'],
+            'source_translations' => ['type' => 'array', 'required' => true, 'description' => '源码扫描 flat 词表，merge 进默认语言'],
+            'error_count' => ['type' => 'int', 'required' => true, 'description' => 'CSV 读取错误数'],
+        ],
+    ],
+    'Weline_Framework_Phrase::dictionary_compile_after' => [
+        'name' => __('Phrase 词典编译完成'),
+        'description' => __('i18n:collect 写入 generated/language 完成后触发。扩展模块可清理自身缓存；Framework 不依赖具体实现。'),
+        'doc' => 'phrase/词典编译完成.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'module' => ['type' => 'string|null', 'required' => false, 'description' => '限定模块名'],
+            'locale_count' => ['type' => 'int', 'required' => true, 'description' => '编译产物 locale 数'],
+        ],
+    ],
+    'Weline_Framework_Phrase::dictionary_register' => [
+        'name' => __('Phrase 词典登记'),
+        'description' => __('维护冷路径：业务模块登记词条到扩展词典（如 I18n DB）。Framework 只 dispatch，无 Observer 时为 no-op。'),
+        'doc' => 'phrase/词典登记.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'entries' => ['type' => 'array', 'required' => true, 'description' => 'word/translate/module/locale/is_backend'],
+            'translations' => ['type' => 'array', 'required' => false, 'description' => '与 entries 同义，兼容 shim'],
+            'module' => ['type' => 'string|null', 'required' => false, 'description' => '默认模块名'],
+        ],
+    ],
+    'Weline_Framework_Phrase::dictionary_translate' => [
+        'name' => __('Phrase 词典批量翻译'),
+        'description' => __('维护冷路径：批量 AI/机器翻译并 publish 到 generated/language。Framework 只 dispatch；I18n Observer 写 DB 与 locale 文件。'),
+        'doc' => 'phrase/词典批量翻译.md',
+        'version' => '1.0.0',
+        'type' => 'integration',
+        'data_contract' => [
+            'module' => ['type' => 'string', 'required' => true, 'description' => '业务模块名'],
+            'target_locale' => ['type' => 'string', 'required' => true, 'description' => '目标语言'],
+            'source_locale' => ['type' => 'string', 'required' => false, 'description' => '源语言，默认 zh_Hans_CN'],
+            'word_prefix' => ['type' => 'string', 'required' => false, 'description' => '如 @meta::'],
+            'publish' => ['type' => 'bool', 'required' => false, 'description' => '是否 publishLocale，默认 true'],
+            'write_csv' => ['type' => 'bool', 'required' => false, 'description' => 'dev 写回模块 CSV'],
+            'result' => ['type' => 'array', 'required' => false, 'description' => 'Observer 回填翻译结果'],
+        ],
+    ],
     
     // ========== 系统升级事件 ==========
     'Weline_Framework_Setup::before_schema_diff_commit' => [

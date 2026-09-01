@@ -7,6 +7,7 @@ namespace Weline\Framework\Service\Runtime;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\Resumable\ResumableTaskHandlerInterface;
+use Weline\Framework\Runtime\StateManager;
 
 /**
  * Discovers explicit `etc/resumable_tasks.php` declarations from enabled
@@ -14,6 +15,8 @@ use Weline\Framework\Runtime\Resumable\ResumableTaskHandlerInterface;
  */
 final class ResumableTaskHandlerRegistry
 {
+    private static bool $stateRegistered = false;
+
     /** @var array<string,ResumableTaskTypeDefinition>|null */
     private ?array $definitions = null;
 
@@ -23,6 +26,18 @@ final class ResumableTaskHandlerRegistry
     public function __construct(
         private readonly ?array $configurationFiles = null,
     ) {
+        self::ensureStateRegistered();
+    }
+
+    private static function ensureStateRegistered(): void
+    {
+        if (self::$stateRegistered) {
+            return;
+        }
+        StateManager::registerStaticResets(self::class, [
+            'definitions' => null,
+        ]);
+        self::$stateRegistered = true;
     }
 
     public function definition(string $typeCode): ResumableTaskTypeDefinition

@@ -33,4 +33,12 @@ final class FormRendererTest extends TestCase
         self::assertStringContainsString('data-weline-form-intent="pagination.jump"', $open);
         self::assertStringContainsString('</form>', FormRenderer::close());
     }
+
+    public function testReservedLiteralAttributeValueProtectsMethodPost(): void
+    {
+        self::assertTrue(FormRenderer::isReservedLiteralAttributeValue('method', 'post'));
+        self::assertTrue(FormRenderer::isReservedLiteralAttributeValue('method', 'get'));
+        self::assertFalse(FormRenderer::isReservedLiteralAttributeValue('method', 'put'));
+        self::assertFalse(FormRenderer::isReservedLiteralAttributeValue('class', 'post'));
+    }
 }

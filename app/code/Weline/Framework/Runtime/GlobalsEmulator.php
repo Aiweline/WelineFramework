@@ -187,15 +187,8 @@ class GlobalsEmulator
 
     private function applyCookieRouteVariant(array &$server): void
     {
-        $lang = (string)($_COOKIE['WELINE_USER_LANG'] ?? $_COOKIE['WELINE-WEBSITE-LANG'] ?? '');
-        if ($lang !== '') {
-            $server['WELINE_USER_LANG'] = \str_replace('-', '_', \trim($lang));
-        }
-
-        $currency = \strtoupper(\trim((string)($_COOKIE['WELINE_USER_CURRENCY'] ?? $_COOKIE['WELINE_WEBSITE_CURRENCY'] ?? '')));
-        if ($currency !== '' && State::isAllowedCurrencyCode($currency)) {
-            $server['WELINE_USER_CURRENCY'] = $currency;
-        }
+        // Path/query-only language + currency: do not seed from preference cookies.
+        // Url parse / State::getLang|getCurrency fill WELINE_USER_* mirrors later.
     }
 
     public function reset(bool $leaveContext = true): void

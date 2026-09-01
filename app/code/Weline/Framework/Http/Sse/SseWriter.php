@@ -137,7 +137,10 @@ class SseWriter
         $isWlsMode = SseContext::getConnection() !== null || SseContext::getWriteCallback() !== null;
         
         if ($isWlsMode) {
-            // WLS 模式：直接写入 socket，构建完整 HTTP 响应
+            // WLS 模式：直接写入 socket，构建完整 HTTP 响应。
+            // 必须附带 HeaderCollector 中的 Set-Cookie：remember-me / Session regenerate
+            // 发生在 SseWriter::start() 之前，若此处不写出，浏览器永远拿不到新会话 Cookie，
+            // 后续写回请求仍持旧 Cookie → session_rebound / 未登录。
             $headers = "HTTP/1.1 200 OK\r\n";
             $headers .= "Content-Type: text/event-stream; charset=utf-8\r\n";
             $headers .= "Cache-Control: no-cache\r\n";
@@ -146,10 +149,14 @@ class SseWriter
             if ($this->corsOrigin !== null && $this->corsOrigin !== '') {
                 $headers .= "Access-Control-Allow-Origin: {$this->corsOrigin}\r\n";
             }
+            foreach ($this->collectPendingSetCookieLines() as $cookieLine) {
+                $headers .= 'Set-Cookie: ' . $cookieLine . "\r\n";
+            }
             $headers .= "\r\n";
 
             // 使用带重试的写入方法
             $this->writeWithRetry($headers);
+            $this->clearPendingCookiesAfterEmit();
             // 与 FPM 分支一致：大块注释推动 Nginx/浏览器尽早刷新首包，降低「仅有状态行、长时间0 字节」的观感
             $this->writeWithRetry(':' . \str_repeat(' ', 2048) . "\n\n");
         } else {
@@ -170,6 +177,10 @@ class SseWriter
                 if ($this->corsOrigin !== null && $this->corsOrigin !== '') {
                     \header('Access-Control-Allow-Origin: ' . $this->corsOrigin);
                 }
+                foreach ($this->collectPendingSetCookieLines() as $cookieLine) {
+                    \header('Set-Cookie: ' . $cookieLine, false);
+                }
+                $this->clearPendingCookiesAfterEmit();
             }
 
             // 清空所有输出缓冲区
@@ -596,5 +607,37 @@ class SseWriter
     public function isStarted(): bool
     {
         return $this->started;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function collectPendingSetCookieLines(): array
+    {
+        try {
+            return \Weline\Framework\Http\HeaderCollector::getInstance()->formatSetCookieHeaderLines();
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /**
+     * Cookies already written on the SSE response must not remain for Worker merge.
+     */
+    private function clearPendingCookiesAfterEmit(): void
+    {
+        try {
+            $collector = \Weline\Framework\Http\HeaderCollector::getInstance();
+            foreach ($collector->getCookies() as $cookie) {
+                if (!\is_array($cookie)) {
+                    continue;
+                }
+                $name = (string)($cookie['name'] ?? '');
+                if ($name !== '') {
+                    $collector->removeCookie($name);
+                }
+            }
+        } catch (\Throwable) {
+        }
     }
 }

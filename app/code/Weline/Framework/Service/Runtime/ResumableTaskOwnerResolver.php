@@ -9,6 +9,7 @@ use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\Resumable\ResumableTaskAccessDeniedException;
 use Weline\Framework\Runtime\Resumable\TaskOwner;
 use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
+use Weline\Framework\Session\AttestedSessionCookieResolver;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 
@@ -26,6 +27,7 @@ class ResumableTaskOwnerResolver
     public function __construct(
         private readonly SessionFactory $sessionFactory,
         private readonly Request $request,
+        private readonly ?AttestedSessionCookieResolver $attestedSessionCookieResolver = null,
     ) {
     }
 
@@ -79,13 +81,23 @@ class ResumableTaskOwnerResolver
             );
         }
 
-        $backend = $this->sessionFactory->createBackendSession();
+        $sessionId = $this->attestedSessionCookieResolver()->resolve($binding->sessionFingerprint);
+        if ($sessionId === null) {
+            throw new ResumableTaskAccessDeniedException(
+                'Runtime task backend authority no longer matches the Session.',
+            );
+        }
+
+        // Query Bin may already be inside a storefront Website cookie scope.
+        // Restore the exact attested backend Session instead of re-resolving
+        // through the ambient scope, which can pick the wrong cookie alias.
+        $backend = $this->sessionFactory->restoreAuthenticatedSession('backend', $sessionId);
         $backendUserId = $this->authenticatedUserId($backend);
-        $sessionId = $this->sessionId($backend);
+        $activeSessionId = $this->sessionId($backend);
         if ($backendUserId === null
             || !\hash_equals((string)$binding->backendUserId, $backendUserId)
-            || $sessionId === ''
-            || !\hash_equals($binding->sessionFingerprint, \hash('sha256', $sessionId))) {
+            || $activeSessionId === ''
+            || !\hash_equals($binding->sessionFingerprint, \hash('sha256', $activeSessionId))) {
             throw new ResumableTaskAccessDeniedException(
                 'Runtime task backend authority no longer matches the Session.',
             );
@@ -94,10 +106,15 @@ class ResumableTaskOwnerResolver
         return new TaskOwner(
             area: 'backend',
             principal: 'backend:' . $backendUserId,
-            sessionId: $sessionId,
+            sessionId: $activeSessionId,
             websiteId: $websiteId,
             acl: $this->backendAcl($backend),
         );
+    }
+
+    private function attestedSessionCookieResolver(): AttestedSessionCookieResolver
+    {
+        return $this->attestedSessionCookieResolver ?? new AttestedSessionCookieResolver();
     }
 
     private function resolveFrontendOwner(?int $websiteId): TaskOwner

@@ -3044,12 +3044,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
             $allowed[$name] = $value;
         }
-        if ($allowed['WELINE_USER_LANG'] === '' || $allowed['WELINE_USER_CURRENCY'] === '') {
-            return null;
-        }
 
-        return 'WELINE_USER_LANG=' . \rawurlencode($allowed['WELINE_USER_LANG'])
-            . '; WELINE_USER_CURRENCY=' . \rawurlencode($allowed['WELINE_USER_CURRENCY']);
+        // Accept legacy LANG+CURRENCY and currency-only receipts. Preference
+        // cookies are no longer authoritative; normalize to empty identity.
+        unset($allowed);
+
+        return '';
     }
 
     /**
@@ -5722,14 +5722,8 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             ->setHeader('Pragma', 'no-cache')
             ->setHeader('Expires', '0');
 
-        $expireAt = \time() + 3600 * 24 * 30;
-        $secure = \str_starts_with($location, 'https://');
-        if ($language !== '') {
-            $response->setCookie('WELINE_USER_LANG', $language, $expireAt, '/', '', $secure, false, 'Lax');
-        }
-        if ($currency !== '') {
-            $response->setCookie('WELINE_USER_CURRENCY', $currency, $expireAt, '/', '', $secure, false, 'Lax');
-        }
+        // Language/currency are path/query-only: never write preference cookies here.
+        unset($language, $currency);
 
         return $response->toHttpString(false);
     }
@@ -6957,6 +6951,22 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     private function buildSseFailedResponse(int $statusCode, string $message, array $extra = []): string
     {
         $statusCode = $statusCode > 0 ? $statusCode : 500;
+        // 401/403：丢弃本请求铸造的空 Session Cookie，避免 Worker 合并 Set-Cookie 冲掉浏览器登录态。
+        if ($statusCode === 401 || $statusCode === 403) {
+            try {
+                $collector = \Weline\Framework\Http\HeaderCollector::getInstance();
+                foreach ($collector->getCookies() as $cookie) {
+                    if (!\is_array($cookie)) {
+                        continue;
+                    }
+                    $name = (string)($cookie['name'] ?? '');
+                    if ($name !== '' && \preg_match('/^WELINE_SESSID(?:_[1-9]\d{0,4})?(?:_w\d+)?$/D', $name) === 1) {
+                        $collector->removeCookie($name);
+                    }
+                }
+            } catch (\Throwable) {
+            }
+        }
         $payload = 'event: failed' . "\n";
         $data = array_merge([
             'code' => $statusCode,

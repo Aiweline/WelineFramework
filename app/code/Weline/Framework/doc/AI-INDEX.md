@@ -10,11 +10,13 @@
 3. `dev/ai/diagrams/08-module-docs-index.txt`
 4. 本文件：`app/code/Weline/Framework/doc/AI-INDEX.md`
 5. 模块说明：`app/code/Weline/Framework/doc/README.md`
-6. 认证/设备任务：`app/code/Weline/Framework/doc/需求.md`、`app/code/Weline/Framework/doc/开发日志.md`、`app/code/Weline/SessionManager/doc/设备管理架构.md`
-7. `app/code/Weline/Theme/doc/AI-INDEX.md`
-8. `app/code/Weline/Frontend/doc/AI-INDEX.md`
-9. `app/code/Weline/Taglib/doc/AI-INDEX.md`
-10. 只读取本次任务相关源码、配置和验证入口
+6. **Event 命名与注册**：`app/code/Weline/Framework/doc/3-开发/事件命名与注册规范.md`
+7. **模块版本与升级门禁**：`app/code/Weline/Framework/doc/3-开发/模块版本与升级门禁.md`
+8. 认证/设备任务：`app/code/Weline/Framework/doc/需求.md`、`app/code/Weline/Framework/doc/开发日志.md`、`app/code/Weline/SessionManager/doc/设备管理架构.md`
+9. `app/code/Weline/Theme/doc/AI-INDEX.md`
+10. `app/code/Weline/Frontend/doc/AI-INDEX.md`
+11. `app/code/Weline/Taglib/doc/AI-INDEX.md`
+12. 只读取本次任务相关源码、配置和验证入口
 
 ## 模块身份
 

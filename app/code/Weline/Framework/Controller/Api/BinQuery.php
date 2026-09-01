@@ -12,6 +12,7 @@ use Weline\Framework\Http\Response;
 use Weline\Framework\Service\Query\BinQueryCachePolicy;
 use Weline\Framework\Service\Query\BinQueryGateway;
 use Weline\Framework\Service\Query\FrontendQueryException;
+use Weline\Framework\Service\Query\QueryUnexpectedFailurePayload;
 
 #[Acl(
     source_id: 'Weline_Framework::binquery',
@@ -100,21 +101,13 @@ class BinQuery extends FrontendRestController
             } else {
                 $statusCode = 500;
                 $this->logUnexpectedFailure($exception, $requestId, $summary);
-                $responsePayload = $this->errorPayload(
-                    EmergencyPacket::ERROR_CODE,
-                    EmergencyPacket::ERROR_MESSAGE,
-                    $requestId
-                );
+                $responsePayload = $this->unexpectedFailurePayload($exception, $requestId);
             }
             $responseHeaders = ['Cache-Control' => 'no-store'];
         } catch (\Throwable $throwable) {
             $statusCode = 500;
             $this->logUnexpectedFailure($throwable, $requestId, $summary);
-            $responsePayload = $this->errorPayload(
-                EmergencyPacket::ERROR_CODE,
-                EmergencyPacket::ERROR_MESSAGE,
-                $requestId
-            );
+            $responsePayload = $this->unexpectedFailurePayload($throwable, $requestId);
             $responseHeaders = ['Cache-Control' => 'no-store'];
         }
 
@@ -208,6 +201,19 @@ class BinQuery extends FrontendRestController
                 'code' => $code,
                 'message' => $message,
             ],
+            'request_id' => $requestId,
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function unexpectedFailurePayload(\Throwable $throwable, string $requestId): array
+    {
+        return [
+            'ok' => false,
+            'data' => null,
+            'error' => QueryUnexpectedFailurePayload::build($throwable),
             'request_id' => $requestId,
         ];
     }

@@ -9,6 +9,7 @@ use Weline\Framework\Binary\EmergencyPacket;
 use Weline\Framework\Binary\Limits;
 use Weline\Framework\Binary\WelineBinaryCodec;
 use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Http\HeaderCollector;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FrontendWorkerBackendAttestationException;
@@ -22,6 +23,7 @@ use Weline\Framework\Runtime\RuntimeProviderResolution;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Framework\Service\Query\FrontendQueryGateway;
+use Weline\Framework\Service\Query\QueryUnexpectedFailurePayload;
 use Weline\Framework\Service\Query\FrontendWorkerSessionService;
 use Weline\Framework\Service\Query\Value\FrontendWorkerBackendBinding;
 use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
@@ -184,10 +186,7 @@ class QueryBin extends FrontendRestController
             $payload = [
                 'ok' => false,
                 'data' => null,
-                'error' => [
-                    'code' => EmergencyPacket::ERROR_CODE,
-                    'message' => EmergencyPacket::ERROR_MESSAGE,
-                ],
+                'error' => QueryUnexpectedFailurePayload::build($throwable),
                 'request_id' => $requestId,
             ];
             $statusCode = 500;
@@ -230,10 +229,7 @@ class QueryBin extends FrontendRestController
                 return $this->binaryResponse([
                     'ok' => false,
                     'data' => null,
-                    'error' => [
-                        'code' => EmergencyPacket::ERROR_CODE,
-                        'message' => EmergencyPacket::ERROR_MESSAGE,
-                    ],
+                    'error' => QueryUnexpectedFailurePayload::build($throwable),
                     'request_id' => $requestId,
                 ], 500, $emptySummary, $elapsedMs);
             } catch (\Throwable $fallbackThrowable) {
@@ -386,12 +382,12 @@ class QueryBin extends FrontendRestController
                 $backendBootstrapId,
                 $secureCookie,
             );
-            $cookieProof = $this->readSingleCookie(
-                $cookieName,
-                'backend_attestation_invalid',
-                'Worker backend bootstrap Cookie',
-            );
             try {
+                $cookieProof = $this->readSingleCookie(
+                    $cookieName,
+                    'backend_attestation_invalid',
+                    'Worker backend bootstrap Cookie',
+                );
                 $binding = $this->sessionService->peekBackendBootstrap(
                     $backendBootstrapId,
                     $cookieProof,
@@ -413,10 +409,9 @@ class QueryBin extends FrontendRestController
                 if ($exception->getHttpStatus() >= 500) {
                     throw $exception;
                 }
-                throw new FrontendQueryException(
-                    'backend_attestation_invalid',
-                    'Worker backend bootstrap is invalid, expired, or already consumed.',
-                    401,
+                $session = $this->createBackendWorkerSessionFromLiveSession(
+                    $deployVersion,
+                    $workerBuildId,
                     $exception,
                 );
             } catch (\Throwable $exception) {
@@ -600,6 +595,8 @@ class QueryBin extends FrontendRestController
         );
         if ($language !== '') {
             RequestContext::setWelineUserLang($language);
+            // Phrase/__() resolve via State::getLang(); Worker path is /bin/query without /{locale}/.
+            State::setRequestLanguageOverride($language);
         }
 
         $currency = $this->normalizeWorkerCurrency($context['currency'] ?? '');
@@ -739,6 +736,57 @@ class QueryBin extends FrontendRestController
             'Worker Scope provider is configured but unavailable.',
             503,
         );
+    }
+
+    /**
+     * Re-establish a backend Worker session from the live PHP login Session when
+     * the one-time page bootstrap bridge is no longer available.
+     *
+     * @return array{worker_session_token:string,signing_secret:string,expires_at:int,deploy_version:string,worker_build_id:string,scope_bound:bool,attested_area:string}
+     */
+    private function createBackendWorkerSessionFromLiveSession(
+        string $deployVersion,
+        string $workerBuildId,
+        FrontendQueryException $bootstrapFailure,
+    ): array {
+        try {
+            $provider = $this->resolveBackendAttestationProvider();
+            $binding = $provider->issueBinding($this->authorityHost());
+            if ($binding === null) {
+                throw new FrontendQueryException(
+                    'backend_attestation_invalid',
+                    'Worker backend bootstrap is invalid, expired, or already consumed.',
+                    401,
+                    $bootstrapFailure,
+                );
+            }
+            $restored = $provider->restoreBinding($binding, $this->authorityHost());
+
+            return $this->sessionService->createSessionFromBackendBinding(
+                $deployVersion,
+                $workerBuildId,
+                $restored,
+            );
+        } catch (FrontendWorkerBackendAttestationException $exception) {
+            throw $this->backendAttestationFailure($exception);
+        } catch (FrontendQueryException $exception) {
+            if ($exception->getHttpStatus() >= 500) {
+                throw $exception;
+            }
+            throw new FrontendQueryException(
+                'backend_attestation_invalid',
+                'Worker backend bootstrap is invalid, expired, or already consumed.',
+                401,
+                $exception,
+            );
+        } catch (\Throwable $exception) {
+            throw new FrontendQueryException(
+                'backend_attestation_unavailable',
+                'Worker backend attestation is unavailable.',
+                503,
+                $exception,
+            );
+        }
     }
 
     private function resolveBackendAttestationProvider(): FrontendWorkerBackendAttestationProviderInterface
@@ -888,7 +936,7 @@ class QueryBin extends FrontendRestController
         $response->setHeader('X-Content-Type-Options', 'nosniff');
         $response->setHeader('X-Weline-Query-Bin-Time', (string)$elapsedMs);
 
-        return $this->expireConsumedBootstrapCookie($response);
+        return $this->expireConsumedBootstrapCookie($this->attachPendingCookies($response));
     }
 
     /**
@@ -925,7 +973,40 @@ class QueryBin extends FrontendRestController
             $response->setHeader('X-Weline-Query-Bin-Operation', $summary['operation']);
         }
 
-        return $this->expireConsumedBootstrapCookie($response);
+        return $this->expireConsumedBootstrapCookie($this->attachPendingCookies($response));
+    }
+
+    /**
+     * Detached Response objects do not see Session/auth cookies written to the
+     * request HeaderCollector during provider execution. Mirror the login-302
+     * path: copy pending cookies onto the QueryBin response so browser jars
+     * receive WELINE_SESSID after account.login.
+     */
+    private function attachPendingCookies(Response $response): Response
+    {
+        $pending = HeaderCollector::getInstance()->getCookies();
+        if ($pending === []) {
+            return $response;
+        }
+
+        foreach ($pending as $cookie) {
+            if (!\is_array($cookie) || !isset($cookie['name'])) {
+                continue;
+            }
+            $response->setCookie(
+                (string)$cookie['name'],
+                (string)($cookie['value'] ?? ''),
+                (int)($cookie['expire'] ?? 0),
+                (string)($cookie['path'] ?? '/'),
+                (string)($cookie['domain'] ?? ''),
+                (bool)($cookie['secure'] ?? false),
+                (bool)($cookie['httpOnly'] ?? true),
+                (string)($cookie['sameSite'] ?? 'Lax')
+            );
+        }
+        $response->setHeader('X-Weline-Query-Bin-Cookies', (string)\count($pending));
+
+        return $response;
     }
 
     private function expireConsumedBootstrapCookie(Response $response): Response

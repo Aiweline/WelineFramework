@@ -41,13 +41,46 @@ final class SessionCookieNameResolverTest extends TestCase
 
         self::assertSame('shop.test:9502', SessionCookieNameResolver::currentHost());
         self::assertSame('WELINE_SESSID_9502', SessionCookieNameResolver::resolve());
-        self::assertFalse(SessionCookieNameResolver::hasRequestCookie());
+        // Legacy jar entries remain readable so CookieScope/QueryBin migrations
+        // do not invent a second empty session.
+        self::assertTrue(SessionCookieNameResolver::hasRequestCookie());
+        self::assertSame(str_repeat('a', 32), SessionCookieNameResolver::readRequestSessionId());
 
         Context::current()->set('input.cookie', [
             'WELINE_SESSID' => str_repeat('a', 32),
             'WELINE_SESSID_9502' => str_repeat('b', 32),
         ]);
         self::assertTrue(SessionCookieNameResolver::hasRequestCookie());
+        self::assertSame(str_repeat('b', 32), SessionCookieNameResolver::readRequestSessionId());
+    }
+
+    public function testReadRequestSessionIdPrefersActiveScopeThenFallsBackToUnscopedAlias(): void
+    {
+        CookieScope::setPolicyResolverOverride(static fn(): array => [
+            'active' => true,
+            'name_suffix' => '_w0',
+            'name_suffix_pattern' => '/_w\d+$/',
+            'mount_path' => '/',
+            'expire_unscoped_aliases' => true,
+            'revision' => 'test',
+        ]);
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        RequestContext::setId('session-cookie-alias-fallback');
+        Context::current()->set('input.server.HTTP_HOST', 'shop.test:9502');
+        Context::current()->set('input.host', 'shop.test:9502');
+        Context::current()->set('input.cookie', [
+            'WELINE_SESSID_9502' => str_repeat('u', 32),
+        ]);
+
+        self::assertSame('WELINE_SESSID_9502_w0', SessionCookieNameResolver::resolve());
+        self::assertContains('WELINE_SESSID_9502', SessionCookieNameResolver::requestCookieCandidates());
+        self::assertSame(str_repeat('u', 32), SessionCookieNameResolver::readRequestSessionId());
+
+        Context::current()->set('input.cookie', [
+            'WELINE_SESSID_9502' => str_repeat('u', 32),
+            'WELINE_SESSID_9502_w0' => str_repeat('s', 32),
+        ]);
+        self::assertSame(str_repeat('s', 32), SessionCookieNameResolver::readRequestSessionId());
     }
 
     public function testTrustedProxyHttpsPortWinsOverInternalWlsWorkerPort(): void

@@ -103,6 +103,33 @@ class Clear implements \Weline\Framework\Console\CommandInterface
 
         // 向 WLS 发送缓存清理命令（进程内缓存失效，不重启 Worker）
         $this->sendWlsCacheClearCommand();
+        $this->warmStorefrontFpcAfterClear();
+    }
+
+    /**
+     * Rebuild storefront FPC so the next visitor is not the cold SSR victim.
+     */
+    private function warmStorefrontFpcAfterClear(): void
+    {
+        try {
+            if (!\class_exists(\Weline\Theme\Service\StorefrontFpcWarmer::class)) {
+                return;
+            }
+            /** @var \Weline\Framework\Cache\Service\CacheWarmerRegistry $registry */
+            $registry = ObjectManager::getInstance(\Weline\Framework\Cache\Service\CacheWarmerRegistry::class);
+            if (!$registry->has('theme.storefront_fpc')) {
+                $registry->register(ObjectManager::getInstance(\Weline\Theme\Service\StorefrontFpcWarmer::class));
+            }
+            $result = $registry->warmUp('fpc');
+            $warmed = (int)($result['warmed'] ?? 0);
+            if ($warmed > 0) {
+                $this->printing->successIcon(__('店面 FPC 已预热 %{1} 条路径', [$warmed]));
+            } else {
+                $this->printing->note(__('店面 FPC 预热未命中可暖路径（WLS 未就绪或主机不可达）'));
+            }
+        } catch (\Throwable $e) {
+            $this->printing->note(__('店面 FPC 预热跳过：%{1}', [$e->getMessage()]));
+        }
     }
 
     /**

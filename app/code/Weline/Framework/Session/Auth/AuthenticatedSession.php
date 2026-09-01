@@ -396,6 +396,14 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
     /**
      * @inheritDoc
      */
+    public function reassertCookieWire(): void
+    {
+        $this->session->reassertCookieWire();
+    }
+
+    /**
+     * @inheritDoc
+     */
     public function getArea(): string
     {
         return $this->areaConfig->getArea();

@@ -362,14 +362,76 @@ class Env extends DataObject
         }
     }
 
+    /**
+     * Privileged process identity: Unix euid 0, or Windows elevated High/System integrity.
+     * Installer/CLI drops framework commands to the deploy user instead of aborting.
+     */
+    public static function isElevatedPrivilegedProcess(): bool
+    {
+        if (\function_exists('posix_geteuid') && \posix_geteuid() === 0) {
+            return true;
+        }
+        if (DIRECTORY_SEPARATOR !== '\\') {
+            return false;
+        }
+
+        $out = [];
+        $code = 1;
+        @\exec('whoami /groups /fo csv 2>NUL', $out, $code);
+        if ($code === 0 && $out !== []) {
+            $blob = \strtolower(\implode("\n", $out));
+
+            return \str_contains($blob, 's-1-16-12288')
+                || \str_contains($blob, 's-1-16-16384');
+        }
+        $netCode = 1;
+        @\exec('net session >NUL 2>&1', $out, $netCode);
+
+        return $netCode === 0;
+    }
+
     public static function user(): string
     {
-        if (self::$user) {
+        if (self::$user !== '') {
             return self::$user;
         }
-        // 缓存当前系统用户，避免重复调用系统接口
-        self::$user = get_current_user();
+        // 必须用进程有效用户，禁止 get_current_user()/getmyuid()（二者是脚本文件属主）。
+        // 否则 root 执行属主为部署用户的 bin/w 时，check_user 会误放行并把 crontab/var 写成 root。
+        self::$user = self::resolveProcessUserName();
         return self::$user;
+    }
+
+    /**
+     * Resolve the OS account that owns the current process (effective uid).
+     * Never use script-file ownership APIs for CLI/runtime identity gates.
+     */
+    private static function resolveProcessUserName(): string
+    {
+        if (\function_exists('posix_geteuid') && \function_exists('posix_getpwuid')) {
+            $info = @\posix_getpwuid((int) \posix_geteuid());
+            if (\is_array($info)) {
+                $name = $info['name'] ?? null;
+                if (\is_string($name) && $name !== '') {
+                    return $name;
+                }
+            }
+        }
+
+        // Windows / environments without posix: prefer process environment identity.
+        foreach (['USERNAME', 'USER', 'LOGNAME'] as $key) {
+            $value = \getenv($key);
+            if (\is_string($value)) {
+                $trimmed = \trim($value);
+                if ($trimmed !== '') {
+                    return $trimmed;
+                }
+            }
+        }
+
+        // Last resort only: script-file owner is intentionally weaker and must not
+        // be preferred over process identity when posix/env identity is available.
+        $fallback = \get_current_user();
+        return \is_string($fallback) ? $fallback : '';
     }
 
     static function real_config(string $key, mixed $value = null): string|null

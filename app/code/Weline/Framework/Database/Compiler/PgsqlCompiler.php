@@ -42,7 +42,7 @@ final class PgsqlCompiler extends AbstractCompiler
 
         foreach ($allItems as $insertKey => $row) {
             $insertKey += 1;
-            if ($identityField && empty($row[$identityField])) {
+            if ($identityField && $this->isAbsentIdentityValue($row, $identityField)) {
                 unset($row[$identityField]);
                 $fields = array_keys($row);
                 $fieldsQuoted = array_map(fn(string $f): string => $this->dialect->quoteIdentifier($f), $fields);
