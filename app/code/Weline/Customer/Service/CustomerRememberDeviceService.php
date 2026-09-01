@@ -57,10 +57,9 @@ final class CustomerRememberDeviceService
 
             $previousDeviceToken = $this->readDeviceCookie();
             if ($previousDeviceToken !== '') {
-                // Password login defines a new browser-profile device. Retire a
-                // credential left by the previously authenticated customer
-                // before issuing the replacement, so a later issuance failure
-                // cannot restore the previous account from this browser.
+        // Password login keeps the same browser-profile device (install key).
+        // Retire only the previous remember credential so a later issuance
+        // failure cannot restore the previous account from this browser.
                 $provider->revokeCredential('frontend', $previousDeviceToken, 'password_login_replaced');
                 $this->clearDeviceCookie();
             }

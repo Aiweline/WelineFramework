@@ -19,12 +19,47 @@
         }
     }
 
-    function getNoticeApi() {
-        return window.Weline
-            && window.Weline.Theme
-            && window.Weline.Theme.Notice
-            ? window.Weline.Theme.Notice
-            : null;
+    function getThemeNoticeApi() {
+        if (window.Weline && window.Weline.Theme && window.Weline.Theme.Notice
+            && typeof window.Weline.Theme.Notice.confirm === 'function') {
+            return window.Weline.Theme.Notice;
+        }
+        if (window.Theme && window.Theme.Notice && typeof window.Theme.Notice.confirm === 'function') {
+            return window.Theme.Notice;
+        }
+        if (window.Weline && window.Weline.Notice && typeof window.Weline.Notice.confirm === 'function') {
+            return window.Weline.Notice;
+        }
+        if (window.Toast && typeof window.Toast.confirm === 'function') {
+            return window.Toast;
+        }
+        return null;
+    }
+
+    function getThemeUiDialogConfirm() {
+        if (window.Weline && window.Weline.UI && window.Weline.UI.dialog
+            && typeof window.Weline.UI.dialog.confirm === 'function') {
+            return window.Weline.UI.dialog.confirm.bind(window.Weline.UI.dialog);
+        }
+        return null;
+    }
+
+    function waitForThemeConfirm(timeoutMs) {
+        var deadline = Date.now() + (timeoutMs || 3000);
+        return new Promise(function (resolve) {
+            function tick() {
+                if (getThemeNoticeApi() || getThemeUiDialogConfirm()) {
+                    resolve(true);
+                    return;
+                }
+                if (Date.now() >= deadline) {
+                    resolve(false);
+                    return;
+                }
+                window.setTimeout(tick, 50);
+            }
+            tick();
+        });
     }
 
     function isLogoutLink(link) {
@@ -44,8 +79,25 @@
         return href.indexOf('customer/account/logout') !== -1;
     }
 
+    function confirmWithThemeUi(config) {
+        var uiConfirm = getThemeUiDialogConfirm();
+        if (!uiConfirm) {
+            return Promise.resolve(null);
+        }
+
+        return Promise.resolve(uiConfirm(config.message, {
+            title: config.title,
+            confirmLabel: config.confirmText,
+            cancelLabel: config.cancelText,
+            tone: 'danger',
+            confirmTone: 'danger',
+            cancelable: true
+        })).then(function (confirmed) {
+            return !!confirmed;
+        });
+    }
+
     function confirmLogout(config) {
-        var notice = getNoticeApi();
         var options = {
             title: config.title || '退出登录',
             message: config.message || '确定要退出登录吗？',
@@ -53,12 +105,37 @@
             cancelText: config.cancelText || '取消'
         };
 
-        if (notice && typeof notice.confirm === 'function') {
-            return notice.confirm(options);
+        var notice = getThemeNoticeApi();
+        if (notice) {
+            return Promise.resolve(notice.confirm(options)).then(function (confirmed) {
+                return !!confirmed;
+            });
         }
 
-        console.warn('[Weline Account] Notice confirmation is unavailable; logout cancelled.');
-        return Promise.resolve(false);
+        return confirmWithThemeUi(options).then(function (confirmed) {
+            if (confirmed !== null) {
+                return confirmed;
+            }
+
+            // Theme UI may still be mounting; wait briefly, never use window.confirm.
+            return waitForThemeConfirm(3000).then(function (ready) {
+                if (!ready) {
+                    console.warn('[Weline Account] Theme confirm dialog is unavailable; logout cancelled.');
+                    return false;
+                }
+
+                notice = getThemeNoticeApi();
+                if (notice) {
+                    return Promise.resolve(notice.confirm(options)).then(function (ok) {
+                        return !!ok;
+                    });
+                }
+
+                return confirmWithThemeUi(options).then(function (ok) {
+                    return ok === null ? false : !!ok;
+                });
+            });
+        });
     }
 
     function bindLogoutLink(link, config) {
@@ -121,4 +198,9 @@
     } else {
         initAccountLogout();
     }
+
+    window.WelineCustomerLogout = {
+        __full: true,
+        init: initAccountLogout,
+    };
 })();

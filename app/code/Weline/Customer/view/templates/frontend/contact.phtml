@@ -1,8 +1,6 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 $escape = static fn($value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
-$accountUrl = $this->getUrl('customer/account');
-$returnsUrl = $this->getUrl('customer/account');
 ?>
 <section class="customer-contact-page" data-testid="customer-contact-page" weline-code="customer.contact.customer_contact_page">
     <div class="customer-contact-hero">
@@ -16,7 +14,7 @@ $returnsUrl = $this->getUrl('customer/account');
                 <a class="customer-contact-button customer-contact-button--primary" href="#customer-service-chat" data-customer-contact-chat>
                     <?= __('打开在线客服') ?>
                 </a>
-                <a class="customer-contact-button customer-contact-button--secondary" href="<?= $escape($accountUrl) ?>">
+                <a class="customer-contact-button customer-contact-button--secondary" href="@url{'customer/account'}">
                     <?= __('返回个人中心') ?>
                 </a>
             </div>
@@ -25,7 +23,7 @@ $returnsUrl = $this->getUrl('customer/account');
         <aside class="customer-contact-hero__side">
             <h2><?= __('需要售后帮助？') ?></h2>
             <p><?= __('如果你正在申请退换货，请从个人中心的订单或退换货区域进入，系统会带上更完整的订单上下文。') ?></p>
-            <a class="customer-contact-button customer-contact-button--dark" href="<?= $escape($returnsUrl) ?>">
+            <a class="customer-contact-button customer-contact-button--dark" href="@url{'customer/account'}">
                 <?= __('查看我的售后') ?>
             </a>
         </aside>

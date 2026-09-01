@@ -40,12 +40,23 @@ final class AccountSidebarQueryProviderContextTest extends TestCase
         $template = (string) file_get_contents(
             dirname(__DIR__, 3) . '/view/templates/frontend/account/index.phtml'
         );
+        $accountIndexJs = (string) file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/account-index.js'
+        );
 
         self::assertStringContainsString('var sidebarQuery = parseAccountHash().query;', $template);
         self::assertStringContainsString('sidebarPayload.order_uuid = sidebarQuery.order_uuid;', $template);
         self::assertStringNotContainsString(
             'Object.assign({ section: sectionName }, parseAccountHash().query)',
             $template,
+        );
+
+        self::assertStringContainsString('var sidebarPayload = { section: sectionName };', $accountIndexJs);
+        self::assertStringContainsString('sidebarPayload.order_uuid = sidebarQuery.order_uuid;', $accountIndexJs);
+        self::assertStringContainsString('sanitizeAccountLocationSearch();', $accountIndexJs);
+        self::assertStringNotContainsString(
+            'Object.assign({ section: sectionName }, parseAccountHash().query)',
+            $accountIndexJs,
         );
     }
 }

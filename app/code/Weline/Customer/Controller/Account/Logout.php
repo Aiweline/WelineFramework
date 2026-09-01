@@ -4,9 +4,10 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Controller\Account;
 
+use Weline\Customer\Service\CustomerAuthReturnUrlService;
+use Weline\Customer\Service\CustomerRememberDeviceService;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Customer\Service\CustomerRememberDeviceService;
 
 /**
  * 用户登出控制器
@@ -14,6 +15,15 @@ use Weline\Customer\Service\CustomerRememberDeviceService;
 class Logout extends \Weline\Framework\App\Controller\FrontendController
 {
     protected ?string $layoutType = 'account.logout';
+
+    private CustomerAuthReturnUrlService $authReturnUrlService;
+
+    public function __construct(
+        ?CustomerAuthReturnUrlService $authReturnUrlService = null,
+    ) {
+        $this->authReturnUrlService = $authReturnUrlService
+            ?? ObjectManager::getInstance(CustomerAuthReturnUrlService::class);
+    }
 
     /**
      * 统一执行登出逻辑
@@ -35,13 +45,18 @@ class Logout extends \Weline\Framework\App\Controller\FrontendController
         }
     }
 
+    private function logoutRedirectTarget(): string
+    {
+        return $this->authReturnUrlService->formatAuthInvalidRedirect('/customer/account/login');
+    }
+
     /**
      * 登出（GET）
      */
     public function getIndex()
     {
         $this->logoutUser();
-        $this->redirect('/customer/account/login');
+        $this->redirect($this->logoutRedirectTarget());
     }
 
     /**
@@ -54,7 +69,7 @@ class Logout extends \Weline\Framework\App\Controller\FrontendController
         return $this->fetchJson([
             'success' => true,
             'message' => __('退出成功'),
-            'redirect' => '/customer/account/login'
+            'redirect' => $this->logoutRedirectTarget(),
         ]);
     }
 }

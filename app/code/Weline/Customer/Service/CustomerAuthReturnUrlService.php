@@ -16,6 +16,15 @@ final class CustomerAuthReturnUrlService
 {
     private const SESSION_KEY = 'login_referer';
 
+    /** Storefront signal: header JS should re-check account.current once. */
+    public const AUTH_REFRESH_QUERY = 'w_auth';
+
+    /** After login / register / 2FA success. */
+    public const AUTH_REFRESH_VALUE = '1';
+
+    /** After logout / session cleared (login invalid). */
+    public const AUTH_REFRESH_LOGOUT_VALUE = '0';
+
     private const AUTH_ROUTE_PREFIXES = [
         'customer/account/login',
         'customer/account/register',
@@ -150,6 +159,62 @@ final class CustomerAuthReturnUrlService
     }
 
     /**
+     * Post-auth destination for storefront redirects (login / register / 2FA).
+     * Appends w_auth=1 so FPC-served chrome can refresh via account.current.
+     */
+    public function formatAuthSuccessRedirect(string $candidate): string
+    {
+        return $this->withAuthRefreshSignal($this->formatRedirect($candidate), self::AUTH_REFRESH_VALUE);
+    }
+
+    /**
+     * After logout / auth invalidation. May land on the login route itself, so
+     * this uses formatInternalNavigation (auth routes are allowed) then w_auth=0.
+     */
+    public function formatAuthInvalidRedirect(string $candidate = '/customer/account/login'): string
+    {
+        return $this->withAuthRefreshSignal(
+            $this->formatInternalNavigation($candidate, '/customer/account/login'),
+            self::AUTH_REFRESH_LOGOUT_VALUE
+        );
+    }
+
+    public function withAuthRefreshSignal(string $path, string $value = self::AUTH_REFRESH_VALUE): string
+    {
+        $value = $value === self::AUTH_REFRESH_LOGOUT_VALUE
+            ? self::AUTH_REFRESH_LOGOUT_VALUE
+            : self::AUTH_REFRESH_VALUE;
+
+        $path = trim($path);
+        if ($path === '') {
+            $path = '/';
+        }
+
+        $parts = parse_url($path);
+        if (!is_array($parts)) {
+            return '/?' . self::AUTH_REFRESH_QUERY . '=' . $value;
+        }
+
+        $pathOnly = (string)($parts['path'] ?? '/');
+        if ($pathOnly === '') {
+            $pathOnly = '/';
+        }
+
+        $query = [];
+        if (isset($parts['query']) && $parts['query'] !== '') {
+            parse_str($parts['query'], $query);
+        }
+        $query[self::AUTH_REFRESH_QUERY] = $value;
+
+        $built = $pathOnly . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+        if (isset($parts['fragment']) && $parts['fragment'] !== '') {
+            $built .= '#' . $parts['fragment'];
+        }
+
+        return $built;
+    }
+
+    /**
      * @param array<string, scalar> $params
      */
     public function buildAuthPageUrl(string $route, string $target = '', array $params = []): string
@@ -194,6 +259,8 @@ final class CustomerAuthReturnUrlService
             explode('/', trim($path, '/')),
             static fn(string $segment): bool => $segment !== ''
         ));
+        // Collapse accidental duplicated locale/currency prefixes (e.g. /en_US/en_US/...).
+        $segments = $this->collapseDuplicatedLocalizationPrefix($segments);
         $localization = State::resolveLocalizationFromPathSegments(array_slice($segments, 0, 3));
         $consumed = (int)($localization['consumed'] ?? 0);
         if ($consumed <= 0) {
@@ -204,6 +271,45 @@ final class CustomerAuthReturnUrlService
         $prefixSegments = array_slice($segments, $offset, $consumed);
 
         return $prefixSegments === [] ? '' : '/' . implode('/', $prefixSegments);
+    }
+
+    /**
+     * @param list<string> $segments
+     * @return list<string>
+     */
+    private function collapseDuplicatedLocalizationPrefix(array $segments): array
+    {
+        if ($segments === []) {
+            return $segments;
+        }
+
+        $first = State::resolveLocalizationFromPathSegments(array_slice($segments, 0, 3));
+        $consumed = (int)($first['consumed'] ?? 0);
+        if ($consumed <= 0) {
+            return $segments;
+        }
+
+        $offset = (int)($first['area_offset'] ?? 0);
+        $prefix = array_slice($segments, $offset, $consumed);
+        $rest = array_slice($segments, $offset + $consumed);
+        while ($rest !== []) {
+            $next = State::resolveLocalizationFromPathSegments(array_slice($rest, 0, 3));
+            $nextConsumed = (int)($next['consumed'] ?? 0);
+            if ($nextConsumed <= 0) {
+                break;
+            }
+            $nextPrefix = array_slice($rest, 0, $nextConsumed);
+            if ($nextPrefix !== $prefix) {
+                break;
+            }
+            $rest = array_slice($rest, $nextConsumed);
+        }
+
+        return array_merge(
+            array_slice($segments, 0, $offset),
+            $prefix,
+            $rest
+        );
     }
 
     private function hasLocalizationPrefix(string $path): bool
