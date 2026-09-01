@@ -108,6 +108,336 @@ class SocialWebsiteAccountService
     }
 
     /**
+     * Resolve backend admin scope selection from URL/query params with catalog fallback.
+     *
+     * Supported params:
+     * - scope_key=website:0:website_default:0
+     * - scope_type, scope_id, child_scope_type, child_scope_id
+     * - scope_code / website_code
+     * - scope={website_code}.default.default
+     * - tab=accounts|platforms|scopeAccounts|creative|publish|records
+     *
+     * @param array<string, mixed>        $params
+     * @param array<int, array<string, mixed>> $scopeCatalog
+     *
+     * @return array<string, mixed>
+     */
+    public function resolveAdminScopeSelection(array $params, array $scopeCatalog = []): array
+    {
+        if ($scopeCatalog === []) {
+            $scopeCatalog = $this->listScopes();
+        }
+
+        $default = $this->defaultAdminScopeSelection($scopeCatalog);
+        $tab = $this->normalizeAdminScopeTab((string)($params['tab'] ?? 'platforms'));
+        if (!$this->hasAdminScopeParams($params)) {
+            $default['tab'] = $tab;
+
+            return $default;
+        }
+
+        $matched = $this->matchAdminScopeSelection($params, $scopeCatalog);
+        if ($matched === null) {
+            $fallback = $default;
+            $fallback['source'] = 'invalid';
+            $fallback['tab'] = $tab;
+
+            return $fallback;
+        }
+
+        if (\trim((string)($params['tab'] ?? '')) !== '') {
+            $matched['tab'] = $tab;
+        }
+        $matched['source'] = 'url';
+
+        return $matched;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $scopeCatalog
+     *
+     * @return array<string, mixed>
+     */
+    private function defaultAdminScopeSelection(array $scopeCatalog): array
+    {
+        foreach ($scopeCatalog as $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            $items = \array_values(\array_filter(
+                (array)($group['items'] ?? []),
+                static fn(mixed $item): bool => \is_array($item),
+            ));
+            if ($items === []) {
+                continue;
+            }
+
+            $item = null;
+            foreach ($items as $candidate) {
+                if ((int)($candidate['scope_id'] ?? -1) === 0) {
+                    $item = $candidate;
+                    break;
+                }
+            }
+            $item ??= $items[0];
+            $children = \array_values(\array_filter(
+                (array)($item['children'] ?? []),
+                static fn(mixed $child): bool => \is_array($child),
+            ));
+            if ($children === []) {
+                continue;
+            }
+
+            return $this->formatAdminScopeSelection($group, $item, $children[0], 'default');
+        }
+
+        return [
+            'scope_type' => '',
+            'scope_id' => 0,
+            'child_scope' => '',
+            'scope_key' => '',
+            'scope_code' => '',
+            'tab' => 'platforms',
+            'source' => 'empty',
+        ];
+    }
+
+    /**
+     * @param array<string, mixed>        $params
+     * @param array<int, array<string, mixed>> $scopeCatalog
+     *
+     * @return array<string, mixed>|null
+     */
+    private function matchAdminScopeSelection(array $params, array $scopeCatalog): ?array
+    {
+        $scopeKey = \trim((string)($params['scope_key'] ?? ''));
+        if ($scopeKey !== '') {
+            $matched = $this->findAdminScopeByKey($scopeKey, $scopeCatalog);
+            if ($matched !== null) {
+                return $matched;
+            }
+        }
+
+        $scopeCode = \trim((string)($params['scope_code'] ?? $params['website_code'] ?? ''));
+        if ($scopeCode === '') {
+            $scopeCode = $this->parseScopeDotWebsiteCode((string)($params['scope'] ?? ''));
+        }
+        if ($scopeCode !== '') {
+            $matched = $this->findAdminScopeByCode($scopeCode, $scopeCatalog);
+            if ($matched !== null) {
+                return $matched;
+            }
+        }
+
+        if ($this->hasScopeParams($params)) {
+            try {
+                $normalized = $this->normalizeScopeParams($params, true);
+            } catch (\Throwable) {
+                return null;
+            }
+
+            return $this->findAdminScopeByKey((string)($normalized['scope_key'] ?? ''), $scopeCatalog)
+                ?? $this->findAdminScopeByIds(
+                    (string)($normalized['scope_type'] ?? SocialWebsiteAccount::SCOPE_TYPE_WEBSITE),
+                    (int)($normalized['scope_id'] ?? 0),
+                    (string)($normalized['child_scope_type'] ?? SocialWebsiteAccount::CHILD_SCOPE_TYPE_WEBSITE_DEFAULT),
+                    (int)($normalized['child_scope_id'] ?? 0),
+                    $scopeCatalog,
+                );
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $scopeCatalog
+     *
+     * @return array<string, mixed>|null
+     */
+    private function findAdminScopeByKey(string $scopeKey, array $scopeCatalog): ?array
+    {
+        $scopeKey = \trim($scopeKey);
+        if ($scopeKey === '') {
+            return null;
+        }
+
+        foreach ($scopeCatalog as $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            foreach ((array)($group['items'] ?? []) as $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                foreach ((array)($item['children'] ?? []) as $child) {
+                    if (!\is_array($child)) {
+                        continue;
+                    }
+                    $candidateKey = (string)($child['scope_key'] ?? $this->scopeKey([
+                        'scope_type' => (string)($item['scope_type'] ?? $group['scope_type'] ?? SocialWebsiteAccount::SCOPE_TYPE_WEBSITE),
+                        'scope_id' => (int)($item['scope_id'] ?? 0),
+                        'child_scope_type' => (string)($child['child_scope_type'] ?? SocialWebsiteAccount::CHILD_SCOPE_TYPE_WEBSITE_DEFAULT),
+                        'child_scope_id' => (int)($child['child_scope_id'] ?? 0),
+                    ]));
+                    if ($candidateKey === $scopeKey) {
+                        return $this->formatAdminScopeSelection($group, $item, $child, 'url');
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $scopeCatalog
+     *
+     * @return array<string, mixed>|null
+     */
+    private function findAdminScopeByCode(string $scopeCode, array $scopeCatalog): ?array
+    {
+        $scopeCode = \strtolower(\trim($scopeCode));
+        if ($scopeCode === '') {
+            return null;
+        }
+
+        foreach ($scopeCatalog as $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            foreach ((array)($group['items'] ?? []) as $item) {
+                if (!\is_array($item)) {
+                    continue;
+                }
+                $candidateCode = \strtolower(\trim((string)($item['scope_code'] ?? '')));
+                if ($candidateCode === '' || $candidateCode !== $scopeCode) {
+                    continue;
+                }
+                $children = \array_values(\array_filter(
+                    (array)($item['children'] ?? []),
+                    static fn(mixed $child): bool => \is_array($child),
+                ));
+                if ($children === []) {
+                    continue;
+                }
+
+                return $this->formatAdminScopeSelection($group, $item, $children[0], 'url');
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<int, array<string, mixed>> $scopeCatalog
+     *
+     * @return array<string, mixed>|null
+     */
+    private function findAdminScopeByIds(
+        string $scopeType,
+        int $scopeId,
+        string $childScopeType,
+        int $childScopeId,
+        array $scopeCatalog,
+    ): ?array {
+        foreach ($scopeCatalog as $group) {
+            if (!\is_array($group)) {
+                continue;
+            }
+            if ((string)($group['scope_type'] ?? '') !== $scopeType) {
+                continue;
+            }
+            foreach ((array)($group['items'] ?? []) as $item) {
+                if (!\is_array($item) || (int)($item['scope_id'] ?? -1) !== $scopeId) {
+                    continue;
+                }
+                foreach ((array)($item['children'] ?? []) as $child) {
+                    if (!\is_array($child)) {
+                        continue;
+                    }
+                    if ((string)($child['child_scope_type'] ?? '') !== $childScopeType) {
+                        continue;
+                    }
+                    if ((int)($child['child_scope_id'] ?? 0) !== $childScopeId) {
+                        continue;
+                    }
+
+                    return $this->formatAdminScopeSelection($group, $item, $child, 'url');
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $group
+     * @param array<string, mixed> $item
+     * @param array<string, mixed> $child
+     *
+     * @return array<string, mixed>
+     */
+    private function formatAdminScopeSelection(array $group, array $item, array $child, string $source): array
+    {
+        $scopeType = (string)($item['scope_type'] ?? $group['scope_type'] ?? SocialWebsiteAccount::SCOPE_TYPE_WEBSITE);
+        $scopeId = (int)($item['scope_id'] ?? 0);
+        $childScopeType = (string)($child['child_scope_type'] ?? SocialWebsiteAccount::CHILD_SCOPE_TYPE_WEBSITE_DEFAULT);
+        $childScopeId = (int)($child['child_scope_id'] ?? 0);
+
+        return [
+            'scope_type' => $scopeType,
+            'scope_id' => $scopeId,
+            'child_scope' => $childScopeType . ':' . (string)$childScopeId,
+            'scope_key' => (string)($child['scope_key'] ?? $this->scopeKey([
+                'scope_type' => $scopeType,
+                'scope_id' => $scopeId,
+                'child_scope_type' => $childScopeType,
+                'child_scope_id' => $childScopeId,
+            ])),
+            'scope_code' => (string)($item['scope_code'] ?? ''),
+            'tab' => 'platforms',
+            'source' => $source,
+        ];
+    }
+
+    private function parseScopeDotWebsiteCode(string $scope): string
+    {
+        $scope = \trim($scope);
+        if ($scope === '') {
+            return '';
+        }
+
+        $parts = \explode('.', $scope);
+        return \trim((string)($parts[0] ?? ''));
+    }
+
+    private function normalizeAdminScopeTab(string $tab): string
+    {
+        $tab = \strtolower(\trim($tab));
+        $map = [
+            'platforms' => 'platforms',
+            'accounts' => 'accounts',
+            'scopeaccounts' => 'scopeAccounts',
+            'creative' => 'creative',
+            'publish' => 'publish',
+            'records' => 'records',
+        ];
+
+        return $map[$tab] ?? 'platforms';
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function hasAdminScopeParams(array $params): bool
+    {
+        return $this->hasScopeParams($params)
+            || \trim((string)($params['scope_key'] ?? '')) !== ''
+            || \trim((string)($params['scope_code'] ?? '')) !== ''
+            || \trim((string)($params['website_code'] ?? '')) !== '';
+    }
+
+    /**
      * @param array<string, mixed> $params
      * @return array<int, array<string, mixed>>
      */
