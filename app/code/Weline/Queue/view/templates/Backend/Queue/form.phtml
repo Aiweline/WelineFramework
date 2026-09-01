@@ -17,7 +17,6 @@ $config = [
         'bizKey' => (string)($queue['biz_key'] ?? ''),
         'types' => is_array($queue_types ?? null) ? array_values($queue_types) : [],
     ],
-    'resultUrl' => '@backend-url("component/offcanvas/success")',
     'messages' => [
         'apiUnavailable' => (string)__('队列服务暂时不可用，请稍后重试。'),
         'selectType' => (string)__('请选择队列类型后再继续。'),
@@ -144,5 +143,5 @@ $jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_
     </form>
 </main>
 
-<script type="application/json" data-w-queue-form-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
+<script type="application/json" data-w-queue-form-config>{"resultUrl":"@backend-url{'component/offcanvas/success'}",<?= substr(json_encode($config, $jsonFlags) ?: '{}', 1) ?></script>
 <script type="module" src="@static(Weline_Theme::ui/pages/weline-queue-form.js)"></script>
