@@ -206,6 +206,9 @@ OK,OK
 "文件定义了元数据区域但缺少 @meta.%1.info.* 字段：%2","文件定义了元数据区域但缺少 @meta.%1.info.* 字段：%2"
 "元数据缺少必需字段 type：%1","元数据缺少必需字段 type：%1"
 "元数据缺少必需字段 @meta.%1.info.name：%2","元数据缺少必需字段 @meta.%1.info.name：%2"
+"Meta 自动翻译：I18n AI 未启用，已跳过","Meta 自动翻译：I18n AI 未启用，已跳过"
+"@meta:: %{1}: translated=%{2}","@meta:: %{1}: translated=%{2}"
+"MetaLocal: translated=%{1}, skipped=%{2}","MetaLocal: translated=%{1}, skipped=%{2}"
 模块不存在：%{1},模块不存在：%{1}
 "未指定模块，将扫描所有扩展了 Meta 模块的模块...","未指定模块，将扫描所有扩展了 Meta 模块的模块..."
 "通过 ExtendsData 找到 %{1} 个扩展了 Meta 模块的模块","通过 ExtendsData 找到 %{1} 个扩展了 Meta 模块的模块"

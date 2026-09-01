@@ -18,6 +18,7 @@ use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Module\Model\Module;
 use Weline\Framework\Output\Cli\Printing;
+use Weline\Framework\Phrase\DictionaryEvents;
 use Weline\Meta\Model\Meta;
 use Weline\Meta\Service\ParamDefinitionNormalizer;
 
@@ -1217,14 +1218,7 @@ class ScanConvention extends CommandAbstract
         // 触发翻译收集事件
         if (!empty($translations)) {
             try {
-                /** @var \Weline\Framework\Event\EventsManager $eventsManager */
-                $eventsManager = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-                // 将数组赋值给变量，以便作为引用参数传递
-                $eventData = [
-                    'translations' => $translations,
-                    'module' => 'Weline_Meta'
-                ];
-                $eventsManager->dispatch('Weline_I18n::collect_translations', $eventData);
+                DictionaryEvents::register($translations, 'Weline_Meta');
             } catch (\Exception $e) {
                 // 如果事件系统不可用，忽略错误（避免影响Meta扫描）
                 if ($this->verbose ?? false) {

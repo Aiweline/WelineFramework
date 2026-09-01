@@ -13,7 +13,7 @@ namespace Weline\Meta\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
-use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\DictionaryEvents;
 
 /**
  * 模板编译观察者
@@ -38,13 +38,7 @@ class TemplateCompile implements ObserverInterface
             return;
         }
         
-        // 触发翻译收集事件
-        /** @var \Weline\Framework\Event\EventsManager $eventsManager */
-        $eventsManager = ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class);
-        $eventsManager->dispatch('Weline_I18n::collect_translations', [
-            'translations' => $metaTranslations,
-            'module' => 'Weline_Meta'
-        ]);
+        DictionaryEvents::register($metaTranslations, 'Weline_Meta');
     }
     
     /**

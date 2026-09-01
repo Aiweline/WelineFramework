@@ -4,9 +4,9 @@
 "前台 Meta 读取仅允许 public.* 命名空间","前台 Meta 读取仅允许 public.* 命名空间"
 "Meta config_key 不能为空","Meta config_key 不能为空"
 "当前请求没有可用的商城 Scope","当前请求没有可用的商城 Scope"
-关闭,关闭
+关闭,Close
 翻译窗口,翻译窗口
-刷新,刷新
+刷新,Refresh
 提交,提交
 "MetaConfig 指纹%{1}失败：%{2}","MetaConfig 指纹%{1}失败：%{2}"
 "没有找到任何本地化数据！<a target=""_blank"" href=""%{url}"">前往I18n安装启用</a>搜索本地语言：%{search} 或者手动刷新页面：<a href=""%{refresh}"">刷新</a>","没有找到任何本地化数据！<a target=""_blank"" href=""%{url}"">前往I18n安装启用</a>搜索本地语言：%{search} 或者手动刷新页面：<a href=""%{refresh}"">刷新</a>"
@@ -56,7 +56,7 @@ Meta翻译,Meta翻译
 区域,区域
 全部,全部
 Scope,Scope
-语言,语言
+语言,Language
 "类型 (可选)","类型 (可选)"
 "分类 (可选)","分类 (可选)"
 "实体ID (可选)","实体ID (可选)"
@@ -70,7 +70,7 @@ Scope,Scope
 "Meta 翻译","Meta 翻译"
 加载中...,加载中...
 正在加载翻译...,正在加载翻译...
-取消,取消
+取消,Cancel
 保存翻译,保存翻译
 参数翻译,参数翻译
 请先选择命名空间,请先选择命名空间
@@ -90,8 +90,8 @@ Scope,Scope
 确定,确定
 默认值,默认值
 如果某语言没有翻译，将使用此默认值,如果某语言没有翻译，将使用此默认值
-多语言翻译,多语言翻译
-没有可用的语言,没有可用的语言
+多语言翻译,"Multilingual Translation"
+没有可用的语言,"No languages available"
 留空则使用默认值,留空则使用默认值
 翻译已保存,翻译已保存
 名称,名称
@@ -152,7 +152,7 @@ JSON,JSON
 "Meta JSON 中的 info.* 字段会自动收集为词条。","Meta JSON 中的 info.* 字段会自动收集为词条。"
 "保存后可在""元数据列表""页快速跳转翻译。","保存后可在""元数据列表""页快速跳转翻译。"
 "Setting 字段建议保持 JSON 格式，方便扩展。","Setting 字段建议保持 JSON 格式，方便扩展。"
-保存,保存
+保存,Save
 返回列表,返回列表
 "JSON 校验通过","JSON 校验通过"
 元数据扫描器,元数据扫描器
@@ -206,6 +206,9 @@ OK,OK
 "文件定义了元数据区域但缺少 @meta.%1.info.* 字段：%2","文件定义了元数据区域但缺少 @meta.%1.info.* 字段：%2"
 "元数据缺少必需字段 type：%1","元数据缺少必需字段 type：%1"
 "元数据缺少必需字段 @meta.%1.info.name：%2","元数据缺少必需字段 @meta.%1.info.name：%2"
+"Meta 自动翻译：I18n AI 未启用，已跳过","Meta 自动翻译：I18n AI 未启用，已跳过"
+"@meta:: %{1}: translated=%{2}","@meta:: %{1}: translated=%{2}"
+"MetaLocal: translated=%{1}, skipped=%{2}","MetaLocal: translated=%{1}, skipped=%{2}"
 模块不存在：%{1},模块不存在：%{1}
 "未指定模块，将扫描所有扩展了 Meta 模块的模块...","未指定模块，将扫描所有扩展了 Meta 模块的模块..."
 "通过 ExtendsData 找到 %{1} 个扩展了 Meta 模块的模块","通过 ExtendsData 找到 %{1} 个扩展了 Meta 模块的模块"
