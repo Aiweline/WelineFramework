@@ -21,6 +21,10 @@
           action="payment/backend/diagnostics/webhooks" parent="Weline_Backend::payment_group"
           icon="webhook" order="30"/>
 
+    <menu source="Weline_Payment::payment_dev_relay" name="payment_dev_relay" title="开发 Webhook 转发"
+          action="payment/backend/dev-relay/index" parent="Weline_Backend::payment_group"
+          icon="webhook" order="35"/>
+
     <menu source="Weline_Payment::payment_reconciliation" name="payment_reconciliation" title="支付对账"
           action="payment/backend/diagnostics/reconciliation" parent="Weline_Backend::payment_group"
           icon="circle" order="40"/>

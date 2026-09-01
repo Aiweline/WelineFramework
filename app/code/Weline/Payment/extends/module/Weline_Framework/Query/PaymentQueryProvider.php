@@ -12,8 +12,10 @@ use Weline\Payment\Api\Data\AvailabilityRequest;
 use Weline\Payment\Api\Data\AvailabilityResult;
 use Weline\Payment\Interface\ProviderInterface;
 use Weline\Payment\Model\PaymentMethod;
+use Weline\Payment\Service\PaymentGuideI18nService;
 use Weline\Payment\Service\PaymentMethodManager;
 use Weline\Payment\Service\PaymentObjectScopeService;
+use Weline\Payment\Service\PaymentScopeConfigService;
 use Weline\Payment\Service\PaymentTransactionAccessService;
 
 class PaymentQueryProvider implements QueryProviderInterface
@@ -24,6 +26,7 @@ class PaymentQueryProvider implements QueryProviderInterface
         private readonly PaymentObjectScopeService $objectScopeService,
         private readonly PaymentTransactionAccessService $transactionAccess,
         private readonly BackendObjectAuthorizationGuardInterface $objectAuthorizationGuard,
+        private readonly PaymentGuideI18nService $guideI18nService,
     ) {
     }
 
@@ -41,7 +44,11 @@ class PaymentQueryProvider implements QueryProviderInterface
             'getPaymentMethodSummary' => $this->getPaymentMethodSummary($params),
             'getPaymentDashboardSummary' => $this->getPaymentDashboardSummary($params),
             'registerProviders' => $this->registerProviders($params),
+            'reorderPaymentMethods' => $this->reorderPaymentMethods($params),
             'queryTransactionStatus' => $this->queryTransactionStatus($params),
+            'listPaymentCustomerGuides' => $this->listPaymentCustomerGuides($params),
+            'auditPaymentGuideI18n' => $this->auditPaymentGuideI18n($params),
+            'enqueuePaymentGuideAiTranslation' => $this->enqueuePaymentGuideAiTranslation($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Payment query provider does not support operation: %{1}', [$operation])
             ),
@@ -215,6 +222,44 @@ class PaymentQueryProvider implements QueryProviderInterface
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
+    private function reorderPaymentMethods(array $params): array
+    {
+        $target = $this->objectScopeService->fromExplicitTarget($params);
+        $this->objectAuthorizationGuard->requireSubmitForQuery(
+            ObjectAction::UPDATE,
+            $target,
+            $this->expectedGrantVersion($params),
+        );
+
+        $ordered = $params['ordered_codes'] ?? $params['codes'] ?? [];
+        if (!\is_array($ordered)) {
+            $ordered = [];
+        }
+
+        $storageScope = $target->isGlobal()
+            ? PaymentScopeConfigService::DEFAULT_SCOPE
+            : (string)$target->toLegacyScopeString();
+        if ($storageScope === '' || $storageScope === 'global') {
+            $storageScope = PaymentScopeConfigService::DEFAULT_SCOPE;
+        }
+
+        $result = $this->methodManager->reorderMethodsForScope(
+            array_values($ordered),
+            [
+                'scope' => $storageScope,
+                'environment' => (string)($params['environment'] ?? PaymentScopeConfigService::DEFAULT_ENVIRONMENT),
+            ],
+        );
+        $result['source'] = 'Weline_Payment';
+        $result['target_scope'] = $target->isGlobal() ? 'global' : $storageScope;
+
+        return $result;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
     private function authorizeAdminRead(array $params, string $action): array
     {
         $target = $this->objectScopeService->fromExplicitTarget($params);
@@ -295,7 +340,7 @@ class PaymentQueryProvider implements QueryProviderInterface
     {
         $provider = $this->methodManager->getProviderInstance($method, $context);
         $metadata = $this->methodManager->getProviderMetadata($method, $provider);
-        $display = \is_array($metadata['display_metadata'] ?? null) ? $metadata['display_metadata'] : [];
+        $display = $this->methodManager->getEffectiveDisplayMetadata($method, $context, $provider);
         $runtimeConfig = $this->methodManager->getRuntimeConfig($method, $context);
         $availability = $this->availability($method, $provider, $metadata, $runtimeConfig, $context);
         $code = (string)($metadata['method_code'] ?? $method->getData(PaymentMethod::schema_fields_CODE));
@@ -475,6 +520,63 @@ class PaymentQueryProvider implements QueryProviderInterface
     }
 
     /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function listPaymentCustomerGuides(array $params): array
+    {
+        $locale = trim((string) ($params['locale'] ?? $params['locale_code'] ?? 'en_US'));
+
+        return [
+            'success' => true,
+            'locale' => $locale !== '' ? $locale : 'en_US',
+            'guides' => $this->guideI18nService->listGuidesWithI18nStatus($locale !== '' ? $locale : 'en_US'),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function auditPaymentGuideI18n(array $params): array
+    {
+        $locale = trim((string) ($params['locale'] ?? $params['locale_code'] ?? 'en_US'));
+        $methodCode = trim((string) ($params['method_code'] ?? $params['method'] ?? ''));
+
+        return [
+            'success' => true,
+            'report' => $this->guideI18nService->audit(
+                $methodCode !== '' ? $methodCode : null,
+                $locale !== '' ? $locale : 'en_US',
+            ),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function enqueuePaymentGuideAiTranslation(array $params): array
+    {
+        $locale = trim((string) ($params['locale'] ?? $params['locale_code'] ?? 'en_US'));
+        $methodCode = trim((string) ($params['method_code'] ?? $params['method'] ?? ''));
+        $missingOnly = !array_key_exists('missing_only', $params) || $this->boolParam($params, 'missing_only', true);
+        $force = $this->boolParam($params, 'force', false);
+
+        $result = $this->guideI18nService->enqueueAiTranslation(
+            $locale !== '' ? $locale : 'en_US',
+            $methodCode !== '' ? $methodCode : null,
+            $missingOnly,
+            $force,
+        );
+
+        return [
+            'success' => true,
+            ...$result,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function getDescriptor(): array
@@ -564,6 +666,35 @@ class PaymentQueryProvider implements QueryProviderInterface
                     'summary' => 'Register payment providers discovered from module extensions.',
                 ],
                 [
+                    'name' => 'reorderPaymentMethods',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_Payment::payment_method_edit',
+                    ],
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        ...$this->adminTargetParams(),
+                        $this->grantVersionParam(),
+                        [
+                            'name' => 'ordered_codes',
+                            'type' => 'array',
+                            'required' => true,
+                        ],
+                        [
+                            'name' => 'environment',
+                            'type' => 'string',
+                            'required' => false,
+                        ],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'Persist payment method drag order as scoped sort_order for the current target_scope.',
+                ],
+                [
                     'name' => 'queryTransactionStatus',
                     'frontend' => true,
                     'auth' => 'backend',
@@ -581,6 +712,46 @@ class PaymentQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => $commonReturns,
                     'summary' => 'Replay one persisted transaction status query after object authorization.',
+                ],
+                [
+                    'name' => 'listPaymentCustomerGuides',
+                    'frontend' => false,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'List registered payment customer guides with i18n completeness.',
+                ],
+                [
+                    'name' => 'auditPaymentGuideI18n',
+                    'frontend' => false,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => [
+                        ['name' => 'locale', 'type' => 'string', 'required' => false],
+                        ['name' => 'method_code', 'type' => 'string', 'required' => false],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'Audit payment guide template phrases against target locale CSV.',
+                ],
+                [
+                    'name' => 'enqueuePaymentGuideAiTranslation',
+                    'frontend' => false,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        ['name' => 'locale', 'type' => 'string', 'required' => true],
+                        ['name' => 'method_code', 'type' => 'string', 'required' => false],
+                        ['name' => 'missing_only', 'type' => 'bool', 'required' => false],
+                        ['name' => 'force', 'type' => 'bool', 'required' => false],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'Enqueue scoped I18n AI translation for payment guide phrases.',
                 ],
             ],
         ];

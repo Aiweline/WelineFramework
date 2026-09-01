@@ -1,0 +1,136 @@
+<?php
+/**
+ * PayPal 平台沙箱 REST App 凭据（内容模板）
+ * 由后台布局系统自动包裹 HTML 框架。
+ *
+ * @var array<int, string> $redirect_uris
+ * @var string $developer_url
+ * @var bool $credentials_ready
+ * @var string $client_id
+ * @var string $local_file
+ * @var string $config_url_global
+ * @var string $config_url_default_website
+ */
+$credentials_ready = !empty($credentials_ready);
+$client_id = (string) ($client_id ?? '');
+$local_file = (string) ($local_file ?? '');
+$config_url_global = (string) ($config_url_global ?? '');
+$config_url_default_website = (string) ($config_url_default_website ?? '');
+$developer_url = (string) ($developer_url ?? 'https://developer.paypal.com/dashboard/applications/sandbox');
+$redirect_uris = \is_array($redirect_uris ?? null) ? $redirect_uris : [];
+$escape = static fn (mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="w-grid" data-testid="payment-paypal-platform-sandbox-setup">
+    <div style="--w-span:12;">
+        <div class="w-card">
+            <div class="w-card__header">
+                <h4 class="w-card__title" style="--w-mb:0;">
+                    <w:icon name="key" size="sm"></w:icon><lang>写入 / 更新平台沙箱凭据</lang>
+                </h4>
+            </div>
+            <div class="w-card__body">
+                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
+                    <lang>维护者可在此写入或更新框架级沙箱 REST App。保存后，配置中心的 Global 与 Website（含默认站点）均可使用「沙箱一键授权」。</lang>
+                </p>
+
+                <?php if ($credentials_ready): ?>
+                    <div class="w-alert" role="status" data-tone="success" style="--w-mb:var(--weline-space-3);">
+                        <lang>当前平台沙箱凭据已就绪</lang>
+                        <?php if ($client_id !== ''): ?>
+                            · Client ID:
+                            <code style="word-break:break-all;"><?= $escape($client_id) ?></code>
+                        <?php endif; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="w-alert" role="status" data-tone="warning" style="--w-mb:var(--weline-space-3);">
+                        <lang>尚未配置平台沙箱凭据，请从 PayPal Developer 复制 Client ID / Secret 后保存。</lang>
+                    </div>
+                <?php endif; ?>
+
+                <ol class="w-text" style="--w-mb:var(--weline-space-4); padding-left:1.25rem;">
+                    <li style="--w-mb:var(--weline-space-2);">
+                        <lang>在同一 Default Application（Sandbox）页向下找到 Features → Add-on services →「Log in with PayPal」：勾选后点 Manage / Advanced Settings，在 Return URL 中只登记下面这一条支付模块统一回调（不要填页面底部的 Sandbox Webhooks；也不要登记多条 paypal/return 或后台 callback）。</lang>
+                        <ul style="margin-top:var(--weline-space-2); padding-left:1.1rem;">
+                            <?php foreach ($redirect_uris as $uri): ?>
+                                <?php if ($uri === '' || str_contains((string) $uri, 'localhost')) {
+                                    continue;
+                                } ?>
+                                <li style="word-break:break-all;"><code><?= $escape($uri) ?></code></li>
+                            <?php endforeach; ?>
+                        </ul>
+                        <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2); --w-mb:0;">
+                            <lang>Return URL 必须与授权请求完全一致（含 https、主机名、端口、路径）；保存后偶发需等待几分钟生效。</lang>
+                        </p>
+                    </li>
+                    <li style="--w-mb:var(--weline-space-2);">
+                        <a class="w-button" data-tone="primary" data-variant="outline" data-size="sm"
+                           href="<?= $escape($developer_url) ?>" target="_blank" rel="noopener noreferrer">
+                            <lang>打开 PayPal Developer Sandbox Apps</lang>
+                        </a>
+                    </li>
+                    <li style="--w-mb:var(--weline-space-2);">
+                        <lang>复制 Client ID / Secret 粘贴到下方表单并保存（仅写入本机，不会提交 Git）。</lang>
+                    </li>
+                    <?php if ($local_file !== ''): ?>
+                        <li style="word-break:break-all;">
+                            <lang>本地文件</lang>：<code><?= $escape($local_file) ?></code>
+                        </li>
+                    <?php endif; ?>
+                </ol>
+
+                <w:form method="post" action="@backend-url{'payment/backend/platform-sandbox-setup/index'}">
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="paypal-platform-client-id"><lang>Client ID</lang></label>
+                        <input
+                            id="paypal-platform-client-id"
+                            class="w-input"
+                            type="text"
+                            name="client_id"
+                            required
+                            autocomplete="off"
+                            value="<?= $escape($client_id) ?>"
+                        />
+                    </div>
+                    <div class="w-field" style="--w-mb:var(--weline-space-4);">
+                        <label class="w-field__label" for="paypal-platform-client-secret"><lang>Client Secret</lang></label>
+                        <input
+                            id="paypal-platform-client-secret"
+                            class="w-input"
+                            type="password"
+                            name="client_secret"
+                            autocomplete="new-password"
+                            <?= $credentials_ready ? '' : 'required' ?>
+                            placeholder="<?= $credentials_ready
+                                ? $escape((string) __('已配置时可留空表示不改 Secret；若需更换请重新填写'))
+                                : '' ?>"
+                        />
+                        <div class="w-field__hint">
+                            <?php if ($credentials_ready): ?>
+                                <lang>已配置时可留空表示保留原 Secret；若要更换请填写新 Secret。PKCE 公网客户端可将 Secret 清空保存。</lang>
+                            <?php else: ?>
+                                <lang>若 App 为 PKCE 公网客户端，Secret 可留空。</lang>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div class="w-cluster" data-gap="2" style="--w-mt:var(--weline-space-2);">
+                        <button type="submit" class="w-button" data-tone="primary">
+                            <lang>保存平台沙箱凭据</lang>
+                        </button>
+                        <?php if ($config_url_default_website !== ''): ?>
+                            <a class="w-button" data-tone="success" data-variant="outline"
+                               href="<?= $escape($config_url_default_website) ?>">
+                                <lang>去默认 Website 一键授权</lang>
+                            </a>
+                        <?php endif; ?>
+                        <?php if ($config_url_global !== ''): ?>
+                            <a class="w-button" data-tone="neutral" data-variant="outline"
+                               href="<?= $escape($config_url_global) ?>">
+                                <lang>去 Global 配置 / 授权</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </w:form>
+            </div>
+        </div>
+    </div>
+</div>

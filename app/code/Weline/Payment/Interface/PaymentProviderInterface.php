@@ -14,9 +14,11 @@ namespace Weline\Payment\Interface;
 use Weline\Payment\Model\PaymentResult;
 
 /**
- * 支付提供商接口
- * 
- * 所有支付提供商必须实现此接口
+ * @deprecated Use {@see ProviderInterface}. Do not implement or extend this legacy surface.
+ *
+ * 支付提供商接口（已废弃）
+ *
+ * 所有新支付提供商必须实现 ProviderInterface。
  */
 interface PaymentProviderInterface
 {

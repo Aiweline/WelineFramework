@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Payment\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Service\PaymentService;
 
@@ -66,6 +67,11 @@ class Checkout extends FrontendController
 
     public function return()
     {
+        $this->layoutType = 'checkout';
+        $this->request->setGet('page_type', 'payment');
+        $this->request->setGet('theme_page_title', (string) __('支付结果'));
+        $this->assign('page_title', (string) __('支付结果'));
+
         $fakeMode = (string) $this->request->getParam('fake', $this->request->getParam('payment_fake_mode', '')) === '1';
         if ($fakeMode) {
             $this->assign('payment_fake_mode', true);
@@ -74,11 +80,17 @@ class Checkout extends FrontendController
         }
 
         $transactionNo = (string) $this->request->getParam('transaction_no', '');
+        $transaction = null;
 
         if ($transactionNo === '') {
-            $this->getMessageManager()->addError(__('Payment transaction number is required.'));
+            // 生产空参无效回跳回首页；开发环境留页说明（与统一 Return 落地策略一致）。
+            if ($this->isProductionLive()) {
+                return $this->redirect('/');
+            }
+            $this->assign('transaction', null);
+            $this->assign('payment_return_empty', true);
 
-            return $this->redirect('/');
+            return $this->fetch();
         }
 
         try {
@@ -90,10 +102,28 @@ class Checkout extends FrontendController
             }
 
             $this->assign('transaction', $transaction);
+            $this->assign('payment_return_empty', false);
         } catch (\Throwable $throwable) {
             $this->getMessageManager()->addError(__('Query payment status failed: %{message}', ['message' => $throwable->getMessage()]));
+            $this->assign('transaction', null);
+            $this->assign('payment_return_empty', false);
         }
 
         return $this->fetch();
+    }
+
+    private function isProductionLive(): bool
+    {
+        $systemEnv = strtolower(trim((string) Env::get('system.env', '')));
+        if ($systemEnv === 'production' || $systemEnv === 'prod') {
+            return true;
+        }
+
+        $deploy = strtolower(trim((string) Env::get('deploy', '')));
+        if ($deploy === '') {
+            $deploy = strtolower(trim((string) Env::get('system.deploy', '')));
+        }
+
+        return $deploy === 'production' || $deploy === 'prod';
     }
 }

@@ -184,11 +184,13 @@ if ($isFakeMode) {
                     $metadata = $method instanceof \Weline\Payment\Model\PaymentMethod
                         ? $methodManager->getProviderMetadata($method)
                         : [];
-                    $display = is_array($metadata['display_metadata'] ?? null) ? $metadata['display_metadata'] : [];
+                    $display = $method instanceof \Weline\Payment\Model\PaymentMethod
+                        ? $methodManager->getEffectiveDisplayMetadata($method)
+                        : [];
                     $methodCode = (string)($method instanceof \Weline\Payment\Model\PaymentMethod ? $method->getData('code') : '');
                     $methodName = (string)($method instanceof \Weline\Payment\Model\PaymentMethod ? $method->getData('name') : '');
                     $safeMethodId = preg_replace('/[^a-zA-Z0-9_-]+/', '-', $methodCode) ?: 'payment-method';
-                    $iconUrl = (string)($display['icon_url'] ?? $display['icon'] ?? '');
+                    $iconUrl = (string)($display['icon_url'] ?? '');
                     $description = (string)($display['description'] ?? '');
                     $fakeAvailability = is_array($fakeScenarioPayload[$methodCode] ?? null) ? $fakeScenarioPayload[$methodCode] : [];
                     $isAvailable = !$isFakeMode || !empty($fakeAvailability['available']);

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 64" role="img" aria-label="Fake Card">
+  <rect width="96" height="64" rx="8" fill="#1F2937"/>
+  <rect x="0" y="14" width="96" height="12" fill="#F59E0B"/>
+  <rect x="12" y="40" width="36" height="8" rx="2" fill="#E5E7EB"/>
+  <rect x="60" y="38" width="24" height="12" rx="3" fill="#9CA3AF"/>
+</svg>

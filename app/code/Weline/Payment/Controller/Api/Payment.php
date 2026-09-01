@@ -37,12 +37,11 @@ class Payment extends AbstractRestController
         
         $result = [];
         foreach ($methods as $method) {
-            $metadata = $this->methodManager->getProviderMetadata($method);
-            $display = \is_array($metadata['display_metadata'] ?? null) ? $metadata['display_metadata'] : [];
+            $display = $this->methodManager->getEffectiveDisplayMetadata($method);
             $result[] = [
                 'code' => $method->getData('code'),
                 'name' => $method->getData('name'),
-                'icon_url' => (string) ($display['icon_url'] ?? $display['icon'] ?? ''),
+                'icon_url' => (string) ($display['icon_url'] ?? ''),
                 'description' => (string) ($display['description'] ?? ''),
             ];
         }

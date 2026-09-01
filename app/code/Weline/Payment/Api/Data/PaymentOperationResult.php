@@ -14,6 +14,8 @@ final class PaymentOperationResult extends AbstractPaymentData
     public const NEXT_QR = 'qr';
     public const NEXT_SDK = 'sdk';
     public const NEXT_POLL = 'poll';
+    /** Hosted fields / third-party iframe; Provider template owns PCI/CSP. */
+    public const NEXT_IFRAME = 'iframe';
 
     public const FIELD_INTENT_CODE = 'intent_code';
     public const FIELD_ATTEMPT_CODE = 'attempt_code';

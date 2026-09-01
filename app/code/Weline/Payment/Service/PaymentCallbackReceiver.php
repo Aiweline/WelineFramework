@@ -7,6 +7,8 @@ namespace Weline\Payment\Service;
 use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Service\DatabaseTransactionRunnerInterface;
 use Weline\Framework\Http\Security\SecretRefCipher;
+use Weline\Framework\Event\Event;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Api\Data\CallbackRequest;
 use Weline\Payment\Api\Data\CallbackResult;
@@ -379,6 +381,7 @@ final class PaymentCallbackReceiver
                         PaymentWebhookInbox::schema_fields_RECEIVED_AT => $this->dateTime($receivedAt),
                     ])->save();
                     $this->audit('received', $record->endpointCode, null, $inboxCode);
+                    $this->dispatchInboxReceived($inboxCode);
 
                     return new WebhookReceiveResult(
                         httpStatus: WebhookReceiveResult::HTTP_OK,
@@ -778,5 +781,22 @@ final class PaymentCallbackReceiver
             'inbox_code' => $inboxCode,
             'at' => $this->now,
         ];
+    }
+
+    private function dispatchInboxReceived(string $inboxCode): void
+    {
+        if ($this->useMemory || $inboxCode === '') {
+            return;
+        }
+
+        try {
+            $events = $this->objectManager->getInstance(EventsManager::class);
+            $event = new Event([
+                'inbox_code' => $inboxCode,
+            ]);
+            $events->dispatch(DevRelayDispatcher::EVENT_INBOX_RECEIVED, $event);
+        } catch (\Throwable) {
+            // Relay must never break webhook receipt.
+        }
     }
 }
