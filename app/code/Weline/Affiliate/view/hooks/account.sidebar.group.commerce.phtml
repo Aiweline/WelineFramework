@@ -1,0 +1,32 @@
+<?php
+/**
+ * Account sidebar affiliate entry (commerce group).
+ *
+ * Hook: account.sidebar.group.commerce
+ *
+ * @hook-priority 165
+ * @hook-sort-order 18
+ * @hook-solo false
+ */
+use Weline\Framework\Runtime\RequestContext;
+
+$renderKey = 'weline_affiliate.account_sidebar.rendered';
+if (RequestContext::get($renderKey, false)) {
+    return;
+}
+
+RequestContext::set($renderKey, true);
+?>
+<a class="account-hook-nav-link motor-account-sidebar__link"
+   href="@url{'customer/account/index'}#affiliate"
+   data-section="affiliate"
+   data-account-nav-link="true"
+   data-account-nav-parent="commerce">
+    <span class="account-hook-nav-link__label motor-account-sidebar__link-label">
+        <w:icon name="share" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text motor-account-sidebar__link-text">
+            <strong><lang>我的分销</lang></strong>
+            <span><lang>分享、转化与佣金</lang></span>
+        </span>
+    </span>
+</a>

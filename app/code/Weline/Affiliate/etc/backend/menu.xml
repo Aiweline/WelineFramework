@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<menus xmlns:xs="http://www.w3.org/2001/XMLSchema-instance"
+       xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
+       xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
+    <menu source="Weline_Affiliate::commerce:affiliate:programs"
+          name="weline_affiliate_programs"
+          title="万能分销"
+          action="*/backend/affiliate"
+          parent="Weline_Backend::marketing_group"
+          icon="mdi mdi-handshake-outline"
+          order="50"/>
+</menus>

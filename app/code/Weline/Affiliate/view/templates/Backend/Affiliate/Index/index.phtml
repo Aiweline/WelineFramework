@@ -1,0 +1,571 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$escapeHtml = static fn(mixed $value): string => htmlspecialchars(
+    (string) $value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+
+$affiliateRecords = $this->getData('affiliateRecords') ?? [];
+$summary = $this->getData('summary') ?? [];
+$filters = $this->getData('filters') ?? [];
+$statusOptions = $this->getData('statusOptions') ?? [];
+$editingRecord = $this->getData('editingRecord') ?? [];
+$affiliateIndexPath = '*/backend/affiliate';
+$affiliateSavePath = '*/backend/affiliate/save';
+$affiliateViewPath = '*/backend/affiliate/view';
+$pagination = $this->getData('pagination') ?? [];
+$currentPage = max(1, (int) ($pagination['page'] ?? 1));
+$pageCount = max(1, (int) ($pagination['page_count'] ?? 1));
+$totalAffiliates = max(0, (int) ($pagination['total'] ?? 0));
+$editingId = max(0, (int) ($editingRecord['affiliate_id'] ?? 0));
+$isEditMode = $editingId > 0;
+$createScopeReady = (bool) ($this->getData('createScopeReady') ?? $isEditMode);
+$filterWebsiteId = max(0, (int) ($filters['website_id'] ?? 0));
+$filterScopeReady = $filterWebsiteId > 0;
+$customerSelectValue = (string) ($editingRecord['customer_id'] ?? '');
+$customerSelectDisplay = (string) ($editingRecord['customer_display'] ?? '');
+$filterCustomerSelectValue = (string) ($filters['customer_id'] ?? '');
+$filterCustomerSelectDisplay = (string) ($filters['customer_display'] ?? '');
+
+$buildPageParams = static function (int $page, array $filters): array {
+    $params = ['page' => $page];
+    foreach (['customer_id', 'referral_code', 'status', 'website_id', 'store_code', 'channel_code'] as $key) {
+        if (!empty($filters[$key])) {
+            $params[$key] = $filters[$key];
+        }
+    }
+
+    return $params;
+};
+?>
+<link rel="stylesheet" href="@static(Weline_Affiliate::css/affiliate-admin-index.css)">
+
+<div class="w-grid affiliate-admin-page">
+    <template>Weline_Component::message.phtml</template>
+</div>
+
+<div class="w-grid affiliate-admin-page">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading affiliate-admin-header w-cluster" data-align="center" data-justify="between">
+            <div>
+                <h4 style="--w-mb-sm:0;"><?= __('Affiliate Management') ?></h4>
+                <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-2);--w-mb:0;">
+                    <?= __('Review, filter, and adjust affiliate accounts created by marketing partners.') ?>
+                </p>
+            </div>
+            <div class="w-cluster" data-gap="md">
+                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
+                    <li class="w-breadcrumb__item"><span><lang>后台</lang></span></li>
+                    <li class="w-breadcrumb__item"><span><lang>营销管理</lang></span></li>
+                    <li class="w-breadcrumb__item" data-state="active"><lang>万能分销</lang></li>
+                </ol>
+                <span class="w-text" data-tone="muted" data-size="sm">
+                    <?= $escapeHtml(sprintf(
+                        __('Page %d of %d, %d affiliates found'),
+                        $currentPage,
+                        $pageCount,
+                        $totalAffiliates
+                    )) ?>
+                </span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="w-grid affiliate-admin-page">
+    <div style="--w-span:12;">
+        <div class="w-stat-tiles" style="--w-stat-tile-min:10rem;--w-gap:var(--weline-space-4);--w-mb:var(--weline-space-4);">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <div class="w-text" data-tone="muted" data-size="sm"><?= __('Total Affiliates') ?></div>
+                    <strong class="affiliate-admin-stat-value"><?= (int) ($summary['total'] ?? $totalAffiliates) ?></strong>
+                </div>
+            </div>
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <div class="w-text" data-tone="muted" data-size="sm"><?= __('Active') ?></div>
+                    <strong class="affiliate-admin-stat-value" data-tone="success"><?= (int) ($summary['active'] ?? 0) ?></strong>
+                </div>
+            </div>
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <div class="w-text" data-tone="muted" data-size="sm"><?= __('Disabled') ?></div>
+                    <strong class="affiliate-admin-stat-value" data-tone="muted"><?= (int) ($summary['disabled'] ?? 0) ?></strong>
+                </div>
+            </div>
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <div class="w-text" data-tone="muted" data-size="sm"><?= __('Total Commission') ?></div>
+                    <strong class="affiliate-admin-stat-value"><?= number_format((float) ($summary['total_commission'] ?? 0), 2) ?></strong>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="w-grid affiliate-admin-page" data-testid="affiliate-admin-index">
+    <div style="--w-span-lg:4;">
+        <div class="w-card" data-w-shadow="sm">
+            <div class="w-card__header">
+                <h5 class="w-card__title" style="--w-mb:0;">
+                    <?= $isEditMode ? __('Edit Affiliate Account') : __('Create Affiliate Account') ?>
+                </h5>
+            </div>
+            <div class="w-card__body">
+                <form method="post" action="@backend-url{$affiliateSavePath}" class="w-stack" data-gap="md">
+                    <input type="hidden" name="affiliate_id" value="<?= $editingId ?>">
+                    <?php if ($isEditMode): ?>
+                    <input type="hidden" name="back_url" value="@backend-url{$affiliateViewPath}?id={id}">
+                    <?php else: ?>
+                    <input type="hidden" name="back_url" value="@backend-url{$affiliateIndexPath}">
+                    <?php endif; ?>
+
+                    <div class="w-field">
+                        <label class="w-field__label"><?= __('Scope') ?></label>
+                        <div class="w-grid">
+                            <div style="--w-span-md:4;">
+                                <label class="w-field__label" for="affiliate-create-website"><?= __('Website') ?></label>
+                                <?php if ($isEditMode): ?>
+                                    <w:websites:website:select
+                                        id="affiliate-create-website"
+                                        name="website_id"
+                                        value="websiteSelectValue"
+                                        display="websiteSelectDisplay"
+                                        options="websiteOptionsJson"
+                                        disabled="true"
+                                    />
+                                <?php else: ?>
+                                    <w:websites:website:select
+                                        id="affiliate-create-website"
+                                        name="website_id"
+                                        value="websiteSelectValue"
+                                        display="websiteSelectDisplay"
+                                        options="websiteOptionsJson"
+                                        placeholder="@lang(选择 Website)"
+                                        on-change="affiliateAdminReloadFormScope('website')"
+                                    />
+                                <?php endif; ?>
+                            </div>
+                            <div style="--w-span-md:4;">
+                                <label class="w-field__label" for="affiliate-create-store"><?= __('Store') ?></label>
+                                <?php if ($isEditMode): ?>
+                                    <w:websites:store:select
+                                        id="affiliate-create-store"
+                                        name="store_code"
+                                        value="storeSelectValue"
+                                        display="storeSelectDisplay"
+                                        options="storeOptionsJson"
+                                        disabled="true"
+                                    />
+                                <?php else: ?>
+                                    <w:websites:store:select
+                                        id="affiliate-create-store"
+                                        name="store_code"
+                                        value="storeSelectValue"
+                                        display="storeSelectDisplay"
+                                        options="storeOptionsJson"
+                                        allow-empty="true"
+                                        clearable="true"
+                                        empty-label="@lang(全部店铺)"
+                                        placeholder="@lang(选择店铺)"
+                                        on-change="affiliateAdminReloadFormScope('store')"
+                                        disabled="<?= $createScopeReady ? 'false' : 'true' ?>"
+                                    />
+                                <?php endif; ?>
+                            </div>
+                            <div style="--w-span-md:4;">
+                                <label class="w-field__label" for="affiliate-create-channel"><?= __('Channel') ?></label>
+                                <?php if ($isEditMode): ?>
+                                    <w:websites:channel:select
+                                        id="affiliate-create-channel"
+                                        name="channel_code"
+                                        value="channelSelectValue"
+                                        display="channelSelectDisplay"
+                                        options="channelOptionsJson"
+                                        disabled="true"
+                                    />
+                                <?php else: ?>
+                                    <w:websites:channel:select
+                                        id="affiliate-create-channel"
+                                        name="channel_code"
+                                        value="channelSelectValue"
+                                        display="channelSelectDisplay"
+                                        options="channelOptionsJson"
+                                        allow-empty="true"
+                                        clearable="true"
+                                        empty-label="@lang(全部渠道)"
+                                        placeholder="@lang(选择渠道)"
+                                        on-change="affiliateAdminReloadFormScope('channel')"
+                                        disabled="<?= $createScopeReady ? 'false' : 'true' ?>"
+                                    />
+                                <?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if ($isEditMode): ?>
+                            <p class="w-field__help"><?= __('Scope cannot be changed after creation.') ?></p>
+                        <?php elseif (!$createScopeReady): ?>
+                            <p class="w-field__help" data-tone="warning"><?= __('Select a Website first to confirm scope, then search for a customer.') ?></p>
+                        <?php else: ?>
+                            <p class="w-field__help"><?= __('Scope confirmed. You can optionally refine store and channel, then search for a customer.') ?></p>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="w-field">
+                        <label class="w-field__label" for="affiliate-create-customer-id"><?= __('Customer') ?></label>
+                        <?php if ($isEditMode): ?>
+                            <w:customer:admin:select
+                                id="affiliate-create-customer-id"
+                                name="customer_id"
+                                value="customerSelectValue"
+                                display="customerSelectDisplay"
+                                disabled="true"
+                            />
+                            <p class="w-field__help"><?= __('Customer cannot be changed after creation.') ?></p>
+                        <?php elseif (!$createScopeReady): ?>
+                            <w:customer:admin:select
+                                id="affiliate-create-customer-id"
+                                name="customer_id"
+                                value="customerSelectValue"
+                                display="customerSelectDisplay"
+                                disabled="true"
+                            />
+                            <p class="w-field__help"><?= __('Customer search unlocks after Website scope is selected.') ?></p>
+                        <?php else: ?>
+                            <w:customer:admin:select
+                                id="affiliate-create-customer-id"
+                                name="customer_id"
+                                value="customerSelectValue"
+                                display="customerSelectDisplay"
+                                required="true"
+                            />
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="w-field">
+                        <label class="w-field__label" for="affiliate-create-referral-code"><?= __('Referral Code') ?></label>
+                        <input
+                            id="affiliate-create-referral-code"
+                            type="text"
+                            class="w-input"
+                            value="<?= $escapeHtml((string) ($editingRecord['referral_code'] ?? '')) ?>"
+                            readonly>
+                        <p class="w-field__help"><?= __('Auto-generated referral code.') ?></p>
+                    </div>
+
+                    <div class="w-field">
+                        <label class="w-field__label" for="affiliate-create-commission-rate"><?= __('Commission Rate') ?></label>
+                        <div class="w-field__control weline-input-group-sm">
+                            <input
+                                id="affiliate-create-commission-rate"
+                                type="number"
+                                name="commission_rate"
+                                class="w-input"
+                                step="0.01"
+                                min="0"
+                                max="1"
+                                value="<?= $escapeHtml(number_format((float) ($editingRecord['commission_rate'] ?? 0.10), 2)) ?>"
+                                required>
+                            <span class="w-field__addon"><?= __('decimal') ?></span>
+                        </div>
+                        <p class="w-field__help"><?= __('Enter a decimal between 0 and 1 to represent the commission percentage.') ?></p>
+                    </div>
+
+                    <div class="w-field">
+                        <label class="w-field__label" for="affiliate-create-status"><?= __('Status') ?></label>
+                        <select id="affiliate-create-status" name="status" class="w-select">
+                            <?php foreach ($statusOptions as $code => $label): ?>
+                                <option value="<?= $escapeHtml((string) $code) ?>" <?= ($editingRecord['status'] ?? '') === $code ? 'selected' : '' ?>>
+                                    <?= $escapeHtml((string) $label) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+
+                    <div class="affiliate-admin-summary-panel">
+                        <div class="affiliate-admin-summary-row">
+                            <span><?= __('Total Commission') ?></span>
+                            <strong><?= $escapeHtml(number_format((float) ($editingRecord['total_commission'] ?? 0.0), 2)) ?></strong>
+                        </div>
+                        <div class="affiliate-admin-summary-row">
+                            <span><?= __('Paid Commission') ?></span>
+                            <strong><?= $escapeHtml(number_format((float) ($editingRecord['paid_commission'] ?? 0.0), 2)) ?></strong>
+                        </div>
+                        <div class="affiliate-admin-summary-row">
+                            <span><?= __('Pending') ?></span>
+                            <strong data-tone="primary"><?= $escapeHtml(number_format((float) ($editingRecord['pending_commission'] ?? 0.0), 2)) ?></strong>
+                        </div>
+                    </div>
+
+                    <div class="w-cluster" data-gap="sm">
+                        <button type="submit" class="w-button" data-tone="primary" <?= !$isEditMode && !$createScopeReady ? 'disabled' : '' ?>>
+                            <?= $isEditMode ? __('Update Affiliate') : __('Create Affiliate') ?>
+                        </button>
+                        <?php if ($isEditMode): ?>
+                            <a href="@backend-url{$affiliateIndexPath}" class="w-button" data-variant="outline"><?= __('Cancel Edit') ?></a>
+                        <?php endif; ?>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div style="--w-span-lg:8;">
+        <div class="w-card" data-w-shadow="sm" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <h5 class="w-card__title" style="--w-mb:0;"><?= __('Apply Filters') ?></h5>
+            </div>
+            <div class="w-card__body">
+                <form method="get" action="@backend-url{$affiliateIndexPath}" class="w-grid" id="affiliate-filter-form">
+                    <div style="--w-span-md:4;">
+                        <div class="w-field">
+                            <label class="w-field__label" for="affiliate-filter-website"><?= __('Website') ?></label>
+                            <w:websites:website:select
+                                id="affiliate-filter-website"
+                                name="website_id"
+                                value="filterWebsiteSelectValue"
+                                display="filterWebsiteSelectDisplay"
+                                options="filterWebsiteOptionsJson"
+                                placeholder="@lang(选择 Website)"
+                                on-change="affiliateAdminReloadFilterScope('website')"
+                            />
+                        </div>
+                    </div>
+                    <div style="--w-span-md:4;">
+                        <div class="w-field">
+                            <label class="w-field__label" for="affiliate-filter-store"><?= __('Store') ?></label>
+                            <w:websites:store:select
+                                id="affiliate-filter-store"
+                                name="store_code"
+                                value="filterStoreSelectValue"
+                                display="filterStoreSelectDisplay"
+                                options="filterStoreOptionsJson"
+                                allow-empty="true"
+                                clearable="true"
+                                empty-label="@lang(全部店铺)"
+                                placeholder="@lang(选择店铺)"
+                                on-change="affiliateAdminReloadFilterScope('store')"
+                                disabled="<?= $filterScopeReady ? 'false' : 'true' ?>"
+                            />
+                        </div>
+                    </div>
+                    <div style="--w-span-md:4;">
+                        <div class="w-field">
+                            <label class="w-field__label" for="affiliate-filter-channel"><?= __('Channel') ?></label>
+                            <w:websites:channel:select
+                                id="affiliate-filter-channel"
+                                name="channel_code"
+                                value="filterChannelSelectValue"
+                                display="filterChannelSelectDisplay"
+                                options="filterChannelOptionsJson"
+                                allow-empty="true"
+                                clearable="true"
+                                empty-label="@lang(全部渠道)"
+                                placeholder="@lang(选择渠道)"
+                                on-change="affiliateAdminReloadFilterScope('channel')"
+                                disabled="<?= $filterScopeReady ? 'false' : 'true' ?>"
+                            />
+                        </div>
+                    </div>
+                    <div style="--w-span-md:4;">
+                        <div class="w-field">
+                            <label class="w-field__label" for="affiliate-filter-customer-id"><?= __('Customer') ?></label>
+                            <w:customer:admin:select
+                                id="affiliate-filter-customer-id"
+                                name="customer_id"
+                                value="filterCustomerSelectValue"
+                                display="filterCustomerSelectDisplay"
+                                allow-empty="true"
+                                clearable="true"
+                                disabled="<?= $filterScopeReady ? 'false' : 'true' ?>"
+                            />
+                            <?php if (!$filterScopeReady): ?>
+                                <p class="w-field__help"><?= __('Select Website scope before searching customers.') ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <div style="--w-span-md:4;">
+                        <div class="w-field">
+                            <label class="w-field__label" for="affiliate-filter-referral-code"><?= __('Referral Code') ?></label>
+                            <input
+                                id="affiliate-filter-referral-code"
+                                type="text"
+                                name="referral_code"
+                                class="w-input"
+                                value="<?= $escapeHtml((string) ($filters['referral_code'] ?? '')) ?>">
+                        </div>
+                    </div>
+                    <div style="--w-span-md:4;">
+                        <div class="w-field">
+                            <label class="w-field__label" for="affiliate-filter-status"><?= __('Status') ?></label>
+                            <select id="affiliate-filter-status" name="status" class="w-select">
+                                <option value=""><?= __('All statuses') ?></option>
+                                <?php foreach ($statusOptions as $code => $label): ?>
+                                    <option value="<?= $escapeHtml((string) $code) ?>" <?= ($filters['status'] ?? '') === $code ? 'selected' : '' ?>>
+                                        <?= $escapeHtml((string) $label) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="--w-span:12;">
+                        <div class="w-cluster" data-gap="sm">
+                            <button type="submit" class="w-button" data-variant="outline"><?= __('Apply Filters') ?></button>
+                            <a href="@backend-url{$affiliateIndexPath}" class="w-button" data-variant="outline"><?= __('Reset') ?></a>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="w-card" data-w-shadow="sm">
+            <div class="w-card__header w-cluster" data-align="center" data-justify="between">
+                <h5 class="w-card__title" style="--w-mb:0;"><?= __('Affiliate Management') ?></h5>
+            </div>
+            <div class="w-card__body">
+                <?php if ($affiliateRecords): ?>
+                    <div class="affiliate-admin-table-wrap">
+                        <table class="affiliate-admin-table">
+                            <thead>
+                                <tr>
+                                    <th><?= __('Affiliate ID') ?></th>
+                                    <th><?= __('Customer ID') ?></th>
+                                    <th><?= __('Scope') ?></th>
+                                    <th><?= __('Referral Code') ?></th>
+                                    <th><?= __('Commission Rate') ?></th>
+                                    <th><?= __('Status') ?></th>
+                                    <th><?= __('Total') ?></th>
+                                    <th><?= __('Paid') ?></th>
+                                    <th><?= __('Pending') ?></th>
+                                    <th><?= __('Created At') ?></th>
+                                    <th><?= __('Actions') ?></th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($affiliateRecords as $record): ?>
+                                    <tr <?= (int) $record['affiliate_id'] === $editingId ? 'data-state="selected"' : '' ?>>
+                                        <td><?= (int) $record['affiliate_id'] ?></td>
+                                        <td><?= (int) $record['customer_id'] ?></td>
+                                        <td><?= $escapeHtml((string) ($record['scope_label'] ?? '')) ?></td>
+                                        <td><code class="affiliate-admin-code"><?= $escapeHtml((string) $record['referral_code']) ?></code></td>
+                                        <td><?= $escapeHtml(number_format((float) ($record['commission_rate'] ?? 0.0) * 100, 2)) ?>%</td>
+                                        <td>
+                                            <span class="affiliate-admin-badge" data-tone="<?= ($record['status'] ?? '') === 'active' ? 'success' : 'muted' ?>">
+                                                <?= $escapeHtml((string) ($record['status_label'] ?? '')) ?>
+                                            </span>
+                                        </td>
+                                        <td><?= $escapeHtml(number_format((float) ($record['total_commission'] ?? 0.0), 2)) ?></td>
+                                        <td><?= $escapeHtml(number_format((float) ($record['paid_commission'] ?? 0.0), 2)) ?></td>
+                                        <td><?= $escapeHtml(number_format((float) ($record['pending_commission'] ?? 0.0), 2)) ?></td>
+                                        <td><?= $escapeHtml((string) $record['created_at']) ?></td>
+                                        <td>
+                                            <div class="affiliate-admin-actions">
+                                                <a href="@backend-url{'*/backend/affiliate/view'|['id' => $record['affiliate_id']]}" class="w-button" data-variant="outline" data-size="sm">
+                                                    <?= __('View') ?>
+                                                </a>
+                                                <a href="@backend-url{'*/backend/affiliate'|['id' => $record['affiliate_id']]}" class="w-button" data-variant="outline" data-size="sm">
+                                                    <?= __('Edit') ?>
+                                                </a>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <?php if ($pageCount > 1): ?>
+                        <nav aria-label="<?= __('Affiliate pagination') ?>" style="--w-mt:var(--weline-space-4);">
+                            <ul class="w-pagination" data-justify="center" style="--w-mb:0;">
+                                <li class="w-pagination__item <?= $currentPage <= 1 ? 'disabled' : '' ?>">
+                                    <a class="w-pagination__link" href="@backend-url{$affiliateIndexPath|$buildPageParams($currentPage - 1, $filters)}">
+                                        <?= __('Previous') ?>
+                                    </a>
+                                </li>
+                                <?php for ($i = max(1, $currentPage - 2); $i <= min($pageCount, $currentPage + 2); $i++): ?>
+                                    <li class="w-pagination__item <?= $i === $currentPage ? 'active' : '' ?>">
+                                        <a class="w-pagination__link" href="@backend-url{$affiliateIndexPath|$buildPageParams($i, $filters)}">
+                                            <?= $i ?>
+                                        </a>
+                                    </li>
+                                <?php endfor; ?>
+                                <li class="w-pagination__item <?= $currentPage >= $pageCount ? 'disabled' : '' ?>">
+                                    <a class="w-pagination__link" href="@backend-url{$affiliateIndexPath|$buildPageParams($currentPage + 1, $filters)}">
+                                        <?= __('Next') ?>
+                                    </a>
+                                </li>
+                            </ul>
+                        </nav>
+                    <?php endif; ?>
+                <?php else: ?>
+                    <div class="affiliate-admin-empty">
+                        <w:icon name="circle" size="sm"></w:icon>
+                        <h2 class="w-card__title" style="--w-mb:var(--weline-space-2);"><?= __('No affiliate accounts found.') ?></h2>
+                        <p class="affiliate-admin-empty-text"><?= __('Use the form to create the first affiliate or adjust filters to find existing accounts.') ?></p>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<script data-no-extract="true">
+function affiliateAdminReloadFormScope(level) {
+    var root = document.querySelector('[data-testid="affiliate-admin-index"] form[method="post"]');
+    if (!root) {
+        return;
+    }
+    var params = new URLSearchParams(window.location.search);
+    var websiteInput = root.querySelector('[name="website_id"]');
+    var storeInput = root.querySelector('[name="store_code"]');
+    var channelInput = root.querySelector('[name="channel_code"]');
+    var websiteId = websiteInput ? String(websiteInput.value || '0').trim() : '0';
+    var storeCode = storeInput ? String(storeInput.value || '').trim() : '';
+    var channelCode = channelInput ? String(channelInput.value || '').trim() : '';
+    if (level === 'website') {
+        storeCode = '';
+        channelCode = '';
+    } else if (level === 'store') {
+        channelCode = '';
+    }
+    params.set('form_website_id', websiteId);
+    params.set('form_store_code', storeCode);
+    params.set('form_channel_code', channelCode);
+    params.delete('customer_id');
+    params.delete('id');
+    window.location.search = params.toString();
+}
+
+function affiliateAdminReloadFilterScope(level) {
+    var form = document.getElementById('affiliate-filter-form');
+    if (!form) {
+        return;
+    }
+    var websiteInput = form.querySelector('[name="website_id"]');
+    var storeInput = form.querySelector('[name="store_code"]');
+    var channelInput = form.querySelector('[name="channel_code"]');
+    var customerInput = form.querySelector('[name="customer_id"]');
+    if (level === 'website') {
+        if (storeInput) {
+            storeInput.value = '';
+        }
+        if (channelInput) {
+            channelInput.value = '';
+        }
+        if (customerInput) {
+            customerInput.value = '';
+        }
+    } else if (level === 'store') {
+        if (channelInput) {
+            channelInput.value = '';
+        }
+        if (customerInput) {
+            customerInput.value = '';
+        }
+    }
+    if (form.requestSubmit) {
+        form.requestSubmit();
+    } else {
+        form.submit();
+    }
+}
+</script>

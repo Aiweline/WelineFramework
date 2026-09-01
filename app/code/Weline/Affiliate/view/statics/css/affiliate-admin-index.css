@@ -1,0 +1,152 @@
+/**
+ * 分销后台列表页
+ * 模块：Weline_Affiliate
+ * 前缀：affiliate-admin-
+ * 使用主题变量，支持明暗模式
+ */
+
+.affiliate-admin-page {
+    --affiliate-admin-transition: 0.2s ease;
+}
+
+.affiliate-admin-page .affiliate-admin-header {
+    margin-bottom: var(--weline-space-4, 1rem);
+}
+
+.affiliate-admin-page .affiliate-admin-header h4 {
+    color: var(--backend-theme-text, var(--weline-theme-text));
+    font-weight: 650;
+    margin: 0;
+}
+
+.affiliate-admin-page .affiliate-admin-stat-value {
+    font-size: var(--weline-font-size-2xl, 1.75rem);
+    font-weight: 700;
+    line-height: 1.1;
+    color: var(--backend-theme-text, var(--weline-theme-text));
+}
+
+.affiliate-admin-page .affiliate-admin-stat-value[data-tone="success"] {
+    color: var(--weline-theme-success);
+}
+
+.affiliate-admin-page .affiliate-admin-stat-value[data-tone="muted"] {
+    color: var(--weline-theme-text-muted);
+}
+
+.affiliate-admin-page .affiliate-admin-summary-panel {
+    border: 1px solid var(--backend-theme-border, var(--weline-theme-border));
+    border-radius: var(--weline-radius-md, 0.375rem);
+    background: var(--weline-theme-surface-muted);
+    padding: var(--weline-space-4);
+}
+
+.affiliate-admin-page .affiliate-admin-summary-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-3);
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-sm);
+}
+
+.affiliate-admin-page .affiliate-admin-summary-row + .affiliate-admin-summary-row {
+    margin-top: var(--weline-space-2);
+}
+
+.affiliate-admin-page .affiliate-admin-summary-row strong {
+    color: var(--backend-theme-text, var(--weline-theme-text));
+    font-weight: 600;
+}
+
+.affiliate-admin-page .affiliate-admin-summary-row strong[data-tone="primary"] {
+    color: var(--weline-theme-primary);
+}
+
+.affiliate-admin-page .affiliate-admin-table-wrap {
+    overflow-x: auto;
+}
+
+.affiliate-admin-page .affiliate-admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--weline-font-size-sm, 0.9375rem);
+    color: var(--backend-theme-text, var(--weline-theme-text));
+}
+
+.affiliate-admin-page .affiliate-admin-table th {
+    color: var(--backend-theme-text, var(--weline-theme-text));
+    font-weight: 700;
+    padding: var(--weline-space-3) var(--weline-space-4);
+    border-bottom: 1px solid var(--backend-theme-border, var(--weline-theme-border));
+    text-align: start;
+    white-space: nowrap;
+}
+
+.affiliate-admin-page .affiliate-admin-table th:last-child,
+.affiliate-admin-page .affiliate-admin-table td:last-child {
+    text-align: end;
+}
+
+.affiliate-admin-page .affiliate-admin-table td {
+    padding: var(--weline-space-4);
+    border-bottom: 1px solid var(--backend-theme-border, var(--weline-theme-border));
+    vertical-align: middle;
+}
+
+.affiliate-admin-page .affiliate-admin-table tbody tr:last-child td {
+    border-bottom: 0;
+}
+
+.affiliate-admin-page .affiliate-admin-table tbody tr:hover td {
+    background: var(--weline-theme-surface-hover);
+}
+
+.affiliate-admin-page .affiliate-admin-table tbody tr[data-state="selected"] td {
+    background: color-mix(in srgb, var(--weline-theme-primary) 10%, var(--backend-theme-surface, var(--weline-theme-surface)));
+}
+
+.affiliate-admin-page .affiliate-admin-code {
+    color: var(--weline-theme-primary);
+    font-weight: 500;
+}
+
+.affiliate-admin-page .affiliate-admin-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2em 0.65em;
+    font-size: var(--weline-font-size-xs);
+    font-weight: 600;
+    border-radius: var(--weline-radius-round, 50rem);
+    line-height: 1.2;
+}
+
+.affiliate-admin-page .affiliate-admin-badge[data-tone="success"] {
+    background: var(--weline-theme-success-surface);
+    color: var(--weline-theme-success);
+}
+
+.affiliate-admin-page .affiliate-admin-badge[data-tone="muted"] {
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-text-muted);
+}
+
+.affiliate-admin-page .affiliate-admin-empty {
+    display: grid;
+    justify-items: center;
+    gap: var(--weline-space-3);
+    text-align: center;
+    padding: var(--weline-space-8) var(--weline-space-6);
+}
+
+.affiliate-admin-page .affiliate-admin-empty-text {
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-base);
+}
+
+.affiliate-admin-page .affiliate-admin-actions {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-2);
+    justify-content: flex-end;
+}
