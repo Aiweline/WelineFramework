@@ -1,0 +1,81 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$heading = (string)($this->getData('currency_page_heading') ?? __('货币与汇率'));
+$subtitle = (string)($this->getData('currency_page_subtitle') ?? '');
+$currencies = (array)($this->getData('currency_list') ?? []);
+$baseCode = strtoupper(trim((string)($this->getData('currency_base_code') ?? '')));
+$rateModeLabel = (string)($this->getData('currency_rate_mode_label') ?? '');
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+?>
+<link rel="stylesheet"
+      href="@static(Weline_Currency::css/currency-guide.css)?v=20260831-currency-guide1"
+      data-no-extract="true">
+
+<main class="w-currency-guide" data-testid="currency-guide-hub" weline-code="currency.guide.hub">
+    <header class="w-currency-guide__header">
+        <h1 class="w-currency-guide__title"><?= $esc($heading) ?></h1>
+        <?php if ($subtitle !== ''): ?>
+            <p class="w-currency-guide__subtitle"><?= $esc($subtitle) ?></p>
+        <?php endif; ?>
+    </header>
+
+    <section class="w-currency-guide__policy" data-testid="currency-guide-policy" weline-code="currency.guide.policy">
+        <h2 class="w-currency-guide__section-title"><lang>汇率政策</lang></h2>
+        <ul class="w-currency-guide__policy-list">
+            <li>
+                <lang>商品基准价按站点基准货币存储；前台按当前浏览货币换算后展示。</lang>
+            </li>
+            <?php if ($baseCode !== ''): ?>
+                <li>
+                    <lang args="[$baseCode]">当前基准货币为 %{1}。</lang>
+                </li>
+            <?php endif; ?>
+            <?php if ($rateModeLabel !== ''): ?>
+                <li>
+                    <lang args="[$rateModeLabel]">汇率来源模式：%{1}。</lang>
+                </li>
+            <?php endif; ?>
+            <li>
+                <lang>手动模式下各币种汇率由运营维护；自动模式下可由授权渠道同步更新。</lang>
+            </li>
+            <li>
+                <lang>结账与支付以订单结算货币为准；可用支付渠道可能受币种与收货地区限制。</lang>
+            </li>
+        </ul>
+    </section>
+
+    <section class="w-currency-guide__list" data-testid="currency-guide-list" weline-code="currency.guide.list">
+        <h2 class="w-currency-guide__section-title"><lang>支持的货币</lang></h2>
+        <?php if ($currencies === []): ?>
+            <p class="w-currency-guide__empty"><lang>当前暂无已启用的前台货币。</lang></p>
+        <?php else: ?>
+            <div class="w-currency-guide__grid">
+                <?php foreach ($currencies as $row): ?>
+                    <?php
+                    if (!is_array($row)) {
+                        continue;
+                    }
+                    $code = strtoupper(trim((string)($row['code'] ?? '')));
+                    if ($code === '') {
+                        continue;
+                    }
+                    $name = trim((string)($row['name'] ?? $code));
+                    $symbol = trim((string)($row['symbol'] ?? ''));
+                    $isBase = $baseCode !== '' && $code === $baseCode;
+                    ?>
+                    <article class="w-currency-guide__card" data-testid="currency-guide-card">
+                        <div class="w-currency-guide__card-code"><?= $esc($code) ?></div>
+                        <h3 class="w-currency-guide__card-name"><?= $esc($name) ?></h3>
+                        <?php if ($symbol !== ''): ?>
+                            <p class="w-currency-guide__card-symbol"><lang args="[$symbol]">符号：%{1}</lang></p>
+                        <?php endif; ?>
+                        <?php if ($isBase): ?>
+                            <span class="w-currency-guide__badge"><lang>基准货币</lang></span>
+                        <?php endif; ?>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php endif; ?>
+    </section>
+</main>
