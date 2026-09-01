@@ -9,6 +9,41 @@ declare(strict_types=1);
 
 $projectRoot = dirname(__DIR__, 2);
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'EnvLoader.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'DeployUserCommandRunner.php';
+
+/**
+ * Root 直接调用本脚本时：整段以部署用户重执行（与 bin/install.bash 一致），
+ * 避免 composer/setup:upgrade/cron:install 把 vendor、var、crontab 写成 root。
+ * Windows 允许管理员跑安装器；框架命令经 DeployUserCommandRunner 降到部署用户。
+ */
+if (
+    DeployUserCommandRunner::shouldDropRootPrivileges($projectRoot)
+    && \getenv('WELINE_INSTALLER_AS_DEPLOY_USER') !== '1'
+) {
+    $deployUser = DeployUserCommandRunner::resolveDeployUser($projectRoot);
+    if (\function_exists('posix_getpwnam') && @\posix_getpwnam($deployUser) === false) {
+        \fwrite(
+            \STDERR,
+            "ERROR: deploy user '{$deployUser}' does not exist. "
+            . "Create it first (e.g. bin/install.sh as root), or set WELINE_USER / env.php user.\n"
+        );
+        exit(1);
+    }
+    $selfPhp = (\defined('PHP_BINARY') && \PHP_BINARY !== '') ? (string) \PHP_BINARY : 'php';
+    $argList = \array_slice($argv, 1);
+    $quotedArgs = \array_map('escapeshellarg', $argList);
+    $path = (string) (\getenv('PATH') ?: '');
+    $inner = 'cd ' . \escapeshellarg($projectRoot)
+        . ' && export PATH=' . \escapeshellarg($path)
+        . ' && export WELINE_INSTALLER_AS_DEPLOY_USER=1'
+        . ' && export WELINE_USER=' . \escapeshellarg($deployUser)
+        . ' && ' . \escapeshellarg($selfPhp) . ' ' . \escapeshellarg(__FILE__)
+        . ($quotedArgs !== [] ? ' ' . \implode(' ', $quotedArgs) : '');
+    $wrapped = DeployUserCommandRunner::privilegeDropPrefix($deployUser) . \escapeshellarg($inner);
+    echo "run.php invoked as root; re-executing as deploy user {$deployUser}...\n";
+    \passthru($wrapped, $reexecCode);
+    exit((int) $reexecCode);
+}
 
 /** 优先使用项目 PHP（extend/server/php），非 root 时需提权的命令由内部加 sudo */
 $resolveProjectPhpBin = static function (string $root, string $phpDir): string {
@@ -204,11 +239,8 @@ if ($envPhpHadDbAtStart) {
             }
         }
 
-        $run = function (string $cmd) use ($phpBin): int {
-            $full = $phpBin . ' ' . $cmd;
-            echo "Running command: {$full}\n";
-            passthru($full, $code);
-            return (int)$code;
+        $run = static function (string $cmd) use ($projectRoot, $phpBin): int {
+            return DeployUserCommandRunner::runPhp($projectRoot, $phpBin, $cmd);
         };
         $runWithUpgradeRetry = function (string $cmd, string $stage, string $setupLockPath, int $maxWaitSeconds = 120) use ($run): int {
             $code = $run($cmd);
@@ -271,11 +303,8 @@ if ($envPhpHadDbAtStart) {
             $env = (new EnvLoader($projectRoot))->load(true);
             $phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
             $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
-            $run = function (string $cmd) use ($phpBin): int {
-                $full = $phpBin . ' ' . $cmd;
-                echo "执行命令：$full\n";
-                passthru($full, $code);
-                return (int) $code;
+            $run = static function (string $cmd) use ($projectRoot, $phpBin): int {
+                return DeployUserCommandRunner::runPhp($projectRoot, $phpBin, $cmd);
             };
             $tryInstallEventExtension = function () use ($run): void {
                 if (extension_loaded('event')) {
@@ -309,11 +338,8 @@ if ($envPhpHadDbAtStart) {
                     $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
                     (new EnsureComposer($projectRoot))->ensure($phpBin);
                     EnsureComposer::applyEnvCommand($projectRoot, $phpBin);
-                    $run = function (string $cmd) use ($phpBin): int {
-                        $full = $phpBin . ' ' . $cmd;
-                        echo "鎵ц鍛戒护锛?full\n";
-                        passthru($full, $code);
-                        return (int) $code;
+                    $run = static function (string $cmd) use ($projectRoot, $phpBin): int {
+                        return DeployUserCommandRunner::runPhp($projectRoot, $phpBin, $cmd);
                     };
                     $runWithUpgradeRetry = function (string $cmd, string $stage, string $setupLockPath, int $maxWaitSeconds = 120) use ($run): int {
                         $code = $run($cmd);
@@ -323,7 +349,7 @@ if ($envPhpHadDbAtStart) {
                         $waitSeconds = max(0, $maxWaitSeconds);
                         $interval = 2;
                         while ($waitSeconds > 0 && is_file($setupLockPath)) {
-                            echo "绛夊緟 setup:upgrade 鎵ц涓殑閿侀噴鏀撅紝閲嶈瘯{$stage}锛堝墿浣?{$waitSeconds}s锛?..\n";
+                            echo "等待 setup:upgrade 执行中的锁释放，重试{$stage}（剩余 {$waitSeconds}s）...\n";
                             sleep($interval);
                             $waitSeconds -= $interval;
                         }
@@ -452,11 +478,8 @@ $fromStep5b = in_array('--from', $argv, true)
 
 $phpDir = $projectRoot . DIRECTORY_SEPARATOR . 'extend' . DIRECTORY_SEPARATOR . 'server' . DIRECTORY_SEPARATOR . 'php';
 $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
-$run = function (string $cmd) use ($projectRoot, $phpBin): int {
-    $full = $phpBin . ' ' . $cmd;
-    echo "执行命令：$full\n";
-    passthru($full, $code);
-    return (int) $code;
+$run = static function (string $cmd) use ($projectRoot, $phpBin): int {
+    return DeployUserCommandRunner::runPhp($projectRoot, $phpBin, $cmd);
 };
 $tryInstallEventExtension = function () use ($run): void {
     if (extension_loaded('event')) {
@@ -470,10 +493,8 @@ $tryInstallEventExtension = function () use ($run): void {
     }
 };
 // 执行裸命令（不 prepend php），用于 composer 等独立可执行命令
-$runRaw = function (string $cmd): int {
-    echo "执行命令：$cmd\n";
-    passthru($cmd, $code);
-    return (int) $code;
+$runRaw = static function (string $cmd) use ($projectRoot): int {
+    return DeployUserCommandRunner::runShell($projectRoot, $cmd);
 };
 
 // 0. 确保 generated/code 存在（Composer classmap 会扫描，缺失会报错）
@@ -507,11 +528,8 @@ if (!$fromStep5b && is_dir($phpDir)) {
         $iniCfg = new ConfigurePhpIni($projectRoot, $phpDir);
         $iniCfg->apply($env);
         $phpBin = $resolveProjectPhpBin($projectRoot, $phpDir);
-        $run = function (string $cmd) use ($projectRoot, $phpBin): int {
-            $full = $phpBin . ' ' . $cmd;
-            echo "执行命令：$full\n";
-            passthru($full, $code);
-            return (int) $code;
+        $run = static function (string $cmd) use ($projectRoot, $phpBin): int {
+            return DeployUserCommandRunner::runPhp($projectRoot, $phpBin, $cmd);
         };
     } catch (Throwable $e) {
         fwrite(STDERR, "WARNING: php.ini configuration failed: " . $e->getMessage() . "\n");
@@ -617,7 +635,7 @@ if (!extension_loaded('pdo_pgsql')) {
             ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"'
             : (is_file($phpDir . DIRECTORY_SEPARATOR . 'php') ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php"' : 'php');
         $runCmd = $runPhp . ' "' . $projectRoot . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'server_installer' . DIRECTORY_SEPARATOR . 'run.php" --from 5b';
-        passthru($runCmd, $code);
+        $code = DeployUserCommandRunner::runShell($projectRoot, $runCmd);
         exit($code);
     }
     fwrite(STDERR, "WARNING: env:install pdo_pgsql 未成功。Linux/Mac 请确保有 sudo 权限；Windows 需在 php.ini 启用 extension=pdo_pgsql 并将 extend/server/pgsql/bin 加入 PATH。\n");
@@ -640,7 +658,7 @@ if (!$step5bOk && DIRECTORY_SEPARATOR === '\\' && is_dir($pgsqlBin)) {
         echo "Step 5b: pdo_pgsql needs libpq.dll. Re-running from Step 5b with PATH set...\n";
         $runPhp = is_file($phpDir . DIRECTORY_SEPARATOR . 'php.exe') ? '"' . $phpDir . DIRECTORY_SEPARATOR . 'php.exe"' : 'php';
         $runCmd = $runPhp . ' "' . $projectRoot . DIRECTORY_SEPARATOR . 'setup' . DIRECTORY_SEPARATOR . 'server_installer' . DIRECTORY_SEPARATOR . 'run.php" --from 5b';
-        passthru($runCmd, $code);
+        $code = DeployUserCommandRunner::runShell($projectRoot, $runCmd);
         exit($code);
     }
 }
@@ -708,21 +726,17 @@ $serverPort = (int) ($env['SERVER_PORT'] ?? $env['server']['port'] ?? 9981);
 $needSudo = $isMac && $serverPort < 1024;
 $serverStartCmd = 'bin/w server:start';
 if ($needSudo) {
-    echo "提示：macOS 上绑定端口 {$serverPort} 需要管理员权限，将使用 sudo 启动...\n";
-    $code = 0;
-    $sudoCmd = 'sudo ' . $phpBin . ' ' . $serverStartCmd;
-    echo "执行命令：$sudoCmd\n";
-    passthru($sudoCmd, $code);
-} else {
-    $code = $run($serverStartCmd);
+    // Env::check_user 禁止 root 跑 bin/w；特权端口请改用 >=1024 或系统 capabilities，勿 sudo 成 root 启动。
+    echo "提示：macOS 上绑定端口 {$serverPort} 通常需要特权；将以部署用户执行 server:start（禁止 root）。"
+        . " 若失败请将 SERVER_PORT 设为 >=1024，或为 PHP 配置 port binding 能力。\n";
 }
+$code = $run($serverStartCmd);
 if ($code !== 0) {
     echo "\n";
     echo "提示：server:start 未能自动启动，您可以手动启动服务器：\n";
+    echo "  php bin/w server:start\n";
     if ($needSudo) {
-        echo "  sudo php bin/w server:start\n";
-    } else {
-        echo "  php bin/w server:start\n";
+        echo "  （勿使用 sudo 以 root 启动；请改用端口 >=1024 或以部署用户具备的能力绑定低端口）\n";
     }
     echo "\n";
 }

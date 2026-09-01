@@ -1615,14 +1615,15 @@ RUN_ARGS=()
 [[ "$FORCE_INSTALL" == true ]] && RUN_ARGS+=("-f")
 [[ "$AUTO_UPGRADE" == true ]] && RUN_ARGS+=("-y")
 [[ -n "$ENV_FILE_ARG" ]] && RUN_ARGS+=("--env-file" "$ENV_FILE_ARG")
-# 已通过 root→weline 重执行，此处始终由 weline 执行
+# 已通过 root→weline 重执行，此处始终由 weline 执行。
+# run.php 另有 root→部署用户自降权与 bin/w 命令包装（防直接 php run.php 以 root 安装污染 crontab/var）。
 if [[ -f "$ROOT/setup/server_installer/bootstrap_php_ini.php" ]] && [[ -x "$PHP_EXE" || -f "$PHP_EXE" ]]; then
   echo "Pre-configuring php.ini (opcache file_cache for Windows ASLR)..."
   "$PHP_EXE" -d opcache.enable=0 -d opcache.enable_cli=0 "$ROOT/setup/server_installer/bootstrap_php_ini.php" || {
     echo "WARNING: bootstrap_php_ini failed; run.php may hit Opcache ASLR fatal on Windows." >&2
   }
 fi
-(cd "$ROOT" && "$PHP_EXE" setup/server_installer/run.php "${RUN_ARGS[@]}") || exit 1
+(cd "$ROOT" && env WELINE_USER="$WELINE_USER" "$PHP_EXE" setup/server_installer/run.php "${RUN_ARGS[@]}") || exit 1
 echo ""
 cd "$ROOT"
 
