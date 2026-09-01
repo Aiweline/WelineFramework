@@ -53,11 +53,7 @@ try {
     $inboxError = $throwable->getMessage();
 }
 
-$accountPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
-if (!is_string($accountPath) || $accountPath === '') {
-    $accountPath = '/customer/account/index';
-}
-$accountPath = rtrim($accountPath, '/');
+$accountPath = '/customer/account/index';
 ?>
 <style data-no-extract="true">
 .weline-real-mail{display:grid;gap:1rem}.weline-real-mail__header{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;flex-wrap:wrap}
@@ -77,7 +73,7 @@ $accountPath = rtrim($accountPath, '/');
             <h2><?= __('我的企业邮箱') ?></h2>
             <p><?= __('这里只显示与你当前账号绑定且已启用的邮箱。') ?></p>
         </div>
-        <form method="get" action="<?= $escape($accountPath) ?>#mail">
+        <form method="get" action="@url{'customer/account/index'}#mail">
             <label class="w-field">
                 <span class="w-field__label"><?= __('当前邮箱') ?></span>
                 <select class="w-select" name="mail_account" onchange="this.form.submit()">
@@ -178,11 +174,6 @@ $selectedAccount = $fakeAccounts[0] ?? null;
 $selectedAccountId = $selectedAccount ? (int)$selectedAccount->getId() : 0;
 $inboxMessages = $selectedAccountId > 0 ? $mailboxService->getMessagesForCustomer($customerId, $selectedAccountId, 'inbox') : [];
 $sentMessages = $selectedAccountId > 0 ? $mailboxService->getMessagesForCustomer($customerId, $selectedAccountId, 'sent') : [];
-$applyUrl = $this->getFrontendUrl('weline_mail/frontend/account/mail/apply');
-$suspendUrl = $this->getFrontendUrl('weline_mail/frontend/account/mail/suspend');
-$resumeUrl = $this->getFrontendUrl('weline_mail/frontend/account/mail/resume');
-$sendUrl = $this->getFrontendUrl('weline_mail/frontend/account/mail/send');
-$receiveTestUrl = $this->getFrontendUrl('weline_mail/frontend/account/mail/receive-test');
 $statusLabels = [
     'pending' => __('待同步'),
     'active' => __('已启用'),
@@ -206,7 +197,7 @@ $statusLabels = [
                     <p><?= __('当前没有已开启的邮箱域名，请稍后再试。') ?></p>
                 </div>
             <?php else: ?>
-                <w:form class="weline-mail-account__form" method="post" action="@var($escape($applyUrl))">
+                <w:form class="weline-mail-account__form" method="post" action="@frontend-url{'weline_mail/frontend/account/mail/apply'}">
                     <?php if ($fakeMode): ?>
                         <input type="hidden" name="mail_fake" value="1">
                     <?php endif; ?>
@@ -261,12 +252,12 @@ $statusLabels = [
                             <span class="weline-mail-account__badge"><?= $statusLabels[$status] ?? $escape($status) ?></span>
                             <div class="weline-mail-account__actions">
                                 <?php if ($status !== 'suspended'): ?>
-                                    <w:form method="post" action="@var($escape($suspendUrl))">
+                                    <w:form method="post" action="@frontend-url{'weline_mail/frontend/account/mail/suspend'}">
                                         <input type="hidden" name="account_id" value="<?= $accountId ?>">
                                         <button type="submit" class="account-form__btn account-form__btn--secondary"><?= __('暂停') ?></button>
                                     </w:form>
                                 <?php else: ?>
-                                    <w:form method="post" action="@var($escape($resumeUrl))">
+                                    <w:form method="post" action="@frontend-url{'weline_mail/frontend/account/mail/resume'}">
                                         <input type="hidden" name="account_id" value="<?= $accountId ?>">
                                         <button type="submit" class="account-form__btn account-form__btn--secondary"><?= __('恢复') ?></button>
                                     </w:form>
@@ -293,12 +284,12 @@ $statusLabels = [
                                 <strong><?= $escape($selectedEmail) ?></strong>
                                 <span><?= __('Fake 模式已启用，可进行本地收发信冒烟。') ?></span>
                             </div>
-                            <w:form method="post" action="@var($escape($receiveTestUrl))">
+                            <w:form method="post" action="@frontend-url{'weline_mail/frontend/account/mail/receive-test'}">
                                 <input type="hidden" name="account_id" value="<?= $selectedAccountId ?>">
                                 <button type="submit" class="account-form__btn account-form__btn--secondary"><?= __('收取测试邮件') ?></button>
                             </w:form>
                         </div>
-                        <w:form class="weline-mail-client__form" method="post" action="@var($escape($sendUrl))">
+                        <w:form class="weline-mail-client__form" method="post" action="@frontend-url{'weline_mail/frontend/account/mail/send'}">
                             <input type="hidden" name="account_id" value="<?= $selectedAccountId ?>">
                             <div class="account-form__group">
                                 <label class="account-form__label" for="mail_to_email"><?= __('收件人') ?></label>
