@@ -11,7 +11,7 @@
         <button type="button" class="w-button" data-geo-account-action="show" data-tone="primary">
             <w:icon name="plus" size="sm"></w:icon> <?= __('添加账户') ?>
         </button>
-        <a href="<?= $this->getUrl('geo/backend/platform') ?>" class="w-button" data-tone="neutral">
+        <a href="@url{'geo/backend/platform'}" class="w-button" data-tone="neutral">
             <?= __('返回') ?>
         </a>
     </div>
@@ -135,7 +135,7 @@ function testConnection(accountId) {
     const formData = new FormData();
     formData.append('account_id', accountId);
     
-    var testUrl = '<?= $this->getUrl('geo/backend/platform/testConnection') ?>';
+    var testUrl = '@url{'geo/backend/platform/testConnection'}';
     var testOpts = { method: 'POST', body: formData };
     Weline.adminRequest('geo', testUrl, testOpts)
     .then(function(res) {
@@ -167,7 +167,7 @@ document.getElementById('account-form').addEventListener('submit', function(e) {
     
     const formData = new FormData(this);
     
-    var saveUrl = '<?= $this->getUrl('geo/backend/platform/saveAccount') ?>';
+    var saveUrl = '@url{'geo/backend/platform/saveAccount'}';
     var saveOpts = { method: 'POST', body: formData };
     Weline.adminRequest('geo', saveUrl, saveOpts)
     .then(function(res) {
