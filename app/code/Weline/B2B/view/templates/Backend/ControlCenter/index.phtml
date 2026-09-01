@@ -5,7 +5,7 @@ $status = (array)($this->getData('workspace_status') ?? []);
 $datasets = (array)($this->getData('workspace_datasets') ?? []);
 $form = (array)($this->getData('workspace_form') ?? []);
 $kind = (string)($form['kind'] ?? '');
-$formActionUrl = $form === [] ? '' : $this->getBackendUrl((string)($form['action'] ?? ''));
+$formActionPath = $form === [] ? '' : trim((string)($form['action'] ?? ''));
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $display = static function (mixed $value) use ($escape): string {
     if (is_bool($value)) return $value ? (string)__('是') : (string)__('否');
@@ -42,7 +42,7 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
     <div class="w-alert" role="status" data-tone="info"><?= $form === [] ? __('此页面显示不可变报价与订单价格快照；生产迁移仍由受控 CLI 完成。') : __('写操作受 B2B rollout 门禁保护，并复用候选解析、报价重检与不可变快照服务。') ?></div>
     <?php if ($form !== []): ?>
         <div class="w-card" data-testid="b2b-<?= $escape($code) ?>-write-form" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?= $kind === 'quote' ? __('签发并审批报价') : __('新增配置') ?></h5></div><div class="w-card__body">
-            <w:form method="post" action="@var($formActionUrl)"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
+            <w:form method="post" action="@backend-url{$formActionPath}"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
                 <?php if ($kind === 'group'): ?>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户组 ID') ?></label><input class="w-input" name="group_id" maxlength="64" required></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
