@@ -1,0 +1,27 @@
+<?php
+/**
+ * Weline_Wishlist — account page wishlist section.
+ *
+ * Hook: account.sidebar.content
+ *
+ * @hook-priority 160
+ * @hook-sort-order 10
+ * @hook-solo false
+ */
+use Weline\Customer\Service\AccountSidebarContentGate;
+use Weline\Framework\Runtime\RequestContext;
+
+if (!class_exists(AccountSidebarContentGate::class) || !AccountSidebarContentGate::accepts('wishlist')) {
+    return;
+}
+
+$renderKey = 'weline_wishlist.account_sidebar_content.rendered';
+if (RequestContext::get($renderKey, false)) {
+    return;
+}
+
+RequestContext::set($renderKey, true);
+?>
+<section class="account-hook-section account-index__section motor-account-section" id="wishlist-section" data-account-section="wishlist" hidden weline-code="wishlist.hook.account_sidebar_content.wishlist_section">
+    <?= $this->fetch('Weline_Wishlist::templates/frontend/wishlist/index.phtml') ?>
+</section>

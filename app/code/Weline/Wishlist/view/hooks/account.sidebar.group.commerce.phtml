@@ -1,0 +1,20 @@
+<?php
+/**
+ * Weline_Wishlist — commerce group entry.
+ *
+ * Hook: account.sidebar.group.commerce
+ *
+ * @hook-priority 160
+ * @hook-sort-order 12
+ * @hook-solo false
+ */
+?>
+<a class="account-hook-nav-link" href="@url{'customer/account/index'}#wishlist" data-section="wishlist" data-account-nav-link="true" data-account-nav-parent="commerce">
+    <span class="account-hook-nav-link__label">
+        <w:icon name="heart" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text">
+            <strong><?= __('我的收藏') ?></strong>
+            <span><?= __('查看已收藏的商品') ?></span>
+        </span>
+    </span>
+</a>

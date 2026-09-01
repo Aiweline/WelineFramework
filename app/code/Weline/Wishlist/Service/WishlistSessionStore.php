@@ -19,7 +19,7 @@ class WishlistSessionStore
      */
     public function listIds(): array
     {
-        $raw = trim((string)Cookie::get(self::COOKIE_NAME));
+        $raw = trim($this->readRawCookieValue());
         if ($raw === '') {
             return [];
         }
@@ -36,6 +36,39 @@ class WishlistSessionStore
         }
 
         return array_values(array_unique($out));
+    }
+
+    private function readRawCookieValue(): string
+    {
+        try {
+            $raw = trim((string)Cookie::get(self::COOKIE_NAME));
+            if ($raw !== '') {
+                return $raw;
+            }
+        } catch (\Throwable) {
+        }
+
+        return $this->readRawCookieFromSuperglobal();
+    }
+
+    private function readRawCookieFromSuperglobal(): string
+    {
+        $cookies = is_array($_COOKIE ?? null) ? $_COOKIE : [];
+        $prefix = self::COOKIE_NAME;
+        foreach ($cookies as $name => $value) {
+            if (!is_string($name) || !is_scalar($value)) {
+                continue;
+            }
+            if ($name !== $prefix && !str_starts_with($name, $prefix . '_')) {
+                continue;
+            }
+            $candidate = trim((string)$value);
+            if ($candidate !== '') {
+                return $candidate;
+            }
+        }
+
+        return '';
     }
 
   /**
