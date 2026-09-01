@@ -207,7 +207,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
                 <span class="w-switch__label"><?= $escape(__('正式环境调试')) ?></span>
             </label>
             <button class="w-button" type="button" data-tone="primary" data-api-action="open-login" data-api-login-button><w:icon name="lock" size="sm"></w:icon><span data-api-login-label><?= $escape(__('登录')) ?></span></button>
-            <a class="w-button" data-tone="neutral" href="<?= $escape($this->getUrl('dev/tool/docs')) ?>"><w:icon name="book" size="sm"></w:icon><?= $escape(__('开发文档')) ?></a>
+            <a class="w-button" data-tone="neutral" href="@url{'dev/tool/docs'}"><w:icon name="book" size="sm"></w:icon><?= $escape(__('开发文档')) ?></a>
         </nav>
     </header>
 

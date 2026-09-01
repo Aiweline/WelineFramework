@@ -24,6 +24,15 @@
 // 但为了防止报错，提供默认值
 $isBackend = $isBackend ?? false;
 $panelType = $panelType ?? 'frontend';
+$systemVersion = trim((string)($systemVersion ?? ''));
+$themePublishedVersionId = trim((string)($themePublishedVersionId ?? ''));
+$themePublishedVersion = trim((string)($themePublishedVersion ?? ''));
+if ($systemVersion === '') {
+    $systemVersion = 'unknown';
+}
+$themeVersionLabel = $themePublishedVersion !== ''
+    ? $themePublishedVersion
+    : ($themePublishedVersionId !== '' ? ('#' . $themePublishedVersionId) : '—');
 ?>
 
 <!-- 开发工具面板样式 -->
@@ -844,6 +853,37 @@ $panelType = $panelType ?? 'frontend';
     .badge-success {
         background: #dce4dc;
         color: #5a6b5a !important;
+    }
+
+    .dev-tool-version-badges {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-left: 2px;
+    }
+
+    .dev-tool-version-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        max-width: 220px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        border: 1px solid rgba(255, 255, 255, 0.28);
+        background: rgba(0, 0, 0, 0.22);
+        color: rgba(255, 255, 255, 0.95);
+        font-size: 11px;
+        font-weight: 500;
+        line-height: 1.3;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .dev-tool-version-badge strong {
+        font-weight: 600;
+        color: #ffd8a8;
     }
 
     @keyframes spin {
@@ -3002,6 +3042,28 @@ $panelType = $panelType ?? 'frontend';
                     <span class="w-badge badge-<?php echo $isBackend ? 'primary' : 'success'; ?>">
                         <?php echo $isBackend ? 'Backend' : 'Frontend'; ?>
                     </span>
+                    <span class="dev-tool-version-badges" aria-label="<?php echo htmlspecialchars(__('系统与主题版本'), ENT_QUOTES, 'UTF-8'); ?>">
+                        <span
+                            class="dev-tool-version-badge"
+                            title="<?php echo htmlspecialchars(__('系统版本（Weline_Framework）'), ENT_QUOTES, 'UTF-8'); ?>"
+                        >
+                            <strong>SYS</strong>
+                            <?php echo htmlspecialchars($systemVersion, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                        <span
+                            class="dev-tool-version-badge"
+                            title="<?php echo htmlspecialchars(
+                                $themePublishedVersionId !== ''
+                                    ? (__('前端主题发布版本') . ' #' . $themePublishedVersionId)
+                                    : (string)__('前端主题发布版本'),
+                                ENT_QUOTES,
+                                'UTF-8'
+                            ); ?>"
+                        >
+                            <strong>Theme</strong>
+                            <?php echo htmlspecialchars($themeVersionLabel, ENT_QUOTES, 'UTF-8'); ?>
+                        </span>
+                    </span>
                     <span class="dev-tool-header-hint" aria-hidden="true"></span>
                 </h3>
                 <div class="dev-tool-page-context" aria-label="当前页面">
@@ -3022,10 +3084,10 @@ $panelType = $panelType ?? 'frontend';
                 </div>
             </div>
             <div class="dev-tool-quick-actions">
-                <a href="/dev/tool/docs" target="_blank" class="dev-tool-quick-btn">
+                <a href="@url{'dev/tool/docs'}" target="_blank" class="dev-tool-quick-btn">
                     <w:icon name="circle" size="sm"></w:icon> 完整文档
                 </a>
-                <a href="/dev/tool/docs?catalog=api" target="_blank" class="dev-tool-quick-btn">
+                <a href="@url{'dev/tool/docs'}?catalog=api" target="_blank" class="dev-tool-quick-btn">
                     <w:icon name="code" size="sm"></w:icon> API文档
                 </a>
             </div>
@@ -3033,13 +3095,13 @@ $panelType = $panelType ?? 'frontend';
         
         <!-- 标签页 -->
         <div class="dev-tool-tabs">
-            <button class="dev-tool-tab active" data-tab="performance" data-dev-tool-action="switch-main-tab">
+            <button class="dev-tool-tab active" data-tab="performance" data-order="10" data-dev-tool-action="switch-main-tab">
                 <w:icon name="clock" size="sm"></w:icon> 耗时统计
             </button>
-            <button class="dev-tool-tab" data-tab="framework" data-dev-tool-action="switch-main-tab">
+            <button class="dev-tool-tab" data-tab="framework" data-order="20" data-dev-tool-action="switch-main-tab">
                 <w:icon name="box" size="sm"></w:icon> 框架
             </button>
-            <button class="dev-tool-tab" data-tab="docs" data-dev-tool-action="switch-main-tab">
+            <button class="dev-tool-tab" data-tab="docs" data-order="30" data-dev-tool-action="switch-main-tab">
                 <w:icon name="file" size="sm"></w:icon> 文档
             </button>
             <?= $extraTabsHtml ?? '' ?>

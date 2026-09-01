@@ -439,7 +439,7 @@ class DevToolPanelObserver implements ObserverInterface
         $requestId = \htmlspecialchars($requestId, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
         $tokenRequired = $panelAccess->requiresTokenForUi() ? '1' : '0';
         $sessionUrl = \htmlspecialchars('/' . $this->resolveApiBase() . '/panel/session', ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-        $loaderSrc = '/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js?v=20260729-query-provider-4';
+        $loaderSrc = '/Weline/DeveloperWorkspace/view/statics/js/dev-tool-panel-loader.js?v=20260829-tab-order-fix';
 
         return <<<HTML
 <script data-weline-panel-bootstrap="1" data-api-base="{$apiBase}" data-request-id="{$requestId}" data-token-required="{$tokenRequired}" data-session-url="{$sessionUrl}" data-src="{$loaderSrc}">(function(d,w){if(w.__WELINE_PANEL_BOOT__)return;w.__WELINE_PANEL_BOOT__=1;var s=d.currentScript;function l(){if(d.getElementById('weline-panel-loader-js'))return;var x=d.createElement('script');x.id='weline-panel-loader-js';x.src=s.getAttribute('data-src');x.async=false;x.setAttribute('data-api-base',s.getAttribute('data-api-base')||'');x.setAttribute('data-request-id',s.getAttribute('data-request-id')||'');x.setAttribute('data-token-required',s.getAttribute('data-token-required')||'0');x.setAttribute('data-session-url',s.getAttribute('data-session-url')||'');(d.body||d.documentElement).appendChild(x)}if(d.body||d.documentElement){l()}else{d.addEventListener('DOMContentLoaded',l,{once:true})}})(document,window);
@@ -535,12 +535,19 @@ HTML;
             $hasPanelSession = $panelAccess->canAccessPanel($this->request);
             $runtimeMode = Runtime::getMode();
             $isWlsRuntime = Runtime::isWls();
+            $versionMeta = $this->resolvePanelVersionMeta();
+            $systemVersion = (string)($versionMeta['systemVersion'] ?? '');
+            $themePublishedVersionId = (string)($versionMeta['themePublishedVersionId'] ?? '');
+            $themePublishedVersion = (string)($versionMeta['themePublishedVersion'] ?? '');
             $cacheKey = sha1(json_encode([
                 'backend' => $isBackend,
                 'session' => $hasPanelSession,
                 'base_url' => (string)$this->request->getBaseUrl(),
                 'runtime' => $runtimeMode,
                 'is_wls' => $isWlsRuntime,
+                'system_version' => $systemVersion,
+                'theme_published_version_id' => $themePublishedVersionId,
+                'theme_published_version' => $themePublishedVersion,
                 'shell' => $this->panelShellCacheSignature($templatePath),
             ], JSON_UNESCAPED_SLASHES) ?: 'dev-tool-panel');
             $cached = self::$panelHtmlCache[$cacheKey] ?? null;
@@ -603,10 +610,53 @@ HTML;
         }
     }
 
+    /**
+     * @return array{systemVersion:string,themePublishedVersionId:string,themePublishedVersion:string}
+     */
+    private function resolvePanelVersionMeta(): array
+    {
+        $systemVersion = 'unknown';
+        try {
+            $frameworkModule = BP . 'app/code/Weline/Framework/etc/module.php';
+            if (\is_file($frameworkModule)) {
+                /** @var mixed $meta */
+                $meta = include $frameworkModule;
+                if (\is_array($meta)) {
+                    $systemVersion = \trim((string)($meta['version'] ?? 'unknown')) ?: 'unknown';
+                }
+            }
+        } catch (\Throwable) {
+            $systemVersion = 'unknown';
+        }
+
+        $themePublishedVersionId = '';
+        $themePublishedVersion = '';
+        try {
+            if (\class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+                /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+                $resolver = ObjectManager::getInstance(
+                    \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+                );
+                $resolved = $resolver->resolve();
+                $themePublishedVersionId = \trim((string)($resolved['themePublishedVersionId'] ?? ''));
+                $themePublishedVersion = \trim((string)($resolved['themePublishedVersion'] ?? ''));
+            }
+        } catch (\Throwable) {
+            $themePublishedVersionId = '';
+            $themePublishedVersion = '';
+        }
+
+        return [
+            'systemVersion' => $systemVersion,
+            'themePublishedVersionId' => $themePublishedVersionId,
+            'themePublishedVersion' => $themePublishedVersion,
+        ];
+    }
+
     private function panelShellCacheSignature(string $templatePath): string
     {
         $parts = [
-            'version=20260702-weline-panel-shell-hooks-v6-wls-register-tab',
+            'version=20260901-weline-panel-sys-theme-versions-v1',
             'template=' . $this->fileCacheSignature($templatePath),
         ];
 
