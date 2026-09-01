@@ -77,7 +77,7 @@ $confirmMessages = [
             <h3><?= __('筛选条件') ?></h3>
         </div>
         <div class="w-card__body">
-            <w:form method="get" action="@var($this->getBackendUrl('*/backend/record'))">
+            <w:form method="get" action="@backend-url{'*/backend/record'}">
                 <div class="w-grid">
                     <div style="--w-span-md:3;">
                         <div style="--w-mb:var(--weline-space-4);">
@@ -142,7 +142,7 @@ $confirmMessages = [
                                 <button type="submit" class="w-button" data-tone="primary">
                                     <w:icon name="filter" size="sm"></w:icon> <?= __('筛选') ?>
                                 </button>
-                                <a href="<?= $this->getBackendUrl('*/backend/record') ?>" class="w-button" data-tone="neutral">
+                                <a href="@backend-url{'*/backend/record'}" class="w-button" data-tone="neutral">
                                     <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
                                 </a>
                             </div>
@@ -244,10 +244,10 @@ $confirmMessages = [
                                     <td><?= htmlspecialchars($record->getData('created_at')) ?></td>
                                     <td>
                                         <div class="w-button-group">
-                                            <a href="<?= $this->getBackendUrl('*/backend/record/view', ['id' => $record->getId()]) ?>" class="w-button" data-tone="info" data-variant="outline">
+                                            <a href="@backend-url{'*/backend/record/view'|['id' => $record->getId()]}" class="w-button" data-tone="info" data-variant="outline">
                                                 <w:icon name="eye" size="sm"></w:icon>
                                             </a>
-                                            <a href="<?= $this->getBackendUrl('*/backend/record/delete', ['id' => $record->getId()]) ?>" class="w-button" data-translation-record-confirm="deleteRecord" data-tone="danger" data-variant="outline">
+                                            <a href="@backend-url{'*/backend/record/delete'|['id' => $record->getId()]}" class="w-button" data-translation-record-confirm="deleteRecord" data-tone="danger" data-variant="outline">
                                                 <w:icon name="trash" size="sm"></w:icon>
                                             </a>
                                         </div>
@@ -264,7 +264,7 @@ $confirmMessages = [
                         <ul class="w-pagination" data-justify="center">
                             <?php if ($page > 1): ?>
                                 <li class="w-pagination__item">
-                                    <a class="w-pagination__link" href="<?= $this->getBackendUrl('*/backend/record', array_merge($filters, ['page' => $page - 1])) ?>">
+                                    <a class="w-pagination__link" href="@backend-url{'*/backend/record'|array_merge($filters, ['page' => $page - 1])}">
                                         <?= __('上一页') ?>
                                     </a>
                                 </li>
@@ -272,7 +272,7 @@ $confirmMessages = [
                             
                             <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
                                 <li class="w-pagination__item <?= $i == $page ? 'active' : '' ?>">
-                                    <a class="w-pagination__link" href="<?= $this->getBackendUrl('*/backend/record', array_merge($filters, ['page' => $i])) ?>">
+                                    <a class="w-pagination__link" href="@backend-url{'*/backend/record'|array_merge($filters, ['page' => $i])}">
                                         <?= $i ?>
                                     </a>
                                 </li>
@@ -280,7 +280,7 @@ $confirmMessages = [
                             
                             <?php if ($page < $totalPages): ?>
                                 <li class="w-pagination__item">
-                                    <a class="w-pagination__link" href="<?= $this->getBackendUrl('*/backend/record', array_merge($filters, ['page' => $page + 1])) ?>">
+                                    <a class="w-pagination__link" href="@backend-url{'*/backend/record'|array_merge($filters, ['page' => $page + 1])}">
                                         <?= __('下一页') ?>
                                     </a>
                                 </li>
@@ -417,7 +417,7 @@ function batchDelete() {
 
         const form = document.createElement('form');
         form.method = 'POST';
-        form.action = '<?= $this->getBackendUrl('*/backend/record/batchDelete') ?>';
+        form.action = '@backend-url{'*/backend/record/batchDelete'}';
 
         ids.forEach(function(id) {
             const input = document.createElement('input');
@@ -433,7 +433,7 @@ function batchDelete() {
 }
 
 function exportStats() {
-    window.location.href = '<?= $this->getBackendUrl('*/backend/record/exportStats') ?>';
+    window.location.href = '@backend-url{'*/backend/record/exportStats'}';
 }
 
 document.querySelectorAll('[data-translation-record-select-all]').forEach(function(checkbox) {
