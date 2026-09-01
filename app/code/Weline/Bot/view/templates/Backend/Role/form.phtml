@@ -49,9 +49,7 @@ foreach ($skills as $skill) {
 }
 ksort($skillsByCategory);
 
-$saveUrl = $this->getBackendUrl('*/backend/role/save');
-$listUrl = $this->getBackendUrl('*/backend/role/listing');
-$suggestUrl = $this->getBackendUrl('*/backend/role/suggest');
+$suggestPath = '*/backend/role/suggest';
 ?>
 
 <div class="row">
@@ -60,7 +58,7 @@ $suggestUrl = $this->getBackendUrl('*/backend/role/suggest');
             <h4 class="mb-sm-0"><?= $role ? __('Edit Role') : __('Create Role') ?></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="<?= htmlspecialchars($listUrl, ENT_QUOTES) ?>"><?= __('Role Management') ?></a></li>
+                    <li class="breadcrumb-item"><a href="@backend-url{'*/backend/role/listing'}"><?= __('Role Management') ?></a></li>
                     <li class="breadcrumb-item active"><?= $role ? __('Edit Role') : __('Create Role') ?></li>
                 </ol>
             </div>
@@ -74,7 +72,7 @@ $suggestUrl = $this->getBackendUrl('*/backend/role/suggest');
     </div>
 </div>
 
-<form id="botRoleForm" action="<?= htmlspecialchars($saveUrl, ENT_QUOTES) ?>" method="post">
+<form id="botRoleForm" action="@backend-url{'*/backend/role/save'}" method="post">
     <csrf/>
     <?php if (!empty($roleData['role_id'])): ?>
     <input type="hidden" name="id" value="<?= (int)$roleData['role_id'] ?>">
@@ -328,7 +326,7 @@ $suggestUrl = $this->getBackendUrl('*/backend/role/suggest');
                 <button type="submit" class="btn btn-primary flex-grow-1">
                     <i class="mdi mdi-content-save me-1"></i><?= __('Save') ?>
                 </button>
-                <a href="<?= htmlspecialchars($listUrl, ENT_QUOTES) ?>" class="btn btn-light"><?= __('Back') ?></a>
+                <a href="@backend-url{'*/backend/role/listing'}" class="btn btn-light"><?= __('Back') ?></a>
             </div>
         </div>
     </div>
@@ -347,7 +345,7 @@ $suggestUrl = $this->getBackendUrl('*/backend/role/suggest');
 (function () {
     'use strict';
 
-    var suggestUrl = <?= json_encode($suggestUrl, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var suggestUrl = "@backend-url{$suggestPath}";
     var roleTemplates = <?= json_encode($roleTemplates, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var guideProfiles = <?= json_encode($guideProfiles, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var form = document.getElementById('botRoleForm');

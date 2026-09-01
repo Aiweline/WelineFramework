@@ -7,7 +7,6 @@
 $sessions = is_array($sessions ?? null) ? $sessions : [];
 $currentStatus = trim((string)($current_status ?? ''));
 $currentChannel = trim((string)($current_channel ?? ''));
-$listingUrl = $this->getBackendUrl('*/backend/session/listing');
 
 $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
     if (is_array($item)) {
@@ -32,7 +31,7 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
             <h4 class="mb-sm-0"><?= __('Session Management') ?></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="<?= htmlspecialchars($listingUrl, ENT_QUOTES) ?>"><?= __('Bot') ?></a></li>
+                    <li class="breadcrumb-item"><a href="@backend-url{'*/backend/session/listing'}"><?= __('Bot') ?></a></li>
                     <li class="breadcrumb-item active"><?= __('Sessions') ?></li>
                 </ol>
             </div>
@@ -50,7 +49,7 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <form class="row g-2 mb-3" method="get" action="<?= htmlspecialchars($listingUrl, ENT_QUOTES) ?>">
+                <form class="row g-2 mb-3" method="get" action="@backend-url{'*/backend/session/listing'}">
                     <div class="col-md-3">
                         <label class="form-label"><?= __('Status') ?></label>
                         <input type="text" class="form-control" name="status" value="<?= htmlspecialchars($currentStatus) ?>" placeholder="active / archived">
@@ -95,7 +94,7 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
                                     <td><?= htmlspecialchars((string) $get($session, 'updated_at', '')) ?></td>
                                     <td>
                                         <a class="btn btn-sm btn-outline-primary"
-                                           href="<?= htmlspecialchars($this->getBackendUrl('*/backend/session/view?id=' . $id), ENT_QUOTES) ?>">
+                                           href="@backend-url{'*/backend/session/view'|['id' => $id]}">
                                             <?= __('View') ?>
                                         </a>
                                     </td>
