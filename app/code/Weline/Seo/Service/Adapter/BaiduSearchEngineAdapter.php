@@ -119,6 +119,35 @@ class BaiduSearchEngineAdapter implements SearchEngineAdapterInterface
         ];
     }
 
+    public function getAccountConfigFields(): array
+    {
+        return [
+            [
+                'key' => 'token',
+                'label' => (string)__('百度站长平台 Token'),
+                'type' => 'password',
+                'required' => true,
+                'placeholder' => 'xxxxx',
+                'hint' => (string)__('在百度搜索资源平台「链接提交 → 主动推送」接口地址中的 token 参数'),
+            ],
+            [
+                'key' => 'site',
+                'label' => (string)__('已验证站点 URL'),
+                'type' => 'website_url',
+                'required' => true,
+                'placeholder' => 'https://www.example.com',
+                'hint' => (string)__('从网站列表选择；须与百度站长平台已验证站点一致'),
+            ],
+            [
+                'key' => 'use_fast_push',
+                'label' => (string)__('启用快速收录（需配额）'),
+                'type' => 'checkbox',
+                'required' => false,
+                'hint' => (string)__('开启后走百度快速收录接口；无配额时请关闭'),
+            ],
+        ];
+    }
+
     public function isConfigured(): bool
     {
         return true;

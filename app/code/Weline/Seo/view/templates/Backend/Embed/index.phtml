@@ -40,7 +40,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
 
     <section class="w-card">
         <div class="w-card__body">
-            <w:form method="get" action="@var($this->getUrl('*/backend/embed', $baseParams))" class="w-grid">
+            <w:form method="get" action="@url{'*/backend/embed'|$baseParams}" class="w-grid">
                 <?php if ($module !== ''): ?><input type="hidden" name="module" value="<?= $escape($module) ?>"><?php endif; ?>
                 <?php if ($scope !== ''): ?><input type="hidden" name="scope" value="<?= $escape($scope) ?>"><?php endif; ?>
                 <label class="w-field" style="--w-span:5;"><span class="w-field__label"><lang>搜索</lang></span><input class="w-input" name="search" value="<?= $escape($search) ?>" placeholder="<?= $escape(__('输入主体标题...')) ?>"></label>
@@ -51,7 +51,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
                 </select></label>
                 <div class="w-cluster" data-self="end" style="--w-span:4;">
                     <button type="submit" class="w-button" data-tone="primary"><w:icon name="search" size="sm"></w:icon><lang>搜索</lang></button>
-                    <a href="<?= $escape($this->getUrl('*/backend/embed', $baseParams)) ?>" class="w-button" data-tone="neutral"><w:icon name="refresh" size="sm"></w:icon><lang>重置</lang></a>
+                    <a href="@url{'*/backend/embed'|$baseParams}" class="w-button" data-tone="neutral"><w:icon name="refresh" size="sm"></w:icon><lang>重置</lang></a>
                 </div>
             </w:form>
         </div>
@@ -62,13 +62,13 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
             <div class="w-empty"><w:icon name="file" size="lg"></w:icon><h2><lang>暂无SEO主体</lang></h2><p><lang>点击“添加主体”创建第一条记录。</lang></p></div>
         <?php else: ?>
             <?php foreach ($subjects as $subject): ?>
-                <?php $detailUrl = $this->getUrl('*/backend/embed/detail', array_merge($baseParams, ['id' => $subject['subject_id']])); ?>
+                <?php $detailParams = array_merge($baseParams, ['id' => $subject['subject_id']]); ?>
                 <article class="w-card w-seo-embed__subject" data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>">
                     <header class="w-card__header w-cluster" data-justify="between">
-                        <div class="w-cluster"><a href="<?= $escape($detailUrl) ?>" class="w-card__title"><?= $escape($subject['title'] ?? __('未命名主体')) ?></a><span class="w-badge" data-tone="<?= (int)($subject['status'] ?? 0) === 1 ? 'success' : 'neutral' ?>"><?= (int)($subject['status'] ?? 0) === 1 ? __('启用') : __('禁用') ?></span></div>
+                        <div class="w-cluster"><a href="@url{'*/backend/embed/detail'|$detailParams}" class="w-card__title"><?= $escape($subject['title'] ?? __('未命名主体')) ?></a><span class="w-badge" data-tone="<?= (int)($subject['status'] ?? 0) === 1 ? 'success' : 'neutral' ?>"><?= (int)($subject['status'] ?? 0) === 1 ? __('启用') : __('禁用') ?></span></div>
                         <div class="w-cluster">
                             <span class="w-seo-embed__keyword"><w:icon name="tag" size="sm"></w:icon><?= (int)($subject['keyword_count'] ?? 0) ?> <lang>关键词</lang></span>
-                            <a href="<?= $escape($detailUrl) ?>" class="w-button" aria-label="<?= $escape(__('查看详情')) ?>" data-tone="neutral" data-size="sm"><w:icon name="eye" size="sm"></w:icon></a>
+                            <a href="@url{'*/backend/embed/detail'|$detailParams}" class="w-button" aria-label="<?= $escape(__('查看详情')) ?>" data-tone="neutral" data-size="sm"><w:icon name="eye" size="sm"></w:icon></a>
                             <button type="button" class="w-button" data-seo-action="delete" data-subject-id="<?= (int)($subject['subject_id'] ?? 0) ?>" aria-label="<?= $escape(__('删除')) ?>" data-tone="danger" data-size="sm"><w:icon name="trash" size="sm"></w:icon></button>
                         </div>
                     </header>

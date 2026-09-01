@@ -113,6 +113,26 @@ class NaverSearchAdvisorAdapter implements SearchEngineAdapterInterface
         ];
     }
 
+    public function getAccountConfigFields(): array
+    {
+        return [
+            [
+                'key' => 'access_token',
+                'label' => (string)__('Naver Search Advisor Access Token'),
+                'type' => 'password',
+                'required' => true,
+            ],
+            [
+                'key' => 'type',
+                'label' => (string)__('提交类型'),
+                'type' => 'text',
+                'required' => false,
+                'placeholder' => 'update',
+                'hint' => (string)__('可选 update 或 delete，默认 update'),
+            ],
+        ];
+    }
+
     public function isConfigured(): bool
     {
         return true;

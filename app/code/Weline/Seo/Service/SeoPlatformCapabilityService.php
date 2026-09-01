@@ -44,10 +44,58 @@ class SeoPlatformCapabilityService
                 'supports_indexnow' => in_array($code, self::INDEXNOW_PLATFORMS, true),
                 'supports_stats' => !empty($info['supports_stats']),
                 'catalog_only' => !$supportsUrlPush && !$supportsSitemapSubmit,
+                'config_fields' => $this->resolveAccountConfigFields($code),
             ];
         }
 
         return $platforms;
+    }
+
+    /**
+     * @return list<array<string, mixed>>
+     */
+    public function resolveAccountConfigFields(string $platform): array
+    {
+        $platform = strtolower(trim($platform));
+        if ($platform === '') {
+            return [];
+        }
+
+        $adapter = $this->searchEngineAdapterRegistry->getAdapter($platform);
+        if ($adapter === null) {
+            return [];
+        }
+
+        $fields = $adapter->getAccountConfigFields();
+        if (!is_array($fields)) {
+            return [];
+        }
+
+        $normalized = [];
+        foreach ($fields as $field) {
+            if (!is_array($field)) {
+                continue;
+            }
+            $key = trim((string)($field['key'] ?? ''));
+            if ($key === '') {
+                continue;
+            }
+            $type = strtolower(trim((string)($field['type'] ?? 'text')));
+            if (!in_array($type, ['text', 'password', 'url', 'website_url', 'textarea', 'json', 'checkbox'], true)) {
+                $type = 'text';
+            }
+            $normalized[] = [
+                'key' => $key,
+                'label' => (string)($field['label'] ?? $key),
+                'type' => $type,
+                'required' => !empty($field['required']),
+                'placeholder' => (string)($field['placeholder'] ?? ''),
+                'hint' => (string)($field['hint'] ?? ''),
+                'accept' => (string)($field['accept'] ?? ''),
+            ];
+        }
+
+        return $normalized;
     }
 
     /**
