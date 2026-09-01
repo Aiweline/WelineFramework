@@ -14,12 +14,12 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
       <?php if ($candidates === []): ?><tr><td colspan="5" class="w-text" data-align="center" data-tone="muted"><?= __('暂无开票 effect') ?></td></tr>
       <?php else: foreach ($candidates as $row): ?>
         <tr data-testid="invoice-candidate" data-outbox-code="<?= $escape($row['outbox_code'] ?? '') ?>">
-          <td><a href="<?= $this->getBackendUrl('weline_order/backend/order/view?id=' . (int)($row['order_id'] ?? 0)) ?>"><?= $escape($row['order_number'] ?? '') ?></a></td>
+          <td><a href="@backend-url{'weline_order/backend/order/view'|['id' => (int)($row['order_id'] ?? 0)]}"><?= $escape($row['order_number'] ?? '') ?></a></td>
           <td><code><?= $escape($row['outbox_code'] ?? '') ?></code></td>
           <td><code><?= $escape($row['effect_key'] ?? '') ?></code></td>
           <td><?= $escape($row['status'] ?? '') ?></td>
           <td>
-            <w:form method="post" action="@var($this->getBackendUrl('weline_order/backend/invoice/execute'))" data-testid="invoice-command-form">
+            <w:form method="post" action="@backend-url{'weline_order/backend/invoice/execute'}" data-testid="invoice-command-form">
               <input type="hidden" name="outbox_code" value="<?= $escape($row['outbox_code'] ?? '') ?>">
               <input type="hidden" name="expected_grant_version" value="<?= (int)($row['expected_grant_version'] ?? 0) ?>">
               <button class="w-button" type="submit" data-testid="invoice-submit" data-tone="primary" data-size="sm"><?= ($row['status'] ?? '') === 'done' ? __('验证幂等结果') : __('处理开票') ?></button>

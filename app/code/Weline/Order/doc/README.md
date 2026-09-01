@@ -6,6 +6,16 @@ Weline_Order 是一个符合国际电商标准的订单管理模块，提供完�
 
 订单优惠校验直接使用 Payment 的支付方式兼容能力，因此 Payment 是必需依赖。
 
+## 订单跟踪壳（TrackingProvider）
+
+见 [`doc/tracking-shell.md`](tracking-shell.md)、[`doc/tracking-provider-development.md`](tracking-provider-development.md)、[`doc/dev-tracking-relay.md`](dev-tracking-relay.md)。
+
+- **主入口**：个人中心「我的订单」详情（`customer/account/index?order_uuid=…#orders`）展示物流追踪区块。
+- 列表摘要：履约态映射为「已发货，发往目的地」等。
+- 无正式物流商：内置 `system` Provider。
+- 正式承运商：`extends/module/Weline_Order/TrackingProvider`。
+- 旧独立跟踪页已删除；`/orders/track` 仅保留 Router 302 → 账户订单；反馈仍走 `order/frontend/tracking-callback/notify`。
+
 ## Order Facade（P2D-001）
 
 跨模块写入边界见 [`doc/facade-api.md`](facade-api.md)：`plan` / `create` / `get`；Checkout/Payment/Inventory 不得引用内部 Model/Service。`get()` 的公开只读投影保留 `customerId`，供支付 eligibility 冻结 owner，但不暴露 Order Model。Order 作为 Payable：[`doc/payable-resolver.md`](payable-resolver.md)（`weline_order`）。退款：[`doc/refund.md`](refund.md)。发票/履约/tombstone/账户汇总：[`doc/invoice-fulfillment-tombstone.md`](invoice-fulfillment-tombstone.md)。

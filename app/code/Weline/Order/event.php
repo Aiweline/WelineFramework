@@ -77,6 +77,11 @@ return [
         'description' => \__('订单退款后触发，可用于处理退款后的相关操作。'),
         'doc' => 'order_refunded.md',
     ],
+    'Weline_Order::order_tracking_feedback_received' => [
+        'name' => \__('物流反馈写入 Inbox 后'),
+        'description' => \__('跟踪壳在验签/解析并持久化反馈 Inbox 后触发；可用于异步应用状态、通知或开发中继观察。Provider 不得在 verify/parse 内推进订单状态。'),
+        'doc' => 'order_tracking_feedback_received.md',
+    ],
     'Weline_Order::query::get_status_label' => [
         'name' => \__('获取订单状态标签'),
         'description' => \__('获取订单状态标签，允许其他模块扩展状态标签。'),

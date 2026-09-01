@@ -11,7 +11,7 @@ final class AccountSidebarHookTemplateTest extends TestCase
     public function testOrderModuleProvidesCanonicalSidebarAndContentHooks(): void
     {
         $moduleRoot = dirname(__DIR__, 3);
-        $sidebarTemplate = $moduleRoot . '/view/hooks/account.sidebar.phtml';
+        $sidebarTemplate = $moduleRoot . '/view/hooks/account.sidebar.group.commerce.phtml';
         $contentTemplate = $moduleRoot . '/view/hooks/account.sidebar.content.phtml';
         $headerTemplate = $moduleRoot . '/view/hooks/header-orders.phtml';
 
@@ -24,6 +24,7 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $header = (string) file_get_contents($headerTemplate);
 
         $this->assertStringContainsString('data-account-nav-link="true"', $sidebar);
+        $this->assertStringContainsString('data-account-nav-parent="commerce"', $sidebar);
         $this->assertStringContainsString('data-section="orders"', $sidebar);
         $this->assertStringContainsString('#orders', $sidebar);
         $this->assertStringContainsString('account-hook-nav-link', $sidebar);
@@ -41,6 +42,9 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $this->assertStringContainsString('AccountSidebarProjectionProviderInterface', $content);
         $this->assertStringContainsString("assign('accountCheckoutGroups'", $content);
         $this->assertStringContainsString("assign('accountOrderDetail'", $content);
+        $this->assertStringContainsString("assign('accountOrderTracking'", $content);
+        $this->assertStringContainsString('OrderTrackingService', $content);
+        $this->assertStringContainsString('data-order-tracking-resolved=', $content);
         $this->assertStringNotContainsString('$GLOBALS', $content);
         $this->assertStringNotContainsString('Weline_Customer::frontend::account::index::orders', $content);
 
@@ -52,6 +56,8 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $this->assertStringContainsString('data-order-status="true"', $orders);
         $this->assertStringContainsString('data-order-total="true"', $orders);
         $this->assertStringContainsString('data-partial-expanded="true"', $orders);
+        $this->assertStringContainsString('data-account-order-tracking="true"', $orders);
+        $this->assertStringContainsString('data-order-tracking-summary="true"', $orders);
         $this->assertStringContainsString('AccountCheckoutGroupPresenter', $orders);
         $this->assertStringNotContainsString('fetch(', $orders);
         $this->assertStringNotContainsString('axios', $orders);
