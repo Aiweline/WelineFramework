@@ -61,7 +61,7 @@ class WarehouseStoreAuthorization extends Model
         $websiteId = (int) $this->getData(self::schema_fields_WEBSITE_ID);
         $storeId = (int) $this->getData(self::schema_fields_STORE_ID);
         $warehouseId = (int) $this->getData(self::schema_fields_WAREHOUSE_ID);
-        if ($websiteId < 0 || $storeId <= 0 || $warehouseId <= 0) {
+        if ($websiteId < 0 || $storeId < 0 || $warehouseId <= 0) {
             throw new \InvalidArgumentException(__('仓授权 Scope 无效'));
         }
         $isDefault = (int) $this->getData(self::schema_fields_IS_DEFAULT) === 1;

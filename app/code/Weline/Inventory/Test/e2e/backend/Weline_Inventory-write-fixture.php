@@ -153,7 +153,7 @@ function r43_inventory_cleanup(array $data): array
         ObjectManager::getInstance(InventoryLedger::class, [], false),
         [InventoryLedger::schema_fields_IDEMPOTENCY_KEY => (string)$data['command_id']],
     );
-    if (!empty($data['offer_id']) && !empty($data['store_id'])) {
+    if (!empty($data['offer_id']) && array_key_exists('store_id', $data) && (int)$data['store_id'] >= 0) {
         $deleted['stocks'] = r43_inventory_delete(
             ObjectManager::getInstance(InventoryStock::class, [], false),
             [
