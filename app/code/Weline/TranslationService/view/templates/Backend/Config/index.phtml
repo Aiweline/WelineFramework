@@ -23,7 +23,7 @@ $confirmMessages = [
     <div class="w-card">
         <div class="w-card__header w-cluster" data-justify="between" data-align="center">
             <h3><?= __('渠道列表') ?></h3>
-            <a href="<?= $this->getBackendUrl('*/backend/config/edit') ?>" class="w-button" data-tone="primary">
+            <a href="@backend-url{'*/backend/config/edit'}" class="w-button" data-tone="primary">
                 <w:icon name="plus" size="sm"></w:icon> <?= __('添加渠道') ?>
             </a>
         </div>
@@ -67,13 +67,13 @@ $confirmMessages = [
                                     <td><?= htmlspecialchars($provider->getData('priority')) ?></td>
                                     <td>
                                         <div class="w-button-group">
-                                            <a href="<?= $this->getBackendUrl('*/backend/config/edit', ['id' => $provider->getId()]) ?>" class="w-button" data-tone="primary" data-variant="outline">
+                                            <a href="@backend-url{'*/backend/config/edit'|['id' => $provider->getId()]}" class="w-button" data-tone="primary" data-variant="outline">
                                                 <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
                                             </a>
                                             <button type="button" class="w-button test-connection-btn" data-id="<?= $provider->getId() ?>" data-tone="info" data-variant="outline">
                                                 <w:icon name="circle" size="sm"></w:icon> <?= __('测试') ?>
                                             </button>
-                                            <a href="<?= $this->getBackendUrl('*/backend/config/delete', ['id' => $provider->getId()]) ?>" class="w-button" data-translation-config-confirm="deleteProvider" data-tone="danger" data-variant="outline">
+                                            <a href="@backend-url{'*/backend/config/delete'|['id' => $provider->getId()]}" class="w-button" data-translation-config-confirm="deleteProvider" data-tone="danger" data-variant="outline">
                                                 <w:icon name="trash" size="sm"></w:icon> <?= __('删除') ?>
                                             </a>
                                         </div>
@@ -192,7 +192,7 @@ document.addEventListener('DOMContentLoaded', function() {
             btn.disabled = true;
             btn.innerHTML = '<w:icon name="circle" size="sm"></w:icon> <?= __('测试中...') ?>';
             
-            var testUrl = '<?= $this->getBackendUrl('*/backend/config/test') ?>?id=' + providerId;
+            var testUrl = '@backend-url{'*/backend/config/test'}?id=' + providerId;
             window.Weline.Api.get(testUrl, { silent: true })
                 .then(function(res) {
                     var data = (res && res.data) !== undefined ? res.data : res;
