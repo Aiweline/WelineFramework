@@ -208,6 +208,7 @@ SystemConfig 提供配置模板专用标签：
 | `<w:config:field>` | 声明一个可保存字段，自动绑定当前显式选择的 scope |
 | `<w:config:adapter>` | 声明复杂业务对象入口，只展示摘要和管理入口 |
 | `<w:config:hint>` | 展示说明、警告或文档链接，不参与保存。正文写在标签之间，或用 `description`/`text` 属性；`type` 支持 `info` / `warning` / `danger`。配置中心按分组渲染在 adapter 之后、字段之前。 |
+| `<w:config:embed>` | **真实 Taglib（消费侧）**：在任意后台模板嵌入已声明字段/分组/模块。Scope 只信 URL；变更即时 `setScopedConfig` + toast；每个字段按自身 `type` 渲染控件。完整用法见 [config-embed标签使用指南.md](./config-embed标签使用指南.md)；摘要见 README「配置嵌入」。 |
 
 字段完整身份仍然是：
 

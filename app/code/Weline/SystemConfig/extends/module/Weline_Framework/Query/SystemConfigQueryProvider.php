@@ -334,7 +334,11 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             module: $module,
             area: $area,
             scope: $target['storage_scope'],
-            locale: isset($params['locale']) ? (string)$params['locale'] : null,
+            // Omit locale → default row (same as config center). Never fall through
+            // to admin UI language via normalizeLocale(null), or reads with locale=default miss the write.
+            locale: array_key_exists('locale', $params)
+                ? (string)$params['locale']
+                : SystemConfig::LOCALE_DEFAULT,
             options: $options
         );
     }
@@ -363,7 +367,9 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             module: $module,
             area: $area,
             scope: $target['storage_scope'],
-            locale: isset($params['locale']) ? (string)$params['locale'] : null,
+            locale: array_key_exists('locale', $params)
+                ? (string)$params['locale']
+                : SystemConfig::LOCALE_DEFAULT,
             options: $options
         );
     }
@@ -392,7 +398,9 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             area: $area,
             values: $values,
             scope: $target['storage_scope'],
-            locale: isset($params['locale']) ? (string)$params['locale'] : null,
+            locale: array_key_exists('locale', $params)
+                ? (string)$params['locale']
+                : SystemConfig::LOCALE_DEFAULT,
             options: $options
         );
     }
@@ -992,6 +1000,16 @@ class SystemConfigQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'setScopedConfig',
                     'description' => __('Set one scoped config value and create a version batch.'),
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => [
+                        'kind' => 'source',
+                        'source_id' => 'Weline_SystemConfig::config_center_save',
+                    ],
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 2,
                     'params' => $this->commonWriteParams(),
                 ],
                 [
@@ -1204,6 +1222,12 @@ class SystemConfigQueryProvider implements QueryProviderInterface
             ['name' => 'locale', 'type' => 'string', 'required' => false],
             ['name' => 'base_versions', 'type' => 'object', 'required' => false],
             ['name' => 'reason', 'type' => 'string', 'required' => false],
+            [
+                'name' => 'value_type',
+                'type' => 'string',
+                'required' => false,
+                'description' => __('Optional value type for serialization (e.g. bool, int, string).'),
+            ],
             $this->grantVersionParam(),
         ];
         if ($includeValue) {

@@ -1,0 +1,107 @@
+/* Config embed: follow Weline theme tokens (no light-only fallbacks). */
+.w-config-embed {
+  --w-config-embed-gap: var(--weline-space-3, 0.75rem);
+  display: block;
+  color: var(--weline-theme-text, var(--backend-theme-text, inherit));
+}
+
+.w-config-embed__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--w-config-embed-gap);
+}
+
+.w-config-embed.layout-horizontal .w-config-embed__list {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.w-config-embed.layout-horizontal .w-config-embed__field {
+  flex: 1 1 16rem;
+  min-width: 14rem;
+}
+
+.w-config-embed.layout-inline .w-config-embed__list {
+  gap: var(--weline-space-2, 0.5rem);
+}
+
+.w-config-embed.layout-inline .w-config-embed__field {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: var(--weline-space-2, 0.5rem);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.w-config-embed.layout-inline .w-config-embed__field-meta {
+  display: none;
+}
+
+.w-config-embed.layout-inline .w-config-embed__control,
+.w-config-embed.layout-inline .w-config-embed__control .w-field__control {
+  margin: 0;
+  min-inline-size: 0;
+}
+
+.w-config-embed__field {
+  border: 1px solid var(--weline-theme-border, var(--backend-color-border-default, transparent));
+  border-radius: var(--weline-radius-md, 0.5rem);
+  padding: var(--weline-space-3, 0.75rem);
+  background: var(
+    --weline-theme-surface-raised,
+    var(--weline-theme-surface, var(--backend-color-card-bg, transparent))
+  );
+  color: var(--weline-theme-text, var(--backend-theme-text, inherit));
+  box-shadow: none;
+}
+
+.w-config-embed__field.is-undeclared {
+  border-color: var(--weline-theme-danger, var(--weline-danger, #c0392b));
+  background: color-mix(
+    in srgb,
+    var(--weline-theme-danger, var(--weline-danger, #c0392b)) 12%,
+    var(--weline-theme-surface, transparent)
+  );
+}
+
+.w-config-embed__field.is-disabled,
+.w-config-embed.is-readonly .w-config-embed__control {
+  opacity: 0.72;
+}
+
+.w-config-embed__label {
+  font-weight: 600;
+  margin-bottom: 0.15rem;
+  color: var(--weline-theme-text, inherit);
+}
+
+.w-config-embed__key {
+  display: inline-block;
+  font-size: 0.75rem;
+  margin-bottom: 0.35rem;
+  color: var(--weline-theme-text-muted, var(--weline-theme-text-subtle, inherit));
+  opacity: 1;
+}
+
+.w-config-embed__adapter,
+.w-config-embed__hint {
+  margin-bottom: 0.25rem;
+  color: var(--weline-theme-text, inherit);
+}
+
+.w-config-embed .w-text[data-tone="muted"] {
+  color: var(--weline-theme-text-muted, var(--weline-theme-text-subtle, inherit));
+}
+
+.w-config-embed .w-alert {
+  background: var(--weline-theme-surface-muted, var(--weline-theme-surface, transparent));
+  color: var(--weline-theme-text, inherit);
+  border-color: var(--weline-theme-border, transparent);
+}

@@ -32,6 +32,10 @@ class Config extends BackendController
         $module = trim((string)$this->request->getGet('module', ''));
         $area = trim((string)$this->request->getGet('area', SystemConfig::area_BACKEND));
         $search = trim((string)$this->request->getGet('search', ''));
+        if ($search === '') {
+            // 兼容支付等模块深链仍传 q=
+            $search = trim((string)$this->request->getGet('q', ''));
+        }
         $locale = trim((string)$this->request->getGet('locale', SystemConfig::LOCALE_DEFAULT));
         $guideParams = $this->guideParams('get');
 
@@ -44,14 +48,11 @@ class Config extends BackendController
         /** @var SystemConfigTargetScopeService $targetScopeService */
         $targetScopeService = ObjectManager::getInstance(SystemConfigTargetScopeService::class);
 
-        // GET：允许 Session 恢复工作 Scope；显式 query 优先
-        $target = $targetScopeService->resolveFromInput([
-            'target_scope' => (string)$this->request->getGet('target_scope', ''),
-            'scope' => (string)$this->request->getGet('scope', ''),
-            'website_code' => (string)$this->request->getGet('website_code', ''),
-            'store_code' => (string)$this->request->getGet('store_code', ''),
-            'channel_code' => (string)$this->request->getGet('channel_code', ''),
-        ], allowSessionFallback: true);
+        // GET：显式 query 优先；分段键仅在请求中出现时才传入，避免空 website_code 冲掉 target_scope 深链
+        $target = $targetScopeService->resolveFromInput(
+            $this->configCenterScopeInputFromGet(),
+            allowSessionFallback: true,
+        );
         try {
             $grant = $this->objectAuthorizationGuard()->requireForQuery(
                 ObjectAction::VIEW,
@@ -70,13 +71,6 @@ class Config extends BackendController
         $selectedArea = $area !== '' ? $area : SystemConfig::area_BACKEND;
         $selectedSearch = $search !== '' ? $search : null;
 
-        $modules = $templateService->getModules($selectedArea, $selectedSearch);
-        $tree = $configCenterService->enrichTreeWithValues(
-            $templateService->getTree($selectedModule, $selectedArea, $selectedSearch),
-            $normalizedScope,
-            $normalizedLocale
-        );
-
         $guideKeys = $this->normalizeGuideKeys((string)($guideParams['guide_key'] ?? ''));
         $guideLocate = trim((string)($guideParams['guide_locate'] ?? ''));
         if ($guideLocate === '' || ($guideKeys !== [] && !\in_array($guideLocate, $guideKeys, true))) {
@@ -85,9 +79,39 @@ class Config extends BackendController
         if ($guideLocate !== '') {
             $guideParams['guide_locate'] = $guideLocate;
         }
+
+        $canonicalQuery = $this->buildConfigCenterShareQuery(
+            module: $module,
+            area: $selectedArea,
+            locale: $normalizedLocale,
+            search: $search,
+            target: $target,
+            guideParams: $guideParams,
+        );
+        if ($this->configCenterShareQueryNeedsSync($canonicalQuery)) {
+            return $this->redirect(
+                $this->request->getUrlBuilder()->getBackendUrl(
+                    'weline_systemconfig/backend/config',
+                    $canonicalQuery,
+                ),
+            );
+        }
+
+        $modules = $templateService->getModules($selectedArea, $selectedSearch);
+        $tree = $configCenterService->enrichTreeWithValues(
+            $templateService->getTree($selectedModule, $selectedArea, $selectedSearch),
+            $normalizedScope,
+            $normalizedLocale
+        );
+
         $guideTargets = $this->resolveGuideTargets($guideKeys, $templateService, $selectedArea);
 
         $this->assign('page_title', __('统一配置中心'));
+        $this->assign('layoutShowPageHeader', false);
+        $this->assign('layoutShowMessages', false);
+        $meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+        $meta['showPageHeader'] = false;
+        $this->assign('meta', $meta);
         $this->assign('modules', $modules);
         $this->assign('tree', $tree);
         $this->assign('selected_module', $module);
@@ -507,6 +531,117 @@ class Config extends BackendController
     /**
      * @return array<string, string>
      */
+    private function configCenterScopeInputFromGet(): array
+    {
+        $input = [];
+        $targetScope = trim((string)$this->request->getGet('target_scope', ''));
+        $scope = trim((string)$this->request->getGet('scope', ''));
+        if ($targetScope !== '') {
+            $input['target_scope'] = $targetScope;
+        } elseif ($scope !== '') {
+            $input['scope'] = $scope;
+        }
+
+        foreach (['website_code', 'store_code', 'channel_code'] as $key) {
+            if ($this->request->hasGet($key)) {
+                $input[$key] = (string)$this->request->getGet($key, '');
+            }
+        }
+
+        return $input;
+    }
+
+    /**
+     * 可复制分享的配置中心查询串：范围切换后地址栏必须带齐 target_scope 与分段。
+     *
+     * @param array{website_code?:string,store_code?:string,channel_code?:string,storage_scope?:string} $target
+     * @param array<string, string> $guideParams
+     * @return array<string, string>
+     */
+    private function buildConfigCenterShareQuery(
+        string $module,
+        string $area,
+        string $locale,
+        string $search,
+        array $target,
+        array $guideParams,
+    ): array {
+        $storageScope = trim((string)($target['storage_scope'] ?? SystemConfig::SCOPE_GLOBAL));
+        $query = [
+            'module' => $module,
+            'area' => $area !== '' ? $area : SystemConfig::area_BACKEND,
+            'scope' => $storageScope,
+            'target_scope' => $storageScope,
+            'website_code' => strtolower(trim((string)($target['website_code'] ?? ''))),
+            'store_code' => strtolower(trim((string)($target['store_code'] ?? ''))),
+            'channel_code' => strtolower(trim((string)($target['channel_code'] ?? ''))),
+            'locale' => $locale !== '' ? $locale : SystemConfig::LOCALE_DEFAULT,
+            'search' => $search,
+        ];
+        foreach ($guideParams as $key => $value) {
+            $value = trim((string)$value);
+            if ($value !== '') {
+                $query[$key] = $value;
+            }
+        }
+
+        return $query;
+    }
+
+    /**
+     * @param array<string, string> $canonical
+     */
+    private function configCenterShareQueryNeedsSync(array $canonical): bool
+    {
+        foreach ([
+            'target_scope',
+            'scope',
+            'website_code',
+            'store_code',
+            'channel_code',
+            'module',
+            'area',
+            'locale',
+            'search',
+        ] as $key) {
+            $want = (string)($canonical[$key] ?? '');
+            $have = trim((string)$this->request->getGet($key, ''));
+            if ($key === 'target_scope' && $have === '') {
+                $have = trim((string)$this->request->getGet('scope', ''));
+            }
+            if ($key === 'scope' && $have === '') {
+                $have = trim((string)$this->request->getGet('target_scope', ''));
+            }
+            if ($key === 'area' && $have === '') {
+                $have = SystemConfig::area_BACKEND;
+            }
+            if ($key === 'locale' && ($have === '' || strtolower($have) === 'default')) {
+                $have = SystemConfig::LOCALE_DEFAULT;
+            }
+            if ($key === 'locale' && ($want === '' || strtolower($want) === 'default')) {
+                $want = SystemConfig::LOCALE_DEFAULT;
+            }
+            if ($want !== $have) {
+                return true;
+            }
+        }
+
+        foreach ($canonical as $key => $want) {
+            if (!str_starts_with((string)$key, 'guide_')) {
+                continue;
+            }
+            $have = trim((string)$this->request->getGet((string)$key, ''));
+            if ((string)$want !== $have) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @return array<string, string>
+     */
     private function guideParams(string $source): array
     {
         $params = [];
@@ -551,9 +686,14 @@ class Config extends BackendController
             (string)($params['guide_keys'] ?? '')
         );
         unset($params['guide_keys']);
+        $locateOnly = $this->decodeGuideValue(trim((string)($params['guide_locate'] ?? '')));
+        // 仅有 guide_locate 时也要保留定位（以前会整段 unset，导致深度链接无法定位）
+        if ($mergedKeys === [] && $locateOnly !== '') {
+            $mergedKeys = [$locateOnly];
+        }
         if ($mergedKeys !== []) {
             $params['guide_key'] = \implode(',', $mergedKeys);
-            $locate = $this->decodeGuideValue(trim((string)($params['guide_locate'] ?? '')));
+            $locate = $locateOnly;
             if ($locate === '' || !\in_array($locate, $mergedKeys, true)) {
                 $params['guide_locate'] = $mergedKeys[0];
             } else {
@@ -652,6 +792,27 @@ class Config extends BackendController
                             $lookup[$fieldKey] = [
                                 'key' => $fieldKey,
                                 'label' => (string)($field['label'] ?? $fieldKey),
+                                'module' => $moduleName,
+                                'area' => $areaName,
+                                'code' => $code,
+                                'found' => true,
+                            ];
+                        }
+                        foreach (($template['adapters'] ?? []) as $adapter) {
+                            if (!\is_array($adapter)) {
+                                continue;
+                            }
+                            $adapterCode = (string)($adapter['code'] ?? '');
+                            if ($adapterCode === '') {
+                                continue;
+                            }
+                            $adapterKey = 'adapter:' . $adapterCode;
+                            if (isset($lookup[$adapterKey])) {
+                                continue;
+                            }
+                            $lookup[$adapterKey] = [
+                                'key' => $adapterKey,
+                                'label' => (string)($adapter['label'] ?? $adapterCode),
                                 'module' => $moduleName,
                                 'area' => $areaName,
                                 'code' => $code,

@@ -55,6 +55,43 @@ final class SystemConfigTargetScopeServiceTest extends TestCase
         self::assertSame('shop.main.app', $channel['storage_scope']);
     }
 
+    public function testExplicitTargetScopeDeepLinkWithoutSegmentKeys(): void
+    {
+        $target = $this->service->resolveFromInput([
+            'target_scope' => 'shop.main.default',
+        ], false);
+
+        self::assertSame('shop.main.default', $target['storage_scope']);
+        self::assertSame('shop', $target['website_code']);
+        self::assertSame('main', $target['store_code']);
+    }
+
+    public function testEmptyWebsiteSegmentKeysMeanGlobalOverStaleTargetScope(): void
+    {
+        $target = $this->service->resolveFromInput([
+            'target_scope' => 'shop.main.default',
+            'website_code' => '',
+            'store_code' => '',
+            'channel_code' => '',
+        ], false);
+
+        self::assertSame(SystemConfig::SCOPE_GLOBAL, $target['storage_scope']);
+        self::assertSame(ScopeIdentity::KIND_GLOBAL, $target['kind']);
+    }
+
+    public function testNonEmptyWebsiteSegmentsWinOverStaleTargetScope(): void
+    {
+        $target = $this->service->resolveFromInput([
+            'target_scope' => 'default.default.default',
+            'website_code' => 'shop',
+            'store_code' => '',
+            'channel_code' => '',
+        ], false);
+
+        self::assertSame('shop.default.default', $target['storage_scope']);
+        self::assertSame(ScopeIdentity::KIND_WEBSITE, $target['kind']);
+    }
+
     public function testWritePathRejectsSessionFallback(): void
     {
         $this->uiState->write(SystemConfigTargetScopeService::SESSION_KEY, [
