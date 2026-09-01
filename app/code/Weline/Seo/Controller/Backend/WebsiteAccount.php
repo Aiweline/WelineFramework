@@ -80,35 +80,10 @@ class WebsiteAccount extends BackendController
 
         /** @var SeoAccount $accountModel */
         $accountModel = $this->objectManager->getInstance(SeoAccount::class);
-        if ($scope !== '') {
-            $accountsById = [];
-
-            $scopeAccounts = $accountModel->reset()
-                ->select()
-                ->where(SeoAccount::schema_fields_SCOPE, $scope)
-                ->fetchArray();
-            $globalAccounts = $accountModel->reset()
-                ->select()
-                ->where(SeoAccount::schema_fields_SCOPE, '')
-                ->fetchArray();
-
-            foreach (array_merge($scopeAccounts, $globalAccounts) as $account) {
-                $accountId = (int)($account[SeoAccount::schema_fields_ID] ?? $account['account_id'] ?? 0);
-                if ($accountId > 0) {
-                    $accountsById[$accountId] = $account;
-                }
-            }
-
-            $accounts = array_values($accountsById);
-            usort($accounts, static function (array $left, array $right): int {
-                return strtotime((string)($right['created_at'] ?? '')) <=> strtotime((string)($left['created_at'] ?? ''));
-            });
-        } else {
-            $accounts = $accountModel->reset()
-                ->select()
-                ->order(SeoAccount::schema_fields_CREATED_AT, 'DESC')
-                ->fetchArray();
-        }
+        $accounts = $accountModel->reset()
+            ->select()
+            ->order(SeoAccount::schema_fields_CREATED_AT, 'DESC')
+            ->fetchArray();
 
         $isAjax = $this->request->isAjax()
             || $this->request->getHeader('X-Requested-With') === 'XMLHttpRequest';

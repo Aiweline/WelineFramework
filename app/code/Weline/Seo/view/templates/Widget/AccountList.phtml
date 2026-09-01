@@ -3,12 +3,10 @@
  * SEO 账户列表 Widget 模板
  * 
  * 可复用的 SEO 账户列表展示组件
- * 支持按 scope/module 过滤，以只读方式展示账户信息
+ * 以只读方式展示 SEO 账户信息
  * 
  * @var \Weline\Framework\View\Template $this
  * @var string $widget_id Widget 唯一ID
- * @var string $scope 业务 scope
- * @var string $module 模块名
  * @var bool $readonly 是否只读模式
  * @var string $title 标题
  * @var array $accounts 账户列表
@@ -101,10 +99,7 @@ $platformVisual = ObjectManager::getInstance(PlatformVisual::class);
                         </td>
                         <?php if (!$readonly): ?>
                         <td class="w-text" data-align="center">
-                            <a href="<?= $this->getBackendUrl('seo/backend/account/form', [
-                                'id' => (int)($account['account_id'] ?? 0),
-                                'scope' => $scope
-                            ]) ?>" class="w-button" target="_blank" data-tone="primary" data-variant="outline" data-size="sm">
+                            <a href="@backend-url{'seo/backend/account/form'|['id' => (int)($account['account_id'] ?? 0)]}" class="w-button" target="_blank" data-tone="primary" data-variant="outline" data-size="sm">
                                 <lang>编辑</lang>
                             </a>
                         </td>
@@ -118,15 +113,6 @@ $platformVisual = ObjectManager::getInstance(PlatformVisual::class);
         <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-4);">
             <w:icon name="info" size="sm"></w:icon>
             <lang>共</lang> <?= count($accounts) ?> <lang>个账户</lang>
-            <?php if ($scope || $module): ?>
-            <span class="">
-                (<lang>过滤条件</lang>: 
-                <?php if ($scope): ?>scope=<code><?= htmlspecialchars($scope, ENT_QUOTES) ?></code><?php endif; ?>
-                <?php if ($scope && $module): ?>, <?php endif; ?>
-                <?php if ($module): ?>module=<code><?= htmlspecialchars($module, ENT_QUOTES) ?></code><?php endif; ?>
-                )
-            </span>
-            <?php endif; ?>
         </div>
         <?php endif; ?>
     </div>

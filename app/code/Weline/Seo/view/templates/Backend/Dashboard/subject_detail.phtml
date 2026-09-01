@@ -33,12 +33,12 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                             <div class="w-cluster">
                                 <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
                                     <li class="w-breadcrumb__item">
-                                        <a href='<?= $this->getUrl('*/backend/dashboard') ?>'>
+                                        <a href='@url{'*/backend/dashboard'}'>
                                             <lang>SEO管理</lang>
                                         </a>
                                     </li>
                                     <li class="w-breadcrumb__item">
-                                        <a href='<?= $this->getUrl('*/backend/dashboard/subject') ?>'>
+                                        <a href='@url{'*/backend/dashboard/subject'}'>
                                             <lang>主体列表</lang>
                                         </a>
                                     </li>
@@ -203,7 +203,7 @@ $title = $this->getData('seo_page_title') ?: __('主体SEO详情');
                 <!-- 返回按钮 -->
                 <div class="w-grid">
                     <div style="--w-span:12;">
-                        <a href="<?= $this->getUrl('*/backend/dashboard/subject') ?>" class="w-button" data-tone="neutral">
+                        <a href="@url{'*/backend/dashboard/subject'}" class="w-button" data-tone="neutral">
                             <w:icon name="arrow-left" size="sm"></w:icon>
                             <lang>返回列表</lang>
                         </a>

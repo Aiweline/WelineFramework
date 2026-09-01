@@ -139,6 +139,7 @@ sparkles,闪闪发光
 账户名称不能为空,账户名称不能为空
 平台不能为空,平台不能为空
 平台未注册：%{1},平台未注册：%{1}
+请填写：%{1},请填写：%{1}
 账户保存成功,账户保存成功
 账户保存失败：%{1},账户保存失败：%{1}
 账户ID无效,账户ID无效
@@ -273,7 +274,6 @@ Sitemap提交,网站地图提交
 编辑,编辑
 共,共
 个账户,个账户
-过滤条件,过滤条件
 添加主体,添加主体
 搜索,搜索
 重置,重置
@@ -636,20 +636,22 @@ SEO主体总数,SEO主体总数
 站点绑定,站点绑定
 新增账户,新增账户
 搜索账户,搜索账户
+"暂无 SEO 账户","暂无 SEO 账户"
+"先新增 Google、Bing、百度、IndexNow 或其他搜索引擎账户。","先新增 Google、Bing、百度、IndexNow 或其他搜索引擎账户。"
 账户,账户
 平台与能力,平台与能力
 绑定,绑定
 "SEO 数据","SEO 数据"
-"暂无 SEO 账户","暂无 SEO 账户"
 "Sitemap 提交","网站地图 提交"
 个站点,个站点
 未绑定,未绑定
-统计同步完成,统计同步完成
-统计同步失败,统计同步失败
 已收录页面,已收录页面
 平台错误,平台错误
-"搜索账户名称、平台或 scope","搜索账户名称、平台或 scope"
-全局,全局
+统计同步完成,统计同步完成
+统计同步失败,统计同步失败
+账户操作,账户操作
+账户概览,账户概览
+搜索账户名称或平台,搜索账户名称或平台
 点击量,点击量
 错误数,错误数
 同步中,同步中
@@ -657,21 +659,21 @@ SEO主体总数,SEO主体总数
 编辑SEO账户,编辑SEO账户
 新增SEO账户,新增SEO账户
 新增,新增
-Scope,范围
-由URL参数指定的scope不可修改，用于区分不同业务范围。,由URL参数指定的scope不可修改，用于区分不同业务范围。
-账户名称,账户名称
 平台(Platform),平台(Platform)
 请选择平台（选择后将显示配置获取指南）,请选择平台（选择后将显示配置获取指南）
 选择目标搜索引擎平台后，下方将自动显示：,选择目标搜索引擎平台后，下方将自动显示：
 平台支持的功能列表,平台支持的功能列表
 详细的配置获取步骤指南,详细的配置获取步骤指南
 配置模板和示例,配置模板和示例
+账户名称,账户名称
+强制要求填写用户名的格式是：,强制要求填写用户名的格式是：
 支持的功能,支持的功能
-配置模板：,配置模板：
-账户配置(JSON),账户配置(JSON)
-填充模板,填充模板
-"上传 JSON 文件","上传 JSON 文件"
-"请根据所选平台填写相应的配置信息，点击上方""配置获取指南""查看详细步骤，或直接上传从 Google Cloud 下载的 JSON 密钥文件","请根据所选平台填写相应的配置信息，点击上方""配置获取指南""查看详细步骤，或直接上传从 Google Cloud 下载的 JSON 密钥文件"
+字段预览,字段预览
+示意结构，请在下方填写真实值,示意结构，请在下方填写真实值
+账户配置,账户配置
+已验证站点,已验证站点
+"该平台无需填写 API 凭据","该平台无需填写 API 凭据"
+"保存账户并绑定站点后，按指南到对应站长平台手动提交 Sitemap 即可。","保存账户并绑定站点后，按指南到对应站长平台手动提交 Sitemap 即可。"
 启用账户,启用账户
 启用URL定时推送,启用URL定时推送
 启用Sitemap定时提交,启用Sitemap定时提交
@@ -692,6 +694,14 @@ Scope,范围
 "4. 保持 robots.txt 中的 Sitemap 入口可访问","4. 保持 robots.txt 中的 Sitemap 入口可访问"
 确认操作,确认操作
 确定,确定
+"上传 JSON 文件","上传 JSON 文件"
+"请上传 JSON 文件","请上传 JSON 文件"
+"文件大小不能超过 5MB","文件大小不能超过 5MB"
+"JSON 文件上传成功","JSON 文件上传成功"
+"JSON 文件格式错误","JSON 文件格式错误"
+文件读取失败，请重试,文件读取失败，请重试
+请先选择平台后再填写账户名称,请先选择平台后再填写账户名称
+账户名,账户名
 "SEO 自动优化分析队列","SEO 自动优化分析队列"
 发现达标目标并生成结构化建议；是否修改由站点策略决定。,发现达标目标并生成结构化建议；是否修改由站点策略决定。
 "SEO 自动优化分析队列参数无效。","SEO 自动优化分析队列参数无效。"
@@ -777,6 +787,10 @@ Scope,范围
 "向Google Indexing API 提交URL失败","向Google Indexing API 提交URL失败"
 "Sitemap URL为空","站点地图 URL 为空"
 "Google Indexing API 不用于提交 Sitemap，请使用 Google Search Console Sitemap API","Google Indexing API 不用于提交 Sitemap，请使用 Google Search Console Sitemap API"
+"Google Service Account JSON","Google Service Account JSON"
+"Indexing API 与 Search Console 共用 Service Account；须在 GSC 中添加 client_email 为所有者","Indexing API 与 Search Console 共用 Service Account；须在 GSC 中添加 client_email 为所有者"
+"站点属性 URL","站点属性 URL"
+"从网站列表选择；可选，用于与 Search Console 站点属性对齐","从网站列表选择；可选，用于与 Search Console 站点属性对齐"
 "Google Service Account 配置缺失或格式错误（需要 client_email 和 private_key）","Google Service Account 配置缺失或格式错误（需要 client_email 和 private_key）"
 "获取 Google Indexing API 访问令牌失败","获取 Google Indexing API 访问令牌失败"
 "URL 已提交给 Google Indexing API","URL 已提交给 Google Indexing API"
@@ -786,12 +800,20 @@ Scope,范围
 "Bing API 请求失败：%{1}","Bing API 请求失败：%{1}"
 "Bing API 返回错误码：%{1}","Bing API 返回错误码：%{1}"
 "已在 Bing Webmaster Tools 验证的站点 URL","已在 Bing Webmaster Tools 验证的站点 URL"
+"Bing Webmaster API Key","Bing Webmaster API Key"
+"在 Bing Webmaster Tools → Settings → API Access 生成","在 Bing Webmaster Tools → Settings → API Access 生成"
+"已验证站点 URL","已验证站点 URL"
+"从网站列表选择；须与 Bing Webmaster Tools 已验证站点一致","从网站列表选择；须与 Bing Webmaster Tools 已验证站点一致"
 "已成功向 Bing 提交 %{1} 个 URL","已成功向 Bing 提交 %{1} 个 URL"
 "URL 列表为空","URL 列表为空"
 "已通过 IndexNow 提交 %{1} 个 URL","已通过 IndexNow 提交 %{1} 个 URL"
 "URL 缺少主机名：%{1}","URL 缺少主机名：%{1}"
 "IndexNow Key",现在索引键
 "可公开访问的 IndexNow Key 文件地址","可公开访问的 IndexNow Key 文件地址"
+"网站根目录 Key 文件内容须与此一致","网站根目录 Key 文件内容须与此一致"
+"Key 文件公开地址","Key 文件公开地址"
+"IndexNow Endpoint（可选）","IndexNow Endpoint（可选）"
+"留空则使用平台默认 IndexNow 端点","留空则使用平台默认 IndexNow 端点"
 "缺少 Naver Search Advisor Access Token","缺少 Naver 搜索顾问访问令牌"
 "Naver Search Advisor 请求失败：%{1}","Naver Search Advisor 请求失败：%{1}"
 "Naver Search Advisor 返回错误：%{1}","Naver Search Advisor 返回错误：%{1}"
@@ -799,15 +821,25 @@ Scope,范围
 "Naver Search Advisor 收集请求 API 面向落地页 URL，不用于 Sitemap 文件；请使用 IndexNow 或在 Naver Search Advisor 手动提交 Sitemap","Naver Search Advisor 收集请求 API 面向落地页 URL，不用于 Sitemap 文件；请使用 IndexNow 或在 Naver Search Advisor 手动提交 Sitemap"
 "Naver Search Advisor Access Token","Naver 搜索顾问访问令牌"
 "提交类型：update 或 delete","提交类型：update 或 delete"
+提交类型,提交类型
+"可选 update 或 delete，默认 update","可选 update 或 delete，默认 update"
 "Google Search Console API 不提供通用 URL 推送，请使用 Google Indexing API 或 Sitemap 提交","Google Search Console API 不提供通用 URL 推送，请使用 Google Indexing API 或 Sitemap 提交"
 "Google Service Account JSON 凭据内容","Google 服务帐户 JSON 凭据内容"
 "Search Console 中已验证的站点属性 URL","Search Console 中已验证的站点属性 URL"
+"可粘贴完整 JSON，或上传 Google Cloud 下载的密钥文件","可粘贴完整 JSON，或上传 Google Cloud 下载的密钥文件"
+"Search Console 站点属性 URL","Search Console 站点属性 URL"
+"从网站列表选择；须与 Search Console 已验证站点属性一致","从网站列表选择；须与 Search Console 已验证站点属性一致"
 百度站长平台,百度站长平台
 "缺少百度站点 URL","缺少百度站点 URL"
 "已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}","已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}"
 "百度 URL 提交失败","百度 URL 提交失败"
 "百度站长平台 API Token","百度站长平台 API Token"
 "已在百度站长平台验证的站点 URL","已在百度站长平台验证的站点 URL"
+"百度站长平台 Token","百度站长平台 Token"
+"在百度搜索资源平台「链接提交 → 主动推送」接口地址中的 token 参数","在百度搜索资源平台「链接提交 → 主动推送」接口地址中的 token 参数"
+从网站列表选择；须与百度站长平台已验证站点一致,从网站列表选择；须与百度站长平台已验证站点一致
+启用快速收录（需配额）,启用快速收录（需配额）
+开启后走百度快速收录接口；无配额时请关闭,开启后走百度快速收录接口；无配额时请关闭
 "Sitemap 暂不可用，请稍后重试","Sitemap 暂不可用，请稍后重试"
 "Sitemap 文件不存在","Sitemap 文件不存在"
 "Sitemap 文件不可读或超过协议限制","Sitemap 文件不可读或超过协议限制"
@@ -862,6 +894,17 @@ Canonical,典范
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。"
 SEO账户配置,SEO账户配置
 """SEO subject created""","“已创建 SEO 主题”"
+字段预览：,字段预览：
+须与百度站长平台已验证站点一致,须与百度站长平台已验证站点一致
+配置模板：,配置模板：
+账户配置(JSON),账户配置(JSON)
+填充模板,填充模板
+"请根据所选平台填写相应的配置信息，点击上方""配置获取指南""查看详细步骤，或直接上传从 Google Cloud 下载的 JSON 密钥文件","请根据所选平台填写相应的配置信息，点击上方""配置获取指南""查看详细步骤，或直接上传从 Google Cloud 下载的 JSON 密钥文件"
+过滤条件,过滤条件
+"搜索账户名称、平台或 scope","搜索账户名称、平台或 scope"
+全局,全局
+Scope,范围
+由URL参数指定的scope不可修改，用于区分不同业务范围。,由URL参数指定的scope不可修改，用于区分不同业务范围。
 正在读取站点…,正在读取站点…
 没有可用站点,没有可用站点
 "点击上方""添加主体""按钮创建第一个SEO主体。","点击上方""添加主体""按钮创建第一个SEO主体。"
@@ -990,3 +1033,5 @@ SEO账户列表,SEO账户列表
 打开查看,打开查看
 SEO账户,SEO账户
 主体管理,主体管理
+账户名称必须符合格式：%{1}{账户名},账户名称必须符合格式：%{1}{账户名}
+请选择网站,请选择网站

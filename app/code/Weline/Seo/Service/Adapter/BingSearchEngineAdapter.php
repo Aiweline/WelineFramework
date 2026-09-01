@@ -133,6 +133,28 @@ class BingSearchEngineAdapter implements SearchEngineAdapterInterface
         ];
     }
 
+    public function getAccountConfigFields(): array
+    {
+        return [
+            [
+                'key' => 'api_key',
+                'label' => (string)__('Bing Webmaster API Key'),
+                'type' => 'password',
+                'required' => true,
+                'placeholder' => 'your-bing-webmaster-api-key',
+                'hint' => (string)__('在 Bing Webmaster Tools → Settings → API Access 生成'),
+            ],
+            [
+                'key' => 'site_url',
+                'label' => (string)__('已验证站点 URL'),
+                'type' => 'website_url',
+                'required' => true,
+                'placeholder' => 'https://www.example.com',
+                'hint' => (string)__('从网站列表选择；须与 Bing Webmaster Tools 已验证站点一致'),
+            ],
+        ];
+    }
+
     public function isConfigured(): bool
     {
         return true;

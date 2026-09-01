@@ -33,7 +33,7 @@ $status = $this->getData('status');
                             <div class="w-cluster">
                                 <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
                                     <li class="w-breadcrumb__item">
-                                        <a href='<?= $this->getUrl('*/backend/dashboard') ?>'>
+                                        <a href='@url{'*/backend/dashboard'}'>
                                             <lang>SEO管理</lang>
                                         </a>
                                     </li>
@@ -50,7 +50,7 @@ $status = $this->getData('status');
                 <div class="w-grid">
                     <div style="--w-span:12;">
                         <div class="search-box">
-                            <w:form method="get" action="@var($this->getUrl('*/backend/dashboard/subject'))">
+                            <w:form method="get" action="@url{'*/backend/dashboard/subject'}">
                                 <div class="w-grid" data-align="end">
                                     <div style="--w-span-md:4;">
                                         <label class="w-field__label"><lang>搜索主体</lang></label>
@@ -69,7 +69,7 @@ $status = $this->getData('status');
                                             <w:icon name="search" size="sm"></w:icon>
                                             <lang>搜索</lang>
                                         </button>
-                                        <a href="<?= $this->getUrl('*/backend/dashboard/subject') ?>" class="w-button ms-2" data-tone="neutral" data-variant="outline">
+                                        <a href="@url{'*/backend/dashboard/subject'}" class="w-button ms-2" data-tone="neutral" data-variant="outline">
                                             <w:icon name="refresh" size="sm"></w:icon>
                                             <lang>重置</lang>
                                         </a>
@@ -115,7 +115,7 @@ $status = $this->getData('status');
                                                     <tr>
                                                         <td><?= (int)($subject['subject_id'] ?? 0) ?></td>
                                                         <td class="subject-title-cell">
-                                                            <a href="<?= $this->getUrl('*/backend/dashboard/subject', ['id' => $subject['subject_id']]) ?>" 
+                                                            <a href="@url{'*/backend/dashboard/subject'|['id' => $subject['subject_id']]}" 
                                                                class="subject-title-link">
                                                                 <?= htmlspecialchars($subject['title'] ?? __('未命名主体')) ?>
                                                             </a>
@@ -146,7 +146,7 @@ $status = $this->getData('status');
                                                             </small>
                                                         </td>
                                                         <td class="w-text action-buttons" data-align="center">
-                                                            <a href="<?= $this->getUrl('*/backend/dashboard/subject', ['id' => $subject['subject_id']]) ?>" class="w-button" title="<?= __('查看详情') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                                            <a href="@url{'*/backend/dashboard/subject'|['id' => $subject['subject_id']]}" class="w-button" title="<?= __('查看详情') ?>" data-tone="primary" data-variant="outline" data-size="sm">
                                                                 <w:icon name="eye" size="sm"></w:icon>
                                                                 <lang>详情</lang>
                                                             </a>

@@ -63,6 +63,22 @@ interface SearchEngineAdapterInterface
     public function getRequirements(): array;
 
     /**
+     * 后台账户表单字段（由 Provider 自行决定，禁止跨平台复用）
+     *
+     * 每项建议包含：
+     * - key: string 写入账户 config 的键
+     * - label: string 字段标题
+     * - type: text|password|url|website_url|textarea|json|checkbox（默认 text；website_url 由网站选择标签填公网 URL）
+     * - required: bool
+     * - placeholder?: string
+     * - hint?: string
+     * - accept?: string（如 .json，仅 json/文件类字段）
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function getAccountConfigFields(): array;
+
+    /**
      * 检查是否已配置
      * 
      * @return bool
