@@ -1,8 +1,6 @@
 <?php
 /** @var \Weline\Framework\Http\Request $request */
 $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
-$backendUrlPrefix = $request->getUrlBuilder()->getBackendUrl('/');
-$backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 ?>
 <div class="w-container">
     <!-- 页面标题 -->
@@ -916,7 +914,7 @@ select.w-input-sm {
 // 异步搜索功能
 (function() {
     let searchTimeout = null;
-    const backendUrlPrefix = '<?= $backendUrlPrefix ?>';
+    const eventSearchBaseUrl = "@backend-url{'event/backend/event/search-ajax'}";
     const eventsListContainer = document.querySelector('.events-list');
     const filterForm = document.querySelector('.filter-form');
 
@@ -943,7 +941,7 @@ select.w-input-sm {
         }
         
         // 构建 AJAX URL
-        const searchUrl = backendUrlPrefix + '/event/backend/event/search-ajax?' + params.toString();
+        const searchUrl = eventSearchBaseUrl + (eventSearchBaseUrl.indexOf('?') >= 0 ? '&' : '?') + params.toString();
         
         var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
         Weline.adminRequest('event', searchUrl, opts)
@@ -1135,8 +1133,7 @@ select.w-input-sm {
             // 打开 offcanvas
             showOffcanvas();
             
-            const backendUrlPrefix = '<?= $backendUrlPrefix ?>';
-            const detailUrl = backendUrlPrefix + '/event/backend/event/detail?event=' + encodeURIComponent(eventName) + '&isAjax=1';
+            const detailUrl = "@backend-url{'event/backend/event/detail'}" + '?event=' + encodeURIComponent(eventName) + '&isAjax=1';
             var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
             Weline.adminRequest('event', detailUrl, opts)
             .then(function(response) {
