@@ -8,7 +8,7 @@ use PHPUnit\Framework\TestCase;
 
 final class LoginTemplateCaptchaTest extends TestCase
 {
-    public function testFrontendLoginFormExplicitlyRequiresCaptcha(): void
+    public function testFrontendLoginFormUsesLazyCaptcha(): void
     {
         $source = \file_get_contents(
             \dirname(__DIR__, 3) . '/view/templates/frontend/account/login.phtml'
@@ -16,7 +16,8 @@ final class LoginTemplateCaptchaTest extends TestCase
 
         self::assertIsString($source);
         self::assertMatchesRegularExpression('/<w:form\b[^>]*\bid="loginForm"[^>]*>/', $source);
-        self::assertMatchesRegularExpression('/<w:form\b[^>]*\bcaptcha="required"[^>]*>/', $source);
+        self::assertMatchesRegularExpression('/<w:form\b[^>]*\bcaptcha="lazy"[^>]*>/', $source);
+        self::assertDoesNotMatchRegularExpression('/<w:form\b[^>]*\bcaptcha="required"[^>]*>/', $source);
         self::assertMatchesRegularExpression('/<w:form\b[^>]*\bintent="customer\.login"[^>]*>/', $source);
         self::assertStringContainsString('data-weline-form-captcha-slot', $source);
         self::assertMatchesRegularExpression(

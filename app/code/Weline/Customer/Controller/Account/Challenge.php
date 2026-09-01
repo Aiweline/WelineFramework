@@ -13,7 +13,7 @@ use Weline\Framework\View\Template;
 
 class Challenge extends \Weline\Framework\App\Controller\FrontendController
 {
-    protected ?string $layoutType = 'account.auth';
+    protected ?string $layoutType = 'account.challenge';
 
     private readonly CustomerAuthReturnUrlService $authReturnUrlService;
 
@@ -43,16 +43,50 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
         $this->assign('challenge_token', $challengeToken);
         $this->assign('expires_at', $expiresAt);
         $this->assign('title', __('两步验证'));
+        $this->assign('meta', [
+            'showHeader' => true,
+            'showFooter' => true,
+        ]);
 
-        return $this->fetch('Weline_Customer::templates/frontend/account/challenge.phtml');
+        // Stage UI is Theme-inline account-challenge widget (background configurable).
+        return $this->fetch('Weline_Customer::templates/frontend/account/challenge-shell.phtml');
     }
 
     public function postIndex(): string
     {
-        $challengeToken = trim((string) ($this->request->getPost('challenge_token') ?? ''));
-        $code = trim((string) ($this->request->getPost('code') ?? ''));
+        $post = [];
+        if (\method_exists($this->request, 'getPostParams')) {
+            $candidate = $this->request->getPostParams();
+            if (\is_array($candidate)) {
+                $post = $candidate;
+            }
+        }
+        if ($post === []) {
+            $candidate = $this->request->getPost();
+            if (\is_array($candidate)) {
+                $post = $candidate;
+            }
+        }
 
-        if ($challengeToken === '' || $code === '') {
+        $challengeToken = trim((string)($post['challenge_token'] ?? ''));
+        if ($challengeToken === '') {
+            $challengeToken = trim((string)($this->request->getParam('challenge_token') ?? ''));
+        }
+
+        $rawCode = (string)($post['code'] ?? '');
+        if ($rawCode === '') {
+            $rawCode = (string)($this->request->getPost('code') ?? '');
+        }
+        $code = preg_replace('/\D+/', '', $rawCode) ?? '';
+
+        if ($challengeToken === '') {
+            return $this->respondFailure(
+                (string)__('登录验证令牌缺失，请返回登录后重试。'),
+                ''
+            );
+        }
+
+        if ($code === '') {
             return $this->respondFailure(
                 (string)__('请输入验证码。'),
                 $challengeToken
@@ -75,7 +109,7 @@ class Challenge extends \Weline\Framework\App\Controller\FrontendController
     private function respondSuccess(string $message, string $redirectUrl): string
     {
         $target = $this->authReturnUrlService->consume($this->session, $redirectUrl);
-        $redirect = $this->authReturnUrlService->formatRedirect($target);
+        $redirect = $this->authReturnUrlService->formatAuthSuccessRedirect($target);
         if ($this->expectsJsonResponse()) {
             return $this->fetchJson([
                 'success' => true,

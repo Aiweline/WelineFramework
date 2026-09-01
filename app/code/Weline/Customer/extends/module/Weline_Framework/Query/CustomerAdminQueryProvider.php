@@ -3,11 +3,14 @@ declare(strict_types=1);
 
 namespace Weline\Customer\Extends\Module\Weline_Framework\Query;
 
+use Weline\Customer\Service\CustomerAdminPickerService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 class CustomerAdminQueryProvider implements QueryProviderInterface
 {
+    public const ACL_SOURCE = 'Weline_Customer::customer_index';
+
     public function getProviderName(): string
     {
         return 'customer_admin';
@@ -17,6 +20,8 @@ class CustomerAdminQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'adminRequest' => $this->adminRequest($params),
+            'search' => $this->search($params),
+            'resolve' => $this->resolve($params),
             default => throw new \InvalidArgumentException('Unsupported operation: ' . $operation),
         };
     }
@@ -27,22 +32,89 @@ class CustomerAdminQueryProvider implements QueryProviderInterface
             'provider' => 'customer_admin',
             'name' => 'Weline_Customer admin bridge',
             'module' => 'Weline_Customer',
-            'operations' => [[
-                'name' => 'adminRequest',
-                'description' => 'Legacy controller bridge',
-                'frontend' => true,
-                'auth' => 'backend',
-                'backend' => true,
-                'backend_acl' => ['kind' => 'self'],
-                'mode' => 'write',
-                'params' => [
-                    ['name' => 'url', 'type' => 'string', 'required' => true],
-                    ['name' => 'method', 'type' => 'string', 'required' => false],
-                    ['name' => 'headers', 'type' => 'array', 'required' => false],
-                    ['name' => 'body', 'type' => 'string', 'required' => false],
+            'operations' => [
+                [
+                    'name' => 'adminRequest',
+                    'description' => 'Legacy controller bridge',
+                    'frontend' => true,
+                    'auth' => 'backend',
+                    'backend' => true,
+                    'backend_acl' => ['kind' => 'self'],
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'url', 'type' => 'string', 'required' => true],
+                        ['name' => 'method', 'type' => 'string', 'required' => false],
+                        ['name' => 'headers', 'type' => 'array', 'required' => false],
+                        ['name' => 'body', 'type' => 'string', 'required' => false],
+                    ],
                 ],
-            ]],
+                $this->readOperation('search', (string) __('搜索客户（姓名 / 邮箱）'), [
+                    ['name' => 'q', 'type' => 'string', 'required' => false, 'max_length' => 120],
+                    ['name' => 'keyword', 'type' => 'string', 'required' => false, 'max_length' => 120],
+                    ['name' => 'page', 'type' => 'int', 'required' => false, 'min' => 1],
+                    ['name' => 'limit', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 50],
+                ]),
+                $this->readOperation('resolve', (string) __('解析单个客户显示信息'), [
+                    ['name' => 'customer_id', 'type' => 'int', 'required' => true, 'min' => 1],
+                ]),
+            ],
         ];
+    }
+
+    /** @param array<string,mixed> $params */
+    private function search(array $params): array
+    {
+        $keyword = trim((string) ($params['q'] ?? $params['keyword'] ?? ''));
+        $page = max(1, (int) ($params['page'] ?? 1));
+        $limit = max(1, min(50, (int) ($params['limit'] ?? 20)));
+        $result = $this->picker()->search($keyword, $page, $limit);
+
+        return [
+            'success' => true,
+            'items' => $result['items'],
+            'total' => $result['total'],
+            'page' => $result['page'],
+            'limit' => $result['limit'],
+        ];
+    }
+
+    /** @param array<string,mixed> $params */
+    private function resolve(array $params): array
+    {
+        $customerId = max(0, (int) ($params['customer_id'] ?? 0));
+        $item = $this->picker()->resolve($customerId);
+
+        return [
+            'success' => $item !== null,
+            'item' => $item,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function readOperation(string $name, string $description, array $params): array
+    {
+        return [
+            'name' => $name,
+            'description' => $description,
+            'frontend' => true,
+            'backend' => true,
+            'external' => false,
+            'auth' => 'backend',
+            'backend_acl' => [
+                'kind' => 'source',
+                'source_id' => self::ACL_SOURCE,
+            ],
+            'mode' => 'read',
+            'graph' => false,
+            'cost' => 1,
+            'params' => $params,
+            'returns' => ['type' => 'map'],
+        ];
+    }
+
+    private function picker(): CustomerAdminPickerService
+    {
+        return ObjectManager::getInstance(CustomerAdminPickerService::class);
     }
 
     /** @param array<string,mixed> $params */

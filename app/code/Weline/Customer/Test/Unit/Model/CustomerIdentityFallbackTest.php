@@ -65,4 +65,45 @@ class CustomerIdentityFallbackTest extends TestCase
         $this->assertSame('FCDC Dealer', $customer->getData(Customer::schema_fields_username));
         $this->assertSame('dealer@example.test', $customer->getEmail());
     }
+
+    public function testDisplayNamePrefersStoredNonEmailUsername(): void
+    {
+        $customer = new class extends Customer {
+            public function __construct()
+            {
+            }
+        };
+
+        $customer->setData(Customer::schema_fields_email, 'dealer@example.test');
+        $customer->setData(Customer::schema_fields_username, 'FCDC Dealer');
+
+        $this->assertSame('FCDC Dealer', $customer->getDisplayName());
+    }
+
+    public function testDisplayNameUsesEmailLocalPartWhenUsernameIsEmailShaped(): void
+    {
+        $customer = new class extends Customer {
+            public function __construct()
+            {
+            }
+        };
+
+        $customer->setData(Customer::schema_fields_email, 'weline@qq.com');
+        $customer->setData(Customer::schema_fields_username, 'weline@qq.com');
+
+        $this->assertSame('weline', $customer->getDisplayName());
+    }
+
+    public function testDisplayNameUsesEmailLocalPartWhenUsernameMissing(): void
+    {
+        $customer = new class extends Customer {
+            public function __construct()
+            {
+            }
+        };
+
+        $customer->setData(Customer::schema_fields_email, 'ada@example.com');
+
+        $this->assertSame('ada', $customer->getDisplayName());
+    }
 }

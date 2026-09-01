@@ -6,6 +6,7 @@ namespace Weline\Customer\Controller\Account;
 
 use Weline\Customer\Service\PasswordResetService;
 use Weline\Customer\Service\CustomerAuthReturnUrlService;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 
@@ -69,15 +70,19 @@ class ForgotPassword extends \Weline\Framework\App\Controller\FrontendController
                 $email,
                 $this->getUrl('customer/account/forgot-password')
             );
-            if (!$sent) {
-                $this->getMessageManager()->addError(__('该邮箱尚未注册。'));
-                return $this->redirect('/customer/account/forgot-password');
-            }
-            $this->getMessageManager()->addSuccess(__('重置链接已发送至您的邮箱。'));
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $throwable) {
             $this->getMessageManager()->addError(__('暂时无法创建密码重置请求。'));
+            return $this->redirect('/customer/account/forgot-password');
         }
 
+        if (!$sent) {
+            $this->getMessageManager()->addError(__('该邮箱尚未注册。'));
+            return $this->redirect('/customer/account/forgot-password');
+        }
+
+        $this->getMessageManager()->addSuccess(__('重置链接已发送至您的邮箱。'));
         return $this->redirect('/customer/account/forgot-password');
     }
 
@@ -104,17 +109,19 @@ class ForgotPassword extends \Weline\Framework\App\Controller\FrontendController
 
         try {
             $reset = $this->passwordResetService->resetPassword($token, $password);
-            if (!$reset) {
-                $this->getMessageManager()->addError(__('重置链接无效或已过期。'));
-                return $this->redirect('/customer/account/forgot-password?token=' . urlencode($token));
-            }
-
-            $this->getMessageManager()->addSuccess(__('密码已重置，请使用新密码登录。'));
-            return $this->redirect('/customer/account/login');
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $throwable) {
             $this->getMessageManager()->addError($throwable->getMessage());
+            return $this->redirect('/customer/account/forgot-password?token=' . urlencode($token));
         }
 
-        return $this->redirect('/customer/account/forgot-password?token=' . urlencode($token));
+        if (!$reset) {
+            $this->getMessageManager()->addError(__('重置链接无效或已过期。'));
+            return $this->redirect('/customer/account/forgot-password?token=' . urlencode($token));
+        }
+
+        $this->getMessageManager()->addSuccess(__('密码已重置，请使用新密码登录。'));
+        return $this->redirect('/customer/account/login');
     }
 }

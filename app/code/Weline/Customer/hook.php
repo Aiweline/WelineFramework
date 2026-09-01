@@ -19,4 +19,9 @@ return [
         'description' => __('在顾客账户首页“我的订单”分区注入订单列表、订单状态与售后入口等内容。'),
         'doc' => 'frontend/account/index/orders.md',
     ],
+    'Weline_Customer::frontend::account::discovery::cards' => [
+        'name' => __('账户发现卡片扩展'),
+        'description' => __('在顾客账户中心发现页卡片区域注入扩展入口，例如分销摘要卡片。'),
+        'doc' => 'frontend/account/discovery/cards.md',
+    ],
 ];

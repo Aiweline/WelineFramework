@@ -145,7 +145,7 @@ class AccountQueryProvider implements QueryProviderInterface
         }
 
         return $this->success('Signed out successfully.', [
-            'redirect' => '/customer/account/login',
+            'redirect' => $this->authReturnUrlService->formatAuthInvalidRedirect('/customer/account/login'),
         ]);
     }
 
@@ -220,7 +220,7 @@ class AccountQueryProvider implements QueryProviderInterface
         ]);
         $this->eventsManager->dispatch('Weline_Customer_Account_Login::login_after', $loginEvent);
 
-        $target = $this->authReturnUrlService->formatRedirect(
+        $target = $this->authReturnUrlService->formatAuthSuccessRedirect(
             $this->authReturnUrlService->consume($session, $redirectUrl)
         );
 
@@ -281,7 +281,7 @@ class AccountQueryProvider implements QueryProviderInterface
             $this->customerAccountService->loginCustomer($user);
             $target = $this->authReturnUrlService->consume($session, $redirectUrl);
             return $this->success('Registration succeeded. Welcome.', [
-                'redirect' => $this->authReturnUrlService->formatRedirect($target),
+                'redirect' => $this->authReturnUrlService->formatAuthSuccessRedirect($target),
                 'user' => $this->customerPayload($user),
             ]);
         } catch (\Throwable $throwable) {
@@ -394,7 +394,7 @@ class AccountQueryProvider implements QueryProviderInterface
         );
         return $this->success('Two-factor verification succeeded.', [
             'status' => 'authenticated',
-            'redirect' => $this->authReturnUrlService->formatRedirect($target),
+            'redirect' => $this->authReturnUrlService->formatAuthSuccessRedirect($target),
         ]);
     }
 
@@ -501,6 +501,7 @@ class AccountQueryProvider implements QueryProviderInterface
         return [
             'user_id' => (int)$user->getId(),
             'username' => (string)$user->getUsername(),
+            'display_name' => $user->getDisplayName(),
             'email' => $user->getEmail(),
             'avatar' => (string)($user->getAvatar() ?? ''),
             'is_sandbox' => $user->isSandboxAccount(),
@@ -543,7 +544,7 @@ class AccountQueryProvider implements QueryProviderInterface
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 5,
-                    'auth' => 'guest',
+                    'auth' => 'any',
                     'params' => [
                         'username' => ['type' => 'string', 'max_length' => 160],
                         'login' => ['type' => 'string', 'max_length' => 160],
@@ -567,7 +568,7 @@ class AccountQueryProvider implements QueryProviderInterface
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 8,
-                    'auth' => 'guest',
+                    'auth' => 'any',
                     'params' => [
                         'firstname' => ['type' => 'string', 'max_length' => 80],
                         'lastname' => ['type' => 'string', 'max_length' => 80],
@@ -656,7 +657,7 @@ class AccountQueryProvider implements QueryProviderInterface
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 5,
-                    'auth' => 'guest',
+                    'auth' => 'any',
                     'params' => [
                         'challenge_token' => ['type' => 'string', 'max_length' => 128],
                         'code' => ['type' => 'string', 'max_length' => 16],
