@@ -409,7 +409,7 @@
                 </div>
                 
                 <div>
-                    <a href="/two-factor-auth/frontend" class="w-button" data-tone="neutral"><?= __('取消') ?></a>
+                    <a href="@frontend-url{'two-factor-auth/frontend'}" class="w-button" data-tone="neutral"><?= __('取消') ?></a>
                     <button class="w-button" type="button" data-twofa-action="enable-two-factor" data-tone="primary"><?= __('确认启用') ?></button>
                 </div>
             </div>
@@ -557,7 +557,7 @@
                         message: '<?= __('双因素身份验证已成功启用。\n\n请确保已保存备份码，然后返回管理页面。') ?>',
                         confirmLabel: '<?= __('确定') ?>'
                     }).then(() => {
-                        window.location.href = '/two-factor-auth/frontend';
+                        window.location.href = "@frontend-url{'two-factor-auth/frontend'}";
                     });
                 } else {
                     Weline.UI.dialog.request({
@@ -653,7 +653,7 @@
                         <button type="button" data-twofa-action="close-authenticator-app-modal" style="padding: 0.75rem 1.5rem; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; cursor: pointer; font-weight: 500;">
                             <?= __('取消') ?>
                         </button>
-                        <a href="/twofa-app/" target="_blank" data-twofa-action="close-authenticator-app-modal" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; text-decoration: none; font-weight: 500; display: inline-block;">
+                        <a href="@frontend-url{'twofa-app/'}" target="_blank" data-twofa-action="close-authenticator-app-modal" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; text-decoration: none; font-weight: 500; display: inline-block;">
                             <?= __('打开验证器') ?>
                         </a>
                     </div>
