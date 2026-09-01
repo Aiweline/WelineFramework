@@ -1,0 +1,39 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
+
+$payload = is_array($this->getData('payload') ?? null) ? $this->getData('payload') : [];
+$hit = is_array($this->getData('hit') ?? null) ? $this->getData('hit') : [];
+$title = trim((string)($payload['title'] ?? $hit['title'] ?? ''));
+$url = trim((string)($payload['url'] ?? $hit['url'] ?? ''));
+$excerpt = trim((string)($payload['excerpt'] ?? ''));
+$entityId = trim((string)($payload['entity_id'] ?? $hit['entity_id'] ?? ''));
+$imageResolved = StorefrontImagePlaceholder::resolve((string)($payload['image'] ?? ''), (int)$entityId);
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<article class="blog-storefront__card<?= $url !== '' ? ' is-clickable' : '' ?>"
+         data-testid="storefront-blog-card"
+         data-content-kind="cms_page"
+         data-entity-id="<?= $escape($entityId) ?>">
+    <?php if ($url !== ''): ?>
+        <a class="blog-storefront__card-hit"
+           href="<?= $escape($url) ?>"
+           aria-label="<?= $escape($title !== '' ? $title : (string)__('博客页面')) ?>"
+           data-testid="search-hit-blog-cms"></a>
+    <?php endif; ?>
+    <div class="blog-storefront__media"<?= $url === '' ? ' aria-hidden="true"' : '' ?>>
+        <img src="<?= $escape($imageResolved['src']) ?>"
+             alt=""
+             data-storefront-img="1"
+             data-fallback="<?= $escape($imageResolved['fallback']) ?>"
+             loading="lazy"
+             decoding="async">
+        <span class="blog-storefront__badge"><lang>页面</lang></span>
+    </div>
+    <div class="blog-storefront__body">
+        <h2><?= $escape($title !== '' ? $title : (string)__('未命名页面')) ?></h2>
+        <?php if ($excerpt !== ''): ?>
+            <p class="blog-storefront__excerpt"><?= $escape($excerpt) ?></p>
+        <?php endif; ?>
+    </div>
+</article>
