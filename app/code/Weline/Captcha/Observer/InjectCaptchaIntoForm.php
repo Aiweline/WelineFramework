@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Captcha\Observer;
 
 use Weline\Captcha\Api\CaptchaManagerInterface;
+use Weline\Captcha\Service\LazyCaptchaClientRuntime;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 
@@ -21,6 +22,7 @@ final class InjectCaptchaIntoForm implements ObserverInterface
             return;
         }
         $mode = (string)($attributes['captcha'] ?? 'off');
+        // auto/required/lazy only gate whether to inject; markup is always lazy (FPC-safe).
         if ($mode === 'off' || ($mode === 'auto' && (string)($attributes['method'] ?? '') !== 'post')) {
             return;
         }
@@ -37,25 +39,19 @@ final class InjectCaptchaIntoForm implements ObserverInterface
 
         $formId = (string)($attributes['id'] ?? '');
         $intent = (string)($attributes['intent'] ?? 'generic');
-        if ($mode === 'lazy') {
-            // Marker only — storefront JS loads /captcha/frontend/challenge on first open.
-            $event->setData(
-                'html',
-                (string)$event->getData('html')
-                . '<div class="weline-captcha-lazy-host"'
-                . ' data-weline-captcha-lazy="1"'
-                . ' data-form-id="' . \htmlspecialchars($formId, \ENT_QUOTES, 'UTF-8') . '"'
-                . ' data-intent="' . \htmlspecialchars($intent, \ENT_QUOTES, 'UTF-8') . '"'
-                . '></div>'
-            );
-            return;
-        }
-
-        $html = $this->captcha->renderChallenge([
-            'form_id' => $formId,
-            'intent' => $intent,
-            'required' => $mode === 'required',
-        ]);
-        $event->setData('html', (string)$event->getData('html') . $html);
+        $runtime = LazyCaptchaClientRuntime::onceScriptHtml();
+        // Never SSR one-shot challenge HTML into shared page shells.
+        $event->setData(
+            'html',
+            (string)$event->getData('html')
+            . '<div class="weline-captcha-lazy-host"'
+            . ' data-weline-captcha-lazy="1"'
+            . ' data-challenge-route="weline_captcha/frontend/challenge"'
+            . ' data-form-id="' . \htmlspecialchars($formId, \ENT_QUOTES, 'UTF-8') . '"'
+            . ' data-intent="' . \htmlspecialchars($intent, \ENT_QUOTES, 'UTF-8') . '"'
+            . ' data-captcha-mode="' . \htmlspecialchars($mode, \ENT_QUOTES, 'UTF-8') . '"'
+            . '></div>'
+            . $runtime
+        );
     }
 }

@@ -6,16 +6,22 @@ namespace Weline\Captcha\Controller\Frontend;
 
 use Weline\Captcha\Api\CaptchaManagerInterface;
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Cache\SharedResponseCachePolicy;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
  * Lazy captcha challenge HTML for storefront forms that must not SSR
  * LocalImageCaptcha on every page (PASSWORD_DEFAULT alone is ~100–400ms).
+ *
+ * Route: weline_captcha/frontend/challenge (GET).
  */
 class Challenge extends FrontendController
 {
     public function get()
     {
+        // One-shot challenge HTML must never enter shared/page fragment caches.
+        SharedResponseCachePolicy::forbid('captcha_challenge');
+
         $intent = trim((string)$this->request->getGet('intent', 'generic'));
         if (preg_match('/\A[A-Za-z0-9_.:-]{1,80}\z/D', $intent) !== 1) {
             $intent = 'generic';
@@ -33,7 +39,8 @@ class Challenge extends FrontendController
             'required' => true,
         ]);
 
-        return $this->json([
+        // PcController exposes fetchJson (not json).
+        return $this->fetchJson([
             'code' => 200,
             'html' => $html,
         ]);
