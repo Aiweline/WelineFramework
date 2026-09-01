@@ -1,0 +1,73 @@
+<?php
+
+/**
+ * Checkout-owned buy-now control for product cards.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('product-card-buy-now');
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
+    || (bool)($this->getData('editor_mode') ?? false);
+
+$offer = StorefrontOfferResolver::resolve($this);
+if ($offer === [] && !$isPreviewMode) {
+    return;
+}
+
+$productId = max(0, (int)($offer['product_id'] ?? 0));
+$offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
+$sellable = !empty($offer['sellable']);
+$quoteOnly = !empty($offer['quote_only']);
+
+if ($quoteOnly || (!$isPreviewMode && (!$sellable || $offerUuid === ''))) {
+    return;
+}
+
+$variant = trim((string)($this->getData('card_add_to_cart_variant') ?? $this->getData('card_buy_now_variant') ?? 'cta'));
+$extraClass = trim((string)($this->getData('card_buy_now_button_class') ?? ''));
+$labelOverride = trim((string)($this->getData('card_buy_now_label') ?? ''));
+$buttonLabel = $labelOverride !== '' ? $labelOverride : __('立即购买');
+
+if ($variant === 'storefront') {
+    $buttonClass = 'product-storefront__buy-now weline-pixel::buy-now';
+} elseif ($variant === 'amz-card') {
+    $buttonClass = 'amz-card__buy-now weline-pixel::buy-now';
+} else {
+    $buttonClass = 'btn-buy-now weline-pixel::buy-now';
+}
+if ($extraClass !== '') {
+    $buttonClass .= ' ' . $extraClass;
+}
+?>
+<div class="weline-checkout-product-card-buy-now"
+     data-weline-load="cart"
+     data-widget-module="Weline_Checkout"
+     data-widget-code="product-card-buy-now"
+     data-uid="<?= $escape($scope->uid) ?>"
+     data-purchase-loading="<?= $escape(__('正在前往结账...')) ?>"
+     data-purchase-success="<?= $escape(__('正在前往结账...')) ?>"
+     data-purchase-error="<?= $escape(__('结账准备失败')) ?>"
+     weline-code="<?= $escape($scope->code) ?>">
+    <button type="button"
+            class="<?= $escape(trim($buttonClass)) ?>"
+            data-action="buy-now"
+            data-testid="product-card-buy-now"
+            data-default-label="<?= $escape($buttonLabel) ?>"
+            data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
+            data-product-id="<?= $productId ?>"
+            data-global-offer-uuid="<?= $escape($offerUuid) ?>"
+            data-checkout-url="@url{'checkout'}"
+            data-qty="1"
+            <?= $isPreviewMode ? 'disabled' : '' ?>>
+        <span class="weline-pixel::buy_now" data-card-buy-label="1"><?= $escape($buttonLabel) ?></span>
+    </button>
+</div>

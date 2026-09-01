@@ -14,7 +14,11 @@ use Weline\Inventory\Api\DefaultWarehouseResolverInterface;
 use Weline\Inventory\Api\InventoryCapabilityInterface;
 use Weline\Inventory\Api\InventoryConflictException;
 use Weline\Inventory\Api\WarehouseInventoryCapabilityInterface;
+use Weline\Marketing\Api\Quote\DiscountQuote;
+use Weline\Marketing\Api\Quote\DiscountQuoteRequest;
+use Weline\Marketing\Api\Quote\DiscountQuoteServiceInterface;
 use Weline\Order\Api\Data\CreateCheckoutGroupCommand;
+use Weline\Order\Service\DiscountValidationService;
 use Weline\Order\Api\Data\CreateCheckoutGroupResult;
 use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Shipping\Api\Quote\ShippingQuoteRequest;
@@ -33,6 +37,7 @@ final class CheckoutGroupSubmitService
     public const ERROR_CURRENCY = 'checkout_currency_missing';
     public const ERROR_QUOTE_TOKEN = 'checkout_quote_token_conflict';
     public const ERROR_CLIENT_MONEY = 'checkout_client_money_rejected';
+    public const ERROR_CLIENT_DISCOUNT = 'checkout_client_discount_rejected';
     public const ERROR_EMPTY = 'checkout_lines_empty';
     public const ERROR_TAX = 'checkout_tax_blocked';
     public const ERROR_CLIENT_FACT = 'checkout_client_fact_rejected';
@@ -45,6 +50,7 @@ final class CheckoutGroupSubmitService
     private ?InventoryCapabilityInterface $inventory;
     private ?DefaultWarehouseResolverInterface $defaultWarehouseResolver;
     private ?WarehouseInventoryCapabilityInterface $warehouseInventory;
+    private ?DiscountQuoteServiceInterface $discountQuotes;
 
     public function __construct(
         private readonly ShippingQuoteServiceInterface $shippingQuotes,
@@ -58,10 +64,13 @@ final class CheckoutGroupSubmitService
         private readonly ?DatabaseTransactionRunnerInterface $transactions = null,
         private readonly ?ConnectionFactory $connectionFactory = null,
         private readonly bool $resolveRuntimeInventory = true,
+        ?DiscountQuoteServiceInterface $discountQuotes = null,
+        private readonly bool $resolveRuntimeDiscount = true,
     ) {
         $this->inventory = $inventory;
         $this->defaultWarehouseResolver = $defaultWarehouseResolver;
         $this->warehouseInventory = $warehouseInventory;
+        $this->discountQuotes = $discountQuotes;
     }
 
     public static function forTesting(
@@ -72,6 +81,7 @@ final class CheckoutGroupSubmitService
         ?InventoryCapabilityInterface $inventory = null,
         ?DefaultWarehouseResolverInterface $defaultWarehouseResolver = null,
         ?WarehouseInventoryCapabilityInterface $warehouseInventory = null,
+        ?DiscountQuoteServiceInterface $discountQuotes = null,
     ): self {
         return new self(
             $shippingQuotes,
@@ -83,6 +93,8 @@ final class CheckoutGroupSubmitService
             defaultWarehouseResolver: $defaultWarehouseResolver,
             warehouseInventory: $warehouseInventory,
             resolveRuntimeInventory: false,
+            discountQuotes: $discountQuotes,
+            resolveRuntimeDiscount: false,
         );
     }
 
@@ -113,6 +125,8 @@ final class CheckoutGroupSubmitService
         array $clientHints = [],
         ?int $customerId = null,
         string $cartHash = '',
+        ?string $couponCode = null,
+        ?string $paymentMethod = null,
     ): array {
         $this->rejectClientAuthority($clientHints);
         if ($lines === []) {
@@ -183,6 +197,26 @@ final class CheckoutGroupSubmitService
             );
         }
 
+        $discountPayload = null;
+        $discountQuotes = $this->discountQuoteService();
+        if ($discountQuotes !== null) {
+            $discountRequest = new DiscountQuoteRequest(
+                scope: $scope,
+                address: $address,
+                lines: $lines,
+                orders: $orders,
+                currency: $currency,
+                currencyPrecision: 2,
+                customerId: $customerId,
+                shippingAmountMinor: $quote->amountMinor,
+                couponCode: $couponCode,
+                paymentMethod: $paymentMethod,
+                cartHash: $cartHash,
+            );
+            $discountQuote = $discountQuotes->quote($discountRequest);
+            $discountPayload = $discountQuote->toArray();
+        }
+
         $token = 'qt_' . bin2hex(random_bytes(12));
         $payload = [
             'quote_token' => $token,
@@ -198,11 +232,17 @@ final class CheckoutGroupSubmitService
             'allocation' => $alloc,
             'quote' => $quote->toArray(),
             'tax' => $tax,
+            'discount' => $discountPayload,
+            'coupon_code' => strtoupper(trim((string)($couponCode ?? ''))),
+            'payment_method' => trim((string)($paymentMethod ?? '')),
         ];
         $payload['request_hash'] = hash(
             'sha256',
             json_encode(
-                $payload + ['shipping_request_hash' => $quote->requestHash],
+                $payload + [
+                    'shipping_request_hash' => $quote->requestHash,
+                    'discount_request_hash' => is_array($discountPayload) ? ($discountPayload['request_hash'] ?? '') : '',
+                ],
                 JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
             ) ?: '',
         );
@@ -221,6 +261,7 @@ final class CheckoutGroupSubmitService
         ?int $customerId = null,
         ?string $expectedConfigVersion = null,
         ?string $expectedTaxRuleSetHash = null,
+        ?string $paymentMethod = null,
     ): CreateCheckoutGroupResult {
         $this->rejectClientAuthority($clientHints);
         $token = trim($quoteToken);
@@ -236,6 +277,7 @@ final class CheckoutGroupSubmitService
             $customerId,
             $expectedConfigVersion,
             $expectedTaxRuleSetHash,
+            $paymentMethod,
         );
         if (!$this->resolveRuntimeInventory && $this->transactions === null) {
             return $operation();
@@ -253,6 +295,7 @@ final class CheckoutGroupSubmitService
         ?int $customerId,
         ?string $expectedConfigVersion,
         ?string $expectedTaxRuleSetHash,
+        ?string $paymentMethod = null,
     ): CreateCheckoutGroupResult {
         if ($idempotencyKey === '' || strlen($idempotencyKey) > 128) {
             throw new CheckoutV2ConflictException(
@@ -334,6 +377,8 @@ final class CheckoutGroupSubmitService
                 throw new CheckoutV2ConflictException($e->errorCode(), $e->getMessage(), $e->context(), $e);
             }
         }
+
+        $this->assertSessionDiscountQuote($session, $paymentMethod);
 
         $session['state'] = \Weline\Checkout\Model\CheckoutSession::STATE_SUBMITTING;
         $session['idempotency_key'] = $idempotencyKey;
@@ -442,6 +487,8 @@ final class CheckoutGroupSubmitService
         }
 
         $ownerShip = (int) ($session['allocation']['group_shipping_minor'] ?? 0);
+        $discount = is_array($session['discount'] ?? null) ? $session['discount'] : [];
+        $discountMinor = (int)($discount['amount_minor'] ?? 0);
         $cmd = new CreateCheckoutGroupCommand(
             idempotencyKey: $idempotencyKey,
             requestHash: (string) $session['request_hash'],
@@ -457,6 +504,8 @@ final class CheckoutGroupSubmitService
                 'tax_mode' => (string) ($tax['mode'] ?? self::TAX_STUB_MODE),
                 'tax_amount_minor' => (int) ($tax['tax_amount_minor'] ?? 0),
                 'tax_snapshot' => $tax,
+                'discount_amount_minor' => $discountMinor,
+                'discount_snapshot' => $discount,
                 'quote_token' => $token,
                 'shipping_quote' => $session['quote'],
                 'owner_item_shipping_minor' => $session['allocation']['owner_item_shipping_minor'],
@@ -465,6 +514,42 @@ final class CheckoutGroupSubmitService
         );
 
         $result = $this->orderFacade->create($cmd);
+        $discountQuotes = $this->discountQuoteService();
+        if ($discountQuotes !== null && is_array($session['discount'] ?? null)) {
+            $couponCode = (string)($session['coupon_code'] ?? '');
+            if ($couponCode !== '') {
+                $discountRequest = new DiscountQuoteRequest(
+                    scope: $session['scope'],
+                    address: $session['address'],
+                    lines: $this->flattenOrderLines($session['orders']),
+                    orders: $session['orders'],
+                    currency: (string)$session['currency'],
+                    customerId: $customerId,
+                    shippingAmountMinor: (int)($session['quote']['amount_minor'] ?? 0),
+                    couponCode: $couponCode,
+                    cartHash: (string)($session['cart_hash'] ?? ''),
+                );
+                $discountQuote = new DiscountQuote(
+                    discountQuoteToken: (string)($session['discount']['discount_quote_token'] ?? ''),
+                    amountMinor: (int)($session['discount']['amount_minor'] ?? 0),
+                    currency: (string)($session['discount']['currency'] ?? $session['currency']),
+                    currencyPrecision: (int)($session['discount']['currency_precision'] ?? 2),
+                    requestHash: (string)($session['discount']['request_hash'] ?? ''),
+                    lines: is_array($session['discount']['lines'] ?? null) ? $session['discount']['lines'] : [],
+                    appliedRuleIds: is_array($session['discount']['applied_rule_ids'] ?? null) ? $session['discount']['applied_rule_ids'] : [],
+                    couponCode: $couponCode,
+                    actionPayloads: is_array($session['discount']['action_payloads'] ?? null) ? $session['discount']['action_payloads'] : [],
+                    freeShipping: !empty($session['discount']['free_shipping']),
+                    shippingDiscountMinor: (int)($session['discount']['shipping_discount_minor'] ?? 0),
+                );
+                $orderUuid = (string)($result->orderUuids[0] ?? '');
+                $discountQuotes->redeemCoupon($couponCode, [
+                    'customer_id' => $customerId,
+                    'order_id' => $orderUuid,
+                    'subtotal' => $this->ordersSubtotalMajor($session['orders']),
+                ], $discountQuote);
+            }
+        }
         $session['state'] = \Weline\Checkout\Model\CheckoutSession::STATE_SUBMITTED;
         $session['submitted_result'] = $result->toArray();
         $session['reservations'] = $reservations;
@@ -500,10 +585,19 @@ final class CheckoutGroupSubmitService
     /** @param array<string, mixed> $clientHints */
     private function rejectClientAuthority(array $clientHints): void
     {
-        foreach (['shipping_amount', 'shipping_amount_minor', 'tax_amount', 'tax_amount_minor', 'grand_total', 'grand_total_minor'] as $key) {
+        foreach ([
+            'shipping_amount',
+            'shipping_amount_minor',
+            'tax_amount',
+            'tax_amount_minor',
+            'discount_amount',
+            'discount_amount_minor',
+            'grand_total',
+            'grand_total_minor',
+        ] as $key) {
             if (array_key_exists($key, $clientHints)) {
                 throw new CheckoutV2ConflictException(
-                    self::ERROR_CLIENT_MONEY,
+                    str_starts_with($key, 'discount_') ? self::ERROR_CLIENT_DISCOUNT : self::ERROR_CLIENT_MONEY,
                     __('客户端金额字段被拒绝：%{1}', [$key]),
                     ['field' => $key],
                 );
@@ -668,5 +762,119 @@ final class CheckoutGroupSubmitService
         ksort($buckets);
 
         return array_values($buckets);
+    }
+
+    private function discountQuoteService(): ?DiscountQuoteServiceInterface
+    {
+        if ($this->discountQuotes instanceof DiscountQuoteServiceInterface) {
+            return $this->discountQuotes;
+        }
+        if (!$this->resolveRuntimeDiscount) {
+            return null;
+        }
+        $resolved = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DiscountQuoteServiceInterface::class);
+        if (!$resolved instanceof DiscountQuoteServiceInterface) {
+            return null;
+        }
+
+        return $this->discountQuotes = $resolved;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orders
+     * @return list<array<string, mixed>>
+     */
+    private function flattenOrderLines(array $orders): array
+    {
+        $lines = [];
+        foreach ($orders as $order) {
+            foreach ($order['items'] ?? [] as $item) {
+                $lines[] = $item;
+            }
+        }
+
+        return $lines;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orders
+     */
+    private function ordersSubtotalMajor(array $orders): float
+    {
+        $minor = 0;
+        foreach ($orders as $order) {
+            $minor += (int)($order['subtotal_minor'] ?? 0);
+        }
+
+        return $minor / 100;
+    }
+
+    /**
+     * @param array<string, mixed> $session
+     */
+    private function assertSessionDiscountQuote(array $session, ?string $paymentMethod): void
+    {
+        $discountQuotes = $this->discountQuoteService();
+        if ($discountQuotes === null || !is_array($session['discount'] ?? null)) {
+            return;
+        }
+
+        $couponCode = (string)($session['coupon_code'] ?? '');
+        $discountRequest = new DiscountQuoteRequest(
+            scope: $session['scope'],
+            address: $session['address'],
+            lines: $this->flattenOrderLines($session['orders']),
+            orders: $session['orders'],
+            currency: (string)$session['currency'],
+            customerId: isset($session['customer_id']) ? (int)$session['customer_id'] : null,
+            shippingAmountMinor: (int)($session['quote']['amount_minor'] ?? 0),
+            couponCode: $couponCode !== '' ? $couponCode : null,
+            paymentMethod: trim((string)($paymentMethod ?? $session['payment_method'] ?? '')) ?: null,
+            cartHash: (string)($session['cart_hash'] ?? ''),
+        );
+        $discount = $session['discount'];
+        $discountQuote = new DiscountQuote(
+            discountQuoteToken: (string)($discount['discount_quote_token'] ?? ''),
+            amountMinor: (int)($discount['amount_minor'] ?? 0),
+            currency: (string)($discount['currency'] ?? $session['currency']),
+            currencyPrecision: (int)($discount['currency_precision'] ?? 2),
+            requestHash: (string)($discount['request_hash'] ?? ''),
+            lines: is_array($discount['lines'] ?? null) ? $discount['lines'] : [],
+            appliedRuleIds: is_array($discount['applied_rule_ids'] ?? null) ? $discount['applied_rule_ids'] : [],
+            couponCode: $couponCode,
+            actionPayloads: is_array($discount['action_payloads'] ?? null) ? $discount['action_payloads'] : [],
+            freeShipping: !empty($discount['free_shipping']),
+            shippingDiscountMinor: (int)($discount['shipping_discount_minor'] ?? 0),
+        );
+
+        if (!$discountQuotes->validateToken($discountRequest, $discountQuote)) {
+            throw new CheckoutV2ConflictException(
+                self::ERROR_QUOTE_TOKEN,
+                __('折扣报价已失效，请重新报价确认'),
+                ['discount_quote_token' => $discountQuote->discountQuoteToken],
+            );
+        }
+
+        $resolvedPayment = trim((string)($paymentMethod ?? $session['payment_method'] ?? ''));
+        $actionPayloads = $discountQuote->actionPayloads;
+        if ($resolvedPayment === '' || $actionPayloads === []) {
+            return;
+        }
+
+        $validation = ObjectManager::getInstance(DiscountValidationService::class);
+        foreach ($actionPayloads as $payload) {
+            $actionCode = (string)($payload['type'] ?? '');
+            if ($actionCode === '') {
+                continue;
+            }
+            if (!$validation->validateDiscountForPayment($resolvedPayment, $actionCode)) {
+                throw new CheckoutV2ConflictException(
+                    self::ERROR_CLIENT_DISCOUNT,
+                    __('当前支付方式不支持已选优惠方式：%{1}', [$actionCode]),
+                    ['payment_method' => $resolvedPayment, 'action_code' => $actionCode],
+                );
+            }
+        }
     }
 }
