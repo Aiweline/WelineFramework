@@ -95,17 +95,19 @@
     }
 
     function writeCurrencyPreference(currency) {
+        void currency;
         try {
             if (window.localStorage) {
-                localStorage.setItem('weline_user_currency', currency);
+                localStorage.removeItem('weline_user_currency');
                 localStorage.removeItem('api_doc_currency');
                 localStorage.removeItem('WELINE_USER_CURRENCY');
             }
         } catch (error) {
             // localStorage can be unavailable in privacy modes.
         }
+        const past = 'Thu, 01 Jan 1970 00:00:00 GMT';
         currencyCookieNames().forEach((name) => {
-            writeCookieValue(name, currency, 365, { path: '/', SameSite: 'Lax' });
+            document.cookie = `${name}=;expires=${past};path=/;SameSite=Lax`;
         });
     }
 
@@ -255,19 +257,8 @@
 
     function getCurrentCurrency() {
         const config = getThemeConfig();
-        const cookieCurrency = readCookieValue('WELINE_USER_CURRENCY');
-        if (isSupportedCurrencyCode(cookieCurrency, config)) {
-            return cookieCurrency.toUpperCase();
-        }
 
-        // 从 URL 参数获取
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlCurrency = urlParams.get('currency');
-        if (isSupportedCurrencyCode(urlCurrency, config)) {
-            return urlCurrency.toUpperCase();
-        }
-
-        // 从 URL 路径获取（如 /CNY/...）
+        // Path first
         const pathParts = window.location.pathname.split('/').filter(Boolean);
         for (const part of pathParts) {
             if (isSupportedCurrencyCode(part, config)) {
@@ -275,7 +266,13 @@
             }
         }
 
-        // 从配置获取
+        // Query when path has no currency segment
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlCurrency = urlParams.get('currency');
+        if (isSupportedCurrencyCode(urlCurrency, config)) {
+            return urlCurrency.toUpperCase();
+        }
+
         const fallbackCurrency = isSupportedCurrencyCode(config.currentCurrency, config)
             ? config.currentCurrency
             : (config.defaultCurrency || 'CNY');

@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Currency',
-    "version" => '1.0.0',
+    "version" => '1.0.1',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -10,6 +10,8 @@ return [
     ],
     "optional" => [
         'Weline_Server' => '*',
+        'Weline_Theme' => '*',
+        'Weline_Widget' => '*',
     ],
     "provides" => [
         \Weline\Currency\Api\CurrencyCatalogInterface::class => \Weline\Currency\Service\Repository\CurrencyCatalog::class,
