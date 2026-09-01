@@ -27,4 +27,15 @@ final class LoginTemplateCaptchaTest extends TestCase
         self::assertStringNotContainsString('data-bs-', $source);
         self::assertStringNotContainsString('<script>', $source);
     }
+
+    public function testLoginPageUsesFixedLightThemeAndDoesNotFollowBackendThemeConfig(): void
+    {
+        $source = \file_get_contents(\dirname(__DIR__, 3) . '/view/templates/Login/index.phtml');
+
+        self::assertIsString($source);
+        self::assertStringContainsString('data-theme="light"', $source);
+        self::assertStringContainsString('data-theme-preference="light"', $source);
+        self::assertStringNotContainsString('getThemeHtmlAttributes()', $source);
+        self::assertStringContainsString("getData('login_logo_light') ?: \$this->getData('login_logo_dark')", $source);
+    }
 }
