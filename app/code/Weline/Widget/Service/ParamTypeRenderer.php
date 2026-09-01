@@ -7,6 +7,7 @@ namespace Weline\Widget\Service;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Form\FormRenderer;
 use Weline\Widget\Api\Param\ParamFormRendererInterface;
+use Weline\Widget\Ui\ParamType\AbstractParamType;
 use Weline\Widget\Ui\ParamType\ArrayType;
 use Weline\Widget\Ui\ParamType\BoolType;
 use Weline\Widget\Ui\ParamType\ColorType;
@@ -118,17 +119,19 @@ class ParamTypeRenderer implements ParamFormRendererInterface
         $actionsHtml = (string)($options['actions_html'] ?? '');
 
         $groupsHtml = $this->renderGroups($layoutId, $params, $config);
-        return FormRenderer::open([
+        $identityAttrs = AbstractParamType::widgetIdentityAttrMap($layoutId);
+        $deleteIdentityHtml = AbstractParamType::widgetIdentityAttrHtml($layoutId);
+        $deleteIdentitySuffix = $deleteIdentityHtml !== '' ? ' ' . $deleteIdentityHtml : '';
+        return FormRenderer::open(\array_merge([
                 'class' => 'w-param-form',
                 'method' => 'post',
-                'data-layout-id' => (string)$layoutId,
                 'data-auto-save' => '1',
                 'intent' => 'widget.parameters',
-            ]) . '
+            ], $identityAttrs)) . '
                 ' . $groupsHtml . '
                 <div class="w-param-actions">
                     <button type="submit" class="w-button w-param-btn-save-widget" data-tone="primary">' . __('保存配置') . '</button>
-                    <button type="button" class="w-button w-param-btn-delete-widget" data-tone="danger" data-variant="outline" data-layout-id="' . htmlspecialchars((string)$layoutId) . '">' . __('删除') . '</button>
+                    <button type="button" class="w-button w-param-btn-delete-widget" data-tone="danger" data-variant="outline"' . $deleteIdentitySuffix . '>' . __('删除') . '</button>
                 </div>
             ' . FormRenderer::close();
     }
@@ -142,23 +145,25 @@ class ParamTypeRenderer implements ParamFormRendererInterface
         $actionsHtml = (string)($options['actions_html'] ?? '');
 
         $groupsHtml = $this->renderGroups($layoutId, $params, $config);
+        $deleteIdentityHtml = AbstractParamType::widgetIdentityAttrHtml($layoutId);
+        $deleteIdentitySuffix = $deleteIdentityHtml !== '' ? ' ' . $deleteIdentityHtml : '';
 
         if ($showDeleteButton) {
-            $actionsHtml = '<button type="button" class="w-button w-param-btn-delete-widget" data-tone="danger" data-variant="outline" data-layout-id="' . htmlspecialchars((string)$layoutId) . '">' . __('删除') . '</button>' . $actionsHtml;
+            $actionsHtml = '<button type="button" class="w-button w-param-btn-delete-widget" data-tone="danger" data-variant="outline"' . $deleteIdentitySuffix . '>' . __('删除') . '</button>' . $actionsHtml;
         }
         if ($showSaveButton) {
             $actionsHtml = '<button type="submit" class="w-button w-param-btn-save-widget" data-tone="primary">' . __('保存配置') . '</button>' . $actionsHtml;
         }
 
         $actionsBlock = $actionsHtml !== '' ? '<div class="w-param-actions">' . $actionsHtml . '</div>' : '';
+        $identityAttrs = AbstractParamType::widgetIdentityAttrMap($layoutId);
 
-        return FormRenderer::open([
+        return FormRenderer::open(\array_merge([
                 'class' => $formClass,
                 'method' => 'post',
-                'data-layout-id' => (string)$layoutId,
                 'data-auto-save' => $autoSave ? '1' : '0',
                 'intent' => 'widget.parameters',
-            ]) . '
+            ], $identityAttrs)) . '
                 ' . $groupsHtml . '
                 ' . $actionsBlock . '
             ' . FormRenderer::close();
