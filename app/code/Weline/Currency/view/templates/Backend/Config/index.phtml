@@ -736,7 +736,7 @@
         updateCurrencyRates: function(oldBaseCurrency, newBaseCurrency, form) {
             var self = this;
             var baseCurrencySelect = document.getElementById('base_currency');
-            var updateUrl = '<?= $this->getBackendUrl("currency/backend/config/post-update-rates") ?>';
+            var updateUrl = '@backend-url{'currency/backend/config/post-update-rates'}';
             
             Weline.adminRequest('currency', updateUrl, {
                 method: 'POST',
@@ -819,7 +819,7 @@
             btn.disabled = true;
             btn.innerHTML = '<?= __('测试中...') ?>';
             
-            var testApiUrl = '<?= $this->getBackendUrl("currency/backend/config/testApi") ?>';
+            var testApiUrl = '@backend-url{'currency/backend/config/testApi'}';
             var testApiOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'api_key=' + encodeURIComponent(apiKey) };
             Weline.adminRequest('currency', testApiUrl, testApiOpts)
             .then(function(res) {
@@ -845,7 +845,7 @@
             btn.disabled = true;
             btn.innerHTML = '<?= __('导入中...') ?>';
             
-            var importUrl = '<?= $this->getBackendUrl("currency/backend/config/import") ?>';
+            var importUrl = '@backend-url{'currency/backend/config/import'}';
             var importOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' } };
             Weline.adminRequest('currency', importUrl, importOpts)
             .then(function(res) {
