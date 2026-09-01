@@ -1,51 +1,85 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
+/** @var array|object|null $rule */
+$rule = $rule ?? null;
+$ruleData = is_object($rule) && method_exists($rule, 'getData') ? $rule->getData() : (is_array($rule) ? $rule : []);
+$isEdit = !empty($ruleData['id']);
+$externalManaged = !empty($external_managed);
+$externalHint = (string)($external_manage_hint ?? '');
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 ?>
 <div class="w-grid" data-testid="marketing-rule-form">
     <div style="--w-span:12;">
         <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 class="w-backend-page__title"><?= __('新建营销规则') ?></h4>
-            <a class="w-button" href="<?= $this->getBackendUrl('marketing/backend/rule/index') ?>" data-tone="neutral">
+            <h4 class="w-backend-page__title"><?= $isEdit ? __('编辑营销规则') : __('新建营销规则') ?></h4>
+            <a class="w-button" href="@backend-url{'marketing/backend/rule/index'}" data-tone="neutral">
                 <?= __('返回列表') ?>
             </a>
         </div>
         <template>Weline_Component::message.phtml</template>
+        <?php if ($externalManaged && $externalHint !== ''): ?>
+            <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="marketing-rule-external-edit-hint">
+                <div class="w-card__body">
+                    <span class="w-badge" data-tone="warning"><lang>系统同步</lang></span>
+                    <p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);"><?= $escape($externalHint) ?></p>
+                </div>
+            </div>
+        <?php endif; ?>
         <div class="w-card">
             <div class="w-card__body">
-                <w:form method="post" action="@var($this->getBackendUrl('marketing/backend/rule/save'))">
+                <w:form method="post" action="@backend-url{'marketing/backend/rule/save'}">
+                    <?php if ($isEdit): ?>
+                        <input type="hidden" name="id" value="<?= (int)$ruleData['id'] ?>">
+                    <?php endif; ?>
                     <div style="--w-mb:var(--weline-space-4);">
                         <label class="w-field__label" for="marketing-rule-name"><?= __('规则名称') ?></label>
-                        <input id="marketing-rule-name" data-testid="marketing-rule-name" class="w-input" type="text" name="name" required maxlength="255">
+                        <input id="marketing-rule-name" data-testid="marketing-rule-name" class="w-input" type="text" name="name" required maxlength="255" value="<?= $escape($ruleData['name'] ?? '') ?>" <?= $externalManaged ? 'readonly' : '' ?>>
                     </div>
                     <div style="--w-mb:var(--weline-space-4);">
                         <label class="w-field__label" for="marketing-rule-description"><?= __('规则描述') ?></label>
-                        <textarea id="marketing-rule-description" class="w-textarea" name="description" rows="3"></textarea>
+                        <textarea id="marketing-rule-description" class="w-textarea" name="description" rows="3" <?= $externalManaged ? 'readonly' : '' ?>><?= $escape($ruleData['description'] ?? '') ?></textarea>
                     </div>
                     <div class="w-grid">
                         <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
                             <label class="w-field__label" for="marketing-rule-type"><?= __('规则类型') ?></label>
-                            <select id="marketing-rule-type" data-testid="marketing-rule-type" class="w-select" name="rule_type" required>
-                                <option value="coupon"><?= __('优惠券') ?></option>
-                                <option value="campaign"><?= __('促销活动') ?></option>
-                                <option value="automatic"><?= __('自动规则') ?></option>
+                            <select id="marketing-rule-type" data-testid="marketing-rule-type" class="w-select" name="rule_type" required <?= $externalManaged ? 'disabled' : '' ?>>
+                                <?php
+                                $type = (string)($ruleData['rule_type'] ?? 'coupon');
+                                foreach (['coupon' => __('优惠券'), 'campaign' => __('促销活动'), 'automatic' => __('自动规则')] as $value => $label):
+                                ?>
+                                    <option value="<?= $escape($value) ?>" <?= $type === $value ? 'selected' : '' ?>><?= $escape($label) ?></option>
+                                <?php endforeach; ?>
                             </select>
+                            <?php if ($externalManaged): ?>
+                                <input type="hidden" name="rule_type" value="<?= $escape($type) ?>">
+                            <?php endif; ?>
                         </div>
                         <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
                             <label class="w-field__label" for="marketing-rule-status"><?= __('状态') ?></label>
-                            <select id="marketing-rule-status" data-testid="marketing-rule-status" class="w-select" name="status" required>
-                                <option value="inactive"><?= __('禁用') ?></option>
-                                <option value="active"><?= __('启用') ?></option>
-                                <option value="expired"><?= __('已过期') ?></option>
+                            <select id="marketing-rule-status" data-testid="marketing-rule-status" class="w-select" name="status" required <?= $externalManaged ? 'disabled' : '' ?>>
+                                <?php
+                                $status = (string)($ruleData['status'] ?? 'inactive');
+                                foreach (['inactive' => __('禁用'), 'active' => __('启用'), 'expired' => __('已过期')] as $value => $label):
+                                ?>
+                                    <option value="<?= $escape($value) ?>" <?= $status === $value ? 'selected' : '' ?>><?= $escape($label) ?></option>
+                                <?php endforeach; ?>
                             </select>
+                            <?php if ($externalManaged): ?>
+                                <input type="hidden" name="status" value="<?= $escape($status) ?>">
+                            <?php endif; ?>
                         </div>
                         <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
                             <label class="w-field__label" for="marketing-rule-priority"><?= __('优先级') ?></label>
-                            <input id="marketing-rule-priority" class="w-input" type="number" name="priority" min="0" value="0">
+                            <input id="marketing-rule-priority" class="w-input" type="number" name="priority" min="0" value="<?= (int)($ruleData['priority'] ?? 0) ?>" <?= $externalManaged ? 'readonly' : '' ?>>
                         </div>
                     </div>
-                    <button data-testid="marketing-rule-submit" class="w-button" type="submit" data-tone="primary">
-                        <?= __('保存规则') ?>
-                    </button>
+                    <?php if (!$externalManaged): ?>
+                        <button data-testid="marketing-rule-submit" class="w-button" type="submit" data-tone="primary">
+                            <?= __('保存规则') ?>
+                        </button>
+                    <?php else: ?>
+                        <p class="w-text" data-tone="muted"><lang>系统同步规则请到来源模块管理活动，折扣模块不可保存修改。</lang></p>
+                    <?php endif; ?>
                 </w:form>
             </div>
         </div>

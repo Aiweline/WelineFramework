@@ -17,6 +17,7 @@ use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Marketing\Model\Rule\Rule;
+use Weline\Marketing\Model\Rule\LocalDescription;
 use Weline\Marketing\Model\Coupon\Coupon;
 use Weline\Marketing\Model\Campaign\Campaign;
 use Weline\Marketing\Model\RuleUsage\RuleUsage;
@@ -34,6 +35,12 @@ class Install implements InstallInterface
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($rule);
         $rule->setup($modelSetup, $context);
+
+        /** @var LocalDescription $localDescription */
+        $localDescription = ObjectManager::getInstance(LocalDescription::class);
+        $modelSetup = ObjectManager::make(ModelSetup::class);
+        $modelSetup->putModel($localDescription);
+        $localDescription->setup($modelSetup, $context);
         
         // 安装优惠券表
         /** @var Coupon $coupon */

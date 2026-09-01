@@ -55,6 +55,20 @@
 跨模块消费者不得引用 `Weline\Marketing\Service\RuleEngine`；新的动作类仍由
 Marketing 内部扩展机制管理，目录在模块内完成实例化和数据投影。
 
+## 外部活动折扣集成扩展
+
+详细对接说明见：`doc/外部活动折扣集成.md`。
+
+`Weline\Marketing\Api\Deal\ExternalDealDiscountProviderInterface`（`etc/module.php` `provides`）
+是其他模块为活动/主题创建自动折扣的唯一写入入口。
+
+- 入参：`ExternalDealDiscountRequest`（source_module / source_type / source_id、折扣类型与值、SKU 列表、是否启用、已有 rule_id）。
+- 行为：upsert `automatic` 规则；**一活动一规则**（`existingRuleId` 回写联动更新）；条件 `product_sku in`；动作 `matched_products`；description / actions 带 `external_managed=1`。
+- 报价仍走 `DiscountQuoteServiceInterface`，保证陈列与加购同源。
+- 禁止跨模块直接写 `Model\Rule\Rule` 或调用 `RuleEngine` 落库。
+- **删除护栏**：带外部托管标记的规则不可在 Marketing 后台删除；列表展示「系统同步」徽章，引导到源模块（如促销活动）管理/禁用。
+- 参考实现：`Weline_Promotion\Service\PromotionThemeDealDiscountSyncService`（主题 `marketing_rule_id` 绑定）。
+
 ## 本模块文档资产
 
 - `app/code/Weline/Marketing/doc/i18n国际化完成报告.md`
@@ -63,6 +77,7 @@ Marketing 内部扩展机制管理，目录在模块内完成实例化和数据�
 - `app/code/Weline/Marketing/doc/i18n翻译词条补充说明.md`
 - `app/code/Weline/Marketing/doc/开发规则/LocalModel开发规范.md`
 - `app/code/Weline/Marketing/doc/扩展开发文档.md`
+- `app/code/Weline/Marketing/doc/外部活动折扣集成.md`
 - `app/code/Weline/Marketing/doc/测试/规则名称多语言翻译测试用例.md`
 
 ## 维护规则
