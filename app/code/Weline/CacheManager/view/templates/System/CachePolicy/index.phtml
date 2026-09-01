@@ -36,7 +36,6 @@ $field = function (string $path, string $label, string $unit, string $help, stri
     <?php
 };
 
-$saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
 ?>
 
 <style>
@@ -66,7 +65,7 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
         <h4 style="--w-mb-sm:0;"><?= __('缓存策略') ?></h4>
         <div class="w-cluster">
             <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                <li class="w-breadcrumb__item"><a href="<?= $this->getBackendUrl('admin/system/cache') ?>"><?= __('缓存管理') ?></a></li>
+                <li class="w-breadcrumb__item"><a href="@backend-url{'admin/system/cache'}"><?= __('缓存管理') ?></a></li>
                 <li class="w-breadcrumb__item" data-state="active"><?= __('缓存策略') ?></li>
             </ol>
         </div>
@@ -79,7 +78,7 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
         <p><?= __('这里管理 WLS/FPM 下热路径缓存 TTL 与共享 Memory 访问超时。它属于缓存策略，不属于服务器参数；保存后会清理非持久缓存，让新策略尽快生效。') ?></p>
     </section>
 
-    <w:form id="cache-policy-form" method="post" action="@var($saveUrl)">
+    <w:form id="cache-policy-form" method="post" action="@backend-url{'admin/system/cache-policy/save'}">
         <section class="cache-policy-card">
             <h3><?= __('页面片段缓存') ?></h3>
             <p><?= __('控制首页、分类页、商品页主内容旁路缓存时间。') ?></p>
@@ -147,8 +146,6 @@ $saveUrl = $this->getBackendUrl('admin/system/cache-policy/save');
         </div>
     </w:form>
 </div>
-
-
 
 <script>
     (function () {
