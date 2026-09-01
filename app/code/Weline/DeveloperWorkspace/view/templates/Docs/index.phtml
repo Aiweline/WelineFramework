@@ -22,7 +22,6 @@ $uiAssetVersion = static function (string $relative): string {
     return is_string($hash) ? substr($hash, 0, 16) : '0';
 };
 $config = [
-    'baseUrl' => rtrim((string)$this->getUrl('dev/tool'), '/'),
     'documentId' => $documentId,
     'catalogId' => $catalogId,
     'locale' => $currentLanguage,
@@ -48,6 +47,11 @@ $config = [
 ];
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
     | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
+$configJsonTail = json_encode($config, $jsonFlags);
+if (!is_string($configJsonTail) || $configJsonTail === '' || $configJsonTail[0] !== '{') {
+    $configJsonTail = '{}';
+}
+$configJsonTailBody = substr($configJsonTail, 1); // drop leading "{"
 ?>
 <?php /* Content fragment for frontend theme layout blank.full; document shell + Frontend Header come from Theme. */ ?>
 <style>
@@ -94,8 +98,8 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
                     </button>
                 </div>
             </div>
-            <a class="w-button" data-tone="neutral" href="<?= $escape($this->getUrl('dev/tool/docs/api')) ?>"><w:icon name="code" size="sm"></w:icon><?= $escape(__('API 文档')) ?></a>
-            <a class="w-button" data-tone="quiet" href="<?= $escape($this->getUrl('/')) ?>"><w:icon name="home" size="sm"></w:icon><?= $escape(__('返回网站')) ?></a>
+            <a class="w-button" data-tone="neutral" href="@url{'dev/tool/docs/api'}"><w:icon name="code" size="sm"></w:icon><?= $escape(__('API 文档')) ?></a>
+            <a class="w-button" data-tone="quiet" href="@url{'/'}"><w:icon name="home" size="sm"></w:icon><?= $escape(__('返回网站')) ?></a>
         </nav>
     </header>
 
@@ -120,4 +124,4 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG
         </section>
     </div>
 </div>
-<script type="application/json" id="weline-docs-browser-config" data-docs-browser-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
+<script type="application/json" id="weline-docs-browser-config" data-docs-browser-config>{"baseUrl":"@url{'dev/tool'}",<?= $configJsonTailBody ?></script>

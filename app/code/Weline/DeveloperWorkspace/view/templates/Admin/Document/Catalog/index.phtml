@@ -44,8 +44,13 @@ $flatten = function (array $nodes, int $depth = 0, array $ancestors = []) use (&
     }
 };
 $flatten($catalogs);
-$catalogPageUrl = function (array $params = []): string {
-    return (string)$this->getBackendUrl('dev/tool/admin/document/catalog', $params);
+$catalogPath = 'dev/tool/admin/document/catalog';
+$catalogPageParams = static function (array $params = []): array {
+    return $params;
+};
+// PHP echo 树链接仍需绝对 URL
+$catalogPageUrl = function (array $params = []) use ($catalogPath, $catalogPageParams): string {
+    return (string)$this->getBackendUrl($catalogPath, $catalogPageParams($params));
 };
 $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $catalogPageUrl): void {
     if ($nodes === []) {
@@ -111,7 +116,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
             <p class="w-text" data-tone="muted"><?= $escape(__('使用键盘可操作的树形列表维护层级，通过上移和下移按钮调整同级顺序')) ?></p>
         </div>
         <nav class="w-cluster" aria-label="<?= $escape(__('分类管理操作')) ?>">
-            <a class="w-button" data-tone="primary" href="<?= $escape($catalogPageUrl(['new' => 1])) ?>"><w:icon name="plus" size="sm"></w:icon><?= $escape(__('添加顶级分类')) ?></a>
+            <a class="w-button" data-tone="primary" href="@backend-url{$catalogPath|$catalogPageParams(['new' => 1])}"><w:icon name="plus" size="sm"></w:icon><?= $escape(__('添加顶级分类')) ?></a>
             <a class="w-button" data-tone="neutral" href="@admin-url('dev/tool/admin/document')"><w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回文档')) ?></a>
         </nav>
     </header>
@@ -125,7 +130,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                 <?php if ($catalogs !== []): ?>
                     <nav class="w-catalog-tree" aria-label="<?= $escape(__('文档分类树')) ?>"><?php $renderTree($catalogs); ?></nav>
                 <?php else: ?>
-                    <div class="w-empty"><w:icon name="folder" size="lg"></w:icon><p><?= $escape(__('暂无分类')) ?></p><a class="w-button" data-tone="primary" href="<?= $escape($catalogPageUrl(['new' => 1])) ?>"><?= $escape(__('添加分类')) ?></a></div>
+                    <div class="w-empty"><w:icon name="folder" size="lg"></w:icon><p><?= $escape(__('暂无分类')) ?></p><a class="w-button" data-tone="primary" href="@backend-url{$catalogPath|$catalogPageParams(['new' => 1])}"><?= $escape(__('添加分类')) ?></a></div>
                 <?php endif; ?>
             </div>
         </aside>
@@ -190,7 +195,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                                 <?php endif; ?>
                             </div>
                             <div class="w-cluster">
-                                <a class="w-button" data-tone="neutral" href="<?= $escape($catalogPageUrl()) ?>"><?= $escape(__('取消')) ?></a>
+                                <a class="w-button" data-tone="neutral" href="@backend-url{$catalogPath}"><?= $escape(__('取消')) ?></a>
                                 <button class="w-button" type="submit" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= $escape(__('保存')) ?></button>
                             </div>
                         </footer>
