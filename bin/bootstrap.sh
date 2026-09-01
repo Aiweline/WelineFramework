@@ -162,7 +162,8 @@ if [[ "$(uname -s)" == "Linux" ]] && [[ "$(id -u)" -eq 0 ]]; then
     chown -R "$WELINE_USER":"$WELINE_USER" "$INSTALL_DIR"
   fi
   echo "Switching to user $WELINE_USER for clone and install..."
-  exec sudo -u "$WELINE_USER" env REPO_URL="$REPO_URL" BRANCH="$BRANCH" INSTALL_DIR="$INSTALL_DIR" WORK_DIR="$WORK_DIR" USE_WELINE_HOME="$USE_WELINE_HOME" \
+  # 后续 clone/install.sh/run.php 均以部署用户执行，避免 root crontab 与 var 属主污染
+  exec sudo -u "$WELINE_USER" env REPO_URL="$REPO_URL" BRANCH="$BRANCH" INSTALL_DIR="$INSTALL_DIR" WORK_DIR="$WORK_DIR" USE_WELINE_HOME="$USE_WELINE_HOME" WELINE_USER="$WELINE_USER" \
     bash -c 'cd "$WORK_DIR" && export REPO_URL BRANCH INSTALL_DIR WORK_DIR
     is_empty_dir() { [[ -z "$(ls -A "${1:-.}" 2>/dev/null)" ]]; }
     if [[ "$USE_WELINE_HOME" == true ]]; then
