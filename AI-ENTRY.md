@@ -13,6 +13,7 @@
 
 ```
 Step 1: dev/ai/diagrams/00-INDEX.txt + 01-framework-overview.txt
+Step 1b: app/code/Weline/Ai/doc/AI硬规则索引.md（任务路由）
 Step 2: dev/ai/diagrams/08-module-docs-index.txt → app/code/Weline/{Module}/doc/README.md
 Step 3: CLAUDE.md
 Step 4: dev/ai/skills/{skill}.md (on-demand)
@@ -52,9 +53,9 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 
 ## ⚠️ Constraints
 
-**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | Alter fields in `Setup/Upgrade.php` | `<?=?>` in `<w:*>` attrs | `declare(strict_types=1)` in `.phtml` | WLS `sleep/die/exit` | Write detailed fix reports to root directory | **Test on default port 9501 or reuse instance names** | **Leave test instances running after session ends**
+**NEVER:** Edit `generated/` | Use `routes.xml` | JS `alert/confirm` | Hardcode text | Alter fields in `Setup/Upgrade.php` | `<?=?>` in `<w:*>` attrs | `<?= __() ?>` in `.phtml` HTML body/attrs | `declare(strict_types=1)` in `.phtml` | WLS `sleep/die/exit` | Write detailed fix reports to root directory | **Test on default port 9501 or reuse instance names** | **Leave test instances running after session ends**
 
-**ALWAYS:** I18n `__('text')` or `<lang>text</lang>` | Placeholders `%{1}` or `%{name}` | ORM chains end with `.fetch()`/`.fetchArray()` | Schema via `#[Col]` + `setup:upgrade` | Write fix reports in module's doc/ directory | Update module README with test status | **Start dedicated test instance with unique name (`-p 9502+ -n ai-test-{timestamp|session-id}`)** | **Stop test instance after testing (`server:stop -n {instance-name}`)**
+**ALWAYS:** I18n `__('text')` or `<lang>text</lang>` | Placeholders `%{1}` or `%{name}` | **Maintain `i18n/zh_Hans_CN.csv` + `en_US.csv` aligned; run `php bin/w i18n:collect` after CSV/string changes** | ORM chains end with `.fetch()`/`.fetchArray()` | Schema via `#[Col]` + bump `etc/module.php` version + `setup:upgrade` | **Web/UI: Browser self-test use cases before claiming done; end reports with 「交付地址」** | Write fix reports in module's doc/ directory | Update module README with test status | **Start dedicated test instance with unique name (`-p 9502+ -n ai-test-{timestamp|session-id}`)** | **Stop test instance after testing (`server:stop -n {instance-name}`)**
 
 ## 📝 Documentation Rules
 
