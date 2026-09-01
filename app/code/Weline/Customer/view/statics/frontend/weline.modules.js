@@ -1,0 +1,24 @@
+/**
+ * Weline Customer 前端 JS 模块注册（用户中心页 UI；API 能力仍用 api/account）
+ * 注意：模块名必须是可解析的裸标识符（编译器不识别 "hyphen-keys"）。
+ */
+window.WelineModulesConfig = window.WelineModulesConfig || {};
+window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
+window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAliases || {};
+
+Object.assign(window.WelineModulesConfig.modules, {
+    customerAccount: {
+        paths: [
+            "Weline_Customer::js/account-index.js"
+        ],
+        globalVar: "WelineCustomerAccount",
+        description: "前台用户中心账户页交互"
+    },
+    customerLogout: {
+        paths: [
+            "Weline_Customer::js/account-logout.js"
+        ],
+        globalVar: "WelineCustomerLogout",
+        description: "前台账户退出确认"
+    }
+});

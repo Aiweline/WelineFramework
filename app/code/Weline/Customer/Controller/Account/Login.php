@@ -68,11 +68,12 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         );
         $this->assign('title', __('登录'));
         $this->assign('meta', [
-            'showHeader' => false,
-            'showFooter' => false,
+            'showHeader' => true,
+            'showFooter' => true,
         ]);
 
-        return $this->fetch('Weline_Customer::templates/frontend/account/login.phtml');
+        // Form UI is rendered by Theme-inline account-login widget (background configurable in Theme Editor).
+        return $this->fetch('Weline_Customer::templates/frontend/account/login-shell.phtml');
     }
 
     public function postIndex()
@@ -311,7 +312,7 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
 
     private function respondSuccess(string $message, string $redirectUrl, array $extra = []): string
     {
-        $formattedRedirect = $this->authReturnUrlService->formatRedirect($redirectUrl);
+        $formattedRedirect = $this->authReturnUrlService->formatAuthSuccessRedirect($redirectUrl);
         if ($this->expectsJsonResponse()) {
             return $this->json(array_merge([
                 'success' => true,

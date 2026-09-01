@@ -58,7 +58,7 @@ $keyword = $keyword ?? '';
     <div style="--w-span-lg:12;">
         <div class="w-card">
             <div class="w-card__body">
-                <w:form method="get" action="@var($this->getBackendUrl('customer/backend/customer/index'))" class="w-grid" data-align="end" style="--w-gap:var(--weline-space-4);">
+                <w:form method="get" action="@backend-url{'customer/backend/customer/index'}" class="w-grid" data-align="end" style="--w-gap:var(--weline-space-4);">
                     <div style="--w-span-md:9;">
                         <label class="w-field__label"><?= __('搜索关键字') ?></label>
                         <input type="text" class="w-input" name="keyword" value="<?= htmlspecialchars($keyword) ?>" placeholder="<?= __('用户名模糊查询') ?>">
@@ -69,7 +69,7 @@ $keyword = $keyword ?? '';
                             <button type="submit" class="w-button" data-tone="primary">
                                 <w:icon name="search" size="sm"></w:icon><?= __('搜索') ?>
                             </button>
-                            <a href="<?= $this->getBackendUrl('customer/backend/customer/index') ?>" class="w-button" data-tone="neutral">
+                            <a href="@backend-url{'customer/backend/customer/index'}" class="w-button" data-tone="neutral">
                                 <w:icon name="refresh" size="sm"></w:icon><?= __('重置') ?>
                             </a>
                         </div>
@@ -308,11 +308,11 @@ $keyword = $keyword ?? '';
 
     var CUSTOMERS = <?= json_encode($customersPayload, $jsonForScriptFlags) ?>;
     var CUSTOMER_TEXT = <?= json_encode($customerText, $jsonForScriptFlags) ?>;
-    var CUSTOMER_SAVE_URL = <?= json_encode($this->getBackendUrl('customer/backend/customer/save'), $jsonForScriptFlags) ?>;
-    var CUSTOMER_DETAIL_URL = <?= json_encode($this->getBackendUrl('customer/backend/customer/detail'), $jsonForScriptFlags) ?>;
-    var CUSTOMER_DELETE_URL = <?= json_encode($this->getBackendUrl('customer/backend/customer/delete'), $jsonForScriptFlags) ?>;
-    var CUSTOMER_RESET_TOKEN_URL = <?= json_encode($this->getBackendUrl('customer/backend/customer/resetToken'), $jsonForScriptFlags) ?>;
-    var CUSTOMER_RESET_PASSWORD_URL = <?= json_encode($this->getBackendUrl('customer/backend/customer/resetPassword'), $jsonForScriptFlags) ?>;
+    var CUSTOMER_SAVE_URL = "@backend-url{'customer/backend/customer/save'}";
+    var CUSTOMER_DETAIL_URL = "@backend-url{'customer/backend/customer/detail'}";
+    var CUSTOMER_DELETE_URL = "@backend-url{'customer/backend/customer/delete'}";
+    var CUSTOMER_RESET_TOKEN_URL = "@backend-url{'customer/backend/customer/resetToken'}";
+    var CUSTOMER_RESET_PASSWORD_URL = "@backend-url{'customer/backend/customer/resetPassword'}";
 
     var customerModalInstance = null;
     var passwordModalInstance = null;

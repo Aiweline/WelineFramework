@@ -10,14 +10,7 @@ $email = is_object($user) && method_exists($user, 'getEmail') ? (string)($user->
 if ($username === '' && $email !== '') { $username = $email;
 }
 $avatarInitial = $username !== '' ? strtoupper(mb_substr($username, 0, 1)) : '?';
-$accountIndexPath = parse_url($this->getFrontendUrl('customer/account/index'), PHP_URL_PATH);
-if (!is_string($accountIndexPath) || $accountIndexPath === '') { $accountIndexPath = '/customer/account/index';
-}
-$accountIndexPath = rtrim($accountIndexPath, '/');
-$accountLogoutPath = parse_url($this->getFrontendUrl('customer/account/logout'), PHP_URL_PATH);
-if (!is_string($accountLogoutPath) || $accountLogoutPath === '') { $accountLogoutPath = '/customer/account/logout';
-}
-$accountSidebarAssetVersion = '20260701-account-responsive-5';
+$accountSidebarAssetVersion = '20260830-sidebar-groups-1';
 $accountLogoutConfigJson = json_encode([ 'title' => (string) __('退出登录'), 'message' => (string) __('确定要退出登录吗？'), 'confirmText' => (string) __('确认退出'), 'cancelText' => (string) __('取消'),
 ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') { $accountLogoutConfigJson = '{}';
@@ -25,10 +18,89 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') { $
 ?>
 <css>Weline_Customer::css/account-sidebar.css</css>
 <script id="weline-account-logout-config" type="application/json"><?= $accountLogoutConfigJson ?></script>
-<js>Weline_Customer::js/account-logout.js</js>
-<div class="account-sidebar-wrapper"> <header class="account-sidebar__header"> <div class="account-sidebar__avatar"> <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="sidebarAvatarPreview" class="account-sidebar__avatar-img"<?= $avatar ? '' : ' hidden' ?>> <div class="account-sidebar__avatar-fallback" id="sidebarAvatarFallback"<?= $avatar ? ' hidden' : '' ?>><?= $avatarInitial ?></div> </div> <div class="account-sidebar__user-info"> <h4 class="account-sidebar__username"><?= htmlspecialchars($username) ?></h4> <?php if ($email): ?> <p class="account-sidebar__email"><?= htmlspecialchars($email) ?></p> <?php endif; ?> </div> </header> <button class="account-sidebar__menu-toggle" type="button" aria-expanded="false" aria-controls="accountSidebarNav" data-account-sidebar-toggle> <span class="account-sidebar__menu-toggle-main"> <w:icon name="menu" size="sm"></w:icon> <span><lang>账户菜单</lang></span> </span> <span class="account-sidebar__menu-toggle-current" data-account-sidebar-current><lang>当前栏目</lang></span> <w:icon name="arrow-down" size="sm"></w:icon> </button> <nav class="account-sidebar__nav" id="accountSidebarNav" data-account-sidebar-nav> <a class="account-sidebar__nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#profile" data-section="profile" data-account-nav-link="true"> <span><lang>个人资料</lang></span> </a> <a class="account-sidebar__nav-link" href="<?= htmlspecialchars($accountIndexPath, ENT_QUOTES, 'UTF-8') ?>#security" data-section="security" data-account-nav-link="true"> <span><lang>安全设置</lang></span> </a> <w:hook name="account.sidebar"/> <a class="account-sidebar__nav-link account-sidebar__nav-link--logout" href="<?= htmlspecialchars($accountLogoutPath, ENT_QUOTES, 'UTF-8') ?>" data-account-logout-confirm> <span><lang>退出登录</lang></span> </a> </nav>
+<div class="account-sidebar-wrapper" data-weline-load="customerLogout">
+    <header class="account-sidebar__header">
+        <div class="account-sidebar__avatar">
+            <img src="<?= htmlspecialchars($avatar) ?>" alt="<?= htmlspecialchars($username) ?>" id="sidebarAvatarPreview" class="account-sidebar__avatar-img"<?= $avatar ? '' : ' hidden' ?>>
+            <div class="account-sidebar__avatar-fallback" id="sidebarAvatarFallback"<?= $avatar ? ' hidden' : '' ?>><?= $avatarInitial ?></div>
+        </div>
+        <div class="account-sidebar__user-info">
+            <h4 class="account-sidebar__username"><?= htmlspecialchars($username) ?></h4>
+            <?php if ($email): ?>
+                <p class="account-sidebar__email"><?= htmlspecialchars($email) ?></p>
+            <?php endif; ?>
+            <?php if ($user instanceof \Weline\Customer\Model\Customer): ?>
+                <p class="account-sidebar__login-status" data-account-login-status="signed-in">
+                    <span class="account-sidebar__login-status-dot" aria-hidden="true"></span>
+                    <lang>已登录</lang>
+                </p>
+            <?php endif; ?>
+        </div>
+        <w:slot id="account-sidebar-status"
+                name="账户登录状态扩展"
+                accept="account-sidebar-status,account-status,status"
+                multiple="true"
+                position="header"></w:slot>
+    </header>
+    <button class="account-sidebar__menu-toggle" type="button" aria-expanded="false" aria-controls="accountSidebarNav" data-account-sidebar-toggle>
+        <span class="account-sidebar__menu-toggle-main">
+            <w:icon name="menu" size="sm"></w:icon>
+            <span><lang>账户菜单</lang></span>
+        </span>
+        <span class="account-sidebar__menu-toggle-current" data-account-sidebar-current><lang>当前栏目</lang></span>
+        <w:icon name="arrow-down" size="sm"></w:icon>
+    </button>
+    <nav class="account-sidebar__nav" id="accountSidebarNav" data-account-sidebar-nav>
+        <a class="account-sidebar__nav-link" href="@url{'customer/account/index'}#profile" data-section="profile" data-account-nav-link="true">
+            <span><lang>个人资料</lang></span>
+        </a>
+        <a class="account-sidebar__nav-link" href="@url{'customer/account/index'}#security" data-section="security" data-account-nav-link="true">
+            <span><lang>安全设置</lang></span>
+        </a>
+        <div class="account-hook-nav-group account-hook-nav-group--security" data-account-nav-group="security">
+            <w:hook name="account.sidebar.group.security"/>
+        </div>
+        <w:slot id="account-sidebar-nav-before"
+                name="账户菜单前置扩展"
+                accept="account-sidebar-nav,account-sidebar-nav-before,account-nav"
+                multiple="true"
+                position="sidebar"></w:slot>
+        <div class="account-hook-nav-group account-hook-nav-group--commerce" data-account-nav-group="commerce">
+            <div class="account-hook-nav-title"><lang>消费与资产</lang></div>
+            <w:hook name="account.sidebar.group.commerce"/>
+        </div>
+        <div class="account-hook-nav-group account-hook-nav-group--addresses" data-account-nav-group="addresses">
+            <div class="account-hook-nav-title"><lang>地址管理</lang></div>
+            <w:hook name="account.sidebar.group.addresses"/>
+        </div>
+        <div class="account-hook-nav-group account-hook-nav-group--connections" data-account-nav-group="connections">
+            <div class="account-hook-nav-title"><lang>连接与应用</lang></div>
+            <w:hook name="account.sidebar.group.connections"/>
+        </div>
+        <div class="account-hook-nav-group account-hook-nav-group--developer" data-account-nav-group="developer">
+            <div class="account-hook-nav-title"><lang>开发者</lang></div>
+            <w:hook name="account.sidebar.group.developer"/>
+        </div>
+        <div class="account-hook-nav-group account-hook-nav-group--legacy" data-account-nav-group="legacy">
+            <div class="account-hook-nav-title"><lang>更多</lang></div>
+            <w:hook name="account.sidebar"/>
+        </div>
+        <w:slot id="account-sidebar-nav-after"
+                name="账户菜单后置扩展"
+                accept="account-sidebar-nav,account-sidebar-nav-after,account-nav"
+                multiple="true"
+                position="sidebar"></w:slot>
+        <a class="account-sidebar__nav-link account-sidebar__nav-link--logout" href="@url{'customer/account/logout'}" data-account-logout-confirm>
+            <span><lang>退出登录</lang></span>
+        </a>
+    </nav>
+    <w:slot id="account-sidebar-footer"
+            name="账户侧栏底部扩展"
+            accept="account-sidebar-footer,account-footer"
+            multiple="true"
+            position="footer"></w:slot>
 </div> <script>
-(function() { 'use strict'; function initAccountSidebarMenu() { var root = document.querySelector('.account-sidebar-wrapper'); if (!root) { return; } var toggle = root.querySelector('[data-account-sidebar-toggle]'); var current = root.querySelector('[data-account-sidebar-current]'); if (!toggle || !current) { return; } var mobileQuery = window.matchMedia ? window.matchMedia('(max-width: 767px)') : null; function isMobile() { return mobileQuery ? mobileQuery.matches : window.innerWidth <= 767; } function getActiveLabel() { var active = root.querySelector('[data-account-nav-link].account-sidebar__nav-link--active, [data-account-nav-link].is-active'); if (!active && window.location.hash) { Array.prototype.some.call(root.querySelectorAll('[data-account-nav-link][href]'), function(link) { var href = link.getAttribute('href') || ''; if (href.slice(-window.location.hash.length) === window.location.hash) { active = link; return true; } return false; }); } var titleNode = active ? (active.querySelector('.account-hook-nav-link__text strong') || active.querySelector('strong') || active.querySelector('span')) : null; var text = titleNode ? (titleNode.innerText || titleNode.textContent || '') : (active ? (active.innerText || active.textContent || '') : ''); text = text.replace(/\s+/g, ' ').trim(); return text || toggle.getAttribute('data-fallback-label') || '账户菜单'; } function setOpen(open) { root.classList.toggle('is-menu-open', open); toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); } function refresh() { var mobile = isMobile(); root.classList.toggle('is-mobile-menu-ready', mobile); current.textContent = getActiveLabel(); if (!mobile) { setOpen(true); } else if (!root.getAttribute('data-account-menu-touched')) { setOpen(false); } } toggle.setAttribute('data-fallback-label', toggle.innerText.replace(/\s+/g, ' ').trim() || '账户菜单'); toggle.addEventListener('click', function() { root.setAttribute('data-account-menu-touched', '1'); setOpen(!root.classList.contains('is-menu-open')); }); root.addEventListener('click', function(event) { var link = event.target && event.target.closest ? event.target.closest('[data-account-nav-link]') : null; if (link && isMobile()) { setOpen(false); window.setTimeout(refresh, 80); } }); window.addEventListener('hashchange', function() { window.setTimeout(refresh, 80); }); window.addEventListener('weline:account-sidebar-content-loaded', refresh); if (mobileQuery && mobileQuery.addEventListener) { mobileQuery.addEventListener('change', refresh); } window.setTimeout(refresh, 0); window.setTimeout(refresh, 160); } if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initAccountSidebarMenu); } else { initAccountSidebarMenu(); }
+(function() { 'use strict'; function initAccountSidebarMenu() { var root = document.querySelector('.account-sidebar-wrapper'); if (!root) { return; } var toggle = root.querySelector('[data-account-sidebar-toggle]'); var current = root.querySelector('[data-account-sidebar-current]'); if (!toggle || !current) { return; } var mobileQuery = window.matchMedia ? window.matchMedia('(max-width: 767px)') : null; function isMobile() { return mobileQuery ? mobileQuery.matches : window.innerWidth <= 767; } function pruneEmptyGroups() { Array.prototype.forEach.call(root.querySelectorAll('[data-account-nav-group]'), function(group) { var hasLink = !!group.querySelector('.account-hook-nav-link, [data-account-nav-link]'); group.hidden = !hasLink; }); } function getActiveLabel() { var active = root.querySelector('[data-account-nav-link].account-sidebar__nav-link--active, [data-account-nav-link].is-active'); if (!active && window.location.hash) { Array.prototype.some.call(root.querySelectorAll('[data-account-nav-link][href]'), function(link) { var href = link.getAttribute('href') || ''; if (href.slice(-window.location.hash.length) === window.location.hash) { active = link; return true; } return false; }); } var titleNode = active ? (active.querySelector('.account-hook-nav-link__text strong') || active.querySelector('strong') || active.querySelector('span')) : null; var text = titleNode ? (titleNode.innerText || titleNode.textContent || '') : (active ? (active.innerText || active.textContent || '') : ''); text = text.replace(/\s+/g, ' ').trim(); return text || toggle.getAttribute('data-fallback-label') || '账户菜单'; } function setOpen(open) { root.classList.toggle('is-menu-open', open); toggle.setAttribute('aria-expanded', open ? 'true' : 'false'); } function refresh() { pruneEmptyGroups(); var mobile = isMobile(); root.classList.toggle('is-mobile-menu-ready', mobile); current.textContent = getActiveLabel(); if (!mobile) { setOpen(true); } else if (!root.getAttribute('data-account-menu-touched')) { setOpen(false); } } toggle.setAttribute('data-fallback-label', toggle.innerText.replace(/\s+/g, ' ').trim() || '账户菜单'); toggle.addEventListener('click', function() { root.setAttribute('data-account-menu-touched', '1'); setOpen(!root.classList.contains('is-menu-open')); }); root.addEventListener('click', function(event) { var link = event.target && event.target.closest ? event.target.closest('[data-account-nav-link]') : null; if (link && isMobile()) { setOpen(false); window.setTimeout(refresh, 80); } }); window.addEventListener('hashchange', function() { window.setTimeout(refresh, 80); }); window.addEventListener('weline:account-sidebar-content-loaded', refresh); if (mobileQuery && mobileQuery.addEventListener) { mobileQuery.addEventListener('change', refresh); } window.setTimeout(refresh, 0); window.setTimeout(refresh, 160); } if (document.readyState === 'loading') { document.addEventListener('DOMContentLoaded', initAccountSidebarMenu); } else { initAccountSidebarMenu(); }
 })();
 </script> <?php if (false): ?>
 <style>

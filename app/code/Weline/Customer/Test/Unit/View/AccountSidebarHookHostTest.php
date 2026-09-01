@@ -10,10 +10,14 @@ final class AccountSidebarHookHostTest extends TestCase
 {
     public function testAccountIndexUsesCanonicalSidebarContentHost(): void
     {
-        $templateFile = dirname(__DIR__, 3) . '/view/templates/frontend/account/index.phtml';
+        $moduleRoot = dirname(__DIR__, 3);
+        $templateFile = $moduleRoot . '/view/templates/frontend/account/index.phtml';
+        $scriptFile = $moduleRoot . '/view/statics/js/account-index.js';
 
         $this->assertFileExists($templateFile);
+        $this->assertFileExists($scriptFile);
         $content = (string) file_get_contents($templateFile);
+        $script = (string) file_get_contents($scriptFile);
 
         $this->assertStringContainsString('data-account-sidebar-content-mount', $content);
         $this->assertStringContainsString('data-account-sidebar-content-url', $content);
@@ -22,48 +26,80 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('data-account-section="profile"', $content);
         $this->assertStringContainsString('data-account-section="security"', $content);
         $this->assertStringContainsString('data-account-section="login-info"', $content);
-        $this->assertStringContainsString('function parseAccountHash()', $content);
-        $this->assertStringContainsString('function hasNavSection(section)', $content);
-        $this->assertStringContainsString('function syncFromHash()', $content);
-        $this->assertStringContainsString("targetId = 'profile';", $content);
-        $this->assertStringContainsString("activeParent = nav.getAttribute('data-account-nav-parent') || '';", $content);
-        $this->assertStringContainsString("var isActiveParent = activeParent && nav.getAttribute('data-section') === activeParent;", $content);
-        $this->assertStringContainsString("nav.classList.remove('account-sidebar__nav-link--active');", $content);
-        $this->assertStringContainsString('function buildSidebarContentUrl(sectionName)', $content);
-        $this->assertStringContainsString("'section=' + encodeURIComponent(sectionName)", $content);
-        $this->assertStringContainsString('loadSidebarContent(targetId)', $content);
-        $this->assertStringContainsString('function sanitizeSidebarHtml(html)', $content);
-        $this->assertStringContainsString("insertAdjacentHTML('beforeend', sanitizeSidebarHtml(payload.html))", $content);
-        $this->assertStringNotContainsString('executeInsertedScripts', $content);
+        $this->assertStringContainsString('data-weline-load="api,account,customerAccount"', $content);
+        $this->assertStringContainsString('20260701-sidebar-content-loop-guard-1', $content);
+
+        $this->assertStringContainsString('function parseAccountHash()', $script);
+        $this->assertStringContainsString('function hasNavSection(section)', $script);
+        $this->assertStringContainsString('function syncFromHash()', $script);
+        $this->assertStringContainsString("targetId = 'profile';", $script);
+        $this->assertStringContainsString("activeParent = nav.getAttribute('data-account-nav-parent') || '';", $script);
+        $this->assertStringContainsString("var isActiveParent = activeParent && nav.getAttribute('data-section') === activeParent;", $script);
+        $this->assertStringContainsString("nav.classList.remove('account-sidebar__nav-link--active');", $script);
+        $this->assertStringContainsString('function buildSidebarContentUrl(sectionName)', $script);
+        $this->assertStringContainsString("'section=' + encodeURIComponent(sectionName)", $script);
+        $this->assertStringContainsString('loadSidebarContent(targetId)', $script);
+        $this->assertStringContainsString('function sanitizeSidebarHtml(html)', $script);
+        $this->assertStringContainsString('function loadTrustedSidebarStyles(html)', $script);
+        $this->assertStringContainsString('loadTrustedSidebarStyles(payload.html)', $script);
+        $this->assertStringContainsString("insertAdjacentHTML('beforeend', sanitizeSidebarHtml(payload.html))", $script);
+        $this->assertStringContainsString('function loadDeclaredSidebarModules(root)', $script);
+        $this->assertStringContainsString('loadDeclaredSidebarModules(sidebarContentMount)', $script);
+        $this->assertStringContainsString('function reloadSidebarSection(sectionName)', $script);
+        $this->assertStringContainsString("weline:account-sidebar-section-reload", $script);
+        $this->assertStringNotContainsString('executeInsertedScripts', $script);
     }
 
     public function testSidebarTemplateKeepsCanonicalSidebarHookHost(): void
     {
-        $templateFile = dirname(__DIR__, 3) . '/view/templates/frontend/account/sidebar/side.phtml';
+        $moduleRoot = dirname(__DIR__, 3);
+        $templateFile = $moduleRoot . '/view/templates/frontend/account/sidebar/side.phtml';
+        $cssFile = $moduleRoot . '/view/statics/css/account-sidebar.css';
 
         $this->assertFileExists($templateFile);
+        $this->assertFileExists($cssFile);
         $content = (string) file_get_contents($templateFile);
+        $css = (string) file_get_contents($cssFile);
 
+        $this->assertStringContainsString('<w:hook name="account.sidebar.group.security"/>', $content);
+        $this->assertStringContainsString('<w:hook name="account.sidebar.group.commerce"/>', $content);
+        $this->assertStringContainsString('<w:hook name="account.sidebar.group.addresses"/>', $content);
+        $this->assertStringContainsString('<w:hook name="account.sidebar.group.connections"/>', $content);
+        $this->assertStringContainsString('<w:hook name="account.sidebar.group.developer"/>', $content);
         $this->assertStringContainsString('<w:hook name="account.sidebar"/>', $content);
+        $this->assertStringContainsString('data-account-nav-group="addresses"', $content);
+        $this->assertStringContainsString('data-account-nav-group="commerce"', $content);
+        $this->assertStringContainsString('id="account-sidebar-status"', $content);
+        $this->assertStringContainsString('id="account-sidebar-nav-before"', $content);
+        $this->assertStringContainsString('id="account-sidebar-nav-after"', $content);
+        $this->assertStringContainsString('id="account-sidebar-footer"', $content);
+        $this->assertStringContainsString('data-account-login-status="signed-in"', $content);
+        $this->assertStringContainsString('position="header"', $content);
+        $this->assertStringContainsString('position="sidebar"', $content);
+        $this->assertStringContainsString('position="footer"', $content);
+        $this->assertStringNotContainsString('position="status"', $content);
+        $this->assertStringNotContainsString('position="nav-before"', $content);
+        $this->assertStringNotContainsString('position="nav-after"', $content);
         $this->assertStringContainsString('data-account-nav-link="true"', $content);
         $this->assertStringNotContainsString('ri-user-line', $content);
         $this->assertStringNotContainsString('ri-lock-line', $content);
         $this->assertStringNotContainsString('ri-logout-box-line', $content);
         $this->assertStringNotContainsString('account-sidebar__nav-link account-sidebar__nav-link--active', $content);
-        $this->assertStringContainsString('.account-hook-nav-link.is-active', $content);
-        $this->assertStringContainsString('.account-hook-nav-link.is-active:not([data-account-nav-parent])', $content);
-        $this->assertStringContainsString('.account-hook-nav-link[data-account-nav-parent].is-active', $content);
-        $this->assertStringContainsString('.account-hook-nav-group--developer', $content);
-        $this->assertStringContainsString('order: 90;', $content);
-        $this->assertStringContainsString('order: 21;', $content);
-        $this->assertStringContainsString('justify-content: flex-start;', $content);
-        $this->assertStringContainsString('padding: 0.75rem 1rem;', $content);
-        $this->assertStringContainsString('.account-hook-nav-link__label i', $content);
-        $this->assertStringContainsString('display: none;', $content);
-        $this->assertStringContainsString('.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__label i', $content);
-        $this->assertStringContainsString('display: inline-block;', $content);
-        $this->assertStringContainsString('.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__text span', $content);
-        $this->assertStringContainsString('box-shadow: none;', $content);
+        $this->assertStringContainsString('pruneEmptyGroups', $content);
+        $this->assertStringContainsString('.account-hook-nav-group--developer', $css);
+        $this->assertStringContainsString('.account-hook-nav-group--addresses', $css);
+        $this->assertStringContainsString('.account-hook-nav-group--commerce', $css);
+        $this->assertStringContainsString('order: 40;', $css);
+        $this->assertStringContainsString('order: 21;', $css);
+        $this->assertStringContainsString('justify-content: flex-start;', $css);
+        $this->assertStringContainsString('padding: 0.75rem 1rem;', $css);
+        $this->assertStringContainsString('.account-hook-nav-link__label i, .account-hook-nav-link__label .w-icon', $css);
+        $this->assertStringContainsString('display: none;', $css);
+        $this->assertStringContainsString('.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__label .w-icon', $css);
+        $this->assertStringContainsString('display: inline-block;', $css);
+        $this->assertStringContainsString('.account-hook-nav-link[data-account-nav-parent] .account-hook-nav-link__text span', $css);
+        $this->assertStringContainsString('box-shadow: none;', $css);
+        $this->assertStringContainsString('.account-sidebar__login-status', $css);
         $this->assertStringNotContainsString('#orders', $content);
         $this->assertStringNotContainsString('#subscriptions', $content);
     }
@@ -90,7 +126,7 @@ final class AccountSidebarHookHostTest extends TestCase
     public function testTwoFactorAuthHookUsesAccountSectionProtocol(): void
     {
         $moduleRoot = dirname(__DIR__, 4);
-        $sidebarFile = $moduleRoot . '/TwoFactorAuth/view/hooks/account.sidebar.phtml';
+        $sidebarFile = $moduleRoot . '/TwoFactorAuth/view/hooks/account.sidebar.group.security.phtml';
         $contentFile = $moduleRoot . '/TwoFactorAuth/view/hooks/account.sidebar.content.phtml';
         $scriptFile = $moduleRoot . '/TwoFactorAuth/view/statics/Frontend/js/account-two-factor-inline-v2.js';
 
@@ -116,15 +152,33 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringNotContainsString('Weline_Theme::theme/frontend/components/card.phtml', $content);
         $this->assertStringContainsString('data-twofa-action="disable"', $content);
         $this->assertStringContainsString('禁用两步验证', $content);
-        $this->assertStringContainsString('account-two-factor-inline-v2.js', $content);
+        $this->assertStringContainsString('data-weline-load="accountTwoFactor"', $content);
+        $this->assertStringContainsString("action=\"@url{'two-factor-auth/frontend/setup/enable'}\"", $content);
+        $this->assertStringContainsString("action=\"@url{'two-factor-auth/frontend/setup/disable'}\"", $content);
+        $this->assertStringContainsString("action=\"@url{'two-factor-auth/frontend/setup/regenerate-backup-codes'}\"", $content);
+        $modulesFile = $moduleRoot . '/TwoFactorAuth/view/statics/Frontend/weline.modules.js';
+        $this->assertFileExists($modulesFile);
+        $modules = (string) file_get_contents($modulesFile);
+        $this->assertStringContainsString('accountTwoFactor', $modules);
+        $this->assertStringContainsString('account-two-factor-inline-v2.js', $modules);
         $this->assertStringContainsString("window.Weline.Api.resource('twoFactor')", $script);
         $this->assertStringContainsString("action === 'regenerate'", $script);
+        $this->assertStringContainsString('refreshAccountTwoFaView', $script);
+        $this->assertStringContainsString('function showToast(message, tone)', $script);
+        $this->assertStringContainsString('Weline.UI.toast', $script);
+        $this->assertStringContainsString("weline:account-sidebar-section-reload", $script);
+        $this->assertStringNotContainsString('window.location.reload()', $script);
+        $this->assertStringNotContainsString("window.location.href = '/customer/account/index#twofa';", $script);
+        $this->assertDoesNotMatchRegularExpression(
+            '/location\\.href\\s*=\\s*[\'"]\\/customer\\/account\\/index#twofa[\'"]\\s*;\\s*window\\.location\\.reload\\s*\\(/s',
+            $script
+        );
     }
 
     public function testShippingHookUsesAccountSectionProtocol(): void
     {
         $moduleRoot = dirname(__DIR__, 4);
-        $sidebarFile = $moduleRoot . '/Shipping/view/hooks/account.sidebar.phtml';
+        $sidebarFile = $moduleRoot . '/Shipping/view/hooks/account.sidebar.group.addresses.phtml';
         $contentFile = $moduleRoot . '/Shipping/view/hooks/account.sidebar.content.phtml';
 
         $this->assertFileExists($sidebarFile);
@@ -136,13 +190,14 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringNotContainsString('account-hook-nav-group', $sidebar);
         $this->assertStringNotContainsString('account-hook-nav-title', $sidebar);
         $this->assertStringNotContainsString('地址管理', $sidebar);
-        $this->assertStringContainsString('$accountIndexPath', $sidebar);
+        $this->assertStringContainsString("@url{'customer/account/index'}#shipping-address", $sidebar);
+        $this->assertStringContainsString("@url{'customer/account/index'}#delivery-address", $sidebar);
         $this->assertStringContainsString('#shipping-address"', $sidebar);
         $this->assertStringContainsString('#delivery-address"', $sidebar);
         $this->assertStringContainsString('data-account-nav-link="true"', $sidebar);
         $this->assertStringContainsString('data-section="shipping-address"', $sidebar);
         $this->assertStringContainsString('data-section="delivery-address"', $sidebar);
-        $this->assertStringNotContainsString('data-account-nav-parent', $sidebar);
+        $this->assertStringContainsString('data-account-nav-parent="addresses"', $sidebar);
         $this->assertStringNotContainsString('class="nav-link"', $sidebar);
         $this->assertStringNotContainsString('shipping/address/index', $sidebar);
         $this->assertStringNotContainsString('shipping/delivery/index', $sidebar);

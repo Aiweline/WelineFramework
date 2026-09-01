@@ -1,0 +1,233 @@
+/* Trigger stays in component root; panel/options use data-w-customer-select-panel because floating.portal moves them to body. */
+.w-language-select[data-w-component="customer-select"] {
+    position: relative;
+    display: block;
+    min-width: 0;
+    max-width: 100%;
+    width: 100%;
+    color: var(--weline-theme-text);
+}
+
+.w-language-select[data-w-component="customer-select"] .w-language-select__trigger {
+    display: flex;
+    width: 100%;
+    box-sizing: border-box;
+    min-height: var(--weline-control-height);
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border: 1px solid var(--weline-theme-border-strong);
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-surface);
+    color: var(--weline-theme-text);
+    text-align: start;
+    cursor: pointer;
+    transition: border-color var(--weline-motion-fast), box-shadow var(--weline-motion-fast), background-color var(--weline-motion-fast);
+}
+
+.w-language-select[data-w-component="customer-select"] .w-language-select__trigger:hover {
+    border-color: var(--weline-theme-primary);
+}
+
+.w-language-select[data-w-component="customer-select"] .w-language-select__trigger:focus-visible {
+    border-color: var(--weline-theme-focus);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--weline-theme-focus) 20%, transparent);
+    outline: 0;
+}
+
+.w-language-select[data-w-component="customer-select"] .w-language-select__trigger:disabled {
+    background: var(--weline-theme-surface-muted);
+    color: var(--weline-theme-text-muted);
+    cursor: default;
+}
+
+.w-language-select[data-w-component="customer-select"][data-state="open"] .w-language-select__trigger > .w-icon:last-child {
+    rotate: 180deg;
+}
+
+.w-language-select[data-w-component="customer-select"] .w-language-select__trigger > .w-icon:last-child {
+    flex: 0 0 auto;
+    transition: rotate var(--weline-motion-fast);
+}
+
+.w-language-select[data-w-component="customer-select"] .w-language-select__tags {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-1);
+}
+
+.w-language-select[data-w-component="customer-select"] .w-language-select__placeholder {
+    display: inline-flex;
+    min-width: 0;
+    align-items: center;
+    gap: var(--weline-space-2);
+    overflow: hidden;
+    color: var(--weline-theme-text-subtle);
+    font-size: var(--weline-font-size-sm);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.w-language-select[data-w-component="customer-select"] .w-language-select__tag {
+    display: inline-flex;
+    min-width: 0;
+    max-width: 100%;
+    align-items: center;
+    gap: var(--weline-space-1);
+    padding: var(--weline-space-1) var(--weline-space-2);
+    border: 1px solid color-mix(in srgb, var(--weline-theme-primary) 22%, transparent);
+    border-radius: var(--weline-radius-round);
+    background: color-mix(in srgb, var(--weline-theme-primary) 12%, var(--weline-theme-surface));
+    color: var(--weline-theme-primary);
+    font-size: var(--weline-font-size-xs);
+    line-height: 1.25;
+}
+
+.w-language-select[data-w-component="customer-select"] .w-language-select__tag-label {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.w-language-select__popover[data-w-customer-select-panel] {
+    z-index: var(--weline-z-menu);
+    display: grid;
+    inline-size: min(28rem, var(--w-floating-max-inline-size, calc(100dvw - 1rem)));
+    min-inline-size: min(var(--w-language-select-anchor-width, 16rem), var(--w-floating-max-inline-size, calc(100dvw - 1rem)));
+    max-inline-size: var(--w-floating-max-inline-size, calc(100dvw - 1rem));
+    max-block-size: var(--w-floating-max-block-size, calc(100dvh - 1rem));
+    grid-template-rows: auto auto minmax(0, 1fr);
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-3);
+    overflow: hidden;
+    overscroll-behavior: contain;
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
+    background: var(--weline-theme-surface-raised);
+    color: var(--weline-theme-text);
+    box-shadow: var(--weline-theme-shadow-md);
+}
+
+.w-language-select__popover[data-w-customer-select-panel][hidden] {
+    display: none;
+}
+
+.w-language-select__popover[data-w-customer-select-panel][data-w-floating-positioned] {
+    position: fixed;
+    inset: auto;
+    top: var(--w-floating-top, 0);
+    left: var(--w-floating-left, 0);
+    transform-origin: var(--w-floating-transform-origin, top);
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__search {
+    min-width: 0;
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__list {
+    min-height: 0;
+    max-height: max(4rem, min(22rem, calc(var(--w-floating-max-block-size, 28rem) - 4.5rem)));
+    overflow: auto;
+    overscroll-behavior: contain;
+    scrollbar-color: var(--weline-theme-border-strong) var(--weline-theme-surface-muted);
+    scrollbar-width: thin;
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-surface);
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__option {
+    display: grid;
+    width: 100%;
+    min-width: 0;
+    min-height: var(--weline-control-height);
+    grid-template-columns: auto auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-2) var(--weline-space-3);
+    border: 0;
+    border-block-end: 1px solid var(--weline-theme-border);
+    background: transparent;
+    color: var(--weline-theme-text);
+    text-align: start;
+    cursor: pointer;
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__option:last-child {
+    border-block-end: 0;
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__option > .w-icon {
+    flex: 0 0 auto;
+    color: var(--weline-theme-text-muted);
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__option[aria-selected="true"] > .w-icon:first-child {
+    color: var(--weline-theme-primary);
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__option:hover,
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__option:focus-visible,
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__option[aria-selected="true"] {
+    background: var(--weline-theme-surface-hover);
+    outline: 0;
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-customer-select__avatar {
+    display: inline-grid;
+    inline-size: 1.75rem;
+    block-size: 1.75rem;
+    flex: 0 0 auto;
+    place-items: center;
+    border-radius: var(--weline-radius-round);
+    background: color-mix(in srgb, var(--weline-theme-primary) 14%, var(--weline-theme-surface));
+    color: var(--weline-theme-primary);
+    font-size: var(--weline-font-size-xs);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__option-copy {
+    display: grid;
+    min-width: 0;
+    gap: var(--weline-space-1);
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__option-copy strong {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    font-size: var(--weline-font-size-sm);
+    font-weight: 650;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__option-copy small {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-customer-select__code {
+    flex: 0 0 auto;
+    color: var(--weline-theme-text-muted);
+    font-family: var(--weline-font-mono);
+    font-size: var(--weline-font-size-xs);
+    white-space: nowrap;
+}
+
+.w-language-select__popover[data-w-customer-select-panel] .w-language-select__empty {
+    padding: var(--weline-space-5);
+    color: var(--weline-theme-text-muted);
+    text-align: center;
+}

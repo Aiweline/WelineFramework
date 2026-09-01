@@ -1,200 +1,709 @@
 @layer page {
-    .w-auth-login {
+    /* Prototype v1: full-bleed stage; grid so height grows with form (no clip) */
+    .account-login-widget {
+        --account-login-float-max: 22rem;
+        --account-login-radius: var(--weline-layout-radius-lg, 12px);
+        --account-login-promo-bg: #1b2430;
+        --account-login-accent: #e08a2a;
+        position: relative;
+        isolation: isolate;
+        box-sizing: border-box;
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(18rem, var(--account-login-float-max));
+        align-items: start;
+        column-gap: clamp(1rem, 3vw, 2.5rem);
+        row-gap: 0;
+        padding: clamp(1.5rem, 4vh, 2.75rem) clamp(1rem, 4vw, 3rem) clamp(2rem, 5vh, 3.25rem);
+        min-height: min(70vh, 42rem);
+        overflow: visible;
+        background: var(--account-login-promo-bg, #1b2430);
+    }
+
+    .account-login-widget__backdrop {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+        background-color: var(--account-login-promo-bg, #1b2430);
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        overflow: hidden;
+    }
+
+    .account-login-widget--wash .account-login-widget__backdrop {
+        background-image:
+            radial-gradient(90% 70% at 12% 18%, rgba(255, 153, 0, 0.28) 0%, transparent 55%),
+            linear-gradient(
+                145deg,
+                var(--account-login-promo-bg, #1b2430) 0%,
+                #37475a 46%,
+                var(--account-login-accent, #e08a2a) 100%
+            );
+    }
+
+    .account-login-widget__media {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        pointer-events: none;
+    }
+
+    .account-login-widget__media img,
+    .account-login-widget__media picture,
+    .account-login-widget__media .w-file-image,
+    .account-login-widget__media .weline-file-image {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+    }
+
+    .account-login-widget__overlay {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        pointer-events: none;
+        background: linear-gradient(
+            180deg,
+            rgba(15, 17, 17, 0.1) 0%,
+            rgba(15, 17, 17, var(--account-login-overlay, 0.35)) 100%
+        );
+        opacity: 0;
+        transition: opacity var(--weline-theme-transition-fast, 160ms ease);
+    }
+
+    .account-login-widget--has-image .account-login-widget__overlay {
+        opacity: 1;
+    }
+
+    /* Left brand rail — upper area within the adaptive stage */
+    .account-login-widget__rail {
+        position: relative;
+        z-index: 1;
+        box-sizing: border-box;
+        grid-column: 1;
+        max-width: 40rem;
+        width: 100%;
+        padding: 0.35rem 0 0;
+        color: #fff;
+        display: grid;
+        gap: 0.55rem;
+        align-content: start;
+    }
+
+    .account-login-widget__eyebrow {
+        margin: 0;
+        font-size: 0.75rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.75);
+    }
+
+    .account-login-widget__promo-title {
+        margin: 0;
+        font-size: clamp(2rem, 3.6vw, 3rem);
+        font-weight: 700;
+        line-height: 1.15;
+        text-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    }
+
+    .account-login-widget__promo-subtitle {
+        margin: 0;
+        max-width: 22rem;
+        font-size: clamp(0.95rem, 1.3vw, 1.05rem);
+        line-height: 1.5;
+        color: rgba(255, 255, 255, 0.92);
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+    }
+
+    .account-login-widget__promo-trust {
+        margin: 0.25rem 0 0;
+        font-size: 0.8125rem;
+        line-height: 1.45;
+        color: rgba(255, 255, 255, 0.72);
+    }
+
+    /* In-flow dock: parent height follows form (no absolute clip) */
+    .account-login-widget__dock {
+        position: relative;
+        z-index: 2;
+        grid-column: 2;
+        width: 100%;
+        max-width: var(--account-login-float-max);
+        justify-self: end;
+        pointer-events: none;
+    }
+
+    .account-login-widget__stage {
+        width: 100%;
+        margin: 0;
+        pointer-events: auto;
+        filter: drop-shadow(0 14px 32px rgba(15, 17, 17, 0.28));
+    }
+
+    .account-login-widget .w-auth-login--amazon {
+        width: 100%;
+        margin: 0;
+        border-radius: var(--account-login-radius);
+        box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
+        overflow: hidden;
+    }
+
+    /* Compact spacing inside docked card — keep fields, reduce vertical waste */
+    .account-login-widget .w-auth-login--amazon .w-auth-login__header {
+        gap: 0.35rem;
+        padding: 1.25rem 1.25rem 0.5rem;
+    }
+
+    .account-login-widget .w-auth-login--amazon .w-auth-login__title {
+        font-size: 1.5rem;
+    }
+
+    .account-login-widget .w-auth-login--amazon .w-auth-login__messages,
+    .account-login-widget .w-auth-login--amazon .w-auth-login__form {
+        gap: 0.75rem;
+        padding-inline: 1.25rem;
+    }
+
+    .account-login-widget .w-auth-login--amazon .w-auth-login__messages {
+        padding-block-start: 0.25rem;
+    }
+
+    .account-login-widget .w-auth-login--amazon .w-auth-login__social {
+        gap: 0.55rem;
+        margin-block-start: 0.35rem;
+        padding: 0.75rem 1.25rem 0;
+    }
+
+    .account-login-widget .w-auth-login--amazon .w-auth-login__footer {
+        gap: 0.55rem;
+        margin-block-start: 0.65rem;
+        padding: 0.15rem 1.25rem 1.1rem;
+    }
+
+    .account-login-widget.is-preview {
+        min-height: 22rem;
+    }
+
+    @media (max-width: 63.99rem) {
+        .account-login-widget {
+            column-gap: 1rem;
+        }
+
+        .account-login-widget__promo-title {
+            font-size: clamp(1.5rem, 3vw, 2.15rem);
+        }
+    }
+
+    @media (max-width: 47.99rem) {
+        .account-login-widget {
+            min-height: 0;
+            grid-template-columns: 1fr;
+            padding: var(--weline-layout-spacing-xl, 2rem) var(--weline-layout-spacing-md, 1rem) var(--weline-layout-spacing-2xl, 3rem);
+            row-gap: 0;
+        }
+
+        .account-login-widget__rail {
+            grid-column: 1;
+            max-width: none;
+            padding: 0 0.25rem 2.75rem;
+        }
+
+        .account-login-widget__promo-title {
+            font-size: 1.5rem;
+        }
+
+        .account-login-widget__dock {
+            grid-column: 1;
+            justify-self: center;
+            width: min(100%, var(--account-login-float-max));
+            margin-block-start: -1.75rem;
+        }
+    }
+
+    .w-auth-login--amazon {
+        --amz-text: #0f1111;
+        --amz-text-muted: #565959;
+        --amz-link: #007185;
+        --amz-link-hover: #c45500;
+        --amz-border: #d5d9d9;
+        --amz-border-input: #888c8c;
+        --amz-surface: #ffffff;
+        --amz-surface-muted: #f0f2f2;
+        --amz-cta-bg: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
+        --amz-cta-bg-hover: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
+        --amz-cta-border: #fcd200;
+        --amz-secondary-bg: linear-gradient(180deg, #f7f8f8 0%, #e3e6e6 100%);
+        --amz-secondary-border: #adb1b8;
+        --amz-focus: #e77600;
+        --amz-error: #b12704;
+        width: min(22rem, calc(100% - 2rem));
+        margin-inline: auto;
+        padding: 0;
+        overflow: hidden;
+        border: 1px solid var(--amz-border);
+        border-radius: 8px;
+        background: var(--amz-surface);
+        color: var(--amz-text);
+        box-shadow: none;
+        animation: w-auth-login-enter 240ms ease-out;
+    }
+
+    .w-auth-login--amazon .w-auth-login__header {
+        display: grid;
+        justify-items: start;
+        gap: var(--weline-layout-spacing-sm, 0.5rem);
+        padding: var(--weline-layout-spacing-xl, 2rem) var(--weline-layout-spacing-lg, 1.5rem) var(--weline-layout-spacing-md, 1rem);
+        text-align: start;
+    }
+
+    .w-auth-login--amazon .w-auth-login__icon {
+        display: none;
+    }
+
+    .w-auth-login--amazon .w-auth-login__title {
+        margin: 0;
+        font-size: 1.75rem;
+        font-weight: 400;
+        line-height: 1.2;
+        color: var(--amz-text);
+    }
+
+    .w-auth-login--amazon .w-auth-login__subtitle {
+        margin: 0;
+        font-size: 0.8125rem;
+        color: var(--amz-text-muted);
+    }
+
+    .w-auth-login--amazon .w-auth-login__messages,
+    .w-auth-login--amazon .w-auth-login__form {
+        display: grid;
+        gap: var(--weline-layout-spacing-md, 1rem);
+        padding-inline: var(--weline-layout-spacing-lg, 1.5rem);
+    }
+
+    .w-auth-login--amazon .w-auth-login__messages {
+        padding-block-start: var(--weline-layout-spacing-sm, 0.5rem);
+    }
+
+    .w-auth-login--amazon .w-field__label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        font-size: 0.8125rem;
+        font-weight: 700;
+        color: var(--amz-text);
+    }
+
+    .w-auth-login--amazon .w-field__label .w-icon,
+    .w-auth-login--amazon .w-auth-login__remember-label .w-icon,
+    .w-auth-login--amazon .w-auth-login__forgot .w-icon,
+    .w-auth-login--amazon .w-auth-login__submit .w-icon {
+        width: 1.125rem;
+        height: 1.125rem;
+        min-width: 1.125rem;
+        min-height: 1.125rem;
+        flex: 0 0 1.125rem;
+    }
+
+    .w-auth-login--amazon .w-input,
+    .w-auth-login--amazon .w-select {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        min-height: 2rem;
+        border: 1px solid var(--amz-border-input);
+        border-radius: 3px;
+        background: var(--amz-surface);
+        box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08) inset;
+        color: var(--amz-text);
+    }
+
+    .w-auth-login--amazon .w-input:focus,
+    .w-auth-login--amazon .w-select:focus {
+        border-color: var(--amz-focus);
+        outline: none;
+        box-shadow: 0 0 0 3px rgba(228, 121, 17, 0.35), 0 1px 2px rgba(15, 17, 17, 0.08) inset;
+    }
+
+    .w-auth-login--amazon .w-auth-login__password {
+        position: relative;
+    }
+
+    .w-auth-login--amazon .w-auth-login__password .w-input {
+        padding-inline-end: 2.75rem;
+    }
+
+    .w-auth-login--amazon .w-auth-login__password > .w-button {
+        position: absolute;
+        inset-block-start: 50%;
+        inset-inline-end: 0.15rem;
+        translate: 0 -50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 2rem;
+        height: 2rem;
+        padding: 0;
+        color: var(--amz-link);
+    }
+
+    /* Password toggle: keep data-* on wrappers (icon taglib strips attrs on svg) */
+    .w-auth-login--amazon .w-auth-login__password > .w-button [data-w-password-show],
+    .w-auth-login--amazon .w-auth-login__password > .w-button [data-w-password-hide] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        line-height: 0;
+    }
+
+    .w-auth-login--amazon .w-auth-login__password > .w-button [data-w-password-hide][hidden],
+    .w-auth-login--amazon .w-auth-login__password > .w-button [data-w-password-show][hidden] {
+        display: none !important;
+    }
+
+    .w-auth-login--amazon .w-auth-login__password > .w-button .w-icon {
+        width: 1.125rem;
+        height: 1.125rem;
+        min-width: 1.125rem;
+        min-height: 1.125rem;
+    }
+
+    .w-auth-login--amazon .w-auth-login__remember {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(4.5rem, 5.75rem);
+        align-items: center;
+        column-gap: 0.5rem;
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        padding: 0.5rem;
+        border: 1px solid var(--amz-border);
+        border-radius: 4px;
+        background: var(--amz-surface-muted);
+        overflow: hidden;
+    }
+
+    .w-auth-login--amazon .w-auth-login__remember-label {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.375rem;
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        color: var(--amz-text);
+        font-size: 0.8125rem;
+        font-weight: 650;
+        line-height: 1.3;
+    }
+
+    .w-auth-login--amazon .w-auth-login__remember .w-select {
+        box-sizing: border-box;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: 100% !important;
+        min-inline-size: 0 !important;
+        max-inline-size: 100% !important;
+        min-height: 1.875rem;
+        padding-inline: 0.35rem;
+        font-size: 0.8125rem;
+    }
+
+    .w-auth-login--amazon .w-auth-login__forgot {
+        display: flex;
+        justify-content: flex-start;
+    }
+
+    .w-auth-login--amazon .w-auth-login__forgot .w-button {
+        color: var(--amz-link);
+        text-decoration: none;
+    }
+
+    .w-auth-login--amazon .w-auth-login__forgot .w-button:hover,
+    .w-auth-login--amazon .w-auth-login__forgot .w-button:focus-visible {
+        color: var(--amz-link-hover);
+        text-decoration: underline;
+    }
+
+    .w-auth-login--amazon .w-auth-login__form .weline-captcha {
+        margin-block: 0;
+    }
+
+    .w-auth-login--amazon .w-auth-login__form .weline-captcha .w-field {
+        gap: 0.5rem;
+    }
+
+    .w-auth-login--amazon .w-auth-login__form .weline-captcha-row,
+    .w-auth-login--amazon .w-auth-login__form .weline-captcha-stack {
+        gap: 0.75rem;
+    }
+
+    .w-auth-login--amazon .w-auth-login__form .weline-captcha-visual {
+        display: flex;
+        flex-direction: row;
+        flex-wrap: nowrap;
+        align-items: stretch;
+        gap: 0.75rem;
+        width: 100%;
+        min-width: 0;
+    }
+
+    .w-auth-login--amazon .w-auth-login__form .weline-captcha-image {
+        flex: 1 1 auto;
+        width: auto;
+        min-width: 0;
+        max-width: none;
+        height: 2.5rem;
+    }
+
+    .w-auth-login--amazon .w-auth-login__form .weline-captcha-refresh {
+        flex: 0 0 auto !important;
+        width: auto !important;
+        min-width: 3.25rem;
+        max-width: none !important;
+        align-self: stretch;
+        white-space: nowrap;
+    }
+
+    .w-auth-login--amazon .w-auth-login__form .weline-captcha-field {
+        display: flex;
+        width: 100%;
+        min-width: 0;
+        max-width: none;
+    }
+
+    .w-auth-login--amazon .w-auth-login__form .weline-captcha-field .w-input {
+        letter-spacing: 0.24em;
+    }
+
+    .w-auth-login--amazon .w-auth-login__row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 0.75rem;
+        min-width: 0;
+    }
+
+    .w-auth-login--amazon .w-auth-login__row .w-field {
+        min-width: 0;
+    }
+
+    .w-auth-login--amazon .w-auth-login__terms {
+        box-sizing: border-box;
+        width: 100%;
+        max-width: 100%;
+        padding: 0.5rem 0.65rem;
+        border: 1px solid var(--amz-border);
+        border-radius: 4px;
+        background: var(--amz-surface-muted);
+    }
+
+    .w-auth-login--amazon .w-auth-login__terms-label {
+        display: flex;
+        align-items: flex-start;
+        gap: 0.5rem;
+        margin: 0;
+        color: var(--amz-text);
+        font-size: 0.8125rem;
+        font-weight: 500;
+        line-height: 1.45;
+        cursor: pointer;
+    }
+
+    .w-auth-login--amazon .w-auth-login__terms-checkbox {
+        flex: 0 0 auto;
+        width: 1rem;
+        height: 1rem;
+        margin-block-start: 0.15rem;
+        accent-color: #e08a2a;
+    }
+
+    .w-auth-login--amazon .w-auth-login__terms-link {
+        color: var(--amz-link);
+        text-decoration: none;
+        font-weight: 650;
+    }
+
+    .w-auth-login--amazon .w-auth-login__terms-link:hover {
+        color: var(--amz-link-hover);
+        text-decoration: underline;
+    }
+
+    .account-login-widget--register {
+        --account-login-float-max: 24rem;
+    }
+
+    .w-auth-login--amazon.w-auth-login--register .auth-form__error--shake {
+        animation: w-auth-register-shake 0.5s;
+    }
+
+    @keyframes w-auth-register-shake {
+        0%, 100% { transform: translateX(0); }
+        25% { transform: translateX(-8px); }
+        75% { transform: translateX(8px); }
+    }
+
+    .w-auth-login--amazon .w-auth-login__submit {
+        width: 100%;
+        min-height: 2rem;
+        margin-block-end: 0.25rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--amz-cta-border);
+        border-radius: 20px;
+        background: var(--amz-cta-bg);
+        color: var(--amz-text);
+        font-weight: 650;
+        box-shadow: none;
+    }
+
+    .w-auth-login--amazon .w-auth-login__submit:hover:not(:disabled),
+    .w-auth-login--amazon .w-auth-login__submit:focus-visible {
+        background: var(--amz-cta-bg-hover);
+        outline: none;
+    }
+
+    .w-auth-login--amazon .w-auth-login__submit [data-w-login-idle-label],
+    .w-auth-login--amazon .w-auth-login__submit [data-w-login-busy-label],
+    .w-auth-login--amazon .w-auth-login__submit [data-w-challenge-idle-label],
+    .w-auth-login--amazon .w-auth-login__submit [data-w-challenge-busy-label] {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.375rem;
+    }
+
+    .w-auth-login--amazon .w-auth-login__submit[data-tone="success"] {
+        background: #067d62;
+        border-color: #067d62;
+        color: #fff;
+    }
+
+    .w-auth-login--amazon .w-auth-login__social {
+        display: grid;
+        gap: 0.75rem;
+        margin-block-start: 0.5rem;
+        padding: 1rem 1.125rem 0;
+        border-block-start: 1px solid var(--amz-border);
+    }
+
+    .w-auth-login--amazon .w-auth-login__social-title {
+        margin: 0;
+        color: var(--amz-text-muted);
+        font-size: 0.8125rem;
+        text-align: center;
+    }
+
+    .w-auth-login--amazon .w-auth-login__social .auth-form__provider {
+        width: 100%;
+        margin: 0;
+    }
+
+    .w-auth-login--amazon .w-auth-login__social .auth-form__provider + .auth-form__provider {
+        margin-top: 0.75rem;
+    }
+
+    .w-auth-login--amazon .w-auth-login__social .auth-form__submit--provider {
+        width: 100%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.375rem;
+        min-height: 2rem;
+        padding: 0 1rem;
+        border: 1px solid var(--amz-secondary-border);
+        border-radius: 20px;
+        background: var(--amz-secondary-bg);
+        color: var(--amz-text);
+        font-weight: 650;
+        text-decoration: none;
+        box-shadow: none;
+        cursor: pointer;
+    }
+
+    .w-auth-login--amazon .w-auth-login__social .auth-form__submit--provider:hover,
+    .w-auth-login--amazon .w-auth-login__social .auth-form__submit--provider:focus-visible {
+        background: linear-gradient(180deg, #e7e9e9 0%, #d9dcdc 100%);
+        outline: none;
+    }
+
+    .w-auth-login--amazon .w-auth-login__footer {
+        display: grid;
+        gap: 0.75rem;
+        margin-block-start: 1rem;
+        padding: 0.25rem 1.125rem 1.25rem;
+        border-block-start: none;
+    }
+
+    .w-auth-login--amazon .w-auth-login__divider {
+        display: grid;
+        align-items: center;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 0.75rem;
+        margin: 0;
+        color: var(--amz-text-muted);
+        font-size: 0.75rem;
+        text-align: center;
+    }
+
+    .w-auth-login--amazon .w-auth-login__divider::before,
+    .w-auth-login--amazon .w-auth-login__divider::after {
+        content: "";
+        height: 1px;
+        background: var(--amz-border);
+    }
+
+    .w-auth-login--amazon .w-button.w-auth-login__register {
+        width: 100%;
+        min-height: 2rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border: 1px solid var(--amz-secondary-border);
+        border-radius: 20px;
+        background: var(--amz-secondary-bg);
+        color: var(--amz-text);
+        font-weight: 650;
+        text-decoration: none;
+        box-shadow: none;
+        transform: none;
+    }
+
+    .w-auth-login--amazon .w-button.w-auth-login__register:hover,
+    .w-auth-login--amazon .w-button.w-auth-login__register:focus-visible {
+        background: linear-gradient(180deg, #e7e9e9 0%, #d9dcdc 100%);
+        color: var(--amz-text);
+        box-shadow: none;
+        transform: none;
+        outline: none;
+    }
+
+    .w-auth-login--amazon .w-alert[data-tone="danger"],
+    .w-auth-login--amazon [data-w-login-feedback]:not([hidden]) {
+        color: var(--amz-error);
+    }
+
+    .w-auth-login--amazon.w-auth-login--shake {
+        animation: w-auth-login-shake 0.45s ease;
+    }
+
+    /* Non-amazon fallback (recovery pages may share base class) */
+    .w-auth-login:not(.w-auth-login--amazon) {
         width: min(27.5rem, calc(100% - 2rem));
         margin-inline: auto;
         overflow: hidden;
         animation: w-auth-login-enter 240ms ease-out;
     }
 
-    .w-auth-login__header {
-        display: grid;
-        justify-items: center;
-        gap: var(--weline-space-2);
-        padding: var(--weline-space-8) var(--weline-space-6) var(--weline-space-4);
-        text-align: center;
-    }
-
-    .w-auth-login__icon {
-        display: grid;
-        width: 4rem;
-        height: 4rem;
-        place-items: center;
-        border-radius: var(--weline-radius-lg);
-        background: var(--weline-theme-primary-surface);
-        color: var(--weline-theme-primary);
-    }
-
-    .w-auth-login__title {
-        margin: 0;
-        font-size: clamp(var(--weline-font-size-xl), 5vw, 1.875rem);
-    }
-
-    .w-auth-login__subtitle {
-        margin: 0;
-        color: var(--weline-theme-text-muted);
-    }
-
-    .w-auth-login__messages,
-    .w-auth-login__form {
-        display: grid;
-        gap: var(--weline-space-4);
-        padding-inline: var(--weline-space-6);
-    }
-
-    .w-auth-login__password {
-        position: relative;
-    }
-
-    .w-auth-login__password .w-input {
-        padding-inline-end: 3.25rem;
-    }
-
-    .w-auth-login__password > .w-button {
-        position: absolute;
-        inset-block-start: 50%;
-        inset-inline-end: var(--weline-space-1);
-        translate: 0 -50%;
-    }
-
-    .w-auth-login__remember {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: var(--weline-space-3);
-        padding: var(--weline-space-3);
-        border: 1px solid var(--weline-theme-border);
-        border-radius: var(--weline-radius-md);
-        background: var(--weline-theme-surface-muted);
-    }
-
-    .w-auth-login__remember-label {
-        display: inline-flex;
-        align-items: center;
-        gap: var(--weline-space-2);
-        color: var(--weline-theme-text);
-        font-size: var(--weline-font-size-sm);
-        font-weight: 650;
-        white-space: nowrap;
-    }
-
-    .w-auth-login__remember .w-select {
-        width: auto;
-        min-width: 9.5rem;
-        min-height: var(--weline-control-height-sm);
-    }
-
-    .w-auth-login__forgot {
-        display: flex;
-        justify-content: flex-end;
-    }
-
-    .w-auth-login__form .weline-captcha {
-        margin-block: 0;
-    }
-
-    .w-auth-login__form .weline-captcha .w-field {
-        gap: var(--weline-space-2);
-    }
-
-    .w-auth-login__form .weline-captcha-row {
-        align-items: stretch;
-    }
-
-    .w-auth-login__form .weline-captcha-image {
-        width: min(168px, 42%);
-        height: var(--weline-control-height-lg);
-        flex: 0 0 auto;
-    }
-
-    .w-auth-login__form .weline-captcha-field {
-        flex: 1 1 auto;
-        min-width: 0;
-        max-width: none;
-    }
-
-    .w-auth-login__form .weline-captcha-field .w-input {
-        letter-spacing: 0.24em;
-    }
-
-    .w-auth-login__submit {
-        width: 100%;
-    }
-
-    .w-auth-login__submit[data-tone="success"] {
-        background: var(--weline-theme-success);
-        border-color: var(--weline-theme-success);
-        color: var(--weline-theme-surface);
-    }
-
-    .w-auth-login__social {
-        display: grid;
-        gap: var(--weline-space-3);
-        margin-block-start: var(--weline-space-2);
-        padding: var(--weline-space-4) var(--weline-space-6) 0;
-        border-block-start: 1px solid var(--weline-theme-border);
-    }
-
-    .w-auth-login__social-title {
-        margin: 0;
-        color: var(--weline-theme-text-muted);
-        font-size: var(--weline-font-size-sm);
-        text-align: center;
-    }
-
-    .w-auth-login__social .auth-form__provider {
-        width: 100%;
-        margin: 0;
-    }
-
-    .w-auth-login__social .auth-form__provider + .auth-form__provider {
-        margin-top: var(--weline-space-3);
-    }
-
-    .w-auth-login__social .auth-form__submit--provider {
-        width: 100%;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        gap: var(--weline-space-2);
-        min-height: var(--weline-control-height);
-        padding: 0 var(--weline-space-4);
-        border: 1px solid var(--weline-theme-border-strong);
-        border-radius: var(--weline-radius-md);
-        background: var(--weline-theme-surface);
-        color: var(--weline-theme-primary);
-        font-weight: 650;
-        text-decoration: none;
-        box-shadow: none;
-        cursor: pointer;
-        transition: background-color var(--weline-motion-fast), border-color var(--weline-motion-fast), color var(--weline-motion-fast);
-    }
-
-    .w-auth-login__social .auth-form__submit--provider:hover,
-    .w-auth-login__social .auth-form__submit--provider:focus-visible {
-        background: var(--weline-theme-primary-surface);
-        border-color: var(--weline-theme-primary);
-        color: var(--weline-theme-primary);
-        outline: none;
-    }
-
-    .w-auth-login__footer {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: var(--weline-space-2);
-        margin-block-start: var(--weline-space-6);
-        padding: var(--weline-space-4) var(--weline-space-6);
-        border-block-start: 1px solid var(--weline-theme-border);
-    }
-
-    .w-auth-login--shake {
-        animation: w-auth-login-shake 0.45s ease;
-    }
-
     @keyframes w-auth-login-enter {
         from {
             opacity: 0;
-            translate: 0 var(--weline-space-3);
+            translate: 0 0.75rem;
         }
         to {
             opacity: 1;
@@ -208,35 +717,70 @@
         75% { translate: 0.35rem 0; }
     }
 
+    @media (min-width: 48rem) {
+        .w-auth-login--amazon {
+            width: min(22rem, 100%);
+        }
+    }
+
+    @media (min-width: 64rem) {
+        .w-auth-login--amazon {
+            width: 22rem;
+        }
+    }
+
     @media (max-width: 39.99rem) {
-        .w-auth-login {
-            width: min(100% - 1rem, 27.5rem);
+        .w-auth-login--amazon {
+            width: min(100% - 1rem, 22rem);
         }
 
-        .w-auth-login__header {
-            padding: var(--weline-space-6) var(--weline-space-4) var(--weline-space-3);
+        .w-auth-login--amazon .w-auth-login__header,
+        .w-auth-login--amazon .w-auth-login__messages,
+        .w-auth-login--amazon .w-auth-login__form,
+        .w-auth-login--amazon .w-auth-login__social,
+        .w-auth-login--amazon .w-auth-login__footer {
+            padding-inline: 1rem;
         }
 
-        .w-auth-login__messages,
-        .w-auth-login__form,
-        .w-auth-login__social {
-            padding-inline: var(--weline-space-4);
+        .w-auth-login--amazon .w-auth-login__remember {
+            grid-template-columns: 1fr;
+            row-gap: 0.5rem;
         }
 
-        .w-auth-login__remember {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .w-auth-login__remember .w-select {
+        .w-auth-login--amazon .w-auth-login__remember .w-select {
             width: 100%;
+            max-width: none;
+        }
+
+        .w-auth-login--amazon .w-auth-login__row {
+            grid-template-columns: 1fr;
         }
     }
 
     @media (prefers-reduced-motion: reduce) {
-        .w-auth-login,
-        .w-auth-login--shake {
+        .w-auth-login--amazon,
+        .w-auth-login--amazon.w-auth-login--shake {
             animation: none;
         }
     }
+}
+
+/* icon-overflow-fix-20260829 */
+
+/* Unlayered: beat theme.css unlayered .w-button on-primary white text on gray secondary CTA */
+.w-auth-login--amazon .w-button.w-auth-login__register {
+    border: 1px solid var(--amz-secondary-border, #adb1b8);
+    border-radius: 20px;
+    background: var(--amz-secondary-bg, linear-gradient(180deg, #f7f8f8 0%, #e3e6e6 100%));
+    color: #0f1111;
+    box-shadow: none;
+    transform: none;
+}
+
+.w-auth-login--amazon .w-button.w-auth-login__register:hover,
+.w-auth-login--amazon .w-button.w-auth-login__register:focus-visible {
+    background: linear-gradient(180deg, #e7e9e9 0%, #d9dcdc 100%);
+    color: #0f1111;
+    box-shadow: none;
+    transform: none;
 }

@@ -116,7 +116,8 @@
         function getAccountApi() {
             if (!accountApiPromise) {
                 if (window.Weline && window.Weline.Api && typeof window.Weline.Api.resource === 'function') {
-                    accountApiPromise = window.Weline.Api.resource('account');
+                    // Api.resource() returns a sync Proxy — wrap so callers can always .then()
+                    accountApiPromise = Promise.resolve(window.Weline.Api.resource('account'));
                 } else if (window.Weline && typeof window.Weline.load === 'function') {
                     accountApiPromise = window.Weline.load('api').then(function() {
                         if (!window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
@@ -147,6 +148,7 @@
         var loadedSidebarSections = Object.create(null);
         var sidebarContentLoading = Object.create(null);
         var loadedSidebarScripts = Object.create(null);
+        var loadedSidebarStyles = Object.create(null);
 
         function isSafeSidebarAssetUrl(rawValue, extension) {
             var value = String(rawValue || '').trim();
@@ -183,6 +185,79 @@
                 script.src = src;
                 script.defer = true;
                 document.head.appendChild(script);
+            });
+        }
+
+        // Body-injected <link rel="stylesheet"> is unreliable across browsers; hoist to <head>.
+        function loadTrustedSidebarStyles(html) {
+            var template = document.createElement('template');
+            template.innerHTML = String(html || '');
+
+            Array.prototype.slice.call(template.content.querySelectorAll('link[rel="stylesheet"][href], link[rel=stylesheet][href]')).forEach(function(linkNode) {
+                var href = linkNode.getAttribute('href') || '';
+                if (!isSafeSidebarAssetUrl(href, '.css') || loadedSidebarStyles[href]) {
+                    return;
+                }
+
+                loadedSidebarStyles[href] = true;
+                var link = document.createElement('link');
+                link.rel = 'stylesheet';
+                link.type = 'text/css';
+                link.href = href;
+                document.head.appendChild(link);
+            });
+        }
+
+        // AJAX-injected sidebar HTML never re-runs the initial data-weline-load scan.
+        function loadDeclaredSidebarModules(root) {
+            if (!root || !window.Weline || typeof window.Weline.load !== 'function') {
+                return Promise.resolve();
+            }
+
+            var names = [];
+            var seen = Object.create(null);
+            root.querySelectorAll('[data-weline-load]').forEach(function(el) {
+                String(el.getAttribute('data-weline-load') || '').split(',').forEach(function(raw) {
+                    var name = String(raw || '').trim();
+                    if (!name || seen[name]) {
+                        return;
+                    }
+                    seen[name] = true;
+                    names.push(name);
+                });
+            });
+
+            if (!names.length) {
+                return Promise.resolve();
+            }
+
+            return Promise.all(names.map(function(name) {
+                return window.Weline.load(name).catch(function(error) {
+                    console.error(error);
+                    return null;
+                });
+            }));
+        }
+
+        function reloadSidebarSection(sectionName) {
+            if (!sectionName) {
+                return Promise.resolve(false);
+            }
+
+            var existing = document.querySelector('[data-account-section="' + sectionName + '"]')
+                || document.getElementById(sectionName + '-section');
+            if (existing && existing.parentNode) {
+                existing.parentNode.removeChild(existing);
+            }
+
+            delete loadedSidebarSections[sectionName];
+            delete sidebarContentLoading[sectionName];
+
+            return loadSidebarContent(sectionName).then(function(ok) {
+                if (ok !== false) {
+                    showAccountSection(sectionName);
+                }
+                return ok !== false;
             });
         }
 
@@ -247,7 +322,13 @@
                 return sidebarContentLoading[sectionName];
             }
 
-            var sidebarPayload = Object.assign({ section: sectionName }, parseAccountHash().query);
+            // Only forward params declared on account.getSidebarSection (section, order_uuid).
+            // Merging location.search wholesale forwards 2FA secrets and trips FrontendQueryGateway 422.
+            var sidebarPayload = { section: sectionName };
+            var sidebarQuery = parseAccountHash().query;
+            if (sidebarQuery.order_uuid) {
+                sidebarPayload.order_uuid = sidebarQuery.order_uuid;
+            }
             sidebarContentLoading[sectionName] = (window.Weline && window.Weline.load
                 ? window.Weline.load('api')
                 : Promise.resolve(window.Weline && window.Weline.Api)
@@ -264,8 +345,10 @@
                 }
 
                 if (payload.html) {
+                    loadTrustedSidebarStyles(payload.html);
                     loadTrustedSidebarScripts(payload.html);
                     sidebarContentMount.insertAdjacentHTML('beforeend', sanitizeSidebarHtml(payload.html));
+                    loadDeclaredSidebarModules(sidebarContentMount);
                 }
 
                 loadedSidebarSections[sectionName] = true;
@@ -329,6 +412,35 @@
                 });
             } catch (err) {}
             return state;
+        }
+
+        // Drop sensitive / accidental query keys that must never stay in the address bar
+        // or ride along into BinQuery (e.g. native 2FA form GET leak: secret, backup_codes).
+        function sanitizeAccountLocationSearch() {
+            if (!window.history || typeof window.history.replaceState !== 'function') {
+                return;
+            }
+
+            try {
+                var search = new URLSearchParams(window.location.search || '');
+                var stripKeys = ['secret', 'backup_codes', 'code'];
+                var changed = false;
+                stripKeys.forEach(function(key) {
+                    if (search.has(key)) {
+                        search.delete(key);
+                        changed = true;
+                    }
+                });
+                if (!changed) {
+                    return;
+                }
+
+                var nextSearch = search.toString();
+                var nextUrl = window.location.pathname
+                    + (nextSearch ? '?' + nextSearch : '')
+                    + (window.location.hash || '');
+                window.history.replaceState(null, '', nextUrl);
+            } catch (err) {}
         }
 
         function getNavTarget(link) {
@@ -430,6 +542,14 @@
             }
         }
 
+        window.addEventListener('weline:account-sidebar-section-reload', function(event) {
+            var section = event && event.detail ? event.detail.section : '';
+            if (!section) {
+                return;
+            }
+            reloadSidebarSection(section);
+        });
+
         function syncFromHash() {
             var parsed = parseAccountHash();
             var targetId = parsed.section || 'profile';
@@ -465,6 +585,7 @@
             });
         });
 
+        sanitizeAccountLocationSearch();
         syncFromHash();
         window.addEventListener('hashchange', syncFromHash);
 
@@ -639,4 +760,9 @@
     } else {
         initAccountIndex();
     }
+
+    window.WelineCustomerAccount = {
+        __full: true,
+        init: initAccountIndex,
+    };
 })();

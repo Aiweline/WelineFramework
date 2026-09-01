@@ -17,7 +17,7 @@ class LoginTemplateGoogleHostTest extends TestCase
 
         $this->assertStringContainsString('$redirectUrl = (string) ($this->getData(\'redirect_url\')', $content);
         $this->assertStringContainsString('id="loginForm"', $content);
-        $this->assertStringContainsString('action="@var($loginSubmitUrl)"', $content);
+        $this->assertStringContainsString("action=\"@url{'customer/account/login'}\"", $content);
         $this->assertStringContainsString('method="post"', $content);
         $this->assertStringContainsString('name="redirect_url"', $content);
         $this->assertStringContainsString('value="<?= $safe($redirectUrl) ?>"', $content);
@@ -25,7 +25,8 @@ class LoginTemplateGoogleHostTest extends TestCase
         $this->assertStringContainsString('Weline_Customer::frontend::account::login::providers', $content);
         $this->assertStringNotContainsString('WeShop_GoogleAuth::templates/Frontend/Auth/login-provider-button.phtml', $content);
         $this->assertStringNotContainsString('getModuleStatus(\'WeShop_GoogleAuth\')', $content);
-        $this->assertStringContainsString('/customer/account/forgot-password', $content);
+        $this->assertStringContainsString("@url{'customer/account/forgot-password'}", $content);
+        $this->assertStringContainsString("@url{'customer/account/register'}", $content);
         $this->assertStringContainsString('data-w-component="account-login"', $content);
         $this->assertStringContainsString('data-w-login-submit', $content);
 
