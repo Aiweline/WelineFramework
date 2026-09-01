@@ -1,115 +1,48 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 
-use Weline\Framework\Manager\ObjectManager;
-use Weline\Compare\Service\ComparePagePresenter;
-use Weline\Compare\Service\CompareSpecificationMatrix;
-
-$view = ObjectManager::getInstance(ComparePagePresenter::class)->resolve($this);
-$items = $view['items'];
-$specRows = $view['specRows'];
-$count = (int)$view['count'];
-$max = (int)$view['max'];
-$specMatrix = ObjectManager::getInstance(CompareSpecificationMatrix::class);
-$esc = static fn (mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$labelHitClass = static fn (array $values): string => $specMatrix->labelIsHighlight($values) ? ' storefront-compare__label--hit' : '';
-$cellHitClass = static fn (string $value, array $values): string => $specMatrix->cellIsHighlight($value, $values) ? ' storefront-compare__cell--hit' : '';
-$specLabelClass = static fn (array $specRow): string => trim($specMatrix->specLabelHighlightClass($specRow));
-$specCellClass = static fn (int $index, array $specRow): string => trim($specMatrix->specCellHighlightClass($index, $specRow));
+$max = 8;
+$labels = [
+    'title' => (string)__('商品对比'),
+    // Phrase 无参会吃掉 %{n}；传回字面占位供 compare-page.js 客户端替换
+    'meta' => (string)__('已选 %{1} / %{2} 件', ['%{1}', '%{2}']),
+    'loading' => (string)__('加载对比商品…'),
+    'empty' => (string)__('对比栏暂无商品'),
+    'cta' => (string)__('去逛逛'),
+    'attr' => (string)__('属性'),
+    'image' => (string)__('图片'),
+    'price' => (string)__('价格'),
+    'rating' => (string)__('评分'),
+    'sku' => (string)__('SKU'),
+    'specs' => (string)__('规格参数'),
+    'action' => (string)__('操作'),
+    'remove' => (string)__('移除'),
+    'failed' => (string)__('加载对比数据失败，请稍后重试'),
+];
 ?>
 <div class="storefront-compare-layout">
-<section class="storefront-compare" data-testid="storefront-compare-page" weline-code="compare.page.section_1">
+<section class="storefront-compare"
+         data-compare-page
+         data-weline-load="comparePage"
+         data-compare-max="<?= (int)$max ?>"
+         data-testid="storefront-compare-page"
+         weline-code="compare.page.section_1">
+    <script type="application/json" id="weline-compare-page-labels"><?= json_encode($labels, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
     <header class="storefront-compare__header">
-        <h1 class="storefront-compare__title"><?= __('商品对比') ?></h1>
-        <p class="storefront-compare__meta"><?= $esc((string)__('已选 %{1} / %{2} 件', [$count, $max])) ?></p>
+        <h1 class="storefront-compare__title"><?= htmlspecialchars($labels['title'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></h1>
+        <p class="storefront-compare__meta" data-compare-page-meta><?= htmlspecialchars((string)__('已选 %{1} / %{2} 件', [0, $max]), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
     </header>
 
-    <?php if ($items === []): ?>
-        <div class="storefront-compare__empty">
-            <p><?= __('对比栏暂无商品') ?></p>
-            <a class="storefront-compare__cta" href="/"><?= __('去逛逛') ?></a>
-        </div>
-    <?php else: ?>
-        <?php
-        $ratingValues = array_map(
-            static fn (array $item): string => number_format((float)($item['rating'] ?? 0), 1) . ' (' . (int)($item['review_count'] ?? 0) . ')',
-            $items
-        );
-        ?>
-        <div class="storefront-compare__table-wrap" style="--compare-product-cols: <?= count($items) ?>">
-            <table class="storefront-compare__table">
-                <thead>
-                    <tr>
-                        <th scope="col"><?= __('属性') ?></th>
-                        <?php foreach ($items as $item): ?>
-                            <th scope="col">
-                                <a href="<?= $esc((string)($item['url'] ?? '#')) ?>"><?= $esc((string)($item['name'] ?? '')) ?></a>
-                            </th>
-                        <?php endforeach; ?>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <th scope="row"><?= __('图片') ?></th>
-                        <?php foreach ($items as $item): ?>
-                            <td>
-                                <?php if (trim((string)($item['image'] ?? '')) !== ''): ?>
-                                    <img src="<?= $esc((string)$item['image']) ?>" alt="" class="storefront-compare__thumb" loading="lazy">
-                                <?php endif; ?>
-                            </td>
-                        <?php endforeach; ?>
-                    </tr>
-                    <tr class="storefront-compare__row">
-                        <th scope="row"><?= __('价格') ?></th>
-                        <?php foreach ($items as $index => $item): ?>
-                            <td class="<?= $specMatrix->priceCellIsHighlight($index, $items) ? 'storefront-compare__cell--best-price' : '' ?>"><?= $esc((string)($item['formatted_price'] ?? '')) ?></td>
-                        <?php endforeach; ?>
-                    </tr>
-                    <tr class="storefront-compare__row">
-                        <th scope="row" class="<?= trim($labelHitClass($ratingValues)) ?>"><?= __('评分') ?></th>
-                        <?php foreach ($items as $index => $item): ?>
-                            <?php $ratingText = number_format((float)($item['rating'] ?? 0), 1) . ' (' . (int)($item['review_count'] ?? 0) . ')'; ?>
-                            <td class="<?= trim($cellHitClass($ratingValues[$index] ?? '', $ratingValues)) ?>"><?= $esc($ratingText) ?></td>
-                        <?php endforeach; ?>
-                    </tr>
-                    <tr class="storefront-compare__row">
-                        <th scope="row"><?= __('SKU') ?></th>
-                        <?php foreach ($items as $item): ?>
-                            <td><?= $esc((string)($item['sku'] ?? '—')) ?></td>
-                        <?php endforeach; ?>
-                    </tr>
-                    <?php if ($specRows !== []): ?>
-                        <tr class="storefront-compare__section">
-                            <th scope="row" colspan="<?= count($items) + 1 ?>"><?= __('规格参数') ?></th>
-                        </tr>
-                        <?php foreach ($specRows as $specRow): ?>
-                            <?php $specValues = array_map(static fn ($value): string => trim((string)$value), (array)($specRow['values'] ?? [])); ?>
-                            <tr class="storefront-compare__row">
-                                <th scope="row" class="<?= $specLabelClass($specRow) ?>"><?= $esc((string)($specRow['label'] ?? '')) ?></th>
-                                <?php foreach ($specValues as $index => $value): ?>
-                                    <?php $display = $value !== '' ? $value : '—'; ?>
-                                    <td class="<?= $specCellClass($index, $specRow) ?>"><?= $esc($display) ?></td>
-                                <?php endforeach; ?>
-                            </tr>
-                        <?php endforeach; ?>
-                    <?php endif; ?>
-                    <tr>
-                        <th scope="row"><?= __('操作') ?></th>
-                        <?php foreach ($items as $item): ?>
-                            <td>
-                                <button type="button"
-                                        class="storefront-compare__remove"
-                                        data-compare-remove
-                                        data-product-id="<?= (int)($item['product_id'] ?? 0) ?>">
-                                    <?= __('移除') ?>
-                                </button>
-                            </td>
-                        <?php endforeach; ?>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
-    <?php endif; ?>
+    <div class="storefront-compare__loading" data-compare-page-loading>
+        <p><?= htmlspecialchars($labels['loading'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
+    </div>
+
+    <div class="storefront-compare__empty" data-compare-page-empty hidden>
+        <p><?= htmlspecialchars($labels['empty'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></p>
+        <a class="storefront-compare__cta" href="@url{'/'}"><?= htmlspecialchars($labels['cta'], ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?></a>
+    </div>
+
+    <div data-compare-page-content></div>
 </section>
 </div>
 
@@ -132,6 +65,7 @@ $specCellClass = static fn (int $index, array $specRow): string => trim($specMat
 }
 .storefront-compare__title { margin: 0 0 .5rem; font-size: 1.75rem; }
 .storefront-compare__meta { margin: 0 0 1.5rem; color: #565959; }
+.storefront-compare__loading,
 .storefront-compare__empty {
     padding: 3rem 1.5rem;
     border: 1px dashed #e7e7e7;
@@ -243,20 +177,4 @@ $specCellClass = static fn (int $index, array $specRow): string => trim($specMat
     text-decoration: underline;
 }
 </style>
-
-<script>
-(function () {
-    document.addEventListener('click', function (event) {
-        var button = event.target && event.target.closest ? event.target.closest('[data-compare-remove]') : null;
-        if (!button) return;
-        event.preventDefault();
-        var productId = Number(button.getAttribute('data-product-id') || 0);
-        if (productId <= 0 || !window.Weline || !window.Weline.Api) return;
-        window.Weline.Api.resource('compare').then(function (api) {
-            return api.remove({ product_id: productId });
-        }).then(function () {
-            window.location.reload();
-        });
-    });
-})();
-</script>
+<?php // comparePage：由 section data-weline-load 声明，禁止 @static 直引 ?>
