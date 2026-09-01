@@ -1,0 +1,462 @@
+.weline-affiliate-account-card {
+box-sizing: border-box;
+width: 100%;
+scroll-margin-top: 96px;
+border: 1px solid var(--color-border-light, #d9e1ec);
+border-radius: 8px;
+background: var(--color-surface-light, #fff);
+color: var(--color-text-primary-light, #172033);
+box-shadow: 0 10px 26px rgba(19, 33, 53, 0.07);
+overflow: hidden;
+}
+.weline-affiliate-account-card * {
+box-sizing: border-box;
+}
+.weline-affiliate-account-card__header,
+.weline-affiliate-account-card__body {
+padding: 20px;
+}
+.weline-affiliate-account-card__header {
+display: flex;
+align-items: flex-start;
+justify-content: space-between;
+gap: 16px;
+border-bottom: 1px solid var(--color-border-light, #e5e7eb);
+background: var(--color-background-light, #f8fafc);
+}
+.weline-affiliate-account-card__eyebrow {
+margin: 0 0 6px;
+color: var(--color-primary, #007185);
+font-size: 12px;
+font-weight: 700;
+letter-spacing: 0.08em;
+text-transform: uppercase;
+}
+.weline-affiliate-account-card__title {
+margin: 0;
+color: inherit;
+font-size: 20px;
+font-weight: 760;
+letter-spacing: 0;
+line-height: 1.25;
+}
+.weline-affiliate-account-card__status {
+display: inline-flex;
+align-items: center;
+min-height: 28px;
+padding: 5px 10px;
+border: 1px solid rgba(0, 113, 133, 0.25);
+border-radius: 999px;
+color: var(--color-primary, #007185);
+font-size: 12px;
+font-weight: 700;
+white-space: nowrap;
+}
+.weline-affiliate-account-card__money {
+display: grid;
+grid-template-columns: repeat(3, minmax(0, 1fr));
+gap: 12px;
+margin-bottom: 16px;
+}
+.weline-affiliate-account-card__metric {
+min-width: 0;
+border: 1px solid var(--color-border-light, #e5e7eb);
+border-radius: 8px;
+background: var(--color-background-light, #f8fafc);
+padding: 12px;
+}
+.weline-affiliate-account-card__metric-label {
+display: block;
+color: var(--color-text-secondary-light, #647084);
+font-size: 12px;
+font-weight: 650;
+}
+.weline-affiliate-account-card__metric-value {
+display: block;
+margin-top: 6px;
+color: inherit;
+font-size: 20px;
+font-weight: 780;
+line-height: 1.2;
+overflow-wrap: anywhere;
+}
+.weline-affiliate-account-card__funnel {
+display: grid;
+grid-template-columns: repeat(6, minmax(0, 1fr));
+gap: 8px;
+margin: 0 0 16px;
+}
+.weline-affiliate-account-card__funnel-item {
+border: 1px solid var(--color-border-light, #e5e7eb);
+border-radius: 8px;
+padding: 10px 8px;
+text-align: center;
+}
+.weline-affiliate-account-card__funnel-value {
+display: block;
+font-size: 18px;
+font-weight: 760;
+}
+.weline-affiliate-account-card__funnel-label {
+display: block;
+margin-top: 4px;
+color: var(--color-text-secondary-light, #647084);
+font-size: 12px;
+font-weight: 650;
+}
+.weline-affiliate-account-card__link-row {
+display: grid;
+grid-template-columns: minmax(0, 1fr) auto;
+gap: 10px;
+align-items: center;
+}
+.weline-affiliate-account-card__link {
+min-width: 0;
+width: 100%;
+min-height: 40px;
+border: 1px solid var(--color-border-light, #d1d5db);
+border-radius: 8px;
+background: #fff;
+color: inherit;
+padding: 8px 10px;
+font: inherit;
+}
+.weline-affiliate-account-card__actions {
+display: flex;
+flex-wrap: wrap;
+gap: 10px;
+margin-top: 14px;
+}
+.weline-affiliate-account-card__button {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+min-height: 40px;
+border: 1px solid var(--color-border-light, #d1d5db);
+border-radius: 8px;
+background: #fff;
+color: inherit;
+padding: 8px 14px;
+font-size: 14px;
+font-weight: 700;
+line-height: 1.2;
+text-decoration: none;
+cursor: pointer;
+transition: border-color 120ms ease, color 120ms ease, background-color 120ms ease;
+}
+.weline-affiliate-account-card__button:hover {
+border-color: var(--color-primary, #007185);
+color: var(--color-primary, #007185);
+text-decoration: none;
+}
+.weline-affiliate-account-card__button--primary {
+border-color: var(--color-primary, #007185);
+background: var(--color-primary, #007185);
+color: #fff;
+}
+.weline-affiliate-account-card__button--primary:hover {
+background: var(--color-primary-dark, #005f6b);
+color: #fff;
+}
+.weline-affiliate-account-card__notice {
+min-height: 18px;
+margin-top: 8px;
+color: var(--color-primary, #007185);
+font-size: 12px;
+font-weight: 650;
+}
+.weline-affiliate-account-card__subsection {
+margin-top: 18px;
+padding-top: 18px;
+border-top: 1px solid var(--color-border-light, #e5e7eb);
+}
+.weline-affiliate-account-card__section-head {
+display: flex;
+align-items: flex-end;
+justify-content: space-between;
+gap: 12px;
+margin-bottom: 10px;
+}
+.weline-affiliate-account-card__section-title {
+margin: 0;
+color: inherit;
+font-size: 16px;
+font-weight: 760;
+line-height: 1.3;
+}
+.weline-affiliate-account-card__section-note {
+margin: 4px 0 0;
+color: var(--color-text-secondary-light, #647084);
+font-size: 12px;
+line-height: 1.45;
+}
+.weline-affiliate-account-card__link-group {
+display: grid;
+gap: 12px;
+margin-bottom: 12px;
+}
+.weline-affiliate-account-card__field-label {
+display: block;
+margin-bottom: 6px;
+color: var(--color-text-secondary-light, #647084);
+font-size: 12px;
+font-weight: 700;
+}
+.weline-affiliate-account-card__target-row {
+display: grid;
+grid-template-columns: minmax(0, 1fr) auto;
+gap: 10px;
+align-items: center;
+}
+.weline-affiliate-account-card__table-wrap {
+width: 100%;
+overflow-x: auto;
+border: 1px solid var(--color-border-light, #e5e7eb);
+border-radius: 8px;
+background: #fff;
+}
+.weline-affiliate-account-card__table {
+width: 100%;
+min-width: 760px;
+border-collapse: collapse;
+font-size: 13px;
+}
+.weline-affiliate-account-card__table th,
+.weline-affiliate-account-card__table td {
+padding: 10px 12px;
+border-bottom: 1px solid var(--color-border-light, #edf0f3);
+text-align: left;
+vertical-align: top;
+}
+.weline-affiliate-account-card__table th {
+color: var(--color-text-secondary-light, #647084);
+font-size: 12px;
+font-weight: 760;
+white-space: nowrap;
+background: var(--color-background-light, #f8fafc);
+}
+.weline-affiliate-account-card__table tr:last-child td {
+border-bottom: 0;
+}
+.weline-affiliate-account-card__muted {
+color: var(--color-text-secondary-light, #647084);
+}
+.weline-affiliate-account-card__mono {
+font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+overflow-wrap: anywhere;
+}
+.weline-affiliate-account-card__badge {
+display: inline-flex;
+align-items: center;
+min-height: 22px;
+padding: 3px 8px;
+border: 1px solid var(--color-border-light, #d1d5db);
+border-radius: 999px;
+color: var(--color-text-secondary-light, #647084);
+font-size: 12px;
+font-weight: 700;
+white-space: nowrap;
+}
+.weline-affiliate-account-card__empty {
+padding: 16px;
+color: var(--color-text-secondary-light, #647084);
+font-size: 13px;
+text-align: center;
+}
+.weline-affiliate-account-card__report-tools {
+display: grid;
+grid-template-columns: minmax(180px, 1fr) auto auto;
+gap: 10px;
+align-items: end;
+margin: 0 0 10px;
+}
+.weline-affiliate-account-card__report-field {
+display: grid;
+gap: 5px;
+min-width: 0;
+}
+.weline-affiliate-account-card__report-field span {
+color: var(--color-text-secondary-light, #647084);
+font-size: 12px;
+font-weight: 700;
+}
+.weline-affiliate-account-card__report-search,
+.weline-affiliate-account-card__report-size {
+min-height: 36px;
+border: 1px solid var(--color-border-light, #d1d5db);
+border-radius: 8px;
+background: #fff;
+color: inherit;
+padding: 7px 10px;
+font: inherit;
+}
+.weline-affiliate-account-card__report-pager {
+display: inline-flex;
+align-items: center;
+justify-content: flex-end;
+gap: 8px;
+min-height: 36px;
+color: var(--color-text-secondary-light, #647084);
+font-size: 12px;
+font-weight: 700;
+white-space: nowrap;
+}
+.weline-affiliate-account-card__report-page-button {
+display: inline-flex;
+align-items: center;
+justify-content: center;
+min-height: 34px;
+border: 1px solid var(--color-border-light, #d1d5db);
+border-radius: 8px;
+background: #fff;
+color: inherit;
+padding: 6px 10px;
+font-size: 12px;
+font-weight: 760;
+cursor: pointer;
+}
+.weline-affiliate-account-card__report-page-button:hover:not(:disabled) {
+border-color: var(--color-primary, #007185);
+color: var(--color-primary, #007185);
+}
+.weline-affiliate-account-card__report-page-button:disabled {
+cursor: not-allowed;
+opacity: 0.48;
+}
+.weline-affiliate-account-card__report-empty {
+margin-top: 8px;
+border: 1px dashed var(--color-border-light, #d1d5db);
+border-radius: 8px;
+background: var(--color-background-light, #f8fafc);
+}
+.weline-affiliate-account-card__report-empty[hidden] {
+display: none;
+}
+@media (max-width: 900px) {
+.weline-affiliate-account-card__money,
+.weline-affiliate-account-card__funnel {
+grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.weline-affiliate-account-card__section-head {
+align-items: flex-start;
+flex-direction: column;
+}
+.weline-affiliate-account-card__report-tools {
+grid-template-columns: 1fr;
+align-items: stretch;
+}
+.weline-affiliate-account-card__report-pager {
+justify-content: space-between;
+}
+}
+@media (max-width: 560px) {
+.weline-affiliate-account-card {
+scroll-margin-top: 184px;
+}
+.weline-affiliate-account-card__header {
+flex-direction: column;
+}
+.weline-affiliate-account-card__header,
+.weline-affiliate-account-card__body {
+padding: 16px;
+}
+.weline-affiliate-account-card__money,
+.weline-affiliate-account-card__funnel,
+.weline-affiliate-account-card__link-row,
+.weline-affiliate-account-card__target-row {
+grid-template-columns: 1fr;
+}
+.weline-affiliate-account-card__button {
+width: 100%;
+}
+.weline-affiliate-account-card__table-wrap {
+overflow-x: visible;
+border: 0;
+border-radius: 0;
+background: transparent;
+}
+.weline-affiliate-account-card__table {
+display: block;
+min-width: 0;
+font-size: 12px;
+}
+.weline-affiliate-account-card__table thead {
+display: none;
+}
+.weline-affiliate-account-card__table tbody {
+display: grid;
+gap: 10px;
+}
+.weline-affiliate-account-card__table tr {
+display: grid;
+gap: 8px;
+border: 1px solid var(--color-border-light, #e5e7eb);
+border-radius: 8px;
+background: #fff;
+padding: 12px;
+}
+.weline-affiliate-account-card__table td {
+display: grid;
+grid-template-columns: minmax(82px, 36%) minmax(0, 1fr);
+gap: 10px;
+align-items: start;
+padding: 0;
+border: 0;
+min-width: 0;
+overflow-wrap: anywhere;
+}
+.weline-affiliate-account-card__table td::before {
+color: var(--color-text-secondary-light, #647084);
+font-size: 11px;
+font-weight: 760;
+line-height: 1.35;
+text-transform: none;
+}
+[data-affiliate-withdrawals-table] td:nth-child(1)::before { content: "申请时间"; }
+[data-affiliate-withdrawals-table] td:nth-child(2)::before { content: "金额"; }
+[data-affiliate-withdrawals-table] td:nth-child(3)::before { content: "方式"; }
+[data-affiliate-withdrawals-table] td:nth-child(4)::before { content: "收款账户"; }
+[data-affiliate-withdrawals-table] td:nth-child(5)::before { content: "状态"; }
+[data-affiliate-withdrawals-table] td:nth-child(6)::before { content: "处理时间"; }
+[data-affiliate-withdrawals-table] td:nth-child(7)::before { content: "打款时间"; }
+[data-affiliate-withdrawals-table] td:nth-child(8)::before { content: "备注"; }
+[data-affiliate-share-links-table] td:nth-child(1)::before { content: "推广目标"; }
+[data-affiliate-share-links-table] td:nth-child(2)::before { content: "渠道"; }
+[data-affiliate-share-links-table] td:nth-child(3)::before { content: "点击"; }
+[data-affiliate-share-links-table] td:nth-child(4)::before { content: "注册"; }
+[data-affiliate-share-links-table] td:nth-child(5)::before { content: "收藏/加购"; }
+[data-affiliate-share-links-table] td:nth-child(6)::before { content: "订单"; }
+[data-affiliate-share-links-table] td:nth-child(7)::before { content: "佣金"; }
+[data-affiliate-share-links-table] td:nth-child(8)::before { content: "创建时间"; }
+[data-affiliate-referred-customers-table] td:nth-child(1)::before { content: "客户"; }
+[data-affiliate-referred-customers-table] td:nth-child(2)::before { content: "来源"; }
+[data-affiliate-referred-customers-table] td:nth-child(3)::before { content: "注册时间"; }
+[data-affiliate-referred-customers-table] td:nth-child(4)::before { content: "订单数"; }
+[data-affiliate-referred-customers-table] td:nth-child(5)::before { content: "支付订单"; }
+[data-affiliate-referred-customers-table] td:nth-child(6)::before { content: "成交金额"; }
+[data-affiliate-referred-customers-table] td:nth-child(7)::before { content: "最近下单"; }
+[data-affiliate-products-table] td:nth-child(1)::before { content: "商品"; }
+[data-affiliate-products-table] td:nth-child(2)::before { content: "SKU"; }
+[data-affiliate-products-table] td:nth-child(3)::before { content: "分享/点击"; }
+[data-affiliate-products-table] td:nth-child(4)::before { content: "浏览/收藏/加购"; }
+[data-affiliate-products-table] td:nth-child(5)::before { content: "订单"; }
+[data-affiliate-products-table] td:nth-child(6)::before { content: "净商品额"; }
+[data-affiliate-products-table] td:nth-child(7)::before { content: "佣金"; }
+[data-affiliate-orders-table] td:nth-child(1)::before { content: "订单"; }
+[data-affiliate-orders-table] td:nth-child(2)::before { content: "买家"; }
+[data-affiliate-orders-table] td:nth-child(3)::before { content: "商品"; }
+[data-affiliate-orders-table] td:nth-child(4)::before { content: "订单金额"; }
+[data-affiliate-orders-table] td:nth-child(5)::before { content: "结算基数"; }
+[data-affiliate-orders-table] td:nth-child(6)::before { content: "佣金"; }
+[data-affiliate-orders-table] td:nth-child(7)::before { content: "状态"; }
+[data-affiliate-orders-table] td:nth-child(8)::before { content: "下单时间"; }
+[data-affiliate-commissions-table] td:nth-child(1)::before { content: "时间"; }
+[data-affiliate-commissions-table] td:nth-child(2)::before { content: "订单"; }
+[data-affiliate-commissions-table] td:nth-child(3)::before { content: "商品"; }
+[data-affiliate-commissions-table] td:nth-child(4)::before { content: "买家"; }
+[data-affiliate-commissions-table] td:nth-child(5)::before { content: "基数"; }
+[data-affiliate-commissions-table] td:nth-child(6)::before { content: "比例"; }
+[data-affiliate-commissions-table] td:nth-child(7)::before { content: "佣金"; }
+[data-affiliate-commissions-table] td:nth-child(8)::before { content: "状态"; }
+[data-affiliate-commissions-table] td:nth-child(9)::before { content: "原因"; }
+}
