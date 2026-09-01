@@ -122,7 +122,7 @@ $renderTree = static function (
      data-testid="storefront-search-type-filter"
      data-search-type-filter>
     <h2 class="storefront-search__filter-title"><?= __('搜索类型') ?></h2>
-    <form method="get" action="/search" class="storefront-search__type-form">
+    <form method="get" action="@url{'search'}" class="storefront-search__type-form">
         <input type="hidden" name="q" value="<?= $esc($q) ?>">
         <input type="hidden" name="category_id" value="<?= $categoryId > 0 ? $esc((string)$categoryId) : '' ?>">
         <ul class="storefront-search__type-tree storefront-search__type-tree--root" role="list">

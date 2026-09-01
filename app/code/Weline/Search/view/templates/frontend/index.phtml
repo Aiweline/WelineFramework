@@ -7,6 +7,7 @@
  * @var int $search_category_id
  * @var list<array<string,mixed>> $search_types
  * @var list<array{label:string,type:string,category_id:int}> $search_category_breadcrumb
+ * @var array<string,string> $search_hit_templates
  * @var list<array<string,mixed>> $search_hits
  * @var array<string,list<array<string,mixed>>> $search_sections
  * @var int $search_hit_count
@@ -27,6 +28,9 @@ $sections = is_array($sections) ? $sections : [];
 $hitCount = (int)($this->getData('search_hit_count') ?? count($hits));
 $error = trim((string)($this->getData('search_error') ?? ''));
 $errorCode = trim((string)($this->getData('search_error_code') ?? ''));
+$hitTemplates = $this->getData('search_hit_templates') ?? [];
+$hitTemplates = is_array($hitTemplates) ? $hitTemplates : [];
+$defaultHitTemplate = 'Weline_Search::templates/frontend/partials/hit-card.phtml';
 $esc = static fn (mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $typeLabels = $this->getData('search_type_labels') ?? [];
 $typeLabels = is_array($typeLabels) ? $typeLabels : [];
@@ -53,6 +57,38 @@ $resolveTypeLabel = static function (string $code) use ($typeLabels): string {
         'product' => (string)__('商品'),
         default => $code,
     };
+};
+$normalizeHit = static function (mixed $hit): ?array {
+    if ($hit instanceof \Weline\Search\Dto\SearchHit) {
+        return $hit->toArray();
+    }
+    if (!is_array($hit)) {
+        return null;
+    }
+
+    return $hit;
+};
+$renderHitCard = function (mixed $hit, ?string $sectionType = null) use (
+    $normalizeHit,
+    $hitTemplates,
+    $defaultHitTemplate,
+): void {
+    $normalized = $normalizeHit($hit);
+    if ($normalized === null) {
+        return;
+    }
+    $type = trim((string)($sectionType ?? $normalized['type'] ?? $normalized['indexer'] ?? ''));
+    $template = $hitTemplates[$type] ?? $defaultHitTemplate;
+    echo (string)$this->fetch($template, ['hit' => $normalized]);
+};
+$gridClassForType = static function (?string $sectionType) use ($type): string {
+    $resolved = trim((string)($sectionType ?? $type));
+    $classes = 'storefront-search__grid';
+    if ($resolved === 'product' || $resolved === 'blog') {
+        $classes .= ' storefront-search__grid--' . $resolved;
+    }
+
+    return $classes;
 };
 $typeLabel = $resolveTypeLabel($type);
 if ($breadcrumb === []) {
@@ -86,16 +122,19 @@ if ($breadcrumb === []) {
                         $crumbType = trim((string)($crumb['type'] ?? $type)) ?: $type;
                         $crumbCategoryId = (int)($crumb['category_id'] ?? 0);
                         $isLast = $index === array_key_last($breadcrumb);
-                        $href = '/search?q=' . rawurlencode($q) . '&type=' . rawurlencode($crumbType);
+                        $crumbParams = [
+                            'q' => $q,
+                            'type' => $crumbType,
+                        ];
                         if ($crumbCategoryId > 0) {
-                            $href .= '&category_id=' . $crumbCategoryId;
+                            $crumbParams['category_id'] = $crumbCategoryId;
                         }
                         ?>
                         <li class="storefront-search__breadcrumb-item<?= $isLast ? ' is-current' : '' ?>">
                             <?php if ($isLast): ?>
                                 <span aria-current="page"><?= $esc($crumbLabel) ?></span>
                             <?php else: ?>
-                                <a href="<?= $esc($href) ?>"><?= $esc($crumbLabel) ?></a>
+                                <a href="@url{'search'|$crumbParams}"><?= $esc($crumbLabel) ?></a>
                             <?php endif; ?>
                         </li>
                     <?php endforeach; ?>
@@ -123,24 +162,22 @@ if ($breadcrumb === []) {
                     <?php $sectionLabel = $resolveTypeLabel((string)$sectionType); ?>
                     <div class="storefront-search__section" data-section-type="<?= $esc((string)$sectionType) ?>">
                         <h2 class="storefront-search__section-title"><?= $esc($sectionLabel) ?></h2>
-                        <div class="storefront-search__grid">
+                        <div class="<?= $esc($gridClassForType((string)$sectionType)) ?>">
                             <?php foreach ($sectionHits as $hit): ?>
-                                <?php if (!is_array($hit)) { continue; } ?>
-                                <?php include __DIR__ . '/partials/hit-card.phtml'; ?>
+                                <?php $renderHitCard($hit, (string)$sectionType); ?>
                             <?php endforeach; ?>
                         </div>
                         <p class="storefront-search__section-more">
-                            <a href="/search?q=<?= rawurlencode($q) ?>&amp;type=<?= rawurlencode((string)$sectionType) ?>">
+                            <a href="@url{'search'}?q=<?= rawurlencode($q) ?>&amp;type=<?= rawurlencode((string)$sectionType) ?>">
                                 <?= $esc((string)__('查看更多%{1}结果', [$sectionLabel])) ?> →
                             </a>
                         </p>
                     </div>
                 <?php endforeach; ?>
             <?php else: ?>
-                <div class="storefront-search__grid">
+                <div class="<?= $esc($gridClassForType(null)) ?>">
                     <?php foreach ($hits as $hit): ?>
-                        <?php if (!is_array($hit)) { continue; } ?>
-                        <?php include __DIR__ . '/partials/hit-card.phtml'; ?>
+                        <?php $renderHitCard($hit, $type); ?>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>

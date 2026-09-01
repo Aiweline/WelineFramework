@@ -8,7 +8,7 @@ Register::register(
     Register::MODULE,
     'Weline_Search',
     __DIR__,
-    '1.4.0',
+    '1.4.4',
     'Universal search hub with scoped analytics and provider SPI',
     [
         'Weline_Framework',
