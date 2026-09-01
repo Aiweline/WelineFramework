@@ -1,0 +1,203 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$children = is_array($this->getData('children')) ? $this->getData('children') : [];
+$selected = $this->getData('selected');
+$selectedId = trim((string)($this->getData('selected_id') ?? ''));
+$parentId = trim((string)($this->getData('parent_id') ?? ''));
+$breadcrumb = is_array($this->getData('breadcrumb')) ? $this->getData('breadcrumb') : [];
+$q = (string)($this->getData('q') ?? '');
+$locale = (string)($this->getData('locale') ?? 'zh_Hans_CN');
+$totalCount = max(0, (int)($this->getData('total_count') ?? 0));
+$taxonomyVersion = trim((string)($this->getData('taxonomy_version') ?? ''));
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$rowLabel = static function (array $row) use ($escape): string {
+    $label = trim((string)($row['label'] ?? ''));
+    $nameEn = trim((string)($row['name_en'] ?? ''));
+    if ($label === '' || str_starts_with($label, 'google_taxonomy.')) {
+        return $nameEn !== '' ? $nameEn : $label;
+    }
+
+    return $label;
+};
+$taxonomyPath = 'weline_catalog/backend/google-taxonomy/index';
+$pageParams = function (array $params = []) use ($locale, $q, $parentId, $selectedId): array {
+    return array_filter([
+        'q' => $q !== '' ? $q : null,
+        'parent_id' => $parentId !== '' ? $parentId : null,
+        'id' => $selectedId !== '' ? $selectedId : null,
+        'locale' => $locale !== '' ? $locale : null,
+        ...$params,
+    ], static fn(mixed $value): bool => $value !== null && $value !== '');
+};
+$selectedRow = is_array($selected) ? $selected : null;
+$selectedLabel = $selectedRow !== null ? $rowLabel($selectedRow) : '';
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-catalogs.css)">
+<link rel="stylesheet" href="@static(Weline_Catalog::css/backend/google-taxonomy-admin.css)?v=20260826-v2">
+
+<section
+    class="w-catalog-admin w-google-taxonomy-admin"
+    data-testid="catalog-google-taxonomy"
+    data-google-taxonomy-admin
+>
+    <header class="w-google-taxonomy-toolbar w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div class="w-stack w-google-taxonomy-toolbar__intro">
+            <h1 class="w-google-taxonomy-toolbar__title">
+                <w-icon name="language" size="md"></w-icon><?= $escape(__('Google 产品分类')) ?>
+            </h1>
+            <p class="w-text" data-tone="muted"><?= $escape(__('只读参照树；不可删改结构。可对译名发起 AI 批量翻译。')) ?></p>
+            <div class="w-google-taxonomy__stats">
+                <span class="w-badge" data-tone="info"><?= $escape(__('共 %{1} 条', [$totalCount])) ?></span>
+                <?php if ($taxonomyVersion !== ''): ?>
+                    <span class="w-badge" data-tone="neutral"><?= $escape(__('版本 %{1}', [$taxonomyVersion])) ?></span>
+                <?php endif; ?>
+            </div>
+        </div>
+        <nav class="w-google-taxonomy-toolbar__actions w-cluster" aria-label="<?= $escape(__('Google 分类操作')) ?>">
+            <form method="get"
+                  class="w-google-taxonomy-search-form w-cluster"
+                  action="@backend-url('weline_catalog/backend/google-taxonomy/index')">
+                <input type="hidden" name="locale" value="<?= $escape($locale) ?>">
+                <label class="w-visually-hidden" for="google-taxonomy-search"><?= $escape(__('搜索 Google ID / 英文名')) ?></label>
+                <input
+                    id="google-taxonomy-search"
+                    class="w-input w-google-taxonomy-search-form__input"
+                    type="search"
+                    name="q"
+                    value="<?= $escape($q) ?>"
+                    placeholder="<?= $escape(__('搜索 Google ID / 英文名')) ?>"
+                >
+                <button class="w-button" type="submit" data-tone="neutral">
+                    <w-icon name="search" size="sm"></w-icon><?= $escape(__('搜索')) ?>
+                </button>
+            </form>
+            <a class="w-button" data-tone="neutral" href="@backend-url('weline_catalog/backend/category/index')">
+                <w-icon name="arrow-left" size="sm"></w-icon><?= $escape(__('返回万能分类')) ?>
+            </a>
+        </nav>
+    </header>
+
+    <template>Weline_Component::message.phtml</template>
+
+    <div class="w-catalog-admin__layout">
+        <aside class="w-card w-catalog-admin__tree-card" aria-labelledby="catalog-google-tree-heading">
+            <header class="w-card__header">
+                <h2 class="w-card__title" id="catalog-google-tree-heading">
+                    <w-icon name="folder" size="sm"></w-icon>
+                    <?= $escape($q !== '' ? __('搜索结果') : __('只读树')) ?>
+                </h2>
+            </header>
+            <div class="w-card__body">
+                <?php if ($q === ''): ?>
+                    <nav class="w-google-taxonomy__breadcrumb" aria-label="<?= $escape(__('分类路径')) ?>">
+                        <a href="@backend-url{$taxonomyPath|$pageParams(['parent_id' => null, 'id' => null])}"><?= $escape(__('全部分类')) ?></a>
+                        <?php foreach ($breadcrumb as $crumb): ?>
+                            <?php if (!is_array($crumb)) { continue; } ?>
+                            <span aria-hidden="true">/</span>
+                            <a href="@backend-url{$taxonomyPath|$pageParams([
+                                'parent_id' => (string)($crumb['google_id'] ?? ''),
+                                'id' => (string)($crumb['google_id'] ?? ''),
+                            ])}"><?= $escape($rowLabel($crumb)) ?></a>
+                        <?php endforeach; ?>
+                    </nav>
+                <?php endif; ?>
+
+                <?php if ($children === []): ?>
+                    <div class="w-empty" data-testid="catalog-google-tree-empty">
+                        <w-icon name="folder" size="lg"></w-icon>
+                        <p><?= $escape($q !== '' ? __('未找到匹配分类') : __('暂无 Google 分类数据')) ?></p>
+                        <?php if ($totalCount < 100): ?>
+                            <p class="w-text" data-tone="muted"><?= $escape(__('请执行 php bin/w setup:upgrade 导入官方分类库。')) ?></p>
+                        <?php endif; ?>
+                    </div>
+                <?php else: ?>
+                    <div class="w-google-taxonomy__list" data-testid="catalog-google-tree">
+                        <?php foreach ($children as $row): ?>
+                            <?php if (!is_array($row)) { continue; } ?>
+                            <?php
+                            $rowId = (string)($row['google_id'] ?? '');
+                            $hasChildren = $q === '' && (int)($row['depth'] ?? 0) < 6;
+                            $isSelected = $selectedId === $rowId;
+                            ?>
+                            <div class="w-google-taxonomy__row" data-state="<?= $isSelected ? 'selected' : 'idle' ?>">
+                                <a class="w-google-taxonomy__row-link"
+                                   href="@backend-url{$taxonomyPath|$pageParams(['id' => $rowId])}">
+                                    <w-icon name="folder" size="sm"></w-icon>
+                                    <span><?= $escape($rowLabel($row)) ?></span>
+                                    <span class="w-badge" data-tone="neutral"><?= $escape($rowId) ?></span>
+                                </a>
+                                <?php if ($hasChildren): ?>
+                                    <a class="w-button" data-tone="neutral" data-size="sm"
+                                       href="@backend-url{$taxonomyPath|$pageParams(['parent_id' => $rowId, 'id' => $rowId])}"
+                                       aria-label="<?= $escape(__('展开子分类')) ?>">
+                                        <w-icon name="chevron-right" size="sm"></w-icon>
+                                    </a>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
+            </div>
+        </aside>
+
+        <main class="w-card w-catalog-admin__editor" aria-labelledby="catalog-google-detail-heading">
+            <header class="w-card__header">
+                <h2 class="w-card__title" id="catalog-google-detail-heading">
+                    <w-icon name="edit" size="sm"></w-icon><?= $escape(__('译名与 AI')) ?>
+                </h2>
+            </header>
+            <div class="w-card__body">
+                <?php if ($selectedRow === null): ?>
+                    <div class="w-empty">
+                        <w-icon name="language" size="lg"></w-icon>
+                        <p><?= $escape(__('请从左侧选择一条 Google 分类')) ?></p>
+                    </div>
+                <?php else: ?>
+                    <div class="w-stack" data-testid="catalog-google-detail">
+                        <div>
+                            <h3 class="w-text" style="--w-mb:var(--weline-space-1);"><?= $escape($selectedLabel) ?></h3>
+                            <code class="w-google-taxonomy__detail-path"><?= $escape((string)($selectedRow['path'] ?? '')) ?></code>
+                        </div>
+                        <div class="w-cluster">
+                            <span class="w-badge" data-tone="info">ID <?= $escape($selectedId) ?></span>
+                            <span class="w-badge" data-tone="neutral"><?= $escape(__('深度 %{1}', [(int)($selectedRow['depth'] ?? 0) + 1])) ?></span>
+                        </div>
+                    </div>
+                <?php endif; ?>
+
+                <form method="post"
+                      class="w-form w-catalog-form"
+                      style="margin-block-start:var(--weline-space-5);"
+                      action="@backend-url('weline_catalog/backend/google-taxonomy/enqueue-ai')"
+                      data-testid="catalog-google-ai-form"
+                      data-google-ai-form>
+                    <p class="w-text" data-tone="muted"><?= $escape(__('将入队词典键 google_taxonomy.{id} 的 AI 翻译任务。')) ?></p>
+                    <label class="w-field">
+                        <span class="w-field__label"><?= $escape(__('目标语言')) ?></span>
+                        <input class="w-input" type="text" name="locale" value="<?= $escape($locale) ?>">
+                    </label>
+                    <?php if ($selectedId !== ''): ?>
+                        <input type="hidden" name="google_ids[]" value="<?= $escape($selectedId) ?>">
+                    <?php endif; ?>
+                    <footer class="w-catalog-form__actions w-cluster" data-justify="end">
+                        <button class="w-button" type="submit" data-tone="primary" data-google-ai-submit>
+                            <w-icon name="language" size="sm"></w-icon><?= $escape(__('一键 AI 翻译')) ?>
+                        </button>
+                    </footer>
+                </form>
+            </div>
+        </main>
+    </div>
+</section>
+<script type="module">
+const form = document.querySelector('[data-google-ai-form]');
+form?.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    const confirmed = await window.Weline?.UI?.dialog?.confirm?.(
+        <?= json_encode((string)__('确认入队 Google 分类 AI 翻译？任务可在离开页面后继续。'), JSON_UNESCAPED_UNICODE) ?>,
+        { title: <?= json_encode((string)__('AI 翻译'), JSON_UNESCAPED_UNICODE) ?> }
+    );
+    if (!confirmed) return;
+    form.submit();
+});
+</script>

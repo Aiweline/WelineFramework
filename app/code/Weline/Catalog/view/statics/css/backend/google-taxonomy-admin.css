@@ -1,0 +1,144 @@
+@layer page {
+    .w-google-taxonomy-admin {
+        display: grid;
+        gap: var(--weline-space-5);
+    }
+
+    .w-google-taxonomy-toolbar {
+        gap: var(--weline-space-4);
+        margin-block-end: 0;
+    }
+
+    .w-google-taxonomy-toolbar__intro {
+        min-inline-size: 0;
+        flex: 1 1 24rem;
+    }
+
+    .w-google-taxonomy-toolbar__title {
+        display: flex;
+        align-items: center;
+        gap: var(--weline-space-2);
+        margin: 0;
+        font-size: var(--weline-font-size-xl);
+        line-height: 1.2;
+    }
+
+    .w-google-taxonomy-toolbar__actions {
+        flex: 0 1 auto;
+        justify-content: flex-end;
+        align-items: center;
+        gap: var(--weline-space-2);
+    }
+
+    .w-google-taxonomy-search-form {
+        flex-wrap: nowrap;
+        align-items: center;
+        gap: var(--weline-space-2);
+    }
+
+    .w-google-taxonomy-search-form__input {
+        min-inline-size: min(18rem, 100%);
+        inline-size: 18rem;
+        max-inline-size: 100%;
+    }
+
+    .w-google-taxonomy-admin .w-google-taxonomy__stats {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: var(--weline-space-2);
+    }
+
+    .w-google-taxonomy-admin .w-google-taxonomy__breadcrumb {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: var(--weline-space-2);
+        margin-block-end: var(--weline-space-3);
+    }
+
+    .w-google-taxonomy-admin .w-google-taxonomy__breadcrumb a {
+        color: var(--weline-theme-primary);
+        text-decoration: none;
+    }
+
+    .w-google-taxonomy-admin .w-google-taxonomy__list {
+        display: grid;
+        gap: var(--weline-space-1);
+    }
+
+    .w-google-taxonomy-admin .w-google-taxonomy__row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-3);
+        padding: var(--weline-space-2);
+        border-radius: var(--weline-radius-sm);
+        border: 1px solid transparent;
+    }
+
+    .w-google-taxonomy-admin .w-google-taxonomy__row:hover,
+    .w-google-taxonomy-admin .w-google-taxonomy__row[data-state="selected"] {
+        background: var(--weline-theme-surface-hover);
+        border-color: var(--weline-theme-border);
+    }
+
+    .w-google-taxonomy-admin .w-google-taxonomy__row-link {
+        display: flex;
+        min-inline-size: 0;
+        flex: 1;
+        align-items: center;
+        gap: var(--weline-space-2);
+        color: inherit;
+        text-decoration: none;
+    }
+
+    .w-google-taxonomy-admin .w-google-taxonomy__row-link > span:not(.w-badge) {
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .w-google-taxonomy-admin .w-google-taxonomy__detail-path {
+        display: block;
+        margin-block-start: var(--weline-space-2);
+        padding: var(--weline-space-3);
+        border-radius: var(--weline-radius-sm);
+        background: var(--weline-theme-surface-muted);
+        word-break: break-word;
+    }
+}
+
+@media (max-width: 63.99rem) {
+    @layer page {
+        .w-google-taxonomy-toolbar {
+            align-items: stretch;
+        }
+
+        .w-google-taxonomy-toolbar__actions {
+            inline-size: 100%;
+            justify-content: stretch;
+        }
+
+        .w-google-taxonomy-search-form {
+            flex: 1 1 auto;
+        }
+
+        .w-google-taxonomy-search-form__input {
+            flex: 1 1 auto;
+            inline-size: auto;
+        }
+    }
+}
+
+@media (max-width: 35.99rem) {
+    @layer page {
+        .w-google-taxonomy-toolbar__actions {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .w-google-taxonomy-search-form {
+            flex-wrap: wrap;
+        }
+    }
+}

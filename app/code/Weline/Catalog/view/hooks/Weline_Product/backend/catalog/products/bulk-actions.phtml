@@ -1,0 +1,69 @@
+<?php
+/**
+ * @hook-priority 200
+ * @hook-sort-order 10
+ */
+/** @var \Weline\Framework\View\Template $this */
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    is_scalar($value) || $value === null ? (string)$value : '',
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8',
+);
+?>
+<button class="w-button"
+        type="button"
+        data-variant="outline"
+        data-size="sm"
+        data-catalog-bulk-categories
+        data-testid="catalog-bulk-categories-button"
+        disabled>
+    <lang>调整分类</lang>
+</button>
+<dialog class="w-catalog-bulk-categories"
+        data-catalog-bulk-categories-dialog
+        data-testid="catalog-bulk-categories-dialog">
+    <form method="dialog" class="w-catalog-bulk-categories__panel" data-catalog-bulk-categories-form>
+        <header class="w-catalog-bulk-categories__header">
+            <h3 class="w-catalog-bulk-categories__title"><lang>批量调整分类</lang></h3>
+            <p class="w-text" data-tone="muted" data-size="sm" data-catalog-bulk-categories-summary></p>
+        </header>
+        <div class="w-field">
+            <span class="w-field__label"><lang>操作方式</lang></span>
+            <div class="w-cluster" data-gap="sm">
+                <label class="w-product-check">
+                    <input type="radio" name="catalog_bulk_mode" value="add" checked>
+                    <span><lang>追加分类</lang></span>
+                </label>
+                <label class="w-product-check">
+                    <input type="radio" name="catalog_bulk_mode" value="replace">
+                    <span><lang>替换全部分类</lang></span>
+                </label>
+                <label class="w-product-check">
+                    <input type="radio" name="catalog_bulk_mode" value="remove">
+                    <span><lang>移除所选分类</lang></span>
+                </label>
+            </div>
+        </div>
+        <div class="w-field">
+            <label class="w-field__label" for="catalog-bulk-category-search"><lang>选择分类</lang></label>
+            <input class="w-input"
+                   id="catalog-bulk-category-search"
+                   type="search"
+                   data-catalog-bulk-category-search
+                   placeholder="@lang(输入名称或路径筛选)">
+            <div class="w-catalog-bulk-categories__list" data-catalog-bulk-category-list>
+                <p class="w-text" data-tone="muted" data-size="sm"><lang>正在加载分类…</lang></p>
+            </div>
+        </div>
+        <footer class="w-catalog-bulk-categories__footer w-cluster" data-gap="sm" data-justify="end">
+            <button class="w-button" type="button" data-variant="outline" data-catalog-bulk-categories-cancel>
+                <lang>取消</lang>
+            </button>
+            <button class="w-button" type="submit" data-tone="primary" data-catalog-bulk-categories-submit disabled>
+                <lang>应用</lang>
+            </button>
+        </footer>
+    </form>
+</dialog>
+<link rel="stylesheet" href="@static(Weline_Catalog::css/backend/product-catalog-bulk.css)?v=20260826-bulk1">
+<script src="@static(Weline_Catalog::js/backend/product-catalog-bulk-categories.js)?v=20260826-bulk2" defer data-no-extract="true"></script>

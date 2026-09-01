@@ -6,6 +6,7 @@ namespace Weline\Catalog\Service;
 
 use Weline\Catalog\Api\CatalogSpaceProviderInterface;
 use Weline\Catalog\Exception\CatalogScopeForbiddenException;
+use Weline\Framework\Manager\ObjectManager;
 
 /**
  * Thin catalog hub: resolve space provider and forward operations without business SQL.
@@ -15,7 +16,21 @@ final class CatalogHubService
     public function __construct(
         private readonly CatalogSpaceRegistry $registry,
         private readonly CatalogScopeGuard $scopeGuard,
+        private readonly ?GoogleTaxonomyService $googleTaxonomy = null,
+        private readonly ?GoogleTaxonomyTranslationQueueService $googleTranslationQueue = null,
     ) {
+    }
+
+    private function googleTaxonomy(): GoogleTaxonomyService
+    {
+        return $this->googleTaxonomy
+            ?? ObjectManager::getInstance(GoogleTaxonomyService::class);
+    }
+
+    private function googleTranslationQueue(): GoogleTaxonomyTranslationQueueService
+    {
+        return $this->googleTranslationQueue
+            ?? ObjectManager::getInstance(GoogleTaxonomyTranslationQueueService::class);
     }
 
     /**
@@ -46,6 +61,28 @@ final class CatalogHubService
     public function execute(string $operation, array $params): mixed
     {
         $operation = trim($operation);
+        if (in_array($operation, [
+            'googleTaxonomyTree',
+            'googleTaxonomySearch',
+            'enqueueGoogleTaxonomyAiTranslation',
+        ], true)) {
+            return match ($operation) {
+                'googleTaxonomyTree' => $this->googleTaxonomy()->listTree(),
+                'googleTaxonomySearch' => $this->googleTaxonomy()->search(
+                    trim((string)($params['q'] ?? $params['query'] ?? '')),
+                    max(1, (int)($params['limit'] ?? 20)),
+                ),
+                'enqueueGoogleTaxonomyAiTranslation' => [
+                    'success' => true,
+                    'queue_id' => $this->googleTranslationQueue()->enqueue(
+                        trim((string)($params['locale'] ?? $params['locale_code'] ?? 'zh_Hans_CN')),
+                        is_array($params['google_ids'] ?? null) ? $params['google_ids'] : [],
+                        trim((string)($params['requested_by'] ?? 'catalog')),
+                    ),
+                ],
+            };
+        }
+
         $scopeContext = $this->scopeGuard->resolve($params);
         if ($scopeContext->space === '') {
             throw new \InvalidArgumentException((string)__('分类空间 space 不能为空'));

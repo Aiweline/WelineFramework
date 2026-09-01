@@ -20,13 +20,17 @@ final class CatalogQueryProviderTest extends TestCase
         }
     }
 
-    public function testSpacesOperationReturnsEmptyList(): void
+    private function hub(): CatalogHubService
     {
-        $hub = new CatalogHubService(
+        return new CatalogHubService(
             new CatalogSpaceRegistry($this->createMock(ObjectManager::class)),
             new CatalogScopeGuard(),
         );
-        $provider = new CatalogQueryProvider($hub);
+    }
+
+    public function testSpacesOperationReturnsEmptyList(): void
+    {
+        $provider = new CatalogQueryProvider($this->hub());
 
         $result = $provider->execute('spaces');
         self::assertTrue($result['success']);
@@ -35,22 +39,17 @@ final class CatalogQueryProviderTest extends TestCase
 
     public function testDescriptorIncludesSpacesOperation(): void
     {
-        $provider = new CatalogQueryProvider(new CatalogHubService(
-            new CatalogSpaceRegistry($this->createMock(ObjectManager::class)),
-            new CatalogScopeGuard(),
-        ));
+        $provider = new CatalogQueryProvider($this->hub());
         $names = array_column($provider->getDescriptor()['operations'], 'name');
         self::assertContains('spaces', $names);
+        self::assertContains('googleTaxonomyTree', $names);
+        self::assertContains('enqueueGoogleTaxonomyAiTranslation', $names);
         self::assertSame('catalog', $provider->getProviderName());
     }
 
     public function testStructureMutationsRequireWebsiteScope(): void
     {
-        $hub = new CatalogHubService(
-            new CatalogSpaceRegistry($this->createMock(ObjectManager::class)),
-            new CatalogScopeGuard(),
-        );
-        $provider = new CatalogQueryProvider($hub);
+        $provider = new CatalogQueryProvider($this->hub());
         $base = [
             'space' => 'product',
             'website_id' => 0,
@@ -63,5 +62,19 @@ final class CatalogQueryProviderTest extends TestCase
             self::assertFalse($storeResult['success']);
             self::assertSame('catalog_scope_forbidden', $storeResult['error_code'] ?? '');
         }
+    }
+
+    public function testWebsiteScopeBlocksDisplaySelectionWrite(): void
+    {
+        $provider = new CatalogQueryProvider($this->hub());
+        $result = $provider->execute('saveDisplaySelection', [
+            'space' => 'product',
+            'scope_level' => 'website',
+            'website_id' => 0,
+            'rows' => [],
+        ]);
+        self::assertIsArray($result);
+        self::assertFalse($result['success']);
+        self::assertSame('catalog_scope_forbidden', $result['error_code'] ?? '');
     }
 }

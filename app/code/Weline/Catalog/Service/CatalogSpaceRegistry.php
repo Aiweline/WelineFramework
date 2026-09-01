@@ -34,19 +34,23 @@ class CatalogSpaceRegistry
                     if ($this->extensionName($extension) !== 'CatalogSpace') {
                         continue;
                     }
-                    $class = $this->extensionClass($extension);
-                    if ($class === '' || !class_exists($class)) {
+                    try {
+                        $class = $this->extensionClass($extension);
+                        if ($class === '' || !class_exists($class)) {
+                            continue;
+                        }
+                        $instance = $this->objectManager->getInstance($class);
+                        if (!$instance instanceof CatalogSpaceProviderInterface) {
+                            continue;
+                        }
+                        $code = trim($instance->code());
+                        if ($code === '') {
+                            continue;
+                        }
+                        $map[$code] = $instance;
+                    } catch (\Throwable) {
                         continue;
                     }
-                    $instance = $this->objectManager->getInstance($class);
-                    if (!$instance instanceof CatalogSpaceProviderInterface) {
-                        continue;
-                    }
-                    $code = trim($instance->code());
-                    if ($code === '') {
-                        continue;
-                    }
-                    $map[$code] = $instance;
                 }
             }
         } catch (\Throwable) {
@@ -101,8 +105,13 @@ class CatalogSpaceRegistry
         }
         $filePath = str_replace('\\', '/', (string)($extension['file_path'] ?? ''));
         $segments = explode('/', $filePath);
+        $segment = trim((string)($segments[0] ?? ''));
+        // Extends scanner stores file_path as Space/*.php; SPI key in extends.php is CatalogSpace.
+        if ($segment === 'Space') {
+            return 'CatalogSpace';
+        }
 
-        return trim((string)($segments[0] ?? ''));
+        return $segment;
     }
 
     /**
