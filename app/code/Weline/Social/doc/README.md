@@ -4,9 +4,9 @@
 
 `Weline_Social` 提供社媒、博客、论坛、消息渠道的统一平台账户、AI 创意和一键多平台发布能力。模块自身可以内置多个平台 Provider，外部模块也可以通过 `extends/module/Weline_Social/platforms.php` 一次追加多个 Provider。
 
-社媒后台页继承 `Weline\Admin\Api\Controller\BaseController`，通过 Admin 发布的
-`fetchBase()` 后台页面契约复用页面外壳；Admin 是已声明的真实必需依赖，不引用其
-内部 Controller。
+社媒后台页继承 `Weline\Admin\Api\Controller\BaseController`，通过 `fetch()` 走当前
+激活的后端主题布局（`Weline_Theme` 的 `default.default` 壳层）；Admin 是已声明的
+真实必需依赖，不引用其内部 Controller。
 
 ## 核心能力
 
@@ -60,6 +60,16 @@ const Social = await Weline.Api.resource('welineSocial')
 后台 `站点社媒` 页签用于为每个站点配置默认社媒账户。关系只保存 `website_id`、`account_id`、`platform_code`、默认标记、排序和状态，不保存 token、secret、cookie 或 Authorization 等凭据。
 
 后台范围选择器分层为：范围类型（如「站点」）→ 站点范围（具体站点，含零号默认站）→ 二级范围（如「站点默认」）。与账户表单中的平台、授权方式一样，均使用可搜索标签弹层选择器（选中态为标签 + 编码胶囊）。全页「添加到当前范围 / 范围社媒 / 一键发布」共用顶部范围选择。
+
+**默认与深度链接**：无 URL 参数时默认选中 `website_id=0` 的站点默认范围；切换范围会同步更新地址栏 `scope_key`（可分享）。支持的 query 参数：
+
+- `scope_key=website:0:website_default:0`（推荐）
+- `scope_code` / `website_code`（站点编码）
+- `scope_type` + `scope_id` + `child_scope_type` + `child_scope_id`
+- `scope={website_code}.default.default`（与系统配置 scope 语法兼容）
+- `tab=accounts|scopeAccounts|creative|publish|records`（打开指定页签）
+
+示例：`/weline_social/backend/social?scope_key=website:0:website_default:0&tab=scopeAccounts`
 
 一键发布窗口默认先选择站点，再调用 `getWebsiteDefaultAccounts` 勾选该站点可发布账户；勾选 `全部站发布` 时调用 `resolvePublishAccounts`，按所有站点默认关系取账号并集。发布服务端也会兜底解析 `website_id` / `website_ids` / `all_sites`，避免只依赖前端勾选状态。账户仍必须满足 `publish_enabled=1` 且 `test_status=passed` 才能进入发布任务。
 
