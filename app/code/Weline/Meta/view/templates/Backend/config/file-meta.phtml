@@ -81,14 +81,14 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
                 </div>
 
                 <div class="meta-config-page" id="meta-config-app"
-     data-tree-url="<?= $this->getUrl('meta/backend/config/file/tree') ?>"
-     data-meta-url="<?= $this->getUrl('meta/backend/config/file/fileMeta') ?>"
-     data-save-url="<?= $this->getUrl('meta/backend/config/file/save') ?>"
-     data-translation-url="<?= $this->getUrl('meta/backend/config/file/paramTranslation') ?>"
-     data-translation-save-url="<?= $this->getUrl('meta/backend/config/file/paramTranslationSave') ?>"
-     data-locales-url="<?= $this->getUrl('meta/backend/config/file/getLocales') ?>"
-     data-meta-name-desc-translation-url="<?= $this->getUrl('meta/backend/config/file/metaNameDescriptionTranslation') ?>"
-     data-meta-name-desc-translation-save-url="<?= $this->getUrl('meta/backend/config/file/metaNameDescriptionTranslationSave') ?>">
+     data-tree-url="@url{'meta/backend/config/file/tree'}"
+     data-meta-url="@url{'meta/backend/config/file/fileMeta'}"
+     data-save-url="@url{'meta/backend/config/file/save'}"
+     data-translation-url="@url{'meta/backend/config/file/paramTranslation'}"
+     data-translation-save-url="@url{'meta/backend/config/file/paramTranslationSave'}"
+     data-locales-url="@url{'meta/backend/config/file/getLocales'}"
+     data-meta-name-desc-translation-url="@url{'meta/backend/config/file/metaNameDescriptionTranslation'}"
+     data-meta-name-desc-translation-save-url="@url{'meta/backend/config/file/metaNameDescriptionTranslationSave'}">
                     <!-- 筛选条件置顶一行 -->
                     <div class="w-grid" style="--w-mb:var(--weline-space-4);">
                         <div style="--w-span:12;">

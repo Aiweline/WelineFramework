@@ -12,6 +12,7 @@ use Weline\Framework\Database\AbstractModel;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\Phrase\DictionaryEvents;
 #[Table(comment: '元数据表')]
 #[Index(name: 'uk_namespace_type_identify', columns: ['namespace', 'meta_type', 'meta_identify'], type: 'UNIQUE')]
 #[Index(name: 'idx_namespace', columns: ['namespace'])]
@@ -95,10 +96,7 @@ class Meta extends AbstractModel
         
         // 触发翻译收集事件（由I18n模块监听并处理）
         if (!empty($translations)) {
-            $this->getEventManager()->dispatch('Weline_I18n::collect_translations', [
-                'translations' => $translations,
-                'module' => 'Weline_Meta' // 标识翻译词来源模块
-            ]);
+            DictionaryEvents::register($translations, 'Weline_Meta');
         }
         
         return $this;
