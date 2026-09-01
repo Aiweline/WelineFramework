@@ -39,6 +39,7 @@ final class AttributeMetadataCatalogContractTest extends TestCase
         self::assertStringContainsString('Group::schema_fields_eav_entity_id', $source);
         self::assertStringContainsString('EavAttribute::schema_fields_eav_entity_id', $source);
         self::assertStringContainsString('Option::schema_fields_eav_entity_id', $source);
+        self::assertStringContainsString('Placement::schema_fields_eav_entity_id', $source);
         self::assertStringContainsString('AttributeSetMetadata', $source);
         self::assertStringContainsString('compare_mode', $source);
         self::assertStringContainsString('attributeIndexByEntityCode', $source);

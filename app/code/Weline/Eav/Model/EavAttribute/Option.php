@@ -98,7 +98,7 @@ class Option extends \Weline\Framework\Database\Model
 
     function getSwatchImage(): string
     {
-        return $this->getData(self::schema_fields_swatch_image);
+        return (string)($this->getData(self::schema_fields_swatch_image) ?? '');
     }
 
     function setSwatchImage(string $swatch_image): static
@@ -108,7 +108,7 @@ class Option extends \Weline\Framework\Database\Model
 
     function getSwatchColor(): string
     {
-        return $this->getData(self::schema_fields_swatch_color);
+        return (string)($this->getData(self::schema_fields_swatch_color) ?? '');
     }
 
     function setSwatchColor(string $swatch_color): static
@@ -118,7 +118,7 @@ class Option extends \Weline\Framework\Database\Model
 
     function getSwatchText(): string
     {
-        return $this->getData(self::schema_fields_swatch_text);
+        return (string)($this->getData(self::schema_fields_swatch_text) ?? '');
     }
 
     function setSwatchText(string $swatch_text): static
