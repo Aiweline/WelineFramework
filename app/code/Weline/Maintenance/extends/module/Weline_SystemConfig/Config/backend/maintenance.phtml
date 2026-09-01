@@ -1,0 +1,74 @@
+<?php
+/**
+ * @meta.title {default="维护模式",description="维护页展示、开发者联系邮箱与等待礼金"}
+ * @meta.description {default="维护静态页联系邮箱；可选开启维护等待补偿礼金（随机优惠券）。"}
+ * @config.area {backend}
+ * @config.sort {35}
+ * @config.acl {Weline_Backend::system_maintenance_config}
+ */
+?>
+
+<w:config:group code="maintenance_contact" label="维护页联系信息" description="前台维护页「需要帮助吗？」卡片中展示的开发者/支持邮箱。" sort="10">
+    <w:config:field
+        key="maintenance/developer_email"
+        label="开发者联系邮箱"
+        description="保存后维护静态页会自动重新生成；也可在「系统维护模式」页面快速修改。"
+        type="email"
+        value-type="string"
+        default=""
+        scope="global"
+        validation="email|max:255"
+    />
+</w:config:group>
+
+<w:config:group code="maintenance_wait_gift" label="维护等待礼金" description="开启后，真实进入维护等待的用户可在恢复后 10 分钟内领取随机补偿礼金券。" sort="20">
+    <w:config:field
+        key="maintenance/wait_gift/enabled"
+        label="启用维护等待礼金"
+        description="启用后需在下次开启维护时固化升级波次；保存时会同步 Marketing 随机券活动。"
+        type="boolean"
+        value-type="bool"
+        default="0"
+        scope="global"
+    />
+    <w:config:field
+        key="maintenance/wait_gift/discount_type"
+        label="礼金折扣类型"
+        description="percentage=百分比；fixed_amount=固定金额。"
+        type="select"
+        value-type="string"
+        default="fixed_amount"
+        scope="global"
+        options="fixed_amount:固定金额,percentage:百分比"
+    />
+    <w:config:field
+        key="maintenance/wait_gift/discount_value"
+        label="礼金面额"
+        description="百分比填 1-100；固定金额按站点主币种面值。"
+        type="number"
+        value-type="float"
+        default="10"
+        scope="global"
+        validation="min:0"
+    />
+    <w:config:field
+        key="maintenance/wait_gift/min_wait_sec"
+        label="最短等待秒数"
+        description="防止秒开秒兑；默认 30 秒。"
+        type="number"
+        value-type="int"
+        default="30"
+        scope="global"
+        validation="min:0|max:3600"
+    />
+    <w:config:field
+        key="maintenance/wait_gift/marketing_rule_id"
+        label="Marketing 规则 ID"
+        description="由系统同步回写，通常无需手工修改。"
+        type="number"
+        value-type="int"
+        default="0"
+        scope="global"
+        validation="min:0"
+    />
+</w:config:group>

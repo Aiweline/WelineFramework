@@ -2,11 +2,14 @@
 
 return [
     "name" => 'Weline_Maintenance',
-    "version" => '1.0.1',
+    "version" => '1.1.5',
     "requires" => [
         'Weline_Backend' => '*',
+        'Weline_Theme' => '*',
+        'Weline_Marketing' => '>=1.1.4',
     ],
     "optional" => [
+        'Weline_I18n' => '*',
     ],
     "provides" => [
         \Weline\Backend\Api\Maintenance\MaintenanceOperationsProviderInterface::class => \Weline\Maintenance\Integration\Backend\MaintenanceOperationsProvider::class,

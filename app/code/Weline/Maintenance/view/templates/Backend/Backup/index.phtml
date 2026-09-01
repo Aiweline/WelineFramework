@@ -15,7 +15,7 @@ $filters = $filters ?? [];
         <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
             <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>备份管理</lang></h4>
             <div>
-                <a class="w-button" href="<?= $this->getBackendUrl('maintenance/backend/backup/create') ?>" data-tone="primary">
+                <a class="w-button" href="@backend-url{'maintenance/backend/backup/create'}" data-tone="primary">
                     <w:icon name="plus" size="sm"></w:icon><lang>创建备份</lang>
                 </a>
             </div>
@@ -94,7 +94,7 @@ $filters = $filters ?? [];
                                         </td>
                                         <td><?= $backup['created_at'] ?? '' ?></td>
                                         <td>
-                                            <a href="<?= $this->getBackendUrl('maintenance/backend/backup/download', ['id' => $backup['backup_id'] ?? 0]) ?>" class="w-button" data-tone="primary" data-size="sm">
+                                            <a href="@backend-url{'maintenance/backend/backup/download'|['id' => $backup['backup_id'] ?? 0]}" class="w-button" data-tone="primary" data-size="sm">
                                                 <w:icon name="download" size="sm"></w:icon> <lang>下载</lang>
                                             </a>
                                             <button type="button" class="w-button" data-maintenance-backup-delete="<?= (int)($backup['backup_id'] ?? 0) ?>" data-tone="danger" data-size="sm">
@@ -134,7 +134,7 @@ $filters = $filters ?? [];
                 var formData = new FormData();
                 formData.append('id', backupId);
                 
-                var url = '<?= $this->getBackendUrl('maintenance/backend/backup/delete') ?>';
+                var url = '@backend-url{'maintenance/backend/backup/delete'}';
                 var opts = { method: 'POST', body: formData };
                 Weline.adminRequest('maintenance', url, opts)
                 .then(function(res) {
