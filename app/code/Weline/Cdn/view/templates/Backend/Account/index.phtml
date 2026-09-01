@@ -214,7 +214,7 @@ $escapeAttr = static function (mixed $value): string {
 (function() {
     'use strict';
     
-    var setDefaultUrl = <?= $jsonForScript($this->getBackendUrl('*/backend/account/setDefault')) ?>;
+    var setDefaultUrl = "@backend-url{'*/backend/account/setDefault'}";
 
     function confirmAction(message, onConfirm) {
         Weline.UI.dialog.confirm(message).then(function(confirmed) {
