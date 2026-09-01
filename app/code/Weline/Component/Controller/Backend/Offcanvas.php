@@ -29,6 +29,26 @@ class Offcanvas extends BackendPageController
         } else {
             $this->layoutType = 'default.blank';
         }
+        // 信息提示页只展示结果卡片，不显示 blank 布局回退出来的模块/站点大标题。
+        $this->suppressPageChromeForResult();
+    }
+
+    /**
+     * 隐藏 blank 布局页面大标题与系统消息区（结果卡本身已含文案）。
+     */
+    private function suppressPageChromeForResult(): void
+    {
+        $pageTitle = (string)__('操作提示');
+        $this->assign('title', $pageTitle);
+        $meta = $this->getTemplate()->getData('meta');
+        $meta = is_array($meta) ? $meta : [];
+        $meta['showPageHeader'] = false;
+        $meta['showMessages'] = false;
+        $meta['title'] = $pageTitle;
+        $meta['controller_title'] = $pageTitle;
+        $this->assign('meta', $meta);
+        $this->assign('layoutShowPageHeader', false);
+        $this->assign('layoutShowMessages', false);
     }
 
     /**
