@@ -242,7 +242,7 @@
     color: rgba(17, 24, 39, 0.72);
 }
 
-.account-w-button {
+.account-btn {
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -258,14 +258,48 @@
     white-space: nowrap;
 }
 
+.account-btn:visited,
+.account-btn:hover,
+.account-btn:focus {
+    color: #111827;
+    text-decoration: none;
+}
+
 .account-btn--secondary {
     border: 1px solid #d6dde8;
     background: #ffffff;
+    color: #111827;
 }
 
 .account-btn--danger {
     background: #ef4444;
     color: #ffffff;
+}
+
+.account-btn--danger:visited,
+.account-btn--danger:hover,
+.account-btn--danger:focus {
+    color: #ffffff;
+}
+
+.twofa-app-card .account-btn,
+.twofa-app-card .account-btn--secondary {
+    flex: 0 0 auto;
+    border: 1px solid rgba(17, 24, 39, 0.14);
+    background: #111827;
+    color: #ffffff;
+    box-shadow: 0 8px 18px rgba(17, 24, 39, 0.16);
+}
+
+.twofa-app-card .account-btn:visited,
+.twofa-app-card .account-btn:hover,
+.twofa-app-card .account-btn:focus,
+.twofa-app-card .account-btn--secondary:visited,
+.twofa-app-card .account-btn--secondary:hover,
+.twofa-app-card .account-btn--secondary:focus {
+    background: #0b1220;
+    color: #ffffff;
+    text-decoration: none;
 }
 
 .account-btn[disabled] {
