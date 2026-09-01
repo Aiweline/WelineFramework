@@ -10,7 +10,6 @@ use Weline\Framework\Manager\ObjectManager;
 
 $platform = $this->getData('platform') ?? null;
 $account = $this->getData('account') ?? ObjectManager::getInstance(PlatformAccount::class);
-$backendBase = $this->getBackendUrl('generativeengineoptimization/backend/platform');
 ?>
 <div class="row">
     <div class="col-12">
@@ -18,8 +17,8 @@ $backendBase = $this->getBackendUrl('generativeengineoptimization/backend/platfo
             <h4 class="mb-sm-0"><?= $account->getId() ? __('编辑账户') : __('添加账户') ?></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="<?= $this->getBackendUrl() ?>"><?= __('首页') ?></a></li>
-                    <li class="breadcrumb-item"><a href="<?= $backendBase ?>"><?= __('平台管理') ?></a></li>
+                    <li class="breadcrumb-item"><a href="@backend-url{'/'}"><?= __('首页') ?></a></li>
+                    <li class="breadcrumb-item"><a href="@backend-url{'generativeengineoptimization/backend/platform'}"><?= __('平台管理') ?></a></li>
                     <li class="breadcrumb-item active"><?= __('编辑账户') ?></li>
                 </ol>
             </div>
@@ -38,7 +37,7 @@ $backendBase = $this->getBackendUrl('generativeengineoptimization/backend/platfo
                 <h5 class="card-title mb-0"><?= $account->getId() ? __('编辑账户') : __('添加账户') ?></h5>
             </div>
             <div class="card-body">
-                <form method="post" action="<?= $backendBase ?>/accountSave">
+                <form method="post" action="@backend-url{'generativeengineoptimization/backend/platform'}/accountSave">
                     <input type="hidden" name="id" value="<?= $account->getId() ?>">
                     <input type="hidden" name="platform_id" value="<?= $platform ? $platform->getId() : 0 ?>">
                     
@@ -83,7 +82,7 @@ $backendBase = $this->getBackendUrl('generativeengineoptimization/backend/platfo
                     
                     <div class="mb-3">
                         <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
-                        <a href="<?= $backendBase ?>/account?platform_id=<?= $platform ? $platform->getId() : 0 ?>" class="btn btn-secondary"><?= __('返回') ?></a>
+                        <a href="@backend-url{'generativeengineoptimization/backend/platform'}/account?platform_id=<?= $platform ? $platform->getId() : 0 ?>" class="btn btn-secondary"><?= __('返回') ?></a>
                     </div>
                 </form>
             </div>

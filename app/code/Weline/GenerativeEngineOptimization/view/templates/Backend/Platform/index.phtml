@@ -7,7 +7,7 @@
 <div class="content-header">
     <h1><?= __('平台管理') ?></h1>
     <div class="action-bar">
-        <a href="<?= $this->getUrl('generativeengineoptimization/backend/platform/edit') ?>" class="btn btn-primary">
+        <a href="@url{'generativeengineoptimization/backend/platform/edit'}" class="btn btn-primary">
             <i class="mdi mdi-plus"></i> <?= __('添加平台') ?>
         </a>
     </div>
@@ -47,10 +47,10 @@
                             <?php endif; ?>
                         </td>
                         <td>
-                            <a href="<?= $this->getUrl('generativeengineoptimization/backend/platform/edit', ['id' => $platform['id']]) ?>" class="btn btn-sm btn-primary">
+                            <a href="@url{'generativeengineoptimization/backend/platform/edit'|['id' => $platform['id']]}" class="btn btn-sm btn-primary">
                                 <i class="mdi mdi-pencil"></i> <?= __('编辑') ?>
                             </a>
-                            <a href="<?= $this->getUrl('generativeengineoptimization/backend/platform/account', ['platform_id' => $platform['id']]) ?>" class="btn btn-sm btn-info">
+                            <a href="@url{'generativeengineoptimization/backend/platform/account'|['platform_id' => $platform['id']]}" class="btn btn-sm btn-info">
                                 <i class="mdi mdi-account"></i> <?= __('账户') ?>
                             </a>
                         </td>

@@ -74,7 +74,7 @@ $isEdit = $platform->getId() > 0;
             <button type="submit" class="btn btn-primary">
                 <i class="mdi mdi-content-save"></i> <?= __('保存') ?>
             </button>
-            <a href="<?= $this->getUrl('generativeengineoptimization/backend/platform') ?>" class="btn btn-secondary">
+            <a href="@url{'generativeengineoptimization/backend/platform'}" class="btn btn-secondary">
                 <?= __('取消') ?>
             </a>
         </div>
@@ -91,7 +91,7 @@ document.getElementById('platform-form').addEventListener('submit', function(e) 
     
     const formData = new FormData(this);
     
-    var url = '<?= $this->getUrl('generativeengineoptimization/backend/platform/save') ?>';
+    var url = '@url{'generativeengineoptimization/backend/platform/save'}';
     var opts = { method: 'POST', body: formData };
     window.Weline.Api.request(url, opts)
     .then(function(res) {
@@ -105,11 +105,11 @@ document.getElementById('platform-form').addEventListener('submit', function(e) 
                     timer: 2000,
                     showConfirmButton: false
                 }).then(() => {
-                    window.location.href = '<?= $this->getUrl('generativeengineoptimization/backend/platform') ?>';
+                    window.location.href = '@url{'generativeengineoptimization/backend/platform'}';
                 });
             } else {
                 console.log('<?= __('保存成功') ?>');
-                window.location.href = '<?= $this->getUrl('generativeengineoptimization/backend/platform') ?>';
+                window.location.href = '@url{'generativeengineoptimization/backend/platform'}';
             }
         } else {
             if (typeof Swal !== 'undefined') {
