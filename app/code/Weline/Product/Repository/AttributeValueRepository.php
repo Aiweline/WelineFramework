@@ -264,6 +264,53 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
     }
 
     /**
+     * Find product/offer entity ids that already hold an exact attribute value
+     * (Website store overlay by default). Used for URL Handle uniqueness checks.
+     *
+     * @return list<int>
+     */
+    public function findEntityIdsByAttributeValue(
+        int $websiteId,
+        string $entityType,
+        string $attributeCode,
+        string $value,
+        int $storeId = 0,
+    ): array {
+        $this->assertWebsite($websiteId);
+        $this->assertStoreId($storeId);
+        $entityType = trim($entityType);
+        $attributeCode = trim($attributeCode);
+        $value = trim($value);
+        if ($entityType === '' || $attributeCode === '' || $value === '') {
+            return [];
+        }
+
+        $raw = $this->newModel($websiteId)
+            ->clear()
+            ->where(AttributeValue::schema_fields_ENTITY_TYPE, $entityType)
+            ->where(AttributeValue::schema_fields_ATTRIBUTE_CODE, $attributeCode)
+            ->where(AttributeValue::schema_fields_STORE_ID, $storeId)
+            ->where(AttributeValue::schema_fields_VALUE_TEXT, $value)
+            ->select()
+            ->fetchArray();
+
+        $ids = [];
+        foreach ($raw as $item) {
+            $cleared = (string)($item['scope_state'] ?? '') === 'cleared'
+                || (int)($item[AttributeValue::schema_fields_CLEARED] ?? 0) === 1;
+            if ($cleared) {
+                continue;
+            }
+            $entityId = (int)($item[AttributeValue::schema_fields_ENTITY_ID] ?? 0);
+            if ($entityId > 0) {
+                $ids[$entityId] = $entityId;
+            }
+        }
+
+        return array_values($ids);
+    }
+
+    /**
      * Return explicit Website/Store rows without applying fallback.
      *
      * @param list<int> $entityIds
@@ -429,8 +476,30 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
             'select', 'multiselect', 'json' => $this->decodeJsonValue(
                 $row['value_json'] ?? $row[AttributeValue::schema_fields_VALUE_TEXT] ?? null,
             ),
-            default => $row['value_string'] ?? $row[AttributeValue::schema_fields_VALUE_TEXT] ?? null,
+            // Legacy rows may keep value_type=string while value_text holds JSON
+            // (typed columns were not in AttributeValue schema_fields and were dropped on save).
+            default => $this->decodeLegacyStringValue($row),
         };
+    }
+
+    /** @param array<string, mixed> $row */
+    private function decodeLegacyStringValue(array $row): mixed
+    {
+        $string = $row['value_string'] ?? null;
+        $text = $row[AttributeValue::schema_fields_VALUE_TEXT] ?? null;
+        $raw = (is_string($string) && $string !== '') ? $string : $text;
+        if (!is_string($raw) || $raw === '') {
+            return $raw;
+        }
+        $trim = ltrim($raw);
+        if ($trim === '' || ($trim[0] !== '{' && $trim[0] !== '[' && $trim[0] !== '"')) {
+            return $raw;
+        }
+        try {
+            return json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
+        } catch (\JsonException) {
+            return $raw;
+        }
     }
 
     private function decodeJsonValue(mixed $value): mixed

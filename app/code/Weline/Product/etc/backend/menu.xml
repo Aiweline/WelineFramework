@@ -4,23 +4,29 @@
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <menu source="Weline_Product::commerce:catalog:products" name="commerce_catalog_products"
           title="商品" action="weline_product/backend/catalog/products"
-          parent="Weline_Backend::commerce:catalog:group" icon="box" order="10"/>
-    <menu source="Weline_Product::commerce:catalog:offers" name="commerce_catalog_offers"
-          title="销售规格（高级维护）" action="weline_product/backend/catalog/offers"
-          parent="Weline_Backend::commerce:catalog:group" icon="tag" order="20"/>
-    <menu source="Weline_Product::commerce:catalog:sku-registry" name="commerce_catalog_sku_registry"
-          title="SKU 身份（高级维护）" action="weline_product/backend/catalog/skuregistry"
-          parent="Weline_Backend::commerce:catalog:group" icon="code" order="30"/>
+          parent="Weline_Backend::commerce:catalog:product-group" icon="box" order="10"/>
+    <menu source="Weline_Product::commerce:catalog:brands" name="commerce_catalog_brands"
+          title="品牌" action="weline_product/backend/catalog/brands"
+          parent="Weline_Backend::commerce:catalog:product-group" icon="award" order="15"/>
+    <menu source="Weline_Product::commerce:catalog:suppliers" name="commerce_catalog_suppliers"
+          title="供应商" action="weline_product/backend/catalog/suppliers"
+          parent="Weline_Backend::commerce:catalog:product-group" icon="truck" order="16"/>
     <menu source="Weline_Product::commerce:catalog:media" name="commerce_catalog_media"
           title="商品媒体" action="weline_product/backend/catalog/media"
-          parent="Weline_Backend::commerce:catalog:group" icon="image" order="50"/>
-    <menu source="Weline_Product::commerce:catalog:store-copy" name="commerce_catalog_store_copy"
-          title="网站迁移与复制" action="weline_product/backend/catalog/storecopy"
-          parent="Weline_Backend::commerce:catalog:group" icon="copy" order="60"/>
-    <menu source="Weline_Product::commerce:catalog:shards" name="commerce_catalog_shards"
-          title="商品分片" action="weline_product/backend/catalog/shards"
-          parent="Weline_Backend::commerce:catalog:group" icon="settings" order="70"/>
+          parent="Weline_Backend::commerce:catalog:product-group" icon="image" order="20"/>
     <menu source="Weline_Product::commerce:catalog:site-content" name="commerce_catalog_site_content"
           title="站点文案" action="weline_product/backend/catalog/sitecontent"
-          parent="Weline_Backend::commerce:catalog:group" icon="language" order="55"/>
+          parent="Weline_Backend::commerce:catalog:product-group" icon="file" order="30"/>
+    <menu source="Weline_Product::commerce:catalog:offers" name="commerce_catalog_offers"
+          title="销售规格" action="weline_product/backend/catalog/offers"
+          parent="Weline_Backend::commerce:catalog:advanced-group" icon="tag" order="10"/>
+    <menu source="Weline_Product::commerce:catalog:sku-registry" name="commerce_catalog_sku_registry"
+          title="SKU 身份" action="weline_product/backend/catalog/skuregistry"
+          parent="Weline_Backend::commerce:catalog:advanced-group" icon="code" order="20"/>
+    <menu source="Weline_Product::commerce:catalog:store-copy" name="commerce_catalog_store_copy"
+          title="网站迁移" action="weline_product/backend/catalog/storecopy"
+          parent="Weline_Backend::commerce:catalog:advanced-group" icon="copy" order="30"/>
+    <menu source="Weline_Product::commerce:catalog:shards" name="commerce_catalog_shards"
+          title="商品分片" action="weline_product/backend/catalog/shards"
+          parent="Weline_Backend::commerce:catalog:advanced-group" icon="database" order="40"/>
 </menus>

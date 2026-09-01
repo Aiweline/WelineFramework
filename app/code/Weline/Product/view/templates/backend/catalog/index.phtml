@@ -10,6 +10,7 @@
  * @var array<string,mixed> $filters
  * @var array<string,mixed> $creation_context
  * @var string $product_admin_state_json
+ * @var list<array{category_id:int,name:string,path:string,depth:int}> $category_bulk_options
  */
 $escape = static fn(mixed $value): string => htmlspecialchars(
     is_scalar($value) || $value === null
@@ -22,41 +23,217 @@ $productTypes = is_array($creation_context['product_types'] ?? null)
     ? $creation_context['product_types']
     : [];
 $stores = is_array($creation_context['stores'] ?? null) ? $creation_context['stores'] : [];
+$attributeCatalog = is_array($creation_context['attribute_catalog'] ?? null)
+    ? $creation_context['attribute_catalog']
+    : [];
+$catalogSets = array_is_list($attributeCatalog)
+    ? $attributeCatalog
+    : ($attributeCatalog['sets'] ?? $attributeCatalog['attribute_sets'] ?? []);
+$catalogSets = is_array($catalogSets) ? $catalogSets : [];
+$createCategories = is_array($creation_context['categories'] ?? null)
+    ? $creation_context['categories']
+    : [];
+$productCreateCategoryOptions = [];
+foreach ($createCategories as $category) {
+    if (!is_array($category)) {
+        continue;
+    }
+    $categoryId = (int)($category['category_id'] ?? $category['id'] ?? 0);
+    if ($categoryId <= 0) {
+        continue;
+    }
+    $productCreateCategoryOptions[] = [
+        'value' => (string)$categoryId,
+        'label' => (string)($category['name'] ?? ('#' . $categoryId)),
+        'meta' => (string)($category['path'] ?? ''),
+        'parent_id' => (string)max(0, (int)($category['parent_id'] ?? $category['pid'] ?? 0)),
+    ];
+}
+$productCreateCategoryOptionsJson = json_encode(
+    $productCreateCategoryOptions,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+) ?: '[]';
+$productCreateCategoryValue = '';
+$productCreateCategoryEmpty = (string)__('未选择分类');
+$productCreateCategoryPlaceholder = (string)__('搜索分类名称或路径');
+$productCreateCategoryWebsiteId = (int)$website_id;
+$createBrands = is_array($creation_context['brands'] ?? null)
+    ? $creation_context['brands']
+    : [];
+$createSuppliers = is_array($creation_context['suppliers'] ?? null)
+    ? $creation_context['suppliers']
+    : [];
+$productCreateBrandOptions = [];
+foreach ($createBrands as $brandOption) {
+    if (!is_array($brandOption)) {
+        continue;
+    }
+    $brandId = (int)($brandOption['brand_id'] ?? 0);
+    if ($brandId <= 0) {
+        continue;
+    }
+    $productCreateBrandOptions[] = [
+        'value' => (string)$brandId,
+        'label' => (string)($brandOption['name'] ?? ('#' . $brandId)),
+        'meta' => (string)($brandOption['code'] ?? ''),
+        'image' => (string)($brandOption['logo_url'] ?? ''),
+    ];
+}
+$productCreateBrandOptionsJson = json_encode(
+    $productCreateBrandOptions,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+) ?: '[]';
+$productCreateSupplierOptions = [];
+$productCreateSupplierBrandMap = [];
+foreach ($createSuppliers as $supplierOption) {
+    if (!is_array($supplierOption)) {
+        continue;
+    }
+    $supplierId = (int)($supplierOption['supplier_id'] ?? 0);
+    if ($supplierId <= 0) {
+        continue;
+    }
+    $linkedBrandIds = [];
+    foreach ((array)($supplierOption['brand_ids'] ?? []) as $linkedBrandId) {
+        $linkedBrandId = (int)$linkedBrandId;
+        if ($linkedBrandId > 0) {
+            $linkedBrandIds[] = (string)$linkedBrandId;
+        }
+    }
+    $productCreateSupplierBrandMap[(string)$supplierId] = $linkedBrandIds;
+    $productCreateSupplierOptions[] = [
+        'value' => (string)$supplierId,
+        'label' => (string)($supplierOption['name'] ?? ('#' . $supplierId)),
+        'meta' => (string)($supplierOption['code'] ?? ''),
+        'image' => (string)($supplierOption['image_url'] ?? ''),
+        'default_currency' => (string)($supplierOption['default_currency'] ?? ''),
+        'store_url' => (string)($supplierOption['store_url'] ?? ''),
+        'brand_ids' => $linkedBrandIds,
+    ];
+}
+$productCreateSupplierOptionsJson = json_encode(
+    $productCreateSupplierOptions,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+) ?: '[]';
+$productCreateSupplierBrandMapJson = json_encode(
+    $productCreateSupplierBrandMap,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+) ?: '{}';
+$productCreateBrandValue = '';
+$productCreateSupplierValue = '';
+$productCreateBrandEmpty = (string)__('未指定品牌');
+$productCreateSupplierEmpty = (string)__('未指定供应商');
+$productCreateBrandPlaceholder = (string)__('搜索品牌名称或编码');
+$productCreateSupplierPlaceholder = (string)__('搜索供应商名称或编码');
+if ($productTypes !== []) {
+    usort(
+        $productTypes,
+        static function (array $left, array $right): int {
+            $rank = static function (array $row): int {
+                return (string)($row['code'] ?? '') === 'configurable' ? 0 : 1;
+            };
+            $leftRank = $rank($left);
+            $rightRank = $rank($right);
+            if ($leftRank !== $rightRank) {
+                return $leftRank <=> $rightRank;
+            }
+
+            return (string)($left['code'] ?? '') <=> (string)($right['code'] ?? '');
+        },
+    );
+}
+$defaultAttributeSetId = '';
+$defaultAttributeSetCode = '';
+$defaultAttributeSetLabel = '';
+if ($catalogSets !== []) {
+    $firstSet = reset($catalogSets);
+    if (is_array($firstSet)) {
+        $defaultAttributeSetId = (string)(
+            $firstSet['attribute_set_id'] ?? $firstSet['set_id'] ?? $firstSet['id'] ?? ''
+        );
+        $defaultAttributeSetCode = (string)($firstSet['code'] ?? '');
+        $defaultAttributeSetLabel = (string)(
+            $firstSet['label'] ?? $firstSet['name'] ?? $defaultAttributeSetCode
+        );
+    }
+}
+$catalogTableRows = [];
+$editLabel = (string)__('编辑');
+$editWebsiteId = (int)$website_id;
+if ($section === 'products') {
+    foreach ($rows as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $prices = is_array($row['prices'] ?? null) ? $row['prices'] : [];
+        $price = $prices[0] ?? null;
+        $skus = is_array($row['skus'] ?? null) ? $row['skus'] : [];
+        $mainMedia = is_array($row['main_media'] ?? null) ? $row['main_media'] : [];
+        $priceDisplay = (is_array($price) && !($price['cleared'] ?? false))
+            ? trim((string)($price['currency'] ?? '') . ' '
+                . number_format(((int)($price['amount_minor'] ?? 0)) / 100, 2))
+            : (string)__('未配置');
+        $catalogTableRows[] = [
+            'website_id' => (int)$website_id,
+            'product_id' => (int)($row['product_id'] ?? 0),
+            'product_id_label' => '#' . (int)($row['product_id'] ?? 0),
+            'global_product_uuid' => (string)($row['global_product_uuid'] ?? ''),
+            'main_image' => trim((string)($mainMedia['display_url'] ?? '')),
+            'name' => (string)($row['name'] ?? __('未命名草稿')),
+            'product_code' => (string)($row['product_code'] ?? ''),
+            'owner_website_id' => (int)($row['owner_website_id'] ?? 0),
+            'product_type' => (string)($row['product_type'] ?? ''),
+            'status' => (string)($row['status'] ?? ''),
+            'sku' => (string)($skus[0] ?? '-'),
+            'offer_count' => (int)($row['offer_count'] ?? 0),
+            'price_display' => $priceDisplay,
+            'store_count' => count($row['selected_store_ids'] ?? []),
+            'updated_at' => (string)($row['updated_at'] ?? '-'),
+            'identity_version' => (int)($row['identity_version'] ?? 0),
+            'local_version' => (int)($row['local_version'] ?? 0),
+        ];
+    }
+    $editLabel = (string)__('编辑');
+    $editWebsiteId = (int)$website_id;
+}
 ?>
-<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260825-v1">
-<div class="w-container w-product-admin"
+<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260829-basics-grid">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-eav-manager.css)">
+<div class="w-product-admin"
      data-product-admin="<?= $section === 'products' ? 'catalog' : 'legacy' ?>"
      data-testid="product-management-<?= $escape($section) ?>">
-    <header class="w-product-admin__header">
-        <div>
-            <p class="w-product-admin__eyebrow"><lang>Catalog workspace</lang></p>
-            <h1 class="w-product-admin__title"><?= $escape($title) ?></h1>
-            <p class="w-product-admin__subtitle">
-                <?php if ($section === 'products'): ?>
-                    <lang>商品主体、销售规格、价格、Store 与发布诊断集中管理</lang>
-                <?php else: ?>
-                    <lang>高级维护入口；日常运营请从「万能产品」进入</lang>
-                <?php endif; ?>
-            </p>
-        </div>
-        <form method="get" class="w-product-admin__website-form" data-testid="product-website-filter-form">
-            <label class="w-visually-hidden" for="product-website-id"><lang>Website</lang></label>
-            <div class="w-product-admin__website-select">
-                <w:websites:website:select
-                    id="product-website-id"
-                    name="website_id"
-                    value="productWebsiteSelectValue"
-                    display="productWebsiteSelectDisplay"
-                    options="websiteOptionsJson"
-                    multiple="false"
-                    allow-empty="false"
-                    clearable="false"
-                    placeholder="@lang(选择 Website)"
-                />
+    <div class="w-card w-product-admin__hero">
+        <div class="w-card__body w-cluster" data-align="start" data-justify="between" data-wrap="true">
+            <div class="w-stack" data-gap="sm">
+                <p class="w-product-admin__eyebrow"><lang>Catalog workspace</lang></p>
+                <h1 class="w-card__title w-product-admin__title"><?= $escape($title) ?></h1>
+                <p class="w-text w-product-admin__subtitle" data-tone="muted">
+                    <?php if ($section === 'products'): ?>
+                        <lang>商品主体、销售规格、价格、Store 与发布诊断集中管理</lang>
+                    <?php else: ?>
+                        <lang>高级维护入口；日常运营请从「万能产品」进入</lang>
+                    <?php endif; ?>
+                </p>
             </div>
-            <button class="w-button" type="submit" data-tone="neutral"><lang>切换</lang></button>
-        </form>
-    </header>
+            <form method="get" id="product-website-filter-form" class="w-product-admin__website-form w-cluster" data-testid="product-website-filter-form">
+                <label class="w-visually-hidden" for="product-website-id"><lang>Website</lang></label>
+                <div class="w-product-admin__website-select">
+                    <w:websites:website:select
+                        id="product-website-id"
+                        name="website_id"
+                        value="productWebsiteSelectValue"
+                        display="productWebsiteSelectDisplay"
+                        options="websiteOptionsJson"
+                        multiple="false"
+                        allow-empty="false"
+                        clearable="false"
+                        placeholder="@lang(选择 Website)"
+                        on-change="var f=document.getElementById('product-website-filter-form');if(f){f.requestSubmit?f.requestSubmit():f.submit();}"
+                    />
+                </div>
+            </form>
+        </div>
+    </div>
 
     <?php if ($error !== ''): ?>
         <div class="w-alert" data-tone="danger" role="alert"><?= $escape($error) ?></div>
@@ -65,96 +242,602 @@ $stores = is_array($creation_context['stores'] ?? null) ? $creation_context['sto
     <?php if ($section === 'products'): ?>
         <script type="application/json" id="product-admin-state" data-no-extract="true"><?= $product_admin_state_json ?></script>
 
-        <div class="w-product-admin__stats" aria-label="@lang(商品概览)">
-            <div class="w-product-stat">
-                <span class="w-product-stat__value"><?= count($rows) ?></span>
-                <span class="w-product-stat__label"><lang>当前筛选商品</lang></span>
+        <div class="w-stat-tiles" aria-label="@lang(商品概览)" style="--w-stat-tile-min:10rem;--w-gap:var(--weline-space-5);">
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <div class="w-text" data-tone="muted" data-size="sm"><lang>当前筛选商品</lang></div>
+                    <div class="w-product-admin__stat-value"><?= count($rows) ?></div>
+                </div>
             </div>
-            <div class="w-product-stat">
-                <span class="w-product-stat__value"><?= count($productTypes) ?></span>
-                <span class="w-product-stat__label"><lang>可用产品类型</lang></span>
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <div class="w-text" data-tone="muted" data-size="sm"><lang>可用产品类型</lang></div>
+                    <div class="w-product-admin__stat-value"><?= count($productTypes) ?></div>
+                </div>
             </div>
-            <div class="w-product-stat">
-                <span class="w-product-stat__value"><?= count($stores) ?></span>
-                <span class="w-product-stat__label"><lang>活动 Store</lang></span>
+            <div class="w-card" data-w-height="full">
+                <div class="w-card__body">
+                    <div class="w-text" data-tone="muted" data-size="sm"><lang>活动 Store</lang></div>
+                    <div class="w-product-admin__stat-value"><?= count($stores) ?></div>
+                </div>
             </div>
         </div>
 
-        <div class="w-product-admin__grid">
-            <aside class="w-card w-product-create" aria-labelledby="product-create-title">
-                <div class="w-card__header">
-                    <div>
+        <div class="w-product-admin__grid" data-product-admin-grid data-testid="product-admin-grid">
+            <aside class="w-card w-product-create" data-product-create-panel aria-labelledby="product-create-title">
+                <div class="w-card__header w-product-panel__header w-cluster" data-align="center" data-justify="between" data-wrap="true">
+                    <div class="w-stack" data-gap="xs">
                         <span class="w-product-admin__step">01</span>
-                        <h2 id="product-create-title"><lang>新建商品草稿</lang></h2>
+                        <h2 id="product-create-title" class="w-card__title"><lang>新建商品草稿</lang></h2>
                     </div>
+                    <button class="w-button" type="button" data-size="sm" data-tone="primary"
+                            data-product-panel-focus="create" data-testid="product-create-panel-focus"
+                            aria-pressed="false">
+                        <lang>新建</lang>
+                    </button>
                 </div>
                 <div class="w-card__body">
                     <form id="product-create-form" data-testid="product-create-form" novalidate>
-                        <div class="w-field">
-                            <label class="w-field__label" for="product-create-type"><lang>产品类型</lang></label>
-                            <select class="w-select" id="product-create-type" name="product_type" required>
-                                <?php foreach ($productTypes as $type): ?>
-                                    <option value="<?= $escape($type['code'] ?? '') ?>"
-                                            data-supports-variants="<?= !empty($type['capabilities']['variants']) ? '1' : '0' ?>">
-                                        <?= $escape($type['label'] ?? $type['code'] ?? '') ?>
-                                    </option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="w-field">
-                            <label class="w-field__label" for="product-create-name"><lang>名称</lang></label>
-                            <input class="w-input" id="product-create-name" name="name" maxlength="255" required
-                                   placeholder="@lang(例如：轻量防水冲锋衣)">
-                        </div>
-                        <div class="w-field">
-                            <label class="w-field__label" for="product-create-sku"><lang>首个 SKU / SKU 前缀</lang></label>
-                            <input class="w-input" id="product-create-sku" name="sku" maxlength="128" required
-                                   placeholder="JACKET-001">
-                            <p class="w-field__help"><lang>普通商品会自动创建默认 Offer；多规格商品用作矩阵 SKU 前缀。</lang></p>
-                        </div>
-                        <div class="w-field" id="product-create-axes-field" hidden>
-                            <label class="w-field__label" for="product-create-axes"><lang>规格轴 JSON</lang></label>
-                            <textarea class="w-textarea w-code-input" id="product-create-axes" name="axes_json" rows="6">[
-  {"code":"color","label":"颜色","options":["red","blue"]},
-  {"code":"size","label":"尺码","options":["S","M"]}
-]</textarea>
-                        </div>
-                        <fieldset class="w-product-store-picker">
-                            <legend><lang>发布到 Store</lang></legend>
-                            <p><lang>默认选中当前 Website 下全部活动 Store，可取消个别 Store。</lang></p>
-                            <?php if ($stores === []): ?>
-                                <div class="w-alert" data-tone="warning"><lang>当前 Website 没有活动 Store。</lang></div>
-                            <?php else: ?>
-                                <div class="w-product-store-picker__items">
-                                    <?php foreach ($stores as $store): ?>
-                                        <label class="w-product-check">
-                                            <input type="checkbox" name="store_ids[]" value="<?= $escape($store['store_id'] ?? '') ?>" checked>
-                                            <span>
-                                                <strong><?= $escape($store['name'] ?? '') ?></strong>
-                                                <small><?= $escape($store['code'] ?? '') ?> · ID <?= $escape($store['store_id'] ?? '') ?></small>
-                                            </span>
-                                        </label>
-                                    <?php endforeach; ?>
+                        <div class="w-product-create__wizard" id="product-create-wizard" data-testid="product-create-wizard">
+                            <details class="w-product-create__step" data-create-step="basics" open>
+                                <summary class="w-product-create__step-summary">
+                                    <span class="w-product-create__step-index">1</span>
+                                    <span class="w-product-create__step-title"><lang>基础信息</lang></span>
+                                </summary>
+                                                                <div class="w-product-create__step-body w-stack" data-gap="md">
+                                    <p class="w-field__help"><lang>以下为商品基础资料（身份、交易、物流、内容、SEO、分类、媒体），不是属性集里的扩展属性。</lang></p>
+
+                                                                        <section class="w-product-create__basics-block w-stack" data-gap="sm" data-basics-section="identity">
+                                        <h3 class="w-product-create__basics-title"><lang>身份资料</lang></h3>
+                                        <div class="w-product-create__basics-grid">
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-type"><lang>产品类型</lang></label>
+                                                <select class="w-select" id="product-create-type" name="product_type"
+                                                        scope="product_create_draft" required>
+                                                    <option value="" selected disabled hidden><lang>请选择产品类型</lang></option>
+                                                    <?php foreach ($productTypes as $type): ?>
+                                                        <option value="<?= $escape($type['code'] ?? '') ?>"
+                                                                data-supports-variants="<?= !empty($type['capabilities']['variants']) ? '1' : '0' ?>">
+                                                            <?= $escape($type['label'] ?? $type['code'] ?? '') ?>
+                                                        </option>
+                                                    <?php endforeach; ?>
+                                                </select>
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-status"><lang>创建后状态</lang></label>
+                                                <select class="w-select" id="product-create-status" name="status"
+                                                        scope="product_create_draft">
+                                                    <option value="draft" selected><lang>草稿</lang></option>
+                                                    <option value="published"><lang>创建后立即发布上架</lang></option>
+                                                </select>
+                                            </div>
+                                            <div class="w-field" data-span="full">
+                                                <label class="w-field__label" for="product-create-name"><lang>商品名称</lang></label>
+                                                <input class="w-input" id="product-create-name" name="name" maxlength="255" required
+                                                       scope="product_create_draft"
+                                                       placeholder="@lang(例如：轻量防水冲锋衣)">
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-sku"><lang>SKU / SKU 前缀</lang></label>
+                                                <input class="w-input" id="product-create-sku" name="sku" maxlength="128" required
+                                                       scope="product_create_draft"
+                                                       placeholder="JACKET-001">
+                                                <p class="w-field__help"><lang>普通商品创建默认 Offer；多规格用作矩阵 SKU 前缀。</lang></p>
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-spu"><lang>SPU</lang></label>
+                                                <input class="w-input" id="product-create-spu" name="spu" maxlength="128"
+                                                       scope="product_create_draft"
+                                                       placeholder="@lang(款号 / 父货号)">
+                                            </div>
+                                                <div class="w-field">
+                                                    <label class="w-field__label" for="product-create-supplier"><lang>供应商</lang></label>
+                                                    <w:product:catalog:select
+                                                        id="product-create-supplier"
+                                                        name="supplier_id"
+                                                        entity="supplier"
+                                                        multiple="false"
+                                                        allow-empty="true"
+                                                        value="productCreateSupplierValue"
+                                                        options="productCreateSupplierOptionsJson"
+                                                        empty-label="productCreateSupplierEmpty"
+                                                        placeholder="productCreateSupplierPlaceholder"
+                                                        scope="product_create_draft"
+                                                        on-change="if(window.WelineProductAdmin&&typeof window.WelineProductAdmin.syncCreateSupplierBrandCascade==='function'){window.WelineProductAdmin.syncCreateSupplierBrandCascade();}"
+                                                    />
+                                                    <p class="w-field__help">
+                                                        <lang>先选供应商；品牌列表将按该供应商已关联品牌过滤。</lang>
+                                                        <a href="@backend-url('*/backend/catalog/suppliers')?website_id=<?= $escape($website_id) ?>" target="_blank" rel="noopener">
+                                                            <lang>管理供应商</lang>
+                                                        </a>
+                                                    </p>
+                                                </div>
+                                                <div class="w-field">
+                                                    <label class="w-field__label" for="product-create-brand"><lang>品牌</lang></label>
+                                                    <script type="application/json" id="product-create-supplier-brand-map" data-no-extract="true"><?= $productCreateSupplierBrandMapJson ?></script>
+                                                    <w:product:catalog:select
+                                                        id="product-create-brand"
+                                                        name="brand_id"
+                                                        entity="brand"
+                                                        multiple="false"
+                                                        allow-empty="true"
+                                                        value="productCreateBrandValue"
+                                                        options="productCreateBrandOptionsJson"
+                                                        empty-label="productCreateBrandEmpty"
+                                                        placeholder="productCreateBrandPlaceholder"
+                                                        scope="product_create_draft"
+                                                    />
+                                                    <p class="w-field__help">
+                                                        <lang>从当前供应商关联的品牌中选择；可在「品牌管理」中维护挂钩。</lang>
+                                                        <a href="@backend-url('*/backend/catalog/brands')?website_id=<?= $escape($website_id) ?>" target="_blank" rel="noopener">
+                                                            <lang>管理品牌</lang>
+                                                        </a>
+                                                    </p>
+                                                </div>
+                                                <div class="w-stack" data-gap="sm" id="product-create-supplier-offer"
+                                                     data-testid="product-create-supplier-offer" hidden>
+                                                    <p class="w-text" data-tone="muted" data-size="sm">
+                                                        <lang>选填：该商品在供应商侧的链接与供货信息。</lang>
+                                                    </p>
+                                                    <div class="w-field">
+                                                        <label class="w-field__label" for="product-create-supplier-product-url">
+                                                            <lang>供应商产品地址</lang>
+                                                        </label>
+                                                        <input class="w-input" id="product-create-supplier-product-url"
+                                                               name="supplier_product_url" maxlength="512"
+                                                               scope="product_create_draft"
+                                                               placeholder="https://…">
+                                                    </div>
+                                                    <div class="w-cluster" data-gap="sm">
+                                                        <div class="w-field" style="flex:1;">
+                                                            <label class="w-field__label" for="product-create-supplier-sku">
+                                                                <lang>供应商货号</lang>
+                                                            </label>
+                                                            <input class="w-input" id="product-create-supplier-sku"
+                                                                   name="supplier_sku" maxlength="128"
+                                                                   scope="product_create_draft">
+                                                        </div>
+                                                        <div class="w-field" style="flex:1;">
+                                                            <label class="w-field__label" for="product-create-supplier-currency">
+                                                                <lang>供货币种</lang>
+                                                            </label>
+                                                            <input class="w-input" id="product-create-supplier-currency"
+                                                                   name="supplier_currency" maxlength="8"
+                                                                   scope="product_create_draft" placeholder="CNY">
+                                                        </div>
+                                                    </div>
+                                                    <div class="w-cluster" data-gap="sm">
+                                                        <div class="w-field" style="flex:1;">
+                                                            <label class="w-field__label" for="product-create-supplier-unit-price">
+                                                                <lang>供货价</lang>
+                                                            </label>
+                                                            <input class="w-input" id="product-create-supplier-unit-price"
+                                                                   name="supplier_unit_price" type="number" min="0" step="0.01"
+                                                                   scope="product_create_draft">
+                                                        </div>
+                                                        <div class="w-field" style="flex:1;">
+                                                            <label class="w-field__label" for="product-create-supplier-moq">
+                                                                <lang>起订量</lang>
+                                                            </label>
+                                                            <input class="w-input" id="product-create-supplier-moq"
+                                                                   name="supplier_moq" type="number" min="0" step="1"
+                                                                   scope="product_create_draft">
+                                                        </div>
+                                                        <div class="w-field" style="flex:1;">
+                                                            <label class="w-field__label" for="product-create-supplier-lead-time">
+                                                                <lang>交期(天)</lang>
+                                                            </label>
+                                                            <input class="w-input" id="product-create-supplier-lead-time"
+                                                                   name="supplier_lead_time_days" type="number" min="0" step="1"
+                                                                   scope="product_create_draft">
+                                                        </div>
+                                                    </div>
+                                                    <div class="w-field">
+                                                        <label class="w-field__label" for="product-create-supplier-notes">
+                                                            <lang>供货备注</lang>
+                                                        </label>
+                                                        <textarea class="w-input" id="product-create-supplier-notes"
+                                                                  name="supplier_notes" rows="2" maxlength="4000"
+                                                                  scope="product_create_draft"></textarea>
+                                                    </div>
+                                                </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-barcode"><lang>条码 / EAN</lang></label>
+                                                <input class="w-input" id="product-create-barcode" name="barcode" maxlength="64"
+                                                       scope="product_create_draft">
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-visibility"><lang>前台可见性</lang></label>
+                                                <select class="w-select" id="product-create-visibility" name="visibility"
+                                                        scope="product_create_draft">
+                                                    <option value="catalog_search" selected><lang>目录与搜索</lang></option>
+                                                    <option value="catalog"><lang>仅目录</lang></option>
+                                                    <option value="search"><lang>仅搜索</lang></option>
+                                                    <option value="hidden"><lang>不可见</lang></option>
+                                                </select>
+                                            </div>
+                                            <label class="w-product-create__basics-check" for="product-create-quote-only">
+                                                <input type="checkbox" id="product-create-quote-only" name="quote_only" value="1"
+                                                       scope="product_create_draft">
+                                                <span><lang>仅询价（不直接标价售卖）</lang></span>
+                                            </label>
+                                        </div>
+                                    </section>
+
+                                    <section class="w-product-create__basics-block w-stack" data-gap="sm" data-basics-section="commerce">
+                                        <h3 class="w-product-create__basics-title"><lang>交易与库存</lang></h3>
+                                        <div class="w-product-create__basics-grid" data-cols="4">
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-price"><lang>售价</lang></label>
+                                                <input class="w-input" id="product-create-price" name="price" type="number"
+                                                       min="0" step="0.01" scope="product_create_draft" placeholder="0.00">
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-cost"><lang>成本</lang></label>
+                                                <input class="w-input" id="product-create-cost" name="cost" type="number"
+                                                       min="0" step="0.01" scope="product_create_draft" placeholder="0.00">
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-currency"><lang>币种</lang></label>
+                                                <input class="w-input" id="product-create-currency" name="currency" maxlength="8"
+                                                       scope="product_create_draft" value="CNY">
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-stock"><lang>初始库存</lang></label>
+                                                <input class="w-input" id="product-create-stock" name="stock" type="number"
+                                                       min="0" step="1" scope="product_create_draft" placeholder="0">
+                                            </div>
+                                            <p class="w-field__help" data-span="full"><lang>售价写入默认 Offer；库存按已选 Store × Offer 写入现货量。</lang></p>
+                                        </div>
+                                    </section>
+
+                                    <section class="w-product-create__basics-block w-stack" data-gap="sm" data-basics-section="shipping">
+                                        <h3 class="w-product-create__basics-title"><lang>物流尺寸</lang></h3>
+                                        <div class="w-product-create__basics-grid" data-cols="4">
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-weight"><lang>重量 (kg)</lang></label>
+                                                <input class="w-input" id="product-create-weight" name="weight" type="number"
+                                                       min="0" step="0.001" scope="product_create_draft" placeholder="0">
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-length"><lang>长 (cm)</lang></label>
+                                                <input class="w-input" id="product-create-length" name="length" type="number"
+                                                       min="0" step="0.01" scope="product_create_draft" placeholder="0">
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-width"><lang>宽 (cm)</lang></label>
+                                                <input class="w-input" id="product-create-width" name="width" type="number"
+                                                       min="0" step="0.01" scope="product_create_draft" placeholder="0">
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-height"><lang>高 (cm)</lang></label>
+                                                <input class="w-input" id="product-create-height" name="height" type="number"
+                                                       min="0" step="0.01" scope="product_create_draft" placeholder="0">
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section class="w-product-create__basics-block w-stack" data-gap="sm" data-basics-section="content">
+                                        <h3 class="w-product-create__basics-title"><lang>内容文案</lang></h3>
+                                        <div class="w-product-create__basics-grid">
+                                            <div class="w-field" data-span="full">
+                                                <label class="w-field__label" for="product-create-short-description"><lang>短描述</lang></label>
+                                                <textarea class="w-input" id="product-create-short-description" name="short_description"
+                                                          rows="2" maxlength="2000" scope="product_create_draft"
+                                                          placeholder="@lang(列表/摘要展示用短文案)"></textarea>
+                                            </div>
+                                            <div class="w-field" data-span="full">
+                                                <label class="w-field__label" for="product-create-description"><lang>详情描述</lang></label>
+                                                <textarea class="w-input" id="product-create-description" name="description"
+                                                          rows="5" maxlength="20000" scope="product_create_draft"
+                                                          placeholder="@lang(商品详情正文)"></textarea>
+                                            </div>
+                                        </div>
+                                    </section>
+
+                                    <section class="w-product-create__basics-block w-stack" data-gap="sm" data-basics-section="seo">
+                                        <h3 class="w-product-create__basics-title"><lang>SEO / URL</lang></h3>
+                                        <div class="w-product-create__basics-grid">
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-slug"><lang>前台 URL Handle</lang></label>
+                                                <input class="w-input" id="product-create-slug" name="slug" maxlength="255"
+                                                       pattern="[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*"
+                                                       scope="product_create_draft" placeholder="hanfu-song-sku001"
+                                                       aria-describedby="product-create-slug-status">
+                                                <small id="product-create-slug-status" class="w-field__help"
+                                                       data-product-create-slug-status data-tone="muted" hidden></small>
+                                            </div>
+                                            <div class="w-field">
+                                                <label class="w-field__label" for="product-create-meta-name"><lang>SEO 标题</lang></label>
+                                                <input class="w-input" id="product-create-meta-name" name="meta_name" maxlength="255"
+                                                       scope="product_create_draft" placeholder="@lang(留空时前台可回退到商品名称)">
+                                            </div>
+                                            <div class="w-field" data-span="full">
+                                                <label class="w-field__label" for="product-create-meta-description"><lang>SEO 描述</lang></label>
+                                                <textarea class="w-input" id="product-create-meta-description" name="meta_description"
+                                                          rows="2" maxlength="2000" scope="product_create_draft"></textarea>
+                                            </div>
+                                            <div class="w-field" data-span="full">
+                                                <label class="w-field__label" for="product-create-meta-keywords"><lang>SEO 关键词</lang></label>
+                                                <textarea class="w-input" id="product-create-meta-keywords" name="meta_keywords"
+                                                          rows="2" maxlength="2000" scope="product_create_draft"
+                                                          placeholder="@lang(逗号分隔)"></textarea>
+                                            </div>
+                                        </div>
+                                    </section>
+
+<section class="w-product-create__basics-block w-stack" data-gap="sm" data-basics-section="categories">
+                                        <h3 class="w-product-create__basics-title"><lang>分类</lang></h3>
+                                        <div class="w-product-create__category-select"
+                                             data-product-create-category-assignments
+                                             data-testid="product-create-categories">
+                                            <w:catalog:category:select
+                                                id="product-create-categories"
+                                                name="category_ids"
+                                                value="productCreateCategoryValue"
+                                                options="productCreateCategoryOptionsJson"
+                                                empty-label="productCreateCategoryEmpty"
+                                                placeholder="productCreateCategoryPlaceholder"
+                                                website-id="productCreateCategoryWebsiteId"
+                                                space="product"
+                                                allow-create="true"
+                                                scope="product_create_draft"
+                                            />
+                                        </div>
+                                        <?php if ($productCreateCategoryOptions === []): ?>
+                                            <p class="w-text" data-tone="muted"><lang>暂无分类时可在上方快速新建，或稍后在编辑页挂分类。</lang></p>
+                                        <?php endif; ?>
+                                    </section>
+
+                                    <section class="w-product-create__basics-block w-stack" data-gap="sm" data-basics-section="media" data-testid="product-create-media" data-product-create-media>
+                                        <div class="w-cluster" data-align="center" data-justify="between" data-gap="sm">
+                                            <h3 class="w-product-create__basics-title"><lang>主图 / 图集</lang></h3>
+                                            <button class="w-button" type="button" data-variant="outline" data-size="sm"
+                                                    data-product-create-media-picker-open>
+                                                <lang>从媒体库添加</lang>
+                                            </button>
+                                        </div>
+                                        <p class="w-field__help"><lang>第一张默认主图；可继续添加图集。</lang></p>
+                                        <div class="w-table-wrap">
+                                            <table class="w-table w-product-media-table" data-product-create-media-assignments>
+                                                <thead>
+                                                <tr>
+                                                    <th><lang>资源</lang></th>
+                                                    <th><lang>角色</lang></th>
+                                                    <th><lang>排序</lang></th>
+                                                    <th><lang>操作</lang></th>
+                                                </tr>
+                                                </thead>
+                                                <tbody data-product-create-media-rows></tbody>
+                                            </table>
+                                        </div>
+                                        <p class="w-text" data-tone="muted" data-product-create-media-empty>
+                                            <lang>暂无图片。可先创建草稿，稍后再补主图。</lang>
+                                        </p>
+                                        <input type="hidden" id="product-create-media-json" name="media_assignments_json"
+                                               scope="product_create_draft" value="">
+                                        <input type="hidden" id="product-create-eav-attributes-json"
+                                               name="create_eav_attributes_json"
+                                               scope="product_create_draft" value="">
+                                        <input type="hidden" id="product-create-variant-axes-json"
+                                               name="create_variant_axes_json"
+                                               scope="product_create_draft" value="">
+                                        <input type="hidden" id="product-create-variant-option-images-json"
+                                               name="create_variant_option_images_json"
+                                               scope="product_create_draft" value="">
+                                    </section>
+
+                                    <div class="w-cluster w-product-create__step-actions" data-align="end">
+                                        <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                                                data-create-step-continue="basics">
+                                            <lang>下一步</lang>
+                                        </button>
+                                    </div>
+                                </div>
+                            </details>
+
+                            <?php if ($catalogSets !== []): ?>
+                                <details class="w-product-create__step" data-create-step="attribute-set">
+                                    <summary class="w-product-create__step-summary">
+                                        <span class="w-product-create__step-index">2</span>
+                                        <span class="w-product-create__step-title"><lang>属性集</lang></span>
+                                    </summary>
+                                    <div class="w-product-create__step-body w-stack" data-gap="sm">
+                                        <div class="w-field" id="product-create-attribute-set-field" data-testid="product-create-attribute-set">
+                                            <span class="w-field__label"><lang>属性集</lang></span>
+                                            <div class="w-cluster w-product-create__attribute-set" data-align="center" data-gap="sm">
+                                                <span class="w-product-create__attribute-set-chip<?= $defaultAttributeSetLabel !== '' ? ' is-selected' : ' is-empty' ?>"
+                                                      id="product-create-attribute-set-label"
+                                                      data-selected="<?= $defaultAttributeSetLabel !== '' ? '1' : '0' ?>"><?= $defaultAttributeSetLabel !== '' ? $escape($defaultAttributeSetLabel) : $escape(__('未选择属性集')) ?></span>
+                                                <button class="w-button" type="button" data-variant="outline" data-size="sm"
+                                                        data-product-eav-drawer-open="select-set">
+                                                    <lang>选择属性集</lang>
+                                                </button>
+                                            </div>
+                                            <input type="hidden"
+                                                   id="product-create-attribute-set-id"
+                                                   name="attribute_set_id"
+                                                   scope="product_create_draft"
+                                                   value="<?= $escape($defaultAttributeSetId) ?>">
+                                            <input type="hidden"
+                                                   id="product-create-attribute-set-code"
+                                                   name="attribute_set"
+                                                   scope="product_create_draft"
+                                                   value="<?= $escape($defaultAttributeSetCode) ?>">
+                                            <input type="hidden"
+                                                   id="product-create-attribute-set-name"
+                                                   name="attribute_set_label"
+                                                   scope="product_create_draft"
+                                                   value="<?= $escape($defaultAttributeSetLabel) ?>">
+                                            <p class="w-field__help"><lang>创建草稿前选定属性集；编辑已有商品时不可更换。</lang></p>
+                                        </div>
+                                        <div class="w-cluster w-product-create__step-actions" data-align="end">
+                                            <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                                                    data-create-step-continue="attribute-set">
+                                                <lang>下一步</lang>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </details>
+                                <div class="w-product-create__set-flow"
+                                     id="product-create-set-flow"
+                                     data-testid="product-create-set-flow"
+                                    <?= $defaultAttributeSetId !== '' ? '' : ' hidden' ?>>
+                                    <details class="w-product-create__step" data-create-step="product-attributes">
+                                        <summary class="w-product-create__step-summary">
+                                            <span class="w-product-create__step-index" data-create-step-number="product">3</span>
+                                            <span class="w-product-create__step-title"><lang>商品属性</lang></span>
+                                        </summary>
+                                        <div class="w-product-create__step-body w-stack" data-gap="sm">
+                                            <p class="w-field__help"><lang>按属性组分栏填写；带 * 为必填。</lang></p>
+                                            <div class="w-product-eav w-product-create__eav-grid"
+                                                 id="product-create-product-attributes"
+                                                 data-testid="product-create-product-attributes"></div>
+                                            <div class="w-cluster w-product-create__step-actions" data-align="end">
+                                                <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                                                        data-create-step-continue="product-attributes">
+                                                    <lang>下一步</lang>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </details>
+                                    <details class="w-product-create__step"
+                                             data-create-step="variant-axes"
+                                             data-configurable-only
+                                             hidden>
+                                        <summary class="w-product-create__step-summary">
+                                            <span class="w-product-create__step-index">4</span>
+                                            <span class="w-product-create__step-title"><lang>规格维度</lang></span>
+                                        </summary>
+                                        <div class="w-product-create__step-body w-stack" data-gap="sm">
+                                            <p class="w-field__help"><lang>勾选将参与子 SKU 生成的规格值；按住 Ctrl / Cmd 可多选。</lang></p>
+                                            <div class="w-product-eav w-product-create__eav-grid"
+                                                 id="product-create-variant-axes"
+                                                 data-testid="product-create-variant-axes"></div>
+                                            <div class="w-cluster w-product-create__step-actions" data-align="end">
+                                                <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                                                        data-create-step-continue="variant-axes">
+                                                    <lang>下一步</lang>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </details>
+                                    <details class="w-product-create__step"
+                                             data-create-step="variant-values"
+                                             data-configurable-only
+                                             hidden>
+                                        <summary class="w-product-create__step-summary">
+                                            <span class="w-product-create__step-index">5</span>
+                                            <span class="w-product-create__step-title"><lang>规格值预览图</lang></span>
+                                        </summary>
+                                        <div class="w-product-create__step-body w-stack" data-gap="sm">
+                                            <p class="w-field__help"><lang>图板类规格可为每个已选值上传样本图，生成子规格时将用于预览。</lang></p>
+                                            <div id="product-create-variant-values"
+                                                 data-testid="product-create-variant-values"></div>
+                                            <div class="w-cluster w-product-create__step-actions" data-align="end">
+                                                <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                                                        data-create-step-continue="variant-values">
+                                                    <lang>下一步</lang>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </details>
+                                    <details class="w-product-create__step"
+                                             data-create-step="variant-preview"
+                                             data-configurable-only
+                                             hidden>
+                                        <summary class="w-product-create__step-summary">
+                                            <span class="w-product-create__step-index">6</span>
+                                            <span class="w-product-create__step-title"><lang>子规格预览</lang></span>
+                                        </summary>
+                                        <div class="w-product-create__step-body">
+                                            <div id="product-create-variant-preview"
+                                                 data-testid="product-create-variant-preview"
+                                                 class="w-product-create__variant-preview-shell"></div>
+                                            <div class="w-cluster w-product-create__step-actions" data-align="end">
+                                                <button class="w-button" type="button" data-tone="primary" data-size="sm"
+                                                        data-create-step-continue="variant-preview">
+                                                    <lang>下一步</lang>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </details>
                                 </div>
                             <?php endif; ?>
-                        </fieldset>
-                        <button class="w-button w-product-create__submit" type="submit" data-tone="primary">
-                            <lang>创建草稿并继续编辑</lang>
-                        </button>
+                            <details class="w-product-create__step" data-create-step="publish">
+                                <summary class="w-product-create__step-summary">
+                                    <span class="w-product-create__step-index" data-create-step-number="publish"><?= $catalogSets !== [] ? '7' : '3' ?></span>
+                                    <span class="w-product-create__step-title"><lang>发布</lang></span>
+                                </summary>
+                                <div class="w-product-create__step-body w-stack" data-gap="sm">
+                                    <fieldset class="w-product-store-picker">
+                                        <legend><lang>发布到 Store</lang></legend>
+                                        <p><lang>默认选中当前 Website 下全部活动 Store，可取消个别 Store。</lang></p>
+                                        <?php if ($stores === []): ?>
+                                            <div class="w-alert" data-tone="warning"><lang>当前 Website 没有活动 Store。</lang></div>
+                                        <?php else: ?>
+                                            <div class="w-product-store-picker__items">
+                                                <?php foreach ($stores as $store): ?>
+                                                    <label class="w-product-check">
+                                                        <input type="checkbox" name="store_ids[]" value="<?= $escape($store['store_id'] ?? '') ?>" checked>
+                                                        <span>
+                                                            <strong><?= $escape($store['name'] ?? '') ?></strong>
+                                                            <small><?= $escape($store['code'] ?? '') ?> · ID <?= $escape($store['store_id'] ?? '') ?></small>
+                                                        </span>
+                                                    </label>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        <?php endif; ?>
+                                    </fieldset>
+                                    <button class="w-button w-product-create__submit" type="submit" data-tone="primary"
+                                            data-label-draft="<?= $escape(__('创建草稿并继续编辑')) ?>"
+                                            data-label-published="<?= $escape(__('创建并立即发布')) ?>">
+                                        <lang>创建草稿并继续编辑</lang>
+                                    </button>
+                                </div>
+                            </details>
+                        </div>
+                        <div class="w-product-create__eav-fields"
+                             id="product-create-eav-fields"
+                             data-testid="product-create-eav-fields"
+                             hidden>
+                            <div id="product-create-eav-editor" data-testid="product-create-eav-editor" hidden aria-hidden="true"></div>
+                        </div>
+                        <div class="w-product-create__variant-panel" id="product-create-variant-panel" hidden aria-hidden="true"></div>
+                        <textarea id="product-create-axes" name="axes_json" hidden aria-hidden="true"></textarea>
                     </form>
+                    <w:scope url="@backend-url('taglib/backend/scope')" container-id="product-create-form" event="change"/>
                 </div>
             </aside>
 
-            <main class="w-card w-product-list" aria-labelledby="product-list-title">
-                <div class="w-card__header w-product-list__header">
-                    <div>
+            <main class="w-card w-product-list" data-product-list-panel aria-labelledby="product-list-title">
+                <div class="w-card__header w-product-list__header w-product-panel__header w-cluster" data-align="center" data-justify="between" data-wrap="true">
+                    <div class="w-stack" data-gap="xs">
                         <span class="w-product-admin__step">02</span>
-                        <h2 id="product-list-title"><lang>商品目录</lang></h2>
+                        <h2 id="product-list-title" class="w-card__title"><lang>商品目录</lang></h2>
                     </div>
-                    <button class="w-button" type="button" data-tone="neutral" data-product-action="refresh">
-                        <lang>刷新</lang>
-                    </button>
+                    <div class="w-cluster w-product-list__header-actions" data-align="center" data-gap="sm">
+                        <button class="w-button" type="button" data-size="sm" data-tone="primary"
+                                data-product-panel-focus="list" data-testid="product-list-panel-focus"
+                                aria-pressed="false">
+                            <lang>管理</lang>
+                        </button>
+                        <button class="w-button" type="button" data-tone="neutral" data-size="sm"
+                                data-product-action="refresh" data-product-list-header-refresh>
+                            <lang>刷新</lang>
+                        </button>
+                    </div>
                 </div>
+                <div class="w-product-bulk-bar w-cluster" data-product-bulk-bar hidden data-align="center" data-gap="sm" data-justify="between">
+                    <span class="w-text" data-tone="muted" data-product-bulk-summary></span>
+                    <div class="w-cluster" data-align="center" data-gap="sm">
+                        <button class="w-button" type="button" data-variant="outline" data-size="sm" data-tone="danger" data-product-bulk-action="archive" disabled>
+                            <lang>删除</lang>
+                        </button>
+                        <w:hook>Weline_Product::backend::catalog::products::bulk-actions</w:hook>
+                    </div>
+                </div>
+                <div class="w-product-list__scroll">
                 <div class="w-card__body">
                     <form method="get" class="w-product-filters" data-testid="product-filter-form">
                         <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
@@ -188,75 +871,106 @@ $stores = is_array($creation_context['stores'] ?? null) ? $creation_context['sto
                         <button class="w-button" type="submit" data-tone="primary"><lang>筛选</lang></button>
                     </form>
                 </div>
-                <div class="w-table-wrap">
-                    <table class="w-table w-product-table" data-testid="product-catalog-table">
-                        <thead>
-                        <tr>
-                            <th><lang>商品</lang></th>
-                            <th><lang>类型 / 状态</lang></th>
-                            <th><lang>SKU / Offer</lang></th>
-                            <th><lang>价格</lang></th>
-                            <th><lang>Store</lang></th>
-                            <th><lang>更新时间</lang></th>
-                            <th><span class="w-visually-hidden"><lang>操作</lang></span></th>
-                        </tr>
-                        </thead>
-                        <tbody id="product-admin-table-body">
-                        <?php if ($rows === []): ?>
-                            <tr><td colspan="7" class="w-product-empty"><lang>没有符合条件的商品。可从左侧创建第一件商品。</lang></td></tr>
-                        <?php endif; ?>
-                        <?php foreach ($rows as $row): ?>
-                            <?php
-                            $prices = is_array($row['prices'] ?? null) ? $row['prices'] : [];
-                            $price = $prices[0] ?? null;
-                            $skus = is_array($row['skus'] ?? null) ? $row['skus'] : [];
-                            $uuid = (string)($row['global_product_uuid'] ?? '');
-                            ?>
-                            <tr data-product-uuid="<?= $escape($uuid) ?>">
-                                <td>
-                                    <div class="w-product-cell">
-                                        <?php if (!empty($row['main_media']['display_url'])): ?>
-                                            <img src="<?= $escape($row['main_media']['display_url']) ?>" alt="" width="48" height="48">
-                                        <?php else: ?>
-                                            <span class="w-product-cell__placeholder" aria-hidden="true">P</span>
-                                        <?php endif; ?>
-                                        <div>
-                                            <strong><?= $escape($row['name'] ?? __('未命名草稿')) ?></strong>
-                                            <small><?= $escape($row['product_code'] ?? '') ?></small>
-                                            <small><lang>归属站</lang> #<?= $escape($row['owner_website_id'] ?? '') ?></small>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="w-badge"><?= $escape($row['product_type'] ?? '') ?></span>
-                                    <span class="w-status" data-status="<?= $escape($row['status'] ?? '') ?>"><?= $escape($row['status'] ?? '') ?></span>
-                                </td>
-                                <td>
-                                    <strong><?= $escape($skus[0] ?? '-') ?></strong>
-                                    <small><?= $escape($row['offer_count'] ?? 0) ?> Offer</small>
-                                </td>
-                                <td>
-                                    <?php if (is_array($price) && !($price['cleared'] ?? false)): ?>
-                                        <strong><?= $escape($price['currency'] ?? '') ?> <?= $escape(number_format(((int)($price['amount_minor'] ?? 0)) / 100, 2)) ?></strong>
-                                    <?php else: ?>
-                                        <span class="w-text" data-tone="muted"><lang>未配置</lang></span>
-                                    <?php endif; ?>
-                                </td>
-                                <td><span class="w-badge"><?= count($row['selected_store_ids'] ?? []) ?></span></td>
-                                <td><?= $escape($row['updated_at'] ?? '-') ?></td>
-                                <td>
-                                    <a class="w-button" data-tone="neutral" data-testid="product-edit-button"
-                                       href="@backend-url('*/backend/catalog/edit-product')?website_id=<?= $escape($website_id) ?>&global_product_uuid=<?= rawurlencode($uuid) ?>">
-                                        <lang>编辑</lang>
-                                    </a>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                <script type="application/json"
+                        id="product-catalog-local-rows"
+                        data-no-extract="true"><?= json_encode(
+                            $catalogTableRows,
+                            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP,
+                        ) ?: '[]' ?></script>
+                <script type="application/json"
+                        id="product-catalog-category-options"
+                        data-no-extract="true"><?= json_encode(
+                            $category_bulk_options ?? [],
+                            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP,
+                        ) ?: '[]' ?></script>
+                <w:d-table id="product-catalog-list"
+                           model="Weline\Product\Model\Shard\Product"
+                           scope="product-catalog-list"
+                           mode="local"
+                           local-data-el="#product-catalog-local-rows"
+                           selectable="true"
+                           select-field="global_product_uuid"
+                           show-actions="true"
+                           sticky-actions="true"
+                           row-actions='[{"type":"link","label":<?= json_encode($editLabel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,"hrefTemplate":"@url{'*/backend/catalog/edit-product'}?website_id=<?= (int)$editWebsiteId ?>&global_product_uuid={global_product_uuid}","testId":"product-edit-button","tone":"neutral","variant":"outline","size":"sm"}]'
+                           editable="false"
+                           modal-edit="false"
+                           inline-edit="false"
+                           show-toolbar="false"
+                           show-config="false"
+                           show-pagination="false"
+                           searchable="false"
+                           sortable="false"
+                           data-testid="product-catalog-table">
+                    <w:t-header>
+                        <w:field belong="t-header" name="product_id_label" type="text" width="72"><lang>ID</lang></w:field>
+                        <w:field belong="t-header" name="main_image" type="image" width="72"><lang>主图</lang></w:field>
+                        <w:field belong="t-header" name="name" type="text" width="16rem"><lang>商品</lang></w:field>
+                        <w:field belong="t-header" name="product_code" type="text" width="10rem"><lang>总货号</lang></w:field>
+                        <w:field belong="t-header" name="product_type" type="text" width="7rem"><lang>类型</lang></w:field>
+                        <w:field belong="t-header" name="status" type="text" width="7rem"><lang>状态</lang></w:field>
+                        <w:field belong="t-header" name="sku" type="text" width="11rem">SKU</w:field>
+                        <w:field belong="t-header" name="offer_count" type="text" width="5rem">Offer</w:field>
+                        <w:field belong="t-header" name="price_display" type="text" width="8rem"><lang>价格</lang></w:field>
+                        <w:field belong="t-header" name="store_count" type="text" width="5rem">Store</w:field>
+                        <w:field belong="t-header" name="updated_at" type="text" width="11rem"><lang>更新时间</lang></w:field>
+                    </w:t-header>
+                    <w:t-body></w:t-body>
+                </w:d-table>
                 </div>
             </main>
         </div>
+
+        <div class="w-product-eav-drawer" data-product-eav-drawer hidden>
+            <div class="w-product-eav-drawer__backdrop" data-product-eav-drawer-close></div>
+            <aside class="w-product-eav-drawer__panel" role="dialog" aria-modal="true" aria-labelledby="product-create-eav-drawer-title">
+                <header class="w-product-eav-drawer__header w-cluster" data-align="center" data-justify="between">
+                    <h2 id="product-create-eav-drawer-title" data-product-eav-drawer-title><?= $escape(__('选择属性集')) ?></h2>
+                    <button class="w-button" type="button" data-variant="ghost" data-size="sm" data-product-eav-drawer-close aria-label="<?= $escape(__('关闭')) ?>">
+                        <w:icon name="x" size="sm" />
+                    </button>
+                </header>
+                <div class="w-product-eav-drawer__body">
+                    <div data-product-eav-drawer-panel="select-set">
+                        <eav:manager entity-code="product" mode="select-set" compact="true" />
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <dialog class="w-product-media-picker" data-w-component="dialog" data-product-create-media-picker-dialog aria-labelledby="product-create-media-picker-title">
+            <div class="w-product-media-picker__surface">
+                <header class="w-product-media-picker__header w-cluster" data-align="center" data-justify="between">
+                    <div class="w-stack" data-gap="xs">
+                        <h2 id="product-create-media-picker-title"><lang>选择商品主图 / 图集</lang></h2>
+                    </div>
+                    <button class="w-button" type="button" data-product-create-media-picker-close aria-label="@lang(关闭)">
+                        <w:icon name="x" size="sm" />
+                    </button>
+                </header>
+                <iframe class="w-product-media-picker__frame"
+                        title="@lang(媒体库)"
+                        data-product-create-media-picker-frame
+                        data-src="@backend-url('media/backend/manager/iframe')?target=product-create-media-picker&multi=1&usage=1&ext=jpg,png,gif,webp"></iframe>
+            </div>
+        </dialog>
+
+        <dialog class="w-product-media-picker" data-w-component="dialog" data-product-create-variant-image-dialog aria-labelledby="product-create-variant-image-title">
+            <div class="w-product-media-picker__surface">
+                <header class="w-product-media-picker__header w-cluster" data-align="center" data-justify="between">
+                    <div class="w-stack" data-gap="xs">
+                        <h2 id="product-create-variant-image-title"><lang>选择规格预览图</lang></h2>
+                    </div>
+                    <button class="w-button" type="button" data-product-create-variant-image-close aria-label="@lang(关闭)">
+                        <w:icon name="x" size="sm" />
+                    </button>
+                </header>
+                <iframe class="w-product-media-picker__frame"
+                        title="@lang(媒体库)"
+                        data-product-create-variant-image-frame
+                        data-src="@backend-url('media/backend/manager/iframe')?target=product-create-variant-image&multi=0&usage=1&ext=jpg,png,gif,webp"></iframe>
+            </div>
+        </dialog>
     <?php else: ?>
         <div class="w-alert" data-tone="info">
             <strong><lang>高级维护</lang></strong>
@@ -310,4 +1024,5 @@ $stores = is_array($creation_context['stores'] ?? null) ? $creation_context['sto
         </div>
     <?php endif; ?>
 </div>
-<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260825-v1" defer data-no-extract="true"></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-eav-manager.js)"></script>
+<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260901-wizard-step-v6" defer data-no-extract="true"></script>

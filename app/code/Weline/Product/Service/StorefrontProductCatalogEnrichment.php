@@ -33,6 +33,226 @@ final class StorefrontProductCatalogEnrichment
         return self::CATALOG[$sku] ?? null;
     }
 
+    /**
+     * @return array{
+     *     name?:string,
+     *     short_description?:string,
+     *     description?:string,
+     *     attributes?:array<string,string>
+     * }|null
+     */
+    public static function localeCopy(string $sku, string $locale = 'en_US'): ?array
+    {
+        $locale = trim($locale);
+        if ($locale === '') {
+            return null;
+        }
+
+        return self::LOCALE_COPY[$sku][$locale] ?? null;
+    }
+
+    /**
+     * Storefront copy keyed by SKU and locale code (matches RequestContext user lang).
+     *
+     * @var array<string, array<string, array{
+     *     name?:string,
+     *     short_description?:string,
+     *     description?:string,
+     *     attributes?:array<string,string>
+     * }>>
+     */
+    private const LOCALE_COPY = [
+        'WEB-REDMI-TURBO4-16-256' => [
+            'en_US' => [
+                'name' => 'Redmi Turbo 4 5G 16GB+256GB',
+                'short_description' => 'Dimensity 8400-Ultra, 6550mAh battery, popular performance phone around CNY 1499.',
+                'description' => "Redmi Turbo 4 targets the value performance segment with Dimensity 8400-Ultra and AnTuTu scores over 1.8M.\n6550mAh battery with 67W fast charging supports two-day commuting use.\n16GB+256GB storage fits gaming and media caching; reference 2026 price about CNY 1499.",
+                'attributes' => [
+                    'brand' => 'Redmi',
+                    'model' => 'Turbo 4',
+                    'color' => 'Sea Green',
+                    'storage' => '16GB+256GB',
+                    'chipset' => 'Dimensity 8400-Ultra',
+                    'battery' => '6550mAh',
+                    'charging' => '67W fast charge',
+                    'network' => 'Dual SIM 5G',
+                ],
+            ],
+        ],
+        'WEB-HONOR-PLAY10' => [
+            'en_US' => [
+                'name' => 'HONOR Play10 5G',
+                'short_description' => '6000mAh endurance, Dimensity 7200, balanced entry phone around CNY 1399.',
+                'description' => "HONOR Play10 focuses on eye comfort and long battery life with 6000mAh and Dimensity 7200.\n35W charging and broad offline service coverage; reference price about CNY 1399.",
+                'attributes' => [
+                    'brand' => 'HONOR',
+                    'model' => 'Play10',
+                    'color' => 'Midnight Black',
+                    'storage' => '8GB+256GB',
+                    'chipset' => 'Dimensity 7200',
+                    'battery' => '6000mAh',
+                    'charging' => '35W',
+                    'network' => '5G',
+                ],
+            ],
+        ],
+        'WEB-IQOO-Z11I' => [
+            'en_US' => [
+                'name' => 'iQOO Z11i Long Battery Phone',
+                'short_description' => '7000mAh battery, Snapdragon 685, backup phone favorite around CNY 1019.',
+                'description' => "iQOO Z11i emphasizes huge battery at low price with 7000mAh for backup and delivery riders.\nSnapdragon 685 handles messaging and short video; reference price about CNY 1019.",
+                'attributes' => [
+                    'brand' => 'iQOO',
+                    'model' => 'Z11i',
+                    'color' => 'Meteor Gray',
+                    'storage' => '8GB+128GB',
+                    'chipset' => 'Snapdragon 685',
+                    'battery' => '7000mAh',
+                    'charging' => '18W',
+                    'network' => '4G',
+                ],
+            ],
+        ],
+        'WEB-MIJIA-AIR-6PRO' => [
+            'en_US' => [
+                'name' => 'Mi Home Air Purifier 6 Pro',
+                'short_description' => 'Dual-core purification matrix, 2026 bestseller often around CNY 1899 after subsidies.',
+                'description' => "Mi Home Air Purifier 6 Pro upgrades dual-core architecture for 30-50㎡ rooms.\nCommon 2026 subsidized price CNY 1800-1900; MSRP CNY 2399.",
+                'attributes' => [
+                    'brand' => 'Mi Home',
+                    'model' => 'Air Purifier 6 Pro',
+                    'coverage_area' => '30-50㎡',
+                    'filter_type' => 'HEPA composite filter',
+                    'power' => '38W',
+                    'noise_level' => '32-64dB',
+                    'smart_control' => 'Mi Home App',
+                ],
+            ],
+        ],
+        'WEB-TREEFRESH-T2PRO' => [
+            'en_US' => [
+                'name' => 'TreeFresh T2 Pro Formaldehyde Purifier',
+                'short_description' => 'New-home formaldehyde removal, catalytic split design around CNY 2199.',
+                'description' => "TreeFresh T2 Pro targets post-renovation formaldehyde with low-performance decay.\nReference price about CNY 2199; strong CADR and long-term split are key selling points.",
+                'attributes' => [
+                    'brand' => 'TreeFresh',
+                    'model' => 'T2 Pro',
+                    'coverage_area' => '40-60㎡',
+                    'filter_type' => 'Catalytic split',
+                    'formaldehyde_cadr' => '400m³/h+',
+                    'power' => '45W',
+                    'smart_control' => 'App + touch',
+                ],
+            ],
+        ],
+        'WEB-BELKIN-TB4-DOCK' => [
+            'en_US' => [
+                'name' => 'Belkin 12-in-1 Thunderbolt 4 Dock',
+                'short_description' => 'Desk expansion hub with PD power, reference price about CNY 899.',
+                'description' => "Belkin 12-in-1 Thunderbolt 4 dock supports multi-display, USB, SD and PD charging.\nIdeal for MacBook and ultrabook desks; 618 reference price about CNY 899.",
+                'attributes' => [
+                    'brand' => 'Belkin',
+                    'model' => 'Thunderbolt 4 Dock 12-in-1',
+                    'connectivity' => 'Thunderbolt 4 / USB-C',
+                    'ports' => '12 ports',
+                    'power_delivery' => '90W PD',
+                    'compatibility' => 'Mac / Windows ultrabooks',
+                ],
+            ],
+        ],
+        'WEB-BENQ-SCREENBAR' => [
+            'en_US' => [
+                'name' => 'BenQ ScreenBar Monitor Light',
+                'short_description' => 'Category-leading monitor light reducing glare, around CNY 599.',
+                'description' => "BenQ ScreenBar reduces screen glare and desk shadows for long coding and design sessions.\nReference price about CNY 599; clip-on design saves desk space.",
+                'attributes' => [
+                    'brand' => 'BenQ',
+                    'model' => 'ScreenBar',
+                    'color' => 'Space Gray',
+                    'power' => '5W USB powered',
+                    'compatibility' => '17-34 inch monitors',
+                    'dimming' => 'Auto dimming',
+                ],
+            ],
+        ],
+        'WEB-LOGITECH-MX3S' => [
+            'en_US' => [
+                'name' => 'Logitech MX Master 3S Wireless Mouse',
+                'short_description' => 'Ergonomic flagship office mouse with silent switches, around CNY 699.',
+                'description' => "Logitech MX Master 3S features silent clicks, MagSpeed wheel and Logi Bolt multi-device switching.\nRight-hand ergonomic shape for long work sessions; reference price about CNY 699.",
+                'attributes' => [
+                    'brand' => 'Logitech',
+                    'model' => 'MX Master 3S',
+                    'color' => 'Graphite',
+                    'connectivity' => 'Bluetooth + Logi Bolt',
+                    'dpi' => '8000',
+                    'battery' => '70-day battery life',
+                ],
+            ],
+        ],
+        'WEB-DYSON-V15' => [
+            'en_US' => [
+                'name' => 'Dyson V15 Detect Cordless Vacuum',
+                'short_description' => 'Laser dust detection and high suction flagship, around CNY 4990.',
+                'description' => "Dyson V15 Detect uses laser illumination and Hyperdymium motor for carpets, hard floors and mattresses.\nPremium cordless cleaning reference price about CNY 4990.",
+                'attributes' => [
+                    'brand' => 'Dyson',
+                    'model' => 'V15 Detect',
+                    'color' => 'Nickel Blue',
+                    'runtime' => 'Up to 60 minutes',
+                    'suction' => '240AW',
+                    'weight_kg' => '3.0',
+                    'accessories' => 'Laser soft roller + mattress head',
+                ],
+            ],
+        ],
+        'WEB-LIBY-LAUNDRY-3KG' => [
+            'en_US' => [
+                'name' => 'Liby Natural Tea Seed Antibacterial Laundry Detergent 3kg',
+                'short_description' => 'Household cleaning staple with stain removal and antibacterial care, bundle ref. CNY 129.',
+                'description' => "Liby Natural Tea Seed Antibacterial Laundry Detergent 3kg family pack uses tea seed extract for stain removal and antibacterial washing.\nBundle reference price about CNY 129; high-frequency consumable.",
+                'attributes' => [
+                    'brand' => 'Liby',
+                    'model' => 'Natural Tea Seed Antibacterial',
+                    'volume' => '3kg',
+                    'scent' => 'Natural fresh',
+                    'suitable_for' => 'Cotton, linen and synthetics',
+                    'shelf_life' => '3 years',
+                ],
+            ],
+        ],
+        'WEB-QINGSHAN-RUG' => [
+            'en_US' => [
+                'name' => 'Qingshan Minimal Wabi Wool Rug',
+                'short_description' => 'New Zealand wool blend in muted earth tones, reference price about CNY 699.',
+                'description' => "Qingshan minimal wabi wool rug blends New Zealand wool in low-saturation earth tones for Nordic/Japanese living rooms.\nMultiple sizes; reference price about CNY 699 with anti-slip latex backing.",
+                'attributes' => [
+                    'brand' => 'Qingshan',
+                    'material' => 'New Zealand wool blend',
+                    'color' => 'Oat',
+                    'dimensions' => '160×230cm',
+                    'weight_kg' => '8.5',
+                    'care_instructions' => 'Vacuum regularly; spot dry clean',
+                ],
+            ],
+        ],
+        'WEB-MIJIA-LOCK-E30' => [
+            'en_US' => [
+                'name' => 'Xiaomi Smart Door Lock E30',
+                'short_description' => 'Fingerprint, password and app access for retrofit doors, around CNY 1299.',
+                'description' => "Xiaomi Smart Door Lock E30 supports fingerprint, password, NFC and app remote management.\nPopular 2026 smart lock category; reference price about CNY 1299.",
+                'attributes' => [
+                    'brand' => 'Xiaomi',
+                    'model' => 'Smart Door Lock E30',
+                    'color' => 'Carbon Black',
+                    'unlock_methods' => 'Fingerprint / password / NFC / app',
+                    'battery' => '8× AA batteries',
+                    'material' => 'Zinc alloy',
+                ],
+            ],
+        ],
+    ];
+
     /** @var array<string, array{attribute_set:string,description:string,attributes:array<string,string>,gallery:list<string>}> */
     private const CATALOG = [
         'WEB-REDMI-TURBO4-16-256' => [

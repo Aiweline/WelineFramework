@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Manager\ObjectManager;
 
 /**
@@ -39,7 +40,7 @@ final class ProductSearchCategoryScopeService
      */
     private function listFromCatalog(): array
     {
-        $tree = $this->catalog->tree($this->resolveWebsiteId());
+        $tree = $this->catalog->tree($this->resolveWebsiteId(), (string)State::getLangLocal());
         if ($tree === []) {
             return [];
         }

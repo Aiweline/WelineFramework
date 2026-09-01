@@ -5,7 +5,10 @@ declare(strict_types=1);
 namespace Weline\Product\Extends\Module\Weline_Catalog\Space;
 
 use Weline\Catalog\Api\CatalogSpaceProviderInterface;
+use Weline\Catalog\Service\GoogleTaxonomyService;
+use Weline\Framework\Http\Url;
 use Weline\Product\Model\CategoryAttributeEntity;
+use Weline\Product\Repository\CategoryDisplaySelectionRepository;
 use Weline\Product\Service\ProductCategoryAdminService;
 use Weline\Product\Service\ProductCategoryAttributeMetadataCatalog;
 use Weline\Product\Service\ProductCategoryAttributeService;
@@ -21,8 +24,11 @@ final class ProductCatalogSpaceProvider implements CatalogSpaceProviderInterface
         private readonly ProductCategoryAdminService $categoryAdmin,
         private readonly ProductCategoryAttributeService $categoryAttributes,
         private readonly ProductCategoryAttributeMetadataCatalog $attributeMetadata,
+        private readonly CategoryDisplaySelectionRepository $displaySelections,
+        private readonly GoogleTaxonomyService $googleTaxonomy,
         private readonly StorefrontCategoryTreeIndex $categoryTreeIndex,
         private readonly StorefrontCatalogCacheCoordinator $catalogCache,
+        private readonly Url $url,
     ) {
     }
 
@@ -94,6 +100,15 @@ final class ProductCatalogSpaceProvider implements CatalogSpaceProviderInterface
     public function save(array $scope, array $payload): array
     {
         $websiteId = max(0, (int)($scope['website_id'] ?? 0));
+        $googleTaxonomyId = array_key_exists('google_taxonomy_id', $payload)
+            ? trim((string)$payload['google_taxonomy_id'])
+            : null;
+        if ($googleTaxonomyId !== null && $googleTaxonomyId !== '' && !$this->validateExternalTaxonomyId($googleTaxonomyId)) {
+            throw new \InvalidArgumentException((string)__('无效的 Google Taxonomy ID：%{1}', [$googleTaxonomyId]));
+        }
+        $optional = static function (array $payload, string $key): ?string {
+            return array_key_exists($key, $payload) ? trim((string)$payload[$key]) : null;
+        };
         $result = $this->categoryAdmin->save(
             $websiteId,
             max(0, (int)($payload['category_id'] ?? $payload['id'] ?? 0)),
@@ -104,6 +119,11 @@ final class ProductCatalogSpaceProvider implements CatalogSpaceProviderInterface
                 : 'inactive',
             trim((string)($payload['code'] ?? '')),
             (string)($scope['locale'] ?? ''),
+            $googleTaxonomyId,
+            $optional($payload, 'image'),
+            $optional($payload, 'banner'),
+            $optional($payload, 'summary'),
+            $optional($payload, 'description'),
         );
 
         return ['success' => true] + $result;
@@ -141,7 +161,17 @@ final class ProductCatalogSpaceProvider implements CatalogSpaceProviderInterface
      */
     public function readDisplaySelection(array $scope): array
     {
-        return [];
+        $storeId = max(0, (int)($scope['store_id'] ?? 0));
+        $channelId = max(0, (int)($scope['channel_id'] ?? 0));
+        if ($storeId === 0 && $channelId === 0) {
+            return [];
+        }
+
+        return $this->displaySelections->listForScope(
+            max(0, (int)($scope['website_id'] ?? 0)),
+            $storeId,
+            $channelId,
+        );
     }
 
     /**
@@ -151,11 +181,26 @@ final class ProductCatalogSpaceProvider implements CatalogSpaceProviderInterface
      */
     public function saveDisplaySelection(array $scope, array $payload): array
     {
+        $storeId = max(0, (int)($scope['store_id'] ?? 0));
+        $channelId = max(0, (int)($scope['channel_id'] ?? 0));
+        $rows = is_array($payload['rows'] ?? null) ? $payload['rows'] : [];
+        if ($rows === [] && is_array($payload['selections'] ?? null)) {
+            $rows = $payload['selections'];
+        }
+
+        $result = $this->displaySelections->replaceScope(
+            max(0, (int)($scope['website_id'] ?? 0)),
+            $storeId,
+            $channelId,
+            $rows,
+        );
+
+        $this->invalidateAfterMutation($scope, 'display_selection_saved');
+
         return [
             'success' => true,
-            'saved' => 0,
             'scope_level' => (string)($scope['scope_level'] ?? ''),
-        ];
+        ] + $result;
     }
 
     /**
@@ -180,7 +225,7 @@ final class ProductCatalogSpaceProvider implements CatalogSpaceProviderInterface
         $view = $this->view($scope, $nodeId);
         $path = trim((string)($view['path'] ?? ''), '/');
 
-        return $path !== '' ? '/category/' . $path : '';
+        return $path !== '' ? $this->url->getFrontendUrl('category/' . $path) : '';
     }
 
     /**
@@ -252,6 +297,41 @@ final class ProductCatalogSpaceProvider implements CatalogSpaceProviderInterface
                     trim((string)($row['value'] ?? '')),
                     $locale,
                 );
+            } elseif ($code === 'google_taxonomy_id') {
+                $this->categoryAttributes->writeGoogleTaxonomyId(
+                    $websiteId,
+                    $nodeId,
+                    trim((string)($row['value'] ?? '')),
+                    $locale,
+                );
+            } elseif ($code === 'image') {
+                $this->categoryAttributes->writeImage(
+                    $websiteId,
+                    $nodeId,
+                    trim((string)($row['value'] ?? '')),
+                    $locale,
+                );
+            } elseif ($code === 'banner') {
+                $this->categoryAttributes->writeBanner(
+                    $websiteId,
+                    $nodeId,
+                    trim((string)($row['value'] ?? '')),
+                    $locale,
+                );
+            } elseif ($code === 'summary') {
+                $this->categoryAttributes->writeSummary(
+                    $websiteId,
+                    $nodeId,
+                    trim((string)($row['value'] ?? '')),
+                    $locale,
+                );
+            } elseif ($code === 'description') {
+                $this->categoryAttributes->writeDescription(
+                    $websiteId,
+                    $nodeId,
+                    trim((string)($row['value'] ?? '')),
+                    $locale,
+                );
             }
         }
 
@@ -265,7 +345,7 @@ final class ProductCatalogSpaceProvider implements CatalogSpaceProviderInterface
 
     public function validateExternalTaxonomyId(string $externalId): bool
     {
-        return trim($externalId) !== '';
+        return $this->googleTaxonomy->exists(trim($externalId));
     }
 
     /**
@@ -274,7 +354,7 @@ final class ProductCatalogSpaceProvider implements CatalogSpaceProviderInterface
      */
     public function listExternalTaxonomyPicker(array $scope, string $query): array
     {
-        return [];
+        return $this->googleTaxonomy->search($query, 30);
     }
 
     /**

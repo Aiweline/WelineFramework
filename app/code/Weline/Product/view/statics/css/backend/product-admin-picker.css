@@ -1,0 +1,24 @@
+.w-product-admin-picker__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.w-product-admin-picker__list > li {
+    padding-block: var(--weline-space-2, 0.5rem);
+    border-bottom: 1px solid var(--weline-theme-border, var(--backend-color-border-default, #dbe3ef));
+}
+
+.w-product-admin-picker__results {
+    margin-block: var(--weline-space-3, 0.75rem);
+}
+
+.w-product-admin-picker__selected {
+    margin-block-start: var(--weline-space-3, 0.75rem);
+}
+
+.w-product-admin-picker__help {
+    margin-block-end: var(--weline-space-3, 0.75rem);
+    color: var(--weline-theme-text-muted, var(--backend-color-text-secondary, #64748b));
+    font-size: 0.875rem;
+}

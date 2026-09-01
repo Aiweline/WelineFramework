@@ -1,0 +1,22 @@
+<?php
+
+/**
+ * Product search hit — rendered by Product module (not generic Search text card).
+ *
+ * @var array<string,mixed> $hit
+ */
+$hit = $this->getData('hit') ?? [];
+$hit = is_array($hit) ? $hit : [];
+$offer = $hit['storefront_offer'] ?? null;
+if (!is_array($offer) || $offer === []) {
+    echo (string)$this->fetch(
+        'Weline_Search::templates/frontend/partials/hit-card.phtml',
+        ['hit' => $hit],
+    );
+    return;
+}
+
+echo (string)$this->fetch(
+    'Weline_Product::templates/frontend/partials/storefront-offer-card.phtml',
+    ['offer' => $offer],
+);

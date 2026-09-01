@@ -24,4 +24,19 @@ interface ProductAdminReadInterface
         string $locale = '',
         string $currency = 'CNY',
     ): ProductAdminSnapshot;
+
+    /** @return array<string, mixed> */
+    public function attributeCatalog(int $websiteId, string $globalProductUuid): array;
+
+    /**
+     * Frontend URL Handle availability for create/edit forms.
+     *
+     * @return array{
+     *   slug:string,
+     *   available:bool,
+     *   reason:string,
+     *   conflict_product_id:int
+     * }
+     */
+    public function slugAvailability(int $websiteId, string $slug, int $excludeProductId = 0): array;
 }

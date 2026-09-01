@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Http\Url;
 use Weline\Product\Model\Shard\Category;
 use Weline\Product\Repository\CategoryRepository;
 
@@ -20,6 +22,8 @@ final class StorefrontCategoryTreeIndex
     public function __construct(
         private readonly CategoryRepository $categories,
         private readonly StorefrontScopeHotCache $hotCache,
+        private readonly ProductCategoryAttributeService $categoryAttributes,
+        private readonly Url $url,
     ) {
     }
 
@@ -40,7 +44,7 @@ final class StorefrontCategoryTreeIndex
      *     by_path: array<string, int>
      * }
      */
-    public function forWebsite(int $websiteId): array
+    public function forWebsite(int $websiteId, string $locale = ''): array
     {
         $websiteId = max(0, $websiteId);
         $logicalKey = self::logicalCacheKey($websiteId);
@@ -55,7 +59,7 @@ final class StorefrontCategoryTreeIndex
             self::STALE_TTL_SECONDS,
         );
 
-        return $index;
+        return $this->applyLocalizedNames($websiteId, $index, $locale);
     }
 
     /** @return list<array<string, mixed>> */
@@ -220,7 +224,11 @@ final class StorefrontCategoryTreeIndex
             'parent_id' => (int)($row[Category::schema_fields_PARENT_ID] ?? 0),
             'path' => $path,
             'name' => $this->displayNameFromPath($path),
-            'url' => $path !== '' ? '/category/' . $path : '/categories',
+            'image' => '',
+            'banner' => '',
+            'summary' => '',
+            'description' => '',
+            'url' => $this->categoryUrl($path),
         ];
     }
 
@@ -235,5 +243,74 @@ final class StorefrontCategoryTreeIndex
         $leaf = \str_replace(['-', '_'], ' ', $leaf);
 
         return $leaf !== '' ? $leaf : $path;
+    }
+
+    /**
+     * @param array{
+     *     by_id: array<int, array<string, mixed>>,
+     *     by_parent: array<int, list<array<string, mixed>>>,
+     *     by_path: array<string, int>
+     * } $index
+     * @return array{
+     *     by_id: array<int, array<string, mixed>>,
+     *     by_parent: array<int, list<array<string, mixed>>>,
+     *     by_path: array<string, int>
+     * }
+     */
+    private function applyLocalizedNames(int $websiteId, array $index, string $locale): array
+    {
+        $categoryIds = array_values(array_filter(
+            array_map('intval', array_keys($index['by_id'])),
+            static fn(int $id): bool => $id > 0,
+        ));
+        if ($categoryIds === []) {
+            return $index;
+        }
+
+        $locale = $locale !== '' ? $locale : (string)State::getLangLocal();
+        $names = $this->categoryAttributes->readNameMap($websiteId, $categoryIds, $locale);
+        $images = $this->categoryAttributes->readImageMap($websiteId, $categoryIds, $locale);
+        $banners = $this->categoryAttributes->readBannerMap($websiteId, $categoryIds, $locale);
+        $summaries = $this->categoryAttributes->readSummaryMap($websiteId, $categoryIds, $locale);
+        $descriptions = $this->categoryAttributes->readDescriptionMap($websiteId, $categoryIds, $locale);
+
+        foreach ($index['by_id'] as $categoryId => &$row) {
+            $id = (int)$categoryId;
+            $localized = trim((string)($names[$id] ?? ''));
+            if ($localized !== '') {
+                $row['name'] = $localized;
+            }
+            $row['image'] = (string)($images[$id] ?? '');
+            $row['banner'] = (string)($banners[$id] ?? '');
+            $row['summary'] = (string)($summaries[$id] ?? '');
+            $row['description'] = (string)($descriptions[$id] ?? '');
+            $row['url'] = $this->categoryUrl((string)($row['path'] ?? ''));
+        }
+        unset($row);
+
+        foreach ($index['by_parent'] as &$children) {
+            foreach ($children as &$row) {
+                $categoryId = (int)($row['id'] ?? 0);
+                $localized = trim((string)($names[$categoryId] ?? ''));
+                if ($localized !== '') {
+                    $row['name'] = $localized;
+                }
+                $row['image'] = (string)($images[$categoryId] ?? '');
+                $row['banner'] = (string)($banners[$categoryId] ?? '');
+                $row['summary'] = (string)($summaries[$categoryId] ?? '');
+                $row['description'] = (string)($descriptions[$categoryId] ?? '');
+                $row['url'] = $this->categoryUrl((string)($row['path'] ?? ''));
+            }
+        }
+        unset($children, $row);
+
+        return $index;
+    }
+
+    private function categoryUrl(string $path): string
+    {
+        $path = \trim(\str_replace('\\', '/', $path), '/');
+
+        return $this->url->getFrontendUrl($path !== '' ? 'category/' . $path : 'categories');
     }
 }

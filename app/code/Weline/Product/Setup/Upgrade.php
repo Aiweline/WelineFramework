@@ -9,9 +9,11 @@ use Weline\Framework\Setup\Data\Context;
 use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\UpgradeInterface;
+use Weline\Product\Model\Category\LocalDescription;
 use Weline\Product\Model\CategoryAttributeEntity;
 use Weline\Product\Model\ProductCatalogAttributeEntity;
 use Weline\Product\Service\ProductCategoryEavBootstrap;
+use Weline\Product\Service\ProductCatalogEavBootstrap;
 
 final class Upgrade implements UpgradeInterface
 {
@@ -35,5 +37,15 @@ final class Upgrade implements UpgradeInterface
         $categoryEntity->upgrade($modelSetup, $context);
 
         ObjectManager::getInstance(ProductCategoryEavBootstrap::class)->ensureCategorySchema();
+
+        /** @var LocalDescription $categoryLocal */
+        $categoryLocal = ObjectManager::getInstance(LocalDescription::class);
+        $modelSetup->putModel($categoryLocal);
+        $categoryLocal->upgrade($modelSetup, $context);
+
+        $catalogBootstrap = ObjectManager::getInstance(ProductCatalogEavBootstrap::class);
+        $catalog = $catalogBootstrap->ensureStorefrontSchema();
+        $catalogBootstrap->ensureProductFreeSet((int)($catalog['entity_id'] ?? 0));
+        $catalogBootstrap->detachDedicatedIdentityAttributesFromSets((int)($catalog['entity_id'] ?? 0));
     }
 }

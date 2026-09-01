@@ -123,6 +123,12 @@
 - 向导 stub：`Weline_Websites` → Admin `StoreCopy::wizard`
 - 当时验收版本：`1.0.14`；当前模块版本见文末。
 
+## 店面目录热缓存与库存
+
+- 首页/部件卡片走 `StorefrontCatalogViewService::publishedOffers()`（`StorefrontScopeHotCache`，约 300s fresh / 1800s stale）；PDP 走 `livePublishedOffersForProduct()` 旁路热缓存。
+- `Weline_Inventory::stock_projection_changed`（Product 观察者 `InventoryStockProjectionChangedObserver`）在库存投影真正变更后调用 `StorefrontCatalogCacheCoordinator::notifyCatalogChanged`，含默认站 `website_id=0`。
+- `StorefrontCatalogCacheInvalidator` 对 `website_id=0` 同样清理主题 chrome/片段缓存，不得把 0 当成空值跳过。
+
 ## P2E-001：Cart V2 Product 快照
 
 - `ProductCartItemSnapshotProvider` 保留注入 catalog / resolver 的测试缝，

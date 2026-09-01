@@ -51,10 +51,12 @@ $flatten = function (array $nodes, int $depth = 0, array $ancestors = []) use (&
     }
 };
 $flatten($catalogs);
-$catalogPageUrl = function (array $params = []) use ($websiteId): string {
-    $params = ['website_id' => $websiteId, ...$params];
-
-    return (string)$this->getBackendUrl('*/backend/catalog/categories', $params);
+$catalogPath = '*/backend/catalog/categories';
+$catalogPageParams = function (array $params = []) use ($websiteId): array {
+    return ['website_id' => $websiteId, ...$params];
+};
+$catalogPageUrl = function (array $params = []) use ($catalogPath, $catalogPageParams): string {
+    return (string)$this->getBackendUrl($catalogPath, $catalogPageParams($params));
 };
 $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $catalogPageUrl): void {
     if ($nodes === []) {
@@ -140,7 +142,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                 </div>
                 <button class="w-button" type="submit" data-tone="neutral"><lang>切换</lang></button>
             </form>
-            <a class="w-button" data-tone="primary" href="<?= $escape($catalogPageUrl(['new' => 1])) ?>"><w:icon name="plus" size="sm"></w:icon><?= $escape(__('添加顶级分类')) ?></a>
+            <a class="w-button" data-tone="primary" href="@backend-url{$catalogPath|$catalogPageParams(['new' => 1])}"><w:icon name="plus" size="sm"></w:icon><?= $escape(__('添加顶级分类')) ?></a>
             <a class="w-button" data-tone="neutral" href="@admin-url('*/backend/catalog/products')"><w:icon name="arrow-left" size="sm"></w:icon><?= $escape(__('返回商品')) ?></a>
         </nav>
     </header>
@@ -160,7 +162,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                         <?php $renderTree($catalogs); ?>
                     </nav>
                 <?php else: ?>
-                    <div class="w-empty"><w:icon name="folder" size="lg"></w:icon><p><?= $escape(__('暂无分类')) ?></p><a class="w-button" data-tone="primary" href="<?= $escape($catalogPageUrl(['new' => 1])) ?>"><?= $escape(__('添加分类')) ?></a></div>
+                    <div class="w-empty"><w:icon name="folder" size="lg"></w:icon><p><?= $escape(__('暂无分类')) ?></p><a class="w-button" data-tone="primary" href="@backend-url{$catalogPath|$catalogPageParams(['new' => 1])}"><?= $escape(__('添加分类')) ?></a></div>
                 <?php endif; ?>
             </div>
         </aside>
@@ -233,7 +235,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                                 <?php endif; ?>
                             </div>
                             <div class="w-cluster">
-                                <a class="w-button" data-tone="neutral" href="<?= $escape($catalogPageUrl()) ?>"><?= $escape(__('取消')) ?></a>
+                                <a class="w-button" data-tone="neutral" href="@backend-url{$catalogPath|$catalogPageParams()}"><?= $escape(__('取消')) ?></a>
                                 <button class="w-button" type="submit" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= $escape(__('保存')) ?></button>
                             </div>
                         </footer>

@@ -27,6 +27,8 @@ final class ProductAttributeMetadataCatalogTest extends TestCase
             new AttributeMetadata(12, 3, 'weight', '重量', 'decimal', 'decimal', 'input', 5, 6, false, false, true, false, 12),
             new AttributeMetadata(13, 3, 'active', '启用', 'boolean', 'boolean', 'checkbox', 5, 6, false, false, true, false, 13),
             new AttributeMetadata(14, 3, 'tags', '标签', 'varchar', 'varchar', 'select', 5, 6, false, true, true, true, 14, [$option]),
+            new AttributeMetadata(15, 3, 'brand', '品牌', 'varchar', 'varchar', 'input', 5, 6, false, false, true, false, 15),
+            new AttributeMetadata(16, 3, 'brand_code', '品牌编码', 'varchar', 'varchar', 'input', 5, 6, false, false, true, false, 16),
         ];
         $set = new AttributeSetMetadata(
             5,
@@ -48,6 +50,8 @@ final class ProductAttributeMetadataCatalogTest extends TestCase
 
         self::assertSame(['select', 'number', 'boolean', 'multiselect'], array_column($attributes, 'value_type'));
         self::assertSame(['explicit', 'cleared', 'inherit'], $attributes[0]['scope_states']);
+        self::assertNotContains('brand', array_column($attributes, 'code'));
+        self::assertNotContains('brand_code', array_column($attributes, 'code'));
     }
 
     public function testNormalizeRowsCanonicalizesKnownValuesAndPreservesUnknownRows(): void
@@ -118,6 +122,14 @@ final readonly class StaticProductMetadataCatalog implements AttributeMetadataCa
     public function catalog(EntityDefinitionInterface $entity): array
     {
         return $this->sets;
+    }
+
+    public function catalogForProduct(
+        EntityDefinitionInterface $entity,
+        int $productId,
+        string $freeSetCode = '__product_free',
+    ): array {
+        return $this->catalog($entity);
     }
 
     public function attributeIndexByEntityCode(string $entityCode): array

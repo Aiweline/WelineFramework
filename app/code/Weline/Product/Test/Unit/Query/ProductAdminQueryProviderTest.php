@@ -10,6 +10,7 @@ use Weline\Product\Api\Data\ProductAdminSnapshot;
 use Weline\Product\Api\ProductAdminCommandInterface;
 use Weline\Product\Api\ProductAdminReadInterface;
 use Weline\Product\Extends\Module\Weline_Framework\Query\ProductAdminQueryProvider;
+use Weline\Product\Service\ProductAdminBulkService;
 
 final class ProductAdminQueryProviderTest extends TestCase
 {
@@ -18,12 +19,14 @@ final class ProductAdminQueryProviderTest extends TestCase
         $provider = new ProductAdminQueryProvider(
             $this->createStub(ProductAdminReadInterface::class),
             $this->createStub(ProductAdminCommandInterface::class),
+            new ProductAdminBulkService($this->createStub(ProductAdminCommandInterface::class)),
+            $this->createCategoryBulkService(),
         );
 
         $descriptor = $provider->getDescriptor();
 
         self::assertSame('product_admin', $descriptor['provider']);
-        self::assertCount(4, $descriptor['operations']);
+        self::assertCount(7, $descriptor['operations']);
         foreach ($descriptor['operations'] as $operation) {
             self::assertTrue($operation['frontend']);
             self::assertTrue($operation['backend']);
@@ -75,7 +78,12 @@ final class ProductAdminQueryProviderTest extends TestCase
             ))
             ->willReturn(ProductAdminResult::ok(['diagnostics' => ['valid' => true]]));
 
-        $provider = new ProductAdminQueryProvider($reader, $commands);
+        $provider = new ProductAdminQueryProvider(
+            $reader,
+            $commands,
+            new ProductAdminBulkService($commands),
+            $this->createCategoryBulkService(),
+        );
         self::assertSame(
             [['product_id' => 7]],
             $provider->execute('search', [
@@ -101,5 +109,14 @@ final class ProductAdminQueryProviderTest extends TestCase
         ]]);
         self::assertTrue($result['success']);
         self::assertTrue($result['data']['diagnostics']['valid']);
+    }
+
+    private function createCategoryBulkService(): \Weline\Product\Service\ProductCategoryBulkAssignService
+    {
+        $reflection = new \ReflectionClass(\Weline\Product\Service\ProductCategoryBulkAssignService::class);
+        /** @var \Weline\Product\Service\ProductCategoryBulkAssignService $service */
+        $service = $reflection->newInstanceWithoutConstructor();
+
+        return $service;
     }
 }

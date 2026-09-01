@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\Http\Url;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Product\Repository\CategoryLinkRepository;
@@ -13,6 +14,7 @@ final class StorefrontCategoryViewService
     public function __construct(
         private readonly CategoryLinkRepository $categoryLinks,
         private readonly StorefrontCategoryTreeIndex $tree,
+        private readonly Url $url,
     ) {
     }
 
@@ -96,7 +98,7 @@ final class StorefrontCategoryViewService
             $partialPath = implode('/', $prefix);
             $breadcrumbs[] = [
                 'label' => $this->displayNameFromPath($segment),
-                'url' => '/category/' . $partialPath,
+                'url' => $this->url->getFrontendUrl('category/' . $partialPath),
             ];
         }
 
@@ -107,7 +109,7 @@ final class StorefrontCategoryViewService
                 'parent_id' => 0,
                 'path' => $slugPath,
                 'name' => $this->displayNameFromPath($slugPath),
-                'url' => '/category/' . $slugPath,
+                'url' => $this->url->getFrontendUrl('category/' . $slugPath),
                 'synthetic' => true,
             ],
             'children' => [],

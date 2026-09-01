@@ -5,7 +5,7 @@ declare(strict_types=1);
 return [
     'product-info' => [
         'name' => '产品主要信息',
-        'description' => '商品详情主信息：图库、标题、SKU、价格、加购与规格详情。',
+        'description' => '商品详情主信息：图库、标题、SKU、价格、购买操作槽与规格详情。',
         'type' => 'product',
         'code' => 'product-info',
         'area' => 'frontend',
@@ -13,6 +13,15 @@ return [
         'page_layouts' => ['product'],
         'position' => ['content'],
         'slot' => 'product-main',
+        'is_container' => true,
+        'slots' => [
+            'product-purchase-actions' => [
+                'name' => '购买操作',
+                'accepts' => ['product', 'cart', 'checkout'],
+                'slot_type' => 'layout-product-purchase-actions',
+                'max' => 5,
+            ],
+        ],
         'supports' => [
             'layout-product-main',
             'product-info',
@@ -27,9 +36,23 @@ return [
             'sort_order' => 0,
             'required' => true,
             'reason' => '商品详情默认在产品主内容槽展示产品主要信息',
-            'config' => [],
+            'config' => [
+                'show_brand' => true,
+                'show_supplier' => true,
+            ],
         ]],
-        'params' => [],
+        'params' => [
+            'show_brand' => [
+                'default' => true,
+                'type' => 'bool',
+                'label' => '显示品牌',
+            ],
+            'show_supplier' => [
+                'default' => true,
+                'type' => 'bool',
+                'label' => '显示供应商',
+            ],
+        ],
     ],
     'related-products' => [
         'name' => '相关产品',
@@ -169,12 +192,13 @@ return [
         'code' => 'recommended-products',
         'area' => 'frontend',
         'template' => 'Weline_Product::templates/frontend/widgets/recommended-products.phtml',
-        'page_layouts' => ['category', 'product_list'],
+        'page_layouts' => ['category', 'product_list', 'not_found'],
         'position' => ['content'],
         'slot' => 'category-recommendations',
         'supports' => [
             'layout-category-recommendations',
             'layout-product-list-recommendations',
+            'layout-not-found-recommendations',
             'recommended-products',
             'featured-products',
             'product-carousel',
@@ -203,6 +227,21 @@ return [
                 'sort_order' => 0,
                 'required' => true,
                 'reason' => '产品列表页默认展示真实目录推荐产品',
+                'config' => [
+                    'title' => '推荐产品',
+                    'limit' => 8,
+                    'columns' => '4',
+                    'layout' => 'grid',
+                ],
+            ],
+            [
+                'layout_type' => 'not_found',
+                'layout_option' => 'default',
+                'slot' => 'not-found-recommendations',
+                'area' => 'content',
+                'sort_order' => 0,
+                'required' => true,
+                'reason' => '404 静态页默认在推荐槽展示目录产品（生成快照时使用，运行时直读静态 HTML）',
                 'config' => [
                     'title' => '推荐产品',
                     'limit' => 8,

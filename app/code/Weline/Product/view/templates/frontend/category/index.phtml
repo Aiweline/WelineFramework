@@ -1,5 +1,6 @@
 <?php
 
+use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 /**
  * Amazon-style category results: breadcrumb, results bar, compact product grid.
@@ -18,11 +19,17 @@ $breadcrumbs = $this->getData('storefront_category_breadcrumbs') ?? [];
 $breadcrumbs = is_array($breadcrumbs) ? $breadcrumbs : [];
 $cartGuestToken = trim((string)($this->getData('cart_guest_token') ?? ''));
 $categoryName = trim((string)($category['name'] ?? __('分类')));
+$categoryBanner = trim((string)($category['banner'] ?? ''));
+$categorySummary = trim((string)($category['summary'] ?? ''));
+$categoryDescription = trim((string)($category['description'] ?? ''));
+$categoryImage = trim((string)($category['image'] ?? ''));
 $activePrice = trim((string)($this->getData('storefront_listing_price') ?? ''));
 $totalCount = max(0, (int)($this->getData('storefront_listing_total') ?? count($offers)));
 $visibleCount = max(0, (int)($this->getData('storefront_listing_count') ?? count($offers)));
 $sortOptions = $this->getData('storefront_listing_sort_options') ?? [];
 $sortOptions = is_array($sortOptions) ? $sortOptions : [];
+$children = $this->getData('storefront_category_children') ?? [];
+$children = is_array($children) ? $children : [];
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
 $from = $visibleCount > 0 ? 1 : 0;
@@ -34,7 +41,7 @@ $to = $visibleCount;
 
     <?php if ($breadcrumbs !== []): ?>
         <nav class="amz-plp__crumb" aria-label="<?= $escape(__('面包屑')) ?>">
-            <a href="<?= $escape((string)$this->getUrl('')) ?>"><?= __('首页') ?></a>
+            <a href="@url{'/'}"><?= __('首页') ?></a>
             <?php foreach ($breadcrumbs as $i => $crumb): ?>
                 <?php
                 if (!is_array($crumb)) {
@@ -54,8 +61,63 @@ $to = $visibleCount;
         </nav>
     <?php endif; ?>
 
+    <?php if ($categoryBanner !== ''): ?>
+        <div class="amz-plp__banner" data-testid="storefront-category-banner">
+            <img src="<?= $escape($categoryBanner) ?>"
+                 alt="<?= $escape($categoryName) ?>"
+                 loading="eager"
+                 decoding="async">
+        </div>
+    <?php endif; ?>
+
+    <?php if ($categoryImage !== '' || $categorySummary !== '' || $categoryDescription !== ''): ?>
+        <header class="amz-plp__intro" data-testid="storefront-category-intro">
+            <h1 class="amz-plp__heading">
+                <?php if ($categoryImage !== ''): ?>
+                    <img class="amz-plp__heading-icon"
+                         src="<?= $escape($categoryImage) ?>"
+                         alt=""
+                         width="40"
+                         height="40"
+                         loading="lazy">
+                <?php endif; ?>
+                <span><?= $escape($categoryName) ?></span>
+            </h1>
+            <?php if ($categorySummary !== ''): ?>
+                <p class="amz-plp__summary"><?= $escape($categorySummary) ?></p>
+            <?php endif; ?>
+            <?php if ($categoryDescription !== ''): ?>
+                <div class="amz-plp__description"><?= nl2br($escape($categoryDescription)) ?></div>
+            <?php endif; ?>
+        </header>
+    <?php endif; ?>
+
+    <?php if ($children !== []): ?>
+        <div class="amz-plp__children" data-testid="storefront-category-children">
+            <?php foreach ($children as $child): ?>
+                <?php
+                if (!is_array($child)) {
+                    continue;
+                }
+                $childName = trim((string)($child['name'] ?? ''));
+                $childUrl = trim((string)($child['url'] ?? ''));
+                $childImage = trim((string)($child['image'] ?? ''));
+                if ($childName === '' || $childUrl === '') {
+                    continue;
+                }
+                ?>
+                <a class="amz-plp__child" href="<?= $escape($childUrl) ?>">
+                    <?php if ($childImage !== ''): ?>
+                        <img src="<?= $escape($childImage) ?>" alt="" width="48" height="48" loading="lazy">
+                    <?php endif; ?>
+                    <span><?= $escape($childName) ?></span>
+                </a>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+
     <div class="amz-plp__results-bar" data-testid="storefront-category-toolbar">
-        <h1 class="amz-plp__results-text">
+        <h2 class="amz-plp__results-text">
             <?php if ($visibleCount > 0): ?>
                 <?= __('第 %{1}–%{2} 件，共 %{3} 件结果', [$from, $to, $visibleCount]) ?>
             <?php else: ?>
@@ -67,7 +129,7 @@ $to = $visibleCount;
             <?php if ($activePrice !== '' && $visibleCount !== $totalCount): ?>
                 <span class="amz-plp__results-hint"><?= __('（筛选自 %{1} 件）', [$totalCount]) ?></span>
             <?php endif; ?>
-        </h1>
+        </h2>
         <?php if ($sortOptions !== []): ?>
             <label class="amz-plp__sort">
                 <span><?= __('排序') ?>:</span>
@@ -116,9 +178,11 @@ $to = $visibleCount;
                 $productSlug = trim((string)($offer['slug'] ?? ''));
                 $productUrl = '';
                 if ($productSlug !== '') {
-                    $productUrl = (string)$this->getUrl('product/' . $productSlug);
+                    $productPath = 'product/' . $productSlug;
+$productUrl = $productPath; // route path; render with @url
                 } elseif ($productId > 0) {
-                    $productUrl = (string)$this->getUrl('product/' . $productId);
+                    $productPath = 'product/' . $productId;
+$productUrl = $productPath; // route path; render with @url
                 }
                 $imageResolved = StorefrontImagePlaceholder::resolve((string)($offer['image'] ?? ''), $productId);
                 $image = $imageResolved['src'];
@@ -130,7 +194,7 @@ $to = $visibleCount;
                          data-global-offer-uuid="<?= $escape($uuid) ?>">
                     <?php if ($productUrl !== ''): ?>
                         <a class="amz-card__hit"
-                           href="<?= $escape($productUrl) ?>"
+                           href="@url{$productUrl}"
                            aria-label="<?= $escape($productName) ?>"
                            data-testid="storefront-category-product-card-link"></a>
                     <?php endif; ?>
@@ -160,15 +224,12 @@ $to = $visibleCount;
                                 <span class="amz-card__amount"><?= number_format($minor / 100, 2) ?></span>
                             <?php endif; ?>
                         </p>
-                        <button type="button"
-                                class="amz-card__add"
-                                data-action="add-v2"
-                                data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
-                                data-product-id="<?= $productId ?>"
-                                data-global-offer-uuid="<?= $escape($uuid) ?>"
-                                <?= $sellable ? '' : 'disabled' ?>>
-                            <?= $quoteOnly ? __('仅询价') : ($sellable ? __('加入购物车') : __('暂不可售')) ?>
-                        </button>
+                        <?= $this->fetch(
+                            'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
+                            ProductCardAddToCartParams::fetchDictionaryFromOffer($offer, [
+                                'variant' => 'amz-card',
+                            ])
+                        ) ?>
                     </div>
                 </article>
             <?php endforeach; ?>
@@ -178,6 +239,76 @@ $to = $visibleCount;
 
 <style>
 .amz-plp { width: 100%; min-width: 0; color: #0f1111; }
+.amz-plp__banner {
+    margin: 0 0 14px;
+    border-radius: 8px;
+    overflow: hidden;
+    background: #f0f2f2;
+    aspect-ratio: 5 / 1;
+    max-height: 280px;
+}
+.amz-plp__banner img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.amz-plp__intro {
+    margin: 0 0 14px;
+}
+.amz-plp__heading {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 6px;
+    font-size: 22px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+.amz-plp__heading-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
+    object-fit: cover;
+    flex: 0 0 auto;
+}
+.amz-plp__summary {
+    margin: 0 0 8px;
+    color: #565959;
+    font-size: 14px;
+    line-height: 1.45;
+}
+.amz-plp__description {
+    margin: 0;
+    color: #0f1111;
+    font-size: 13px;
+    line-height: 1.55;
+}
+.amz-plp__children {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 0 0 14px;
+}
+.amz-plp__child {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 10px 6px 6px;
+    border: 1px solid #d5d9d9;
+    border-radius: 999px;
+    background: #fff;
+    color: #0f1111;
+    text-decoration: none;
+    font-size: 13px;
+}
+.amz-plp__child:hover { border-color: #c45500; color: #c45500; }
+.amz-plp__child img {
+    width: 32px;
+    height: 32px;
+    border-radius: 999px;
+    object-fit: cover;
+}
 .amz-plp__crumb {
     display: flex;
     flex-wrap: wrap;
@@ -363,26 +494,59 @@ $to = $visibleCount;
     font-weight: 600;
     vertical-align: super;
 }
-.amz-card__add {
-    position: relative;
-    z-index: 2;
+.amz-plp .product-card-purchase-actions {
+    display: grid;
+    gap: 6px;
+    width: 100%;
     margin-top: 6px;
+}
+.amz-plp .product-card-purchase-actions > .weline-cart-product-card-add-to-cart,
+.amz-plp .product-card-purchase-actions > .weline-checkout-product-card-buy-now {
+    width: 100%;
+}
+.amz-plp .product-card-purchase-actions button {
+    display: flex;
+    width: 100%;
     min-height: 30px;
-    border: 1px solid #fcd200;
-    border-radius: 20px;
-    background: #ffd814;
-    color: #0f1111;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border-radius: 999px;
     font: inherit;
     font-size: 12px;
     font-weight: 600;
+    line-height: 1.2;
     cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    box-sizing: border-box;
+    box-shadow: 0 2px 5px rgba(213, 217, 217, 0.45);
 }
-.amz-card__add:hover { background: #f7ca00; }
-.amz-card__add:disabled {
+.amz-plp .amz-card__add {
+    border: 1px solid #fcd200;
+    background: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
+    color: #0f1111;
+}
+.amz-plp .amz-card__add:hover:not(:disabled) {
+    background: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
+    border-color: #e7b92e;
+}
+.amz-plp .amz-card__buy-now {
+    border: 1px solid #ff8f00;
+    background: linear-gradient(180deg, #ffb84d 0%, #ffa41c 100%);
+    color: #0f1111;
+}
+.amz-plp .amz-card__buy-now:hover:not(:disabled) {
+    background: linear-gradient(180deg, #ff9f1a 0%, #fa8900 100%);
+    border-color: #e77600;
+}
+.amz-plp .amz-card__add:disabled,
+.amz-plp .amz-card__buy-now:disabled {
     border-color: #d5d9d9;
     background: #f0f2f2;
-    color: #9a9a9a;
+    color: #565959;
     cursor: not-allowed;
+    box-shadow: none;
 }
 .amz-plp__empty {
     padding: 28px 16px;
@@ -404,63 +568,3 @@ $to = $visibleCount;
     .amz-plp__sort-select { flex: 1; }
 }
 </style>
-
-<script>
-(function () {
-    'use strict';
-    const root = document.querySelector('[data-testid="storefront-category-catalog"]');
-    if (!root) return;
-    const message = root.querySelector('[data-testid="category-message"]');
-    const guestTokenStorageKey = 'weline.cart.guest_token';
-    let cartApi = null;
-    let guestToken = <?= json_encode($cartGuestToken, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    try {
-        guestToken = guestToken || String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
-    } catch (error) {}
-
-    async function api() {
-        if (cartApi) return cartApi;
-        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
-            throw new Error('Weline.Api unavailable');
-        }
-        cartApi = await window.Weline.Api.resource('cart');
-        return cartApi;
-    }
-
-    async function ensureGuestToken() {
-        if (guestToken) return guestToken;
-        const result = await (await api()).issueGuestToken({});
-        const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
-        guestToken = String((payload && payload.guest_token) || (result && result.guest_token) || '').trim();
-        if (!guestToken) throw new Error('<?= $escape(__('无法创建游客购物车会话')) ?>');
-        try { window.sessionStorage.setItem(guestTokenStorageKey, guestToken); } catch (error) {}
-        return guestToken;
-    }
-
-    root.addEventListener('click', async function (event) {
-        const button = event.target.closest('[data-action="add-v2"]');
-        if (!button || button.disabled) return;
-        button.disabled = true;
-        message.classList.remove('is-error');
-        message.textContent = '<?= $escape(__('正在加入购物车...')) ?>';
-        try {
-            const result = await (await api()).addV2({
-                provider_code: button.dataset.providerCode || 'product',
-                global_offer_uuid: button.dataset.globalOfferUuid || '',
-                legacy_product_id: Number(button.dataset.productId || 0),
-                guest_token: await ensureGuestToken(),
-                qty: 1
-            });
-            if (!result || result.success === false) {
-                throw new Error(result && result.message ? result.message : '<?= $escape(__('加入购物车失败')) ?>');
-            }
-            message.textContent = '<?= $escape(__('商品已加入购物车。')) ?>';
-            button.textContent = '<?= $escape(__('已加入')) ?>';
-        } catch (error) {
-            message.classList.add('is-error');
-            message.textContent = error && error.message ? error.message : '<?= $escape(__('加入购物车失败')) ?>';
-            button.disabled = false;
-        }
-    });
-})();
-</script>
