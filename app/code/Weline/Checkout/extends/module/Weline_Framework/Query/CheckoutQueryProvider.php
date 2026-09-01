@@ -24,6 +24,7 @@ use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Marketing\Service\MarketingCheckoutCouponSession;
 use Weline\Order\Api\Data\CreateCheckoutGroupResult;
 use Weline\Shipping\Model\DeliveryAddress;
 use Weline\Shipping\Service\DeliveryAddressService;
@@ -89,7 +90,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             $address = \is_array($params['address'] ?? null) ? $params['address'] : [];
             $clientHints = \is_array($params['client_hints'] ?? null) ? $params['client_hints'] : [];
             // Allow top-level money fields as client hints for rejection tests.
-            foreach (['shipping_amount', 'shipping_amount_minor', 'tax_amount', 'tax_amount_minor', 'grand_total', 'grand_total_minor'] as $moneyKey) {
+            foreach (['shipping_amount', 'shipping_amount_minor', 'tax_amount', 'tax_amount_minor', 'discount_amount', 'discount_amount_minor', 'grand_total', 'grand_total_minor'] as $moneyKey) {
                 if (\array_key_exists($moneyKey, $params) && !\array_key_exists($moneyKey, $clientHints)) {
                     $clientHints[$moneyKey] = $params[$moneyKey];
                 }
@@ -133,6 +134,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 clientHints: $clientHints,
                 customerId: $customerId,
                 cartHash: (string)$cart['cart_hash'],
+                couponCode: $this->resolveFreezeCouponCode($params),
+                paymentMethod: trim((string)($params['payment_method'] ?? '')) ?: null,
             );
 
             return [
@@ -166,7 +169,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
     {
         try {
             $clientHints = \is_array($params['client_hints'] ?? null) ? $params['client_hints'] : [];
-            foreach (['shipping_amount', 'shipping_amount_minor', 'tax_amount', 'tax_amount_minor', 'grand_total', 'grand_total_minor'] as $moneyKey) {
+            foreach (['shipping_amount', 'shipping_amount_minor', 'tax_amount', 'tax_amount_minor', 'discount_amount', 'discount_amount_minor', 'grand_total', 'grand_total_minor'] as $moneyKey) {
                 if (\array_key_exists($moneyKey, $params) && !\array_key_exists($moneyKey, $clientHints)) {
                     $clientHints[$moneyKey] = $params[$moneyKey];
                 }
@@ -189,6 +192,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 customerId: $this->currentCustomerId(),
                 expectedConfigVersion: $expectedConfig,
                 expectedTaxRuleSetHash: $expectedTaxHash,
+                paymentMethod: trim((string)($params['payment_method'] ?? '')) ?: null,
             );
             $payment = $this->paymentRecoveryState->get($quoteToken, $idempotencyKey);
             if (!is_array($payment)) {
@@ -218,6 +222,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
 
             return $this->createdCheckoutResponse($result, $quoteToken, $payment);
         } catch (CheckoutV2ConflictException $e) {
+            $this->reportCheckoutPixelIncident($e->errorCode(), $e->getMessage());
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -226,6 +231,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             ];
         } catch (\Weline\Order\Api\OrderFacadeConflictException $e) {
             // OrderFacade 冲突（idempotency hash / writer gate 等）原样透出错误码
+            $this->reportCheckoutPixelIncident($e->errorCode(), $e->getMessage());
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -233,6 +239,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'context' => $e->context(),
             ];
         } catch (\Weline\Inventory\Api\InventoryConflictException $e) {
+            $this->reportCheckoutPixelIncident($e->errorCode(), $e->getMessage());
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -240,11 +247,29 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'context' => $e->context(),
             ];
         } catch (\Throwable $e) {
+            $this->reportCheckoutPixelIncident('checkout_submit_v2_failed', $e->getMessage());
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
                 'error_code' => 'checkout_submit_v2_failed',
             ];
+        }
+    }
+
+    private function reportCheckoutPixelIncident(string $errorCode, string $message): void
+    {
+        if (!class_exists(\Weline\Visitor\Service\PixelServerErrorReporter::class)) {
+            return;
+        }
+        try {
+            /** @var \Weline\Visitor\Service\PixelServerErrorReporter $reporter */
+            $reporter = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Visitor\Service\PixelServerErrorReporter::class
+            );
+            $reporter->reportBusinessFailure($errorCode, $message, [
+                'page_url' => 'checkout/submit',
+            ]);
+        } catch (\Throwable) {
         }
     }
 
@@ -418,6 +443,25 @@ class CheckoutQueryProvider implements QueryProviderInterface
 
             return $payment;
         }
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function resolveFreezeCouponCode(array $params): ?string
+    {
+        $couponCode = strtoupper(trim((string)($params['coupon_code'] ?? '')));
+        if ($couponCode !== '') {
+            return $couponCode;
+        }
+
+        try {
+            $sessionCode = ObjectManager::getInstance(MarketingCheckoutCouponSession::class)->getCouponCode();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $sessionCode !== '' ? $sessionCode : null;
     }
 
     private function currentScope(): ScopeIdentity
@@ -720,6 +764,19 @@ class CheckoutQueryProvider implements QueryProviderInterface
      */
     private function placeOrder(array $params): array
     {
+        foreach (['discount_amount', 'discount_amount_minor'] as $discountKey) {
+            if (!\array_key_exists($discountKey, $params)) {
+                continue;
+            }
+            if ((float)$params[$discountKey] !== 0.0) {
+                return [
+                    'success' => false,
+                    'message' => (string)__('客户端折扣金额被拒绝，请使用结账优惠券。'),
+                    'error_code' => CheckoutGroupSubmitService::ERROR_CLIENT_DISCOUNT,
+                ];
+            }
+        }
+
         $identity = $this->resolveCheckoutIdentity($params);
         if (!empty($identity['is_guest_checkout'])) {
             $this->checkoutIdentityService->validateGuestCheckout($identity, $params);

@@ -1,0 +1,12 @@
+<?php
+/**
+ * Checkout-owned product card buy-now button.
+ *
+ * @hook-priority 100
+ * @hook-sort-order 0
+ * @hook-solo true
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+echo $this->fetch('Weline_Checkout::templates/frontend/widgets/product-card-buy-now.phtml');

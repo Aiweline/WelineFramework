@@ -100,6 +100,20 @@ class Checkout extends FrontendController
                 ]);
             }
 
+            $clientDiscount = (float)$this->request->getPost('discount_amount', 0);
+            $clientDiscountMinor = $this->request->getPost('discount_amount_minor');
+            if ($clientDiscount !== 0.0 || ($clientDiscountMinor !== null && (int)$clientDiscountMinor !== 0)) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => __('客户端折扣金额被拒绝，请使用结账优惠券。'),
+                ]);
+            }
+
+            $remark = trim((string)$this->request->getPost('remark', ''));
+            if ($remark === '') {
+                $remark = $this->resolveCheckoutRemarkFromSession();
+            }
+
             $data = [
                 'customer_id' => !empty($identity['is_guest_checkout']) ? 0 : max(0, (int)$identity['customer_id']),
                 'authenticated_customer_id' => $authenticatedCustomerId,
@@ -113,10 +127,10 @@ class Checkout extends FrontendController
                 'shipping_method' => $this->request->getPost('shipping_method', ''),
                 'shipping_amount' => (float)$this->request->getPost('shipping_amount', 0),
                 'tax_amount' => (float)$this->request->getPost('tax_amount', 0),
-                'discount_amount' => (float)$this->request->getPost('discount_amount', 0),
+                'discount_amount' => 0.0,
                 'payment_method' => $this->request->getPost('payment_method', ''),
                 'currency' => $this->request->getPost('currency', 'CNY'),
-                'remark' => $this->request->getPost('remark', ''),
+                'remark' => $remark,
             ];
 
             $order = $this->checkoutService->createOrder($data);
@@ -207,6 +221,17 @@ class Checkout extends FrontendController
                 'success' => false,
                 'message' => __('支付处理失败：%{1}', $e->getMessage())
             ]);
+        }
+    }
+
+    private function resolveCheckoutRemarkFromSession(): string
+    {
+        try {
+            $session = ObjectManager::getInstance(\Weline\Order\Service\OrderCheckoutRemarkSession::class);
+
+            return $session->getRemark();
+        } catch (\Throwable) {
+            return '';
         }
     }
 }

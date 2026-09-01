@@ -79,12 +79,52 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('const cartIsEmpty = Boolean(checkoutState.cart.is_empty);', $template);
         self::assertStringContainsString('form.hidden = cartIsEmpty;', $template);
         self::assertStringContainsString('emptyState.hidden = !cartIsEmpty;', $template);
+        self::assertStringContainsString('--checkout-text: var(--color-text-primary, #0f1111);', $template);
+        self::assertStringContainsString('--checkout-link: var(--color-link, #007185);', $template);
+        self::assertStringContainsString('--checkout-cta-bg: #ffd814;', $template);
+        self::assertStringNotContainsString('#2563eb', $template);
         self::assertMatchesRegularExpression(
-            '/\.weline-checkout__empty-state h2\s*\{[^}]*color:\s*var\(--weline-layout-text-primary/s',
+            '/\.weline-checkout__empty-state h2\s*\{[^}]*color:\s*var\(--checkout-text\)/s',
             $template,
         );
         self::assertMatchesRegularExpression(
-            '/\.weline-checkout__empty-state > p:not\(\.weline-checkout__eyebrow\)\s*\{[^}]*color:\s*var\(--weline-layout-text-primary[^}]*opacity:/s',
+            '/\.weline-checkout__empty-state > p:not\(\.weline-checkout__eyebrow\)\s*\{[^}]*color:\s*var\(--checkout-text-secondary\)/s',
+            $template,
+        );
+        self::assertMatchesRegularExpression(
+            '/\.weline-checkout__submit\s*\{[^}]*background:\s*var\(--checkout-cta-bg\)/s',
+            $template,
+        );
+    }
+
+    public function testCheckoutShippingAddressUsesSlotInsteadOfNakedRegionInputs(): void
+    {
+        $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
+
+        self::assertStringContainsString('id="checkout-shipping-address"', $template);
+        self::assertStringContainsString('class="weline-checkout__shipping-address-slot"', $template);
+        self::assertStringContainsString("accept=\"checkout-shipping-address,shipping-address,delivery-address,address\"", $template);
+        self::assertStringNotContainsString('<input name="country_code"', $template);
+        self::assertStringNotContainsString('<input name="province"', $template);
+        self::assertStringNotContainsString('<input name="city"', $template);
+        self::assertStringNotContainsString('<input name="address1"', $template);
+        self::assertStringContainsString("WelineThemeAddress.applyValues('checkout-shipping-address'", $template);
+        self::assertStringContainsString("district: text(data.get('district')).trim(),", $template);
+    }
+
+    public function testCheckoutSummaryUsesCouponWidgetSlotInsteadOfHookFetch(): void
+    {
+        $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
+
+        self::assertStringContainsString('id="checkout-summary-discount"', $template);
+        self::assertStringContainsString('class="weline-checkout__coupon-slot"', $template);
+        self::assertStringNotContainsString('<w:widget', $template);
+        self::assertMatchesRegularExpression(
+            '/\.weline-checkout__totals > \[role="listitem"\]/s',
+            $template,
+        );
+        self::assertStringNotContainsString(
+            'Weline_Marketing::templates/frontend/widgets/checkout-coupon.phtml',
             $template,
         );
     }
