@@ -8,6 +8,7 @@ use Weline\Eav\Api\Metadata\CompareMode;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Option;
+use Weline\Eav\Model\EavAttribute\Placement;
 use Weline\Eav\Model\EavAttribute\Set;
 use Weline\Eav\Model\EavAttribute\Type;
 use Weline\Eav\Model\EavEntity;
@@ -19,11 +20,21 @@ use Weline\Product\Model\ProductCatalogAttributeEntity;
  */
 final class ProductCatalogEavBootstrap
 {
+    /** 系统保留：承载商品实例级自由属性组/属性的属性集 code */
+    public const PRODUCT_FREE_SET_CODE = '__product_free';
+
+    /**
+     * Dedicated product basics (brand catalog / brand_id wizard field).
+     * Kept as writable value codes but must not sit in attribute-set editor groups.
+     *
+     * @var list<string>
+     */
+    public const DEDICATED_IDENTITY_ATTRIBUTE_CODES = ['brand', 'brand_code'];
+
     /** @var array<string, list<array{code:string,name:string}>> */
     private const GROUP_ATTRIBUTES = [
         'basic' => [
             ['code' => 'attribute_set', 'name' => '属性集'],
-            ['code' => 'brand', 'name' => '品牌'],
             ['code' => 'model', 'name' => '型号'],
             ['code' => 'color', 'name' => '颜色'],
         ],
@@ -60,6 +71,13 @@ final class ProductCatalogEavBootstrap
         'service' => [
             ['code' => 'warranty_months', 'name' => '质保(月)'],
         ],
+    ];
+
+    /** @var list<array{code:string,label:string}> */
+    private const WARRANTY_MONTHS_OPTIONS = [
+        ['code' => '12', 'label' => '12 个月'],
+        ['code' => '24', 'label' => '24 个月'],
+        ['code' => '36', 'label' => '36 个月'],
     ];
 
     /**
@@ -143,14 +161,72 @@ final class ProductCatalogEavBootstrap
             }
         }
 
+        $warranty = $this->ensureWarrantyMonthsSelect($entityId, $setId, $groupIds['service'], $typeId);
+        if ($warranty['attribute_created']) {
+            ++$attributeCount;
+        }
+
         $this->syncSystemAttributeMetadata($entityId);
+        $detached = $this->detachDedicatedIdentityAttributesFromSets($entityId);
 
         return [
             'entity_id' => $entityId,
             'set_id' => $setId,
             'groups' => $groupIds,
             'attributes' => $attributeCount,
+            'warranty_options_added' => $warranty['options_added'],
+            'detached_identity_attributes' => $detached,
         ];
+    }
+
+    /**
+     * Remove brand/brand_code from attribute-set groups and placements.
+     * Values remain writable via dedicated create basics (brand_id → brand/brand_code).
+     */
+    public function detachDedicatedIdentityAttributesFromSets(int $entityId = 0): int
+    {
+        $entityId = $entityId > 0 ? $entityId : $this->resolveEntityId();
+        if ($entityId <= 0) {
+            return 0;
+        }
+
+        $detached = 0;
+        /** @var EavAttribute $attributeModel */
+        $attributeModel = ObjectManager::getInstance(EavAttribute::class);
+        /** @var Placement $placementModel */
+        $placementModel = ObjectManager::getInstance(Placement::class);
+
+        foreach (self::DEDICATED_IDENTITY_ATTRIBUTE_CODES as $code) {
+            $attribute = clone $attributeModel;
+            $attribute->clearData()
+                ->where(EavAttribute::schema_fields_eav_entity_id, $entityId)
+                ->where(EavAttribute::schema_fields_code, $code)
+                ->find()
+                ->fetch();
+            $attributeId = (int)$attribute->getAttributeId();
+            if ($attributeId <= 0) {
+                continue;
+            }
+
+            foreach ($placementModel->clearData()
+                ->where(Placement::schema_fields_attribute_id, $attributeId)
+                ->select()
+                ->fetchArray() as $row) {
+                $placementId = (int)($row[Placement::schema_fields_placement_id] ?? 0);
+                if ($placementId <= 0) {
+                    continue;
+                }
+                (clone $placementModel)->load($placementId)->delete();
+                ++$detached;
+            }
+
+            if ($attribute->getSetId() !== 0 || $attribute->getGroupId() !== 0) {
+                $attribute->setSetId(0)->setGroupId(0)->save(true);
+                ++$detached;
+            }
+        }
+
+        return $detached;
     }
 
     /**
@@ -183,10 +259,8 @@ final class ProductCatalogEavBootstrap
 
         foreach ([
             ['code' => 'attribute_set', 'name' => '属性集', 'group' => $basicGroupId, 'select' => false, 'options' => []],
-            ['code' => 'brand', 'name' => '品牌', 'group' => $basicGroupId, 'select' => false, 'options' => []],
             ['code' => 'material', 'name' => '材质', 'group' => $specsGroupId, 'select' => false, 'options' => []],
             ['code' => 'care_instructions', 'name' => '保养说明', 'group' => $serviceGroupId, 'select' => false, 'options' => []],
-            ['code' => 'warranty_months', 'name' => '质保(月)', 'group' => $serviceGroupId, 'select' => false, 'options' => []],
         ] as $attribute) {
             if ($this->ensureAttribute(
                 $entityId,
@@ -196,6 +270,8 @@ final class ProductCatalogEavBootstrap
                 $attribute['code'],
                 $attribute['name'],
             )) {
+                ++$attributeCount;
+            } elseif ($this->ensurePlacementByCode($entityId, $attribute['code'], $setId, $attribute['group'])) {
                 ++$attributeCount;
             }
         }
@@ -243,6 +319,14 @@ final class ProductCatalogEavBootstrap
             ],
         ];
 
+        $warranty = $this->ensureWarrantyMonthsSelect($entityId, $setId, $serviceGroupId, $typeId);
+        if ($warranty['attribute_created']) {
+            ++$attributeCount;
+        } elseif ($this->ensurePlacementByCode($entityId, 'warranty_months', $setId, $serviceGroupId)) {
+            ++$attributeCount;
+        }
+        $optionCount += $warranty['options_added'];
+
         foreach ($variantDefinitions as $definition) {
             $created = $this->ensureSelectAttribute(
                 $entityId,
@@ -254,6 +338,8 @@ final class ProductCatalogEavBootstrap
                 $definition['options'],
             );
             if ($created['attribute_created']) {
+                ++$attributeCount;
+            } elseif ($this->ensurePlacementByCode($entityId, $definition['code'], $setId, $variantGroupId)) {
                 ++$attributeCount;
             }
             $optionCount += $created['options_added'];
@@ -270,7 +356,67 @@ final class ProductCatalogEavBootstrap
             ],
             'attributes' => $attributeCount,
             'options' => $optionCount,
+            'cleared_global_swatch_images' => $this->clearVariantOptionSwatchImages($entityId),
         ];
+    }
+
+    /**
+     * 全局 EAV 选项只保留抽象色值；商品样本图仅维护在商品 type_configuration。
+     */
+    public function clearVariantOptionSwatchImages(int $entityId): int
+    {
+        if ($entityId <= 0) {
+            return 0;
+        }
+
+        $cleared = 0;
+        foreach (['color', 'style_type', 'size'] as $attributeCode) {
+            /** @var EavAttribute $attribute */
+            $attribute = ObjectManager::getInstance(EavAttribute::class);
+            $attribute->clearData()
+                ->where(EavAttribute::schema_fields_eav_entity_id, $entityId)
+                ->where(EavAttribute::schema_fields_code, $attributeCode)
+                ->find()
+                ->fetch();
+            $attributeId = (int)$attribute->getAttributeId();
+            if ($attributeId <= 0) {
+                continue;
+            }
+
+            /** @var Option $optionModel */
+            $optionModel = ObjectManager::getInstance(Option::class);
+            foreach ($optionModel->clearData()
+                ->where(Option::schema_fields_eav_entity_id, $entityId)
+                ->where(Option::schema_fields_attribute_id, $attributeId)
+                ->select()
+                ->fetchArray() as $row) {
+                $optionId = (int)($row[Option::schema_fields_ID] ?? 0);
+                if ($optionId <= 0 || trim((string)($row[Option::schema_fields_swatch_image] ?? '')) === '') {
+                    continue;
+                }
+                $optionModel->clearData()
+                    ->where(Option::schema_fields_ID, $optionId)
+                    ->find()
+                    ->fetch();
+                if ((int)$optionModel->getOptionId() <= 0) {
+                    continue;
+                }
+                $optionModel->addData([Option::schema_fields_swatch_image => ''])->save();
+                ++$cleared;
+            }
+        }
+
+        return $cleared;
+    }
+
+    public function ensureProductFreeSet(int $entityId): int
+    {
+        return $this->ensureSet($entityId, self::PRODUCT_FREE_SET_CODE, '商品自由属性');
+    }
+
+    public function productFreeSetId(int $entityId): int
+    {
+        return $this->ensureProductFreeSet($entityId);
     }
 
     private function resolveEntityId(): int
@@ -391,6 +537,54 @@ final class ProductCatalogEavBootstrap
         return true;
     }
 
+    private function ensurePlacementByCode(int $entityId, string $code, int $setId, int $groupId): bool
+    {
+        /** @var EavAttribute $attribute */
+        $attribute = ObjectManager::getInstance(EavAttribute::class);
+        $attribute->clearData()
+            ->where(EavAttribute::schema_fields_eav_entity_id, $entityId)
+            ->where(EavAttribute::schema_fields_code, $code)
+            ->find()
+            ->fetch();
+        $attributeId = (int)$attribute->getAttributeId();
+        if ($attributeId <= 0) {
+            return false;
+        }
+        if ((int)$attribute->getSetId() === $setId && (int)$attribute->getGroupId() === $groupId) {
+            return false;
+        }
+
+        return $this->ensurePlacement($entityId, $attributeId, $setId, $groupId);
+    }
+
+    private function ensurePlacement(int $entityId, int $attributeId, int $setId, int $groupId): bool
+    {
+        /** @var Placement $placement */
+        $placement = ObjectManager::getInstance(Placement::class);
+        $placement->clearData()
+            ->where(Placement::schema_fields_attribute_id, $attributeId)
+            ->where(Placement::schema_fields_set_id, $setId)
+            ->find()
+            ->fetch();
+        if ((int)$placement->getId() > 0) {
+            if ((int)$placement->getData(Placement::schema_fields_group_id) === $groupId) {
+                return false;
+            }
+            $placement->setData(Placement::schema_fields_group_id, $groupId)->save();
+
+            return true;
+        }
+
+        $placement->clearData()->insert([
+            Placement::schema_fields_attribute_id => $attributeId,
+            Placement::schema_fields_eav_entity_id => $entityId,
+            Placement::schema_fields_set_id => $setId,
+            Placement::schema_fields_group_id => $groupId,
+        ])->fetch();
+
+        return (int)$placement->getId() > 0;
+    }
+
     public function syncSystemAttributeMetadata(int $entityId = 0): int
     {
         $entityId = $entityId > 0 ? $entityId : $this->resolveEntityId();
@@ -439,7 +633,28 @@ final class ProductCatalogEavBootstrap
     }
 
     /**
-     * @param list<array{code:string,label:string,swatch?:string}> $options
+     * @return array{attribute_created:bool,options_added:int}
+     */
+    private function ensureWarrantyMonthsSelect(int $entityId, int $setId, int $groupId, int $typeId): array
+    {
+        $created = $this->ensureSelectAttribute(
+            $entityId,
+            $setId,
+            $groupId,
+            $typeId,
+            'warranty_months',
+            '质保(月)',
+            self::WARRANTY_MONTHS_OPTIONS,
+        );
+        if (!$created['attribute_created']) {
+            $this->ensurePlacementByCode($entityId, 'warranty_months', $setId, $groupId);
+        }
+
+        return $created;
+    }
+
+    /**
+     * @param list<array{code:string,label:string,swatch?:string,swatch_image?:string}> $options
      * @return array{attribute_created:bool,options_added:int}
      */
     private function ensureSelectAttribute(
@@ -525,7 +740,16 @@ final class ProductCatalogEavBootstrap
             ->find()
             ->fetch();
         if ((int)$option->getOptionId() > 0) {
-            return false;
+            $changes = [];
+            if ($swatchColor !== '') {
+                $changes[Option::schema_fields_swatch_color] = $swatchColor;
+            }
+            if ($changes === []) {
+                return false;
+            }
+            $option->addData($changes)->save();
+
+            return true;
         }
 
         $row = [

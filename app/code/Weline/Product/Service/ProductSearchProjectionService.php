@@ -7,8 +7,11 @@ namespace Weline\Product\Service;
 use Weline\Product\Api\ProductIdentityV2ResolverInterface;
 use Weline\Product\Api\ProductSearchProjectionMutationCoordinatorInterface;
 use Weline\Product\Model\ProductSearchProjectionStream;
+use Weline\Product\Model\Shard\AttributeValue;
 use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Product;
+use Weline\Product\Repository\AttributeValueRepository;
+use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Repository\OfferRepository;
 use Weline\Product\Repository\ProductRepository;
 use Weline\Product\Repository\StoreOfferRepository;
@@ -24,11 +27,22 @@ use Weline\Websites\Api\Catalog\WebsiteCatalogInterface;
  */
 final class ProductSearchProjectionService
 {
+    /** @var list<string> */
+    private const SEARCH_KEYWORD_ATTRIBUTES = [
+        'brand',
+        'model',
+        'short_description',
+    ];
+
+    private const SEARCH_NAME_ATTRIBUTE = 'name';
+
     public function __construct(
         private readonly ProductRepository $products,
         private readonly StoreProductRepository $storeProducts,
         private readonly OfferRepository $offers,
         private readonly StoreOfferRepository $storeOffers,
+        private readonly AttributeValueRepository $attributes,
+        private readonly CategoryLinkRepository $categoryLinks,
         private readonly ProductIdentityV2ResolverInterface $identities,
         private readonly ProductSearchProjectionStream $stream,
         private readonly WebsiteCatalogInterface $websites,
@@ -77,6 +91,11 @@ final class ProductSearchProjectionService
             }
         }
 
+        $searchTexts = $this->buildProductSearchTexts(
+            $websiteId,
+            array_keys($publishedProducts),
+        );
+
         $documents = [];
         foreach ($publishedProducts as $productId => $product) {
             foreach ($scopes as $scope) {
@@ -95,6 +114,7 @@ final class ProductSearchProjectionService
                         $product,
                         $offer,
                         $watermark,
+                        $searchTexts[$productId] ?? ['title' => '', 'keywords' => '', 'localized_titles' => []],
                     );
                 }
             }
@@ -165,6 +185,7 @@ final class ProductSearchProjectionService
             && (string)$product->getData(Product::schema_fields_STATUS) === Product::STATUS_PUBLISHED
         ) {
             $productRow = $product->getData();
+            $searchTexts = $this->buildProductSearchTexts($websiteId, [$productId]);
             foreach ($scopes as $scope) {
                 $scopeStoreId = $scope['store']->id;
                 if (!$this->storeProducts->isSelected($websiteId, $scopeStoreId, $productId)) {
@@ -186,6 +207,7 @@ final class ProductSearchProjectionService
                         $productRow,
                         $offer,
                         $currentWatermark,
+                        $searchTexts[$productId] ?? ['title' => '', 'keywords' => '', 'localized_titles' => []],
                     );
                 }
             }
@@ -241,7 +263,9 @@ final class ProductSearchProjectionService
 
     /**
      * @param array{store:StoreSummary,channel:\Weline\Websites\Api\Catalog\Data\SalesChannelSummary} $scope
-     * @param array<string,mixed> $row
+     * @param array<string,mixed> $product
+     * @param array<string,mixed> $offer
+     * @param array{title:string,keywords:string,localized_titles:array<string,string>} $searchText
      * @return array<string,mixed>
      */
     private function document(
@@ -250,6 +274,7 @@ final class ProductSearchProjectionService
         array $product,
         array $offer,
         int $documentVersion,
+        array $searchText,
     ): array {
         $productId = (int)($product[Product::schema_fields_ID] ?? 0);
         $offerId = (int)($offer[Offer::schema_fields_ID] ?? 0);
@@ -272,9 +297,25 @@ final class ProductSearchProjectionService
             : $this->identities->resolveProductByUuid($productUuid);
         $identity = $this->documentIdentity($website, $scope, $offerUuid);
 
+        $title = \trim($searchText['title'] ?? '');
+        if ($title === '') {
+            $title = $sku;
+        }
+        $keywordParts = [
+            $sku,
+            (string)($productIdentity?->productCode ?? ''),
+            (string)($searchText['keywords'] ?? ''),
+        ];
+
         return $identity + [
-            'title' => $sku,
-            'keywords' => \trim($sku . ' ' . ($productIdentity?->productCode ?? '')),
+            'title' => $title,
+            'keywords' => \trim(\implode(' ', \array_filter(
+                $keywordParts,
+                static fn(string $part): bool => $part !== '',
+            ))),
+            'localized_titles' => \is_array($searchText['localized_titles'] ?? null)
+                ? $searchText['localized_titles']
+                : [],
             'url' => 'product/' . $productId,
             'product_id' => $productId,
             'offer_id' => $offerId,
@@ -335,6 +376,159 @@ final class ProductSearchProjectionService
             'locale' => '',
             'currency' => '',
         ];
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @return array<int, array{title:string,keywords:string,localized_titles:array<string,string>}>
+     */
+    private function buildProductSearchTexts(int $websiteId, array $productIds): array
+    {
+        $productIds = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        if ($productIds === []) {
+            return [];
+        }
+
+        $texts = [];
+        foreach ($productIds as $productId) {
+            $texts[$productId] = [
+                'title' => '',
+                'keywords' => '',
+                'localized_titles' => [],
+            ];
+        }
+
+        $productAttributes = $this->collectLocalizedAttributeTexts(
+            $websiteId,
+            'product',
+            $productIds,
+            \array_merge([self::SEARCH_NAME_ATTRIBUTE], self::SEARCH_KEYWORD_ATTRIBUTES),
+        );
+
+        $categoryIds = [];
+        foreach ($this->categoryLinks->listByProductIds($websiteId, $productIds, [0]) as $link) {
+            if ((int)($link['selected'] ?? 0) !== 1) {
+                continue;
+            }
+            $categoryId = (int)($link['category_id'] ?? 0);
+            if ($categoryId > 0) {
+                $categoryIds[$categoryId] = $categoryId;
+            }
+        }
+        $categoryAttributes = $categoryIds === []
+            ? []
+            : $this->collectLocalizedAttributeTexts(
+                $websiteId,
+                'category',
+                \array_values($categoryIds),
+                [self::SEARCH_NAME_ATTRIBUTE],
+            );
+
+        foreach ($productIds as $productId) {
+            $keywordParts = [];
+            $namesByLocale = $productAttributes[$productId][self::SEARCH_NAME_ATTRIBUTE] ?? [];
+            $texts[$productId]['localized_titles'] = $namesByLocale;
+            $texts[$productId]['title'] = $this->pickPrimaryLocaleText($namesByLocale);
+
+            foreach ($productAttributes[$productId] ?? [] as $attributeTexts) {
+                foreach ($attributeTexts as $value) {
+                    $keywordParts[] = $value;
+                }
+            }
+
+            foreach ($this->categoryLinks->listByProductIds($websiteId, [$productId], [0]) as $link) {
+                if ((int)($link['selected'] ?? 0) !== 1) {
+                    continue;
+                }
+                $categoryId = (int)($link['category_id'] ?? 0);
+                foreach ($categoryAttributes[$categoryId][self::SEARCH_NAME_ATTRIBUTE] ?? [] as $value) {
+                    $keywordParts[] = $value;
+                }
+            }
+
+            $texts[$productId]['keywords'] = \trim(\implode(' ', \array_values(\array_unique(\array_filter(
+                $keywordParts,
+                static fn(string $part): bool => $part !== '',
+            )))));
+        }
+
+        return $texts;
+    }
+
+    /**
+     * @param list<int> $entityIds
+     * @param list<string> $attributeCodes
+     * @return array<int, array<string, array<string, string>>>
+     */
+    private function collectLocalizedAttributeTexts(
+        int $websiteId,
+        string $entityType,
+        array $entityIds,
+        array $attributeCodes,
+    ): array {
+        $entityIds = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $entityIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        $attributeCodes = \array_values(\array_unique(\array_filter(
+            \array_map(
+                static fn(string $code): string => \trim($code),
+                $attributeCodes,
+            ),
+            static fn(string $code): bool => $code !== '',
+        )));
+        if ($entityIds === [] || $attributeCodes === []) {
+            return [];
+        }
+
+        $attributeCodeSet = \array_fill_keys($attributeCodes, true);
+        $texts = [];
+        foreach ($this->attributes->listExplicitRows(
+            $websiteId,
+            $entityType,
+            $entityIds,
+            [AttributeValue::WEBSITE_STORE_ID],
+        ) as $row) {
+            if (!empty($row['cleared'])) {
+                continue;
+            }
+            $attributeCode = \trim((string)($row['attribute_code'] ?? ''));
+            if ($attributeCode === '' || !isset($attributeCodeSet[$attributeCode])) {
+                continue;
+            }
+            $entityId = (int)($row['entity_id'] ?? 0);
+            if ($entityId <= 0) {
+                continue;
+            }
+            $value = \trim((string)($row['value'] ?? ''));
+            if ($value === '') {
+                continue;
+            }
+            $locale = \trim((string)($row['locale'] ?? ''));
+            $texts[$entityId][$attributeCode][$locale] = $value;
+        }
+
+        return $texts;
+    }
+
+    /**
+     * @param array<string, string> $localeTexts
+     */
+    private function pickPrimaryLocaleText(array $localeTexts): string
+    {
+        if (isset($localeTexts['']) && $localeTexts[''] !== '') {
+            return $localeTexts[''];
+        }
+        foreach ($localeTexts as $value) {
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
     }
 
     private function website(int $websiteId): WebsiteSummary

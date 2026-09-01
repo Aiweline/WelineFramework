@@ -8,6 +8,8 @@ use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Product\Api\Data\ProductAdminCommand;
 use Weline\Product\Api\ProductAdminCommandInterface;
 use Weline\Product\Api\ProductAdminReadInterface;
+use Weline\Product\Service\ProductAdminBulkService;
+use Weline\Product\Service\ProductCategoryBulkAssignService;
 
 /**
  * Backend browser Resource for the universal Product editor.
@@ -22,6 +24,8 @@ final class ProductAdminQueryProvider implements QueryProviderInterface
     public function __construct(
         private readonly ProductAdminReadInterface $reader,
         private readonly ProductAdminCommandInterface $commands,
+        private readonly ProductAdminBulkService $bulk,
+        private readonly ProductCategoryBulkAssignService $categoryBulk,
     ) {
     }
 
@@ -36,6 +40,10 @@ final class ProductAdminQueryProvider implements QueryProviderInterface
             'search' => $this->search($params),
             'creationContext' => $this->creationContext($params),
             'snapshot' => $this->snapshot($params),
+            'attributeCatalog' => $this->attributeCatalog($params),
+            'checkSlug' => $this->checkSlug($params),
+            'bulkCommand' => $this->bulkCommand($params),
+            'bulkAssignCategories' => $this->bulkAssignCategories($params),
             'command' => $this->command($params),
             default => throw new \InvalidArgumentException(
                 (string)__('商品后台 Resource 不支持操作：%{1}', [$operation]),
@@ -64,6 +72,27 @@ final class ProductAdminQueryProvider implements QueryProviderInterface
                     ['name' => 'store_id', 'type' => 'int|null', 'required' => false, 'min' => 1],
                     ['name' => 'locale', 'type' => 'string', 'required' => false, 'max_length' => 32],
                     ['name' => 'currency', 'type' => 'string', 'required' => false, 'max_length' => 8],
+                ]),
+                $this->operation('attributeCatalog', (string)__('读取商品属性目录'), 'read', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true, 'min' => 0],
+                    ['name' => 'global_product_uuid', 'type' => 'string', 'required' => true, 'max_length' => 36],
+                ]),
+                $this->operation('checkSlug', (string)__('检查前台 URL Handle 是否可用'), 'read', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true, 'min' => 0],
+                    ['name' => 'slug', 'type' => 'string', 'required' => true, 'max_length' => 255],
+                    ['name' => 'exclude_product_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                ]),
+                $this->operation('bulkCommand', (string)__('批量执行商品后台命令'), 'write', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true, 'min' => 0],
+                    ['name' => 'action', 'type' => 'string', 'required' => true, 'max_length' => 64],
+                    ['name' => 'base_request_hash', 'type' => 'string', 'required' => true, 'min_length' => 64, 'max_length' => 64],
+                    ['name' => 'items', 'type' => 'array', 'required' => true],
+                ]),
+                $this->operation('bulkAssignCategories', (string)__('批量调整商品 Website 分类'), 'write', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true, 'min' => 0],
+                    ['name' => 'mode', 'type' => 'string', 'required' => true, 'max_length' => 16],
+                    ['name' => 'category_ids', 'type' => 'array', 'required' => true],
+                    ['name' => 'items', 'type' => 'array', 'required' => true],
                 ]),
                 $this->operation('command', (string)__('执行商品创建、保存、校验与生命周期命令'), 'write', [
                     ['name' => 'command', 'type' => 'object', 'required' => true],
@@ -100,7 +129,7 @@ final class ProductAdminQueryProvider implements QueryProviderInterface
         $storeId = null;
         if (array_key_exists('store_id', $params) && $params['store_id'] !== null && $params['store_id'] !== '') {
             $storeId = $this->canonicalInt($params['store_id'], 'store_id');
-            if ($storeId <= 0) {
+            if ($storeId < 0) {
                 throw new \InvalidArgumentException('product_admin_store_invalid');
             }
         }
@@ -114,6 +143,80 @@ final class ProductAdminQueryProvider implements QueryProviderInterface
                 strtoupper($this->optionalString($params, 'currency', 8) ?: 'CNY'),
             )->toArray(),
         ];
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function attributeCatalog(array $params): array
+    {
+        return [
+            'success' => true,
+            'catalog' => $this->reader->attributeCatalog(
+                $this->websiteId($params),
+                $this->requiredString($params, 'global_product_uuid', 36),
+            ),
+        ];
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function checkSlug(array $params): array
+    {
+        $excludeProductId = 0;
+        if (array_key_exists('exclude_product_id', $params) && $params['exclude_product_id'] !== null && $params['exclude_product_id'] !== '') {
+            $excludeProductId = $this->canonicalInt($params['exclude_product_id'], 'exclude_product_id');
+            if ($excludeProductId < 0) {
+                throw new \InvalidArgumentException('product_admin_exclude_product_invalid');
+            }
+        }
+
+        $availability = $this->reader->slugAvailability(
+            $this->websiteId($params),
+            $this->requiredString($params, 'slug', 255),
+            $excludeProductId,
+        );
+
+        return [
+            'success' => true,
+            'available' => (bool)($availability['available'] ?? false),
+            'slug' => (string)($availability['slug'] ?? ''),
+            'reason' => (string)($availability['reason'] ?? ''),
+            'conflict_product_id' => (int)($availability['conflict_product_id'] ?? 0),
+        ];
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function bulkCommand(array $params): array
+    {
+        $items = $params['items'] ?? null;
+        if (!is_array($items)) {
+            throw new \InvalidArgumentException('product_admin_bulk_items_invalid');
+        }
+
+        return $this->bulk->execute(
+            $this->websiteId($params),
+            $this->requiredString($params, 'action', 64),
+            $this->requiredString($params, 'base_request_hash', 64),
+            $items,
+        );
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function bulkAssignCategories(array $params): array
+    {
+        $items = $params['items'] ?? null;
+        $categoryIds = $params['category_ids'] ?? null;
+        if (!is_array($items)) {
+            throw new \InvalidArgumentException('product_admin_bulk_items_invalid');
+        }
+        if (!is_array($categoryIds)) {
+            throw new \InvalidArgumentException('product_category_bulk_categories_invalid');
+        }
+
+        return $this->categoryBulk->execute(
+            $this->websiteId($params),
+            $this->requiredString($params, 'mode', 16),
+            $categoryIds,
+            $items,
+        );
     }
 
     /** @param array<string,mixed> $params @return array<string,mixed> */

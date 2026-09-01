@@ -63,6 +63,8 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
         private readonly StoreProductRepository $storeProducts,
         private readonly StoreOfferRepository $storeOffers,
         private readonly StoreCatalogInterface $storeCatalog,
+        private readonly ProductBrandAdminService $brandAdmin,
+        private readonly ProductSupplierAdminService $supplierAdmin,
         ?InventoryCatalogCopyCapabilityInterface $inventory = null,
     ) {
         $this->resolvedInventory = $inventory;
@@ -108,7 +110,10 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             return ProductAdminResult::fail(
                 'product_admin_internal_error',
                 (string)__('商品操作失败，请稍后重试'),
-                ['exception' => $exception::class],
+                [
+                    'exception' => $exception::class,
+                    'exception_message' => $exception->getMessage(),
+                ],
             );
         }
     }
@@ -218,6 +223,34 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     $name,
                     true,
                 );
+                $attributeSetCode = strtolower(trim((string)($payload['attribute_set'] ?? '')));
+                if ($attributeSetCode !== '') {
+                    $this->attributes->writeTyped(
+                        $command->websiteId,
+                        0,
+                        'product',
+                        $productId,
+                        'attribute_set',
+                        '',
+                        'string',
+                        $attributeSetCode,
+                        false,
+                    );
+                    $attributeSetLabel = trim((string)($payload['attribute_set_label'] ?? ''));
+                    if ($attributeSetLabel !== '') {
+                        $this->attributes->writeTyped(
+                            $command->websiteId,
+                            0,
+                            'product',
+                            $productId,
+                            'attribute_set_label',
+                            '',
+                            'string',
+                            $attributeSetLabel,
+                            false,
+                        );
+                    }
+                }
                 $typeConfiguration = $payload['type_configuration'] ?? [];
                 if (!is_array($typeConfiguration)) {
                     throw new \InvalidArgumentException('product_type_configuration_invalid');
@@ -240,6 +273,22 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     'json',
                     $typeConfiguration,
                 );
+                $this->writeCreateBasicsContent(
+                    $command->websiteId,
+                    $productId,
+                    $this->payloadWithResolvedBrand($command->websiteId, $payload),
+                );
+                $this->supplierAdmin->upsertPrimaryFromPayload(
+                    $command->websiteId,
+                    $productId,
+                    $payload,
+                );
+
+                if (!empty($payload['attributes']) && is_array($payload['attributes'])) {
+                    $this->writeAttributes($command->websiteId, $productId, [
+                        'attributes' => $payload['attributes'],
+                    ]);
+                }
 
                 foreach ($selectedStoreIds as $storeId) {
                     $this->storeProducts->select($command->websiteId, $storeId, $productId, true);
@@ -253,13 +302,34 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     }
                 }
                 $this->writeCreatePrices($command->websiteId, $localOffers, $payload);
+                $this->writeTaxonomyAndMedia($command->websiteId, $productId, $payload);
+
+                $offerIdentityArrays = array_map(
+                    static fn($offerIdentity): array => $offerIdentity->toArray(),
+                    $offerIdentities,
+                );
+                $inventoryPayload = $this->payloadWithCreateInventory(
+                    $payload,
+                    $offerIdentityArrays,
+                    $selectedStoreIds,
+                );
+                $inventoryRows = $this->inventoryRows(
+                    $command->websiteId,
+                    $productType,
+                    $productId,
+                    $inventoryPayload,
+                );
+                if ($inventoryRows !== []) {
+                    $inventory = $this->inventory();
+                    if ($inventory === null) {
+                        throw new \InvalidArgumentException('product_inventory_capability_unavailable');
+                    }
+                    $this->writeInventoryRows($command, $inventoryRows, $inventory);
+                }
 
                 return [
                     'identity' => $identity->toArray(),
-                    'offer_identities' => array_map(
-                        static fn($offerIdentity): array => $offerIdentity->toArray(),
-                        $offerIdentities,
-                    ),
+                    'offer_identities' => $offerIdentityArrays,
                     'product_id' => $productId,
                 ];
             },
@@ -660,7 +730,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
         if (!($diagnostics['valid'] ?? false)) {
             return ProductAdminResult::fail(
                 'product_publish_validation_failed',
-                (string)__('发布校验未通过'),
+                $this->publishFailureMessage($diagnostics),
                 ['diagnostics' => $diagnostics],
             );
         }
@@ -944,6 +1014,214 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
         return [['sku' => $sku, 'combination_key' => '', 'configuration' => []]];
     }
 
+    /**
+     * Map brand_id from create wizard onto brand/brand_code text attributes.
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function payloadWithResolvedBrand(int $websiteId, array $payload): array
+    {
+        $brandId = max(0, (int)($payload['brand_id'] ?? 0));
+        if ($brandId <= 0) {
+            return $payload;
+        }
+        $resolved = $this->brandAdmin->resolveForProduct($websiteId, $brandId);
+        if ($resolved === null) {
+            throw new \InvalidArgumentException('product_brand_invalid');
+        }
+        $payload['brand'] = $resolved['name'];
+        $payload['brand_code'] = $resolved['code'];
+
+        return $payload;
+    }
+
+    /**
+     * Create-wizard foundation profile (WeShop-aligned product basics, not EAV attribute groups).
+     * Price → {@see writeCreatePrices()}; media/categories → {@see writeTaxonomyAndMedia()};
+     * stock → inventory rows synthesized by {@see payloadWithCreateInventory()}.
+     *
+     * @param array<string, mixed> $payload
+     */
+    private function writeCreateBasicsContent(int $websiteId, int $productId, array $payload): void
+    {
+        $locale = (string)($payload['locale'] ?? '');
+        foreach ([
+            'short_description',
+            'description',
+            'meta_name',
+            'meta_description',
+            'meta_keywords',
+            'slug',
+            'spu',
+            'brand',
+            'brand_code',
+            'barcode',
+            'visibility',
+        ] as $code) {
+            if (!array_key_exists($code, $payload)) {
+                continue;
+            }
+            $value = trim((string)$payload[$code]);
+            if ($value === '') {
+                continue;
+            }
+            if ($code === 'slug') {
+                $slug = strtolower($value);
+                if (preg_match('#^[a-z][a-z0-9]*(?:-[a-z0-9]+)*$#D', $slug) !== 1) {
+                    throw new \InvalidArgumentException('product_slug_invalid');
+                }
+                $conflictIds = $this->attributes->findEntityIdsByAttributeValue(
+                    $websiteId,
+                    'product',
+                    'slug',
+                    $slug,
+                    0,
+                );
+                foreach ($conflictIds as $conflictId) {
+                    if ((int)$conflictId > 0 && (int)$conflictId !== $productId) {
+                        throw new \InvalidArgumentException('product_slug_taken');
+                    }
+                }
+                $value = $slug;
+            }
+            if ($code === 'visibility'
+                && !in_array($value, ['catalog', 'search', 'catalog_search', 'hidden'], true)
+            ) {
+                throw new \InvalidArgumentException('product_visibility_invalid');
+            }
+            $max = match ($code) {
+                'meta_name', 'slug', 'spu', 'brand', 'brand_code', 'barcode', 'visibility' => 255,
+                'description' => 20000,
+                default => 2000,
+            };
+            if (strlen($value) > $max) {
+                throw new \InvalidArgumentException('product_' . $code . '_too_large');
+            }
+            $this->attributes->writeTyped(
+                $websiteId,
+                0,
+                'product',
+                $productId,
+                $code,
+                $locale,
+                'string',
+                $value,
+                false,
+            );
+        }
+
+        foreach (['weight' => 'weight_kg', 'length' => 'length_cm', 'width' => 'width_cm', 'height' => 'height_cm'] as $input => $code) {
+            if (!array_key_exists($input, $payload) || $payload[$input] === null || $payload[$input] === '') {
+                continue;
+            }
+            if (!is_numeric($payload[$input])) {
+                throw new \InvalidArgumentException('product_' . $input . '_invalid');
+            }
+            $number = (float)$payload[$input];
+            if ($number < 0) {
+                throw new \InvalidArgumentException('product_' . $input . '_invalid');
+            }
+            $this->attributes->writeTyped(
+                $websiteId,
+                0,
+                'product',
+                $productId,
+                $code,
+                '',
+                'number',
+                $number,
+                false,
+            );
+        }
+
+        if (array_key_exists('quote_only', $payload)) {
+            $quoteOnly = $payload['quote_only'];
+            $enabled = $quoteOnly === true
+                || $quoteOnly === 1
+                || $quoteOnly === '1'
+                || $quoteOnly === 'true';
+            $this->attributes->writeTyped(
+                $websiteId,
+                0,
+                'product',
+                $productId,
+                'quote_only',
+                '',
+                'string',
+                $enabled ? '1' : '0',
+                false,
+            );
+        }
+
+        if (!array_key_exists('cost', $payload) || $payload['cost'] === null || $payload['cost'] === '') {
+            return;
+        }
+        if (!is_numeric($payload['cost'])) {
+            throw new \InvalidArgumentException('product_cost_invalid');
+        }
+        $cost = (float)$payload['cost'];
+        if ($cost < 0) {
+            throw new \InvalidArgumentException('product_cost_invalid');
+        }
+        $this->attributes->writeTyped(
+            $websiteId,
+            0,
+            'product',
+            $productId,
+            'cost',
+            '',
+            'number',
+            $cost,
+            false,
+        );
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @param list<array<string, mixed>> $offerIdentities
+     * @param list<int> $selectedStoreIds
+     * @return array<string, mixed>
+     */
+    private function payloadWithCreateInventory(
+        array $payload,
+        array $offerIdentities,
+        array $selectedStoreIds,
+    ): array {
+        if (array_key_exists('inventory', $payload) || !array_key_exists('stock', $payload)) {
+            return $payload;
+        }
+        if ($payload['stock'] === null || $payload['stock'] === '') {
+            return $payload;
+        }
+        $raw = trim((string)$payload['stock']);
+        if (preg_match('/^\d+$/', $raw) !== 1) {
+            throw new \InvalidArgumentException('product_stock_invalid');
+        }
+        $onHand = (int)$raw;
+        if ($selectedStoreIds === [] || $offerIdentities === []) {
+            return $payload;
+        }
+        $rows = [];
+        foreach ($selectedStoreIds as $storeId) {
+            foreach ($offerIdentities as $offerIdentity) {
+                $uuid = strtolower(trim((string)($offerIdentity['global_offer_uuid'] ?? '')));
+                if ($uuid === '') {
+                    continue;
+                }
+                $rows[] = [
+                    'store_id' => (int)$storeId,
+                    'global_offer_uuid' => $uuid,
+                    'on_hand_minor' => $onHand,
+                ];
+            }
+        }
+        if ($rows !== []) {
+            $payload['inventory'] = $rows;
+        }
+        return $payload;
+    }
+
     /** @param list<object> $localOffers */
     private function writeCreatePrices(int $websiteId, array $localOffers, array $payload): void
     {
@@ -1192,7 +1470,12 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             $scopeState = strtolower(trim((string)($row['scope_state'] ?? 'explicit')));
             $storeId = (int)($row['store_id'] ?? 0);
             $entityType = (string)($row['entity_type'] ?? 'product');
-            $entityId = (int)($row['entity_id'] ?? $productId);
+            // Create wizard fields ship data-entity-id="0"; never write overlays to entity 0.
+            // Align with WeShop saveFromPayload($productId, ...): bind to the real product.
+            $entityId = (int)($row['entity_id'] ?? 0);
+            if ($entityId <= 0) {
+                $entityId = $productId;
+            }
             $code = (string)($row['attribute_code'] ?? '');
             $locale = (string)($row['locale'] ?? '');
             if ($scopeState === 'inherit') {
@@ -1365,7 +1648,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 }
             }
             $storeId = (int)($row['store_id'] ?? 0);
-            if ($storeId <= 0 || !isset($selectedStores[$storeId])) {
+            if ($storeId < 0 || !isset($selectedStores[$storeId])) {
                 throw new \InvalidArgumentException('product_inventory_store_not_selected');
             }
 
@@ -1527,6 +1810,32 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             ));
         }
         return $validation->toArray($context);
+    }
+
+    /** @param array<string, mixed> $diagnostics */
+    private function publishFailureMessage(array $diagnostics): string
+    {
+        $errors = is_array($diagnostics['errors'] ?? null) ? $diagnostics['errors'] : [];
+        $messages = [];
+        foreach ($errors as $error) {
+            if (!is_array($error)) {
+                continue;
+            }
+            $message = trim((string)($error['message'] ?? ''));
+            if ($message === '' || in_array($message, $messages, true)) {
+                continue;
+            }
+            $messages[] = $message;
+            if (count($messages) >= 3) {
+                break;
+            }
+        }
+        if ($messages === []) {
+            return (string)__('发布校验未通过');
+        }
+        $suffix = count($errors) > count($messages) ? '…' : '';
+
+        return (string)__('发布校验未通过') . '：' . implode('；', $messages) . $suffix;
     }
 
     /** @return array{code:string,message:string,path:string} */

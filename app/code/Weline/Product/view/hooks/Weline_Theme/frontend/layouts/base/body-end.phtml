@@ -1,6 +1,6 @@
 <?php
 /**
- * Ensure Theme storefront image fallback is present on Product surfaces.
+ * Image fallback is declared once on Theme layouts/base/body-end via data-weline-load.
  *
  * @hook-priority 45
  * @hook-sort-order 45
@@ -9,7 +9,5 @@ $isBackend = str_contains(strtolower((string)($_SERVER['REQUEST_URI'] ?? '')), '
 if ($isBackend) {
     return;
 }
+// Intentionally empty: storefrontImageFallback loaded by Theme body-end attribute declare.
 ?>
-<script src="@static(Weline_Theme::js/storefront-image-fallback.js)?v=20260825-imgph3"
-        defer
-        data-no-extract="true"></script>

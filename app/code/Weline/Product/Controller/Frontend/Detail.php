@@ -6,11 +6,13 @@ namespace Weline\Product\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Product\Service\StorefrontCatalogViewService;
+use Weline\Product\Service\StorefrontVariantSelectionService;
 
 final class Detail extends FrontendController
 {
     public function __construct(
         private readonly StorefrontCatalogViewService $catalog,
+        private readonly StorefrontVariantSelectionService $variantSelection,
     ) {
     }
 
@@ -35,29 +37,33 @@ final class Detail extends FrontendController
         $canonicalSlug = strtolower(trim((string)($offers[0]['slug'] ?? '')));
         if ($slug === '' && $canonicalSlug !== '') {
             $target = $this->getUrl('product/' . $canonicalSlug);
+            $query = [];
             if ($requestedOfferUuid !== '') {
-                $target .= '?offer=' . rawurlencode($requestedOfferUuid);
+                $query['offer'] = $requestedOfferUuid;
+            } else {
+                foreach ($this->variantSelection->collectAxisCodes($offers) as $axisCode) {
+                    $axisValue = trim((string)$this->request->getParam($axisCode, ''));
+                    if ($axisValue !== '') {
+                        $query[$axisCode] = $axisValue;
+                    }
+                }
+            }
+            if ($query !== []) {
+                $target .= '?' . http_build_query($query);
             }
             return (string)$this->redirect($target);
         }
 
-        $selectedOffer = null;
-        if (count($offers) === 1 && $requestedOfferUuid === '') {
-            $selectedOffer = $offers[0];
-        } elseif ($requestedOfferUuid !== '') {
-            foreach ($offers as $candidate) {
-                if (hash_equals(
-                    trim((string)($candidate['global_offer_uuid'] ?? '')),
-                    $requestedOfferUuid,
-                )) {
-                    $selectedOffer = $candidate;
-                    break;
-                }
-            }
-        }
-
+        $selectedOffer = $this->variantSelection->resolveSelectedOffer(
+            $offers,
+            $this->request->getParams(),
+        );
         $displayOffer = $selectedOffer ?? $offers[0];
-        if (count($offers) > 1 && $selectedOffer === null) {
+        $requiresExplicitSelection = count($offers) > 1
+            && $selectedOffer === null
+            && $requestedOfferUuid === ''
+            && !$this->hasAxisSelection($offers);
+        if ($requiresExplicitSelection) {
             $displayOffer['global_offer_uuid'] = '';
             $displayOffer['sellable'] = false;
             $displayOffer['selection_required'] = true;
@@ -82,9 +88,24 @@ final class Detail extends FrontendController
             'selected_offer_uuid',
             $selectedOffer === null ? '' : trim((string)($selectedOffer['global_offer_uuid'] ?? '')),
         );
+        $this->assign(
+            'variant_catalog',
+            $this->variantSelection->buildCatalog($offers, $displayOffer),
+        );
 
         // Product main info is rendered by the product-info widget (default_injections → product-main).
         return (string)$this->fetch('Weline_Product::templates/frontend/catalog/detail-shell.phtml');
     }
 
+    /** @param list<array<string, mixed>> $offers */
+    private function hasAxisSelection(array $offers): bool
+    {
+        foreach ($this->variantSelection->collectAxisCodes($offers) as $axisCode) {
+            if (trim((string)$this->request->getParam($axisCode, '')) !== '') {
+                return true;
+            }
+        }
+
+        return false;
+    }
 }

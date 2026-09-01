@@ -110,9 +110,10 @@ final class ProductSearchProjectionMutationCoordinator implements ProductSearchP
                 'StoreProduct 投影事件必须且只能提供 store_id',
             ));
         }
-        if ($storeId !== null && $storeId <= 0) {
+        if ($storeId !== null && $storeId < 0) {
             throw new \InvalidArgumentException((string)__(
-                'StoreProduct 投影 store_id 必须为正整数',
+                'StoreProduct 投影 store_id 不能为负数：%{1}',
+                [$storeId],
             ));
         }
     }

@@ -15,6 +15,20 @@ final class ProductAttributeMetadataCatalog
 {
     private const SCOPE_STATES = ['explicit', 'cleared', 'inherit'];
 
+    /**
+     * Codes owned by dedicated product basics / system plumbing — never shown in EAV editor groups.
+     *
+     * @var array<string, true>
+     */
+    private const EDITOR_SKIP_CODES = [
+        'attribute_set' => true,
+        'attribute_set_label' => true,
+        'brand' => true,
+        'brand_code' => true,
+        'name' => true,
+        'type_configuration' => true,
+    ];
+
     public function __construct(
         private readonly AttributeMetadataCatalogInterface $metadata,
         private readonly ProductCatalogAttributeEntity $entity,
@@ -24,20 +38,30 @@ final class ProductAttributeMetadataCatalog
     /**
      * @return list<array<string, mixed>>
      */
-    public function editorCatalog(): array
+    public function editorCatalog(?int $productId = null): array
     {
+        $sets = $productId > 0
+            ? $this->metadata->catalogForProduct($this->entity, $productId)
+            : $this->metadata->catalog($this->entity);
         $result = [];
-        foreach ($this->metadata->catalog($this->entity) as $set) {
+        foreach ($sets as $set) {
             if (!$set instanceof AttributeSetMetadata) {
                 throw new \UnexpectedValueException('product_attribute_metadata_set_invalid');
             }
             $row = $set->toArray();
             foreach ($row['groups'] as &$group) {
-                foreach ($group['attributes'] as &$attribute) {
+                $filtered = [];
+                foreach ($group['attributes'] as $attribute) {
+                    $code = strtolower(trim((string)($attribute['code'] ?? $attribute['attribute_code'] ?? '')));
+                    if ($code !== '' && isset(self::EDITOR_SKIP_CODES[$code])) {
+                        continue;
+                    }
                     $attribute['value_type'] = $this->valueType($attribute);
                     $attribute['scope_states'] = self::SCOPE_STATES;
+                    $attribute['swatch_capabilities'] = $this->swatchCapabilities($attribute);
+                    $filtered[] = $attribute;
                 }
-                unset($attribute);
+                $group['attributes'] = $filtered;
             }
             unset($group);
             $result[] = $row;
@@ -137,6 +161,43 @@ final class ProductAttributeMetadataCatalog
         }
 
         return $index;
+    }
+
+    /**
+     * @param array<string, mixed> $attribute
+     * @return array{color:bool,image:bool,text:bool}
+     */
+    private function swatchCapabilities(array $attribute): array
+    {
+        $options = is_array($attribute['options'] ?? null) ? $attribute['options'] : [];
+        $hasSwatchColor = false;
+        $hasSwatchImage = false;
+        $hasSwatchText = false;
+        foreach ($options as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            if (trim((string)($option['swatch_color'] ?? '')) !== '') {
+                $hasSwatchColor = true;
+            }
+            if (trim((string)($option['swatch_image'] ?? '')) !== '') {
+                $hasSwatchImage = true;
+            }
+            if (trim((string)($option['swatch_text'] ?? '')) !== '') {
+                $hasSwatchText = true;
+            }
+        }
+
+        $code = strtolower(trim((string)($attribute['code'] ?? '')));
+        $supportsImage = $hasSwatchImage
+            || $hasSwatchColor
+            || in_array($code, ['color', 'style_type'], true);
+
+        return [
+            'color' => $hasSwatchColor,
+            'image' => $supportsImage,
+            'text' => $hasSwatchText || (!$hasSwatchColor && !$hasSwatchImage),
+        ];
     }
 
     /**

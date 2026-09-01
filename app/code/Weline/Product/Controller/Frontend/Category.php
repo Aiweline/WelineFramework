@@ -55,7 +55,10 @@ final class Category extends FrontendController
 
         $categoryUrl = trim((string)($category['url'] ?? ''));
         if ($categoryUrl === '') {
-            $categoryUrl = $routePath !== '' ? '/category/' . $routePath : '/categories';
+            $categoryUrl = (string)$this->getUrl($routePath !== '' ? 'category/' . $routePath : 'categories');
+        } else {
+            $pathOnly = (string)(parse_url($categoryUrl, PHP_URL_PATH) ?: $categoryUrl);
+            $categoryUrl = (string)$this->getUrl(ltrim($pathOnly, '/'));
         }
         $sortOptions = [];
         foreach ([

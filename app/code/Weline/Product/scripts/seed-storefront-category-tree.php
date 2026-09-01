@@ -11,6 +11,7 @@ declare(strict_types=1);
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Repository\CategoryRepository;
 use Weline\Product\Service\ProductAdminMutationService;
+use Weline\Product\Service\ProductCategoryAttributeService;
 use Weline\Product\Service\StorefrontCategoryTreeIndex;
 
 require dirname(__DIR__, 5) . '/app/bootstrap.php';
@@ -23,6 +24,46 @@ $mutations = ObjectManager::getInstance(ProductAdminMutationService::class);
 $categories = ObjectManager::getInstance(CategoryRepository::class);
 /** @var StorefrontCategoryTreeIndex $tree */
 $tree = ObjectManager::getInstance(StorefrontCategoryTreeIndex::class);
+/** @var ProductCategoryAttributeService $categoryAttributes */
+$categoryAttributes = ObjectManager::getInstance(ProductCategoryAttributeService::class);
+
+$localizedNames = [
+    '/books' => ['zh_Hans_CN' => '图书', 'en_US' => 'Books'],
+    '/books/fiction' => ['zh_Hans_CN' => '小说', 'en_US' => 'Fiction'],
+    '/books/nonfiction' => ['zh_Hans_CN' => '非虚构', 'en_US' => 'Nonfiction'],
+    '/books/fiction/scifi' => ['zh_Hans_CN' => '科幻', 'en_US' => 'Sci-Fi'],
+    '/books/fiction/fantasy' => ['zh_Hans_CN' => '奇幻', 'en_US' => 'Fantasy'],
+    '/books/fiction/mystery' => ['zh_Hans_CN' => '悬疑', 'en_US' => 'Mystery'],
+    '/books/fiction/romance' => ['zh_Hans_CN' => '言情', 'en_US' => 'Romance'],
+    '/home-living' => ['zh_Hans_CN' => '家居生活', 'en_US' => 'Home Living'],
+    '/home-living/kitchen' => ['zh_Hans_CN' => '厨房', 'en_US' => 'Kitchen'],
+    '/home-living/furniture' => ['zh_Hans_CN' => '家具', 'en_US' => 'Furniture'],
+    '/home-living/decor' => ['zh_Hans_CN' => '装饰', 'en_US' => 'Decor'],
+    '/home-living/kitchen/cups' => ['zh_Hans_CN' => '杯具', 'en_US' => 'Cups'],
+    '/home-living/kitchen/plates' => ['zh_Hans_CN' => '餐盘', 'en_US' => 'Plates'],
+    '/home-living/kitchen/utensils' => ['zh_Hans_CN' => '厨具', 'en_US' => 'Utensils'],
+    '/electronics' => ['zh_Hans_CN' => '电子产品', 'en_US' => 'Electronics'],
+    '/electronics/phones' => ['zh_Hans_CN' => '手机', 'en_US' => 'Phones'],
+    '/electronics/computers' => ['zh_Hans_CN' => '电脑', 'en_US' => 'Computers'],
+];
+
+$writeLocalizedNames = static function (int $websiteId, int $categoryId, string $path) use (
+    $categoryAttributes,
+    $localizedNames,
+): void {
+    $normalized = '/' . trim(str_replace('\\', '/', $path), '/');
+    $labels = $localizedNames[$normalized] ?? null;
+    if (!is_array($labels)) {
+        return;
+    }
+    foreach ($labels as $locale => $label) {
+        $label = trim((string)$label);
+        if ($label === '') {
+            continue;
+        }
+        $categoryAttributes->writeName($websiteId, $categoryId, $label, (string)$locale);
+    }
+};
 
 // Migrate confusing demo root `/home` → `/home-living` (and all descendants).
 $renamed = [];
@@ -40,17 +81,30 @@ foreach ($categories->listAll($websiteId) as $row) {
     $renamed[] = ['id' => $id, 'from' => '/' . $stored, 'to' => $newPath];
 }
 
-$ensure = static function (string $path, int $parentId) use ($mutations, $categories, $websiteId): int {
+$ensure = static function (string $path, int $parentId) use (
+    $mutations,
+    $categories,
+    $websiteId,
+    $writeLocalizedNames,
+): int {
     $normalized = '/' . trim(str_replace('\\', '/', $path), '/');
     $needle = strtolower(ltrim($normalized, '/'));
     foreach ($categories->listAll($websiteId) as $row) {
         $stored = strtolower(trim(str_replace('\\', '/', (string)($row['path'] ?? '')), '/'));
         if ($stored === $needle) {
-            return (int)($row['category_id'] ?? 0);
+            $categoryId = (int)($row['category_id'] ?? 0);
+            if ($categoryId > 0) {
+                $writeLocalizedNames($websiteId, $categoryId, $normalized);
+            }
+
+            return $categoryId;
         }
     }
 
-    return (int)$mutations->createCategory($websiteId, $normalized, $parentId)->getId();
+    $categoryId = (int)$mutations->createCategory($websiteId, $normalized, $parentId)->getId();
+    $writeLocalizedNames($websiteId, $categoryId, $normalized);
+
+    return $categoryId;
 };
 
 $books = $ensure('/books', 0);

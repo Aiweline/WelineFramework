@@ -35,8 +35,8 @@ final class ProductCatalogSpaceProviderTest extends TestCase
         $source = (string)file_get_contents(
             dirname(__DIR__, 4) . '/extends/module/Weline_Catalog/Space/ProductCatalogSpaceProvider.php',
         );
-        self::assertStringContainsString("return [];\n    }\n\n    /**\n     * @param array<string, mixed> \$scope\n     * @param array<string, mixed> \$payload", $source)
-            || str_contains($source, 'readDisplaySelection');
+        self::assertStringContainsString('readDisplaySelection', $source);
+        self::assertStringContainsString('CategoryDisplaySelectionRepository', $source);
         self::assertStringContainsString('listExternalTaxonomyPicker', $source);
         self::assertStringContainsString('externalTaxonomyRequired(): bool', $source);
     }

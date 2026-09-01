@@ -20,18 +20,35 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertArrayHasKey('product-info', $widgets);
         $widget = $widgets['product-info'];
         self::assertSame('product-main', $widget['slot'] ?? null);
+        self::assertTrue((bool)($widget['is_container'] ?? false));
+        self::assertArrayHasKey('product-purchase-actions', $widget['slots'] ?? []);
         self::assertSame('Weline_Product::templates/frontend/widgets/product-info.phtml', $widget['template'] ?? null);
         $injection = $widget['default_injections'][0] ?? [];
         self::assertSame('product-main', $injection['slot'] ?? null);
         self::assertSame('product', $injection['layout_type'] ?? null);
         self::assertTrue((bool)($injection['required'] ?? false));
+        self::assertTrue((bool)(($injection['config']['show_brand'] ?? false)));
+        self::assertTrue((bool)(($injection['config']['show_supplier'] ?? false)));
+        self::assertArrayHasKey('show_brand', $widget['params'] ?? []);
+        self::assertArrayHasKey('show_supplier', $widget['params'] ?? []);
+        self::assertTrue((bool)(($widget['params']['show_brand']['default'] ?? false)));
+        self::assertTrue((bool)(($widget['params']['show_supplier']['default'] ?? false)));
 
         $tpl = dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-info.phtml';
         self::assertFileExists($tpl);
         $source = (string)file_get_contents($tpl);
         self::assertStringContainsString('data-testid="storefront-product-detail"', $source);
+        self::assertStringContainsString('data-testid="storefront-product-detail-unavailable"', $source);
+        self::assertStringContainsString('data-testid="product-brand"', $source);
+        self::assertStringContainsString('data-testid="product-supplier"', $source);
+        self::assertStringContainsString('@param show_brand', $source);
+        self::assertStringContainsString('@param show_supplier', $source);
+        self::assertStringContainsString("getParam('editor_mode'", $source);
+        self::assertStringContainsString('StorefrontOfferResolver::resolve', $source);
         self::assertStringContainsString('@widget.default_injections', $source);
         self::assertStringContainsString('product-main', $source);
+        self::assertStringContainsString('id="product-purchase-actions"', $source);
+        self::assertStringNotContainsString("Weline.Api.resource('cart')", $source);
     }
 
     public function testRelatedCardsMethodExcludesCurrentProductInSource(): void
@@ -45,6 +62,20 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         );
         self::assertStringContainsString('function relatedCards(int $excludeProductId = 0, int $limit = 4)', $source);
         self::assertStringContainsString('if ($excludeProductId > 0 && $productId === $excludeProductId)', $source);
+    }
+
+    public function testNewArrivalCardsMethodFiltersByCreatedAtInSource(): void
+    {
+        $method = new ReflectionMethod(StorefrontProductWidgetCatalog::class, 'newArrivalCards');
+        self::assertTrue($method->isPublic());
+        self::assertSame(2, $method->getNumberOfParameters());
+
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php'
+        );
+        self::assertStringContainsString('function newArrivalCards(int $limit = 8, int $days = 30)', $source);
+        self::assertStringContainsString('Product::schema_fields_CREATED_AT', $source);
+        self::assertStringContainsString('publishedOffersForProductIds', $source);
     }
 
     public function testWidgetRegistrationPinsDefaultInjectionSlot(): void
@@ -133,6 +164,10 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         $source = (string)file_get_contents($tpl);
         self::assertStringContainsString('data-testid="storefront-recommended-products"', $source);
         self::assertStringContainsString('->cards($limit)', $source);
+        self::assertStringContainsString('Url::getPrefix()', $source);
+        self::assertStringNotContainsString('$this->getUrl(ltrim($route', $source);
+        self::assertStringContainsString('data-action="add-v2"', $source);
+        self::assertStringContainsString('weline-cart-product-card-add-to-cart', $source);
         self::assertStringContainsString('Weline_Product::css/widgets/recommended-products.css', $source);
         self::assertStringContainsString('Weline_Product::js/widgets/recommended-products.js', $source);
         self::assertFileExists(dirname(__DIR__, 3) . '/view/statics/css/widgets/recommended-products.css');
@@ -140,5 +175,18 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
 
         $css = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/css/widgets/recommended-products.css');
         self::assertStringContainsString('max-width: var(--weline-layout-content-max-width', $css);
+
+        $catalogSrc = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php');
+        self::assertStringContainsString("'/product/'", $catalogSrc);
+
+        $notFoundInjection = null;
+        foreach ($widget['default_injections'] as $row) {
+            if (($row['layout_type'] ?? '') === 'not_found') {
+                $notFoundInjection = $row;
+                break;
+            }
+        }
+        self::assertNotNull($notFoundInjection);
+        self::assertSame('not-found-recommendations', $notFoundInjection['slot'] ?? null);
     }
 }

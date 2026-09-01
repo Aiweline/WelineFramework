@@ -14,6 +14,13 @@ final class AttributeValue extends AbstractWebsiteShardModel
     public const schema_fields_ATTRIBUTE_CODE = 'attribute_code';
     public const schema_fields_LOCALE = 'locale';
     public const schema_fields_VALUE_TEXT = 'value_text';
+    public const schema_fields_VALUE_TYPE = 'value_type';
+    public const schema_fields_VALUE_STRING = 'value_string';
+    public const schema_fields_VALUE_NUMBER = 'value_number';
+    public const schema_fields_VALUE_BOOLEAN = 'value_boolean';
+    public const schema_fields_VALUE_DATE = 'value_date';
+    public const schema_fields_VALUE_JSON = 'value_json';
+    public const schema_fields_SCOPE_STATE = 'scope_state';
     public const schema_fields_CLEARED = 'cleared';
     public const schema_fields_IS_REQUIRED = 'is_required';
 

@@ -1,0 +1,363 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var string $title
+ * @var int $website_id
+ * @var string $error
+ * @var list<array<string,mixed>> $rows
+ * @var array<string,mixed> $editing
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    is_scalar($value) || $value === null ? (string)$value : '',
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8',
+);
+$editingId = max(0, (int)($editing['brand_id'] ?? 0));
+$isEdit = $editingId > 0;
+$rows = is_array($rows ?? null) ? $rows : [];
+$supplierOptions = is_array($supplier_options ?? null) ? $supplier_options : [];
+$selectedSupplierIds = [];
+foreach ((array)($editing['supplier_ids'] ?? []) as $sid) {
+    $sid = (int)$sid;
+    if ($sid > 0) {
+        $selectedSupplierIds[$sid] = true;
+    }
+}
+$brandSupplierSelectOptions = [];
+foreach ($supplierOptions as $option) {
+    if (!is_array($option)) {
+        continue;
+    }
+    $sid = (int)($option['supplier_id'] ?? 0);
+    if ($sid <= 0) {
+        continue;
+    }
+    $brandSupplierSelectOptions[] = [
+        'value' => (string)$sid,
+        'label' => (string)($option['name'] ?? ('#' . $sid)),
+        'meta' => (string)($option['code'] ?? ''),
+        'image' => (string)($option['image_url'] ?? ''),
+    ];
+}
+$brandSupplierSelectOptionsJson = json_encode(
+    $brandSupplierSelectOptions,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+) ?: '[]';
+$brandSupplierSelectValue = implode(',', array_map('strval', array_keys($selectedSupplierIds)));
+$brandSupplierSelectEmpty = (string)__('未关联供应商');
+$brandSupplierSelectPlaceholder = (string)__('搜索供应商名称或编码');
+$logoUrl = trim((string)($editing['logo_url'] ?? ''));
+$logoAssetId = trim((string)($editing['logo_asset_id'] ?? ''));
+$brandTableRows = [];
+$editLabel = (string)__('编辑');
+$disableLabel = (string)__('停用');
+$brandWebsiteId = (int)$website_id;
+$displayableImageUrl = static function (string $url): string {
+    $url = trim($url);
+    if ($url === '') {
+        return '';
+    }
+    if (preg_match('#^(https?:|blob:|data:)#i', $url) === 1) {
+        return $url;
+    }
+    if (str_contains($url, '..') || str_contains($url, '\\') || str_contains($url, '://')) {
+        return '';
+    }
+    if (class_exists(\Weline\FileManager\Api\Image::class)) {
+        $resolved = \Weline\FileManager\Api\Image::pathToMediaUrl($url, 64, 64);
+
+        return is_string($resolved) && $resolved !== '' ? $resolved : $url;
+    }
+
+    return str_starts_with($url, '/') ? $url : '';
+};
+$logoDisplayUrl = $displayableImageUrl($logoUrl);
+foreach ($rows as $row) {
+    if (!is_array($row)) {
+        continue;
+    }
+    $brandId = (int)($row['brand_id'] ?? 0);
+    $status = (string)($row['status'] ?? 'active');
+    $linkedSuppliers = is_array($row['suppliers'] ?? null) ? $row['suppliers'] : [];
+    $supplierNames = [];
+    foreach ($linkedSuppliers as $linked) {
+        if (!is_array($linked)) {
+            continue;
+        }
+        $name = trim((string)($linked['name'] ?? ''));
+        if ($name !== '') {
+            $supplierNames[] = $name;
+        }
+    }
+    $brandTableRows[] = [
+        'website_id' => $brandWebsiteId,
+        'brand_id' => $brandId,
+        'brand_id_label' => '#' . $brandId,
+        'logo_url' => $displayableImageUrl((string)($row['logo_url'] ?? '')),
+        'name' => (string)($row['name'] ?? ''),
+        'code' => (string)($row['code'] ?? ''),
+        'suppliers_label' => $supplierNames === [] ? '—' : implode('、', $supplierNames),
+        'status' => $status,
+        'status_label' => $status === 'active' ? (string)__('启用') : (string)__('停用'),
+        'position' => (int)($row['position'] ?? 0),
+        'can_disable' => $status === 'active',
+    ];
+}
+?>
+<link rel="stylesheet" href="@static(Weline_Product::css/backend/catalog-entity-media.css)?v=20260901-entity-media">
+<div class="w-stack" data-gap="md" data-product-admin="brands" data-testid="product-brand-admin"
+     data-product-entity-media-root>
+    <template>Weline_Component::message.phtml</template>
+
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div>
+            <h2 class="w-card__title"><lang>品牌管理</lang></h2>
+            <p class="w-text" data-tone="muted" data-size="sm">
+                <lang>维护 Website 级品牌目录（名称、编码、Logo、状态）。创建商品时从启用品牌中选择。</lang>
+            </p>
+        </div>
+        <div class="w-cluster" data-gap="sm" data-align="center">
+            <form method="get" id="product-brand-website-filter-form" class="w-cluster" data-align="center" data-gap="sm">
+                <label class="w-visually-hidden" for="product-brand-website-id"><lang>Website</lang></label>
+                <div class="w-product-admin__website-select" style="min-inline-size:12rem;">
+                    <w:websites:website:select
+                        id="product-brand-website-id"
+                        name="website_id"
+                        value="productWebsiteSelectValue"
+                        display="productWebsiteSelectDisplay"
+                        options="websiteOptionsJson"
+                        placeholder="@lang(选择 Website)"
+                        on-change="var f=document.getElementById('product-brand-website-filter-form');if(f){f.requestSubmit?f.requestSubmit():f.submit();}"
+                    />
+                </div>
+            </form>
+            <a class="w-button" data-variant="outline" data-size="sm"
+               href="@backend-url('*/backend/catalog/products')?website_id=<?= $escape($website_id) ?>">
+                <lang>返回商品</lang>
+            </a>
+        </div>
+    </div>
+
+    <?php if ($error !== ''): ?>
+        <div class="w-alert" data-tone="danger"><?= $escape($error) ?></div>
+    <?php endif; ?>
+
+    <div class="w-grid" data-gap="md">
+        <aside class="w-card" style="--w-span:4;">
+            <div class="w-card__body w-stack" data-gap="sm">
+                <h3 class="w-card__title"><?= $isEdit ? __('编辑品牌') : __('新建品牌') ?></h3>
+                <w:form method="post" action="@backend-url('*/backend/catalog/save-brand')" csrf="auto"
+                        class="w-stack" data-gap="sm" data-testid="product-brand-form">
+                    <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
+                    <input type="hidden" name="brand_id" value="<?= $escape($editingId) ?>">
+                    <div class="w-field">
+                        <label class="w-field__label" for="product-brand-name"><lang>品牌名称</lang></label>
+                        <input class="w-input" id="product-brand-name" name="name" required maxlength="255"
+                               value="<?= $escape($editing['name'] ?? '') ?>" placeholder="@lang(如：醉欢楼)">
+                    </div>
+                    <div class="w-field">
+                        <label class="w-field__label" for="product-brand-code"><lang>品牌编码</lang></label>
+                        <input class="w-input" id="product-brand-code" name="code" maxlength="64"
+                               value="<?= $escape($editing['code'] ?? '') ?>"
+                               placeholder="@lang(留空则按名称生成，如 zui-huan-lou)">
+                        <p class="w-field__help"><lang>URL 友好编码，Website 内唯一；用于筛选与导入对齐。</lang></p>
+                    </div>
+                    <div class="w-field" data-testid="product-brand-logo">
+                        <span class="w-field__label"><lang>品牌主图</lang></span>
+                        <div class="w-product-entity-media" data-product-entity-media="product-brand-logo">
+                            <input type="hidden" name="logo_url" value="<?= $escape($logoUrl) ?>"
+                                   data-product-entity-media-url>
+                            <input type="hidden" name="logo_asset_id" value="<?= $escape($logoAssetId) ?>"
+                                   data-product-entity-media-asset>
+                            <div class="w-product-entity-media__preview" data-product-entity-media-preview<?= $logoUrl === '' ? ' hidden' : '' ?>>
+                                <img src="<?= $escape($logoDisplayUrl) ?>" alt=""
+                                     data-product-entity-media-img<?= $logoUrl === '' ? ' hidden' : '' ?>>
+                            </div>
+                            <div class="w-cluster" data-gap="sm">
+                                <button class="w-button" type="button" data-variant="outline" data-size="sm"
+                                        data-product-entity-media-pick>
+                                    <lang>选择主图</lang>
+                                </button>
+                                <button class="w-button" type="button" data-variant="ghost" data-size="sm" data-tone="danger"
+                                        data-product-entity-media-clear<?= $logoUrl === '' ? ' hidden' : '' ?>>
+                                    <lang>清除</lang>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="w-field__help"><lang>选填。从媒体库选择品牌主图 / Logo。</lang></p>
+                    </div>
+                    <div class="w-field" data-testid="product-brand-suppliers">
+                        <span class="w-field__label"><lang>关联供应商</lang></span>
+                        <?php if ($brandSupplierSelectOptions === []): ?>
+                            <p class="w-text" data-tone="muted" data-size="sm">
+                                <lang>暂无启用供应商。请先在「供应商管理」中创建。</lang>
+                                <a href="@backend-url('*/backend/catalog/suppliers')?website_id=<?= $escape($website_id) ?>" target="_blank" rel="noopener">
+                                    <lang>管理供应商</lang>
+                                </a>
+                            </p>
+                            <input type="hidden" name="supplier_ids" value="">
+                        <?php else: ?>
+                            <w:product:catalog:select
+                                id="product-brand-suppliers-select"
+                                name="supplier_ids"
+                                entity="supplier"
+                                multiple="true"
+                                value="brandSupplierSelectValue"
+                                options="brandSupplierSelectOptionsJson"
+                                empty-label="brandSupplierSelectEmpty"
+                                placeholder="brandSupplierSelectPlaceholder"
+                            />
+                            <p class="w-field__help"><lang>多选：一个品牌可挂多个供应商（N:N）。已选显示为标签，可点叉移除。</lang></p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="w-field">
+                        <label class="w-field__label" for="product-brand-description"><lang>品牌简介</lang></label>
+                        <textarea class="w-input" id="product-brand-description" name="description"
+                                  rows="3" maxlength="4000"><?= $escape($editing['description'] ?? '') ?></textarea>
+                    </div>
+                    <div class="w-cluster" data-gap="sm">
+                        <div class="w-field" style="flex:1;">
+                            <label class="w-field__label" for="product-brand-status"><lang>状态</lang></label>
+                            <select class="w-select" id="product-brand-status" name="status">
+                                <option value="active" <?= (($editing['status'] ?? '') === 'disabled') ? '' : 'selected' ?>>
+                                    <lang>启用</lang>
+                                </option>
+                                <option value="disabled" <?= (($editing['status'] ?? '') === 'disabled') ? 'selected' : '' ?>>
+                                    <lang>停用</lang>
+                                </option>
+                            </select>
+                        </div>
+                        <div class="w-field" style="flex:1;">
+                            <label class="w-field__label" for="product-brand-position"><lang>排序</lang></label>
+                            <input class="w-input" id="product-brand-position" name="position" type="number"
+                                   min="0" step="1" value="<?= $escape((int)($editing['position'] ?? 0)) ?>">
+                        </div>
+                    </div>
+                    <div class="w-cluster" data-gap="sm" data-justify="end">
+                        <?php if ($isEdit): ?>
+                            <a class="w-button" data-variant="ghost" data-size="sm"
+                               href="@backend-url('*/backend/catalog/brands')?website_id=<?= $escape($website_id) ?>">
+                                <lang>取消编辑</lang>
+                            </a>
+                        <?php endif; ?>
+                        <button class="w-button" type="submit" data-tone="primary" data-size="sm">
+                            <?= $isEdit ? __('保存品牌') : __('创建品牌') ?>
+                        </button>
+                    </div>
+                </w:form>
+            </div>
+        </aside>
+
+        <section class="w-card" style="--w-span:8;">
+            <div class="w-card__body w-stack" data-gap="sm">
+                <h3 class="w-card__title"><lang>品牌列表</lang></h3>
+                <?php if ($brandTableRows === []): ?>
+                    <p class="w-text" data-tone="muted" data-size="sm"><lang>暂无品牌，请先在左侧创建。</lang></p>
+                <?php endif; ?>
+                <div id="product-brand-table-container">
+                    <script type="application/json"
+                            id="product-brand-local-rows"
+                            data-no-extract="true"><?= json_encode(
+                                $brandTableRows,
+                                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP,
+                            ) ?: '[]' ?></script>
+                    <w:d-table id="product-brand-list"
+                               model="Weline\Product\Model\Shard\Brand"
+                               scope="product-brand-list"
+                               mode="local"
+                               local-data-el="#product-brand-local-rows"
+                               select-field="brand_id"
+                               show-actions="true"
+                               sticky-actions="true"
+                               row-actions='[{"type":"link","label":<?= json_encode($editLabel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,"hrefTemplate":"@url{'*/backend/catalog/brands'}?website_id=<?= (int)$brandWebsiteId ?>&id={brand_id}","testId":"product-brand-edit-button","tone":"neutral","variant":"outline","size":"sm"},{"type":"event","action":"disable","label":<?= json_encode($disableLabel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,"testId":"product-brand-disable-button","tone":"danger","variant":"ghost","size":"sm"}]'
+                               editable="false"
+                               modal-edit="false"
+                               inline-edit="false"
+                               show-toolbar="false"
+                               show-config="false"
+                               show-pagination="true"
+                               page-size="20"
+                               searchable="false"
+                               sortable="true"
+                               data-testid="product-brand-table">
+                        <w:t-header>
+                            <w:field belong="t-header" name="brand_id_label" type="text" width="72"><lang>ID</lang></w:field>
+                            <w:field belong="t-header" name="logo_url" type="image" width="72"><lang>主图</lang></w:field>
+                            <w:field belong="t-header" name="name" type="text" width="10rem" sortable="true"><lang>名称</lang></w:field>
+                            <w:field belong="t-header" name="code" type="text" width="10rem" sortable="true"><lang>编码</lang></w:field>
+                            <w:field belong="t-header" name="suppliers_label" type="text" width="14rem"><lang>供应商</lang></w:field>
+                            <w:field belong="t-header" name="status_label" type="text" width="6rem"><lang>状态</lang></w:field>
+                            <w:field belong="t-header" name="position" type="text" width="5rem" sortable="true"><lang>排序</lang></w:field>
+                        </w:t-header>
+                        <w:t-body></w:t-body>
+                    </w:d-table>
+                </div>
+                <w:form method="post"
+                        id="product-brand-disable-form"
+                        action="@backend-url('*/backend/catalog/disable-brand')"
+                        csrf="auto"
+                        hidden
+                        data-testid="product-brand-disable-form">
+                    <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
+                    <input type="hidden" name="brand_id" value="" data-product-brand-disable-id>
+                </w:form>
+            </div>
+        </section>
+    </div>
+
+    <dialog class="w-product-media-picker" data-w-component="dialog" data-product-entity-media-dialog
+            aria-labelledby="product-brand-media-title">
+        <div class="w-product-media-picker__surface">
+            <header class="w-product-media-picker__header w-cluster" data-align="center" data-justify="between">
+                <div>
+                    <h2 id="product-brand-media-title"><lang>选择品牌主图</lang></h2>
+                </div>
+                <button class="w-button" type="button" data-product-entity-media-close aria-label="@lang(关闭)">
+                    <w-icon name="x" size="sm"></w-icon>
+                </button>
+            </header>
+            <iframe class="w-product-media-picker__frame"
+                    title="@lang(媒体库)"
+                    data-product-entity-media-frame
+                    data-src="@backend-url('media/backend/manager/iframe')?target=product-brand-logo&multi=0&usage=1&ext=jpg,png,gif,webp"></iframe>
+        </div>
+    </dialog>
+</div>
+<script src="@static(Weline_Product::js/backend/catalog-entity-media.js)?v=20260901-entity-media"></script>
+<script>
+(function () {
+    'use strict';
+
+    var tableEl = document.getElementById('w-datatable-product-brand-list')
+        || document.querySelector('#product-brand-table-container [data-w-component="data-table"]');
+    if (!tableEl) {
+        return;
+    }
+
+    tableEl.addEventListener('weline:datatable:row-action', function (event) {
+        var detail = event.detail || {};
+        if (String(detail.action || '') !== 'disable') {
+            return;
+        }
+        var row = detail.row || {};
+        if (row.can_disable !== true && String(row.status || '') !== 'active') {
+            return;
+        }
+        var brandId = String(row.brand_id || '');
+        if (brandId === '' || brandId === '0') {
+            return;
+        }
+        var form = document.getElementById('product-brand-disable-form');
+        var idInput = form ? form.querySelector('[data-product-brand-disable-id], [name="brand_id"]') : null;
+        if (!form || !idInput) {
+            return;
+        }
+        idInput.value = brandId;
+        if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+        } else {
+            form.submit();
+        }
+    });
+})();
+</script>

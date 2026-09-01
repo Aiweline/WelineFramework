@@ -12,10 +12,14 @@ use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2\Product
 use Weline\Product\Model\Shard\AttributeValue;
 use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Product;
+use Weline\Product\Model\Shard\ProductSupplier;
+use Weline\Product\Model\Shard\Supplier;
 use Weline\Product\Repository\AttributeValueRepository;
 use Weline\Product\Repository\MediaRepository;
 use Weline\Product\Repository\OfferRepository;
 use Weline\Product\Repository\ProductRepository;
+use Weline\Product\Repository\ProductSupplierRepository;
+use Weline\Product\Repository\SupplierRepository;
 
 /**
  * Read projection for the first-party storefront catalog.
@@ -44,6 +48,8 @@ final class StorefrontCatalogViewService
         private readonly StorefrontProductDetailProjector $detailProjector,
         private readonly StorefrontScopeHotCache $hotCache,
         private readonly StorefrontCatalogCacheCoordinator $catalogCache,
+        private readonly ProductSupplierRepository $productSuppliers,
+        private readonly SupplierRepository $suppliers,
     ) {
     }
 
@@ -88,7 +94,7 @@ final class StorefrontCatalogViewService
             self::CACHE_POOL,
             $logicalKey,
             self::OFFERS_FRESH_TTL_SECONDS,
-            fn(): array => $this->buildPublishedOffers($websiteId, $scope),
+            fn(): array => $this->buildPublishedOffers($websiteId, $scope, []),
             ['website' => true, 'lang' => true, 'currency' => true],
             self::OFFERS_STALE_TTL_SECONDS,
         );
@@ -97,10 +103,41 @@ final class StorefrontCatalogViewService
     }
 
     /**
+     * Published offers with fresh stock/sellability from Cart V2 snapshot resolver.
+     *
+     * Bypasses {@see rememberPublishedOffers()} hot cache so CDN-cached pages can
+     * reconcile live availability without rebuilding the full catalog projection.
+     *
      * @return list<array<string, mixed>>
      */
-    private function buildPublishedOffers(int $websiteId, ScopeIdentity $scope): array
+    public function livePublishedOffersForProduct(int $productId): array
     {
+        if ($productId <= 0) {
+            return [];
+        }
+
+        $scope = $this->currentScope();
+        $websiteId = max(0, (int)$scope->websiteId);
+        $rows = \array_values(\array_filter(
+            $this->buildPublishedOffers($websiteId, $scope, [$productId]),
+            static fn(array $row): bool => (int)($row['product_id'] ?? 0) === $productId,
+        ));
+
+        return \array_map(fn(array $row): array => $this->hydrateDetailOffer($row), $rows);
+    }
+
+    /**
+     * @param list<int> $productIdsFilter Empty list includes all published products.
+     * @return list<array<string, mixed>>
+     */
+    private function buildPublishedOffers(int $websiteId, ScopeIdentity $scope, array $productIdsFilter): array
+    {
+        $filterIds = \array_values(\array_unique(\array_filter(
+            \array_map('intval', $productIdsFilter),
+            static fn(int $id): bool => $id > 0,
+        )));
+        $allowedProductIds = $filterIds !== [] ? \array_fill_keys($filterIds, true) : [];
+
         $products = $this->products->listAll($websiteId);
         $publishedProductIds = [];
 
@@ -111,9 +148,13 @@ final class StorefrontCatalogViewService
                 continue;
             }
             $productId = (int)($product[Product::schema_fields_ID] ?? 0);
-            if ($productId > 0) {
-                $publishedProductIds[$productId] = true;
+            if ($productId <= 0) {
+                continue;
             }
+            if ($allowedProductIds !== [] && !isset($allowedProductIds[$productId])) {
+                continue;
+            }
+            $publishedProductIds[$productId] = true;
         }
         if ($publishedProductIds === []) {
             return [];
@@ -253,7 +294,7 @@ final class StorefrontCatalogViewService
         $storeId = max(0, RequestContext::getWelineStoreId());
         $storeIds = \array_values(\array_unique([0, $storeId]));
 
-        return $this->detailProjector->project(
+        $projected = $this->detailProjector->project(
             $offer,
             $this->attributeValues->listExplicitRows(
                 $websiteId,
@@ -265,6 +306,59 @@ final class StorefrontCatalogViewService
             $storeId,
             \trim((string)RequestContext::getWelineUserLang()),
         );
+
+        return $this->attachPrimarySupplier($projected, $websiteId, $productId);
+    }
+
+    /**
+     * @param array<string, mixed> $offer
+     * @return array<string, mixed>
+     */
+    private function attachPrimarySupplier(array $offer, int $websiteId, int $productId): array
+    {
+        $offer['supplier_id'] = max(0, (int)($offer['supplier_id'] ?? 0));
+        $offer['supplier_name'] = trim((string)($offer['supplier_name'] ?? ''));
+        $offer['supplier_code'] = trim((string)($offer['supplier_code'] ?? ''));
+        // website_id=0 is the canonical default website shard (same as Brand/AttributeValue).
+        if ($websiteId < 0 || $productId <= 0) {
+            return $offer;
+        }
+
+        try {
+            $link = $this->productSuppliers->findPrimaryByProduct($websiteId, $productId);
+            if ($link === null) {
+                $links = $this->productSuppliers->listByProduct($websiteId, $productId);
+                $first = $links[0] ?? null;
+                $supplierId = is_array($first)
+                    ? (int)($first[ProductSupplier::schema_fields_SUPPLIER_ID] ?? 0)
+                    : 0;
+            } else {
+                $supplierId = (int)$link->getData(ProductSupplier::schema_fields_SUPPLIER_ID);
+            }
+            if ($supplierId <= 0) {
+                return $offer;
+            }
+            $supplier = $this->suppliers->findById($websiteId, $supplierId);
+            if ($supplier === null) {
+                return $offer;
+            }
+            $status = trim((string)$supplier->getData(Supplier::schema_fields_STATUS));
+            if ($status !== '' && $status !== Supplier::STATUS_ACTIVE) {
+                return $offer;
+            }
+            $name = trim((string)$supplier->getData(Supplier::schema_fields_NAME));
+            $code = trim((string)$supplier->getData(Supplier::schema_fields_CODE));
+            if ($name === '') {
+                return $offer;
+            }
+            $offer['supplier_id'] = $supplierId;
+            $offer['supplier_name'] = $name;
+            $offer['supplier_code'] = $code;
+        } catch (\Throwable) {
+            // Storefront PDP remains usable when supplier shards are unavailable.
+        }
+
+        return $offer;
     }
 
     private function currentScope(): ScopeIdentity
