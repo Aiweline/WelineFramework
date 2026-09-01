@@ -90,6 +90,7 @@ final class ConnectorServiceParameterSourceTest extends TestCase
             BP . '/app/code/Weline/MediaManager/Service/ConnectorService.php',
         );
         self::assertStringContainsString('assertUploadDestinationsAvailable', $source);
+        self::assertStringContainsString('handleStorageSearch', $source);
         self::assertStringContainsString('目标文件已存在：%{1}', $source);
         self::assertSame(14 * 1024 * 1024, MediaAssetUploadService::MAX_UPLOAD_BYTES);
         self::assertSame(1024 * 1024, MediaUploadBase64Hydrator::MAX_BYTES);

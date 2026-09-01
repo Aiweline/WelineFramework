@@ -65,6 +65,7 @@ save,save
 Storage,Storage
 "Local Storage","Local Storage"
 Folders,Folders
+Search,Search
 目录,目录
 Upload,Upload
 "New Folder","New Folder"
@@ -72,7 +73,9 @@ Rename,Rename
 Download,Download
 Delete,Delete
 Refresh,Refresh
+"AI 自动翻译","AI 自动翻译"
 Select,Select
+解锁目录,"Unlock directory"
 松开即可上传到当前文件夹,"Release to upload to the current folder"
 Loading...,Loading...
 已选择,Chosen
@@ -83,6 +86,13 @@ Loading...,Loading...
 确认选择,"Confirm Selection"
 文件详情,"File details"
 "Select a file to preview","Select a file to preview"
+多语言翻译,"Locale translations"
+显示名称,"Display name"
+"默认 Alt","Default alt"
+资源描述,Description
+默认说明文字,"Default caption"
+保存当前语言,"Save current locale"
+一键补缺翻译,"One-click gap-fill translate"
 查看详情,"View details"
 "AI 修图","AI Edit"
 Preview,Preview
@@ -122,6 +132,9 @@ OK,OK
 资源描述（必填）,"Resource description (required)"
 "默认 Caption（可选）","Default caption (optional)"
 确认保存,"Confirm Save"
+搜索文件或文件夹…,"Search files or folders…"
+"开启后由 cron 自动补缺未翻译语言；已有文案不覆盖。上传一键翻译不受此开关影响。","When enabled, cron gap-fills missing locales without overwriting existing copy. Upload one-click translate ignores this switch."
+当前目录,"Current directory"
 文件上传进度,"File upload progress"
 搜索文件名…,"Search filenames…"
 上一张,Previous
@@ -177,8 +190,15 @@ OK,OK
 "文件 ""%{name}"" 超过大小限制（最大：%{size}）","File ""%{name}"" exceeds the size limit (max: %{size})"
 "一次最多上传 %{count} 个文件","Upload no more than %{count} files at once."
 "文件类型 ""%{ext}"" 不允许。允许的类型：%{allowed}","File type ""%{ext}"" is not allowed. Allowed types: %{allowed}"
+"仅可选比例 %{ratio} 的图片","Only images with aspect ratio %{ratio} can be selected"
+"建议约 %{width} × %{height}","Recommended about %{width} × %{height}"
+"比例不符：需要 %{ratio}，当前 %{actual}","Aspect ratio mismatch: need %{ratio}, got %{actual}"
+缺少图片尺寸，无法按比例选择,"Image dimensions are missing; cannot select by aspect ratio"
 无法读取文件“%{name}”,"Unable to read file “%{name}”."
 不能访问指定路径以外的目录,"Cannot access directories outside the specified path"
+锁定目录,"Lock directory"
+已解锁目录，可浏览全部媒体库,"Directory unlocked; you can browse the full media library"
+已重新锁定到指定目录,"Relocked to the designated directory"
 文件夹,Folder
 未知,Unknown
 新建文件夹,"New Folder"
@@ -192,6 +212,10 @@ OK,OK
 打开,Open
 下载,download
 复制URL,"Copy URL"
+未找到匹配的文件或文件夹,"No matching files or folders found"
+搜索失败，请稍后重试,"Search failed. Please try again later."
+正在搜索…,Searching…
+无法定位到目标位置,"Unable to locate the target"
 链接已复制到剪贴板,"Link copied to clipboard"
 复制失败，请手动复制,"Copy failed; please copy manually"
 删除,Delete
@@ -209,6 +233,25 @@ OK,OK
 请填写资源描述，用于检索和编辑提示。,"Please fill in the resource description for retrieval and editing prompts."
 请填写“%{name}”的资源描述，用于检索和编辑提示。,"Enter a resource description for “%{name}” for search and editing guidance."
 "上传前必须填写默认 alt 和资源描述","Default alt and resource description must be filled in before uploading"
+上传确认,"Upload confirmation"
+当前语言信息已填写。请选择仅确认上传，或一键补缺其它语言翻译。,"Current-locale metadata is ready. Confirm upload only, or one-click translate missing locales."
+确认上传,确认上传
+一键翻译并上传,"One-click translate and upload"
+"补缺完成：新增 %{filled}，跳过 %{skipped}","Gap-fill done: added %{filled}, skipped %{skipped}"
+一键翻译失败,"One-click translation failed"
+当前语言翻译已保存,"Locale translation saved"
+当前语言翻译保存失败,"Failed to save locale translation"
+正在保存…,Saving…
+正在补缺翻译…,"Filling missing locales…"
+"正在调用 AI 补缺其它语言，请稍候…","AI is translating missing locales, please wait…"
+未翻译,Missing
+"已开启 AI 自动翻译（每小时定时补缺）","AI auto-translation enabled (hourly cron gap-fill)"
+"已开启并立即入队补缺 #%{id}，请到任务队列查看进度","Enabled and queued gap-fill ##{id}; check task queue for progress"
+"已关闭 AI 自动翻译","AI auto-translation disabled"
+"AI 自动翻译配置保存失败","Failed to save AI auto-translation setting"
+文件名已存在,"Filename already exists"
+当前文件夹已有「%{name}」。系统已生成不重复的文件名，请确认或修改后上传：,"A file named \"%{name}\" already exists in this folder. A unique filename has been suggested; confirm or edit it before uploading:"
+「%{name}」仍与现有文件重名，请换一个名称,"\"%{name}\" still conflicts with an existing file. Choose another name."
 当前文件尚未建立可编辑的资源实体,"The current file does not yet have an editable FileAsset."
 资源信息编辑器尚未就绪,"The asset metadata editor is not ready."
 请填写当前语言下的资源名称。,"Enter the asset name for the current locale."
@@ -216,7 +259,6 @@ OK,OK
 "请填写当前语言下的默认 alt。页面使用时仍需确认语境 alt。","Enter the default alt text for the current locale. Confirm contextual alt text again when using it on a page."
 "默认 alt","Default alt"
 请填写当前语言下的资源描述，用于检索和编辑提示。,"Enter an asset description for search and editing guidance in the current locale."
-资源描述,Description
 请填写当前语言下的默认说明文字（可选）。,"Enter the default caption for the current locale (optional)."
 默认说明文字（可选）,"Default caption (optional)"
 资源翻译信息已保存并审核,"Asset translation metadata was saved and marked as reviewed."
@@ -235,9 +277,6 @@ OK,OK
 "SHA-256 校验和","SHA-256 checksum"
 默认语言,"Default locale"
 当前语言,"Current locale"
-显示名称,"Display name"
-"默认 Alt","Default alt"
-默认说明文字,"Default caption"
 翻译状态,"Translation state"
 翻译来源,"Translation origin"
 可选择,Selectable
@@ -253,7 +292,6 @@ OK,OK
 正在润色…,Polishing…
 润色完成,"Polish completed"
 润色失败,"Polish failed"
-正在保存…,Saving…
 保存失败,"Save failed"
 会话已失效，请重新生成后再保存,"Session expired. Please generate again before saving."
 请输入文件名,"Please enter a filename"
@@ -487,6 +525,7 @@ OK,OK
 批量删除未全部完成，部分项目已删除，请立即刷新并人工核对。,"The batch delete was only partially completed. Refresh immediately and verify the remaining items manually."
 目标目录不能为空,"Target directory is required"
 不允许操作存储根目录,"The storage root cannot be modified"
+目标路径已被文件占用,目标路径已被文件占用
 选择项目数量或格式无效,"The selected item count or format is invalid"
 逐文件元数据格式无效。,"Per-file metadata has an invalid format."
 Type,Type
