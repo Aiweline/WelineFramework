@@ -1,0 +1,415 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$escape = static fn (mixed $value): string => htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
+$activityTheme = is_array($this->getData('activityTheme')) ? $this->getData('activityTheme') : [];
+$scope = is_array($this->getData('scope')) ? $this->getData('scope') : [];
+$statuses = is_array($this->getData('statuses')) ? $this->getData('statuses') : [];
+$pickModes = is_array($this->getData('pick_modes')) ? $this->getData('pick_modes') : [];
+$productTypes = is_array($this->getData('productTypes')) ? $this->getData('productTypes') : [];
+$val = static fn (string $key, mixed $default = '') => $activityTheme[$key] ?? $default;
+$isNew = (int)$val('id', 0) <= 0;
+$formWebsiteId = (int)$this->getData('form_website_id');
+$formStoreCode = (string)$this->getData('form_store_code');
+$formChannelCode = (string)$this->getData('form_channel_code');
+$pickMode = (string)$val('product_pick_mode', 'manual');
+$filter = is_array($val('product_filter', [])) ? $val('product_filter') : [];
+$filterVal = static fn (string $key, mixed $default = '') => $filter[$key] ?? $default;
+$selectedProducts = is_array($this->getData('selected_products')) ? $this->getData('selected_products') : [];
+$selectedProductsJson = (string)($this->getData('selectedProductsJson') ?? '[]');
+$pageSlugPreview = (string)$val('page_slug', 'deals');
+$storefrontPreviewUrl = $pageSlugPreview !== '' ? '/promotion/' . rawurlencode($pageSlugPreview) : '/promotion';
+$pickModeLabels = [
+    'manual' => (string)__('手动多选'),
+    'single' => (string)__('单商品活动'),
+    'filter' => (string)__('条件筛选'),
+];
+$localRecordId = (int)$val('id', 0);
+$localTriggerLabelEsc = $escape((string)__('多语言'));
+$pageTitle = ((int)$val('id', 0) > 0) ? (string)__('编辑活动主题') : (string)__('新建活动主题');
+?>
+<link rel="stylesheet" href="@static(Weline_I18n::css/local-translation.css)">
+<link rel="stylesheet" href="@static(Weline_Promotion::css/promotion-theme-form.css)">
+<div class="w-grid promotion-theme-form" data-testid="promotion-theme-form">
+    <div style="--w-span:12;">
+        <div class="promotion-theme-form__sticky-shell" data-testid="promotion-theme-sticky-shell">
+            <div
+                class="promotion-theme-form__sticky-bar w-card"
+                data-promotion-theme-sticky
+                data-testid="promotion-theme-sticky-bar"
+            >
+                <div class="w-card__body promotion-theme-form__sticky-inner w-cluster" data-align="center" data-justify="between" data-gap="md">
+                    <h4 class="promotion-theme-form__sticky-title w-backend-page__title"><?= $escape($pageTitle) ?></h4>
+                    <div class="promotion-theme-form__sticky-actions w-cluster" data-align="center" data-gap="sm">
+                        <?php if ($localRecordId > 0): ?>
+                            <local
+                                mode="bulk"
+                                model="Weline\Promotion\Model\PromotionActivityThemeLocal"
+                                id="activityTheme.id"
+                            ></local>
+                        <?php endif; ?>
+                        <a class="w-button" href="@admin-url('promotion/backend/theme/index')" data-tone="neutral"><?= __('返回列表') ?></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="w-card">
+            <div class="w-card__body">
+                <w:form method="post" action="@admin-url('promotion/backend/theme/save')">
+                    <input type="hidden" name="id" value="<?= (int)$val('id', 0) ?>">
+                    <div class="w-grid">
+                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-key"><?= __('主题键') ?></label>
+                            <input id="promotion-theme-key" class="w-input" type="text" name="theme_key" required maxlength="64" value="<?= $escape($val('theme_key')) ?>">
+                        </div>
+                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-slug"><?= __('路径 slug') ?></label>
+                            <input id="promotion-theme-slug" class="w-input" type="text" name="page_slug" required maxlength="64" value="<?= $escape($val('page_slug')) ?>" placeholder="deals / weekend / gifts">
+                        </div>
+                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-status"><?= __('状态') ?></label>
+                            <select id="promotion-theme-status" class="w-select" name="status">
+                                <?php foreach ($statuses as $status): ?>
+                                    <option value="<?= $escape($status) ?>" <?= (string)$val('status', 'active') === $status ? 'selected' : '' ?>><?= $escape($status) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="w-grid">
+                        <div style="--w-span-md:3;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-website"><?= __('Website') ?></label>
+                            <div class="w-product-admin__website-select">
+                                <w:websites:website:select
+                                    id="promotion-theme-website"
+                                    name="website_id"
+                                    value="websiteSelectValue"
+                                    display="websiteSelectDisplay"
+                                    options="websiteOptionsJson"
+                                    multiple="false"
+                                    allow-empty="false"
+                                    clearable="false"
+                                    placeholder="@lang(选择 Website)"
+                                    on-change="promotionThemeReloadScope('website')"
+                                />
+                            </div>
+                        </div>
+                        <div style="--w-span-md:3;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-store"><?= __('店铺') ?></label>
+                            <w:websites:store:select
+                                id="promotion-theme-store"
+                                name="store_code"
+                                value="storeSelectValue"
+                                display="storeSelectDisplay"
+                                options="storeOptionsJson"
+                                allow-empty="true"
+                                clearable="true"
+                                empty-label="@lang(全部店铺)"
+                                placeholder="@lang(选择店铺)"
+                                on-change="promotionThemeReloadScope('store')"
+                            />
+                        </div>
+                        <div style="--w-span-md:3;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-channel"><?= __('渠道') ?></label>
+                            <w:websites:channel:select
+                                id="promotion-theme-channel"
+                                name="channel_code"
+                                value="channelSelectValue"
+                                display="channelSelectDisplay"
+                                options="channelOptionsJson"
+                                allow-empty="true"
+                                clearable="true"
+                                empty-label="@lang(全部渠道)"
+                                placeholder="@lang(选择渠道)"
+                                on-change="promotionThemeReloadScope('channel')"
+                            />
+                        </div>
+                        <div style="--w-span-md:3;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-band"><?= __('商品 price band') ?></label>
+                            <select id="promotion-theme-band" class="w-select" name="price_band">
+                                <option value="" <?= (string)$val('price_band') === '' ? 'selected' : '' ?>><?= __('不限') ?></option>
+                                <option value="under_200" <?= (string)$val('price_band') === 'under_200' ? 'selected' : '' ?>>under_200</option>
+                                <option value="300_plus" <?= (string)$val('price_band') === '300_plus' ? 'selected' : '' ?>>300_plus</option>
+                            </select>
+                        </div>
+                        <div style="--w-span-md:3;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-deal-type"><?= __('活动折扣') ?></label>
+                            <select id="promotion-theme-deal-type" class="w-select" name="deal_discount_type">
+                                <?php $dealType = (string)$val('deal_discount_type', 'none'); ?>
+                                <option value="none" <?= $dealType === 'none' ? 'selected' : '' ?>><?= __('无折扣（仅陈列）') ?></option>
+                                <option value="percentage" <?= $dealType === 'percentage' ? 'selected' : '' ?>><?= __('百分比折扣') ?></option>
+                                <option value="fixed_amount" <?= $dealType === 'fixed_amount' ? 'selected' : '' ?>><?= __('固定减额') ?></option>
+                            </select>
+                        </div>
+                        <div style="--w-span-md:3;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-deal-value"><?= __('折扣值') ?></label>
+                            <input id="promotion-theme-deal-value" class="w-input" type="number" min="0" step="0.01" name="deal_discount_value" value="<?= $escape((string)$val('deal_discount_value', '0')) ?>">
+                            <p class="w-field__hint" data-size="sm"><?= __('百分比填 10 表示九折；固定减额填金额。保存后自动同步到营销折扣规则（标记来自活动）。') ?></p>
+                            <?php if ((int)$val('marketing_rule_id', 0) > 0): ?>
+                                <p class="w-field__hint" data-size="sm"><?= __('已同步规则 ID') ?>: <?= (int)$val('marketing_rule_id') ?></p>
+                            <?php endif; ?>
+                        </div>
+                    </div>
+                    <p class="w-backend-page__subtitle"><?= __('范围规则：一站一活动，必须选择 Website；店铺/渠道留空表示该站下该层全部；配置渠道时必须同时选择店铺；同 slug 时更具体范围优先。') ?></p>
+                    <details class="w-card" style="margin-bottom:var(--weline-space-4);" data-testid="promotion-theme-field-help">
+                        <summary class="w-card__header" style="cursor:pointer;list-style:none;">
+                            <h5 class="w-card__title"><?= __('字段说明与前台对应') ?></h5>
+                        </summary>
+                        <div class="w-card__body">
+                            <p class="w-backend-page__subtitle"><?= __('保存后可在前台预览：') ?><a href="<?= $escape($storefrontPreviewUrl) ?>" target="_blank" rel="noopener"><?= $escape($storefrontPreviewUrl) ?></a></p>
+                            <table class="w-table">
+                                <thead>
+                                    <tr>
+                                        <th><?= __('后台字段') ?></th>
+                                        <th><?= __('前台展示位置') ?></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><?= __('路径 slug') ?></td><td><?= __('前台 URL：/promotion/{slug}，例如 /promotion/deals') ?></td></tr>
+                                    <tr><td><?= __('显示在二级导航') ?> + <?= __('导航标签') ?></td><td><?= __('活动页顶部 Tab 文案（/promotion 与各 slug 页）') ?></td></tr>
+                                    <tr><td><?= __('页面标题') ?></td><td><?= __('Hero 区主标题（h1）') ?></td></tr>
+                                    <tr><td><?= __('Hero 说明') ?></td><td><?= __('Hero 区副文案') ?></td></tr>
+                                    <tr><td><?= __('入口卡片标题 / 说明 / 按钮') ?></td><td><?= __('活动首页与其它 slug 页底部的「活动入口」卡片') ?></td></tr>
+                                    <tr><td><?= __('商品 price band') ?></td><td><?= __('无手动/条件选品时的兜底货架筛选（under_200 / 300_plus）') ?></td></tr>
+                                    <tr><td><?= __('活动折扣 / 折扣值') ?></td><td><?= __('保存时同步 Marketing 自动规则；前台展示活动价，加购报价同源生效') ?></td></tr>
+                                    <tr><td><?= __('活动商品 / 选品模式') ?></td><td><?= __('Hero 下方商品货架；条件模式按规则动态解析') ?></td></tr>
+                                    <tr><td><?= __('Website / 店铺 / 渠道') ?></td><td><?= __('一站一活动：必须选 Website；店铺/渠道可留空表示该站全部；更具体范围优先') ?></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </details>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <label><input type="checkbox" name="is_nav_tab" value="1" <?= (int)$val('is_nav_tab', 1) === 1 ? 'checked' : '' ?>> <?= __('显示在二级导航') ?></label>
+                    </div>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <div class="w-field__label-row promotion-theme-local-label" data-align="center" data-justify="between" data-gap="sm">
+                            <label class="w-field__label" for="promotion-theme-nav"><?= __('导航标签') ?></label>
+                            <?php if ($localRecordId > 0): ?>
+                                <span class="promotion-theme-local-label__trigger" style="--promotion-local-label: '<?= $localTriggerLabelEsc ?>'">
+                                    <local model="Weline\Promotion\Model\PromotionActivityThemeLocal" field="nav_label" id="activityTheme.id" bulk-input="promotion-theme-nav" bulk-label="导航文案"><?= $escape($val('nav_label')) ?></local>
+                                </span>
+                            <?php else: ?>
+                                <span class="w-field__hint" data-size="sm"><?= __('保存后可翻译多语言') ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <input id="promotion-theme-nav" class="w-input" type="text" name="nav_label" maxlength="255" value="<?= $escape($val('nav_label')) ?>">
+                    </div>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <div class="w-field__label-row promotion-theme-local-label" data-align="center" data-justify="between" data-gap="sm">
+                            <label class="w-field__label" for="promotion-theme-title"><?= __('页面标题') ?></label>
+                            <?php if ($localRecordId > 0): ?>
+                                <span class="promotion-theme-local-label__trigger" style="--promotion-local-label: '<?= $localTriggerLabelEsc ?>'">
+                                    <local model="Weline\Promotion\Model\PromotionActivityThemeLocal" field="page_title" id="activityTheme.id" bulk-input="promotion-theme-title" bulk-label="页面标题"><?= $escape($val('page_title')) ?></local>
+                                </span>
+                            <?php else: ?>
+                                <span class="w-field__hint" data-size="sm"><?= __('保存后可翻译多语言') ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <input id="promotion-theme-title" class="w-input" type="text" name="page_title" required maxlength="255" value="<?= $escape($val('page_title')) ?>">
+                    </div>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <div class="w-field__label-row promotion-theme-local-label" data-align="center" data-justify="between" data-gap="sm">
+                            <label class="w-field__label" for="promotion-theme-lede"><?= __('Hero 说明') ?></label>
+                            <?php if ($localRecordId > 0): ?>
+                                <span class="promotion-theme-local-label__trigger" style="--promotion-local-label: '<?= $localTriggerLabelEsc ?>'">
+                                    <local model="Weline\Promotion\Model\PromotionActivityThemeLocal" field="hero_lede" id="activityTheme.id" bulk-input="promotion-theme-lede" bulk-label="首屏导语"><?= $escape($val('hero_lede')) ?></local>
+                                </span>
+                            <?php else: ?>
+                                <span class="w-field__hint" data-size="sm"><?= __('保存后可翻译多语言') ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <textarea id="promotion-theme-lede" class="w-textarea" name="hero_lede" rows="3"><?= $escape($val('hero_lede')) ?></textarea>
+                    </div>
+                    <div class="w-grid">
+                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+                            <div class="w-field__label-row promotion-theme-local-label" data-align="center" data-justify="between" data-gap="sm">
+                                <label class="w-field__label" for="promotion-theme-entry-title"><?= __('入口卡片标题') ?></label>
+                                <?php if ($localRecordId > 0): ?>
+                                    <span class="promotion-theme-local-label__trigger" style="--promotion-local-label: '<?= $localTriggerLabelEsc ?>'">
+                                        <local model="Weline\Promotion\Model\PromotionActivityThemeLocal" field="entry_title" id="activityTheme.id" bulk-input="promotion-theme-entry-title" bulk-label="入口标题"><?= $escape($val('entry_title')) ?></local>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="w-field__hint" data-size="sm"><?= __('保存后可翻译多语言') ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <input id="promotion-theme-entry-title" class="w-input" type="text" name="entry_title" maxlength="255" value="<?= $escape($val('entry_title')) ?>">
+                        </div>
+                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+                            <div class="w-field__label-row promotion-theme-local-label" data-align="center" data-justify="between" data-gap="sm">
+                                <label class="w-field__label" for="promotion-theme-entry-action"><?= __('入口按钮文案') ?></label>
+                                <?php if ($localRecordId > 0): ?>
+                                    <span class="promotion-theme-local-label__trigger" style="--promotion-local-label: '<?= $localTriggerLabelEsc ?>'">
+                                        <local model="Weline\Promotion\Model\PromotionActivityThemeLocal" field="entry_action_label" id="activityTheme.id" bulk-input="promotion-theme-entry-action" bulk-label="入口按钮文案"><?= $escape($val('entry_action_label')) ?></local>
+                                    </span>
+                                <?php else: ?>
+                                    <span class="w-field__hint" data-size="sm"><?= __('保存后可翻译多语言') ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <input id="promotion-theme-entry-action" class="w-input" type="text" name="entry_action_label" maxlength="255" value="<?= $escape($val('entry_action_label')) ?>">
+                        </div>
+                        <div style="--w-span-md:4;--w-mb:var(--weline-space-4);">
+                            <label class="w-field__label" for="promotion-theme-sort"><?= __('排序') ?></label>
+                            <input id="promotion-theme-sort" class="w-input" type="number" name="sort_order" value="<?= $escape((string)$val('sort_order', 0)) ?>">
+                        </div>
+                    </div>
+                    <div style="--w-mb:var(--weline-space-4);">
+                        <div class="w-field__label-row promotion-theme-local-label" data-align="center" data-justify="between" data-gap="sm">
+                            <label class="w-field__label" for="promotion-theme-entry-sub"><?= __('入口卡片说明') ?></label>
+                            <?php if ($localRecordId > 0): ?>
+                                <span class="promotion-theme-local-label__trigger" style="--promotion-local-label: '<?= $localTriggerLabelEsc ?>'">
+                                    <local model="Weline\Promotion\Model\PromotionActivityThemeLocal" field="entry_subtitle" id="activityTheme.id" bulk-input="promotion-theme-entry-sub" bulk-label="入口副标题"><?= $escape($val('entry_subtitle')) ?></local>
+                                </span>
+                            <?php else: ?>
+                                <span class="w-field__hint" data-size="sm"><?= __('保存后可翻译多语言') ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <textarea id="promotion-theme-entry-sub" class="w-textarea" name="entry_subtitle" rows="3"><?= $escape($val('entry_subtitle')) ?></textarea>
+                    </div>
+                    <div class="w-card promotion-theme-products" style="margin-bottom:var(--weline-space-4);" data-testid="promotion-theme-products">
+                        <div class="w-card__header">
+                            <h5 class="w-card__title"><?= __('活动商品') ?></h5>
+                            <p class="w-backend-page__subtitle"><?= __('手动多选 / 单商品 / 条件筛选；均在当前 Website 范围内解析。') ?></p>
+                        </div>
+                        <div class="w-card__body">
+                            <div class="w-grid promotion-theme-products__controls" style="--w-gap:var(--weline-space-3);" data-testid="promotion-theme-product-controls">
+                                <div class="promotion-theme-products__pick-mode" style="--w-span-md:3;--w-mb:0;">
+                                    <label class="w-field__label" for="promotion-theme-pick-mode"><?= __('选品模式') ?></label>
+                                    <select id="promotion-theme-pick-mode" class="w-select" name="product_pick_mode">
+                                        <?php foreach ($pickModes as $mode): ?>
+                                            <option value="<?= $escape($mode) ?>" <?= $pickMode === $mode ? 'selected' : '' ?>><?= $escape($pickModeLabels[$mode] ?? $mode) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="promotion-theme-products__filter-field" style="--w-span-md:3;--w-mb:0;">
+                                    <label class="w-field__label" for="promotion-theme-filter-type"><?= __('产品类型') ?></label>
+                                    <select id="promotion-theme-filter-type" class="w-select" name="filter_product_type">
+                                        <option value=""><?= __('不限') ?></option>
+                                        <?php foreach ($productTypes as $type): ?>
+                                            <?php $typeCode = trim((string)($type['code'] ?? $type['value'] ?? '')); ?>
+                                            <?php if ($typeCode === '') { continue; } ?>
+                                            <option value="<?= $escape($typeCode) ?>" <?= (string)$filterVal('product_type') === $typeCode ? 'selected' : '' ?>><?= $escape((string)($type['label'] ?? $type['name'] ?? $typeCode)) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div class="promotion-theme-products__filter-field" style="--w-span-md:3;--w-mb:0;">
+                                    <label class="w-field__label" for="promotion-theme-filter-status"><?= __('发布状态') ?></label>
+                                    <select id="promotion-theme-filter-status" class="w-select" name="filter_status">
+                                        <option value="published" <?= (string)$filterVal('status', 'published') === 'published' ? 'selected' : '' ?>><?= __('已发布') ?></option>
+                                        <option value="draft" <?= (string)$filterVal('status') === 'draft' ? 'selected' : '' ?>><?= __('草稿') ?></option>
+                                    </select>
+                                </div>
+                                <div class="promotion-theme-products__filter-field" style="--w-span-md:3;--w-mb:0;">
+                                    <label class="w-field__label" for="promotion-theme-filter-new"><?= __('新品（最近 N 天）') ?></label>
+                                    <select id="promotion-theme-filter-new" class="w-select" name="filter_new_within_days">
+                                        <option value="0" <?= (int)$filterVal('new_within_days', 0) === 0 ? 'selected' : '' ?>><?= __('不限') ?></option>
+                                        <option value="7" <?= (int)$filterVal('new_within_days') === 7 ? 'selected' : '' ?>><?= __('7 天内上新') ?></option>
+                                        <option value="14" <?= (int)$filterVal('new_within_days') === 14 ? 'selected' : '' ?>><?= __('14 天内上新') ?></option>
+                                        <option value="30" <?= (int)$filterVal('new_within_days') === 30 ? 'selected' : '' ?>><?= __('30 天内上新') ?></option>
+                                    </select>
+                                </div>
+                                <div class="promotion-theme-products__filter-field" style="--w-span-md:3;--w-mb:0;">
+                                    <label class="w-field__label" for="promotion-theme-filter-limit"><?= __('前台最多展示') ?></label>
+                                    <input id="promotion-theme-filter-limit" class="w-input" type="number" min="1" max="48" name="filter_limit" value="<?= $escape((string)$filterVal('limit', 12)) ?>">
+                                </div>
+                                <div class="promotion-theme-products__filter-field" style="--w-span-md:3;--w-mb:0;">
+                                    <label class="w-field__label" for="promotion-theme-filter-name"><?= __('名称包含') ?></label>
+                                    <input id="promotion-theme-filter-name" class="w-input" type="text" name="filter_name" maxlength="120" value="<?= $escape((string)$filterVal('name')) ?>">
+                                </div>
+                                <div class="promotion-theme-products__filter-field" style="--w-span-md:3;--w-mb:0;">
+                                    <label class="w-field__label" for="promotion-theme-filter-sku"><?= __('SKU') ?></label>
+                                    <input id="promotion-theme-filter-sku" class="w-input" type="text" name="filter_sku" maxlength="64" value="<?= $escape((string)$filterVal('sku')) ?>">
+                                </div>
+                                <div class="promotion-theme-products__filter-field" style="--w-span-md:3;--w-mb:0;">
+                                    <label class="w-field__label" for="promotion-theme-filter-code"><?= __('产品编码') ?></label>
+                                    <input id="promotion-theme-filter-code" class="w-input" type="text" name="filter_product_code" maxlength="64" value="<?= $escape((string)$filterVal('product_code')) ?>">
+                                </div>
+                            </div>
+                            <div id="promotion-theme-filter-panel" class="promotion-theme-filter-panel" data-testid="promotion-theme-filter-panel">
+                                <div class="promotion-theme-filter-preview" data-testid="promotion-theme-filter-preview">
+                                    <div class="promotion-theme-filter-preview__toolbar w-cluster" data-align="center" data-justify="between" data-gap="sm">
+                                        <p class="w-backend-page__subtitle promotion-theme-filter-preview__hint"><?= __('预览命中商品（上限同「前台最多展示」；支持异步翻页；仅当前 Website）。') ?></p>
+                                        <button type="button" class="w-button" id="promotion-theme-filter-preview-btn" data-tone="neutral" data-size="sm"><?= __('刷新预览') ?></button>
+                                    </div>
+                                    <div id="promotion-theme-filter-preview-results" data-testid="promotion-theme-filter-preview-results" aria-live="polite"></div>
+                                </div>
+                            </div>
+                            <div id="promotion-theme-manual-panel" data-testid="promotion-theme-manual-panel">
+                                <w:product:admin:picker
+                                    id="promotion-theme-product-picker"
+                                    name="product_ids[]"
+                                    selected="selectedProductsJson"
+                                    website-field="website_id"
+                                    store-field="store_code"
+                                    channel-field="channel_code"
+                                    mode-field="product_pick_mode"
+                                    search-url="promotionThemeProductSearchUrl"
+                                    cross-website="false"
+                                    limit="20"
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <p class="w-backend-page__subtitle"><?= __('保存主表单后，可点击字段旁的「多语言」或顶部「一键 AI 翻译」补全其它语言（空字段与已译字段会自动跳过）。') ?></p>
+                    <button class="w-button" type="submit" data-tone="primary"><?= __('保存活动主题') ?></button>
+                </w:form>
+            </div>
+        </div>
+    </div>
+</div>
+<?php
+$filterPreviewJson = (string)($this->getData('filterPreviewJson') ?? '{}');
+$productConfig = [
+    'pickMode' => $pickMode,
+    'searchUrl' => (string)($this->getData('promotionThemeProductSearchUrl') ?? ''),
+    'previewUrl' => '',
+    'pageSize' => 10,
+    'initialPreview' => json_decode($filterPreviewJson, true) ?: ['success' => false, 'items' => []],
+    'labels' => [
+        'empty' => (string)__('当前筛选条件下暂无命中商品，请调整规则或检查发布状态。'),
+        'scopeRequired' => (string)__('活动主题必须指定 Website（一站一活动；0 为默认网站）。'),
+        'previewFailed' => (string)__('预览请求失败，请刷新页面后重试。'),
+        'loading' => (string)__('正在加载命中商品…'),
+        // 使用 {{total}} 避免 __() 无参时吞掉 %{1}
+        'previewSummary' => (string)__('共 {{total}} 条命中（前台最多展示 {{limit}} 条）'),
+        'pageInfo' => (string)__('第 {{page}} / {{page_count}} 页'),
+        'prevPage' => (string)__('上一页'),
+        'nextPage' => (string)__('下一页'),
+        'image' => (string)__('图片'),
+        'id' => (string)__('ID'),
+        'website' => (string)__('网站'),
+        'sku' => (string)__('SKU'),
+        'name' => (string)__('名称'),
+        'status' => (string)__('状态'),
+    ],
+];
+?>
+<script type="application/json" id="promotion-theme-product-config" data-search-url="<?= $escape((string)($this->getData('promotionThemeProductSearchUrl') ?? '')) ?>" data-preview-url="@url{'promotion/backend/theme/previewFilterProducts'}"><?= json_encode($productConfig, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP) ?: '{}' ?></script>
+<script src="@static(Weline_Promotion::js/backend/promotion-theme-products.js)" defer data-no-extract="true"></script>
+<script data-no-extract="true">
+function promotionThemeReloadScope(level) {
+    var root = document.querySelector('[data-testid="promotion-theme-form"]');
+    if (!root) {
+        return;
+    }
+    var params = new URLSearchParams(window.location.search);
+    var websiteInput = root.querySelector('[name="website_id"]');
+    var storeInput = root.querySelector('[name="store_code"]');
+    var channelInput = root.querySelector('[name="channel_code"]');
+    var websiteId = websiteInput ? String(websiteInput.value || '0').trim() : '0';
+    var storeCode = storeInput ? String(storeInput.value || '').trim() : '';
+    var channelCode = channelInput ? String(channelInput.value || '').trim() : '';
+    if (level === 'website') {
+        storeCode = '';
+        channelCode = '';
+    } else if (level === 'store') {
+        channelCode = '';
+    }
+    params.set('website_id', websiteId);
+    params.set('store_code', storeCode);
+    params.set('channel_code', channelCode);
+    var idInput = root.querySelector('[name="id"]');
+    if (idInput && String(idInput.value || '').trim() !== '') {
+        params.set('id', String(idInput.value).trim());
+    }
+    window.location.search = params.toString();
+}
+</script>
