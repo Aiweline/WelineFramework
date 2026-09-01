@@ -3285,7 +3285,10 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $http3Gate = \strpos($source, '$this->holdLinuxHttp3ReadyForActivation(');
         $namespaceGate = \strpos($source, '$finalNamespaceRejection =');
-        $publicLeaseActivation = \strpos($source, '$this->confirmPublicEdgeLease(');
+        $publicLeaseActivation = \strpos(
+            $source,
+            '$this->confirmPublicEdgeLeaseWithTransientRetry(',
+        );
         $initialBackendActivation = \strpos(
             $source,
             '$this->confirmGatewayInitialBackendLease(',
@@ -3299,6 +3302,101 @@ class ServiceOrchestratorStartupTest extends TestCase
         self::assertGreaterThan($namespaceGate, $publicLeaseActivation);
         self::assertGreaterThan($http3Gate, $initialBackendActivation);
         self::assertGreaterThan($namespaceGate, $initialBackendActivation);
+    }
+
+    public function testPublicEdgeLeaseConfirmationRetriesOnlyExactStateLockTimeout(): void
+    {
+        $createOrchestrator = static function (array $outcomes): ServiceOrchestrator {
+            return new class($outcomes) extends ServiceOrchestrator {
+                public int $confirmationAttempts = 0;
+                /** @var list<int> */
+                public array $retryWaits = [];
+
+                /** @param list<?\Throwable> $outcomes */
+                public function __construct(private array $outcomes)
+                {
+                    parent::__construct();
+                }
+
+                protected function confirmPublicEdgeLease(
+                    int $ownerPid,
+                    int $port,
+                    string $managedProcessName,
+                    string $ownerLaunchId,
+                    string $authorizedProcessBirth,
+                    string $authorizedPidNamespaceId,
+                ): void {
+                    $this->confirmationAttempts++;
+                    $outcome = \array_shift($this->outcomes);
+                    if ($outcome instanceof \Throwable) {
+                        throw $outcome;
+                    }
+                }
+
+                protected function waitForPublicEdgeLeaseConfirmationRetry(int $attempt): void
+                {
+                    $this->retryWaits[] = $attempt;
+                }
+            };
+        };
+        $arguments = [
+            12001,
+            9555,
+            'weline-wls-worker-default-p05113ef3-1',
+            '0123456789abcdef0123456789abcdef',
+            \str_repeat('a', 64),
+            '',
+        ];
+        $lockTimeout = static fn (): \RuntimeException => new \RuntimeException(
+            'Timed out acquiring the WLS state lock.',
+        );
+
+        $eventuallyConfirmed = $createOrchestrator([$lockTimeout(), null]);
+        $this->invokePrivateWithArgs(
+            $eventuallyConfirmed,
+            'confirmPublicEdgeLeaseWithTransientRetry',
+            $arguments,
+        );
+        self::assertSame(2, $eventuallyConfirmed->confirmationAttempts);
+        self::assertSame([1], $eventuallyConfirmed->retryWaits);
+
+        $exhausted = $createOrchestrator([
+            $lockTimeout(),
+            $lockTimeout(),
+            $lockTimeout(),
+        ]);
+        try {
+            $this->invokePrivateWithArgs(
+                $exhausted,
+                'confirmPublicEdgeLeaseWithTransientRetry',
+                $arguments,
+            );
+            self::fail('A third state-lock timeout must remain fail closed.');
+        } catch (\RuntimeException $exception) {
+            self::assertSame('Timed out acquiring the WLS state lock.', $exception->getMessage());
+        }
+        self::assertSame(3, $exhausted->confirmationAttempts);
+        self::assertSame([1, 2], $exhausted->retryWaits);
+
+        $identityFailure = $createOrchestrator([
+            new \RuntimeException('WLS public listener lease owner identity mismatch.'),
+            null,
+        ]);
+        try {
+            $this->invokePrivateWithArgs(
+                $identityFailure,
+                'confirmPublicEdgeLeaseWithTransientRetry',
+                $arguments,
+            );
+            self::fail('A non-transient lease error must not be retried.');
+        } catch (\RuntimeException $exception) {
+            self::assertSame(
+                'WLS public listener lease owner identity mismatch.',
+                $exception->getMessage(),
+            );
+        }
+        self::assertSame(1, $identityFailure->confirmationAttempts);
+        self::assertSame([], $identityFailure->retryWaits);
     }
 
     public function testHomepageFailOpenAuditUsesInitializedWorkerReadinessProof(): void
@@ -6598,6 +6696,142 @@ class ServiceOrchestratorStartupTest extends TestCase
         ]));
         self::assertSame(3, $orchestrator->leaseReads);
         self::assertSame(2, $orchestrator->waits);
+    }
+
+    public function testWorkerManagedIdentityMismatchReleasesLeaseAndSchedulesResurrection(): void
+    {
+        $server = new class extends MasterControlServer {
+            /** @var list<int> */
+            public array $closedClients = [];
+
+            public function clientExists(int $clientId): bool
+            {
+                return $clientId === 42;
+            }
+
+            public function closeClient(int $clientId): void
+            {
+                $this->closedClients[] = $clientId;
+            }
+        };
+
+        $orchestrator = new class($server) extends ServiceOrchestrator {
+            /** @var array<string, array<string, mixed>> */
+            public array $probeRequests = [];
+
+            public function __construct(private MasterControlServer $server)
+            {
+                parent::__construct();
+            }
+
+            protected function createControlServer(): MasterControlServer
+            {
+                return $this->server;
+            }
+
+            protected function probeWorkerManagedProcessIdentities(array $requests): array
+            {
+                $this->probeRequests = $requests;
+                $probes = [];
+                foreach ($requests as $key => $request) {
+                    $probes[$key] = [
+                        'pid' => (int)($request['pid'] ?? 0),
+                        'state' => Processer::PROCESS_STATE_IDENTITY_MISMATCH,
+                        'reason' => 'live_identity_mismatch',
+                    ];
+                }
+
+                return $probes;
+            }
+        };
+
+        $registry = $orchestrator->getRegistry();
+        if (!$registry->hasProvider(ControlMessage::ROLE_WORKER)) {
+            $registry->registerProvider(new WorkerProvider());
+        }
+
+        $context = $this->createWorkerInfraContext();
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 1,
+            epoch: $context->epoch,
+            launchId: 'worker-managed-identity-mismatch',
+            pid: 88001,
+            port: 18081,
+            state: ServiceInstance::STATE_READY,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 30.0,
+        );
+        $worker->ipcClientId = 42;
+        $worker->setMeta('process_name', 'weline-wls-worker-identity-audit');
+        $worker->setMeta('expected_process_identity', 'weline-wls-worker-identity-audit');
+        $worker->setMeta('slot_id', 'worker#1');
+        $worker->setMeta('lease_id', 'worker-managed-identity-mismatch');
+        $worker->setMeta('generation', 1);
+        $registry->addInstance($worker);
+
+        $this->writePrivate($orchestrator, 'context', $context);
+        $this->writePrivate($orchestrator, 'running', true);
+        $this->writePrivate($orchestrator, 'controlServer', $server);
+        $this->writePrivate($orchestrator, 'desiredState', [
+            ControlMessage::ROLE_WORKER => 1,
+        ]);
+        $this->writePrivate($orchestrator, 'startupAcceptanceComplete', true);
+
+        $this->invokePrivate($orchestrator, 'reconcileWorkersWithStaleManagedIdentity');
+
+        self::assertSame(['1' => [
+            'pid' => 88001,
+            'expected_process_name' => 'weline-wls-worker-identity-audit',
+            'expected_launch_id' => 'worker-managed-identity-mismatch',
+            'expected_pname' => '--name=weline-wls-worker-identity-audit',
+        ]], $orchestrator->probeRequests);
+        self::assertNull($worker->ipcClientId);
+        self::assertSame([42], $server->closedClients);
+        self::assertArrayHasKey('worker:1', $this->readPrivate($orchestrator, 'resurrectQueue'));
+        $this->writePrivate($orchestrator, 'processRunningCache', [
+            88001 => [
+                'running' => true,
+                'checkedAt' => self::monotonicSeconds(),
+            ],
+        ]);
+        self::assertFalse($this->invokePrivateWithArgs($orchestrator, 'isInstanceServiceAlive', [$worker]));
+    }
+
+    public function testWorkerManagedIdentityHealthyUsesFreshProbeCache(): void
+    {
+        $orchestrator = new ServiceOrchestrator();
+        $worker = new ServiceInstance(
+            role: ControlMessage::ROLE_WORKER,
+            instanceId: 2,
+            epoch: 1,
+            launchId: 'worker-managed-identity-healthy',
+            pid: 88002,
+            state: ServiceInstance::STATE_READY,
+            startedAt: (\hrtime(true) / 1_000_000_000) - 30.0,
+        );
+        $worker->setMeta('process_name', 'weline-wls-worker-identity-healthy');
+        $worker->setMeta('expected_process_identity', 'weline-wls-worker-identity-healthy');
+
+        $this->writePrivate($orchestrator, 'managedIdentityProbeCache', [
+            ControlMessage::ROLE_WORKER . ':2' => [
+                'state' => Processer::PROCESS_STATE_RUNNING,
+                'reason' => 'identity_match',
+                'checkedAt' => self::monotonicSeconds(),
+            ],
+        ]);
+        $this->writePrivate($orchestrator, 'processRunningCache', [
+            88002 => [
+                'running' => true,
+                'checkedAt' => self::monotonicSeconds(),
+            ],
+        ]);
+
+        self::assertTrue($this->invokePrivateWithArgs($orchestrator, 'isInstanceServiceAlive', [$worker]));
+    }
+
+    private static function monotonicSeconds(): float
+    {
+        return (float)\hrtime(true) / 1_000_000_000;
     }
 
     private static function cleanupGatewayBackendTokenState(string $instanceName): void

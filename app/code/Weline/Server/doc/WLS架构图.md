@@ -197,6 +197,21 @@ generation/异摘要拒绝；较高 generation 串行事务发布。
   `TLS_CERTIFICATE_UNAVAILABLE`。
 - 续签结果先写项目待确认队列。网关恢复后，Agent 以 generation/摘要幂等重放。
 
+### 5.1 Master 控制面与 TLS 数据面隔离边界
+
+- Master 是认证 IPC、状态与恢复编排的控制面；TLS Worker/H3 participant 和 admission listener 是可隔离的数据面。
+- 证书热更继续使用 manifest generation/digest/route_count 与精确进程租约验证。不能证明新证书或目标退出时，关闭 Master-owned admission、终止可证明身份的目标、保留未知目标明细，并置 `tls_serving_quarantined=true`。
+- TLS 隔离门禁阻止 TLS 角色批量/单体启动和复活；它不再以 `tls_reload_fail_stop_unverified` 或 `tls_serving_quarantine_unverified` 请求整 Master 停机。Master 保持在线供 `status`、认证 `stop`、诊断和修复证书后的显式整代重启。
+- `zero_serving=false` 是可操作的否定回执，不是成功；控制面在线也不得被解释为 TLS 数据面健康。
+
+### 5.2 显式 clean-start 与普通冷恢复边界
+
+- 普通 `server:start` 不删除端点、PID sidecar 或 serving manifest 引用。端点绑定与当前指针不一致时继续 fail closed，并输出当前实例的 `php bin/w server:start [name] -clean` 恢复命令。
+- `-clean/--clean` 是单实例、离线专用事务：先从旧端点解析并保留启动配置，再按 `lifecycle lock → persistent start lock → endpoint namespace lock → endpoint JSON CAS` 的顺序清理，最后进入正常完整新代启动。
+- 清理前后均重复验证端点内容摘要、文件身份与进程租约；在线进程、锁占用或替换代际都会中止。该路径不发送进程信号，也不会枚举删除其他实例。
+- serving 引用默认要求端点 generation/digest 与 authority/current pointer 精确相等。只有显式 clean 且已证明端点终态时，才允许退役同一 `project_uuid + instance_generation + master_epoch + launch_id + master_pid` 的严格单调后继；此权限只用于 authority-last 退役，不能用于冷恢复或重用证书路径。
+- serving authority 是清理提交标记：先退役 LKG/current/generation 等可变引用，最后删除 authority；端点文件随后以内容与 inode CAS 删除。任一步证明失败都保留端点，供下一次显式恢复继续观察。
+
 WLS 2.0 v1 对共享网关租户关闭 TLS session cache、session ticket 和 0-RTT；不能用
 per-route ticket key 推导租户隔离。H3 只有宿主 Nginx 的 QUIC 数据面、UDP/443、
 Alt-Svc 和真实后端探针同时通过才可声明；纯 WLS 当前只提供 H2/H1。

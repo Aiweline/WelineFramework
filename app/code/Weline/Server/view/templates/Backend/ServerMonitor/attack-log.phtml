@@ -13,15 +13,13 @@
  */
 use Weline\Server\Model\AttackLog;
 
-$currentUrl = $this->getBackendUrl('*/backend/server-monitor/attack-log');
-$monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
 ?>
 
 <div class="attack-log-page">
     <!-- 面包屑 -->
     <nav aria-label="breadcrumb" style="--w-mb:var(--weline-space-4);">
         <ol class="w-breadcrumb">
-            <li class="w-breadcrumb__item"><a href="<?= $monitorUrl ?>"><?= __('服务器监控') ?></a></li>
+            <li class="w-breadcrumb__item"><a href="@backend-url{'*/backend/server-monitor'}"><?= __('服务器监控') ?></a></li>
             <li class="w-breadcrumb__item" data-state="active"><?= __('攻击日志') ?></li>
         </ol>
     </nav>
@@ -151,15 +149,15 @@ $monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
                     <nav aria-label="Page navigation" style="--w-mt:var(--weline-space-4);">
                         <ul class="w-pagination" data-justify="center" style="--w-mb:0;">
                             <li class="w-pagination__item <?= $page <= 1 ? 'disabled' : '' ?>">
-                                <a class="w-pagination__link" href="<?= $currentUrl ?>?page=<?= $page - 1 ?>&instance=<?= $instance ?>">&laquo;</a>
+                                <a class="w-pagination__link" href="@backend-url{'*/backend/server-monitor/attack-log'}?page=<?= $page - 1 ?>&instance=<?= $instance ?>">&laquo;</a>
                             </li>
                             <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
                                 <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
-                                    <a class="w-pagination__link" href="<?= $currentUrl ?>?page=<?= $i ?>&instance=<?= $instance ?>"><?= $i ?></a>
+                                    <a class="w-pagination__link" href="@backend-url{'*/backend/server-monitor/attack-log'}?page=<?= $i ?>&instance=<?= $instance ?>"><?= $i ?></a>
                                 </li>
                             <?php endfor; ?>
                             <li class="w-pagination__item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-                                <a class="w-pagination__link" href="<?= $currentUrl ?>?page=<?= $page + 1 ?>&instance=<?= $instance ?>">&raquo;</a>
+                                <a class="w-pagination__link" href="@backend-url{'*/backend/server-monitor/attack-log'}?page=<?= $page + 1 ?>&instance=<?= $instance ?>">&raquo;</a>
                             </li>
                         </ul>
                     </nav>

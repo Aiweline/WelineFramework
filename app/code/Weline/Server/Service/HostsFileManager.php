@@ -216,6 +216,8 @@ class HostsFileManager
         string $ip,
         string $mutationStatus,
     ): array {
+        LocalDomainRegisteredEventDispatcher::dispatch($domain, $ip, $mutationStatus);
+
         return [
             'success' => true,
             'message' => match ($mutationStatus) {

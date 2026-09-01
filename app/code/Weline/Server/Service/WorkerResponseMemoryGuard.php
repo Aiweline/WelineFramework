@@ -186,18 +186,13 @@ final class WorkerResponseMemoryGuard
      *         memory_store_clears:int,
      *         metadata_entries_cleared:int,
      *         cleared_process_caches:int
-     *     }
+     *     },
+     *     cycle_collection_skipped:bool,
+     *     drain_requested:bool
      * }
      */
     public static function compact(): array
     {
-        $cycles = \gc_collect_cycles();
-        $trimmedBytes = 0;
-
-        if (\function_exists('gc_mem_caches')) {
-            $trimmedBytes = \max(0, (int) \gc_mem_caches());
-        }
-
         $runtimeCacheCompactions = [
             'memory_store_clears' => 0,
             'metadata_entries_cleared' => 0,
@@ -206,16 +201,34 @@ final class WorkerResponseMemoryGuard
 
         $pressure = self::getMemoryPressure();
         $thresholds = self::getRuntimeCacheThresholds();
+        $cycleCollectionSkipped = $pressure >= $thresholds['hard'];
+
+        if ($cycleCollectionSkipped && !self::hasDrainAfterResponseRequest()) {
+            self::requestDrainAfterResponse('memory_pressure_hard_before_gc');
+        }
+
         if ($pressure >= $thresholds['soft']) {
             $runtimeCacheCompactions = self::compactRuntimeCaches(
-                $pressure >= $thresholds['hard']
+                $cycleCollectionSkipped
             );
+        }
+
+        $cycles = 0;
+        $trimmedBytes = 0;
+        if (!$cycleCollectionSkipped) {
+            $cycles = \gc_collect_cycles();
+
+            if (\function_exists('gc_mem_caches')) {
+                $trimmedBytes = \max(0, (int) \gc_mem_caches());
+            }
         }
 
         return [
             'cycles' => $cycles,
             'trimmed_bytes' => $trimmedBytes,
             'runtime_cache_compactions' => $runtimeCacheCompactions,
+            'cycle_collection_skipped' => $cycleCollectionSkipped,
+            'drain_requested' => self::hasDrainAfterResponseRequest(),
         ];
     }
 

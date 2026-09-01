@@ -17,7 +17,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
                 <i class="bi bi-arrow-left-right"></i>
                 <?php echo $isEdit ? '<lang>编辑代理规则</lang>' : '<lang>新建代理规则</lang>'; ?>
             </h2>
-            <a href="<?php echo $this->getUrl('*/backend/reverse-proxy'); ?>" class="btn btn-secondary">
+            <a href="@url{'*/backend/reverse-proxy'}" class="btn btn-secondary">
                 <i class="bi bi-arrow-left"></i> <lang>返回列表</lang>
             </a>
         </div>
@@ -101,7 +101,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
                             <button type="button" class="btn btn-info" data-reverse-proxy-edit-action="test-connection">
                                 <i class="bi bi-plug"></i> <lang>测试连接</lang>
                             </button>
-                            <a href="<?php echo $this->getUrl('*/backend/reverse-proxy'); ?>" class="btn btn-secondary">
+                            <a href="@url{'*/backend/reverse-proxy'}" class="btn btn-secondary">
                                 <lang>取消</lang>
                             </a>
                         </div>
@@ -166,11 +166,11 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
 })(window);
 </script>
 <script>
-const reverseProxyEditUrls = <?= json_encode([
-    'save' => $this->getUrl('*/backend/reverse-proxy/save'),
-    'index' => $this->getUrl('*/backend/reverse-proxy'),
-    'testConnection' => $this->getUrl('*/backend/reverse-proxy/test-connection'),
-], $jsonForScriptFlags) ?>;
+const reverseProxyEditUrls = {
+    save: "@url{'*/backend/reverse-proxy/save'}",
+    index: "@url{'*/backend/reverse-proxy'}",
+    testConnection: "@url{'*/backend/reverse-proxy/test-connection'}"
+};
 const reverseProxyEditMessages = <?= json_encode([
     'saveFailed' => (string)__('保存失败'),
     'requestFailed' => (string)__('请求失败'),

@@ -542,7 +542,7 @@ $rulesDigest = \trim((string)$this->getData('rulesDigest'));
     }
 
     async function saveRules() {
-        var url = '<?= $this->getBackendUrl('*/backend/server-monitor/save-security-rules') ?>';
+        var url = '@backend-url{'*/backend/server-monitor/save-security-rules'}';
         var payload = collectRules();
         try {
             var response = await Weline.adminRequest('server', url, {
