@@ -19,7 +19,10 @@ use Weline\I18n\Api\Localization\LocalModel;
 
 class LocalDescription extends LocalModel
 {
-    public const fields_ID = self::schema_fields_ID;
+    public const fields_ID = Option::schema_fields_ID;
+
+    #[Col(type: 'integer', nullable: false, primaryKey: true, comment: 'Option ID')]
+    public const schema_fields_ID = 'id';
 
     #[Col(type: 'varchar', length: 20, nullable: false, primaryKey: true, comment: '语言代码')]
     public const schema_fields_local_code = 'local_code';

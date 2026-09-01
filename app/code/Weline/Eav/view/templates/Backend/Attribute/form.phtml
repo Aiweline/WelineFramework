@@ -767,10 +767,17 @@
                     this.params.eav_entity_id = entity.eav_entity_id;
                     this.renderSearchEntityAttributeSet();
                 }
-                this.activeName = 'progress-select-set';
-                this.$nextTick(function() {
-                    $(".twitter-bs-wizard-nav li").eq(0).addClass('disabled').css({'pointer-events':'none','opacity':0.5});
-                });
+                if ('{{embed|0}}' === '1' && this.params.group_id) {
+                    this.activeName = 'progress-attribute-details';
+                    this.$nextTick(function() {
+                        $(".twitter-bs-wizard-nav li").addClass('disabled').css({'pointer-events':'none','opacity':0.5});
+                    });
+                } else {
+                    this.activeName = 'progress-select-set';
+                    this.$nextTick(function() {
+                        $(".twitter-bs-wizard-nav li").eq(0).addClass('disabled').css({'pointer-events':'none','opacity':0.5});
+                    });
+                }
             }
             for (var i = 0; i < this.types.length; i++) {
                 var type = this.types[i];
@@ -882,6 +889,13 @@
                                 confirmButtonText: '@lang{好的}'
                             }).then(function(result) {
                                 if (result.isConfirmed) {
+                                    if ('{{embed|0}}' === '1' && window.parent && window.parent !== window) {
+                                        window.parent.postMessage({
+                                            type: 'weline:eav:attribute-saved',
+                                            detail: resData.data || {},
+                                        }, window.location.origin);
+                                        return;
+                                    }
                                     showLoading();
                                     window.parent.location.reload();
                                 }

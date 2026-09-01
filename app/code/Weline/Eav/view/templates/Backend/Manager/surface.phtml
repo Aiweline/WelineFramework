@@ -1,0 +1,251 @@
+<?php
+/**
+ * EAV manager surface (tree + detail), reusable via page or eav:manager taglib.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+/** @var array{code:string,entityId:int,name:string}|null $entityScope */
+$entityScope = is_array($this->getData('entityScope') ?? null) ? $this->getData('entityScope') : null;
+$entityScopeError = trim((string)($this->getData('entityScopeError') ?? ''));
+$compact = (bool)($this->getData('compact') ?? false);
+$mode = strtolower(trim((string)($this->getData('mode') ?? 'manage')));
+if ($mode === '') {
+    $mode = 'manage';
+}
+$productId = max(0, (int)($this->getData('productId') ?? 0));
+$lockSet = (bool)($this->getData('lockSet') ?? false);
+$selectedSetId = max(0, (int)($this->getData('selectedSetId') ?? 0));
+$structureScope = strtolower(trim((string)($this->getData('structureScope') ?? 'catalog')));
+if ($structureScope === '') {
+    $structureScope = 'catalog';
+}
+$config = [
+    'entityScope' => $entityScope,
+    'mode' => $mode,
+    'productContext' => [
+        'productId' => $productId,
+        'lockSet' => $lockSet,
+        'selectedSetId' => $selectedSetId,
+        'structureScope' => $structureScope,
+    ],
+    'i18n' => [
+        'descriptors' => [
+            'entity' => [
+                'model' => 'Weline\\Eav\\Model\\EavEntity\\LocalDescription',
+                'field' => 'name',
+                'idField' => 'eav_entity_id',
+            ],
+            'set' => [
+                'model' => 'Weline\\Eav\\Model\\EavAttribute\\Set\\LocalDescription',
+                'field' => 'name',
+                'idField' => 'set_id',
+            ],
+            'group' => [
+                'model' => 'Weline\\Eav\\Model\\EavAttribute\\Group\\LocalDescription',
+                'field' => 'name',
+                'idField' => 'group_id',
+            ],
+            'attribute' => [
+                'model' => 'Weline\\Eav\\Model\\EavAttribute\\LocalDescription',
+                'field' => 'name',
+                'idField' => 'attribute_id',
+            ],
+            'option' => [
+                'model' => 'Weline\\Eav\\Model\\EavAttribute\\Option\\LocalDescription',
+                'field' => 'value',
+                'idField' => 'option_id',
+            ],
+        ],
+    ],
+    'types' => [
+        'entity' => (string)__('实体'),
+        'set' => (string)__('属性集'),
+        'group' => (string)__('属性组'),
+        'attribute' => (string)__('属性'),
+    ],
+    'structures' => [
+        'options' => (string)__('选项'),
+        'multiple' => (string)__('多值'),
+        'swatch' => (string)__('Swatch'),
+        'swatch_color' => (string)__('色板'),
+        'swatch_image' => (string)__('图板'),
+        'swatch_text' => (string)__('字板'),
+    ],
+    'fields' => [
+        'code' => (string)__('代码'),
+        'name' => (string)__('名称'),
+        'class' => (string)__('实体类'),
+        'eav_entity_id_field_type' => (string)__('主键字段类型'),
+        'eav_entity_id_field_length' => (string)__('主键字段长度'),
+        'type_id' => (string)__('属性类型'),
+        'basic_is_enable' => (string)__('启用'),
+        'frontend_is_filterable' => (string)__('可筛选'),
+        'frontend_is_searchable' => (string)__('可搜索'),
+        'frontend_is_visible' => (string)__('前台可见'),
+        'data_is_multiple' => (string)__('允许多值'),
+        'data_has_option' => (string)__('包含选项'),
+        'option_code' => (string)__('选项代码'),
+        'option_value' => (string)__('选项名称'),
+        'swatch_color' => (string)__('色板颜色'),
+        'swatch_image' => (string)__('图板地址'),
+        'swatch_text' => (string)__('字板文字'),
+        'compare_mode' => (string)__('可比模式'),
+        'compare_mode_none' => (string)__('不参与对比'),
+        'compare_mode_diff' => (string)__('仅标差异'),
+        'compare_mode_higher_better' => (string)__('越大越好'),
+        'compare_mode_lower_better' => (string)__('越小越好'),
+        'set_id' => (string)__('属性集'),
+        'group_id' => (string)__('属性组'),
+    ],
+    'messages' => [
+        'loading' => (string)__('加载中...'),
+        'loadFailed' => (string)__('加载失败'),
+        'empty' => (string)__('暂无 EAV 数据'),
+        'selectContext' => (string)__('请先在树中选择所属节点'),
+        'selectSet' => (string)__('请选择属性集'),
+        'selectGroup' => (string)__('请选择属性组'),
+        'save' => (string)__('保存'),
+        'saved' => (string)__('保存成功'),
+        'deleteTitle' => (string)__('删除 EAV 节点'),
+        'deleteMessage' => (string)__('该操作无法撤销，确定删除当前节点吗？'),
+        'deleted' => (string)__('删除成功'),
+        'confirm' => (string)__('确定'),
+        'cancel' => (string)__('取消'),
+        'required' => (string)__('请填写必填字段'),
+        'system' => (string)__('系统'),
+        'add' => (string)__('添加'),
+        'addItem' => (string)__('添加 %{1}'),
+        'unknownError' => (string)__('未知错误'),
+        'optionsTitle' => (string)__('选项项'),
+        'optionsCount' => (string)__('共 %{1} 项'),
+        'optionsEmpty' => (string)__('暂无选项项'),
+        'optionsEditHint' => (string)__('为该属性类型添加选项项，可按类型填写色板/图板/字板等字段'),
+        'addOption' => (string)__('添加选项'),
+        'removeOption' => (string)__('移除'),
+        'optionCode' => (string)__('选项代码'),
+        'optionLabel' => (string)__('选项名称'),
+        'delete' => (string)__('删除'),
+        'moved' => (string)__('移动成功'),
+        'assigned' => (string)__('归属成功'),
+        'moveFailed' => (string)__('移动失败'),
+        'invalidDrop' => (string)__('只能将属性组放到属性集下，或将属性放到属性组下'),
+        'dragHint' => (string)__('拖拽：属性组 → 属性集；属性同集内移动、跨属性集归属'),
+        'addHint' => (string)__('选中实体添加属性集，选中属性集添加属性组，选中属性组添加属性'),
+        'selectSetConfirm' => (string)__('选用此属性集'),
+        'selectAttributeConfirm' => (string)__('确认选择'),
+        'selectSetDone' => (string)__('已选用属性集'),
+        'selectAttributeDone' => (string)__('已选择属性'),
+        'selectSetHint' => (string)__('可展开并编辑属性组、属性与选项；确认时仍只选用顶层属性集'),
+        'selectAttributeHint' => (string)__('展开属性集与属性组，勾选要加入当前结构的属性'),
+        'localTranslate' => (string)__('多语言'),
+        'localAiTranslate' => (string)__('AI翻译'),
+        'localAiDone' => (string)__('AI 翻译完成'),
+        'localAiRetranslate' => (string)__('已有翻译内容，是否重新翻译？'),
+        'localAiRetranslateTitle' => (string)__('重新翻译'),
+        'sourceText' => (string)__('原文'),
+        'searchLocales' => (string)__('搜索语言、语言码或翻译'),
+        'loadingLocales' => (string)__('正在加载语言…'),
+        'refresh' => (string)__('刷新'),
+        'localEmpty' => (string)__('没有找到已启用的语言'),
+        'localNoMatch' => (string)__('没有匹配的语言'),
+        'localProgress' => (string)__('已译 %{filled} / 共 %{total} 种语言'),
+        'localFilled' => (string)__('已填写'),
+        'localPending' => (string)__('待填写'),
+        'colLanguage' => (string)__('语言'),
+        'colTranslation' => (string)__('译文'),
+        'colStatus' => (string)__('状态'),
+        'localNeedsSave' => (string)__('请先保存后再翻译'),
+        'editLockedSystem' => (string)__('系统属性不可修改'),
+        'editLockedInUse' => (string)__('属性已有实例数据，不可修改'),
+    ],
+];
+$jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE;
+$eavI18nDescriptorsJson = json_encode($config['i18n']['descriptors'] ?? [], $jsonFlags) ?: '{}';
+unset($config['i18n']);
+$configJson = json_encode($config, $jsonFlags);
+if (!is_string($configJson) || $configJson === '' || $configJson[0] !== '{') {
+    $configJson = '{}';
+}
+$configJsonTailBody = substr($configJson, 1);
+?>
+<?php if (!$compact): ?>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-eav-manager.css)">
+<link rel="stylesheet" href="@static(Weline_I18n::css/local-translation.css)">
+<?php endif; ?>
+
+<section class="w-eav-manager w-stack<?= $entityScope ? ' w-eav-manager--scoped' : '' ?><?= $mode !== 'manage' ? ' w-eav-manager--' . $escape($mode) : '' ?>" data-w-component="eav-manager" data-w-eav-mode="<?= $escape($mode) ?>"<?= $entityScope ? ' data-w-eav-scoped="1"' : '' ?>>
+    <div class="w-eav-manager__layout">
+        <aside class="w-card w-eav-manager__navigation" aria-labelledby="w-eav-tree-title">
+            <header class="w-card__header">
+                <div class="w-cluster" data-align="center" data-justify="between">
+                    <h2 class="w-card__title" id="w-eav-tree-title">
+                        <?= $escape($entityScope
+                            ? (string)__('属性结构')
+                            : (string)__('EAV 结构')) ?>
+                    </h2>
+                </div>
+                <div class="w-eav-manager__search">
+                    <w:icon name="search" size="sm" />
+                    <input class="w-input" type="search" data-w-eav-search placeholder="<?= $escape(__('搜索已加载节点...')) ?>" autocomplete="off" aria-label="<?= $escape(__('搜索已加载节点')) ?>">
+                </div>
+                <div class="w-eav-manager__tree-toolbar" data-w-eav-tree-toolbar>
+                    <span><?= $escape(__('选中实体添加属性集，选中属性集添加属性组，选中属性组添加属性')) ?></span>
+                </div>
+            </header>
+
+            <div class="w-card__body w-eav-manager__tree-scroll">
+                <ul class="w-tree" role="tree" data-w-component="tree" data-w-eav-tree aria-label="<?= $escape(__('EAV 结构树')) ?>" aria-busy="true"></ul>
+            </div>
+        </aside>
+
+        <section class="w-card w-eav-manager__detail" aria-labelledby="w-eav-detail-title">
+            <header class="w-card__header w-eav-manager__detail-header w-cluster" data-w-eav-detail-header data-align="center" data-justify="between">
+                <div class="w-stack" data-gap="sm" data-w-eav-detail-heading hidden>
+                    <h2 class="w-card__title" id="w-eav-detail-title" data-w-eav-detail-title></h2>
+                    <p class="w-text" data-tone="muted" data-family="mono" data-w-eav-detail-subtitle></p>
+                </div>
+                <div class="w-cluster w-eav-manager__detail-actions" data-align="center" data-gap="sm">
+                    <button class="w-button" type="button" data-tone="danger" data-variant="outline" data-size="sm" data-w-eav-delete hidden>
+                        <w:icon name="trash" size="sm" /> <?= $escape(__('删除')) ?>
+                    </button>
+                    <button class="w-button" type="button" data-tone="primary" data-size="sm" data-w-eav-add disabled>
+                        <w:icon name="plus" size="sm" />
+                        <span data-w-eav-add-label><?= $escape(__('添加')) ?></span>
+                    </button>
+                </div>
+            </header>
+            <div class="w-card__body w-eav-manager__detail-body">
+                <?php if ($entityScopeError !== ''): ?>
+                    <div class="w-empty" data-w-eav-placeholder>
+                        <w:icon name="warning" size="xl" />
+                        <div class="w-stack" data-gap="sm">
+                            <h2><?= $escape(__('无法加载 EAV 管理')) ?></h2>
+                            <p class="w-text" data-tone="danger"><?= $escape($entityScopeError) ?></p>
+                        </div>
+                    </div>
+                <?php else: ?>
+                    <div class="w-empty" data-w-eav-placeholder>
+                        <w:icon name="info" size="xl" />
+                        <div class="w-stack" data-gap="sm">
+                            <h2><?= $escape(__('选择左侧节点查看详情')) ?></h2>
+                            <p><?= $escape(__('展开结构树并选择节点，可在此查看或修改其配置。')) ?></p>
+                        </div>
+                    </div>
+                    <div class="w-eav-manager__form" data-w-eav-detail hidden></div>
+                <?php endif; ?>
+            </div>
+        </section>
+    </div>
+
+    <script type="application/json" data-w-eav-config>{"apiBase":"@url{'eav/backend/manager'}","i18n":{"localBase":"@url{'i18n/backend/taglib/local'}","localAiTranslate":"@url{'eav/backend/manager/local-ai-translate'}","descriptors":<?= $eavI18nDescriptorsJson ?>},<?= $configJsonTailBody ?></script>
+    <?php if (!$compact): ?>
+        <script type="module" src="@static(Weline_Theme::ui/pages/weline-eav-manager.js)"></script>
+    <?php endif; ?>
+    <?php if ($mode === 'select-set' || $mode === 'select-attribute'): ?>
+        <footer class="w-eav-manager__select-bar w-cluster" data-w-eav-select-bar hidden data-align="center" data-justify="end" data-gap="sm">
+            <button class="w-button" type="button" data-variant="outline" data-w-eav-select-cancel><?= $escape(__('取消')) ?></button>
+            <button class="w-button" type="button" data-tone="primary" data-w-eav-select-confirm><?= $escape($mode === 'select-set' ? __('选用此属性集') : __('确认选择')) ?></button>
+        </footer>
+    <?php endif; ?>
+</section>

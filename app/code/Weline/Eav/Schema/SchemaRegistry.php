@@ -520,6 +520,7 @@ class SchemaRegistry
             EavAttributeGroupSchema::class,
             EavAttributeSchema::class,
             EavAttributeOptionSchema::class,
+            EavAttributePlacementSchema::class,
         ];
     }
 }

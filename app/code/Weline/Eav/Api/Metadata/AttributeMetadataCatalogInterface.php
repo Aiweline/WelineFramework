@@ -17,6 +17,17 @@ interface AttributeMetadataCatalogInterface
     public function catalog(EntityDefinitionInterface $entity): array;
 
     /**
+     * 全局属性集 + 指定商品实例的自由属性（scope_product_id）。
+     *
+     * @return list<AttributeSetMetadata>
+     */
+    public function catalogForProduct(
+        EntityDefinitionInterface $entity,
+        int $productId,
+        string $freeSetCode = '__product_free',
+    ): array;
+
+    /**
      * @return array<string, AttributeMetadata> attribute code => metadata
      */
     public function attributeIndexByEntityCode(string $entityCode): array;
