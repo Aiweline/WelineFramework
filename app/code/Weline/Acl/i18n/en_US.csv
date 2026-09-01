@@ -1,4 +1,4 @@
-﻿无权限访问重定向前,"No permission to access the redirect target"
+﻿无权限访问重定向前,"No permission to access the redirection settings."
 在用户无权限访问时，执行重定向操作前触发。允许其他模块在重定向前执行自定义操作，如记录日志、发送通知等。,"Triggered before performing a redirect operation when a user does not have permission to access. Allows other modules to execute custom operations before the redirect, such as logging, sending notifications, etc."
 角色检查,"Role check"
 在检查用户角色权限时触发，允许其他模块自定义角色检查逻辑。,"Triggered when checking user role permissions, allowing other modules to customize the role checking logic."
@@ -53,6 +53,9 @@ acl标签缺少source属性,"acl tag missing source attribute"
 你无权进行该操作,"You don't have permission to perform this action"
 "你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！","You do not have permission to perform this operation! You lack the: %{1} route: %{2} operation permission! You have been redirected to a page you can access!"
 你无权进行该操作！已将你带到你可访问的后台页面：%{1},"You do not have permission to perform this operation! You have been redirected to an accessible backend page: %{1}"
+"超级管理员已拥有对象 Scope 授权，无需追加。","The Super Administrator already has the Scope permission, no need to add more."
+"已为超级管理员（role_id=1）追加 %{1} 条对象 Scope 授权。","Added %{1} Scope permissions for the Super Administrator (role_id=1)."
+"为超级管理员授予对象 Scope 授权时出错：%{1}","Error granting Scope permission to the Super Administrator: %{1}"
 "超级管理员已拥有全部 ACL 权限，无需追加。","The super admin already has all ACL permissions, no need to add more."
 "已为超级管理员（role_id=1）授予 %{1} 条新权限。","Granted %{1} new permissions to the super administrator (role_id=1)."
 为超级管理员授予权限时出错：%{1},"Error granting permissions to super administrator: %{1}"
@@ -273,7 +276,7 @@ Acl权限管理,"Acl permission management"
 暂无发现的标签,"No tags found yet"
 资源数,"Number of resources"
 元数据名,"Metadata name"
-颜色,color
+颜色,Color
 排序,sort
 说明,illustrate
 已配置,Configured

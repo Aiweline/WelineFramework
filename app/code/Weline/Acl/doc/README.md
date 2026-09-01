@@ -68,7 +68,8 @@ Role ORM、查询条件或可变请求状态。
 - All Sites：独立 `is_all_sites=1` 授权，**永远只读**（list/view/export）；禁止写动作
 - 禁止 `Store=*` / `Channel=*` 通配写授权；`website_id=0` 是合法默认站
 - 提交重鉴权：`authorizeForSubmit(..., expectedGrantVersion)`；预览后撤权或版本变化必须失败
-- 超管 `role_id=1` **不**隐式获得对象写权限
+- 超管 `role_id=1` **不**隐式获得对象写权限（无运行时 bypass）；`setup:upgrade` 会通过
+  `SetupUpgradeGrantSuperAdminObjectScope` 增量写入 All Sites 只读 + Global + 默认 Website 的对象授权行
 - Catalog 读：`websites.getStoreCatalogV1` / `getSalesChannelCatalogV1` 在后台会话下按对象 LIST 过滤，无权限返回空列表（不泄漏存在性）
 
 后台 Controller 与 QueryProvider 统一依赖
