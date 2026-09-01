@@ -56,6 +56,9 @@
 - `app/code/Weline/DataTable/doc/README.md`
 - `app/code/Weline/DataTable/doc/使用指南.md`
 - `app/code/Weline/DataTable/doc/本地模式与列悬浮.md`（**特殊用法 / AI 硬约束**）
+- `app/code/Weline/DataTable/doc/连表管理与写入计划.md`（多模型写入、资源与 token 安全契约）
+- `app/code/Weline/DataTable/doc/原型设计.md`（主题 UI、状态与四断点验收）
+- `app/code/Weline/DataTable/Taglib/doc/场景映射表.md`（后台列表与领域筛选路由）
 - `app/code/Weline/DataTable/doc/实施总结.md`
 - `app/code/Weline/DataTable/doc/快速入门指南.md`
 - `app/code/Weline/DataTable/doc/故障排查文档.md`
@@ -67,6 +70,7 @@
 
 - 先声明本次任务命中的模块、代码面和应读文档；没有命中文档时先补读源码，不要按通用经验猜。
 - **改 `w:d-table` / local / 勾选 / 操作列悬浮 / 主图列前，必读** [`本地模式与列悬浮.md`](本地模式与列悬浮.md)；默认 api CRUD，勿把商品 catalog 的 local 范例当万能模板。
+- **改多模型写入前，必读** [`连表管理与写入计划.md`](连表管理与写入计划.md)；业务模块必须用独立 QueryProvider + ACL，不得开放任意 Model。
 - 涉及浏览器前后端业务请求时，只能使用 `Weline.Api.resource()`、`Weline.Api.graph()` 或 `Weline.Api.stream()`。
 - 涉及跨模块读数据时，先查 `php bin/w query:help <provider|Weline_DataTable> [operation]` 或对应 `w_query` 帮助。
 - 涉及模板、主题、slot、widget、taglib 或 `view/theme` 时，必须先读 `app/code/Weline/Theme/doc/AI-INDEX.md`。

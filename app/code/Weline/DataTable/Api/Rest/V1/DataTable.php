@@ -5,6 +5,7 @@ namespace Weline\DataTable\Api\Rest\V1;
 use Weline\Framework\App\Controller\BackendRestController;
 use Weline\DataTable\Exception\DataTableException;
 use Weline\DataTable\Helper\ErrorHandler;
+use Weline\DataTable\Service\ModelMetadataRegistry;
 
 class DataTable extends BackendRestController
 {
@@ -290,9 +291,7 @@ class DataTable extends BackendRestController
         $data = $this->request->getParam('data', []);
         
         try {
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
             
             $modelInstance = new $model();
             
@@ -325,9 +324,7 @@ class DataTable extends BackendRestController
         $ids = $this->request->getParam('ids', []);
         
         try {
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
             
             $checkIds = !empty($ids) && is_array($ids) ? $ids : [$id];
             $relations = [];
@@ -380,9 +377,7 @@ class DataTable extends BackendRestController
         $forceDelete = $this->request->getParam('force_delete', false);
 
         try {
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
 
             // 处理批量删除
             if (!empty($ids) && is_array($ids)) {
@@ -728,9 +723,7 @@ class DataTable extends BackendRestController
         $scope = $this->request->getParam('scope');
         
         try {
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
             
             $modelInstance = new $model();
             
@@ -906,6 +899,10 @@ class DataTable extends BackendRestController
                 throw new \InvalidArgumentException('多模型配置为空');
             }
 
+            foreach ($models as $modelClass) {
+                ErrorHandler::validateModel((string)$modelClass);
+            }
+
             // 第一个模型作为主模型
             $mainModel = reset($models);
 
@@ -984,6 +981,8 @@ class DataTable extends BackendRestController
                 return $this->error(__('缺少必需参数: model 和 data'));
             }
 
+            ErrorHandler::validateModel((string)$model);
+
             // 检查是否为多表操作
             if (strpos($model, ',') !== false) {
                 return $this->createMultiTableRecord($model, $data, $dependencies, $useTransaction);
@@ -1004,9 +1003,7 @@ class DataTable extends BackendRestController
     private function createSingleTableRecord(string $model, array $data, bool $useTransaction = false)
     {
         $operation = function() use ($model, $data) {
-            if (!class_exists($model)) {
-                    throw new \InvalidArgumentException(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel($model);
 
             $modelInstance = w_obj($model);
 
@@ -1093,10 +1090,7 @@ class DataTable extends BackendRestController
                     $savedResults
                 )[$tableAlias];
 
-                // 检查模型类是否存在
-                if (!class_exists($modelClass)) {
-                    throw new \InvalidArgumentException(__('模型类不存在: %{1}', $modelClass));
-                }
+                ErrorHandler::validateModel((string)$modelClass);
 
                 // 实例化模型并保存
                 $modelInstance = w_obj($modelClass);
@@ -1154,9 +1148,7 @@ class DataTable extends BackendRestController
                 return $this->error(__('缺少必需参数: model、id 和 data'));
             }
 
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
 
             $modelInstance = w_obj($model);
 
@@ -1314,6 +1306,12 @@ class DataTable extends BackendRestController
                 throw DataTableException::validationFailed('ids参数必须是非空数组');
             }
 
+            $statusData = (new ModelMetadataRegistry())->sanitizeWritableData(
+                (string)$model,
+                [(string)$statusField => $statusValue]
+            );
+            $statusValue = $statusData[(string)$statusField];
+
             $modelInstance = w_obj($model);
             $successCount = 0;
             $failedCount = 0;
@@ -1384,9 +1382,7 @@ class DataTable extends BackendRestController
                 return $this->error(__('缺少必需参数: model 和 id/ids'));
             }
 
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
 
             $modelInstance = w_obj($model);
             $deletedCount = 0;
@@ -1434,6 +1430,10 @@ class DataTable extends BackendRestController
     private function validateData(array $data, $modelInstance)
     {
         try {
+            $data = (new ModelMetadataRegistry())->sanitizeWritableData(
+                get_class($modelInstance),
+                $data
+            );
             $validatedData = [];
 
             // 获取模型字段信息
@@ -1469,9 +1469,8 @@ class DataTable extends BackendRestController
                         w_log_error("Field {$field} type validation failed");
                         return false;
                     }
+                    $validatedData[$field] = $value;
                 }
-
-                $validatedData[$field] = $value;
             }
 
             return $validatedData;
@@ -1791,9 +1790,7 @@ class DataTable extends BackendRestController
         $fields = $this->request->getParam('fields', []);
 
         try {
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
 
             if (empty($ids)) {
                 return $this->error('没有选择要导出的数据');
@@ -1935,9 +1932,7 @@ class DataTable extends BackendRestController
         $pageSize = $this->request->getParam('page_size', 1000);
 
         try {
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
 
             // 创建流式导出器
             $exporter = new \Weline\DataTable\Helper\StreamExporter();
@@ -2336,9 +2331,7 @@ class DataTable extends BackendRestController
                 return $this->error(__('缺少必需参数: model 和 scope'));
             }
 
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
 
             $modelInstance = w_obj($model);
 
@@ -2447,9 +2440,7 @@ class DataTable extends BackendRestController
                 return $this->error('记录ID不能为空');
             }
 
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
 
             // 处理批量恢复
             if (!empty($ids) && is_array($ids)) {
@@ -2488,9 +2479,7 @@ class DataTable extends BackendRestController
                 return $this->error('记录ID不能为空');
             }
 
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
 
             // 处理批量永久删除
             if (!empty($ids) && is_array($ids)) {
@@ -2524,9 +2513,7 @@ class DataTable extends BackendRestController
                 return $this->error('模型类不能为空');
             }
 
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', $model));
-            }
+            ErrorHandler::validateModel((string)$model);
 
             $modelInstance = w_obj($model);
 
@@ -2713,9 +2700,7 @@ class DataTable extends BackendRestController
 
     private function loadRecordById(string $model, int|string $id): ?object
     {
-        if (!class_exists($model)) {
-            return null;
-        }
+        ErrorHandler::validateModel($model);
 
         $record = w_obj($model);
         if (method_exists($record, 'reset')) {

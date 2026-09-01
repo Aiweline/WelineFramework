@@ -1,12 +1,12 @@
 <script>
     (function () {
         window.__WelineThemeConfig = Object.assign(window.__WelineThemeConfig || {}, {
-            modulesConfigUrl: '/Weline/Frontend/view/statics/base/weline.modules.js',
-            modulesBaseUrl: '/Weline/Frontend/view/statics/js/weline-api',
+            modulesConfigUrl: '@static(Weline_Frontend::base/weline.modules.js)',
+            modulesBaseUrl: '@static(Weline_Frontend::js/weline-api)',
             api: {
-                workerUrl: '/Weline/Frontend/view/statics/js/weline-api-worker.js',
-                endpoint: '/api/framework/query-bin',
-                queryBinUrl: '/api/framework/query-bin'
+                workerUrl: '@static(Weline_Frontend::js/weline-api-worker.js)',
+                endpoint: "@api{'api/framework/query-bin'}",
+                queryBinUrl: "@api{'api/framework/query-bin'}"
             }
         });
         window.modulesConfigUrl = window.__WelineThemeConfig.modulesConfigUrl;
@@ -15,7 +15,7 @@
         if (!document.getElementById('weline-theme-js')) {
             var script = document.createElement('script');
             script.id = 'weline-theme-js';
-            script.src = '/Weline/Theme/view/theme/frontend/assets/js/theme.js?v=20260517-api-loader-2';
+            script.src = '@static(Weline_Theme::frontend/assets/js/theme.js)?v=20260517-api-loader-2';
             script.async = false;
             document.head.appendChild(script);
         }
