@@ -6,7 +6,6 @@
  */
 $session = $session ?? null;
 $messages = is_array($messages ?? null) ? $messages : [];
-$listingUrl = $this->getBackendUrl('*/backend/session/listing');
 
 $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
     if (is_array($item)) {
@@ -29,7 +28,7 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0"><?= __('Session Detail') ?></h4>
-            <a href="<?= htmlspecialchars($listingUrl, ENT_QUOTES) ?>" class="btn btn-light"><?= __('Back') ?></a>
+            <a href="@backend-url{'*/backend/session/listing'}" class="btn btn-light"><?= __('Back') ?></a>
         </div>
     </div>
 </div>

@@ -8,9 +8,6 @@ $schedule = $schedule ?? null;
 $scheduleData = is_array($schedule) ? $schedule : ($schedule && method_exists($schedule, 'getData') ? $schedule->getData() : []);
 $roles = is_array($roles ?? null) ? $roles : [];
 
-$listingUrl = $this->getBackendUrl('*/backend/schedule/listing');
-$saveUrl = $this->getBackendUrl('*/backend/schedule/save');
-
 $contextText = '';
 $contextRaw = $scheduleData['context'] ?? [];
 if (is_string($contextRaw)) {
@@ -25,7 +22,7 @@ if (is_string($contextRaw)) {
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0"><?= !empty($scheduleData['schedule_id']) ? __('Edit Schedule') : __('Create Schedule') ?></h4>
-            <a href="<?= htmlspecialchars($listingUrl, ENT_QUOTES) ?>" class="btn btn-light"><?= __('Back') ?></a>
+            <a href="@backend-url{'*/backend/schedule/listing'}" class="btn btn-light"><?= __('Back') ?></a>
         </div>
     </div>
 </div>
@@ -36,7 +33,7 @@ if (is_string($contextRaw)) {
     </div>
 </div>
 
-<form action="<?= htmlspecialchars($saveUrl, ENT_QUOTES) ?>" method="post">
+<form action="@backend-url{'*/backend/schedule/save'}" method="post">
     <csrf/>
     <?php if (!empty($scheduleData['schedule_id'])): ?>
         <input type="hidden" name="id" value="<?= (int) $scheduleData['schedule_id'] ?>">
