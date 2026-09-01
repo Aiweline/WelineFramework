@@ -525,7 +525,7 @@ $jsonForScriptFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AM
     <script>
     (function() {
         const formKey = '<?= $form_key ?>';
-        const baseUrl = '<?= $this->getUrl('install') ?>';
+        const baseUrl = "@url{'install'}";
         let currentStep = 'env';
         let envPassed = false;
         
