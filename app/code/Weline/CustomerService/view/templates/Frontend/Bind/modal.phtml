@@ -76,14 +76,14 @@ $email = $this->getData('email') ?? '';
             <p class="verify-message">
                 <?= __('您的邮箱') ?> <span class="verify-email"><?= htmlspecialchars($email) ?></span> <?= __('已成功绑定到客服会话。') ?>
             </p>
-            <a href="/" class="verify-button"><?= __('返回首页') ?></a>
+            <a href="@url{'/'}" class="verify-button"><?= __('返回首页') ?></a>
         <?php else: ?>
             <div class="verify-icon error">✗</div>
             <h1 class="verify-title"><?= __('验证失败') ?></h1>
             <p class="verify-message">
                 <?= htmlspecialchars($message) ?>
             </p>
-            <a href="/" class="verify-button"><?= __('返回首页') ?></a>
+            <a href="@url{'/'}" class="verify-button"><?= __('返回首页') ?></a>
         <?php endif; ?>
     </div>
 </body>
