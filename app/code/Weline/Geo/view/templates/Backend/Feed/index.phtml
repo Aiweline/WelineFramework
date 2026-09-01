@@ -8,7 +8,7 @@
 <div class="content-header">
     <h1><?= __('Feed管理') ?></h1>
     <div class="action-bar">
-        <a href="<?= $this->getUrl('geo/backend/feed/edit') ?>" class="w-button" data-tone="primary">
+        <a href="@url{'geo/backend/feed/edit'}" class="w-button" data-tone="primary">
             <w:icon name="plus" size="sm"></w:icon> <?= __('添加Feed') ?>
         </a>
     </div>
@@ -58,7 +58,7 @@
                         </td>
                         <td><?= $feed['last_generated_at'] ? date('Y-m-d H:i:s', $feed['last_generated_at']) : '-' ?></td>
                         <td>
-                            <a href="<?= $this->getUrl('geo/backend/feed/edit', ['id' => $feed['id']]) ?>" class="w-button" data-tone="primary" data-size="sm">
+                            <a href="@url{'geo/backend/feed/edit'|['id' => $feed['id']]}" class="w-button" data-tone="primary" data-size="sm">
                                 <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
                             </a>
                         </td>
