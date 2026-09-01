@@ -123,6 +123,7 @@ AJAX分配角色,"AJAX assign role"
 <var>tip</var>,<var>tip</var>
 后台快捷导航,"Backend quick navigation"
 打开主导航,"Open main navigation"
+访问前端,访问前端
 主题模式,"Theme mode"
 跟随系统,"Follow system"
 明亮模式,"Light Mode"
@@ -304,6 +305,8 @@ Cms内容管理,"CMS Content Management"
 版本,Version
 描述,Description
 后台主导航,"Backend main navigation"
+收起侧边栏,"Collapse sidebar"
+展开侧边栏,"Expand sidebar"
 搜索菜单,"Search menu"
 搜索菜单…,"Search menu…"
 没有匹配的菜单,"No matching menu"

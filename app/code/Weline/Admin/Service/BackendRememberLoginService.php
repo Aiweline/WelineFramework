@@ -109,9 +109,9 @@ class BackendRememberLoginService
 
             $oldDeviceToken = $this->readDeviceRememberToken();
             if ($oldDeviceToken !== '') {
-                // A password login starts a new device record. Revoke any
-                // credential left by a previous administrator before issuing
-                // the replacement so partial failure cannot restore that user.
+                // Password login keeps the same browser-profile device. Revoke only
+                // the previous remember credential before issuing the replacement
+                // so partial failure cannot restore that user.
                 $provider->revokeCredential('backend', $oldDeviceToken, 'password_login_replaced');
                 $this->clearDeviceCookie();
             }

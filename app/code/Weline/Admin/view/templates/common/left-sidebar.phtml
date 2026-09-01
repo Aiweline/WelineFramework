@@ -23,15 +23,32 @@ $menus = $menuRenderService->getMenuTree();
     aria-label="<?= htmlspecialchars((string)__('后台主导航'), ENT_QUOTES, 'UTF-8') ?>"
     tabindex="-1"
 >
-    <a class="w-backend-brand" href="<?= htmlspecialchars($this->getBackendUrl('admin'), ENT_QUOTES, 'UTF-8') ?>">
-        <img class="w-backend-brand__logo" src="<?= htmlspecialchars($logo, ENT_QUOTES, 'UTF-8') ?>" alt="" width="40" height="40">
-        <span>Weline</span>
-    </a>
+    <div class="w-backend-brand-bar">
+        <a class="w-backend-brand" href="@backend-url{'admin'}">
+            <img class="w-backend-brand__logo" src="<?= htmlspecialchars($logo, ENT_QUOTES, 'UTF-8') ?>" alt="" width="40" height="40">
+            <span>Weline</span>
+        </a>
+        <button
+            type="button"
+            class="w-button w-backend-sidebar-collapse"
+            data-tone="quiet"
+            data-size="sm"
+            data-w-action="backend-sidebar-collapse.toggle"
+            aria-controls="w-backend-sidebar"
+            aria-expanded="true"
+            data-w-label-expanded="<?= htmlspecialchars((string)__('收起侧边栏'), ENT_QUOTES, 'UTF-8') ?>"
+            data-w-label-collapsed="<?= htmlspecialchars((string)__('展开侧边栏'), ENT_QUOTES, 'UTF-8') ?>"
+            aria-label="<?= htmlspecialchars((string)__('收起侧边栏'), ENT_QUOTES, 'UTF-8') ?>"
+            title="<?= htmlspecialchars((string)__('收起侧边栏'), ENT_QUOTES, 'UTF-8') ?>"
+        >
+            <w:icon name="chevron-left" size="sm" />
+        </button>
+    </div>
 
     <div class="w-backend-nav" data-w-component="nav-filter">
         <label class="w-visually-hidden" for="w-backend-nav-search"><?= htmlspecialchars((string)__('搜索菜单'), ENT_QUOTES, 'UTF-8') ?></label>
         <div class="w-backend-nav__search">
-            <w:icon name="search" size="sm" />
+            <w:icon name="search" size="md" />
             <input
                 id="w-backend-nav-search"
                 class="w-input"
