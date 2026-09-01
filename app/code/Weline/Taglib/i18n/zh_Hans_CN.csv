@@ -68,6 +68,10 @@ json数据,json数据
 指定要收集的模块名称（可选）,指定要收集的模块名称（可选）
 收集所有模块的标签库,收集所有模块的标签库
 收集指定模块的标签库,收集指定模块的标签库
+"无法写入 %{1}","无法写入 %{1}"
+标签全量索引已生成：%{1},标签全量索引已生成：%{1}
+"生成 Taglib 标签全量索引 Markdown","生成 Taglib 标签全量索引 Markdown"
+"生成 Taglib/doc/标签全量索引.md","生成 Taglib/doc/标签全量索引.md"
 """所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>""","""所指定的name找不到对应的js模板文件！name 不能为空；若为内联 JS，请使用成对标签 <js:part>代码</js:part>"""
 "fa fa-tags","fa fa-tags"
 "fa fa-list","fa fa-list"
