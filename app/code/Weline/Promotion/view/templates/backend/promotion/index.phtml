@@ -1,0 +1,330 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$escape = static fn (mixed $value): string => htmlspecialchars((string)($value ?? ''), ENT_QUOTES, 'UTF-8');
+$actions = is_array($this->getData('actions')) ? $this->getData('actions') : [];
+$context = is_array($this->getData('context')) ? $this->getData('context') : [];
+$scope = is_array($this->getData('scope')) ? $this->getData('scope') : [];
+$activeThemes = is_array($this->getData('active_themes')) ? $this->getData('active_themes') : [];
+$scopeFilterActive = (bool)$this->getData('scope_filter_active');
+$filterWebsiteId = (int)($scope['website_id'] ?? 0);
+$filterStoreCode = (string)($scope['store_code'] ?? '');
+$filterChannelCode = (string)($scope['channel_code'] ?? '');
+$scorecards = is_array($this->getData('scorecards')) ? $this->getData('scorecards') : [];
+$lanes = is_array($this->getData('lanes')) ? $this->getData('lanes') : [];
+$launchGates = is_array($this->getData('launch_gates')) ? $this->getData('launch_gates') : [];
+$decisionText = (string)($this->getData('decision_text') ?? '');
+$rhythm = is_array($this->getData('rhythm')) ? $this->getData('rhythm') : [];
+$handoffText = (string)($this->getData('handoff_text') ?? '');
+$campaignRuns = is_array($this->getData('campaign_runs')) ? $this->getData('campaign_runs') : [];
+$runItems = is_array($campaignRuns['items'] ?? null) ? $campaignRuns['items'] : [];
+$actionUrl = static function (mixed $key) use ($actions): string {
+    return (string)($actions[(string)($key ?? '')] ?? '#');
+};
+$newTabAttrs = static function (mixed $key): string {
+    return str_starts_with((string)($key ?? ''), 'buyer_') ? ' target="_blank" rel="noopener"' : '';
+};
+?>
+<link rel="stylesheet" href="@static(Weline_Promotion::css/promotion-desk.css)?v=20260827-promo-desk1">
+
+<div class="w-grid w-promotion-desk" data-testid="promotion-desk-page">
+    <div style="--w-span:12;">
+        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+            <div>
+                <h4 class="w-backend-page__title"><?= __('营销活动运营台') ?></h4>
+                <p class="w-backend-page__subtitle">
+                    <?= __('把优惠规则、活动商品、投放入口、客服恢复和效果复盘放到同一条后台路径里。当前不伪装完整折扣引擎，先让店长知道活动上线前要核对什么、出问题找哪里、收班交接怎么写。') ?>
+                </p>
+            </div>
+            <div class="w-cluster" data-wrap="true">
+                <a class="w-button" href="<?= $escape($actionUrl('buyer_promotion')) ?>" data-tone="primary"<?= $newTabAttrs('buyer_promotion') ?>><?= __('前台活动页') ?></a>
+                <a class="w-button" href="<?= $escape($actionUrl('marketing_rules')) ?>" data-tone="neutral"><?= __('营销规则') ?></a>
+                <a class="w-button" href="@admin-url('promotion/backend/theme/index')" data-tone="neutral"><?= __('活动主题') ?></a>
+                <a class="w-button" href="<?= $escape($actionUrl('products')) ?>" data-tone="neutral"><?= __('商品列表') ?></a>
+                <a class="w-button" href="<?= $escape($actionUrl('orders')) ?>" data-tone="neutral"><?= __('订单列表') ?></a>
+                <a class="w-button" href="<?= $escape($actionUrl('customer_service')) ?>" data-tone="neutral"><?= __('客服工作台') ?></a>
+            </div>
+        </div>
+
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <h5 class="w-card__title"><?= __('当前营销活动上下文') ?></h5>
+            </div>
+            <div class="w-card__body">
+                <form method="get" class="w-grid" data-testid="promotion-desk-scope-filter" style="--w-gap:var(--weline-space-4); --w-mb:var(--weline-space-4);">
+                    <div style="--w-span-md:3;">
+                        <label class="w-field__label" for="promotion-desk-website"><?= __('Website') ?></label>
+                        <w:websites:website:select
+                            id="promotion-desk-website"
+                            name="website_id"
+                            value="websiteSelectValue"
+                            display="websiteSelectDisplay"
+                            options="websiteOptionsJson"
+                            multiple="false"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="@lang(全部 Website)"
+                            placeholder="@lang(选择 Website)"
+                            on-change="promotionDeskReloadScope('website')"
+                        />
+                    </div>
+                    <div style="--w-span-md:3;">
+                        <label class="w-field__label" for="promotion-desk-store"><?= __('店铺') ?></label>
+                        <w:websites:store:select
+                            id="promotion-desk-store"
+                            name="store_code"
+                            value="storeSelectValue"
+                            display="storeSelectDisplay"
+                            options="storeOptionsJson"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="@lang(全部店铺)"
+                            placeholder="@lang(选择店铺)"
+                            on-change="promotionDeskReloadScope('store')"
+                        />
+                    </div>
+                    <div style="--w-span-md:3;">
+                        <label class="w-field__label" for="promotion-desk-channel"><?= __('渠道') ?></label>
+                        <w:websites:channel:select
+                            id="promotion-desk-channel"
+                            name="channel_code"
+                            value="channelSelectValue"
+                            display="channelSelectDisplay"
+                            options="channelOptionsJson"
+                            allow-empty="true"
+                            clearable="true"
+                            empty-label="@lang(全部渠道)"
+                            placeholder="@lang(选择渠道)"
+                            on-change="promotionDeskReloadScope('channel')"
+                        />
+                    </div>
+                    <div class="w-cluster" data-align="end" style="--w-span-md:3;">
+                        <?php if ($scopeFilterActive): ?>
+                            <a class="w-button" href="@admin-url('promotion/backend/promotion/index')" data-tone="neutral"><?= __('重置范围') ?></a>
+                        <?php endif; ?>
+                    </div>
+                </form>
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <div class="w-promotion-desk__meta-list" style="--w-span-md:4;">
+                        <div class="w-promotion-desk__meta-item">
+                            <div class="w-text" data-tone="muted" data-size="sm"><?= __('生效范围') ?></div>
+                            <div class="w-text" data-weight="strong"><?= $escape($context['scope_label'] ?? $scope['label'] ?? '') ?></div>
+                        </div>
+                    </div>
+                    <div class="w-promotion-desk__meta-list" style="--w-span-md:4;">
+                        <div class="w-promotion-desk__meta-item">
+                            <div class="w-text" data-tone="muted" data-size="sm"><?= __('站点') ?></div>
+                            <div class="w-text" data-weight="strong"><?= $escape(($context['website_name'] ?? '') . ' / ' . ($context['website_code'] ?? '')) ?></div>
+                        </div>
+                    </div>
+                    <div class="w-promotion-desk__meta-list" style="--w-span-md:4;">
+                        <div class="w-promotion-desk__meta-item">
+                            <div class="w-text" data-tone="muted" data-size="sm"><?= __('语言 / 货币') ?></div>
+                            <div class="w-text" data-weight="strong"><?= $escape((string)(($context['language'] ?? '') . ' / ' . ($context['currency'] ?? ''))) ?></div>
+                        </div>
+                    </div>
+                    <div class="w-promotion-desk__meta-list" style="--w-span-md:8;">
+                        <div class="w-promotion-desk__meta-item">
+                            <div class="w-text" data-tone="muted" data-size="sm"><?= __('前台 URL') ?></div>
+                            <div class="w-text">
+                                <a href="<?= $escape((string)($context['website_url'] ?? '/')) ?>" target="_blank" rel="noopener"><?= $escape((string)($context['website_url'] ?? '/')) ?></a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="w-backend-page__subtitle"><?= __('前台只展示与当前 website / 店铺 / 渠道匹配的活动主题；更具体范围会覆盖同 slug 的全局主题。') ?></p>
+            </div>
+        </div>
+
+        <?php if ($activeThemes !== []): ?>
+            <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="promotion-desk-active-themes">
+                <div class="w-card__header w-cluster" data-align="center" data-justify="between">
+                    <h5 class="w-card__title"><?= __('当前范围生效的活动主题') ?></h5>
+                    <a class="w-button" href="@admin-url('promotion/backend/theme/form')?website_id=<?= $filterWebsiteId ?>&store_code=<?= $escape(rawurlencode($filterStoreCode)) ?>&channel_code=<?= $escape(rawurlencode($filterChannelCode)) ?>" data-tone="primary" data-size="sm"><?= __('在此范围新建') ?></a>
+                </div>
+                <div class="w-card__body">
+                    <table class="w-table">
+                        <thead>
+                            <tr>
+                                <th><?= __('主题') ?></th>
+                                <th><?= __('范围') ?></th>
+                                <th><?= __('前台') ?></th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($activeThemes as $theme): ?>
+                                <tr>
+                                    <td>
+                                        <strong><?= $escape($theme['page_title'] ?? $theme['theme_key'] ?? '') ?></strong>
+                                        <div><?= $escape($theme['theme_key'] ?? '') ?> / <?= $escape($theme['page_slug'] ?? '') ?></div>
+                                    </td>
+                                    <td><?= $escape($theme['scope_label'] ?? '') ?></td>
+                                    <td><a href="<?= $escape($theme['storefront_url'] ?? '#') ?>" target="_blank" rel="noopener"><?= $escape($theme['storefront_url'] ?? '') ?></a></td>
+                                    <td>
+                                        <a class="w-button" data-tone="neutral" data-size="sm" href="@admin-url('promotion/backend/theme/form')?id=<?= (int)($theme['id'] ?? 0) ?>"><?= __('编辑') ?></a>
+                                    </td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php else: ?>
+            <div class="w-card" style="--w-mb:var(--weline-space-4);" data-testid="promotion-desk-active-themes-empty">
+                <div class="w-card__body">
+                    <p class="w-backend-page__subtitle"><?= __('当前范围暂无生效中的活动主题。') ?></p>
+                    <a class="w-button" href="@admin-url('promotion/backend/theme/form')?website_id=<?= $filterWebsiteId ?>&store_code=<?= $escape(rawurlencode($filterStoreCode)) ?>&channel_code=<?= $escape(rawurlencode($filterChannelCode)) ?>" data-tone="primary"><?= __('在此范围新建活动主题') ?></a>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <div class="w-grid" style="--w-gap:var(--weline-space-4); --w-mb:var(--weline-space-4);">
+            <?php foreach ($scorecards as $card): ?>
+                <div class="w-card" style="--w-span-lg:3;">
+                    <div class="w-card__body">
+                        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mb:var(--weline-space-2);">
+                            <i class="<?= $escape($card['icon'] ?? '') ?>" aria-hidden="true"></i>
+                            <?= $escape($card['label'] ?? '') ?>
+                        </div>
+                        <h5 class="w-card__title" style="--w-mb:var(--weline-space-2);"><?= $escape($card['value'] ?? '') ?></h5>
+                        <p class="w-text" data-tone="muted" data-size="sm"><?= $escape($card['summary'] ?? '') ?></p>
+                        <div class="w-promotion-desk__card-actions">
+                            <a class="w-button" href="<?= $escape($actionUrl($card['action'] ?? '')) ?>" data-tone="neutral" data-size="sm"<?= $newTabAttrs($card['action'] ?? '') ?>><?= $escape($card['action_label'] ?? __('查看')) ?></a>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="w-grid" style="--w-gap:var(--weline-space-4); --w-mb:var(--weline-space-4);">
+            <?php foreach ($lanes as $lane): ?>
+                <div class="w-card" style="--w-span-lg:6;">
+                    <div class="w-card__header">
+                        <div>
+                            <div class="w-text" data-tone="muted" data-size="sm"><?= $escape($lane['label'] ?? '') ?> · <?= $escape($lane['owner'] ?? '') ?></div>
+                            <h5 class="w-card__title" style="--w-mb:0; --w-mt:var(--weline-space-1);"><?= $escape($lane['question'] ?? '') ?></h5>
+                        </div>
+                    </div>
+                    <div class="w-card__body">
+                        <p class="w-text" data-tone="muted" data-size="sm"><?= $escape($lane['summary'] ?? '') ?></p>
+                        <ul class="w-promotion-desk__checks">
+                            <?php foreach ((array)($lane['checks'] ?? []) as $check): ?>
+                                <li><?= $escape($check) ?></li>
+                            <?php endforeach; ?>
+                        </ul>
+                        <div class="w-cluster w-promotion-desk__card-actions" data-wrap="true">
+                            <a class="w-button" href="<?= $escape($actionUrl($lane['primary_action'] ?? '')) ?>" data-tone="primary" data-size="sm"<?= $newTabAttrs($lane['primary_action'] ?? '') ?>><?= $escape($lane['primary_label'] ?? '') ?></a>
+                            <a class="w-button" href="<?= $escape($actionUrl($lane['secondary_action'] ?? '')) ?>" data-tone="neutral" data-size="sm"<?= $newTabAttrs($lane['secondary_action'] ?? '') ?>><?= $escape($lane['secondary_label'] ?? '') ?></a>
+                        </div>
+                    </div>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <div class="w-card" style="--w-mb:var(--weline-space-4);">
+            <div class="w-card__header">
+                <h5 class="w-card__title"><?= __('投放决策闸门') ?></h5>
+            </div>
+            <div class="w-card__body">
+                <div class="w-grid" style="--w-gap:var(--weline-space-4); --w-mb:var(--weline-space-4);">
+                    <?php foreach ($launchGates as $gate): ?>
+                        <article class="w-card" style="--w-span-lg:3;">
+                            <div class="w-card__body">
+                                <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-2); --w-mb:var(--weline-space-2);">
+                                    <span class="w-badge" data-tone="neutral"><?= $escape($gate['status'] ?? '') ?></span>
+                                    <span class="w-text" data-tone="muted" data-size="sm"><?= $escape($gate['owner'] ?? '') ?></span>
+                                </div>
+                                <h6 class="w-card__title" style="--w-mb:var(--weline-space-2);"><?= $escape($gate['decision'] ?? '') ?></h6>
+                                <p class="w-text" data-tone="muted" data-size="sm"><?= $escape($gate['summary'] ?? '') ?></p>
+                                <p class="w-text" data-tone="muted" data-size="xs" style="--w-mt:var(--weline-space-2);"><?= $escape($gate['evidence'] ?? '') ?></p>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+                <label class="w-field__label" for="promotion-decision-text"><?= __('营销投放决策内容') ?></label>
+                <textarea id="promotion-decision-text" class="w-textarea" rows="8" readonly><?= $escape($decisionText) ?></textarea>
+            </div>
+        </div>
+
+        <div class="w-grid" style="--w-gap:var(--weline-space-4); --w-mb:var(--weline-space-4);">
+            <section class="w-card" style="--w-span-lg:6;">
+                <div class="w-card__header">
+                    <h5 class="w-card__title"><?= __('营销活动节奏') ?></h5>
+                </div>
+                <div class="w-card__body">
+                    <?php foreach ($rhythm as $item): ?>
+                        <article class="w-promotion-desk__rhythm-item">
+                            <div class="w-text" data-tone="muted" data-size="sm"><?= $escape($item['time'] ?? '') ?></div>
+                            <h6 class="w-card__title" style="--w-mb:var(--weline-space-1); --w-mt:var(--weline-space-1);"><?= $escape($item['label'] ?? '') ?></h6>
+                            <p class="w-text" data-tone="muted" data-size="sm"><?= $escape($item['summary'] ?? '') ?></p>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            </section>
+            <section class="w-card" style="--w-span-lg:6;">
+                <div class="w-card__header">
+                    <h5 class="w-card__title"><?= __('营销活动交接包') ?></h5>
+                </div>
+                <div class="w-card__body">
+                    <textarea class="w-textarea" rows="12" readonly><?= $escape($handoffText) ?></textarea>
+                </div>
+            </section>
+        </div>
+
+        <?php if ($runItems !== []): ?>
+            <div class="w-card">
+                <div class="w-card__header">
+                    <h5 class="w-card__title"><?= __('Campaign Run 记录') ?></h5>
+                </div>
+                <div class="w-card__body">
+                    <table class="w-table">
+                        <thead>
+                            <tr>
+                                <th><?= __('活动键') ?></th>
+                                <th><?= __('状态') ?></th>
+                                <th><?= __('操作人') ?></th>
+                                <th><?= __('更新时间') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($runItems as $run): ?>
+                                <tr>
+                                    <td><?= $escape($run['campaign_key'] ?? '') ?></td>
+                                    <td><?= $escape($run['status'] ?? '') ?></td>
+                                    <td><?= $escape((string)($run['operator_id'] ?? '')) ?></td>
+                                    <td><?= $escape($run['updated_at'] ?? '') ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php endif; ?>
+    </div>
+</div>
+<script data-no-extract="true">
+function promotionDeskReloadScope(level) {
+    var root = document.querySelector('[data-testid="promotion-desk-scope-filter"]');
+    if (!root) {
+        return;
+    }
+    var websiteInput = root.querySelector('[name="website_id"]');
+    var storeInput = root.querySelector('[name="store_code"]');
+    var channelInput = root.querySelector('[name="channel_code"]');
+    var websiteId = websiteInput ? String(websiteInput.value || '0').trim() : '0';
+    var storeCode = storeInput ? String(storeInput.value || '').trim() : '';
+    var channelCode = channelInput ? String(channelInput.value || '').trim() : '';
+    if (level === 'website') {
+        storeCode = '';
+        channelCode = '';
+    } else if (level === 'store') {
+        channelCode = '';
+    }
+    var params = new URLSearchParams();
+    params.set('website_id', websiteId);
+    params.set('store_code', storeCode);
+    params.set('channel_code', channelCode);
+    window.location.search = params.toString();
+}
+</script>

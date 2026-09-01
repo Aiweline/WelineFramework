@@ -1,0 +1,126 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$items = (array)($this->getData('items') ?? []);
+$promotions = (array)($this->getData('promotions') ?? []);
+$pageType = (string)($this->getData('page_type') ?? 'index');
+$total = (int)($this->getData('total') ?? count($items));
+$listUrl = (string)($this->getData('list_url') ?? '/promotion');
+$dealsUrl = (string)($this->getData('deals_url') ?? '/promotion/deals');
+$saleUrl = (string)($this->getData('sale_url') ?? '/promotion/sale');
+$navTabs = (array)($this->getData('nav_tabs') ?? []);
+$pageTitle = (string)($this->getData('title') ?? __('活动中心'));
+$heroLede = (string)($this->getData('hero_lede') ?? __('浏览活动商品，进入商品详情、购物车与结账路径。本页不展示虚假折扣，只承接真实可售商品。'));
+$esc = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$heroCtaUrl = $pageType === 'index'
+    ? ($dealsUrl !== '' ? $dealsUrl : '#promotion-products')
+    : '#promotion-products';
+$placeholderImage = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20fill%3D%22%23f3f4f6%22%20width%3D%22400%22%20height%3D%22400%22/%3E%3Ctext%20x%3D%22200%22%20y%3D%22205%22%20text-anchor%3D%22middle%22%20fill%3D%22%239ca3af%22%20font-family%3D%22system-ui%2Csans-serif%22%20font-size%3D%2218%22%3EProduct%3C/text%3E%3C/svg%3E';
+?>
+<link rel="stylesheet"
+      href="@static(Weline_Theme::css/widgets/amazon-product-card.css)?v=20260826-amzcard1"
+      data-no-extract="true">
+<link rel="stylesheet"
+      href="@static(Weline_Promotion::css/promotion-hub.css)?v=20260827-promo-hub4"
+      data-no-extract="true">
+
+<main class="w-promotion-page weline-amz-card-widget" data-testid="storefront-promotion-page" data-page-type="<?= $esc($pageType) ?>">
+    <nav class="w-promotion-page__nav" aria-label="<?= $esc(__('活动中心')) ?>" weline-code="promotion.page.nav">
+        <?php foreach ($navTabs as $tab): ?>
+            <?php
+            $tabSlug = (string)($tab['active_key'] ?? $tab['slug'] ?? '');
+            $tabLabel = trim((string)($tab['label'] ?? ''));
+            if ($tabLabel === '') {
+                continue;
+            }
+            $isActive = $pageType === $tabSlug || ($pageType === 'index' && $tabSlug === 'index');
+            ?>
+            <a href="<?= $esc((string)($tab['url'] ?? $listUrl)) ?>"
+               class="w-promotion-page__tab <?= $isActive ? 'w-promotion-page__tab--active' : '' ?>"><?= $esc($tabLabel) ?></a>
+        <?php endforeach; ?>
+    </nav>
+
+    <section class="w-promotion-page__hero" weline-code="promotion.page.hero">
+        <div class="w-promotion-page__hero-inner">
+            <h1 class="w-promotion-page__brand"><?= $esc($pageTitle) ?></h1>
+            <p class="w-promotion-page__lede"><?= $esc($heroLede) ?></p>
+            <a class="w-promotion-page__cta" href="<?= $esc($heroCtaUrl) ?>"><?= __('浏览活动商品') ?></a>
+            <p class="w-promotion-page__meta"><?= __('匹配商品') ?> · <?= $total ?></p>
+        </div>
+    </section>
+
+    <?php if ($promotions !== []): ?>
+        <section class="w-promotion-page__section" weline-code="promotion.page.entries" aria-labelledby="promotion-entries-title">
+            <div class="w-promotion-page__section-head">
+                <h2 class="w-promotion-page__section-title" id="promotion-entries-title"><?= __('活动入口') ?></h2>
+            </div>
+            <div class="w-promotion-page__entries">
+                <?php foreach ($promotions as $promotion): ?>
+                    <article class="w-promotion-page__entry">
+                        <h3 class="w-promotion-page__entry-title"><?= $esc($promotion['title'] ?? '') ?></h3>
+                        <p class="w-promotion-page__entry-text"><?= $esc($promotion['subtitle'] ?? '') ?></p>
+                        <a class="w-promotion-page__entry-link" href="<?= $esc((string)($promotion['action_url'] ?? $listUrl)) ?>">
+                            <?= $esc($promotion['action_label'] ?? __('打开')) ?>
+                        </a>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        </section>
+    <?php endif; ?>
+
+    <section class="w-promotion-page__section" id="promotion-products" weline-code="promotion.page.products" aria-labelledby="promotion-products-title">
+        <div class="w-promotion-page__section-head">
+            <h2 class="w-promotion-page__section-title" id="promotion-products-title"><?= __('活动商品') ?></h2>
+            <p class="w-promotion-page__section-note"><?= __('货架展示真实可售商品成交价，不虚构折扣。') ?></p>
+        </div>
+        <w:hook name="Weline_Promotion::frontend::layouts::promotion::page-before"/>
+        <?php if ($items !== []): ?>
+            <div class="products-grid" data-columns="4">
+                <?php foreach ($items as $item): ?>
+                    <?php
+                    $productUrl = (string)($item['url'] ?? '#');
+                    $productName = (string)($item['name'] ?? '');
+                    $productImage = trim((string)($item['image'] ?? ''));
+                    $imageSrc = $productImage !== '' ? $productImage : $placeholderImage;
+                    $imageClass = $productImage !== '' ? 'product-image' : 'product-image product-image--empty';
+                    $price = (float)($item['price'] ?? 0);
+                    $originalPrice = (float)($item['original_price'] ?? $price);
+                    $hasDeal = !empty($item['has_deal']) && $originalPrice > $price;
+                    ?>
+                    <article class="product-card" data-product-id="<?= (int)($item['product_id'] ?? 0) ?>">
+                        <div class="product-image-wrapper">
+                            <a href="<?= $esc($productUrl) ?>" class="product-image-link">
+                                <img src="<?= $esc($imageSrc) ?>"
+                                     alt="<?= $esc($productName) ?>"
+                                     class="<?= $esc($imageClass) ?>"
+                                     loading="lazy">
+                            </a>
+                        </div>
+                        <div class="product-info">
+                            <h3 class="product-name">
+                                <a href="<?= $esc($productUrl) ?>"><?= $esc($productName) ?></a>
+                            </h3>
+                            <?php if (trim((string)($item['short_description'] ?? '')) !== ''): ?>
+                                <p class="product-desc"><?= $esc((string)$item['short_description']) ?></p>
+                            <?php endif; ?>
+                            <div class="product-price">
+                                <span class="price-current">¥<?= $esc(number_format($price, 2)) ?></span>
+                                <?php if ($hasDeal): ?>
+                                    <span class="price-original">¥<?= $esc(number_format($originalPrice, 2)) ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <a class="btn-add-to-cart" href="<?= $esc($productUrl) ?>"><?= __('查看商品') ?></a>
+                        </div>
+                    </article>
+                <?php endforeach; ?>
+            </div>
+        <?php else: ?>
+            <div class="w-promotion-page__empty">
+                <h3 class="w-promotion-page__empty-title"><?= __('暂无活动商品') ?></h3>
+                <p class="w-promotion-page__empty-text"><?= __('当前视图没有可展示商品，请稍后再试或从商品列表继续购物。') ?></p>
+                <a href="@url{'products'}" class="w-promotion-page__cta"><?= __('浏览商品') ?></a>
+            </div>
+        <?php endif; ?>
+        <w:hook name="Weline_Promotion::frontend::layouts::promotion::page-after"/>
+    </section>
+</main>
