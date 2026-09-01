@@ -26,6 +26,7 @@ final class Image implements TaglibInterface
             'decorative' => false,
             'locale' => false,
             'class' => false,
+            'complement' => false,
         ];
     }
 
@@ -35,12 +36,12 @@ final class Image implements TaglibInterface
             $code = AttributeCodeCompiler::attributes($attributes);
             return '<?php ' . $code
                 . ' echo \\Weline\\Framework\\Manager\\ObjectManager::getInstance(\\Weline\\FileManager\\Service\\FileImageRenderer::class)'
-                . '->renderFromMixed($Taglib__usage ?? null, (string)($Taglib__asset ?? \'\'), (string)($Taglib__alt ?? \'\'), filter_var($Taglib__decorative ?? false, FILTER_VALIDATE_BOOL), (string)($Taglib__locale ?? \'\'), (string)($Taglib__class ?? \'\')); ?>';
+                . '->renderFromMixed($Taglib__usage ?? null, (string)($Taglib__asset ?? \'\'), (string)($Taglib__alt ?? \'\'), filter_var($Taglib__decorative ?? false, FILTER_VALIDATE_BOOL), (string)($Taglib__locale ?? \'\'), (string)($Taglib__class ?? \'\'), isset($Taglib__complement) ? filter_var($Taglib__complement, FILTER_VALIDATE_BOOL) : null); ?>';
         };
     }
 
     public static function document(): string
     {
-        return '<w:file:image usage="imageUsage" /> or <w:file:image asset="assetId" alt="已确认的替代文本" />';
+        return '<w:file:image usage="imageUsage" /> or <w:file:image asset="assetId" alt="已确认的替代文本" complement="true" />';
     }
 }

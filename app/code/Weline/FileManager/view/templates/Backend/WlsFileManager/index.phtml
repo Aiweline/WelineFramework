@@ -35,30 +35,8 @@ $pathPolicySourceExtensions = is_array($pathPolicyConfig['source_edit_extensions
     ? implode(', ', array_values($pathPolicyConfig['source_edit_extensions']))
     : trim((string)($pathPolicyConfig['source_edit_extensions'] ?? ''));
 $escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$panelUrl = $this->getBackendUrl('server/backend/wls-panel');
-$projectAdminUrl = $this->getBackendUrl('admin');
-$marketplaceUrl = $this->getBackendUrl('server/backend/wls-panel/marketplace');
-$browseBaseUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/browser');
-$downloadBaseUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/download');
-$createDirectoryUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/create-directory', $embeddedRouteParams);
-$saveTextUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/save-text', $embeddedRouteParams);
-$sourceCreateUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-create', $embeddedRouteParams);
-$sourceRenameUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-rename', $embeddedRouteParams);
-$sourceTrashUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-trash', $embeddedRouteParams);
-$sourceTrashQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-trash-queue', $embeddedRouteParams);
-$sourceArchiveQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-archive-queue', $embeddedRouteParams);
-$sourceArchiveTreeQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-archive-tree-queue', $embeddedRouteParams);
-$sourceArchiveSelectionQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/source-archive-selection-queue', $embeddedRouteParams);
-$uploadUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/upload', $embeddedRouteParams);
-$renameUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/rename', $embeddedRouteParams);
-$deleteUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/delete', $embeddedRouteParams);
-$compressUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/compress', $embeddedRouteParams);
-$compressQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/compress-queue', $embeddedRouteParams);
-$trashQueueUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-queue', $embeddedRouteParams);
-$trashRestoreUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-restore', $embeddedRouteParams);
-$trashPurgeUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/trash-purge', $embeddedRouteParams);
-$pathPolicySaveUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/path-policy-save', $embeddedRouteParams);
-$pathPolicyResetUrl = $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/path-policy-reset', $embeddedRouteParams);
+$browsePath = 'weline_filemanager/backend/wls-file-manager/browser';
+$downloadPath = 'weline_filemanager/backend/wls-file-manager/download';
 $formKey = (string)$this->getFormKeyValue();
 $notice = trim((string)$this->getData('wlsFileManagerNotice'));
 $error = trim((string)$this->getData('wlsFileManagerError'));
@@ -168,24 +146,23 @@ foreach ($roots as $root) {
     }
 }
 $logRootOptions['policy'] = __('Policy');
-$fileRouteBaseUrls = [
-    'roots' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/roots'),
-    'browser' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/browser'),
-    'policy' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/policy-page'),
-    'write' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/write-page'),
-    'queue' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/queue-page'),
-    'audit' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/log-page'),
-    'capabilities' => $this->getBackendUrl('weline_filemanager/backend/wls-file-manager/capabilities-page'),
+$fileRoutePaths = [
+    'roots' => 'weline_filemanager/backend/wls-file-manager/roots',
+    'browser' => 'weline_filemanager/backend/wls-file-manager/browser',
+    'policy' => 'weline_filemanager/backend/wls-file-manager/policy-page',
+    'write' => 'weline_filemanager/backend/wls-file-manager/write-page',
+    'queue' => 'weline_filemanager/backend/wls-file-manager/queue-page',
+    'audit' => 'weline_filemanager/backend/wls-file-manager/log-page',
+    'capabilities' => 'weline_filemanager/backend/wls-file-manager/capabilities-page',
 ];
-$buildFileManagerRouteUrl = static function (string $targetPage, array $params = []) use (
-    $fileRouteBaseUrls,
+$buildFileManagerRouteParams = static function (array $params = []) use (
     $embeddedRouteParams,
     $selectedRootKey,
     $currentRelativePath,
     $projectId,
     $domain,
     $projectType
-): string {
+): array {
     $query = array_merge($embeddedRouteParams, [
         'project_id' => $projectId,
         'domain' => $domain,
@@ -193,33 +170,27 @@ $buildFileManagerRouteUrl = static function (string $targetPage, array $params =
         'root' => $selectedRootKey,
         'path' => $currentRelativePath,
     ], $params);
-    $query = array_filter($query, static fn (mixed $value): bool => $value !== null && $value !== '');
-
-    return ($fileRouteBaseUrls[$targetPage] ?? $fileRouteBaseUrls['browser']) . ($query !== [] ? '?' . http_build_query($query) : '');
+    return array_filter($query, static fn (mixed $value): bool => $value !== null && $value !== '');
 };
 $fileNavClass = static fn (string $targetPage): string => $pageKey === $targetPage ? 'is-active' : '';
 $fileNavCurrent = static fn (string $targetPage): string => $pageKey === $targetPage ? ' aria-current="location"' : '';
-$buildBrowseUrl = static function (array $params) use ($browseBaseUrl, $embeddedRouteParams, $operation, $projectId, $domain, $projectType): string {
+$buildBrowseParams = static function (array $params = []) use ($embeddedRouteParams, $operation, $projectId, $domain, $projectType): array {
     $query = array_merge($embeddedRouteParams, [
         'operation' => $operation !== '' ? $operation : 'files.read',
         'project_id' => $projectId,
         'domain' => $domain,
         'project_type' => $projectType,
     ], $params);
-    $query = array_filter($query, static fn (mixed $value): bool => $value !== null && $value !== '');
-
-    return $browseBaseUrl . ($query !== [] ? '?' . http_build_query($query) : '');
+    return array_filter($query, static fn (mixed $value): bool => $value !== null && $value !== '');
 };
-$buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embeddedRouteParams, $operation, $projectId, $domain, $projectType): string {
+$buildDownloadParams = static function (array $params = []) use ($embeddedRouteParams, $operation, $projectId, $domain, $projectType): array {
     $query = array_merge($embeddedRouteParams, [
         'operation' => $operation !== '' ? $operation : 'files.read',
         'project_id' => $projectId,
         'domain' => $domain,
         'project_type' => $projectType,
     ], $params);
-    $query = array_filter($query, static fn (mixed $value): bool => $value !== null && $value !== '');
-
-    return $downloadBaseUrl . ($query !== [] ? '?' . http_build_query($query) : '');
+    return array_filter($query, static fn (mixed $value): bool => $value !== null && $value !== '');
 };
 ?>
 
@@ -1261,39 +1232,39 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
             <div class="wfm-brand-title"><?= $escapeHtml(__('文件管理器')) ?></div>
         </div>
         <nav class="wfm-nav" data-wls-plugin-nav>
-            <a href="<?= $escapeHtml($panelUrl) ?>">
+            <a href="@backend-url{'server/backend/wls-panel'}">
                 <w:icon name="grid" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('WLS 面板')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('roots')) ?>" class="<?= $escapeHtml($fileNavClass('roots')) ?>"<?= $fileNavCurrent('roots') ?>>
+            <a href="@backend-url{$fileRoutePaths['roots']|$buildFileManagerRouteParams()}" class="<?= $escapeHtml($fileNavClass('roots')) ?>"<?= $fileNavCurrent('roots') ?>>
                 <w:icon name="folder" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('路径')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('browser')) ?>" class="<?= $escapeHtml($fileNavClass('browser')) ?>"<?= $fileNavCurrent('browser') ?>>
+            <a href="@backend-url{$fileRoutePaths['browser']|$buildFileManagerRouteParams()}" class="<?= $escapeHtml($fileNavClass('browser')) ?>"<?= $fileNavCurrent('browser') ?>>
                 <w:icon name="file" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('浏览')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('policy')) ?>" class="<?= $escapeHtml($fileNavClass('policy')) ?>"<?= $fileNavCurrent('policy') ?>>
+            <a href="@backend-url{$fileRoutePaths['policy']|$buildFileManagerRouteParams()}" class="<?= $escapeHtml($fileNavClass('policy')) ?>"<?= $fileNavCurrent('policy') ?>>
                 <w:icon name="edit" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('策略')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('write')) ?>" class="<?= $escapeHtml($fileNavClass('write')) ?>"<?= $fileNavCurrent('write') ?>>
+            <a href="@backend-url{$fileRoutePaths['write']|$buildFileManagerRouteParams()}" class="<?= $escapeHtml($fileNavClass('write')) ?>"<?= $fileNavCurrent('write') ?>>
                 <w:icon name="edit" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('写入')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('queue')) ?>" class="<?= $escapeHtml($fileNavClass('queue')) ?>"<?= $fileNavCurrent('queue') ?>>
+            <a href="@backend-url{$fileRoutePaths['queue']|$buildFileManagerRouteParams()}" class="<?= $escapeHtml($fileNavClass('queue')) ?>"<?= $fileNavCurrent('queue') ?>>
                 <w:icon name="clock" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('队列')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('audit')) ?>" class="<?= $escapeHtml($fileNavClass('audit')) ?>"<?= $fileNavCurrent('audit') ?>>
+            <a href="@backend-url{$fileRoutePaths['audit']|$buildFileManagerRouteParams()}" class="<?= $escapeHtml($fileNavClass('audit')) ?>"<?= $fileNavCurrent('audit') ?>>
                 <w:icon name="clock" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('日志')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($buildFileManagerRouteUrl('capabilities')) ?>" class="<?= $escapeHtml($fileNavClass('capabilities')) ?>"<?= $fileNavCurrent('capabilities') ?>>
+            <a href="@backend-url{$fileRoutePaths['capabilities']|$buildFileManagerRouteParams()}" class="<?= $escapeHtml($fileNavClass('capabilities')) ?>"<?= $fileNavCurrent('capabilities') ?>>
                 <w:icon name="puzzle" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('能力')) ?></span>
             </a>
-            <a href="<?= $escapeHtml($marketplaceUrl) ?>">
+            <a href="@backend-url{'server/backend/wls-panel/marketplace'}">
                 <w:icon name="store" size="sm"></w:icon>
                 <span><?= $escapeHtml(__('插件商城')) ?></span>
             </a>
@@ -1323,11 +1294,11 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                 </p>
             </div>
             <div class="wfm-actions">
-                <a class="wfm-action" href="<?= $escapeHtml($projectAdminUrl) ?>">
+                <a class="wfm-action" href="@backend-url{'admin'}">
                     <w:icon name="circle" size="sm"></w:icon>
                     <span><?= $escapeHtml(__('项目后台')) ?></span>
                 </a>
-                <a class="wfm-action primary" href="<?= $escapeHtml($panelUrl) ?>">
+                <a class="wfm-action primary" href="@backend-url{'server/backend/wls-panel'}">
                     <w:icon name="arrow-left" size="sm"></w:icon>
                     <span><?= $escapeHtml(__('返回 WLS')) ?></span>
                 </a>
@@ -1434,7 +1405,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <div class="wfm-context-value"><?= $escapeHtml($pathPolicyConfig['updated_at'] ?? __('未保存')) ?></div>
                         </div>
                     </div>
-                    <w:form class="wfm-write-form" method="post" action="@var($pathPolicySaveUrl)" data-wfm-path-policy-form csrf="off">
+                    <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/path-policy-save'|$embeddedRouteParams}" data-wfm-path-policy-form csrf="off">
                         <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                         <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                         <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1521,7 +1492,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <span><?= $escapeHtml(__('保存路径策略')) ?></span>
                         </button>
                     </w:form>
-                    <w:form class="wfm-write-form wfm-policy-reset" method="post" action="@var($pathPolicyResetUrl)" data-wfm-path-policy-reset-form csrf="off">
+                    <w:form class="wfm-write-form wfm-policy-reset" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/path-policy-reset'|$embeddedRouteParams}" data-wfm-path-policy-reset-form csrf="off">
                         <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                         <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                         <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1578,7 +1549,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             }
                             $rootClass = $rootKey === $selectedRootKey ? 'is-active' : '';
                             ?>
-                            <a class="<?= $escapeHtml($rootClass) ?>" href="<?= $escapeHtml($buildBrowseUrl(['root' => $rootKey, 'path' => ''])) ?>">
+                            <a class="<?= $escapeHtml($rootClass) ?>" href="@backend-url{$browsePath|$buildBrowseParams(['root' => $rootKey, 'path' => ''])}">
                                 <?= $escapeHtml($root['label'] ?? $rootKey) ?>
                             </a>
                         <?php endforeach; ?>
@@ -1590,7 +1561,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                         <code><?= $escapeHtml($currentPath !== '' ? $currentPath : '-') ?></code>
                     </div>
                     <?php if (!empty($browse['can_go_up'])): ?>
-                        <a class="wfm-up-link" href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $parentRelativePath])) ?>">
+                        <a class="wfm-up-link" href="@backend-url{$browsePath|$buildBrowseParams(['root' => $selectedRootKey, 'path' => $parentRelativePath])}">
                             <w:icon name="arrow-up" size="sm"></w:icon>
                             <?= $escapeHtml(__('返回上级')) ?>
                         </a>
@@ -1618,7 +1589,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                         <?php else: ?>
                             <div class="wfm-preview-actions">
                                 <?php if ($previewCanEdit): ?>
-                                    <a class="wfm-preview-edit-action" href="<?= $escapeHtml($buildFileManagerRouteUrl('write', ['preview' => (string)($preview['relative_path'] ?? '')])) ?>">
+                                    <a class="wfm-preview-edit-action" href="@backend-url{$fileRoutePaths['write']|$buildFileManagerRouteParams(['preview' => (string)($preview['relative_path'] ?? '')])}">
                                         <w:icon name="edit" size="sm"></w:icon>
                                         <span><?= $escapeHtml(__('编辑此文本')) ?></span>
                                     </a>
@@ -1662,7 +1633,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                             <i class="mdi <?= $isDirectory ? 'folder' : 'file' ?>"></i>
                                             <span>
                                                 <?php if ($isDirectory): ?>
-                                                    <a class="wfm-entry-link" href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $entryRelativePath])) ?>">
+                                                    <a class="wfm-entry-link" href="@backend-url{$browsePath|$buildBrowseParams(['root' => $selectedRootKey, 'path' => $entryRelativePath])}">
                                                         <?= $escapeHtml($entryName) ?>
                                                     </a>
                                                 <?php else: ?>
@@ -1681,13 +1652,13 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                         <?php if (!$isDirectory && !empty($entry['readable'])): ?>
                                             <div class="wfm-entry-actions">
                                                 <?php if (!empty($entry['previewable'])): ?>
-                                                    <a class="wfm-entry-action" data-wfm-preview-link href="<?= $escapeHtml($buildBrowseUrl(['root' => $selectedRootKey, 'path' => $currentRelativePath, 'preview' => $entryRelativePath])) ?>">
+                                                    <a class="wfm-entry-action" data-wfm-preview-link href="@backend-url{$browsePath|$buildBrowseParams(['root' => $selectedRootKey, 'path' => $currentRelativePath, 'preview' => $entryRelativePath])}">
                                                         <w:icon name="eye" size="sm"></w:icon>
                                                         <span><?= $escapeHtml(__('预览')) ?></span>
                                                     </a>
                                                 <?php endif; ?>
                                                 <?php if (!empty($entry['downloadable'])): ?>
-                                                    <a class="wfm-entry-action" data-wfm-download-link href="<?= $escapeHtml($buildDownloadUrl(['root' => $selectedRootKey, 'file' => $entryRelativePath])) ?>">
+                                                    <a class="wfm-entry-action" data-wfm-download-link href="@backend-url{$downloadPath|$buildDownloadParams(['root' => $selectedRootKey, 'file' => $entryRelativePath])}">
                                                         <w:icon name="download" size="sm"></w:icon>
                                                         <span><?= $escapeHtml(__('下载')) ?></span>
                                                     </a>
@@ -1752,7 +1723,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Create directory')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('非破坏性')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($createDirectoryUrl)" data-wfm-create-directory-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/create-directory'|$embeddedRouteParams}" data-wfm-create-directory-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1786,7 +1757,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                 <?= $escapeHtml($previewSourceEdit ? __('保存源码前仍需要勾选确认并输入 SAVE_SOURCE。') : __('保存前仍需要勾选确认并输入 SAVE_TEXT。')) ?>
                             </div>
                         <?php endif; ?>
-                        <w:form class="wfm-write-form" method="post" action="@var($saveTextUrl)" data-wfm-save-text-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/save-text'|$embeddedRouteParams}" data-wfm-save-text-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1886,7 +1857,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Upload file')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('5 MB')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" enctype="multipart/form-data" action="@var($uploadUrl)" data-wfm-upload-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" enctype="multipart/form-data" action="@backend-url{'weline_filemanager/backend/wls-file-manager/upload'|$embeddedRouteParams}" data-wfm-upload-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1924,7 +1895,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Rename entry')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('Same folder')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($renameUrl)" data-wfm-rename-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/rename'|$embeddedRouteParams}" data-wfm-rename-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1960,7 +1931,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Compress entry')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('Bounded ZIP')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($compressUrl)" data-wfm-compress-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/compress'|$embeddedRouteParams}" data-wfm-compress-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -1997,7 +1968,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Delete entry')) ?></h3>
                             <span class="wfm-status danger"><?= $escapeHtml(__('Bounded delete')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($deleteUrl)" data-wfm-delete-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/delete'|$embeddedRouteParams}" data-wfm-delete-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2094,7 +2065,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue ZIP compression')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('Async')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($compressQueueUrl)" data-wfm-compress-queue-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/compress-queue'|$embeddedRouteParams}" data-wfm-compress-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2131,7 +2102,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Create source file')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('Source policy')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($sourceCreateUrl)" data-wfm-source-create-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/source-create'|$embeddedRouteParams}" data-wfm-source-create-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2180,7 +2151,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Rename source file')) ?></h3>
                             <span class="wfm-status"><?= $escapeHtml(__('Source policy')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($sourceRenameUrl)" data-wfm-source-rename-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/source-rename'|$embeddedRouteParams}" data-wfm-source-rename-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2224,7 +2195,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Trash source file')) ?></h3>
                             <span class="wfm-status warning"><?= $escapeHtml(__('Recoverable')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($sourceTrashUrl)" data-wfm-source-trash-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/source-trash'|$embeddedRouteParams}" data-wfm-source-trash-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2264,7 +2235,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source trash')) ?></h3>
                             <span class="wfm-status warning"><?= $escapeHtml(__('Source queue')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($sourceTrashQueueUrl)" data-wfm-source-trash-queue-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/source-trash-queue'|$embeddedRouteParams}" data-wfm-source-trash-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2304,7 +2275,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source archive')) ?></h3>
                             <span class="wfm-status ok"><?= $escapeHtml(__('Read-only')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($sourceArchiveQueueUrl)" data-wfm-source-archive-queue-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/source-archive-queue'|$embeddedRouteParams}" data-wfm-source-archive-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2344,7 +2315,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source directory archive')) ?></h3>
                             <span class="wfm-status ok"><?= $escapeHtml(__('Read-only')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($sourceArchiveTreeQueueUrl)" data-wfm-source-archive-tree-queue-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/source-archive-tree-queue'|$embeddedRouteParams}" data-wfm-source-archive-tree-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2378,7 +2349,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue source selection archive')) ?></h3>
                             <span class="wfm-status ok"><?= $escapeHtml(__('Read-only')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($sourceArchiveSelectionQueueUrl)" data-wfm-source-archive-selection-queue-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/source-archive-selection-queue'|$embeddedRouteParams}" data-wfm-source-archive-selection-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2418,7 +2389,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                             <h3 class="wfm-card-title"><?= $escapeHtml(__('Queue recoverable trash')) ?></h3>
                             <span class="wfm-status warning"><?= $escapeHtml(__('Recoverable')) ?></span>
                         </div>
-                        <w:form class="wfm-write-form" method="post" action="@var($trashQueueUrl)" data-wfm-trash-queue-form csrf="off">
+                        <w:form class="wfm-write-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/trash-queue'|$embeddedRouteParams}" data-wfm-trash-queue-form csrf="off">
                             <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                             <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                             <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2481,7 +2452,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                             <div class="wfm-help"><?= $escapeHtml($queueItem['result']) ?></div>
                                         <?php endif; ?>
                                         <?php if ((string)($queueItem['can_restore'] ?? '') === '1'): ?>
-                                            <w:form class="wfm-inline-action-form" method="post" action="@var($trashRestoreUrl)" data-wfm-trash-restore-form csrf="off">
+                                            <w:form class="wfm-inline-action-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/trash-restore'|$embeddedRouteParams}" data-wfm-trash-restore-form csrf="off">
                                                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                                                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                                                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2550,7 +2521,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                             <div class="wfm-help"><?= $escapeHtml($trashItem['process']) ?></div>
                                         <?php endif; ?>
                                         <?php if ((string)($trashItem['can_restore'] ?? '') === '1'): ?>
-                                            <w:form class="wfm-inline-action-form" method="post" action="@var($trashRestoreUrl)" data-wfm-trash-restore-form csrf="off">
+                                            <w:form class="wfm-inline-action-form" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/trash-restore'|$embeddedRouteParams}" data-wfm-trash-restore-form csrf="off">
                                                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                                                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                                                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2568,7 +2539,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                                             </w:form>
                                         <?php endif; ?>
                                         <?php if ((string)($trashItem['can_purge'] ?? '') === '1'): ?>
-                                            <w:form class="wfm-inline-action-form is-danger" method="post" action="@var($trashPurgeUrl)" data-wfm-trash-purge-form csrf="off">
+                                            <w:form class="wfm-inline-action-form is-danger" method="post" action="@backend-url{'weline_filemanager/backend/wls-file-manager/trash-purge'|$embeddedRouteParams}" data-wfm-trash-purge-form csrf="off">
                                                 <input type="hidden" name="form_key" value="<?= $escapeHtml($formKey) ?>">
                                                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.write') ?>">
                                                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
@@ -2629,7 +2600,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                     <strong><?= (int)($operationLogSummary['failed'] ?? 0) ?></strong>
                 </div>
             </div>
-            <w:form class="wfm-log-filters" method="get" action="@var($buildFileManagerRouteUrl('audit'))" aria-label="@var(__('Audit Filters'))">
+            <w:form class="wfm-log-filters" method="get" action="@backend-url{$fileRoutePaths['audit']|$buildFileManagerRouteParams()}" aria-label="@var(__('Audit Filters'))">
                 <input type="hidden" name="operation" value="<?= $escapeHtml($operation !== '' ? $operation : 'files.read') ?>">
                 <input type="hidden" name="project_id" value="<?= $escapeHtml($projectId) ?>">
                 <input type="hidden" name="domain" value="<?= $escapeHtml($domain) ?>">
@@ -2677,7 +2648,7 @@ $buildDownloadUrl = static function (array $params) use ($downloadBaseUrl, $embe
                         <w:icon name="filter" size="sm"></w:icon>
                         <span><?= $escapeHtml(__('Filter Logs')) ?></span>
                     </button>
-                    <a class="wfm-log-reset" href="<?= $escapeHtml($buildFileManagerRouteUrl('audit')) ?>">
+                    <a class="wfm-log-reset" href="@backend-url{$fileRoutePaths['audit']|$buildFileManagerRouteParams()}">
                         <?= $escapeHtml(__('Reset Filters')) ?>
                     </a>
                     <?php if (!empty($operationLogSummary['latest_time'])): ?>

@@ -81,7 +81,7 @@ final class FileAssetManager implements FileAssetManagerInterface
 
     public function validateImageUsage(ImageUsage $usage, FileAccessContext $context): void
     {
-        $usage->assertPublishable($context->localeCode);
+        $this->assertPublishableUsage($usage, $context);
         $asset = $this->get($usage->assetId);
         if ($asset->getVisibility() === FileAsset::VISIBILITY_PRIVATE
             && $context->purpose === FileAccessContext::PURPOSE_PUBLIC_PUBLISH
@@ -129,11 +129,16 @@ final class FileAssetManager implements FileAssetManagerInterface
                 throw new \RuntimeException((string)__('图片语境语言与当前语言不一致。'));
             }
         } else {
-            $usage->assertPublishable($context->localeCode);
+            $this->assertPublishableUsage($usage, $context);
         }
         $asset = $this->get($usage->assetId);
         $this->accessPolicy->assertCanRead($asset, $context);
-        $this->assertImageMetadata($usage, $asset, !$allowsUnreviewedLocale);
+        $locale = $this->assertImageMetadata($usage, $asset, !$allowsUnreviewedLocale);
+        $effective = (new ImageUsageLocaleComplementService())->resolve(
+            $usage,
+            $locale,
+            $allowsUnreviewedLocale,
+        );
         $disk = $this->storage->disk($asset->getDiskCode());
         $baseOptions = $asset->getVisibility() === FileAsset::VISIBILITY_PRIVATE
             ? new StorageUrlOptions(StorageUrlOptions::KIND_TEMPORARY, 300)
@@ -173,7 +178,7 @@ final class FileAssetManager implements FileAssetManagerInterface
         $loading = $usage->priority === 'high' ? 'eager' : $usage->loading;
         $attributes = [
             'src' => $src,
-            'alt' => $usage->decorative ? '' : $usage->alt,
+            'alt' => $usage->decorative ? '' : $effective['alt'],
             'loading' => $loading,
             'decoding' => 'async',
         ];
@@ -196,10 +201,10 @@ final class FileAssetManager implements FileAssetManagerInterface
         if ($usage->decorative) { $attributes['aria-hidden'] = 'true'; }
 
         $html = '<img' . self::htmlAttributes($attributes) . '>';
-        if ($usage->caption !== null && trim($usage->caption) !== '') {
-            $html = '<figure>' . $html . '<figcaption>' . self::escape($usage->caption) . '</figcaption></figure>';
+        if ($effective['caption'] !== null && trim($effective['caption']) !== '') {
+            $html = '<figure>' . $html . '<figcaption>' . self::escape($effective['caption']) . '</figcaption></figure>';
         }
-        return new ResolvedFileImage($src, $html);
+        return new ResolvedFileImage($src, $html, $effective['alt'], $effective['caption']);
     }
 
     public function renderImage(ImageUsage $usage, FileAccessContext $context, string $class = ''): string
@@ -226,7 +231,7 @@ final class FileAssetManager implements FileAssetManagerInterface
         ImageUsage $usage,
         FileAsset $asset,
         bool $requireReviewedLocale,
-    ): void
+    ): FileAssetLocale
     {
         if (!str_starts_with(strtolower($asset->getMimeType()), 'image/')) {
             throw new \RuntimeException((string)__('所选资源不是图片。'));
@@ -234,6 +239,29 @@ final class FileAssetManager implements FileAssetManagerInterface
         $locale = $this->locale($usage->assetId, $usage->localeCode);
         if ($requireReviewedLocale && !$locale->isReviewed()) {
             throw new \RuntimeException((string)__('图片资源语言元数据尚未审核。'));
+        }
+
+        return $locale;
+    }
+
+    private function assertPublishableUsage(ImageUsage $usage, FileAccessContext $context): void
+    {
+        if ($usage->localeCode !== $context->localeCode) {
+            throw new \RuntimeException((string)__('图片语境语言与当前语言不一致。'));
+        }
+        if ($usage->altState !== ImageUsage::ALT_CONFIRMED) {
+            throw new \RuntimeException((string)__('图片 alt 尚未审核确认。'));
+        }
+        if ($usage->decorative) {
+            return;
+        }
+        $locale = $this->locale($usage->assetId, $usage->localeCode);
+        if (!$locale->isReviewed()) {
+            throw new \RuntimeException((string)__('图片资源语言元数据尚未审核。'));
+        }
+        $effective = (new ImageUsageLocaleComplementService())->resolve($usage, $locale, false);
+        if (trim($effective['alt']) === '') {
+            throw new \RuntimeException((string)__('信息图片必须填写 alt。'));
         }
     }
 

@@ -80,6 +80,7 @@ final class FileImageLayoutContractTest extends TestCase
                 return new ResolvedFileImage(
                     'https://cdn.example.test/media/image.jpg',
                     '<img src="https://cdn.example.test/media/image.jpg" alt="Product">',
+                    'Product',
                 );
             });
         $hydrator = new FileImageLayoutValueHydrator($assets);
@@ -138,6 +139,7 @@ final class FileImageLayoutContractTest extends TestCase
                 return new ResolvedFileImage(
                     'https://cdn.example.test/media/image.jpg',
                     '<img src="https://cdn.example.test/media/image.jpg" alt="Product">',
+                    'Product',
                 );
             });
         $hydrator = new FileImageLayoutValueHydrator($assets);
