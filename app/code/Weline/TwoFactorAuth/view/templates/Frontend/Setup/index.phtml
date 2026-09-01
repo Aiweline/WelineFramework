@@ -309,7 +309,7 @@
                         <strong>🔷 <lang>我们的验证器</lang></strong>
                         <small><lang>完全自主开发</lang></small>
                         <br>
-                        <a href="/twofa-app/" target="_blank" id="openAppLink" style="font-size: 12px; color: #007bff;"><lang>打开应用</lang></a>
+                        <a href="@url{'twofa-app/'}" target="_blank" id="openAppLink" style="font-size: 12px; color: #007bff;"><lang>打开应用</lang></a>
                         <br>
                         <button id="installAppBtn" style="display: none; margin-top: 5px; padding: 5px 10px; font-size: 12px; background: #28a745; color: white; border: none; border-radius: 4px; cursor: pointer;">
                             📱 <lang>安装到桌面</lang>
@@ -417,7 +417,7 @@
                 </div>
                 
                 <div>
-                    <a href="/two-factor-auth/frontend" class="w-button" data-tone="neutral"><lang>取消</lang></a>
+                    <a href="@url{'two-factor-auth/frontend'}" class="w-button" data-tone="neutral"><lang>取消</lang></a>
                     <button class="w-button" type="button" data-twofa-action="enable-two-factor" data-tone="primary"><lang>确认启用</lang></button>
                 </div>
             </div>
@@ -687,7 +687,7 @@ ${translations.finalNote}`;
                         duration: 2000,
                         confirmable: false
                     }).then(() => {
-                        window.location.href = '/two-factor-auth/frontend';
+                        window.location.href='@url{'two-factor-auth/frontend'}';
                     });
                 } else {
                     Weline.UI.dialog.request({

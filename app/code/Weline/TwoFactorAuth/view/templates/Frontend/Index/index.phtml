@@ -283,7 +283,7 @@
                     您的账户尚未启用双因素身份验证。启用后，登录时需要额外提供动态验证码。
                 </p>
                 <div class="action-buttons">
-                    <a href="/two-factor-auth/frontend/setup" class="w-button" data-tone="primary">立即启用</a>
+                    <a href="@url{'two-factor-auth/frontend/setup'}" class="w-button" data-tone="primary">立即启用</a>
                 </div>
             <?php endif; ?>
         </div>
@@ -559,7 +559,7 @@
                         <button type="button" data-twofa-action="close-authenticator-app-modal" style="padding: 0.75rem 1.5rem; border: 1px solid #ddd; border-radius: 8px; background: white; color: #333; cursor: pointer; font-weight: 500;">
                             取消
                         </button>
-                        <a href="/twofa-app/" target="_blank" data-twofa-action="close-authenticator-app-modal" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; text-decoration: none; font-weight: 500; display: inline-block;">
+                        <a href="@url{'twofa-app/'}" target="_blank" data-twofa-action="close-authenticator-app-modal" style="padding: 0.75rem 1.5rem; border: none; border-radius: 8px; background: #007bff; color: white; text-decoration: none; font-weight: 500; display: inline-block;">
                             打开验证器
                         </a>
                     </div>

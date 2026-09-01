@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_TwoFactorAuth',
-    "version" => '1.0.0',
+    "version" => '1.0.4',
     "requires" => [
         'Weline_Customer' => '*',
         'Weline_Framework' => '*',
