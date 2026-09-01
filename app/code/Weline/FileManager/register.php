@@ -13,7 +13,7 @@ Register::register(
     Register::MODULE,
     'Weline_FileManager',
     __DIR__,
-    '1.1.1',
+    '1.1.5',
     '文件管理器管理.提供file-manager标签，快速调用文件管理器。',
     [
         'Weline_Backend',

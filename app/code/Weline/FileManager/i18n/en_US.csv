@@ -534,6 +534,11 @@ Latest,Latest
 "No matching file operation logs.","No matching file operation logs."
 暂无文件操作日志。,"No file operation logs yet."
 能力阶段,"Capability Stages"
+processed=%{1},processed=%{1}
+filled=%{1},filled=%{1}
+skipped=%{1},skipped=%{1}
+errors=%{1},errors=%{1}
+已续队下一批,已续队下一批
 "WLS 文件管理器大文件操作","WLS File Manager large-file operation"
 "由 WLS 文件管理器创建的大文件压缩任务，避免在面板请求内执行长耗时文件操作。","Large-file compression task created by WLS File Manager to avoid long-running file work inside panel requests."
 "WLS 文件队列内容无效。","WLS file queue content is invalid."
@@ -570,6 +575,9 @@ Latest,Latest
 图片使用数据布尔字段无效：%{1},"An ImageUsage boolean field is invalid: %{1}"
 文件访问上下文无效。,"The file access context is invalid."
 文件访问上下文角色无效。,"A role in the file access context is invalid."
+源语言元数据缺失，无法补缺翻译。,源语言元数据缺失，无法补缺翻译。
+"语言 %{1} 翻译失败或 AI 翻译不可用。","语言 %{1} 翻译失败或 AI 翻译不可用。"
+"语言 %{1} 翻译结果为空。","语言 %{1} 翻译结果为空。"
 上传源必须是流。,"The upload source must be a stream."
 目标文件已存在，禁止覆盖。,"The target file already exists and cannot be overwritten."
 文件资源上传必须从根边界使用写意图事务。,"File asset uploads must use a write-intent transaction from the root boundary."
@@ -637,6 +645,7 @@ Latest,Latest
 私有文件访问策略无效。,"The private file access policy is invalid."
 私有文件访问策略列表超过限制。,"The private-file access policy list exceeds the limit."
 存储磁盘仍被文件资源引用，不能删除。,"The storage disk is still referenced by file assets and cannot be deleted."
+"文件资源多语言 AI 补缺翻译","文件资源多语言 AI 补缺翻译"
 源码编辑默认关闭,"Source editing is off by default"
 源码编辑策略允许,"Source edit policy allowed"
 源码编辑策略禁用,"Source edit policy disabled"
@@ -661,6 +670,9 @@ Latest,Latest
 "文件布局仅索引模式必须指定完整 owner 身份。","File-layout index-only mode requires a complete owner identity."
 "文件布局校验缺少显式 ScopeIdentity 或 locale_code。","File layout validation is missing an explicit ScopeIdentity or locale_code."
 "Theme 布局内容超过文件校验上限。","Theme layout content exceeds the file verification limit."
+"文件资源 AI 自动翻译未启用，cron 已跳过","文件资源 AI 自动翻译未启用，cron 已跳过"
+"文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒","文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒"
+"文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒","文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒"
 读取存储对象时连续无数据进展。,"No progress was made while reading the storage object."
 无法读取上传源以计算校验值。,"Unable to read the upload source to calculate its checksum."
 读取上传源时连续无数据进展。,"No progress was made while reading the upload source."

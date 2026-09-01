@@ -35,12 +35,26 @@ final class ImageUsageTest extends TestCase
         self::addToAssertionCount(1);
     }
 
-    public function testInformativeImageRequiresConfirmedNonEmptyAlt(): void
+    public function testInformativeImageRequiresConfirmedNonEmptyAltAtUsageLevel(): void
     {
         $usage = new ImageUsage(self::ASSET_ID, 'en_US', '', ImageUsage::ALT_CONFIRMED);
 
         $this->expectException(\RuntimeException::class);
         $usage->assertPublishable('en_US');
+    }
+
+    public function testComplementDefaultsToTrueAndRoundTrips(): void
+    {
+        $usage = ImageUsage::fromArray([
+            'asset_id' => self::ASSET_ID,
+            'locale_code' => 'en_US',
+            'alt' => 'Image',
+        ]);
+
+        self::assertTrue($usage->complement);
+        $reloaded = ImageUsage::fromArray(['complement' => false] + $usage->toArray());
+        self::assertFalse($reloaded->complement);
+        self::assertFalse($reloaded->toArray()['complement']);
     }
 
     public function testDecorativeImageRequiresExplicitEmptyAltAndCanPublish(): void

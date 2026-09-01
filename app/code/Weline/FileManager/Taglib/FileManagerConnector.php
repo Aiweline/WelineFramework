@@ -41,6 +41,7 @@ class FileManagerConnector implements TaglibInterface
             'title' => false,
             'path' => true,
             'lockPath' => false,
+            'lockRoot' => false,
             'preview' => false,
             'ext' => true,
             'value' => false,
@@ -51,6 +52,8 @@ class FileManagerConnector implements TaglibInterface
             'size' => false,
             'recommend_width' => false,
             'recommend_height' => false,
+            'aspect_ratio' => false,
+            'aspect_ratio_tolerance' => false,
             'min_width' => false,
             'min_height' => false,
             'max_width' => false,
@@ -165,6 +168,7 @@ class FileManagerConnector implements TaglibInterface
             $attributes['close'] = trim($attributes['close'] ?? '', '.#');
             $attributes['ext'] = $attributes['ext'] ?? '';
             $attributes['lockPath'] = $booleanAttribute($attributes['lockPath'] ?? null, false);
+            $attributes['lockRoot'] = trim(str_replace('\\', '/', (string)($attributes['lockRoot'] ?? '')), '/');
             $attributes['preview'] = $booleanAttribute($attributes['preview'] ?? null, false);
             $attributes['value'] = $attributes['value'] ?? '';
             $attributes['vars'] = $attributes['vars'] ?? '';
@@ -175,6 +179,8 @@ class FileManagerConnector implements TaglibInterface
             $attributes['multi'] = $booleanAttribute($attributes['multi'] ?? null, false);
             $attributes['recommend_width'] = $attributes['recommend_width'] ?? '';
             $attributes['recommend_height'] = $attributes['recommend_height'] ?? '';
+            $attributes['aspect_ratio'] = $attributes['aspect_ratio'] ?? '';
+            $attributes['aspect_ratio_tolerance'] = $attributes['aspect_ratio_tolerance'] ?? '';
             $attributes['min_width'] = $attributes['min_width'] ?? '';
             $attributes['min_height'] = $attributes['min_height'] ?? '';
             $attributes['max_width'] = $attributes['max_width'] ?? '';
@@ -237,8 +243,12 @@ value：可选。默认当前的文件路径
 multi：可选。默认单选
 w：可选。默认预览宽50px
 h：可选。默认预览高50px
+lockPath：可选。是否锁定路径（不能返回上级目录），默认：0
+lockRoot：可选。锁定根相对路径（lockPath=1 时目标须位于该根下）；主题编辑器传 websites/{website}/{store}[/channel]
 recommend_width：可选。建议图片宽度（选择器内展示提示）
 recommend_height：可选。建议图片高度
+aspect_ratio：可选。硬约束宽高比（如 16:9）；与 recommend_width+height 同时存在时以 aspect_ratio 为准，仅两边 recommend 时自动推导比例并硬拦
+aspect_ratio_tolerance：可选。比例容差，默认 0.02
 min_width/min_height/max_width/max_height：可选。分辨率限制（供选择后校验）
 HTML;
     }
