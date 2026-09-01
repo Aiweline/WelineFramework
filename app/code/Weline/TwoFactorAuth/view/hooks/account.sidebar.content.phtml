@@ -36,7 +36,7 @@ try {
     return;
 }
 ?>
-<section class="account-hook-section account-index__section motor-account-section" id="twofa-section" data-account-section="twofa" hidden weline-code="twofactorauth.account_sidebar_content.twofa_section">
+<section class="account-hook-section account-index__section motor-account-section" id="twofa-section" data-account-section="twofa" data-weline-load="accountTwoFactor" hidden weline-code="twofactorauth.account_sidebar_content.twofa_section">
     <div class="account-card twofa-account-panel" data-twofa-panel data-enabled="<?= $isEnabled ? '1' : '0' ?>">
         <header class="account-card__header">
             <h2 class="account-card__title"><?= __('两步验证') ?></h2>
@@ -74,7 +74,7 @@ try {
                 </div>
 
                 <div class="twofa-action-grid">
-                    <w:form class="twofa-inline-form" data-twofa-action="regenerate" data-endpoint="/two-factor-auth/frontend/setup/regenerate-backup-codes">
+                    <w:form class="twofa-inline-form" method="post" action="@url{'two-factor-auth/frontend/setup/regenerate-backup-codes'}" csrf="off" data-twofa-action="regenerate" data-endpoint="@url{'two-factor-auth/frontend/setup/regenerate-backup-codes'}">
                         <label for="twofaRegenerateCode"><?= __('重新生成备份码') ?></label>
                         <div class="twofa-form-row">
                             <input id="twofaRegenerateCode" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="<?= __('输入 6 位验证码') ?>">
@@ -82,7 +82,7 @@ try {
                         </div>
                     </w:form>
 
-                    <w:form class="twofa-inline-form" data-twofa-action="disable" data-endpoint="/two-factor-auth/frontend/setup/disable">
+                    <w:form class="twofa-inline-form" method="post" action="@url{'two-factor-auth/frontend/setup/disable'}" csrf="off" data-twofa-action="disable" data-endpoint="@url{'two-factor-auth/frontend/setup/disable'}">
                         <label for="twofaDisableCode"><?= __('禁用两步验证') ?></label>
                         <div class="twofa-form-row">
                             <input id="twofaDisableCode" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="<?= __('输入 6 位验证码') ?>">
@@ -107,7 +107,7 @@ try {
                         <span><?= __('使用验证器应用扫描二维码') ?></span>
                     </div>
 
-                    <w:form class="twofa-setup-form" data-twofa-action="enable" data-endpoint="/two-factor-auth/frontend/setup/enable">
+                    <w:form class="twofa-setup-form" method="post" action="@url{'two-factor-auth/frontend/setup/enable'}" csrf="off" data-twofa-action="enable" data-endpoint="@url{'two-factor-auth/frontend/setup/enable'}">
                         <input type="hidden" name="secret" value="<?= htmlspecialchars($setupData['secret'], ENT_QUOTES, 'UTF-8') ?>">
                         <input type="hidden" name="backup_codes" value="<?= htmlspecialchars(json_encode($setupData['backup_codes'], JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') ?>">
                         <label><?= __('手动密钥') ?></label>
@@ -137,11 +137,11 @@ try {
                     <strong><?= __('验证器应用') ?></strong>
                     <p><?= __('可使用任意标准 TOTP 验证器，也可以打开内置验证器应用。') ?></p>
                 </div>
-                <a href="/twofa-app/" target="_blank" class="account-btn account-btn--secondary"><?= __('打开验证器') ?></a>
+                <a href="@url{'twofa-app/'}" target="_blank" class="account-btn twofa-app-card__cta" rel="noopener noreferrer"><?= __('打开验证器') ?></a>
             </div>
         </div>
     </div>
 </section>
 
 <css>Weline_TwoFactorAuth::frontend/css/account-two-factor.css</css>
-<js>Weline_TwoFactorAuth::frontend/js/account-two-factor-inline-v2.js</js>
+<?php // accountTwoFactor：由面板 data-weline-load 声明，禁止裸 <js> ?>

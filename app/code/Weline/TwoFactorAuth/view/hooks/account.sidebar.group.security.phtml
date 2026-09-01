@@ -1,0 +1,22 @@
+<?php
+/**
+ * @hook-priority 50
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
+
+$user = $this->getData('user');
+if (!$user) {
+    return;
+}
+?>
+<a class="account-hook-nav-link" href="@url{'customer/account/index'}#twofa" data-section="twofa" data-account-nav-link="true" data-account-nav-parent="security">
+    <span class="account-hook-nav-link__label">
+        <w:icon name="shield" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text">
+            <strong><lang>两步验证</lang></strong>
+            <span><lang>账户登录安全验证</lang></span>
+        </span>
+    </span>
+</a>

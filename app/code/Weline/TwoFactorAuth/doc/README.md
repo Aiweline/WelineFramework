@@ -25,6 +25,8 @@
 
 - 两步验证是客户主动启用的可选能力，不得在注册或普通登录时强制开启。
 - 设置入口必须挂载到 `Weline_Customer` 官方个人中心的 `account.sidebar` 与 `account.sidebar.content`，路由地址为 `/customer/account/index#twofa`；不得另建独立个人中心。
+- 个人中心内启用 / 禁用 / 重新生成备份码必须走异步 `Weline.Api.resource('twoFactor')`，成功或失败用主题 `Weline.UI.toast` 提示；禁止整页跳转到 JSON 接口。
+- 启用或禁用成功后通过 `weline:account-sidebar-section-reload` 软刷新 `twofa` 分区，不得依赖整页 `location.reload`。
 - 已启用客户可在该入口输入当前 6 位动态验证码并调用 `Weline.Api.resource('twoFactor').disable()` 关闭两步验证。
 - 关闭后 `TwoFactorAuthService::isEnabled()` 必须立即返回 `false`。新密码登录不得创建两步 challenge，TOTP 与备份码也都不得完成关闭前已创建的 challenge。
 - 再次启用前按普通 Customer 密码登录；若登录携带合法来源页，仍由 Customer 的统一认证回跳契约返回该网页。
