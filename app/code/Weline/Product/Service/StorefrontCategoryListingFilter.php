@@ -165,8 +165,8 @@ final class StorefrontCategoryListingFilter
         if ($base === '') {
             $base = '/categories';
         }
-        if ($base[0] !== '/') {
-            $base = '/' . $base;
+        if (!preg_match('#^https?://#i', $base) && ($base === '' || $base[0] !== '/')) {
+            $base = '/' . ltrim($base, '/');
         }
 
         $query = [];

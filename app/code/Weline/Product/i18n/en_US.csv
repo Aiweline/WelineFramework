@@ -1,11 +1,18 @@
-﻿"StoreProduct 写入后无法回读","StoreProduct 写入后无法回读"
+﻿供应商名称与编码不能为空,"Supplier name and code are required"
+供应商编码已存在：%{1},"Supplier code already exists: %{1}"
+供应商创建后无法回读：%{1},"Supplier could not be reloaded after create: %{1}"
+供应商不存在：%{1},"Supplier not found: %{1}"
+供应商名称不能为空,"Supplier name is required"
+供应商更新后无法回读：%{1},"Supplier could not be reloaded after update: %{1}"
+"供应商编码须为 1–64 位小写字母/数字/连字符","Supplier code must be 1–64 lowercase letters, digits, or hyphens"
+"global_supplier_uuid 格式非法","global_supplier_uuid 格式非法"
+"StoreProduct 写入后无法回读","StoreProduct 写入后无法回读"
 "Category 不存在：%{1}","Category does not exist:%{1}"
 "Category 更新后无法回读：%{1}","Category cannot be read back after updating: %{1}"
 "Category 写入后无法回读：%{1}","Category cannot be read back after writing: %{1}"
 "global_category_uuid 格式非法","global_category_uuid format is illegal"
 "website_id 不能为负数：%{1}","website_id cannot be negative: %{1}"
 "store_id 不能为负数：%{1}","store_id cannot be negative: %{1}"
-"%{1}.store_id 不能为 0（Website 层）","%{1}.store_id cannot be 0 (Website layer)"
 "Product 写入后无法回读：%{1}","Product cannot be read back after writing: %{1}"
 "Product SKU 不能为空","Product SKU cannot be empty"
 "Product 不存在：%{1}","Product does not exist: %{1}"
@@ -25,6 +32,11 @@
 "Offer 更新 CAS 失败","Offer 更新 CAS 失败"
 "Offer 缺少有效的父 Product：%{1}","Offer 缺少有效的父 Product：%{1}"
 "Offer CAS token factory 必须返回 32-64 位十六进制","Offer CAS token factory must return 32-64 digit hexadecimal"
+"supplier_id 必须为正整数","supplier_id 必须为正整数"
+"brand_id 必须为正整数","brand_id 必须为正整数"
+"channel_id 不能为负数","channel_id 不能为负数"
+"展示选择需要 store_id 或 channel_id","展示选择需要 store_id 或 channel_id"
+展示选择参数无效,展示选择参数无效
 "Price 在 Scope 上已 cleared，当前币种不可售：%{1}","Price has been cleared on Scope and the current currency is not for sale: %{1}"
 "Price 未配置：offer=%{1} currency=%{2}","Price is not configured: offer=%{1} currency=%{2}"
 "Media remove 并发重试耗尽：media_id=%{1}","Media remove 并发重试耗尽：media_id=%{1}"
@@ -50,6 +62,14 @@
 "Media CAS token factory 必须返回 32-64 位十六进制","Media CAS token factory must return 32-64 digit hexadecimal"
 "Required 属性在 Scope/locale 上已 cleared，禁止发布：%{1}","Required attribute cleared on Scope/locale, publishing prohibited: %{1}"
 "StoreOffer 写入后无法回读","StoreOffer cannot be read back after writing"
+品牌名称与编码不能为空,"Brand name and code are required"
+品牌编码已存在：%{1},"Brand code already exists: %{1}"
+品牌创建后无法回读：%{1},"Brand could not be reloaded after create: %{1}"
+品牌不存在：%{1},"Brand not found: %{1}"
+品牌名称不能为空,品牌名称不能为空
+品牌更新后无法回读：%{1},"Brand could not be reloaded after update: %{1}"
+"品牌编码须为 1–64 位小写字母/数字/连字符","Brand code must be 1–64 lowercase letters, digits, or hyphens"
+"global_brand_uuid 格式非法","global_brand_uuid 格式非法"
 "Copy draft 写入后无法回读","Copy draft cannot be read back after writing"
 "request_hash 不能为空","request_hash cannot be empty"
 "draft 不存在","draft does not exist"
@@ -59,6 +79,9 @@
 "仅 draft 可取消","Only draft can be canceled"
 "Copy claim token 必须为 64 位十六进制","Copy claim token must be 64-bit hexadecimal"
 "Copy JSON 结构非法","Copy JSON structure is illegal"
+"product_id 与 supplier_id 必须为正整数","product_id and supplier_id must be positive integers"
+商品供应商关联创建后无法回读：%{1},"Product-supplier link could not be reloaded after create: %{1}"
+商品供应商关联更新后无法回读,"Product-supplier link could not be reloaded after update"
 "Global Scope 不支持商品加购","Global Scope does not support additional product purchases"
 "Offer 不存在","Offer does not exist"
 "Offer 未发布","Offer not released"
@@ -71,11 +94,12 @@
 商品价格未配置,"Product price is not configured"
 下载商品需要登录后购买,下载商品需要登录后购买
 下载资产当前不可用，请联系管理员,下载资产当前不可用，请联系管理员
-商品库存不足,"Insufficient product inventory"
+商品库存不足,"Out of stock"
 "Store 不存在","Store does not exist"
 "Store 当前不可售","Store is currently unavailable"
 "该 Offer 在当前 Scope 不可售","This Offer is not available for sale in the current Scope"
 产品分类,产品分类
+"无效的 Google Taxonomy ID：%{1}","无效的 Google Taxonomy ID：%{1}"
 "分类 ID 不能为空","Category ID is required."
 "Product shard 重复声明表 %{1}","Product shard duplicate declaration table %{1}"
 "Product Storefront 接口不支持操作：%{1}","Product Storefront interface does not support operation: %{1}"
@@ -96,6 +120,10 @@
 筛选商品列表,筛选商品列表
 "读取新建类型与活动 Store","读取新建类型与活动 Store"
 读取商品完整编辑快照,读取商品完整编辑快照
+读取商品属性目录,读取商品属性目录
+"检查前台 URL Handle 是否可用","检查前台 URL Handle 是否可用"
+批量执行商品后台命令,批量执行商品后台命令
+"批量调整商品 Website 分类","批量调整商品 Website 分类"
 执行商品创建、保存、校验与生命周期命令,执行商品创建、保存、校验与生命周期命令
 商品复制查询器不支持操作：%{1},"Product copy query does not support operation: %{1}"
 "Store 商品复制","Store product copy"
@@ -120,16 +148,46 @@
 "参数 %{1} 须为规范整数","Parameter %{1} must be a canonical integer"
 "参数 %{1} 须为布尔值","Parameter %{1} must be a Boolean value"
 "参数 %{1} 须为数组","Parameter %{1} must be an array"
+id属性不能为空,id属性不能为空
+"通过 product_admin 搜索已发布商品；全站活动（Website=全部）可跨站搜索，结果会标注所属网站。","通过 product_admin 搜索已发布商品；全站活动（Website=全部）可跨站搜索，结果会标注所属网站。"
+搜索商品,搜索商品
+"名称或 SKU","名称或 SKU"
+搜索,搜索
+移除,移除
+添加,添加
+"当前范围暂无可选商品，请检查 website / 店铺范围或商品发布状态。","当前范围暂无可选商品，请检查 website / 店铺范围或商品发布状态。"
+已选商品,已选商品
+名称,名称
+"选品前请先选择 Website（0 为默认网站，可正常选品）。","Select a Website before picking products (0 is the default website and is allowed)."
+网站,website
+未找到匹配项,未找到匹配项
+未选择,未选择
+搜索名称或编码,搜索名称或编码
+商品详情加购之后,商品详情加购之后
+在商品详情页加购操作区域之后注入扩展内容，例如分销分享面板。,在商品详情页加购操作区域之后注入扩展内容，例如分销分享面板。
+商品目录批量操作扩展,商品目录批量操作扩展
+在商品目录列表批量操作栏注入扩展按钮，例如分类模块的批量调整分类。,在商品目录列表批量操作栏注入扩展按钮，例如分类模块的批量调整分类。
 分类不存在或当前不可用。,分类不存在或当前不可用。
 分类,分类
 默认排序,Default
 价格从低到高,"Price: Low to High"
 价格从高到低,"Price: High to Low"
 "名称 A-Z","Name: A-Z"
+商品未找到,商品未找到
 商品不存在或当前不可用。,"The product does not exist or is currently unavailable."
 请选择规格后再加入购物车。,请选择规格后再加入购物车。
 商品详情,"Product details"
 商品目录读取失败：%{1},商品目录读取失败：%{1}
+品牌目录读取失败：%{1},"Failed to load brands: %{1}"
+品牌已保存：%{1},"Brand saved: %{1}"
+保存品牌失败：%{1},"Failed to save brand: %{1}"
+品牌已停用,"Brand disabled"
+停用品牌失败：%{1},"Failed to disable brand: %{1}"
+供应商目录读取失败：%{1},"Failed to load suppliers: %{1}"
+供应商已保存：%{1},"Supplier saved: %{1}"
+保存供应商失败：%{1},"Failed to save supplier: %{1}"
+供应商已停用,"Supplier disabled"
+停用供应商失败：%{1},"Failed to disable supplier: %{1}"
 请选择要编辑的商品,"Please select the product to edit"
 编辑商品失败：%{1},"Failed to edit product: %{1}"
 商品草稿已创建,商品草稿已创建
@@ -153,6 +211,21 @@ code,code
 商品分类,"Product classification"
 tree,tree
 查看商品分类,"View product categories"
+品牌管理,"Brand management"
+管理商品品牌目录,管理商品品牌目录
+保存品牌,"Save brand"
+save,save
+创建或更新商品品牌,创建或更新商品品牌
+停用品牌,停用品牌
+ban,ban
+停用商品品牌（软下架）,停用商品品牌（软下架）
+供应商管理,"Supplier management"
+truck,truck
+管理商品供应商目录,"Manage product supplier catalog"
+保存供应商,"Save supplier"
+创建或更新商品供应商,"Create or update product suppliers"
+停用供应商,"Disable supplier"
+停用商品供应商（软下架）,"Disable product supplier"
 商品媒体,"commodity media"
 image,image
 查看商品媒体,"View product media"
@@ -172,7 +245,6 @@ edit,edit
 plus,plus
 创建真实商品草稿,创建真实商品草稿
 保存万能产品,保存万能产品
-save,save
 保存商品聚合,保存商品聚合
 执行万能产品命令,执行万能产品命令
 play,play
@@ -197,6 +269,21 @@ play,play
 "非法 Product shard 状态迁移：%{1}→%{2}","Illegal Product shard status migration: %{1}→%{2}"
 "Product shard 终态写入冲突：website_id=%{1} expected=%{2} actual=%{3}","Product shard final state write conflict: website_id=%{1} expected=%{2} actual=%{3}"
 "Product shard 未 ready：website_id=%{1} status=%{2}","Product shard is not ready: website_id=%{1} status=%{2}"
+"可多选，按住 Ctrl / Cmd 点选多个值。","可多选，按住 Ctrl / Cmd 点选多个值。"
+"请填写合法 JSON。","请填写合法 JSON。"
+"多规格商品可多选，将按笛卡尔积生成子 SKU。","多规格商品可多选，将按笛卡尔积生成子 SKU。"
+上传图片,上传图片
+清除,清除
+请先在「规格维度」中勾选规格值，再为图板类规格上传预览图。,请先在「规格维度」中勾选规格值，再为图板类规格上传预览图。
+"请在规格维度中至少选择一个规格值，系统将按笛卡尔积生成子 SKU。","请在规格维度中至少选择一个规格值，系统将按笛卡尔积生成子 SKU。"
+个子规格,个子规格
+"填写 SKU 前缀后可预览正式 SKU","填写 SKU 前缀后可预览正式 SKU"
+预览,预览
+组合,组合
+"SKU 预览","SKU 预览"
+未找到属性集目录，请重新选择属性集。,未找到属性集目录，请重新选择属性集。
+"多选规格值后将按笛卡尔积生成子 SKU。","多选规格值后将按笛卡尔积生成子 SKU。"
+当前属性集没有可填写的商品属性（非规格组）。,当前属性集没有可填写的商品属性（非规格组）。
 清除筛选条件,"Clear filters"
 部门,Department
 全部类目,"Any Department"
@@ -213,14 +300,6 @@ play,play
 当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
 该分类下暂无已发布商品。,该分类下暂无已发布商品。
 联系询价,"Contact for quote"
-仅询价,"Quote only"
-加入购物车,"Add to Cart"
-暂不可售,"Not available for sale"
-无法创建游客购物车会话,"Unable to create guest cart session"
-正在加入购物车...,"Adding to cart..."
-加入购物车失败,"Add to cart failed"
-商品已加入购物车。,"The item has been added to the shopping cart."
-已加入,"Already joined"
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
 "共 %{1} 件商品","%{1} products"
 "0 件商品","0 件商品"
@@ -228,50 +307,57 @@ play,play
 查看购物车,"View cart"
 请至少选择一个商品,请至少选择一个商品
 已添加,已添加
+已加入购物车,已加入购物车
 全部加入购物车,全部加入购物车
+正在加入购物车...,"Adding to cart..."
+加入购物车失败,"Failed to add to cart"
 "Buy these items together","Buy these items together"
 当前商品,当前商品
 总价,总价
 精选好物，为你推荐,精选好物，为你推荐
 上一组,上一组
+加入购物车,"Add to Cart"
+已加入,"Added to cart"
+前往购物车,前往购物车
 查看详情,查看详情
 下一组,下一组
-商品类型,商品类型
-属性集,属性集
+商品信息暂不可用,"Product information is unavailable"
+商品类型,"Product type"
+属性集,"Attribute set"
 品牌,Brand
-型号,型号
-颜色,颜色
-尺码,尺码
-类型,类型
-存储容量,存储容量
-处理器,处理器
-电池容量,电池容量
-充电规格,充电规格
-网络制式,网络制式
-适用面积,适用面积
-滤芯类型,滤芯类型
-功率,功率
-噪音,噪音
-智能控制,智能控制
-连接方式,连接方式
-接口数量,接口数量
-"PD 供电","PD 供电"
-兼容设备,兼容设备
+型号,Model
+颜色,Color
+尺码,Size
+类型,Type
+存储容量,Storage
+处理器,Processor
+电池容量,"Battery capacity"
+充电规格,Charging
+网络制式,Network
+适用面积,"Coverage area"
+滤芯类型,"Filter type"
+功率,Power
+噪音,Noise
+智能控制,"Smart control"
+连接方式,Connectivity
+接口数量,Ports
+"PD 供电","PD power delivery"
+兼容设备,Compatibility
 DPI,DPI
-续航时间,续航时间
-吸力,吸力
-重量,重量
-容量,容量
-香型,香型
-材质,材质
-尺寸,尺寸
-"甲醛 CADR","甲醛 CADR"
-开锁方式,开锁方式
-配件,配件
-适用面料,适用面料
-保质期,保质期
-保养说明,保养说明
-质保(月),质保(月)
+续航时间,Runtime
+吸力,Suction
+重量,Weight
+容量,Volume
+香型,Scent
+材质,Material
+尺寸,Dimensions
+"甲醛 CADR","Formaldehyde CADR"
+开锁方式,"Unlock methods"
+配件,Accessories
+适用面料,"Fabric type"
+保质期,"Shelf life"
+保养说明,"Care instructions"
+质保(月),"Warranty (months)"
 系列,Series
 发动机,Engine
 排量,Displacement
@@ -282,22 +368,34 @@ DPI,DPI
 油箱容量,"Fuel tank capacity"
 整备质量,"Curb weight"
 轮胎,Tyres
+按项目确认库存,"Stock confirmed per project"
+"仅剩 %{1} 件","Only %{1} left in stock"
+有货,"In Stock"
+暂时缺货,"Currently unavailable"
 返回商品目录,"Back to products"
 商品图片,"Product images"
+选择图片,"Choose image"
 "查看商品图片 %{1}","View product image %{1}"
-已发布商品,已发布商品
-选择规格,选择规格
-请选择规格,请选择规格
-暂不可购买,暂不可购买
-查看此规格,查看此规格
-库存,Stock
-按项目确认,"Confirmed per project"
-销售状态,"Sales status"
-需询价,"Inquiry required"
-可购买,Available
-商品资料,商品资料
-技术数据,"Technical data"
-规格参数,Specifications
+"平均 %{1} 星","Average %{1} stars"
+"%{1} 条评价","%{1} ratings"
+查看买家评价,"See customer reviews"
+规格,Options
+请选择规格,"Select an option"
+暂不可购买,"Not available for this option"
+查看此规格,"View this option"
+购买选项,"Purchase options"
+供应商,Supplier
+免费极速配送,"FREE delivery"
+"预计 2–5 个工作日送达","Delivery in 2-5 business days"
+当前规格暂不可售,"This option is currently unavailable"
+数量,Quantity
+购买数量,Quantity
+购买操作,"Purchase actions"
+仅询价,"Quote only"
+立即结账,"Proceed to checkout"
+安全交易保障,"Secure transaction"
+关于该商品,"About this item"
+技术细节,"Technical details"
 "Customers also viewed","Customers also viewed"
 Website,Website
 切换,切换
@@ -333,8 +431,8 @@ Website,Website
 顶级分类,"Root categories"
 启用分类,"Enable category"
 删除,删除
-取消,取消
-保存,保存
+取消,Cancel
+保存,Save
 "Catalog workspace","Catalog workspace"
 "商品主体、销售规格、价格、Store 与发布诊断集中管理","商品主体、销售规格、价格、Store 与发布诊断集中管理"
 高级维护入口；日常运营请从「万能产品」进入,高级维护入口；日常运营请从「万能产品」进入
@@ -342,41 +440,165 @@ Website,Website
 可用产品类型,可用产品类型
 "活动 Store","活动 Store"
 新建商品草稿,新建商品草稿
+新建,新建
+基础信息,基础信息
+以下为商品基础资料（身份、交易、物流、内容、SEO、分类、媒体），不是属性集里的扩展属性。,以下为商品基础资料（身份、交易、物流、内容、SEO、分类、媒体），不是属性集里的扩展属性。
+身份资料,身份资料
 产品类型,产品类型
-名称,名称
-"首个 SKU / SKU 前缀","首个 SKU / SKU 前缀"
-"普通商品会自动创建默认 Offer；多规格商品用作矩阵 SKU 前缀。","普通商品会自动创建默认 Offer；多规格商品用作矩阵 SKU 前缀。"
-"规格轴 JSON","规格轴 JSON"
+请选择产品类型,请选择产品类型
+创建后状态,创建后状态
+草稿,草稿
+创建后立即发布上架,创建后立即发布上架
+商品名称,商品名称
+"SKU / SKU 前缀","SKU / SKU 前缀"
+"普通商品创建默认 Offer；多规格用作矩阵 SKU 前缀。","普通商品创建默认 Offer；多规格用作矩阵 SKU 前缀。"
+SPU,SPU
+先选供应商；品牌列表将按该供应商已关联品牌过滤。,先选供应商；品牌列表将按该供应商已关联品牌过滤。
+管理供应商,"Manage suppliers"
+从当前供应商关联的品牌中选择；可在「品牌管理」中维护挂钩。,从当前供应商关联的品牌中选择；可在「品牌管理」中维护挂钩。
+管理品牌,"Manage brands"
+选填：该商品在供应商侧的链接与供货信息。,"Optional: supplier-side product link and sourcing details."
+供应商产品地址,"Supplier product URL"
+供应商货号,"Supplier SKU"
+供货币种,"Supply currency"
+供货价,"Supply price"
+起订量,MOQ
+交期(天),"Lead time (days)"
+供货备注,"Sourcing notes"
+"条码 / EAN","条码 / EAN"
+前台可见性,前台可见性
+目录与搜索,目录与搜索
+仅目录,仅目录
+仅搜索,仅搜索
+不可见,不可见
+仅询价（不直接标价售卖）,仅询价（不直接标价售卖）
+交易与库存,交易与库存
+售价,售价
+成本,成本
+币种,币种
+初始库存,初始库存
+"售价写入默认 Offer；库存按已选 Store × Offer 写入现货量。","售价写入默认 Offer；库存按已选 Store × Offer 写入现货量。"
+物流尺寸,物流尺寸
+"重量 (kg)","重量 (kg)"
+"长 (cm)","长 (cm)"
+"宽 (cm)","宽 (cm)"
+"高 (cm)","高 (cm)"
+内容文案,内容文案
+短描述,短描述
+详情描述,详情描述
+"SEO / URL","SEO / URL"
+"前台 URL Handle","前台 URL Handle"
+"SEO 标题","SEO 标题"
+"SEO 描述","SEO 描述"
+"SEO 关键词","SEO 关键词"
+暂无分类时可在上方快速新建，或稍后在编辑页挂分类。,暂无分类时可在上方快速新建，或稍后在编辑页挂分类。
+"主图 / 图集","主图 / 图集"
+从媒体库添加,从媒体库添加
+第一张默认主图；可继续添加图集。,第一张默认主图；可继续添加图集。
+资源,资源
+角色,角色
+操作,operate
+暂无图片。可先创建草稿，稍后再补主图。,暂无图片。可先创建草稿，稍后再补主图。
+下一步,下一步
+选择属性集,"Select attribute set"
+创建草稿前选定属性集；编辑已有商品时不可更换。,创建草稿前选定属性集；编辑已有商品时不可更换。
+商品属性,商品属性
+"按属性组分栏填写；带 * 为必填。","按属性组分栏填写；带 * 为必填。"
+规格维度,规格维度
+"勾选将参与子 SKU 生成的规格值；按住 Ctrl / Cmd 可多选。","勾选将参与子 SKU 生成的规格值；按住 Ctrl / Cmd 可多选。"
+规格值预览图,规格值预览图
+图板类规格可为每个已选值上传样本图，生成子规格时将用于预览。,图板类规格可为每个已选值上传样本图，生成子规格时将用于预览。
+子规格预览,子规格预览
+发布,发布
 "发布到 Store","发布到 Store"
 "默认选中当前 Website 下全部活动 Store，可取消个别 Store。","默认选中当前 Website 下全部活动 Store，可取消个别 Store。"
 "当前 Website 没有活动 Store。","当前 Website 没有活动 Store。"
-创建草稿并继续编辑,创建草稿并继续编辑
+创建草稿并继续编辑,"Create draft and continue editing"
 商品目录,商品目录
-刷新,刷新
+管理,管理
+刷新,Refresh
 全部类型,全部类型
 全部状态,全部状态
 "全部 Store","全部 Store"
 筛选,筛选
-"类型 / 状态","类型 / 状态"
-"SKU / Offer","SKU / Offer"
-Store,Store
+ID,ID
+主图,Image
+总货号,总货号
+状态,Status
 更新时间,更新时间
-操作,operate
-没有符合条件的商品。可从左侧创建第一件商品。,没有符合条件的商品。可从左侧创建第一件商品。
-归属站,归属站
-未配置,未配置
-编辑,edit
+"选择商品主图 / 图集","选择商品主图 / 图集"
+选择规格预览图,选择规格预览图
 高级维护,高级维护
 "普通运营无需在这里单独创建 Offer 或维护 SKU 身份；请返回万能产品编辑器。","普通运营无需在这里单独创建 Offer 或维护 SKU 身份；请返回万能产品编辑器。"
 注册,注册
 "创建底层 Offer","创建底层 Offer"
 创建媒体,创建媒体
 暂无数据,"No data"
+未选择分类,未选择分类
+搜索分类名称或路径,搜索分类名称或路径
+未指定品牌,"No brand"
+未指定供应商,"No supplier"
+搜索品牌名称或编码,搜索品牌名称或编码
+搜索供应商名称或编码,搜索供应商名称或编码
+编辑,edit
+未配置,未配置
 未命名草稿,未命名草稿
-返回商品列表,"Return to product list"
+未选择属性集,未选择属性集
+创建并立即发布,"Create and publish now"
+关闭,Close
+"维护 Website 级品牌目录（名称、编码、Logo、状态）。创建商品时从启用品牌中选择。","Maintain the website brand catalog (name, code, logo, status). Pick an active brand when creating products."
+品牌名称,"Brand name"
+品牌编码,"Brand code"
+"URL 友好编码，Website 内唯一；用于筛选与导入对齐。","URL-safe code, unique per website; used for filters and imports."
+品牌主图,"Brand main image"
+选择主图,"Choose image"
+"选填。从媒体库选择品牌主图 / Logo。","Optional. Pick the brand main image / logo from the media library."
+关联供应商,"Linked suppliers"
+暂无启用供应商。请先在「供应商管理」中创建。,"No active suppliers yet. Create one in Supplier management first."
+多选：一个品牌可挂多个供应商（N:N）。已选显示为标签，可点叉移除。,多选：一个品牌可挂多个供应商（N:N）。已选显示为标签，可点叉移除。
+品牌简介,"Brand description"
+启用,Active
+停用,Disable
+取消编辑,"Cancel edit"
+品牌列表,"Brand list"
+暂无品牌，请先在左侧创建。,"No brands yet. Create one on the left."
+编码,编码
+选择品牌主图,"Choose brand main image"
+未关联供应商,未关联供应商
+编辑品牌,"Edit brand"
+新建品牌,"New brand"
+创建品牌,"Create brand"
+"维护 Website 级供应商目录（名称、编码、店铺地址、联系人、默认交期/MOQ）。创建商品时可选择供应商并填写供货报价。","Maintain the website supplier catalog (name, code, store URL, contacts, default lead time/MOQ). Pick a supplier when creating products and fill sourcing offers."
+供应商名称,"Supplier name"
+供应商编码,"Supplier code"
+店铺地址,"Store URL"
+"选填。供应商网店 / 店铺主页链接。","Optional. Supplier storefront URL."
+供应商图片,"Supplier image"
+选填。从媒体库选择供应商形象图。,"Optional. Pick a supplier image from the media library."
+关联品牌,"Linked brands"
+暂无启用品牌。请先在「品牌管理」中创建。,"No active brands yet. Create one in Brand management first."
+多选：一个供应商可挂多个品牌（N:N）。已选显示为标签，可点叉移除。,多选：一个供应商可挂多个品牌（N:N）。已选显示为标签，可点叉移除。
+联系人,Contact
+电话,Phone
+邮箱,Email
+默认币种,"Default currency"
+付款条款,"Payment terms"
+默认交期(天),"Default lead time (days)"
+默认起订量,"Default MOQ"
+备注,Notes
+供应商列表,"Supplier list"
+暂无供应商，请先在左侧创建。,"No suppliers yet. Create one on the left."
+图片,Image
+店铺,Store
+选择供应商图片,"Choose supplier image"
+未关联品牌,未关联品牌
+打开店铺,"Open store"
+编辑供应商,"Edit supplier"
+新建供应商,"New supplier"
+创建供应商,"Create supplier"
+商品编辑,"Product editing"
 "归属 Website","归属 Website"
 校验,校验
-发布,发布
 下架,下架
 归档,归档
 "全局 UUID","全局 UUID"
@@ -390,16 +612,12 @@ Store,Store
 销售规格,销售规格
 "可见 Store","可见 Store"
 媒体,媒体
-商品名称,商品名称
-语言,language
-币种,币种
+语言,Language
 商品属性值,商品属性值
 "EAV 管理属性定义；这里填写本商品的实际值和继承方式。","EAV 管理属性定义；这里填写本商品的实际值和继承方式。"
-切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。,切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。
 本站填写,本站填写
 明确清空,明确清空
 继承默认,继承默认
-启用,启用
 请选择,Select
 本站填写会保存当前值；清空和继承不会把零值误判为缺失。,本站填写会保存当前值；清空和继承不会把零值误判为缺失。
 "当前没有可用属性集。请先在 EAV 属性管理中启用属性定义，或使用下方高级数据维护迁移值。","当前没有可用属性集。请先在 EAV 属性管理中启用属性定义，或使用下方高级数据维护迁移值。"
@@ -412,15 +630,12 @@ Store,Store
 "新组合将按“前缀-规格值”生成人类可读 SKU，可在矩阵中逐条修改。","新组合将按“前缀-规格值”生成人类可读 SKU，可在矩阵中逐条修改。"
 添加规格轴,添加规格轴
 重新生成矩阵,重新生成矩阵
-移除,移除
 "当前变更不会停用已有 Offer。","当前变更不会停用已有 Offer。"
 "个 Offer 组合；显式零价有效，留空表示清除基础价。","个 Offer 组合；显式零价有效，留空表示清除基础价。"
 规格组合,规格组合
-状态,状态
 基础价（分）,基础价（分）
 "Offer 与基础价","Offer 与基础价"
 "SKU 和规格结构仅归属站可改；显式零价有效。","SKU 和规格结构仅归属站可改；显式零价有效。"
-组合,组合
 "Website 分类","Website 分类"
 "这里是本站目录事实。Store 默认继承，只在下面保存加入或排除差异。","这里是本站目录事实。Store 默认继承，只在下面保存加入或排除差异。"
 查找分类,查找分类
@@ -433,11 +648,7 @@ Store,Store
 没有可覆盖的分类。,没有可覆盖的分类。
 "Website 图片媒体","Website 图片媒体"
 "从受权限保护的媒体库选择 FileAsset。主图不是统一必填，由产品 Provider 决定。","从受权限保护的媒体库选择 FileAsset。主图不是统一必填，由产品 Provider 决定。"
-从媒体库添加,从媒体库添加
-资源,资源
-角色,角色
 图集,图集
-主图,主图
 "暂无 FileAsset 图片。可先保存没有图片的草稿。","暂无 FileAsset 图片。可先保存没有图片的草稿。"
 "检测到旧 path/blob 媒体。它们会继续兼容读取，但不会由本编辑器覆盖或重新写入；请逐步替换为 FileAsset。","检测到旧 path/blob 媒体。它们会继续兼容读取，但不会由本编辑器覆盖或重新写入；请逐步替换为 FileAsset。"
 "Store 图片差异","Store 图片差异"
@@ -447,7 +658,6 @@ Store,Store
 "先为 Website 添加图片并保存，再配置 Store 差异。","先为 Website 添加图片并保存，再配置 Store 差异。"
 选择商品图片,选择商品图片
 "只会接收媒体库返回的 FileAsset 身份，不保存文件路径。","只会接收媒体库返回的 FileAsset 身份，不保存文件路径。"
-关闭,关闭
 "Store 可见性","Store 可见性"
 "Website 保存目录事实；Store 默认继承并可显式覆盖。","Website 保存目录事实；Store 默认继承并可显式覆盖。"
 库存与配送,库存与配送
@@ -459,11 +669,13 @@ Store,Store
 可以继续编辑商品其他信息；库存不会被改写。,可以继续编辑商品其他信息；库存不会被改写。
 暂无可维护库存,暂无可维护库存
 "请先为商品选择活动 Store，并确保至少有一个启用的 Offer。","请先为商品选择活动 Store，并确保至少有一个启用的 Offer。"
+Store,Store
 "Offer / SKU","Offer / SKU"
 策略,策略
 现货数量,现货数量
 已预留,已预留
 可售数量,可售数量
+可购买,Available
 零库存允许发布，但前台购物车会拒绝购买；保存失败时商品与库存会一起回滚。,零库存允许发布，但前台购物车会拒绝购买；保存失败时商品与库存会一起回滚。
 该产品类型不跟踪库存,该产品类型不跟踪库存
 "虚拟、下载等类型由 Provider 决定履约方式，不会写入库存数量。","虚拟、下载等类型由 Provider 决定履约方式，不会写入库存数量。"
@@ -524,10 +736,18 @@ Store,Store
 "撤销 Website 复制授权","撤销 Website 复制授权"
 发起归属转让,发起归属转让
 未命名商品草稿,未命名商品草稿
+已发布,Published
+已下架,Disabled
+已归档,Archived
 归属站可编辑结构,归属站可编辑结构
 复制站仅编辑经营数据,复制站仅编辑经营数据
 可以发布,可以发布
 需要完善,需要完善
+管理属性结构,管理属性结构
+选择属性,选择属性
+自由属性,自由属性
+编辑中的商品不可更换属性集，仍可在当前集下添加属性组/属性，或使用自由属性。,编辑中的商品不可更换属性集，仍可在当前集下添加属性组/属性，或使用自由属性。
+切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。,切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。
 归属站可编辑,归属站可编辑
 复制站结构只读,复制站结构只读
 库存暂时不可用,库存暂时不可用
@@ -535,9 +755,16 @@ Store,Store
 商品级诊断,"Product-level diagnostics"
 当前为归属站,当前为归属站
 当前为复制站,当前为复制站
+属性结构,属性结构
+"批量分类调整完成：成功 %{1}，失败 %{2}","批量分类调整完成：成功 %{1}，失败 %{2}"
 "至少选择一个活动 Store 才能发布","至少选择一个活动 Store 才能发布"
 库存模块当前不可用，商品其他信息仍可编辑,库存模块当前不可用，商品其他信息仍可编辑
 库存读取失败，请稍后重试,库存读取失败，请稍后重试
+"URL 长度不能超过 512","URL length must not exceed 512"
+"字段长度不能超过 %{1}","Field length must not exceed %{1}"
+"店铺/产品地址须以 http:// 或 https:// 开头","Store/product URL must start with http:// or https://"
+"币种须为 3 位字母，如 CNY","Currency must be a 3-letter code, e.g. CNY"
+须为非负整数,"Must be a non-negative integer"
 请先登录后访问下载权益,请先登录后访问下载权益
 "未知 product shard 实体：%{1}","Unknown product shard entity: %{1}"
 "draft_id 已存在","draft_id already exists"
@@ -709,7 +936,7 @@ Store,Store
 "Product Search 投影目标身份无效","Product Search Projection target identity is invalid"
 "Product Search 投影目标类型无效：%{1}","Product Search Invalid projection target type: %{1}"
 "StoreProduct 投影事件必须且只能提供 store_id","StoreProduct projection events must and can only provide store_id"
-"StoreProduct 投影 store_id 必须为正整数","StoreProduct projection store_id must be a positive integer"
+"StoreProduct 投影 store_id 不能为负数：%{1}","StoreProduct 投影 store_id 不能为负数：%{1}"
 "Product Search 投影找不到 Website：%{1}","Product Search Projection cannot find Website:%{1}"
 "Product Search 投影 Store 不属于 Website：store_id=%{1} website_id=%{2}","Product Search Projection Store does not belong to Website: store_id=%{1} website_id=%{2}"
 普通实体商品,普通实体商品
@@ -742,6 +969,7 @@ Store,Store
 商品已有待确认的归属转让,商品已有待确认的归属转让
 "只能由目标 Website 确认待处理转让","只能由目标 Website 确认待处理转让"
 "仅归属 Website 可执行该操作","仅归属 Website 可执行该操作"
+"批量操作完成：成功 %{1}，失败 %{2}","批量操作完成：成功 %{1}，失败 %{2}"
 "Product Search 快照包含非法 product_id","Product Search snapshot contains illegal product_id"
 "Product Search 增量目标类型无效：%{1}","Product Search incremental target type is invalid: %{1}"
 "Product Search 事件水位超前：event=%{1} current=%{2}","Product Search event water level is advanced: event=%{1} current=%{2}"
@@ -779,11 +1007,11 @@ Store,Store
 "Offer 身份版本冲突，请刷新后重试","Offer 身份版本冲突，请刷新后重试"
 "Offer 本地版本冲突，请刷新后重试","Offer 本地版本冲突，请刷新后重试"
 "已归档 Offer 不能重新加入规格矩阵","已归档 Offer 不能重新加入规格矩阵"
-发布校验未通过,发布校验未通过
 归属站商品尚未发布，复制站不能发布,归属站商品尚未发布，复制站不能发布
 商品已发布,商品已发布
 "仅归属 Website 可修改 SKU","仅归属 Website 可修改 SKU"
 库存保存失败，商品修改已回滚,库存保存失败，商品修改已回滚
+发布校验未通过,发布校验未通过
 "商品类型 Provider 不可用：%{1}","商品类型 Provider 不可用：%{1}"
 "万能产品 V2 身份盘点、迁移、验证与可回滚切换（仅 full clone）","万能产品 V2 身份盘点、迁移、验证与可回滚切换（仅 full clone）"
 "只读统计旧 1:1 与 V2 身份、缺 Offer、冲突及切换状态","只读统计旧 1:1 与 V2 身份、缺 Offer、冲突及切换状态"
@@ -795,7 +1023,48 @@ Store,Store
 "必须与当前 env 配置一致的 mig_clone_* 数据库","必须与当前 env 配置一致的 mig_clone_* 数据库"
 "cutover/rollback 必填的切换状态版本","cutover/rollback 必填的切换状态版本"
 "rollback 目标：dual_read（默认）或 legacy","rollback 目标：dual_read（默认）或 legacy"
+返回商品列表,"Return to product list"
+从品牌目录选择；可在「品牌管理」中维护。,"Choose from the brand catalog. Manage brands separately."
+从供应商目录选择；可在「供应商管理」中维护。,"Choose from the supplier catalog. Manage suppliers separately."
+多选：一个品牌可挂多个供应商（N:N）。,"Multi-select: one brand can link to many suppliers (N:N)."
+多选：一个供应商可挂多个品牌（N:N）。,"Multi-select: one supplier can link to many brands (N:N)."
+"Logo URL","Logo URL"
+暂无可用分类。可先创建草稿，稍后在编辑页挂分类。,暂无可用分类。可先创建草稿，稍后在编辑页挂分类。
 """StoreProduct 写入后无法回读""","""StoreProduct cannot be read back after writing"""
+"首个 SKU / SKU 前缀","首个 SKU / SKU 前缀"
+"普通商品会自动创建默认 Offer；多规格商品用作矩阵 SKU 前缀。","普通商品会自动创建默认 Offer；多规格商品用作矩阵 SKU 前缀。"
+"默认币种 CNY；创建时写入默认 Offer 售价。","默认币种 CNY；创建时写入默认 Offer 售价。"
+"可读短链，如 hanfu-song-001。留空时前台可回退 SKU/名称规则。","可读短链，如 hanfu-song-001。留空时前台可回退 SKU/名称规则。"
+"至少可设一张主图；创建草稿时写入 FileAsset 媒体分片。","至少可设一张主图；创建草稿时写入 FileAsset 媒体分片。"
+「%{1}」库存不足,"%{1} is out of stock"
+"%{1}.store_id 不能为 0（Website 层）","%{1}.store_id cannot be 0 (Website layer)"
+"StoreProduct 投影 store_id 必须为正整数","StoreProduct projection store_id must be a positive integer"
+"选品前请先选择 Website（website_id 不能为 0）。","Select a Website before picking products (website_id cannot be 0)."
+另有,另有
+个组合未列出,个组合未列出
+属性集字段,"Attribute set fields"
+"按属性组分栏填写；带 * 为必填。多规格商品的规格维度可多选并自动生成子 SKU。","按属性组分栏填写；带 * 为必填。多规格商品的规格维度可多选并自动生成子 SKU。"
+暂不可售,"Currently unavailable"
+无法创建游客购物车会话,"Unable to create guest cart session"
+商品已加入购物车。,"Added to cart."
+"带 * 为必填，其余选填。","* Required; others optional."
+"规格轴 JSON","规格轴 JSON"
+请填写属性集中标记为必填的属性,"Please fill in required attributes from the selected set."
+"类型 / 状态","类型 / 状态"
+"SKU / Offer","SKU / Offer"
+没有符合条件的商品。可从左侧创建第一件商品。,没有符合条件的商品。可从左侧创建第一件商品。
+归属站,归属站
+全选,全选
+"选择商品 #%{1}","选择商品 #%{1}"
+已发布商品,已发布商品
+选择规格,选择规格
+库存,Stock
+按项目确认,"Confirmed per project"
+销售状态,"Sales status"
+需询价,"Inquiry required"
+商品资料,商品资料
+技术数据,"Technical data"
+规格参数,Specifications
 "商品分类后台 Resource 不支持操作：%{1}","商品分类后台 Resource 不支持操作：%{1}"
 商品分类后台,商品分类后台
 维护商品分类树、保存、删除与拖拽排序。,维护商品分类树、保存、删除与拖拽排序。
@@ -838,7 +1107,6 @@ Store,Store
 真实商品目录,"Real product catalog"
 "页面价格、库存与购物车均来自当前网站的持久化商品 Offer。","The page price, inventory, and shopping cart all come from the persistent product Offers of the current website."
 商品内核管理工作台,"Product core management workbench"
-网站,website
 切换网站,"Switch website"
 SKU,SKU
 请求哈希,"request hash"
@@ -861,7 +1129,6 @@ SKU,SKU
 "商品 ID：","Product ID:"
 "当前 SKU","Current SKU"
 "新 SKU","New SKU"
-商品编辑,"Product editing"
 简单商品,"simple goods"
 车型类别,"Model category"
 整车尺寸,Dimensions
@@ -910,3 +1177,32 @@ Available,Available
 建议前缀：%{1},"Suggested prefix: %{1}"
 "提示：子分类路径通常以 %{1} 开头","Tip: child paths usually start with %{1}"
 路径会随父级拖拽自动更新,"Path updates automatically when you drag to a new parent."
+多语言翻译,"Multilingual Translation"
+原文,"Source Text"
+译文,"Translated Text"
+AI翻译,"AI Translation"
+已填写,Filled
+待填写,Pending
+搜索语言、语言码或翻译,"Search language, language code, or translation"
+"已译 %{filled} / 共 %{total} 种语言","Translated %{filled} / %{total} languages"
+"已填写 %{filled} / %{total} 种语言","Filled %{filled} / %{total} languages"
+没有找到已启用的语言,"No enabled languages found"
+没有匹配的语言,"No matching languages"
+"AI 翻译完成","AI translation completed"
+已有翻译内容，是否重新翻译？,"Translations already exist. Retranslate?"
+重新翻译,Retranslate
+正在加载语言…,"Loading languages…"
+"一键 AI 翻译","One-click AI Translation"
+"一键 AI 批量翻译","One-click AI Batch Translation"
+请先保存后再翻译,"Please save before translating"
+准备开始…,"Getting ready…"
+翻译进行中,"Translation in progress"
+没有可翻译的字段，请先填写文案,"No translatable fields. Add copy first."
+"留空则按名称生成，如 zui-huan-lou","Leave blank to derive from name, e.g. zui-huan-lou"
+如：醉欢楼,"e.g. Zui Huan Lou"
+如：月结30天,"e.g. Net 30"
+如：杭州某某服饰,"e.g. Hangzhou Apparel Co."
+留空则按名称生成,"Leave blank to derive from name"
+商品身份摘要,"Product identity summary"
+显示品牌,"Show brand"
+显示供应商,"Show supplier"

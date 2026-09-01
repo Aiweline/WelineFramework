@@ -43,8 +43,10 @@ final class ProductShardKeyTest extends TestCase
             ProductShardKey::ENTITY_CODES,
         );
 
-        self::assertCount(9, $tables);
+        self::assertCount(11, $tables);
         self::assertSame('product_ws_7_product', $tables[0]);
+        self::assertContains('product_ws_7_category_display_selection', $tables);
+        self::assertContains('product_ws_7_brand', $tables);
         self::assertSame('product_ws_7_store_offer', $tables[array_key_last($tables)]);
     }
 

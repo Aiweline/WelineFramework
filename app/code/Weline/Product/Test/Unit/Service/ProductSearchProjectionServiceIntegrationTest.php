@@ -26,10 +26,14 @@ use Weline\Product\Model\ProductSearchProjectionStream;
 use Weline\Product\Model\ProductShardKey;
 use Weline\Product\Model\ProductShardRegistry;
 use Weline\Product\Model\Shard\AbstractWebsiteShardModel;
+use Weline\Product\Model\Shard\AttributeValue;
+use Weline\Product\Model\Shard\CategoryLink;
 use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Product;
 use Weline\Product\Model\Shard\StoreOffer;
 use Weline\Product\Model\Shard\StoreProduct;
+use Weline\Product\Repository\AttributeValueRepository;
+use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Repository\OfferRepository;
 use Weline\Product\Repository\ProductRepository;
 use Weline\Product\Repository\StoreOfferRepository;
@@ -131,6 +135,14 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
                 $offers,
                 $projectionMutations,
             );
+            $attributes = new AttributeValueRepository(
+                $provisioner,
+                modelFactory: $this->modelFactory($connection, AttributeValue::class),
+            );
+            $categoryLinks = new CategoryLinkRepository(
+                $provisioner,
+                $this->modelFactory($connection, CategoryLink::class),
+            );
             $stream = new ProductSearchProjectionStream();
             $stream->setConnection($connection);
             $stream->__init();
@@ -228,6 +240,8 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
                 $storeProducts,
                 $offers,
                 $storeOffers,
+                $attributes,
+                $categoryLinks,
                 $identities,
                 $stream,
                 $websites,

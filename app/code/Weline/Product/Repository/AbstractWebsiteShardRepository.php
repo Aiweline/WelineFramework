@@ -41,12 +41,8 @@ abstract class AbstractWebsiteShardRepository
 
     protected function assertStoreOverlayId(int $storeId, string $entity): void
     {
+        // store_id=0 is Store::ID_DEFAULT (system default store on website_id=0).
+        unset($entity);
         $this->assertStoreId($storeId);
-        if ($storeId === 0) {
-            throw new \InvalidArgumentException(__(
-                '%{1}.store_id 不能为 0（Website 层）',
-                [$entity],
-            ));
-        }
     }
 }

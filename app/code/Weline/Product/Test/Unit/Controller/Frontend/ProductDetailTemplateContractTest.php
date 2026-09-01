@@ -92,17 +92,21 @@ final class ProductDetailTemplateContractTest extends TestCase
         );
 
         self::assertStringContainsString('data-testid="storefront-product-detail"', $template);
-        self::assertStringContainsString("Weline.Api.resource('cart')", $template);
-        self::assertStringContainsString('issueGuestToken', $template);
-        self::assertStringContainsString('addV2', $template);
-        self::assertStringContainsString("\$this->getUrl('products')", $template);
-        self::assertStringContainsString('<strong>', $template);
+        self::assertStringContainsString('id="product-purchase-actions"', $template);
+        self::assertStringContainsString('product-purchase-actions', $template);
+        self::assertStringContainsString('@param show_brand', $template);
+        self::assertStringContainsString('@param show_supplier', $template);
+        self::assertStringContainsString('data-testid="product-brand"', $template);
+        self::assertStringContainsString('data-testid="product-supplier"', $template);
+        self::assertStringContainsString('@url{\'products\'}', $template);
         self::assertStringContainsString('@widget.code {product-info}', $template);
         self::assertStringContainsString('product-main', $template);
+        self::assertStringContainsString('data-variant-live-url', $template);
+        self::assertStringContainsString('refreshLiveAvailability', $template);
         self::assertStringNotContainsString('scope:', $template);
         self::assertStringNotContainsString('website_id:', $template);
         self::assertStringNotContainsString('store_code:', $template);
-        self::assertStringNotContainsString('fetch(', $template);
+        self::assertStringNotContainsString("Weline.Api.resource('cart')", $template);
         self::assertStringNotContainsString('axios', $template);
     }
 
@@ -122,11 +126,35 @@ final class ProductDetailTemplateContractTest extends TestCase
         self::assertStringContainsString('name="offer"', $template);
         self::assertStringContainsString('请选择规格', $template);
         self::assertStringContainsString("getParam('offer', '')", $controller);
-        self::assertStringContainsString("assign('storefront_offers', \$offers)", $controller);
+        self::assertStringContainsString('StorefrontVariantSelectionService', $controller);
+        self::assertStringContainsString("'variant_catalog'", $controller);
+        self::assertStringContainsString('data-variant-interactive="1"', $template);
+        self::assertStringContainsString('data-variant-option="1"', $template);
+        self::assertStringContainsString('is-out-of-stock', $template);
+        self::assertStringContainsString('isOptionSellable', $template);
+        self::assertStringContainsString('isOfferSellable', $template);
+        self::assertStringContainsString('resolveSelectionToInStock', $template);
+        self::assertStringContainsString('resolveSelectionGallery', $template);
+        self::assertStringContainsString('gallery_by_color', $template);
+        self::assertStringContainsString('resolveOptionGallery', $template);
+        self::assertStringContainsString('全局 EAV 选项图板仅表示', (string)file_get_contents(
+            BP . 'app/code/Weline/Product/Service/StorefrontVariantAxisResolver.php',
+        ));
+        self::assertStringContainsString('clearVariantOptionSwatchImages', (string)file_get_contents(
+            BP . 'app/code/Weline/Product/Service/ProductCatalogEavBootstrap.php',
+        ));
+        self::assertStringContainsString('data-variant-live-url', $template);
+        self::assertStringContainsString('refreshLiveAvailability', $template);
+        self::assertStringContainsString('mergeLiveOffers', $template);
         self::assertStringContainsString("\$displayOffer['global_offer_uuid'] = '';", $controller);
         self::assertStringContainsString('publishedOffersForProduct', $service);
         self::assertStringContainsString('publishedOffersBySlug', $service);
-        self::assertStringNotContainsString('fetch(', $template);
+        self::assertStringContainsString('livePublishedOffersForProduct', $service);
+        self::assertStringContainsString('attachPrimarySupplier', $service);
+        self::assertStringContainsString('supplier_name', $service);
+        self::assertStringContainsString('VariantAvailability', (string)file_get_contents(
+            BP . 'app/code/Weline/Product/Controller/Frontend/Api/VariantAvailability.php',
+        ));
         self::assertStringNotContainsString('axios', $template);
     }
 

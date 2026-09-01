@@ -39,6 +39,10 @@ final class ProductCategoryTemplateContractTest extends TestCase
         self::assertStringContainsString('data-testid="storefront-category-product-card-link"', $template);
         self::assertStringContainsString("\$this->getUrl('product/' . \$productId)", $template);
         self::assertStringContainsString('storefront_category_breadcrumbs', $template);
+        self::assertStringContainsString('partials/product/add-to-cart.phtml', $template);
+        self::assertStringContainsString('ProductCardAddToCartParams::fetchDictionaryFromOffer', $template);
+        self::assertStringContainsString('product-purchase-actions.js', $template);
+        self::assertStringNotContainsString("button.textContent = '", $template);
         self::assertStringNotContainsString('ObjectManager', $template);
     }
 

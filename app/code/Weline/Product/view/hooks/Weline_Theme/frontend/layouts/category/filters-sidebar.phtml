@@ -104,13 +104,25 @@ if ($tree === []) {
 $categoryUrl = trim((string)($category['url'] ?? ''));
 if ($categoryUrl === '') {
     $path = trim(str_replace('\\', '/', (string)($category['path'] ?? '')), '/');
-    $categoryUrl = $path !== '' ? '/category/' . $path : '/categories';
+    $categoryUrl = $path !== '' ? 'category/' . $path : 'categories';
+}
+try {
+    $categoryPath = ltrim(parse_url($categoryUrl, PHP_URL_PATH) ?: $categoryUrl, '/');
+$categoryUrl = '/' . ltrim($categoryPath, '/');
+} catch (\Throwable) {
+    if ($categoryUrl !== '' && $categoryUrl[0] !== '/' && !preg_match('#^https?://#i', $categoryUrl)) {
+        $categoryUrl = '/' . $categoryUrl;
+    }
 }
 
 $currentId = (int)($category['id'] ?? 0);
 $currentPath = strtolower(trim(str_replace('\\', '/', (string)($category['path'] ?? '')), '/'));
 $activePathIdSet = array_fill_keys($activePathIds, true);
-$rootDepartmentsUrl = '/categories';
+try {
+    $rootDepartmentsUrl = '/categories';
+} catch (\Throwable) {
+    $rootDepartmentsUrl = '/categories';
+}
 
 $activePrice = $listingFilter->normalizePriceBucket((string)$request->getParam('price', ''));
 $activeSort = $listingFilter->normalizeSort((string)$request->getParam('sort', ''));
@@ -185,7 +197,7 @@ $renderDeptNodes = static function (array $nodes, int $depth) use (
         <h3 class="amz-filter__heading"><?= __('部门') ?></h3>
         <ul class="amz-filter__dept" data-testid="storefront-category-dept-tree">
             <li>
-                <a class="amz-filter__dept-root" href="<?= $escape($rootDepartmentsUrl) ?>" data-testid="storefront-category-dept-root">
+                <a class="amz-filter__dept-root" href="@url{'categories'}" data-testid="storefront-category-dept-root">
                     <span aria-hidden="true">‹</span>
                     <?= __('全部类目') ?>
                 </a>

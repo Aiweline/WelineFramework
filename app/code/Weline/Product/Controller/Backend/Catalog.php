@@ -6,13 +6,16 @@ namespace Weline\Product\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Ui\FormKey;
+use Weline\Framework\App\State;
 use Weline\Product\Api\Data\ProductAdminCommand;
 use Weline\Product\Api\ProductAdminCommandInterface;
 use Weline\Product\Api\ProductAdminReadInterface;
 use Weline\Product\Service\ProductAdminMutationService;
 use Weline\Product\Service\ProductAdminViewService;
+use Weline\Product\Service\ProductBrandAdminService;
+use Weline\Product\Service\ProductCategoryAdminService;
 use Weline\Product\Service\ProductSiteContentAdminService;
+use Weline\Product\Service\ProductSupplierAdminService;
 
 final class Catalog extends BackendController
 {
@@ -21,6 +24,8 @@ final class Catalog extends BackendController
         'offers' => '销售规格（高级维护）',
         'sku-registry' => 'SKU 身份（高级维护）',
         'categories' => '商品分类',
+        'brands' => '品牌管理',
+        'suppliers' => '供应商管理',
         'media' => '商品媒体',
         'site-content' => '站点文案',
         'store-copy' => '网站迁移与复制',
@@ -32,6 +37,8 @@ final class Catalog extends BackendController
         'offers' => 'offers',
         'sku-registry' => 'skuRegistry',
         'categories' => 'categories',
+        'brands' => 'brands',
+        'suppliers' => 'suppliers',
         'media' => 'media',
         'site-content' => 'siteContent',
     ];
@@ -42,12 +49,19 @@ final class Catalog extends BackendController
         private readonly ProductAdminViewService $legacyView,
         private readonly ProductAdminMutationService $legacyMutations,
         private readonly ProductSiteContentAdminService $siteContent,
+        private readonly ProductCategoryAdminService $categoryAdmin,
+        private readonly ProductBrandAdminService $brandAdmin,
+        private readonly ProductSupplierAdminService $supplierAdmin,
     ) {
     }
 
+    /**
+     * Match <w:form csrf="auto"> which emits hidden input name="csrf" via Token::create().
+     * Returning form_key here made every Catalog POST without form_key hit noRouter(404).
+     */
     protected function csrf(): string
     {
-        return FormKey::key_name;
+        return 'csrf';
     }
 
     #[Acl('Weline_Product::commerce:catalog:products', '万能产品管理', 'box', '查看和运营万能产品目录')]
@@ -58,9 +72,13 @@ final class Catalog extends BackendController
         $error = '';
         $context = ['product_types' => [], 'stores' => [], 'default_store_ids' => []];
         $rows = [];
+        $categoryBulkOptions = [];
         try {
             $context = $this->productAdminRead->creationContext($websiteId);
             $rows = $this->productAdminRead->search($websiteId, $filters);
+            $categoryBulkOptions = $this->flattenCategoryTree(
+                $this->categoryAdmin->tree($websiteId, (string)State::getLangLocal()),
+            );
         } catch (\Throwable $exception) {
             $this->request->getResponse()->setCode(503);
             $error = (string)__('商品目录读取失败：%{1}', [$exception->getMessage()]);
@@ -70,6 +88,7 @@ final class Catalog extends BackendController
         $this->assign('filters', $filters);
         $this->assign('creation_context', $context);
         $this->assign('rows', $rows);
+        $this->assign('category_bulk_options', $categoryBulkOptions);
         $this->assign('columns', []);
         $this->assign('product_admin_state_json', $this->json([
             'provider' => 'product_admin',
@@ -119,6 +138,204 @@ final class Catalog extends BackendController
         }
 
         return (string)$this->redirect('weline_catalog/backend/category/index', $params);
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:brands', '品牌管理', 'tag', '管理商品品牌目录')]
+    public function brands(): string
+    {
+        $websiteId = max(0, (int)$this->request->getGet('website_id', 0));
+        $editingId = max(0, (int)$this->request->getGet('id', 0));
+        $error = '';
+        $rows = [];
+        $editing = [
+            'brand_id' => 0,
+            'code' => '',
+            'name' => '',
+            'logo_url' => '',
+            'logo_asset_id' => '',
+            'description' => '',
+            'status' => 'active',
+            'position' => 0,
+            'supplier_ids' => [],
+            'suppliers' => [],
+        ];
+        $supplierOptions = [];
+        try {
+            $rows = $this->brandAdmin->list($websiteId);
+            $supplierOptions = $this->supplierAdmin->catalogOptions($websiteId);
+            if ($editingId > 0) {
+                $editing = $this->brandAdmin->get($websiteId, $editingId);
+            }
+        } catch (\Throwable $exception) {
+            $this->request->getResponse()->setCode(503);
+            $error = (string)__('品牌目录读取失败：%{1}', [$exception->getMessage()]);
+        }
+
+        $this->assignCommon('brands', $websiteId, $error);
+        $this->assign('rows', $rows);
+        $this->assign('editing', $editing);
+        $this->assign('supplier_options', $supplierOptions);
+        $this->assign('columns', []);
+
+        return (string)$this->fetch('brands');
+    }
+
+    #[Acl(
+        'Weline_Product::commerce:catalog:brands:save',
+        '保存品牌',
+        'save',
+        '创建或更新商品品牌',
+        'Weline_Product::commerce:catalog:brands'
+    )]
+    public function postSaveBrand(): string
+    {
+        $websiteId = max(0, (int)$this->request->getPost('website_id', 0));
+        try {
+            $saved = $this->brandAdmin->save($websiteId, [
+                'brand_id' => (int)$this->request->getPost('brand_id', 0),
+                'name' => (string)$this->request->getPost('name', ''),
+                'code' => (string)$this->request->getPost('code', ''),
+                'logo_url' => (string)$this->request->getPost('logo_url', ''),
+                'logo_asset_id' => (string)$this->request->getPost('logo_asset_id', ''),
+                'description' => (string)$this->request->getPost('description', ''),
+                'status' => (string)$this->request->getPost('status', 'active'),
+                'position' => (int)$this->request->getPost('position', 0),
+                'supplier_ids' => $this->request->getPost('supplier_ids', []),
+            ]);
+            $this->getMessageManager()->addSuccess(__('品牌已保存：%{1}', [(string)$saved['name']]));
+        } catch (\Throwable $exception) {
+            $this->getMessageManager()->addError(__('保存品牌失败：%{1}', [$exception->getMessage()]));
+        }
+
+        return (string)$this->redirect('*/backend/catalog/brands?website_id=' . $websiteId);
+    }
+
+    #[Acl(
+        'Weline_Product::commerce:catalog:brands:disable',
+        '停用品牌',
+        'ban',
+        '停用商品品牌（软下架）',
+        'Weline_Product::commerce:catalog:brands'
+    )]
+    public function postDisableBrand(): string
+    {
+        $websiteId = max(0, (int)$this->request->getPost('website_id', 0));
+        $brandId = max(0, (int)$this->request->getPost('brand_id', 0));
+        try {
+            $this->brandAdmin->disable($websiteId, $brandId);
+            $this->getMessageManager()->addSuccess(__('品牌已停用'));
+        } catch (\Throwable $exception) {
+            $this->getMessageManager()->addError(__('停用品牌失败：%{1}', [$exception->getMessage()]));
+        }
+
+        return (string)$this->redirect('*/backend/catalog/brands?website_id=' . $websiteId);
+    }
+
+    #[Acl('Weline_Product::commerce:catalog:suppliers', '供应商管理', 'truck', '管理商品供应商目录')]
+    public function suppliers(): string
+    {
+        $websiteId = max(0, (int)$this->request->getGet('website_id', 0));
+        $editingId = max(0, (int)$this->request->getGet('id', 0));
+        $error = '';
+        $rows = [];
+        $editing = [
+            'supplier_id' => 0,
+            'code' => '',
+            'name' => '',
+            'store_url' => '',
+            'image_url' => '',
+            'image_asset_id' => '',
+            'contact_name' => '',
+            'contact_phone' => '',
+            'contact_email' => '',
+            'default_currency' => '',
+            'default_payment_terms' => '',
+            'default_lead_time_days' => null,
+            'default_moq' => null,
+            'description' => '',
+            'status' => 'active',
+            'position' => 0,
+            'brand_ids' => [],
+            'brands' => [],
+        ];
+        $brandOptions = [];
+        try {
+            $rows = $this->supplierAdmin->list($websiteId);
+            $brandOptions = $this->brandAdmin->catalogOptions($websiteId);
+            if ($editingId > 0) {
+                $editing = $this->supplierAdmin->get($websiteId, $editingId);
+            }
+        } catch (\Throwable $exception) {
+            $this->request->getResponse()->setCode(503);
+            $error = (string)__('供应商目录读取失败：%{1}', [$exception->getMessage()]);
+        }
+
+        $this->assignCommon('suppliers', $websiteId, $error);
+        $this->assign('rows', $rows);
+        $this->assign('editing', $editing);
+        $this->assign('brand_options', $brandOptions);
+        $this->assign('columns', []);
+
+        return (string)$this->fetch('suppliers');
+    }
+
+    #[Acl(
+        'Weline_Product::commerce:catalog:suppliers:save',
+        '保存供应商',
+        'save',
+        '创建或更新商品供应商',
+        'Weline_Product::commerce:catalog:suppliers'
+    )]
+    public function postSaveSupplier(): string
+    {
+        $websiteId = max(0, (int)$this->request->getPost('website_id', 0));
+        try {
+            $saved = $this->supplierAdmin->save($websiteId, [
+                'supplier_id' => (int)$this->request->getPost('supplier_id', 0),
+                'name' => (string)$this->request->getPost('name', ''),
+                'code' => (string)$this->request->getPost('code', ''),
+                'store_url' => (string)$this->request->getPost('store_url', ''),
+                'image_url' => (string)$this->request->getPost('image_url', ''),
+                'image_asset_id' => (string)$this->request->getPost('image_asset_id', ''),
+                'contact_name' => (string)$this->request->getPost('contact_name', ''),
+                'contact_phone' => (string)$this->request->getPost('contact_phone', ''),
+                'contact_email' => (string)$this->request->getPost('contact_email', ''),
+                'default_currency' => (string)$this->request->getPost('default_currency', ''),
+                'default_payment_terms' => (string)$this->request->getPost('default_payment_terms', ''),
+                'default_lead_time_days' => $this->request->getPost('default_lead_time_days', ''),
+                'default_moq' => $this->request->getPost('default_moq', ''),
+                'description' => (string)$this->request->getPost('description', ''),
+                'status' => (string)$this->request->getPost('status', 'active'),
+                'position' => (int)$this->request->getPost('position', 0),
+                'brand_ids' => $this->request->getPost('brand_ids', []),
+            ]);
+            $this->getMessageManager()->addSuccess(__('供应商已保存：%{1}', [(string)$saved['name']]));
+        } catch (\Throwable $exception) {
+            $this->getMessageManager()->addError(__('保存供应商失败：%{1}', [$exception->getMessage()]));
+        }
+
+        return (string)$this->redirect('*/backend/catalog/suppliers?website_id=' . $websiteId);
+    }
+
+    #[Acl(
+        'Weline_Product::commerce:catalog:suppliers:disable',
+        '停用供应商',
+        'ban',
+        '停用商品供应商（软下架）',
+        'Weline_Product::commerce:catalog:suppliers'
+    )]
+    public function postDisableSupplier(): string
+    {
+        $websiteId = max(0, (int)$this->request->getPost('website_id', 0));
+        $supplierId = max(0, (int)$this->request->getPost('supplier_id', 0));
+        try {
+            $this->supplierAdmin->disable($websiteId, $supplierId);
+            $this->getMessageManager()->addSuccess(__('供应商已停用'));
+        } catch (\Throwable $exception) {
+            $this->getMessageManager()->addError(__('停用供应商失败：%{1}', [$exception->getMessage()]));
+        }
+
+        return (string)$this->redirect('*/backend/catalog/suppliers?website_id=' . $websiteId);
     }
 
     #[Acl('Weline_Product::commerce:catalog:media', '商品媒体', 'image', '查看商品媒体')]
@@ -563,6 +780,35 @@ final class Catalog extends BackendController
             ]);
         }
         return $options;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $nodes
+     * @return list<array{category_id:int,name:string,path:string,depth:int}>
+     */
+    private function flattenCategoryTree(array $nodes, int $depth = 0): array
+    {
+        $flat = [];
+        foreach ($nodes as $node) {
+            if (!is_array($node)) {
+                continue;
+            }
+            $categoryId = (int)($node['category_id'] ?? 0);
+            if ($categoryId > 0) {
+                $flat[] = [
+                    'category_id' => $categoryId,
+                    'name' => (string)($node['name'] ?? $node['path'] ?? ('#' . $categoryId)),
+                    'path' => (string)($node['path'] ?? ''),
+                    'depth' => $depth,
+                ];
+            }
+            $children = is_array($node['nodes'] ?? null) ? $node['nodes'] : [];
+            if ($children !== []) {
+                array_push($flat, ...$this->flattenCategoryTree($children, $depth + 1));
+            }
+        }
+
+        return $flat;
     }
 
     private function json(mixed $value): string

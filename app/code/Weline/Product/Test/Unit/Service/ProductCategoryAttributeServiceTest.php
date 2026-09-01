@@ -26,5 +26,46 @@ final class ProductCategoryAttributeServiceTest extends TestCase
         self::assertStringContainsString("'code'", $source);
         self::assertStringContainsString('purgeEntity', $source);
         self::assertStringContainsString('copyExplicitAttributes', $source);
+        self::assertStringContainsString('pickLocalizedAttributeValue', $source);
+    }
+
+    public function testPickLocalizedAttributeValuePrefersCurrentLocaleOnly(): void
+    {
+        self::assertSame(
+            '小说',
+            ProductCategoryAttributeService::pickLocalizedAttributeValue(
+                ['en_US' => 'Fiction', 'zh_Hans_CN' => '小说'],
+                'zh_Hans_CN',
+            ),
+        );
+        self::assertSame(
+            'Fiction',
+            ProductCategoryAttributeService::pickLocalizedAttributeValue(
+                ['en_US' => 'Fiction', 'zh_Hans_CN' => '小说'],
+                'en_US',
+            ),
+        );
+    }
+
+    public function testPickLocalizedAttributeValueDoesNotFallbackToOtherLanguages(): void
+    {
+        self::assertSame(
+            '',
+            ProductCategoryAttributeService::pickLocalizedAttributeValue(
+                ['en_US' => 'Fiction'],
+                'zh_Hans_CN',
+            ),
+        );
+    }
+
+    public function testPickLocalizedAttributeValueUsesLanguageNeutralDefault(): void
+    {
+        self::assertSame(
+            '通用名称',
+            ProductCategoryAttributeService::pickLocalizedAttributeValue(
+                ['' => '通用名称', 'en_US' => 'Fiction'],
+                'zh_Hans_CN',
+            ),
+        );
     }
 }

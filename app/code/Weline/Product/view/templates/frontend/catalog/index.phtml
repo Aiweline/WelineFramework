@@ -1,5 +1,6 @@
 <?php
 
+use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 /**
  * Durable Product catalog cards. Cart mutation is performed by the browser
@@ -84,9 +85,11 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 $productSlug = trim((string)($offer['slug'] ?? ''));
                 $productUrl = '';
                 if ($productSlug !== '') {
-                    $productUrl = (string)$this->getUrl('product/' . $productSlug);
+                    $productPath = 'product/' . $productSlug;
+$productUrl = $productPath; // route path; render with @url
                 } elseif ($productId > 0) {
-                    $productUrl = (string)$this->getUrl('product/' . $productId);
+                    $productPath = 'product/' . $productId;
+$productUrl = $productPath; // route path; render with @url
                 }
                 ?>
                 <article class="product-storefront__card product-card<?= $productUrl !== '' ? ' is-clickable' : '' ?>"
@@ -95,7 +98,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                          data-global-offer-uuid="<?= $escape($uuid) ?>">
                     <?php if ($productUrl !== ''): ?>
                         <a class="product-storefront__card-hit"
-                           href="<?= $escape($productUrl) ?>"
+                           href="@url{$productUrl}"
                            aria-label="<?= $escape($productName) ?>"
                            data-testid="storefront-product-card-link"></a>
                     <?php endif; ?>
@@ -126,25 +129,17 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                                 <?= $escape($offer['currency'] ?? 'CNY') ?> <?= number_format($minor / 100, 2) ?>
                             <?php endif; ?>
                         </p>
-                        <button type="button"
-                                class="product-storefront__add"
-                                data-action="add-v2"
-                                data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
-                                data-product-id="<?= $productId ?>"
-                                data-global-offer-uuid="<?= $escape($uuid) ?>"
-                                <?= $sellable ? '' : 'disabled' ?>>
-                            <?= $quoteOnly ? __('仅询价') : ($sellable ? __('加入购物车') : __('暂不可售')) ?>
-                        </button>
-                        <?php if (!$quoteOnly && !$sellable && trim((string)($offer['message'] ?? '')) !== ''): ?>
-                            <small><?= $escape($offer['message']) ?></small>
-                        <?php endif; ?>
+                        <?= $this->fetch(
+                            'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
+                            ProductCardAddToCartParams::fetchDictionaryFromOffer($offer, ['variant' => 'storefront'])
+                        ) ?>
                     </div>
                 </article>
             <?php endforeach; ?>
         </div>
     <?php endif; ?>
 
-    <a class="product-storefront__cart" href="<?= $escape($this->getUrl('cart')) ?>" data-testid="view-cart" hidden>
+    <a class="product-storefront__cart" href="@url{'cart'}" data-testid="view-cart" hidden>
         <?= __('查看购物车') ?>
     </a>
 </section>
@@ -340,71 +335,3 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
         .product-storefront__grid { grid-template-columns:1fr; }
     }
 </style>
-
-<script>
-(function () {
-    'use strict';
-    const root = document.querySelector('[data-testid="storefront-product-catalog"]');
-    if (!root) return;
-    const message = root.querySelector('[data-testid="catalog-message"]');
-    const cartLink = root.querySelector('[data-testid="view-cart"]');
-    const guestTokenStorageKey = 'weline.cart.guest_token';
-    let cartApi = null;
-    let guestToken = <?= json_encode($cartGuestToken, JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
-    try {
-        guestToken = guestToken || String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
-    } catch (error) {
-        // Storage can be unavailable in privacy-restricted browser contexts.
-    }
-
-    async function api() {
-        if (cartApi) return cartApi;
-        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
-            throw new Error('Weline.Api unavailable');
-        }
-        cartApi = await window.Weline.Api.resource('cart');
-        return cartApi;
-    }
-
-    async function ensureGuestToken() {
-        if (guestToken) return guestToken;
-        const result = await (await api()).issueGuestToken({});
-        const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
-        guestToken = String((payload && payload.guest_token) || (result && result.guest_token) || '').trim();
-        if (!guestToken) throw new Error('<?= $escape(__('无法创建游客购物车会话')) ?>');
-        try {
-            window.sessionStorage.setItem(guestTokenStorageKey, guestToken);
-        } catch (error) {
-            // The current add request still owns the token even if storage is unavailable.
-        }
-        return guestToken;
-    }
-
-    root.addEventListener('click', async function (event) {
-        const button = event.target.closest('[data-action="add-v2"]');
-        if (!button || button.disabled) return;
-        button.disabled = true;
-        message.classList.remove('is-error');
-        message.textContent = '<?= $escape(__('正在加入购物车...')) ?>';
-        try {
-            const result = await (await api()).addV2({
-                provider_code: button.dataset.providerCode || 'product',
-                global_offer_uuid: button.dataset.globalOfferUuid || '',
-                legacy_product_id: Number(button.dataset.productId || 0),
-                guest_token: await ensureGuestToken(),
-                qty: 1
-            });
-            if (!result || result.success === false) {
-                throw new Error(result && result.message ? result.message : '<?= $escape(__('加入购物车失败')) ?>');
-            }
-            message.textContent = '<?= $escape(__('商品已加入购物车。')) ?>';
-            cartLink.hidden = false;
-            button.textContent = '<?= $escape(__('已加入')) ?>';
-        } catch (error) {
-            message.classList.add('is-error');
-            message.textContent = error && error.message ? error.message : '<?= $escape(__('加入购物车失败')) ?>';
-            button.disabled = false;
-        }
-    });
-})();
-</script>

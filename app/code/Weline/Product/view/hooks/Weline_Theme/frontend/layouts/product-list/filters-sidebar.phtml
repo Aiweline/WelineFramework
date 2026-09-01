@@ -39,7 +39,7 @@ $requestPath = strtolower(trim(str_replace('\\', '/', (string)(parse_url($reques
 if (preg_match('#(?:^|/)(categories|products|product-list)(?:/|$)#', $requestPath, $pathMatch) === 1) {
     $listingUrl = '/' . ($pathMatch[1] === 'product-list' ? 'products' : $pathMatch[1]);
 } else {
-    $listingUrl = trim((string)$this->getUrl('products'));
+    $listingUrl = '/products';
     if ($listingUrl === '') {
         $listingUrl = '/products';
     }
@@ -64,7 +64,11 @@ if ($activeSort !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
 }
 $clearUrl = $listingFilter->buildListingUrl($listingUrl, []);
 $hasActiveFilters = $activePrice !== '';
-$rootDepartmentsUrl = '/categories';
+try {
+    $rootDepartmentsUrl = '/categories';
+} catch (\Throwable) {
+    $rootDepartmentsUrl = '/categories';
+}
 ?>
 <aside class="amz-filter" data-product-list-filter-panel="1" data-hook-source="Weline_Product" data-testid="storefront-products-filter">
     <?php if ($hasActiveFilters): ?>
@@ -83,7 +87,7 @@ $rootDepartmentsUrl = '/categories';
             </li>
             <?php if ($roots === []): ?>
                 <li>
-                    <a class="amz-filter__dept-root" href="<?= $escape($rootDepartmentsUrl) ?>">
+                    <a class="amz-filter__dept-root" href="@url{'categories'}">
                         <?= __('浏览全部分类') ?>
                     </a>
                 </li>
@@ -99,7 +103,15 @@ $rootDepartmentsUrl = '/categories';
                         if ($path === '') {
                             continue;
                         }
-                        $rootUrl = '/category/' . $path;
+                        $rootUrl = 'category/' . $path;
+                    }
+                    try {
+                        $rootPath = ltrim(parse_url($rootUrl, PHP_URL_PATH) ?: $rootUrl, '/');
+$rootUrl = '/' . ltrim($rootPath, '/');
+                    } catch (\Throwable) {
+                        if ($rootUrl !== '' && $rootUrl[0] !== '/' && !preg_match('#^https?://#i', $rootUrl)) {
+                            $rootUrl = '/' . $rootUrl;
+                        }
                     }
                     ?>
                     <li>

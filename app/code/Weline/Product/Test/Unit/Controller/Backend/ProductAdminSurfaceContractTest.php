@@ -11,6 +11,7 @@ final class ProductAdminSurfaceContractTest extends TestCase
     /** @var array<string, array{code: string, action: string}> */
     private const FEATURES = [
         'products' => ['code' => 'products', 'action' => 'products'],
+        'brands' => ['code' => 'brands', 'action' => 'brands'],
         'offers' => ['code' => 'offers', 'action' => 'offers'],
         'skuRegistry' => ['code' => 'sku-registry', 'action' => 'skuregistry'],
         'media' => ['code' => 'media', 'action' => 'media'],
@@ -54,6 +55,8 @@ final class ProductAdminSurfaceContractTest extends TestCase
         $controller = $this->read('app/code/Weline/Product/Controller/Backend/Catalog.php');
         $index = $this->read('app/code/Weline/Product/view/templates/backend/catalog/index.phtml');
         $edit = $this->read('app/code/Weline/Product/view/templates/backend/catalog/edit.phtml');
+        $script = $this->read('app/code/Weline/Product/view/statics/js/backend/product-admin.js');
+        $commandService = $this->read('app/code/Weline/Product/Service/ProductAdminCommandService.php');
 
         self::assertStringContainsString('ProductAdminReadInterface', $controller);
         self::assertStringContainsString('ProductAdminCommandInterface', $controller);
@@ -68,21 +71,38 @@ final class ProductAdminSurfaceContractTest extends TestCase
             'product-create-form',
             'product-filter-form',
             'product-catalog-table',
-            'product-edit-button',
         ] as $testId) {
             self::assertStringContainsString('data-testid="' . $testId . '"', $index);
         }
+        self::assertStringContainsString('"testId":"product-edit-button"', $index);
         self::assertStringContainsString('w:websites:website:select', $index);
         self::assertStringContainsString('name="store_ids[]"', $index);
         self::assertStringContainsString('name="store_ids[]" value="<?= $escape($store[\'store_id\'] ?? \'\') ?>" checked', $index);
         self::assertStringContainsString('data-supports-variants', $index);
-        self::assertStringContainsString('product-create-axes', $index);
+        self::assertStringContainsString('product-create-variant-preview', $index);
+        self::assertStringContainsString('data-create-variant-axis', $script);
+        self::assertStringContainsString('collectCreateVariantAxes', $script);
         self::assertStringContainsString('product-admin-state', $index);
         self::assertStringContainsString('Weline_Product::js/backend/product-admin.js', $index);
         self::assertStringContainsString('Weline_Product::css/backend/product-admin.css', $index);
+        self::assertStringContainsString('class="w-product-admin"', $index);
+        self::assertStringNotContainsString('class="w-backend-page w-product-admin"', $index);
+        self::assertStringContainsString('w-stat-tiles', $index);
+        self::assertStringContainsString('w-card w-product-admin__hero', $index);
+        self::assertStringContainsString('w-product-list__scroll', $index);
+        self::assertStringContainsString('data-product-admin-grid', $index);
+        self::assertStringContainsString('data-product-create-panel', $index);
+        self::assertStringContainsString('data-testid="product-create-attribute-set"', $index);
+        self::assertStringContainsString('mode="select-set"', $index);
+        self::assertStringContainsString('mode="select-attribute"', $edit);
+        self::assertStringContainsString('refreshProductAttributeCatalog', $script);
+        self::assertStringContainsString('batchMoveAttributesToGroup', $script);
+        self::assertStringContainsString("'attributeCatalog'", $script);
+        self::assertStringContainsString('attribute_set', $commandService);
 
         foreach ([
             'product-edit-workbench',
+            'product-edit-breadcrumb',
             'product-edit-form',
             'product-edit-offers',
             'product-edit-media',
@@ -91,6 +111,9 @@ final class ProductAdminSurfaceContractTest extends TestCase
         ] as $testId) {
             self::assertStringContainsString('data-testid="' . $testId . '"', $edit);
         }
+        self::assertStringContainsString('class="w-breadcrumb"', $edit);
+        self::assertStringContainsString('w-product-editor__heading', $edit);
+        self::assertStringNotContainsString('w-product-editor__back', $edit);
         foreach ([
             'overview',
             'basic',
@@ -260,7 +283,7 @@ final class ProductAdminSurfaceContractTest extends TestCase
             "public const ACL_SOURCE = 'Weline_Product::commerce:catalog:products';",
             $provider,
         );
-        foreach (['search', 'creationContext', 'snapshot', 'command'] as $operation) {
+        foreach (['search', 'creationContext', 'snapshot', 'attributeCatalog', 'checkSlug', 'bulkCommand', 'bulkAssignCategories', 'command'] as $operation) {
             self::assertStringContainsString("'" . $operation . "'", $provider);
         }
 
@@ -506,6 +529,61 @@ final class ProductAdminSurfaceContractTest extends TestCase
         }
         self::assertStringNotContainsString('fetch' . '(', $script);
         self::assertStringNotContainsString('XMLHttpRequest', $script);
+    }
+
+    public function testCatalogListExposesBulkSelectionAndMediaColumns(): void
+    {
+        $index = $this->read('app/code/Weline/Product/view/templates/backend/catalog/index.phtml');
+        $script = $this->read('app/code/Weline/Product/view/statics/js/backend/product-admin.js');
+        $css = $this->read('app/code/Weline/Product/view/statics/css/backend/product-admin.css');
+        $hook = $this->read('app/code/Weline/Catalog/view/hooks/Weline_Product/backend/catalog/products/bulk-actions.phtml');
+        $hookScript = $this->read('app/code/Weline/Catalog/view/statics/js/backend/product-catalog-bulk-categories.js');
+
+        foreach ([
+            'data-product-bulk-bar',
+            'product-catalog-local-rows',
+            'product-catalog-category-options',
+            'w:d-table',
+            'mode="local"',
+            'local-data-el="#product-catalog-local-rows"',
+            'selectable="true"',
+            'sticky-actions="true"',
+            'show-actions="true"',
+            'Weline_Product::backend::catalog::products::bulk-actions',
+            'main_image',
+            'product_id',
+        ] as $marker) {
+            self::assertStringContainsString($marker, $index);
+        }
+        foreach ([
+            'initializeCatalogBulkSelection',
+            'initializeCatalogCreateFocusLayout',
+            'is-create-focused',
+            'weline.product.catalog.panel_mode',
+            'writeCatalogPanelMode',
+            'WelineProductAdminCatalog',
+            'w-datatable-product-catalog-list',
+            'weline:product:catalog:selection-change',
+            "call('bulkCommand'",
+        ] as $marker) {
+            self::assertStringContainsString($marker, $script);
+        }
+        foreach ([
+            'w-product-bulk-bar',
+            'w-datatable__viewport',
+            'is-create-focused',
+        ] as $marker) {
+            self::assertStringContainsString($marker, $css);
+        }
+        self::assertStringContainsString('data-catalog-bulk-categories', $hook);
+        self::assertStringContainsString('product-catalog-category-options', $index);
+        self::assertStringContainsString('bulkAssignCategories', $hookScript);
+        self::assertStringContainsString('weline:product:catalog:selection-change', $hookScript);
+        self::assertStringContainsString('currentLocale', $hookScript);
+        self::assertStringContainsString(
+            'State::getLangLocal()',
+            $this->read('app/code/Weline/Product/Controller/Backend/Catalog.php'),
+        );
     }
 
     private function read(string $path): string

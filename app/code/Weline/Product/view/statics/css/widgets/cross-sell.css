@@ -4,8 +4,9 @@
   --wpf-link: #007185;
   --wpf-border: #d5d9d9;
   --wpf-surface: #ffffff;
-  --wpf-cta: #ffd814;
-  --wpf-cta-hover: #f7ca00;
+  --wpf-cta: #ff8c00;
+  --wpf-cta-hover: #ff6b00;
+  --wpf-cta-glow: rgba(255, 107, 0, 0.42);
   --wpf-total: #b12704;
   --wpf-media: 7.25rem;
   margin: 1.25rem 0 0;
@@ -271,27 +272,152 @@
 }
 
 .weline-product-fbt .wpf-cta {
+  position: relative;
+  isolation: isolate;
   appearance: none;
-  border: 1px solid #d5a000;
+  overflow: visible;
+  border: 1px solid #e85d04;
   border-radius: 20px;
-  background: linear-gradient(180deg, #ffe55c 0%, var(--wpf-cta) 55%, #f0c14b 100%);
-  color: #0f1111;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 12' preserveAspectRatio='none'%3E%3Cpath d='M0 8 Q15 2 30 8 T60 8 T90 8 T120 8' fill='none' stroke='rgba(255,255,255,0.28)' stroke-width='1.5'/%3E%3Cpath d='M0 10 Q15 4 30 10 T60 10 T90 10 T120 10' fill='none' stroke='rgba(255,255,255,0.16)' stroke-width='1'/%3E%3C/svg%3E") center 78% / 100% 0.55rem no-repeat,
+    linear-gradient(180deg, #ffb347 0%, var(--wpf-cta) 48%, var(--wpf-cta-hover) 100%);
+  color: #fff;
   font-size: 0.84rem;
-  font-weight: 600;
+  font-weight: 700;
   line-height: 1.2;
-  padding: 0.5rem 0.9rem;
+  padding: 0.52rem 0.95rem;
   cursor: pointer;
   width: 100%;
+  box-shadow:
+    0 4px 14px var(--wpf-cta-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  animation: wpf-cta-wave-bounce 2.6s ease-in-out infinite;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+}
+
+.weline-product-fbt .wpf-cta__label {
+  position: relative;
+  z-index: 2;
+}
+
+.weline-product-fbt .wpf-cta__ripples {
+  position: absolute;
+  inset: -4px;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.weline-product-fbt .wpf-cta__ripple {
+  position: absolute;
+  inset: 0;
+  border: 2px solid rgba(255, 140, 0, 0.62);
+  border-radius: 22px;
+  opacity: 0;
+  animation: wpf-cta-ripple 2.6s cubic-bezier(0.22, 0.61, 0.36, 1) infinite;
+}
+
+.weline-product-fbt .wpf-cta__ripple:nth-child(2) {
+  animation-delay: 0.85s;
+}
+
+.weline-product-fbt .wpf-cta__ripple:nth-child(3) {
+  animation-delay: 1.7s;
+}
+
+.weline-product-fbt .wpf-cta__waves {
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: 0.18rem;
+  height: 0.35rem;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.55;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0,
+      transparent 6px,
+      rgba(255, 255, 255, 0.22) 6px,
+      rgba(255, 255, 255, 0.22) 7px
+    );
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 8'%3E%3Cpath d='M0 4 Q12.5 0 25 4 T50 4 T75 4 T100 4' fill='none' stroke='%23fff' stroke-width='2'/%3E%3C/svg%3E");
+  mask-size: 2.4rem 100%;
+  mask-repeat: repeat-x;
+  animation: wpf-cta-wave-lines 3.2s linear infinite;
 }
 
 .weline-product-fbt .wpf-cta:hover {
-  background: linear-gradient(180deg, #ffd814 0%, var(--wpf-cta-hover) 100%);
+  filter: brightness(1.04);
+  box-shadow:
+    0 6px 18px rgba(255, 107, 0, 0.48),
+    inset 0 1px 0 rgba(255, 255, 255, 0.4);
+}
+
+.weline-product-fbt .wpf-cta[data-state="loading"],
+.weline-product-fbt .wpf-cta[data-state="saved"],
+.weline-product-fbt .wpf-cta:disabled {
+  animation: none;
+  cursor: wait;
+}
+
+.weline-product-fbt .wpf-cta[data-state="loading"] .wpf-cta__ripples,
+.weline-product-fbt .wpf-cta[data-state="saved"] .wpf-cta__ripples {
+  opacity: 0;
 }
 
 .weline-product-fbt .wpf-cta[data-state="saved"] {
   border-color: #067d62;
-  background: #067d62;
+  background: linear-gradient(180deg, #12a87a 0%, #067d62 100%);
   color: #fff;
+  box-shadow: 0 4px 12px rgba(6, 125, 98, 0.35);
+}
+
+@keyframes wpf-cta-wave-bounce {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  18% {
+    transform: translateY(-6px) rotate(-0.6deg);
+  }
+  36% {
+    transform: translateY(0) rotate(0deg);
+  }
+  54% {
+    transform: translateY(-4px) rotate(0.5deg);
+  }
+  72% {
+    transform: translateY(-1px) rotate(0deg);
+  }
+}
+
+@keyframes wpf-cta-ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.72;
+  }
+  100% {
+    transform: scale(1.42);
+    opacity: 0;
+  }
+}
+
+@keyframes wpf-cta-wave-lines {
+  0% {
+    mask-position: 0 0;
+  }
+  100% {
+    mask-position: 2.4rem 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weline-product-fbt .wpf-cta,
+  .weline-product-fbt .wpf-cta__ripple,
+  .weline-product-fbt .wpf-cta__waves {
+    animation: none;
+  }
 }
 
 .weline-product-fbt .wpf-status {

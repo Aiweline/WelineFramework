@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Eav\Api\Metadata\CompareMode;
 use Weline\Eav\Model\EavAttribute;
 use Weline\Eav\Model\EavAttribute\Group;
 use Weline\Eav\Model\EavAttribute\Set;
@@ -34,20 +35,26 @@ final class ProductCategoryEavBootstrap
 
         $setId = $this->ensureSet($entityId, 'category_default', '分类默认');
         $groupId = $this->ensureGroup($entityId, $setId, 'general', '基本信息');
-        $typeId = $this->resolveVarcharTypeId();
+        $varcharTypeId = $this->resolveTypeId('input_string_255');
+        $summaryTypeId = $this->resolveTypeId('textarea_varchar');
+        $descriptionTypeId = $this->resolveTypeId('textarea_text');
         $attributeCount = 0;
         foreach ([
-            ['code' => 'name', 'name' => '名称', 'required' => true],
-            ['code' => 'code', 'name' => 'Code', 'required' => true],
+            ['code' => 'name', 'name' => '名称', 'type_id' => $varcharTypeId],
+            ['code' => 'code', 'name' => 'Code', 'type_id' => $varcharTypeId],
+            ['code' => 'google_taxonomy_id', 'name' => 'Google Taxonomy ID', 'type_id' => $varcharTypeId],
+            ['code' => 'image', 'name' => '分类图标', 'type_id' => $varcharTypeId],
+            ['code' => 'banner', 'name' => '分类 Banner', 'type_id' => $varcharTypeId],
+            ['code' => 'summary', 'name' => '摘要', 'type_id' => $summaryTypeId],
+            ['code' => 'description', 'name' => '描述', 'type_id' => $descriptionTypeId],
         ] as $attribute) {
             if ($this->ensureAttribute(
                 $entityId,
                 $setId,
                 $groupId,
-                $typeId,
+                (int)$attribute['type_id'],
                 $attribute['code'],
                 $attribute['name'],
-                $attribute['required'],
             )) {
                 ++$attributeCount;
             }
@@ -73,17 +80,17 @@ final class ProductCategoryEavBootstrap
         return (int)$entity->getId();
     }
 
-    private function resolveVarcharTypeId(): int
+    private function resolveTypeId(string $typeCode): int
     {
         /** @var Type $type */
         $type = ObjectManager::getInstance(Type::class);
         $type->clearData()
-            ->where(Type::schema_fields_code, 'input_string_255')
+            ->where(Type::schema_fields_code, $typeCode)
             ->find()
             ->fetch();
         $typeId = (int)$type->getId();
         if ($typeId <= 0) {
-            throw new \RuntimeException('EAV input_string_255 type is missing');
+            throw new \RuntimeException('EAV type is missing: ' . $typeCode);
         }
 
         return $typeId;
@@ -141,7 +148,6 @@ final class ProductCategoryEavBootstrap
         int $typeId,
         string $code,
         string $name,
-        bool $required,
     ): bool {
         /** @var EavAttribute $attribute */
         $attribute = ObjectManager::getInstance(EavAttribute::class);
@@ -161,8 +167,14 @@ final class ProductCategoryEavBootstrap
             EavAttribute::schema_fields_type_id => $typeId,
             EavAttribute::schema_fields_code => $code,
             EavAttribute::schema_fields_name => $name,
-            EavAttribute::schema_fields_is_required => $required ? 1 : 0,
-            EavAttribute::schema_fields_is_user_defined => 0,
+            EavAttribute::schema_fields_is_system => 1,
+            EavAttribute::schema_fields_basic_is_enable => 1,
+            EavAttribute::schema_fields_frontend_is_visible => 1,
+            EavAttribute::schema_fields_frontend_is_filterable => 0,
+            EavAttribute::schema_fields_frontend_is_searchable => 0,
+            EavAttribute::schema_fields_compare_mode => CompareMode::NONE,
+            EavAttribute::schema_fields_data_is_multiple => 0,
+            EavAttribute::schema_fields_data_has_option => 0,
         ])->fetch();
 
         return true;

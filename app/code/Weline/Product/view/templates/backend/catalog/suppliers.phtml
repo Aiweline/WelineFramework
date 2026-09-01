@@ -1,0 +1,421 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var string $title
+ * @var int $website_id
+ * @var string $error
+ * @var list<array<string,mixed>> $rows
+ * @var array<string,mixed> $editing
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    is_scalar($value) || $value === null ? (string)$value : '',
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8',
+);
+$editingId = max(0, (int)($editing['supplier_id'] ?? 0));
+$isEdit = $editingId > 0;
+$rows = is_array($rows ?? null) ? $rows : [];
+$brandOptions = is_array($brand_options ?? null) ? $brand_options : [];
+$selectedBrandIds = [];
+foreach ((array)($editing['brand_ids'] ?? []) as $bid) {
+    $bid = (int)$bid;
+    if ($bid > 0) {
+        $selectedBrandIds[$bid] = true;
+    }
+}
+$supplierBrandSelectOptions = [];
+foreach ($brandOptions as $option) {
+    if (!is_array($option)) {
+        continue;
+    }
+    $bid = (int)($option['brand_id'] ?? 0);
+    if ($bid <= 0) {
+        continue;
+    }
+    $supplierBrandSelectOptions[] = [
+        'value' => (string)$bid,
+        'label' => (string)($option['name'] ?? ('#' . $bid)),
+        'meta' => (string)($option['code'] ?? ''),
+        'image' => (string)($option['logo_url'] ?? ''),
+    ];
+}
+$supplierBrandSelectOptionsJson = json_encode(
+    $supplierBrandSelectOptions,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+) ?: '[]';
+$supplierBrandSelectValue = implode(',', array_map('strval', array_keys($selectedBrandIds)));
+$supplierBrandSelectEmpty = (string)__('未关联品牌');
+$supplierBrandSelectPlaceholder = (string)__('搜索品牌名称或编码');
+$imageUrl = trim((string)($editing['image_url'] ?? ''));
+$imageAssetId = trim((string)($editing['image_asset_id'] ?? ''));
+$supplierTableRows = [];
+$editLabel = (string)__('编辑');
+$disableLabel = (string)__('停用');
+$openStoreLabel = (string)__('打开店铺');
+$supplierWebsiteId = (int)$website_id;
+$displayableImageUrl = static function (string $url): string {
+    $url = trim($url);
+    if ($url === '') {
+        return '';
+    }
+    if (preg_match('#^(https?:|blob:|data:)#i', $url) === 1) {
+        return $url;
+    }
+    if (str_contains($url, '..') || str_contains($url, '\\') || str_contains($url, '://')) {
+        return '';
+    }
+    if (class_exists(\Weline\FileManager\Api\Image::class)) {
+        $resolved = \Weline\FileManager\Api\Image::pathToMediaUrl($url, 64, 64);
+
+        return is_string($resolved) && $resolved !== '' ? $resolved : $url;
+    }
+
+    return str_starts_with($url, '/') ? $url : '';
+};
+foreach ($rows as $row) {
+    if (!is_array($row)) {
+        continue;
+    }
+    $supplierId = (int)($row['supplier_id'] ?? 0);
+    $status = (string)($row['status'] ?? 'active');
+    $storeUrl = trim((string)($row['store_url'] ?? ''));
+    $contactName = trim((string)($row['contact_name'] ?? ''));
+    $name = (string)($row['name'] ?? '');
+    $linkedBrands = is_array($row['brands'] ?? null) ? $row['brands'] : [];
+    $brandNames = [];
+    foreach ($linkedBrands as $linked) {
+        if (!is_array($linked)) {
+            continue;
+        }
+        $brandName = trim((string)($linked['name'] ?? ''));
+        if ($brandName !== '') {
+            $brandNames[] = $brandName;
+        }
+    }
+    $supplierTableRows[] = [
+        'website_id' => $supplierWebsiteId,
+        'supplier_id' => $supplierId,
+        'supplier_id_label' => '#' . $supplierId,
+        'image_url' => $displayableImageUrl((string)($row['image_url'] ?? '')),
+        'name' => $contactName !== '' ? ($name . ' · ' . $contactName) : $name,
+        'code' => (string)($row['code'] ?? ''),
+        'brands_label' => $brandNames === [] ? '—' : implode('、', $brandNames),
+        'store_url' => $storeUrl,
+        'store_label' => $storeUrl !== '' ? $openStoreLabel : '—',
+        'status' => $status,
+        'status_label' => $status === 'active' ? (string)__('启用') : (string)__('停用'),
+        'position' => (int)($row['position'] ?? 0),
+        'can_disable' => $status === 'active',
+        'has_store' => $storeUrl !== '',
+    ];
+}
+?>
+<link rel="stylesheet" href="@static(Weline_Product::css/backend/catalog-entity-media.css)?v=20260901-entity-media">
+<div class="w-stack" data-gap="md" data-product-admin="suppliers" data-testid="product-supplier-admin"
+     data-product-entity-media-root>
+    <template>Weline_Component::message.phtml</template>
+
+    <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
+        <div>
+            <h2 class="w-card__title"><lang>供应商管理</lang></h2>
+            <p class="w-text" data-tone="muted" data-size="sm">
+                <lang>维护 Website 级供应商目录（名称、编码、店铺地址、联系人、默认交期/MOQ）。创建商品时可选择供应商并填写供货报价。</lang>
+            </p>
+        </div>
+        <div class="w-cluster" data-gap="sm" data-align="center">
+            <form method="get" id="product-supplier-website-filter-form" class="w-cluster" data-align="center" data-gap="sm">
+                <label class="w-visually-hidden" for="product-supplier-website-id"><lang>Website</lang></label>
+                <div class="w-product-admin__website-select" style="min-inline-size:12rem;">
+                    <w:websites:website:select
+                        id="product-supplier-website-id"
+                        name="website_id"
+                        value="productWebsiteSelectValue"
+                        display="productWebsiteSelectDisplay"
+                        options="websiteOptionsJson"
+                        placeholder="@lang(选择 Website)"
+                        on-change="var f=document.getElementById('product-supplier-website-filter-form');if(f){f.requestSubmit?f.requestSubmit():f.submit();}"
+                    />
+                </div>
+            </form>
+            <a class="w-button" data-variant="outline" data-size="sm"
+               href="@backend-url('*/backend/catalog/products')?website_id=<?= $escape($website_id) ?>">
+                <lang>返回商品</lang>
+            </a>
+        </div>
+    </div>
+
+    <?php if ($error !== ''): ?>
+        <div class="w-alert" data-tone="danger"><?= $escape($error) ?></div>
+    <?php endif; ?>
+
+    <div class="w-grid" data-gap="md">
+        <aside class="w-card" style="--w-span:4;">
+            <div class="w-card__body w-stack" data-gap="sm">
+                <h3 class="w-card__title"><?= $isEdit ? __('编辑供应商') : __('新建供应商') ?></h3>
+                <w:form method="post" action="@backend-url('*/backend/catalog/save-supplier')" csrf="auto"
+                        class="w-stack" data-gap="sm" data-testid="product-supplier-form">
+                    <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
+                    <input type="hidden" name="supplier_id" value="<?= $escape($editingId) ?>">
+                    <div class="w-field">
+                        <label class="w-field__label" for="product-supplier-name"><lang>供应商名称</lang></label>
+                        <input class="w-input" id="product-supplier-name" name="name" required maxlength="255"
+                               value="<?= $escape($editing['name'] ?? '') ?>" placeholder="@lang(如：杭州某某服饰)">
+                    </div>
+                    <div class="w-field">
+                        <label class="w-field__label" for="product-supplier-code"><lang>供应商编码</lang></label>
+                        <input class="w-input" id="product-supplier-code" name="code" maxlength="64"
+                               value="<?= $escape($editing['code'] ?? '') ?>"
+                               placeholder="@lang(留空则按名称生成)">
+                        <p class="w-field__help"><lang>URL 友好编码，Website 内唯一；用于筛选与导入对齐。</lang></p>
+                    </div>
+                    <div class="w-field">
+                        <label class="w-field__label" for="product-supplier-store-url"><lang>店铺地址</lang></label>
+                        <input class="w-input" id="product-supplier-store-url" name="store_url" maxlength="512"
+                               value="<?= $escape($editing['store_url'] ?? '') ?>"
+                               placeholder="https://…">
+                        <p class="w-field__help"><lang>选填。供应商网店 / 店铺主页链接。</lang></p>
+                    </div>
+                    <div class="w-field" data-testid="product-supplier-image">
+                        <span class="w-field__label"><lang>供应商图片</lang></span>
+                        <div class="w-product-entity-media" data-product-entity-media="product-supplier-image">
+                            <input type="hidden" name="image_url" value="<?= $escape($imageUrl) ?>"
+                                   data-product-entity-media-url>
+                            <input type="hidden" name="image_asset_id" value="<?= $escape($imageAssetId) ?>"
+                                   data-product-entity-media-asset>
+                            <div class="w-product-entity-media__preview" data-product-entity-media-preview<?= $imageUrl === '' ? ' hidden' : '' ?>>
+                                <img src="<?= $escape($imageUrl) ?>" alt=""
+                                     data-product-entity-media-img<?= $imageUrl === '' ? ' hidden' : '' ?>>
+                            </div>
+                            <div class="w-cluster" data-gap="sm">
+                                <button class="w-button" type="button" data-variant="outline" data-size="sm"
+                                        data-product-entity-media-pick>
+                                    <lang>选择图片</lang>
+                                </button>
+                                <button class="w-button" type="button" data-variant="ghost" data-size="sm" data-tone="danger"
+                                        data-product-entity-media-clear<?= $imageUrl === '' ? ' hidden' : '' ?>>
+                                    <lang>清除</lang>
+                                </button>
+                            </div>
+                        </div>
+                        <p class="w-field__help"><lang>选填。从媒体库选择供应商形象图。</lang></p>
+                    </div>
+                    <div class="w-field" data-testid="product-supplier-brands">
+                        <span class="w-field__label"><lang>关联品牌</lang></span>
+                        <?php if ($supplierBrandSelectOptions === []): ?>
+                            <p class="w-text" data-tone="muted" data-size="sm">
+                                <lang>暂无启用品牌。请先在「品牌管理」中创建。</lang>
+                                <a href="@backend-url('*/backend/catalog/brands')?website_id=<?= $escape($website_id) ?>" target="_blank" rel="noopener">
+                                    <lang>管理品牌</lang>
+                                </a>
+                            </p>
+                            <input type="hidden" name="brand_ids" value="">
+                        <?php else: ?>
+                            <w:product:catalog:select
+                                id="product-supplier-brands-select"
+                                name="brand_ids"
+                                entity="brand"
+                                multiple="true"
+                                value="supplierBrandSelectValue"
+                                options="supplierBrandSelectOptionsJson"
+                                empty-label="supplierBrandSelectEmpty"
+                                placeholder="supplierBrandSelectPlaceholder"
+                            />
+                            <p class="w-field__help"><lang>多选：一个供应商可挂多个品牌（N:N）。已选显示为标签，可点叉移除。</lang></p>
+                        <?php endif; ?>
+                    </div>
+                    <div class="w-field">
+                        <label class="w-field__label" for="product-supplier-contact-name"><lang>联系人</lang></label>
+                        <input class="w-input" id="product-supplier-contact-name" name="contact_name" maxlength="128"
+                               value="<?= $escape($editing['contact_name'] ?? '') ?>">
+                    </div>
+                    <div class="w-cluster" data-gap="sm">
+                        <div class="w-field" style="flex:1;">
+                            <label class="w-field__label" for="product-supplier-contact-phone"><lang>电话</lang></label>
+                            <input class="w-input" id="product-supplier-contact-phone" name="contact_phone" maxlength="64"
+                                   value="<?= $escape($editing['contact_phone'] ?? '') ?>">
+                        </div>
+                        <div class="w-field" style="flex:1;">
+                            <label class="w-field__label" for="product-supplier-contact-email"><lang>邮箱</lang></label>
+                            <input class="w-input" id="product-supplier-contact-email" name="contact_email" maxlength="255"
+                                   value="<?= $escape($editing['contact_email'] ?? '') ?>">
+                        </div>
+                    </div>
+                    <div class="w-cluster" data-gap="sm">
+                        <div class="w-field" style="flex:1;">
+                            <label class="w-field__label" for="product-supplier-default-currency"><lang>默认币种</lang></label>
+                            <input class="w-input" id="product-supplier-default-currency" name="default_currency" maxlength="8"
+                                   value="<?= $escape($editing['default_currency'] ?? '') ?>" placeholder="CNY">
+                        </div>
+                        <div class="w-field" style="flex:1;">
+                            <label class="w-field__label" for="product-supplier-payment-terms"><lang>付款条款</lang></label>
+                            <input class="w-input" id="product-supplier-payment-terms" name="default_payment_terms" maxlength="128"
+                                   value="<?= $escape($editing['default_payment_terms'] ?? '') ?>"
+                                   placeholder="@lang(如：月结30天)">
+                        </div>
+                    </div>
+                    <div class="w-cluster" data-gap="sm">
+                        <div class="w-field" style="flex:1;">
+                            <label class="w-field__label" for="product-supplier-default-lead"><lang>默认交期(天)</lang></label>
+                            <input class="w-input" id="product-supplier-default-lead" name="default_lead_time_days"
+                                   type="number" min="0" step="1"
+                                   value="<?= $escape($editing['default_lead_time_days'] ?? '') ?>">
+                        </div>
+                        <div class="w-field" style="flex:1;">
+                            <label class="w-field__label" for="product-supplier-default-moq"><lang>默认起订量</lang></label>
+                            <input class="w-input" id="product-supplier-default-moq" name="default_moq"
+                                   type="number" min="0" step="1"
+                                   value="<?= $escape($editing['default_moq'] ?? '') ?>">
+                        </div>
+                    </div>
+                    <div class="w-field">
+                        <label class="w-field__label" for="product-supplier-description"><lang>备注</lang></label>
+                        <textarea class="w-input" id="product-supplier-description" name="description"
+                                  rows="3" maxlength="4000"><?= $escape($editing['description'] ?? '') ?></textarea>
+                    </div>
+                    <div class="w-cluster" data-gap="sm">
+                        <div class="w-field" style="flex:1;">
+                            <label class="w-field__label" for="product-supplier-status"><lang>状态</lang></label>
+                            <select class="w-select" id="product-supplier-status" name="status">
+                                <option value="active" <?= (($editing['status'] ?? '') === 'disabled') ? '' : 'selected' ?>>
+                                    <lang>启用</lang>
+                                </option>
+                                <option value="disabled" <?= (($editing['status'] ?? '') === 'disabled') ? 'selected' : '' ?>>
+                                    <lang>停用</lang>
+                                </option>
+                            </select>
+                        </div>
+                        <div class="w-field" style="flex:1;">
+                            <label class="w-field__label" for="product-supplier-position"><lang>排序</lang></label>
+                            <input class="w-input" id="product-supplier-position" name="position" type="number"
+                                   min="0" step="1" value="<?= $escape((int)($editing['position'] ?? 0)) ?>">
+                        </div>
+                    </div>
+                    <div class="w-cluster" data-gap="sm" data-justify="end">
+                        <?php if ($isEdit): ?>
+                            <a class="w-button" data-variant="ghost" data-size="sm"
+                               href="@backend-url('*/backend/catalog/suppliers')?website_id=<?= $escape($website_id) ?>">
+                                <lang>取消编辑</lang>
+                            </a>
+                        <?php endif; ?>
+                        <button class="w-button" type="submit" data-tone="primary" data-size="sm">
+                            <?= $isEdit ? __('保存供应商') : __('创建供应商') ?>
+                        </button>
+                    </div>
+                </w:form>
+            </div>
+        </aside>
+
+        <section class="w-card" style="--w-span:8;">
+            <div class="w-card__body w-stack" data-gap="sm">
+                <h3 class="w-card__title"><lang>供应商列表</lang></h3>
+                <?php if ($supplierTableRows === []): ?>
+                    <p class="w-text" data-tone="muted" data-size="sm"><lang>暂无供应商，请先在左侧创建。</lang></p>
+                <?php endif; ?>
+                <div id="product-supplier-table-container">
+                    <script type="application/json"
+                            id="product-supplier-local-rows"
+                            data-no-extract="true"><?= json_encode(
+                                $supplierTableRows,
+                                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP,
+                            ) ?: '[]' ?></script>
+                    <w:d-table id="product-supplier-list"
+                               model="Weline\Product\Model\Shard\Supplier"
+                               scope="product-supplier-list"
+                               mode="local"
+                               local-data-el="#product-supplier-local-rows"
+                               select-field="supplier_id"
+                               show-actions="true"
+                               sticky-actions="true"
+                               row-actions='[{"type":"link","label":<?= json_encode($editLabel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,"hrefTemplate":"@url{'*/backend/catalog/suppliers'}?website_id=<?= (int)$supplierWebsiteId ?>&id={supplier_id}","testId":"product-supplier-edit-button","tone":"neutral","variant":"outline","size":"sm"},{"type":"event","action":"disable","label":<?= json_encode($disableLabel, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,"testId":"product-supplier-disable-button","tone":"danger","variant":"ghost","size":"sm"}]'
+                               editable="false"
+                               modal-edit="false"
+                               inline-edit="false"
+                               show-toolbar="false"
+                               show-config="false"
+                               show-pagination="true"
+                               page-size="20"
+                               searchable="false"
+                               sortable="true"
+                               data-testid="product-supplier-table">
+                        <w:t-header>
+                            <w:field belong="t-header" name="supplier_id_label" type="text" width="72"><lang>ID</lang></w:field>
+                            <w:field belong="t-header" name="image_url" type="image" width="72"><lang>图片</lang></w:field>
+                            <w:field belong="t-header" name="name" type="text" width="12rem" sortable="true"><lang>名称</lang></w:field>
+                            <w:field belong="t-header" name="code" type="text" width="10rem" sortable="true"><lang>编码</lang></w:field>
+                            <w:field belong="t-header" name="brands_label" type="text" width="12rem"><lang>品牌</lang></w:field>
+                            <w:field belong="t-header" name="store_label" type="text" width="7rem"><lang>店铺</lang></w:field>
+                            <w:field belong="t-header" name="status_label" type="text" width="6rem"><lang>状态</lang></w:field>
+                            <w:field belong="t-header" name="position" type="text" width="5rem" sortable="true"><lang>排序</lang></w:field>
+                        </w:t-header>
+                        <w:t-body></w:t-body>
+                    </w:d-table>
+                </div>
+                <w:form method="post"
+                        id="product-supplier-disable-form"
+                        action="@backend-url('*/backend/catalog/disable-supplier')"
+                        csrf="auto"
+                        hidden
+                        data-testid="product-supplier-disable-form">
+                    <input type="hidden" name="website_id" value="<?= $escape($website_id) ?>">
+                    <input type="hidden" name="supplier_id" value="" data-product-supplier-disable-id>
+                </w:form>
+            </div>
+        </section>
+    </div>
+
+    <dialog class="w-product-media-picker" data-w-component="dialog" data-product-entity-media-dialog
+            aria-labelledby="product-supplier-media-title">
+        <div class="w-product-media-picker__surface">
+            <header class="w-product-media-picker__header w-cluster" data-align="center" data-justify="between">
+                <div>
+                    <h2 id="product-supplier-media-title"><lang>选择供应商图片</lang></h2>
+                </div>
+                <button class="w-button" type="button" data-product-entity-media-close aria-label="@lang(关闭)">
+                    <w-icon name="x" size="sm"></w-icon>
+                </button>
+            </header>
+            <iframe class="w-product-media-picker__frame"
+                    title="@lang(媒体库)"
+                    data-product-entity-media-frame
+                    data-src="@backend-url('media/backend/manager/iframe')?target=product-supplier-image&multi=0&usage=1&ext=jpg,png,gif,webp"></iframe>
+        </div>
+    </dialog>
+</div>
+<script src="@static(Weline_Product::js/backend/catalog-entity-media.js)?v=20260901-entity-media"></script>
+<script>
+(function () {
+    'use strict';
+
+    var tableEl = document.getElementById('w-datatable-product-supplier-list')
+        || document.querySelector('#product-supplier-table-container [data-w-component="data-table"]');
+    if (!tableEl) {
+        return;
+    }
+
+    tableEl.addEventListener('weline:datatable:row-action', function (event) {
+        var detail = event.detail || {};
+        if (String(detail.action || '') !== 'disable') {
+            return;
+        }
+        var row = detail.row || {};
+        if (row.can_disable !== true && String(row.status || '') !== 'active') {
+            return;
+        }
+        var supplierId = String(row.supplier_id || '');
+        if (supplierId === '' || supplierId === '0') {
+            return;
+        }
+        var form = document.getElementById('product-supplier-disable-form');
+        var idInput = form ? form.querySelector('[data-product-supplier-disable-id], [name="supplier_id"]') : null;
+        if (!form || !idInput) {
+            return;
+        }
+        idInput.value = supplierId;
+        if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+        } else {
+            form.submit();
+        }
+    });
+})();
+</script>

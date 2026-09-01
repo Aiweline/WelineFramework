@@ -53,6 +53,131 @@ final class ProductCategoryAdminService
         return $walk(0);
     }
 
+    /**
+     * Find an existing sibling category by localized display name (EAV name attribute).
+     */
+    public function findSiblingIdByLocalizedName(
+        int $websiteId,
+        int $parentId,
+        string $name,
+        string $locale = self::DEFAULT_LOCALE,
+    ): int {
+        $name = trim($name);
+        if ($name === '') {
+            return 0;
+        }
+        $this->assertWebsite($websiteId);
+
+        $siblingIds = [];
+        foreach ($this->categories->listSiblings($websiteId, $parentId) as $row) {
+            $categoryId = (int)($row[Category::schema_fields_ID] ?? 0);
+            if ($categoryId > 0) {
+                $siblingIds[] = $categoryId;
+            }
+        }
+        if ($siblingIds === []) {
+            return 0;
+        }
+
+        foreach ([$locale, ''] as $candidateLocale) {
+            $names = $this->categoryAttributes->readNameMap($websiteId, $siblingIds, $candidateLocale);
+            foreach ($siblingIds as $categoryId) {
+                if (trim($names[$categoryId] ?? '') === $name) {
+                    return $categoryId;
+                }
+            }
+            if ($locale === '') {
+                break;
+            }
+        }
+
+        return 0;
+    }
+
+    /**
+     * Remove duplicate sibling categories that share the same localized name, keeping the richest subtree.
+     *
+     * @return list<int> removed category ids
+     */
+    public function dedupeSiblingsByLocalizedName(
+        int $websiteId,
+        int $parentId,
+        string $name,
+        string $locale = self::DEFAULT_LOCALE,
+    ): array {
+        $name = trim($name);
+        if ($name === '') {
+            return [];
+        }
+        $this->assertWebsite($websiteId);
+
+        $siblingIds = [];
+        foreach ($this->categories->listSiblings($websiteId, $parentId) as $row) {
+            $categoryId = (int)($row[Category::schema_fields_ID] ?? 0);
+            if ($categoryId > 0) {
+                $siblingIds[] = $categoryId;
+            }
+        }
+        if ($siblingIds === []) {
+            return [];
+        }
+
+        $matches = [];
+        foreach ([$locale, ''] as $candidateLocale) {
+            $names = $this->categoryAttributes->readNameMap($websiteId, $siblingIds, $candidateLocale);
+            foreach ($siblingIds as $categoryId) {
+                if (trim($names[$categoryId] ?? '') === $name) {
+                    $matches[] = $categoryId;
+                }
+            }
+            if ($matches !== []) {
+                break;
+            }
+        }
+        $matches = array_values(array_unique($matches));
+        if (count($matches) <= 1) {
+            return [];
+        }
+
+        usort(
+            $matches,
+            fn(int $left, int $right): int => $this->countDescendants($websiteId, $right)
+                <=> $this->countDescendants($websiteId, $left)
+                ?: $left <=> $right,
+        );
+        $keeperId = $matches[0];
+        $removed = [];
+        foreach (array_slice($matches, 1) as $duplicateId) {
+            foreach ($this->categories->listSiblings($websiteId, $duplicateId) as $childRow) {
+                $childId = (int)($childRow[Category::schema_fields_ID] ?? 0);
+                if ($childId <= 0) {
+                    continue;
+                }
+                $childName = trim((string)($this->categoryAttributes->readNameMap(
+                    $websiteId,
+                    [$childId],
+                    $locale,
+                )[$childId] ?? ''));
+                if ($childName === '') {
+                    $childName = $this->displayNameFromPath((string)($childRow[Category::schema_fields_PATH] ?? ''));
+                }
+                $this->save(
+                    $websiteId,
+                    $childId,
+                    $keeperId,
+                    $childName,
+                    (string)($childRow[Category::schema_fields_STATUS] ?? 'active'),
+                    $this->leafSlug((string)($childRow[Category::schema_fields_PATH] ?? '')),
+                    $locale,
+                );
+            }
+            $this->delete($websiteId, $duplicateId);
+            $removed[] = $duplicateId;
+        }
+
+        return $removed;
+    }
+
     /** @return array<string, mixed>|null */
     public function view(int $websiteId, int $categoryId, string $locale = self::DEFAULT_LOCALE): ?array
     {
@@ -79,6 +204,11 @@ final class ProductCategoryAdminService
         string $status,
         string $code = '',
         string $locale = self::DEFAULT_LOCALE,
+        ?string $googleTaxonomyId = null,
+        ?string $image = null,
+        ?string $banner = null,
+        ?string $summary = null,
+        ?string $description = null,
     ): array {
         $this->assertWebsite($websiteId);
         $name = trim($name);
@@ -123,12 +253,37 @@ final class ProductCategoryAdminService
 
         $this->categoryAttributes->writeName($websiteId, $categoryId, $name, $locale);
         $this->categoryAttributes->writeCode($websiteId, $categoryId, $slug, $locale);
+        if ($googleTaxonomyId !== null) {
+            $this->categoryAttributes->writeGoogleTaxonomyId(
+                $websiteId,
+                $categoryId,
+                trim($googleTaxonomyId),
+                $locale,
+            );
+        }
+        if ($image !== null) {
+            $this->categoryAttributes->writeImage($websiteId, $categoryId, $image, $locale);
+        }
+        if ($banner !== null) {
+            $this->categoryAttributes->writeBanner($websiteId, $categoryId, $banner, $locale);
+        }
+        if ($summary !== null) {
+            $this->categoryAttributes->writeSummary($websiteId, $categoryId, $summary, $locale);
+        }
+        if ($description !== null) {
+            $this->categoryAttributes->writeDescription($websiteId, $categoryId, $description, $locale);
+        }
         $this->invalidate($websiteId, $categoryId);
 
         return [
             'category_id' => $categoryId,
             'code' => $slug,
             'path' => $path,
+            'google_taxonomy_id' => $googleTaxonomyId !== null ? trim($googleTaxonomyId) : null,
+            'image' => $image !== null ? trim($image) : null,
+            'banner' => $banner !== null ? trim($banner) : null,
+            'summary' => $summary !== null ? trim($summary) : null,
+            'description' => $description !== null ? trim($description) : null,
         ];
     }
 
@@ -229,6 +384,11 @@ final class ProductCategoryAdminService
             $rows,
         )));
         $names = $this->categoryAttributes->readNameMap($websiteId, $ids, $locale);
+        $googleIds = $this->categoryAttributes->readGoogleTaxonomyIdMap($websiteId, $ids, $locale);
+        $images = $this->categoryAttributes->readImageMap($websiteId, $ids, $locale);
+        $banners = $this->categoryAttributes->readBannerMap($websiteId, $ids, $locale);
+        $summaries = $this->categoryAttributes->readSummaryMap($websiteId, $ids, $locale);
+        $descriptions = $this->categoryAttributes->readDescriptionMap($websiteId, $ids, $locale);
 
         $presented = [];
         foreach ($rows as $row) {
@@ -249,6 +409,11 @@ final class ProductCategoryAdminService
                 'status' => (string)($row[Category::schema_fields_STATUS] ?? 'active'),
                 'is_active' => strtolower((string)($row[Category::schema_fields_STATUS] ?? 'active')) !== 'inactive' ? 1 : 0,
                 'name' => $names[$categoryId] ?? $this->displayNameFromPath($path),
+                'google_taxonomy_id' => (string)($googleIds[$categoryId] ?? ''),
+                'image' => (string)($images[$categoryId] ?? ''),
+                'banner' => (string)($banners[$categoryId] ?? ''),
+                'summary' => (string)($summaries[$categoryId] ?? ''),
+                'description' => (string)($descriptions[$categoryId] ?? ''),
                 'level' => $this->depthFor($rows, $categoryId),
             ];
         }
@@ -432,6 +597,21 @@ final class ProductCategoryAdminService
         $path = trim(str_replace('\\', '/', $path), '/');
 
         return $path === '' ? '' : (string)array_slice(explode('/', $path), -1)[0];
+    }
+
+    private function countDescendants(int $websiteId, int $categoryId): int
+    {
+        if ($categoryId <= 0) {
+            return 0;
+        }
+        $count = 0;
+        foreach ($this->categories->listAll($websiteId) as $row) {
+            if (max(0, (int)($row[Category::schema_fields_PARENT_ID] ?? 0)) === $categoryId) {
+                $count++;
+            }
+        }
+
+        return $count;
     }
 
     private function displayNameFromPath(string $path): string

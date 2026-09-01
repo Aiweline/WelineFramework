@@ -25,4 +25,11 @@
                   shared="true"
                   sort="10"/>
     </event>
+    <event name="Weline_Inventory::stock_projection_changed">
+        <observer name="Weline_Product::inventory_stock_projection_changed"
+                  instance="Weline\Product\Observer\InventoryStockProjectionChangedObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"/>
+    </event>
 </config>

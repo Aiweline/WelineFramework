@@ -8,23 +8,42 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
  *
  * @widget.code {product-info}
  * @widget.name {产品主要信息}
- * @widget.description {商品详情主信息：图库、标题、SKU、价格、加购与规格详情}
+ * @widget.description {商品详情主信息：图库、标题、SKU、价格、购买操作槽与规格详情}
+ * @widget.is_container {true}
+ * @widget.slots {"product-purchase-actions":{"name":"购买操作","accepts":["product","cart","checkout"],"slot_type":"layout-product-purchase-actions","max":5}}
  * @widget.type {product}
  * @widget.area {frontend}
  * @widget.position {["content"]}
  * @widget.page_layouts {["product"]}
  * @widget.supports {["layout-product-main","product-info","product-gallery","product-detail"]}
- * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-main", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认在产品主内容槽展示产品主要信息", "config":{} }]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-main", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认在产品主内容槽展示产品主要信息", "config":{"show_brand":true,"show_supplier":true} }]}
+ *
+ * @param show_brand {default=true,type="bool",label="显示品牌"}
+ * @param show_supplier {default=true,type="bool",label="显示供应商"}
  */
 
-use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\Product\Service\StorefrontCatalogViewService;
+use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Product\Helper\StorefrontVariantContextResolver;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('product-info');
+$showBrand = filter_var($this->getData('show_brand') ?? true, FILTER_VALIDATE_BOOLEAN);
+$showSupplier = filter_var($this->getData('show_supplier') ?? true, FILTER_VALIDATE_BOOLEAN);
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
-    || (bool)($this->getData('editor_mode') ?? false);
+    || (bool)($this->getData('editor_mode') ?? false)
+    || (string)($this->getData('editor_mode') ?? '') === '1';
+try {
+    $request = $this->getRequest();
+    if ((string)$request->getParam('editor_mode', '') === '1'
+        || (string)$request->getParam('preview_mode', '') === 'live'
+        || (string)$request->getParam('interaction_mode', '') === 'edit'
+    ) {
+        $isPreviewMode = true;
+    }
+} catch (\Throwable) {
+    // Template may not expose Request in all render paths.
+}
 $escape = static fn(mixed $value): string => htmlspecialchars(
     (string)$value,
     ENT_QUOTES | ENT_SUBSTITUTE,
@@ -40,50 +59,7 @@ $storefrontOffers = is_array($storefrontOffers)
 $selectedOfferUuid = trim((string)($this->getData('selected_offer_uuid') ?? ''));
 
 if ($offer === []) {
-    $publicRoute = '';
-    try {
-        $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
-        $publicRoute = trim(str_replace('\\', '/', (string)$request->getParam('theme_public_route', '')), '/');
-    } catch (\Throwable) {
-        $publicRoute = '';
-    }
-    if ($publicRoute === '' && isset($_GET['theme_public_route'])) {
-        $publicRoute = trim(str_replace('\\', '/', (string)$_GET['theme_public_route']), '/');
-    }
-
-    $handle = '';
-    if (preg_match('#(?:^|/)product/([a-z0-9][a-z0-9-]*)(?:/|$)#i', strtolower($publicRoute), $routeMatch) === 1) {
-        $handle = strtolower((string)$routeMatch[1]);
-    }
-
-    if ($handle === '') {
-        $requestUri = (string)(WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-        $requestPath = (string)(parse_url($requestUri, PHP_URL_PATH) ?: '');
-        $pathParts = array_values(array_filter(
-            explode('/', trim($requestPath, '/')),
-            static fn(string $part): bool => $part !== '',
-        ));
-        $productPartIndex = array_search('product', $pathParts, true);
-        if ($productPartIndex !== false && isset($pathParts[$productPartIndex + 1])) {
-            $handle = strtolower(rawurldecode((string)$pathParts[$productPartIndex + 1]));
-        }
-    }
-
-    if ($handle !== '') {
-        try {
-            $catalog = ObjectManager::getInstance(StorefrontCatalogViewService::class);
-            if (ctype_digit($handle)) {
-                $resolved = $catalog->publishedOffer((int)$handle);
-            } else {
-                $resolved = $catalog->publishedOfferBySlug($handle);
-            }
-            if (is_array($resolved) && $resolved !== []) {
-                $offer = $resolved;
-            }
-        } catch (\Throwable) {
-            $offer = [];
-        }
-    }
+    $offer = StorefrontOfferResolver::resolve($this);
 }
 
 if ($offer === [] && $isPreviewMode) {
@@ -105,11 +81,41 @@ if ($offer === [] && $isPreviewMode) {
         'description' => '',
         'specifications' => [],
         'attribute_set_label' => 'Published Products',
+        'brand' => 'R43 Brand',
+        'supplier_name' => 'R43 Supplier',
     ];
 }
 
 if ($offer === []) {
+    // Never return a blank string: DEV WidgetHtmlHealthInspector treats empty HTML as a warning,
+    // and the product-main slot would collapse with no diagnostic surface.
+    ?>
+<section class="<?= $escape($scope->cssClass) ?> product-native-detail product-native-detail--unavailable"
+         data-testid="storefront-product-detail-unavailable"
+         data-widget-module="Weline_Product"
+         data-widget-code="product-info"
+         data-uid="<?= $escape($scope->uid) ?>"
+         weline-code="<?= $escape($scope->code) ?>">
+    <p class="product-native-detail__unavailable-message"><?= __('商品信息暂不可用') ?></p>
+</section>
+    <?php
     return;
+}
+
+/** @var StorefrontVariantContextResolver $variantContext */
+$variantContext = ObjectManager::getInstance(StorefrontVariantContextResolver::class);
+if ($storefrontOffers === []) {
+    $storefrontOffers = $variantContext->resolveOffers($this);
+}
+$variantCatalog = $this->getData('variant_catalog') ?? [];
+$variantCatalog = is_array($variantCatalog) ? $variantCatalog : [];
+if (count($storefrontOffers) > 1) {
+    $variantCatalog = $variantContext->buildCatalog($this, $storefrontOffers, null);
+    $selectedOffer = $variantCatalog['selected_offer'] ?? null;
+    if (is_array($selectedOffer) && $selectedOffer !== []) {
+        $offer = $selectedOffer;
+        $selectedOfferUuid = trim((string)($offer['global_offer_uuid'] ?? $selectedOfferUuid));
+    }
 }
 
 $minor = max(0, (int)($offer['unit_price_minor'] ?? 0));
@@ -204,33 +210,93 @@ $specificationLabels = [
     'tyres' => __('轮胎'),
 ];
 $attributeSetLabel = trim((string)($offer['attribute_set_label'] ?? ''));
+$variantAxes = array_values(array_filter(
+    (array)($offer['variant_axes'] ?? []),
+    static fn(mixed $axis): bool => is_array($axis)
+        && trim((string)($axis['code'] ?? '')) !== '',
+));
+$hasInteractiveVariants = count($storefrontOffers) > 1
+    && is_array($variantCatalog['axes'] ?? null)
+    && $variantCatalog['axes'] !== [];
+$interactiveVariantAxes = $hasInteractiveVariants
+    ? array_values((array)$variantCatalog['axes'])
+    : $variantAxes;
 $specificationLabel = static function (string $code) use ($specificationLabels): string {
     return (string)($specificationLabels[$code] ?? ucwords(str_replace('_', ' ', $code)));
 };
+$brandName = trim((string)($offer['brand'] ?? ''));
+if ($brandName === '') {
+    foreach ($specifications as $specification) {
+        if (strtolower(trim((string)($specification['code'] ?? ''))) === 'brand') {
+            $brandName = trim((string)($specification['value'] ?? ''));
+            break;
+        }
+    }
+}
+$supplierName = trim((string)($offer['supplier_name'] ?? ''));
+$summaryBullets = [];
+if ($shortDescription !== '') {
+    $parts = preg_split('/[。；;\n]\s*/u', $shortDescription, -1, PREG_SPLIT_NO_EMPTY);
+    $summaryBullets = array_values(array_filter(array_map(static fn(string $value): string => trim($value), $parts ?: [])));
+    if ($summaryBullets === []) {
+        $summaryBullets = [$shortDescription];
+    }
+}
+$currencyCode = strtoupper(trim((string)($offer['currency'] ?? 'CNY')));
+$currencySymbol = match ($currencyCode) {
+    'CNY', 'RMB' => '¥',
+    'USD' => '$',
+    'EUR' => '€',
+    'GBP' => '£',
+    'JPY' => '¥',
+    default => $currencyCode . ' ',
+};
+$priceWhole = (int) floor($minor / 100);
+$priceFraction = sprintf('%02d', $minor % 100);
+$stockLabel = $quoteOnly
+    ? __('按项目确认库存')
+    : ($stock > 0
+        ? ($stock <= 10 ? __('仅剩 %{1} 件', [$stock]) : __('有货'))
+        : __('暂时缺货'));
+$stockTone = !$quoteOnly && $stock > 0 && $sellable ? 'in-stock' : 'out-stock';
+$requiresShipping = !isset($offer['requires_shipping']) || !empty($offer['requires_shipping']);
+$showPrimeBadge = $sellable && $requiresShipping && !$quoteOnly;
+$maxQty = $quoteOnly ? 1 : max(1, min(10, $stock > 0 ? $stock : 10));
+$reviewRating = 0.0;
+$reviewCount = 0;
+if ($offerUuid !== '' && class_exists(\Weline\Review\Service\ReviewService::class)) {
+    try {
+        $reviewFacts = ObjectManager::getInstance(\Weline\Review\Service\ReviewService::class)
+            ->seoFacts('product', $offerUuid, 1);
+        $reviewRating = max(0.0, (float)($reviewFacts['average_rating'] ?? 0));
+        $reviewCount = max(0, (int)($reviewFacts['review_count'] ?? 0));
+    } catch (\Throwable) {
+        $reviewRating = 0.0;
+        $reviewCount = 0;
+    }
+}
+$qtyFieldId = 'product-qty-' . max(0, $productId);
 ?>
-<section class="product-native-detail<?= $isPreviewMode ? ' is-preview' : '' ?>"
+<section class="product-native-detail product-native-detail--amazon<?= $isPreviewMode ? ' is-preview' : '' ?>"
          data-testid="storefront-product-detail"
          data-widget-module="Weline_Product"
          data-widget-code="product-info"
          data-uid="<?= $escape($scope->uid) ?>"
          weline-code="<?= $escape($scope->code) ?>">
-    <a class="product-native-detail__back" href="<?= $escape($this->getUrl('products')) ?>">
+    <a class="product-native-detail__back" href="@url{'products'}">
         <span aria-hidden="true">←</span> <?= __('返回商品目录') ?>
     </a>
 
-    <div class="product-native-detail__grid">
-        <div class="product-native-detail__media">
-            <img class="product-native-detail__primary-image"
-                 src="<?= $escape($image) ?>"
-                 alt="<?= $escape($name) ?>"
-                 data-storefront-img="1"
-                 data-fallback="<?= $escape($imageFallback) ?>">
+    <div class="product-native-detail__hero-grid">
+        <div class="product-native-detail__gallery" aria-label="<?= $escape(__('商品图片')) ?>">
             <?php if (count($images) > 1): ?>
-                <div class="product-native-detail__thumbnails" aria-label="<?= $escape(__('商品图片')) ?>">
+                <div class="product-native-detail__thumbs" role="tablist" aria-label="<?= $escape(__('选择图片')) ?>">
                     <?php foreach ($images as $index => $galleryImage): ?>
                         <button type="button"
-                                class="product-native-detail__thumbnail<?= $index === 0 ? ' is-active' : '' ?>"
+                                role="tab"
+                                class="product-native-detail__thumb<?= $index === 0 ? ' is-active' : '' ?>"
                                 data-gallery-src="<?= $escape($galleryImage) ?>"
+                                aria-selected="<?= $index === 0 ? 'true' : 'false' ?>"
                                 aria-label="<?= $escape(__('查看商品图片 %{1}', [$index + 1])) ?>">
                             <img src="<?= $escape($galleryImage) ?>"
                                  alt=""
@@ -240,119 +306,318 @@ $specificationLabel = static function (string $code) use ($specificationLabels):
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
+            <div class="product-native-detail__stage">
+                <img class="product-native-detail__primary-image"
+                     src="<?= $escape($image) ?>"
+                     alt="<?= $escape($name) ?>"
+                     data-storefront-img="1"
+                     data-fallback="<?= $escape($imageFallback) ?>">
+            </div>
         </div>
 
-        <div class="product-native-detail__body">
-            <p class="product-native-detail__eyebrow">
-                <?= $attributeSetLabel !== '' ? $escape($attributeSetLabel) : __('已发布商品') ?>
-            </p>
-            <h1><?= $escape($name) ?></h1>
-            <p class="product-native-detail__sku">SKU: <?= $escape($offer['sku'] ?? '') ?></p>
-            <?php if ($shortDescription !== ''): ?>
-                <p class="product-native-detail__summary"><?= $escape($shortDescription) ?></p>
-            <?php endif; ?>
-            <p class="product-native-detail__price">
-                <?php if ($quoteOnly): ?>
-                    <?= __('联系询价') ?>
-                <?php else: ?>
-                    <?= $escape($offer['currency'] ?? 'CNY') ?> <?= number_format($minor / 100, 2) ?>
+        <div class="product-native-detail__buy-column">
+            <div class="product-native-detail__summary-panel">
+                <?php if ($showBrand && $brandName !== ''): ?>
+                    <p class="product-native-detail__brand" data-testid="product-brand">
+                        <?= __('品牌') ?>:
+                        <span><?= $escape($brandName) ?></span>
+                    </p>
+                <?php elseif ($showBrand && $attributeSetLabel !== ''): ?>
+                    <p class="product-native-detail__brand" data-testid="product-brand-fallback">
+                        <?= $escape($attributeSetLabel) ?>
+                    </p>
                 <?php endif; ?>
-            </p>
 
-            <?php if (count($storefrontOffers) > 1): ?>
-                <?php
-                $selectorProductId = max(0, (int)($offer['product_id'] ?? 0));
-                $selectorId = 'product-offer-selector-' . $selectorProductId;
-                $selectorSlug = strtolower(trim((string)($offer['slug'] ?? '')));
-                $selectorRoute = $selectorSlug !== ''
-                    ? 'product/' . $selectorSlug
-                    : 'product/' . $selectorProductId;
-                ?>
-                <form class="form-group mb-3"
-                      method="get"
-                      action="<?= $escape($this->getUrl($selectorRoute)) ?>"
-                      data-testid="product-offer-selector">
-                    <label class="form-label" for="<?= $escape($selectorId) ?>">
-                        <?= $escape(__('选择规格')) ?>
-                    </label>
-                    <select class="form-control"
-                            id="<?= $escape($selectorId) ?>"
-                            name="offer"
-                            required
-                            aria-required="true">
-                        <option value=""><?= $escape(__('请选择规格')) ?></option>
-                        <?php foreach ($storefrontOffers as $variant): ?>
-                            <?php
-                            $variantUuid = trim((string)($variant['global_offer_uuid'] ?? ''));
-                            $variantSku = trim((string)($variant['sku'] ?? ''));
-                            $variantLabel = trim((string)($variant['combination_key'] ?? ''));
-                            if ($variantLabel !== '') {
-                                $variantLabel = str_replace(['=', '|', ';'], [': ', ' / ', ' / '], $variantLabel);
-                            } else {
-                                $variantLabel = $variantSku;
-                            }
-                            if ($variantSku !== '' && $variantLabel !== $variantSku) {
-                                $variantLabel .= ' · ' . $variantSku;
-                            }
-                            if (!(bool)($variant['sellable'] ?? false)) {
-                                $variantLabel .= ' · ' . (string)__('暂不可购买');
-                            }
-                            ?>
-                            <option value="<?= $escape($variantUuid) ?>"
-                                <?= $variantUuid !== '' && $variantUuid === $selectedOfferUuid ? 'selected' : '' ?>>
-                                <?= $escape($variantLabel) ?>
-                            </option>
+                <h1 class="product-native-detail__title"><?= $escape($name) ?></h1>
+
+                <div class="product-native-detail__meta-row">
+                    <?php if ($reviewCount > 0 && $reviewRating > 0): ?>
+                        <a class="product-native-detail__rating-link" href="#product-reviews">
+                            <span class="product-native-detail__stars"
+                                  style="--rating: <?= $escape((string)$reviewRating) ?>"
+                                  aria-label="<?= $escape(__('平均 %{1} 星', [number_format($reviewRating, 1)])) ?>">
+                                <span class="product-native-detail__stars-track" aria-hidden="true">
+                                    <?php for ($starIndex = 0; $starIndex < 5; $starIndex++): ?>
+                                        <svg class="product-native-detail__star" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M10 1l2.39 5.64L18 7.27l-4.12 3.72L15 17 10 13.77 5 17l1.12-6L2 7.27l5.61-.63L10 1z"/>
+                                        </svg>
+                                    <?php endfor; ?>
+                                </span>
+                                <span class="product-native-detail__stars-fill" aria-hidden="true">
+                                    <?php for ($starIndex = 0; $starIndex < 5; $starIndex++): ?>
+                                        <svg class="product-native-detail__star" viewBox="0 0 20 20" fill="currentColor">
+                                            <path d="M10 1l2.39 5.64L18 7.27l-4.12 3.72L15 17 10 13.77 5 17l1.12-6L2 7.27l5.61-.63L10 1z"/>
+                                        </svg>
+                                    <?php endfor; ?>
+                                </span>
+                            </span>
+                            <span class="product-native-detail__rating-value"><?= $escape(number_format($reviewRating, 1)) ?></span>
+                            <span class="product-native-detail__rating-count">
+                                <?= $escape(__('%{1} 条评价', [$reviewCount])) ?>
+                            </span>
+                        </a>
+                    <?php else: ?>
+                        <a class="product-native-detail__reviews-link" href="#product-reviews">
+                            <?= __('查看买家评价') ?>
+                        </a>
+                    <?php endif; ?>
+                    <span class="product-native-detail__meta-divider" aria-hidden="true">|</span>
+                    <span class="product-native-detail__sku">SKU: <?= $escape($offer['sku'] ?? '') ?></span>
+                </div>
+
+                <hr class="product-native-detail__divider">
+
+                <?php if (!$quoteOnly): ?>
+                    <div class="product-native-detail__price-block">
+                        <span class="product-native-detail__price-label"><?= __('价格') ?>:</span>
+                        <span class="product-native-detail__price">
+                            <span class="product-native-detail__price-symbol"><?= $escape($currencySymbol) ?></span>
+                            <span class="product-native-detail__price-whole"><?= $priceWhole ?></span>
+                            <span class="product-native-detail__price-fraction">.<?= $priceFraction ?></span>
+                        </span>
+                    </div>
+                <?php else: ?>
+                    <p class="product-native-detail__quote-price"><?= __('联系询价') ?></p>
+                <?php endif; ?>
+
+                <?php if ($summaryBullets !== []): ?>
+                    <ul class="product-native-detail__bullets">
+                        <?php foreach ($summaryBullets as $bullet): ?>
+                            <li><?= $escape($bullet) ?></li>
                         <?php endforeach; ?>
-                    </select>
-                    <button class="btn btn-outline-primary mt-2" type="submit">
-                        <?= $escape(__('查看此规格')) ?>
-                    </button>
-                </form>
-            <?php endif; ?>
+                    </ul>
+                <?php endif; ?>
 
-            <dl class="product-native-detail__facts">
-                <div>
-                    <dt><?= __('库存') ?></dt>
-                    <strong><?= $quoteOnly ? __('按项目确认') : $stock ?></strong>
-                </div>
-                <div>
-                    <dt><?= __('销售状态') ?></dt>
-                    <strong><?= $quoteOnly ? __('需询价') : ($sellable ? __('可购买') : __('暂不可售')) ?></strong>
-                </div>
-            </dl>
+                <?php if ($interactiveVariantAxes !== []): ?>
+                    <div class="product-native-detail__variant-axes"
+                         data-testid="product-variant-axes"
+                         <?= $hasInteractiveVariants ? 'data-variant-interactive="1"' : '' ?>
+                         <?php if ($hasInteractiveVariants): ?>data-variant-live-url="@url{'weline_product/frontend/api/variant-availability'}"<?php endif; ?>>
+                        <?php foreach ($interactiveVariantAxes as $axis): ?>
+                            <?php
+                            $axisCode = strtolower(trim((string)($axis['code'] ?? '')));
+                            $rawAxisLabel = trim((string)($axis['label'] ?? ''));
+                            // 已知规格码优先走 specificationLabels（内含 __()）；否则对 EAV/种子原文 __()。
+                            // 避免 interactive catalog 回退 label=code（如 color）时英文仍显示小写 code。
+                            if (array_key_exists($axisCode, $specificationLabels)) {
+                                $axisLabel = $specificationLabel($axisCode);
+                            } elseif ($rawAxisLabel !== '') {
+                                $axisLabel = (string)__($rawAxisLabel);
+                            } else {
+                                $axisLabel = $specificationLabel($axisCode);
+                            }
+                            $selectedValue = trim((string)(
+                                $hasInteractiveVariants
+                                    ? ($variantCatalog['selected'][$axisCode] ?? ($axis['value'] ?? ''))
+                                    : ($axis['value'] ?? '')
+                            ));
+                            $options = array_values(array_filter(
+                                (array)($axis['options'] ?? []),
+                                static fn(mixed $option): bool => is_array($option)
+                                    && trim((string)($option['value'] ?? '')) !== '',
+                            ));
+                            ?>
+                            <div class="product-native-detail__variant-axis" data-variant-axis="<?= $escape($axisCode) ?>">
+                                <span class="product-native-detail__variant-axis-label"><?= $escape($axisLabel) ?>:</span>
+                                <?php if ($options !== []): ?>
+                                    <div class="product-native-detail__variant-axis-options" role="list">
+                                        <?php foreach ($options as $option): ?>
+                                            <?php
+                                            $optionValue = trim((string)($option['value'] ?? ''));
+                                            $optionLabel = trim((string)($option['label'] ?? $optionValue));
+                                            $swatchImage = trim((string)($option['swatch_image'] ?? ''));
+                                            $swatchColor = trim((string)($option['swatch_color'] ?? $option['swatch'] ?? ''));
+                                            $isSwatch = $swatchImage !== '' || $swatchColor !== '';
+                                            $isSelected = $optionValue !== '' && $optionValue === $selectedValue;
+                                            $optionClasses = 'product-native-detail__variant-option'
+                                                . ($isSelected ? ' is-selected' : '')
+                                                . ($isSwatch ? ' product-native-detail__variant-option--swatch' : '')
+                                                . ($swatchImage !== '' ? ' product-native-detail__variant-option--swatch-image' : '')
+                                                . ($swatchColor !== '' && $swatchImage === '' ? ' product-native-detail__variant-option--swatch-color' : '');
+                                            ?>
+                                            <?php if ($hasInteractiveVariants): ?>
+                                                <button type="button"
+                                                        class="<?= $escape($optionClasses) ?>"
+                                                        data-variant-option="1"
+                                                        data-variant-axis="<?= $escape($axisCode) ?>"
+                                                        data-variant-value="<?= $escape($optionValue) ?>"
+                                                        data-variant-label="<?= $escape($optionLabel) ?>"
+                                                        title="<?= $escape($optionLabel) ?>"
+                                                        aria-label="<?= $escape($optionLabel) ?>"
+                                                        aria-current="<?= $isSelected ? 'true' : 'false' ?>">
+                                                    <?php if ($swatchImage !== ''): ?>
+                                                        <img class="product-native-detail__variant-swatch-image"
+                                                             src="<?= $escape($swatchImage) ?>"
+                                                             alt="<?= $escape($optionLabel) ?>"
+                                                             loading="lazy">
+                                                        <span class="product-native-detail__variant-swatch-label"><?= $escape($optionLabel) ?></span>
+                                                    <?php elseif ($swatchColor !== ''): ?>
+                                                        <span class="product-native-detail__variant-swatch-color"
+                                                              style="--variant-swatch: <?= $escape($swatchColor) ?>"
+                                                              aria-hidden="true"></span>
+                                                        <span class="product-native-detail__variant-swatch-label"><?= $escape($optionLabel) ?></span>
+                                                    <?php else: ?>
+                                                        <?= $escape($optionLabel) ?>
+                                                    <?php endif; ?>
+                                                </button>
+                                            <?php else: ?>
+                                                <span class="product-native-detail__variant-option<?= $isSelected ? ' is-selected' : '' ?>"
+                                                      role="listitem"
+                                                      aria-current="<?= $isSelected ? 'true' : 'false' ?>">
+                                                    <?= $escape($optionLabel) ?>
+                                                </span>
+                                            <?php endif; ?>
+                                        <?php endforeach; ?>
+                                    </div>
+                                <?php elseif ($selectedValue !== ''): ?>
+                                    <span class="product-native-detail__variant-axis-value"><?= $escape($selectedValue) ?></span>
+                                <?php endif; ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
+                <?php endif; ?>
 
-            <?php if (!$quoteOnly && !$sellable && trim((string)($offer['message'] ?? '')) !== ''): ?>
-                <p class="product-native-detail__unavailable"><?= $escape($offer['message']) ?></p>
-            <?php endif; ?>
-
-            <div class="product-native-detail__actions">
-                <button type="button"
-                        class="product-native-detail__add"
-                        data-action="add-v2"
-                        data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
-                        data-product-id="<?= $productId ?>"
-                        data-global-offer-uuid="<?= $escape($offerUuid) ?>"
-                        <?= $sellable && $offerUuid !== '' ? '' : 'disabled' ?>>
-                    <?= $quoteOnly ? __('仅询价') : ($sellable ? __('加入购物车') : __('暂不可售')) ?>
-                </button>
-                <a class="product-native-detail__cart"
-                   href="<?= $escape($this->getUrl('cart')) ?>"
-                   data-testid="view-cart"
-                   hidden><?= __('查看购物车') ?></a>
+                <?php if (count($storefrontOffers) > 1 && !$hasInteractiveVariants): ?>
+                    <?php
+                    $selectorProductId = max(0, (int)($offer['product_id'] ?? 0));
+                    $selectorId = 'product-offer-selector-' . $selectorProductId;
+                    $selectorSlug = strtolower(trim((string)($offer['slug'] ?? '')));
+                    $selectorRoute = $selectorSlug !== ''
+                        ? 'product/' . $selectorSlug
+                        : 'product/' . $selectorProductId;
+                    ?>
+                    <form class="product-native-detail__variant-form"
+                          method="get"
+                          action="@url{$selectorRoute}"
+                          data-testid="product-offer-selector">
+                        <label class="product-native-detail__variant-label" for="<?= $escape($selectorId) ?>">
+                            <?= $escape(__('规格')) ?>:
+                        </label>
+                        <select class="product-native-detail__variant-select"
+                                id="<?= $escape($selectorId) ?>"
+                                name="offer"
+                                required
+                                aria-required="true">
+                            <option value=""><?= $escape(__('请选择规格')) ?></option>
+                            <?php foreach ($storefrontOffers as $variant): ?>
+                                <?php
+                                $variantUuid = trim((string)($variant['global_offer_uuid'] ?? ''));
+                                $variantSku = trim((string)($variant['sku'] ?? ''));
+                                $variantLabel = trim((string)($variant['combination_key'] ?? ''));
+                                if ($variantLabel !== '') {
+                                    $variantLabel = str_replace(['=', '|', ';'], [': ', ' / ', ' / '], $variantLabel);
+                                } else {
+                                    $variantLabel = $variantSku;
+                                }
+                                if ($variantSku !== '' && $variantLabel !== $variantSku) {
+                                    $variantLabel .= ' · ' . $variantSku;
+                                }
+                                if (!(bool)($variant['sellable'] ?? false)) {
+                                    $variantLabel .= ' · ' . (string)__('暂不可购买');
+                                }
+                                ?>
+                                <option value="<?= $escape($variantUuid) ?>"
+                                    <?= $variantUuid !== '' && $variantUuid === $selectedOfferUuid ? 'selected' : '' ?>>
+                                    <?= $escape($variantLabel) ?>
+                                </option>
+                            <?php endforeach; ?>
+                        </select>
+                        <button class="product-native-detail__variant-submit" type="submit">
+                            <?= $escape(__('查看此规格')) ?>
+                        </button>
+                    </form>
+                <?php endif; ?>
             </div>
-            <p class="product-native-detail__message" data-testid="detail-message" aria-live="polite"></p>
+
+            <aside class="product-native-detail__buybox" aria-label="<?= $escape(__('购买选项')) ?>">
+                <?php if (!$quoteOnly): ?>
+                    <div class="product-native-detail__buybox-price">
+                        <span class="product-native-detail__price-symbol"><?= $escape($currencySymbol) ?></span>
+                        <span class="product-native-detail__price-whole"><?= $priceWhole ?></span>
+                        <span class="product-native-detail__price-fraction">.<?= $priceFraction ?></span>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ($showSupplier && $supplierName !== ''): ?>
+                    <p class="product-native-detail__supplier" data-testid="product-supplier">
+                        <?= __('供应商') ?>:
+                        <span><?= $escape($supplierName) ?></span>
+                    </p>
+                <?php endif; ?>
+
+                <p class="product-native-detail__stock product-native-detail__stock--<?= $escape($stockTone) ?>">
+                    <?= $escape($stockLabel) ?>
+                </p>
+                <?php if ($showPrimeBadge): ?>
+                    <p class="product-native-detail__prime">
+                        <span class="product-native-detail__prime-badge">prime</span>
+                        <span><?= __('免费极速配送') ?></span>
+                    </p>
+                <?php endif; ?>
+                <p class="product-native-detail__delivery">
+                    <?= $sellable ? __('预计 2–5 个工作日送达') : __('当前规格暂不可售') ?>
+                </p>
+
+                <?php
+                    $offerMessage = trim((string)($offer['message'] ?? ''));
+                    $genericStockMessage = (string)__('商品库存不足');
+                    $showOfferMessage = !$quoteOnly && !$sellable
+                        && $offerMessage !== ''
+                        && $offerMessage !== $genericStockMessage;
+                ?>
+                <?php if ($showOfferMessage): ?>
+                    <p class="product-native-detail__unavailable"><?= $escape($offerMessage) ?></p>
+                <?php endif; ?>
+
+                <?php if (!$quoteOnly && $sellable): ?>
+                    <div class="product-native-detail__qty-row">
+                        <label class="product-native-detail__qty-label" for="<?= $escape($qtyFieldId) ?>">
+                            <?= __('数量') ?>:
+                        </label>
+                        <select id="<?= $escape($qtyFieldId) ?>"
+                                class="product-native-detail__qty-select"
+                                data-testid="product-qty"
+                                aria-label="<?= $escape(__('购买数量')) ?>">
+                            <?php for ($quantity = 1; $quantity <= $maxQty; $quantity++): ?>
+                                <option value="<?= $quantity ?>"><?= $quantity ?></option>
+                            <?php endfor; ?>
+                        </select>
+                    </div>
+                <?php endif; ?>
+
+                <w:slot id="product-purchase-actions"
+                        name="<?= $escape(__('购买操作')) ?>"
+                        accept="layout-product-purchase-actions,product-purchase-actions,product-add-to-cart,product-buy-now,add-to-cart"
+                        multiple="true"
+                        position="content"
+                        wrapper="div"
+                        class="product-native-detail__actions"
+                        weline-code="product.frontend.detail.purchase_actions">
+                    <?php if ($isPreviewMode): ?>
+                        <button type="button" class="product-native-detail__add" disabled>
+                            <?= $quoteOnly ? __('仅询价') : __('加入购物车') ?>
+                        </button>
+                        <?php if (!$quoteOnly): ?>
+                            <button type="button" class="product-native-detail__buy-now" disabled>
+                                <?= __('立即结账') ?>
+                            </button>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </w:slot>
+                <p class="product-native-detail__secure"><?= __('安全交易保障') ?></p>
+                <p class="product-native-detail__message" data-testid="detail-message" aria-live="polite"></p>
+            </aside>
         </div>
     </div>
 
     <?php if ($description !== '' || $specifications !== []): ?>
-        <div class="product-native-detail__content-grid">
+        <div class="product-native-detail__detail-sections">
             <?php if ($description !== ''): ?>
                 <section class="product-native-detail__description"
                          data-testid="product-description"
                          weline-code="product.frontend.detail.description">
-                    <p class="product-native-detail__section-kicker"><?= __('商品资料') ?></p>
-                    <h2><?= __('商品详情') ?></h2>
-                    <p><?= nl2br($escape($description), false) ?></p>
+                    <h2><?= __('关于该商品') ?></h2>
+                    <div class="product-native-detail__description-body"><?= nl2br($escape($description), false) ?></div>
                 </section>
             <?php endif; ?>
 
@@ -360,9 +625,9 @@ $specificationLabel = static function (string $code) use ($specificationLabels):
                 <section class="product-native-detail__specifications"
                          data-testid="product-specifications"
                          weline-code="product.frontend.detail.specifications">
-                    <p class="product-native-detail__section-kicker"><?= __('技术数据') ?></p>
-                    <h2><?= __('规格参数') ?></h2>
-                    <dl>
+                    <h2><?= __('技术细节') ?></h2>
+                    <table class="product-native-detail__spec-table">
+                        <tbody>
                         <?php foreach ($specifications as $specification): ?>
                             <?php
                             $code = strtolower(trim((string)$specification['code']));
@@ -371,12 +636,13 @@ $specificationLabel = static function (string $code) use ($specificationLabels):
                                 $value = ucwords(str_replace('_', ' ', $value));
                             }
                             ?>
-                            <div>
-                                <dt><?= $escape($specificationLabel($code)) ?></dt>
-                                <div class="product-native-detail__specification-value"><?= $escape($value) ?></div>
-                            </div>
+                            <tr>
+                                <th scope="row"><?= $escape($specificationLabel($code)) ?></th>
+                                <td><?= $escape($value) ?></td>
+                            </tr>
                         <?php endforeach; ?>
-                    </dl>
+                        </tbody>
+                    </table>
                 </section>
             <?php endif; ?>
         </div>
@@ -384,63 +650,554 @@ $specificationLabel = static function (string $code) use ($specificationLabels):
 
 </section>
 
+<?php if ($hasInteractiveVariants): ?>
+<script type="application/json" id="product-variant-catalog-<?= $productId ?>"><?=
+    json_encode($variantCatalog, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
+?></script>
+<?php endif; ?>
+
 <style>
-    .product-native-detail {
+    .product-native-detail--amazon {
+        --amz-text: #0f1111;
+        --amz-link: #007185;
+        --amz-price: #b12704;
+        --amz-border: #d5d9d9;
+        --amz-bg-soft: #f7fafa;
+        --amz-stock: #067d62;
+        --amz-btn-cart: #ffd814;
+        --amz-btn-cart-hover: #f7ca00;
+        --amz-btn-buy: #ffa41c;
+        --amz-btn-buy-hover: #fa8900;
         width: 100%;
         max-width: var(--weline-layout-content-max-width, var(--layout-max-width));
         margin-inline: auto;
         padding-inline: var(--weline-layout-content-padding-inline, var(--spacing-container-padding));
-        padding-block: var(--spacing-2xl, 3rem) var(--spacing-3xl, 4rem);
+        padding-block: var(--spacing-md, 1rem) var(--spacing-3xl, 4rem);
         box-sizing: border-box;
+        color: var(--amz-text);
+        font-size: 14px;
+        line-height: 1.5;
     }
-    .product-detail-layout__main-content .product-native-detail {
+    .product-detail-layout__main-content .product-native-detail--amazon {
         max-width: none;
         margin-inline: 0;
         padding-inline: 0;
     }
-    .product-native-detail__back { display:inline-flex; align-items:center; gap:8px; margin-bottom:24px; font-weight:800; }
-    .product-native-detail__grid { display:grid; grid-template-columns:minmax(0,1.15fr) minmax(320px,.85fr); border:1px solid #d1d5db; background:#fff; }
-    .product-native-detail__media { position:relative; display:grid; min-height:560px; place-items:center; overflow:hidden; background:#f3f4f6; color:#9ca3af; font-size:56px; font-weight:900; }
-    .product-native-detail__primary-image { width:100%; height:100%; max-height:680px; object-fit:contain; }
-    .product-native-detail__thumbnails { position:absolute; right:18px; bottom:18px; left:18px; display:flex; gap:10px; overflow:auto; }
-    .product-native-detail__thumbnail { width:72px; height:58px; flex:0 0 auto; padding:4px; border:2px solid transparent; background:#fff; cursor:pointer; }
-    .product-native-detail__thumbnail.is-active { border-color:#dc2626; }
-    .product-native-detail__thumbnail img { width:100%; height:100%; object-fit:contain; }
-    .product-native-detail__body { align-content:center; display:grid; gap:18px; padding:52px; }
-    .product-native-detail__body h1,.product-native-detail__body p { margin:0; }
-    .product-native-detail__eyebrow { color:#b91c1c; font-weight:800; text-transform:uppercase; }
-    .product-native-detail__body h1 { font-size:clamp(36px,5vw,68px); line-height:1; }
-    .product-native-detail__sku { color:#6b7280; }
-    .product-native-detail__summary { color:#4b5563; font-size:17px; line-height:1.7; }
-    .product-native-detail__price { font-size:32px; font-weight:900; }
-    .product-native-detail__facts { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); margin:8px 0 0; border-block:1px solid #d1d5db; }
-    .product-native-detail__facts div { padding:16px 0; }
-    .product-native-detail__facts dt { color:#6b7280; font-size:13px; font-weight:800; text-transform:uppercase; }
-    .product-native-detail__facts strong { display:block; margin:6px 0 0; font-size:20px; font-weight:800; }
-    .product-native-detail__actions { display:flex; flex-wrap:wrap; gap:12px; }
-    .product-native-detail__add,.product-native-detail__cart { display:inline-flex; min-height:50px; align-items:center; justify-content:center; padding:0 24px; border:0; background:#dc2626; color:#fff; font:inherit; font-weight:900; text-decoration:none; }
-    .product-native-detail__add:disabled { background:#9ca3af; cursor:not-allowed; }
-    .product-native-detail__cart[hidden] { display:none; }
-    .product-native-detail__message { min-height:26px; color:#166534; }
-    .product-native-detail__message.is-error { color:#991b1b; }
-    .product-native-detail__unavailable { color:#991b1b; }
-    .product-native-detail__content-grid { display:grid; grid-template-columns:minmax(0,.9fr) minmax(420px,1.1fr); gap:24px; margin-top:24px; }
-    .product-native-detail__description,.product-native-detail__specifications { padding:40px; border:1px solid #d1d5db; background:#fff; }
-    .product-native-detail__content-grid h2,.product-native-detail__content-grid p { margin:0; }
-    .product-native-detail__content-grid h2 { margin-top:8px; font-size:32px; }
-    .product-native-detail__description > p:last-child { margin-top:24px; color:#4b5563; line-height:1.8; }
-    .product-native-detail__section-kicker { color:#b91c1c; font-size:13px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; }
-    .product-native-detail__specifications dl { margin:24px 0 0; }
-    .product-native-detail__specifications dl div { display:grid; grid-template-columns:minmax(130px,.72fr) minmax(0,1.28fr); gap:20px; padding:14px 0; border-top:1px solid #e5e7eb; }
-    .product-native-detail__specifications dt { color:#6b7280; font-weight:800; }
-    .product-native-detail__specification-value { margin:0; font-weight:700; }
-    @media (max-width: 840px) {
-        .product-native-detail__grid { grid-template-columns:1fr; }
-        .product-native-detail__media { min-height:340px; }
-        .product-native-detail__body { padding:32px 24px; }
-        .product-native-detail__content-grid { grid-template-columns:1fr; }
-        .product-native-detail__description,.product-native-detail__specifications { padding:28px 24px; }
-        .product-native-detail__specifications dl div { grid-template-columns:1fr; gap:6px; }
+    .product-native-detail__back {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        margin-bottom: 12px;
+        color: var(--amz-link);
+        font-size: 13px;
+        font-weight: 400;
+        text-decoration: none;
+    }
+    .product-native-detail__back:hover { color: #c7511f; text-decoration: underline; }
+    .product-native-detail__hero-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 42%) minmax(320px, 1fr);
+        gap: 24px 32px;
+        align-items: start;
+    }
+    .product-native-detail__gallery {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+    }
+    .product-native-detail__thumbs {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        flex: 0 0 52px;
+    }
+    .product-native-detail__thumb {
+        width: 52px;
+        height: 52px;
+        padding: 4px;
+        border: 1px solid var(--amz-border);
+        border-radius: 8px;
+        background: #fff;
+        cursor: pointer;
+        transition: border-color .15s ease, box-shadow .15s ease;
+    }
+    .product-native-detail__thumb:hover,
+    .product-native-detail__thumb.is-active {
+        border-color: #007185;
+        box-shadow: 0 0 0 1px #007185 inset;
+    }
+    .product-native-detail__thumb img { width: 100%; height: 100%; object-fit: contain; }
+    .product-native-detail__stage {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        border: 1px solid var(--amz-border);
+        border-radius: 8px;
+        background: #fff;
+        line-height: 0;
+    }
+    .product-native-detail__primary-image {
+        display: block;
+        width: 100%;
+        height: auto;
+    }
+    .product-native-detail__buy-column {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+        gap: 20px 24px;
+        align-items: start;
+    }
+    .product-native-detail__summary-panel > * { margin: 0; }
+    .product-native-detail__brand {
+        margin-bottom: 4px;
+        color: var(--amz-link);
+        font-size: 14px;
+    }
+    .product-native-detail__brand span { color: var(--amz-link); }
+    .product-native-detail__supplier {
+        margin-bottom: 8px;
+        color: #565959;
+        font-size: 13px;
+    }
+    .product-native-detail__supplier span { color: var(--amz-text); }
+    .product-native-detail__title {
+        margin: 0 0 8px;
+        font-size: clamp(22px, 2.4vw, 28px);
+        font-weight: 400;
+        line-height: 1.35;
+    }
+    .product-native-detail__meta-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        color: #565959;
+        font-size: 13px;
+    }
+    .product-native-detail__reviews-link {
+        color: var(--amz-link);
+        text-decoration: none;
+    }
+    .product-native-detail__reviews-link:hover { color: #c7511f; text-decoration: underline; }
+    .product-native-detail__rating-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--amz-link);
+        text-decoration: none;
+    }
+    .product-native-detail__rating-link:hover { color: #c7511f; text-decoration: underline; }
+    .product-native-detail__stars {
+        position: relative;
+        display: inline-block;
+        width: 88px;
+        height: 16px;
+        flex: 0 0 auto;
+    }
+    .product-native-detail__stars-track,
+    .product-native-detail__stars-fill {
+        display: inline-flex;
+        gap: 2px;
+        line-height: 1;
+    }
+    .product-native-detail__stars-track { color: #ddd; }
+    .product-native-detail__stars-fill {
+        position: absolute;
+        inset: 0 auto 0 0;
+        overflow: hidden;
+        color: #ffa41c;
+        width: calc(var(--rating, 0) / 5 * 100%);
+        white-space: nowrap;
+    }
+    .product-native-detail__star {
+        width: 16px;
+        height: 16px;
+        flex: 0 0 auto;
+    }
+    .product-native-detail__rating-value,
+    .product-native-detail__rating-count {
+        font-size: 13px;
+    }
+    .product-native-detail__meta-divider { color: #bbb; }
+    .product-native-detail__divider {
+        margin: 12px 0 14px;
+        border: 0;
+        border-top: 1px solid #e7e7e7;
+    }
+    .product-native-detail__price-block {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 8px;
+        margin-bottom: 12px;
+    }
+    .product-native-detail__price-label { color: #565959; font-size: 13px; }
+    .product-native-detail__price,
+    .product-native-detail__buybox-price {
+        color: var(--amz-price);
+        font-weight: 400;
+        line-height: 1;
+    }
+    .product-native-detail__price-symbol { font-size: 14px; vertical-align: top; margin-right: 1px; }
+    .product-native-detail__price-whole { font-size: 28px; }
+    .product-native-detail__price-fraction { font-size: 14px; vertical-align: top; }
+    .product-native-detail__quote-price { margin-bottom: 12px; font-size: 22px; font-weight: 700; }
+    .product-native-detail__bullets {
+        margin: 0 0 16px;
+        padding-left: 18px;
+        color: #0f1111;
+    }
+    .product-native-detail__bullets li + li { margin-top: 4px; }
+    .product-native-detail__variant-form {
+        display: grid;
+        gap: 8px;
+        max-width: 360px;
+        margin-top: 8px;
+    }
+    .product-native-detail__variant-axes {
+        display: grid;
+        gap: 12px;
+        margin: 12px 0 4px;
+    }
+    .product-native-detail__variant-axis {
+        display: grid;
+        gap: 6px;
+    }
+    .product-native-detail__variant-axis-label {
+        font-size: 13px;
+        font-weight: 700;
+        color: #0f1111;
+    }
+    .product-native-detail__variant-axis-options {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .product-native-detail__variant-option {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0 12px;
+        border: 1px solid #d5d9d9;
+        border-radius: 999px;
+        background: #fff;
+        color: #0f1111;
+        font-size: 13px;
+        font: inherit;
+        cursor: default;
+    }
+    button.product-native-detail__variant-option {
+        cursor: pointer;
+    }
+    button.product-native-detail__variant-option.is-disabled,
+    button.product-native-detail__variant-option:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
+        text-decoration: line-through;
+    }
+    button.product-native-detail__variant-option.is-out-of-stock {
+        color: #888c8c;
+        border-color: #d5d9d9;
+        background: #f3f3f3;
+        cursor: pointer;
+        text-decoration: none;
+    }
+    button.product-native-detail__variant-option.is-out-of-stock.is-selected {
+        border-color: #aab7b8;
+        box-shadow: 0 0 0 1px #aab7b8 inset;
+        background: #ececec;
+    }
+    button.product-native-detail__variant-option.is-out-of-stock .product-native-detail__variant-swatch-image {
+        filter: grayscale(1);
+        opacity: 0.55;
+    }
+    button.product-native-detail__variant-option.is-out-of-stock .product-native-detail__variant-swatch-color {
+        opacity: 0.45;
+    }
+    .product-native-detail__variant-option.is-selected {
+        border-color: #007185;
+        box-shadow: 0 0 0 1px #007185 inset;
+        background: #f7fafa;
+    }
+    .product-native-detail__variant-option--swatch {
+        gap: 6px;
+        padding: 4px 10px 4px 4px;
+    }
+    .product-native-detail__variant-option--swatch-image {
+        padding: 4px 10px 4px 4px;
+    }
+    .product-native-detail__variant-swatch-image {
+        width: 36px;
+        height: 36px;
+        border-radius: 8px;
+        object-fit: cover;
+        flex: 0 0 auto;
+        border: 1px solid rgba(15, 17, 17, 0.08);
+        background: #fff;
+    }
+    .product-native-detail__variant-swatch-color {
+        width: 28px;
+        height: 28px;
+        border-radius: 999px;
+        flex: 0 0 auto;
+        border: 1px solid rgba(15, 17, 17, 0.12);
+        background: var(--variant-swatch, #ddd);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+    }
+    .product-native-detail__variant-swatch-label {
+        font-size: 12px;
+        line-height: 1.2;
+        color: #0f1111;
+    }
+    .product-native-detail__variant-option--swatch-color .product-native-detail__variant-swatch-label,
+    .product-native-detail__variant-option--swatch-image .product-native-detail__variant-swatch-label {
+        max-width: 72px;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+    .product-native-detail__variant-axis-value {
+        color: #565959;
+        font-size: 13px;
+    }
+    .product-native-detail__variant-label { font-size: 13px; font-weight: 700; }
+    .product-native-detail__variant-select,
+    .product-native-detail__variant-submit {
+        min-height: 32px;
+        border: 1px solid #888c8c;
+        border-radius: 8px;
+        background: #f0f2f2;
+        font: inherit;
+    }
+    .product-native-detail__variant-select {
+        padding: 4px 10px;
+        background: #fff;
+    }
+    .product-native-detail__variant-submit {
+        padding: 0 12px;
+        cursor: pointer;
+        background: #fff;
+    }
+    .product-native-detail__variant-submit:hover { background: #f7fafa; }
+    .product-native-detail__buybox {
+        padding: 16px;
+        border: 1px solid var(--amz-border);
+        border-radius: 8px;
+        background: #fff;
+        box-shadow: 0 2px 5px rgba(15, 17, 17, .08);
+    }
+    .product-native-detail__buybox > * { margin: 0; }
+    .product-native-detail__buybox-price { margin-bottom: 8px; }
+    .product-native-detail__stock {
+        margin-bottom: 4px;
+        font-size: 18px;
+        font-weight: 400;
+    }
+    .product-native-detail__stock--in-stock { color: var(--amz-stock); }
+    .product-native-detail__stock--out-stock { color: #b12704; }
+    .product-native-detail__delivery {
+        margin-bottom: 12px;
+        color: #565959;
+        font-size: 12px;
+    }
+    .product-native-detail__prime {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 6px;
+        color: #565959;
+        font-size: 13px;
+    }
+    .product-native-detail__prime-badge {
+        display: inline-flex;
+        align-items: center;
+        padding: 2px 8px;
+        border-radius: 3px;
+        background: linear-gradient(180deg, #48a3c6 0%, #007eb9 100%);
+        color: #fff;
+        font-size: 12px;
+        font-style: italic;
+        font-weight: 700;
+        letter-spacing: .02em;
+        text-transform: lowercase;
+        line-height: 1.2;
+    }
+    .product-native-detail__qty-row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 12px;
+    }
+    .product-native-detail__qty-label {
+        color: #0f1111;
+        font-size: 13px;
+        font-weight: 700;
+    }
+    .product-native-detail__qty-select {
+        min-width: 72px;
+        min-height: 32px;
+        padding: 4px 10px;
+        border: 1px solid #888c8c;
+        border-radius: 8px;
+        background: #f0f2f2;
+        box-shadow: 0 2px 5px rgba(213, 217, 217, .5) inset;
+        font: inherit;
+        font-size: 13px;
+    }
+    .product-native-detail__qty-select:focus {
+        outline: 2px solid #007185;
+        outline-offset: 1px;
+    }
+    .product-native-detail__unavailable {
+        margin-bottom: 10px;
+        color: #b12704;
+        font-size: 13px;
+    }
+    .product-native-detail__actions {
+        display: grid;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
+    .product-native-detail__add,
+    .product-native-detail__buy-now,
+    .product-native-detail__cart {
+        display: flex;
+        min-height: 32px;
+        align-items: center;
+        justify-content: center;
+        padding: 0 16px;
+        border: 1px solid;
+        border-radius: 999px;
+        font: inherit;
+        font-size: 13px;
+        line-height: 1.2;
+        text-decoration: none;
+        cursor: pointer;
+        box-shadow: 0 2px 5px rgba(213, 217, 217, .5);
+    }
+    .product-native-detail__add {
+        border-color: #fcd200;
+        background: var(--amz-btn-cart);
+        color: var(--amz-text);
+    }
+    .product-native-detail__add:hover:not(:disabled) { background: var(--amz-btn-cart-hover); }
+    .product-native-detail__add.is-loading {
+        cursor: wait;
+        opacity: 0.78;
+    }
+    .product-native-detail__buy-now {
+        border-color: #ff8f00;
+        background: var(--amz-btn-buy);
+        color: var(--amz-text);
+    }
+    .product-native-detail__buy-now:hover:not(:disabled) { background: var(--amz-btn-buy-hover); }
+    .product-native-detail__add:disabled,
+    .product-native-detail__buy-now:disabled {
+        border-color: #d5d9d9;
+        background: #f0f2f2;
+        color: #565959;
+        cursor: not-allowed;
+        box-shadow: none;
+    }
+    .product-native-detail__cart[hidden] { display: none; }
+    .product-native-detail__cart {
+        border-color: #d5d9d9;
+        background: #fff;
+        color: var(--amz-text);
+    }
+    .product-native-detail__secure {
+        color: #565959;
+        font-size: 12px;
+    }
+    .product-native-detail__message {
+        min-height: 20px;
+        margin-top: 8px;
+        color: var(--amz-stock);
+        font-size: 13px;
+    }
+    .product-native-detail__message.is-loading {
+        color: #565959;
+        font-weight: 400;
+    }
+    .product-native-detail__message.is-success {
+        display: flex;
+        align-items: flex-start;
+        gap: 6px;
+        color: var(--amz-stock);
+        font-weight: 700;
+    }
+    .product-native-detail__message.is-success::before {
+        content: '✓';
+        flex: 0 0 auto;
+        font-weight: 700;
+        line-height: 1.2;
+    }
+    .product-native-detail__message-cart-link {
+        margin-left: 4px;
+        color: var(--amz-link);
+        font-weight: 400;
+        text-decoration: none;
+    }
+    .product-native-detail__message-cart-link:hover {
+        color: #c7511f;
+        text-decoration: underline;
+    }
+    .product-native-detail__message.is-error { color: #b12704; }
+    .product-native-detail__detail-sections {
+        display: grid;
+        gap: 24px;
+        margin-top: 32px;
+        padding-top: 24px;
+        border-top: 1px solid #e7e7e7;
+    }
+    .product-native-detail__description,
+    .product-native-detail__specifications {
+        padding: 20px 0 0;
+    }
+    .product-native-detail__description h2,
+    .product-native-detail__specifications h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+        font-weight: 700;
+    }
+    .product-native-detail__description-body {
+        color: #0f1111;
+        line-height: 1.7;
+    }
+    .product-native-detail__spec-table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 14px;
+    }
+    .product-native-detail__spec-table th,
+    .product-native-detail__spec-table td {
+        padding: 10px 12px;
+        border-top: 1px solid #e7e7e7;
+        text-align: left;
+        vertical-align: top;
+    }
+    .product-native-detail__spec-table th {
+        width: 34%;
+        color: #565959;
+        font-weight: 400;
+        background: var(--amz-bg-soft);
+    }
+    @media (max-width: 992px) {
+        .product-native-detail__hero-grid { grid-template-columns: 1fr; }
+        .product-native-detail__buy-column { grid-template-columns: 1fr; }
+        .product-native-detail__buybox { max-width: 360px; }
+    }
+    @media (max-width: 640px) {
+        .product-native-detail__gallery { flex-direction: column-reverse; }
+        .product-native-detail__thumbs {
+            flex-direction: row;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            flex-basis: auto;
+            width: 100%;
+        }
+        .product-native-detail__buybox { max-width: none; }
     }
 </style>
 
@@ -449,76 +1206,549 @@ $specificationLabel = static function (string $code) use ($specificationLabels):
     'use strict';
     const root = document.querySelector('[data-testid="storefront-product-detail"]');
     if (!root) return;
-    const button = root.querySelector('[data-action="add-v2"]');
-    const message = root.querySelector('[data-testid="detail-message"]');
-    const cartLink = root.querySelector('[data-testid="view-cart"]');
     const primaryImage = root.querySelector('.product-native-detail__primary-image');
-    root.querySelectorAll('[data-gallery-src]').forEach(function (thumbnail) {
-        thumbnail.addEventListener('click', function () {
+
+    function bindGalleryThumb(thumb) {
+        thumb.addEventListener('click', function () {
             if (!primaryImage) return;
-            primaryImage.src = thumbnail.dataset.gallerySrc || primaryImage.src;
+            primaryImage.src = thumb.dataset.gallerySrc || primaryImage.src;
             root.querySelectorAll('[data-gallery-src]').forEach(function (item) {
-                item.classList.toggle('is-active', item === thumbnail);
+                const active = item === thumb;
+                item.classList.toggle('is-active', active);
+                item.setAttribute('aria-selected', active ? 'true' : 'false');
             });
         });
-    });
-    const guestTokenStorageKey = 'weline.cart.guest_token';
-    let cartApi = null;
-    let guestToken = '';
+    }
+
+    root.querySelectorAll('[data-gallery-src]').forEach(bindGalleryThumb);
+
+    const qtySelect = root.querySelector('[data-testid="product-qty"]');
+    const syncPurchaseQty = function () {
+        const qty = Math.max(1, Number(qtySelect && qtySelect.value ? qtySelect.value : 1) || 1);
+        root.querySelectorAll('[data-action="add-v2"], [data-action="buy-now"]').forEach(function (button) {
+            button.dataset.qty = String(qty);
+        });
+    };
+    if (qtySelect) {
+        qtySelect.addEventListener('change', syncPurchaseQty);
+        syncPurchaseQty();
+    }
+
+    const observer = new MutationObserver(syncPurchaseQty);
+    const actionsSlot = root.querySelector('.product-native-detail__actions');
+    if (actionsSlot) {
+        observer.observe(actionsSlot, { childList: true, subtree: true });
+    }
+
+    const variantAxes = root.querySelector('[data-variant-interactive="1"]');
+    const catalogElement = document.getElementById('product-variant-catalog-<?= $productId ?>');
+    if (!variantAxes || !catalogElement) {
+        return;
+    }
+
+    let catalog = {};
     try {
-        guestToken = String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
+        catalog = JSON.parse(catalogElement.textContent || '{}');
     } catch (error) {
-        // Storage can be unavailable in privacy-restricted browser contexts.
+        return;
     }
 
-    async function api() {
-        if (cartApi) return cartApi;
-        if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
-            throw new Error('Weline.Api unavailable');
-        }
-        cartApi = await window.Weline.Api.resource('cart');
-        return cartApi;
+    const offers = Array.isArray(catalog.offers) ? catalog.offers : [];
+    const axes = Array.isArray(catalog.axes) ? catalog.axes : [];
+    if (offers.length === 0 || axes.length === 0) {
+        return;
     }
 
-    async function ensureGuestToken() {
-        if (guestToken) return guestToken;
-        const result = await (await api()).issueGuestToken({});
-        const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
-        guestToken = String((payload && payload.guest_token) || (result && result.guest_token) || '').trim();
-        if (!guestToken) throw new Error('<?= $escape(__('无法创建游客购物车会话')) ?>');
-        try {
-            window.sessionStorage.setItem(guestTokenStorageKey, guestToken);
-        } catch (error) {
-            // The active mutation can still use this request-owned token.
-        }
-        return guestToken;
-    }
+    let selection = Object.assign({}, catalog.selected || {});
+    const basePath = window.location.pathname;
 
-    if (!button) return;
-    button.addEventListener('click', async function () {
-        if (button.disabled) return;
-        button.disabled = true;
-        message.classList.remove('is-error');
-        message.textContent = '<?= $escape(__('正在加入购物车...')) ?>';
-        try {
-            const result = await (await api()).addV2({
-                provider_code: button.dataset.providerCode || 'product',
-                global_offer_uuid: button.dataset.globalOfferUuid || '',
-                legacy_product_id: Number(button.dataset.productId || 0),
-                guest_token: await ensureGuestToken(),
-                qty: 1
-            });
-            if (!result || result.success === false) {
-                throw new Error(result && result.message ? result.message : '<?= $escape(__('加入购物车失败')) ?>');
+    function normalizeSelection(input) {
+        const normalized = {};
+        Object.keys(input || {}).sort().forEach(function (axisCode) {
+            const value = String(input[axisCode] || '').trim();
+            if (value !== '') {
+                normalized[axisCode] = value;
             }
-            message.textContent = '<?= $escape(__('商品已加入购物车。')) ?>';
-            button.textContent = '<?= $escape(__('已加入')) ?>';
-            cartLink.hidden = false;
+        });
+        return normalized;
+    }
+
+    function combinationMatches(combination, current) {
+        const combo = normalizeSelection(combination);
+        const selected = normalizeSelection(current);
+        return Object.keys(selected).every(function (axisCode) {
+            return combo[axisCode] === selected[axisCode];
+        });
+    }
+
+    function findExactOffer(current) {
+        const selected = normalizeSelection(current);
+        return offers.find(function (offer) {
+            const combo = normalizeSelection(offer.combination || {});
+            return Object.keys(selected).length > 0
+                && Object.keys(selected).length === Object.keys(combo).length
+                && combinationMatches(combo, selected);
+        }) || null;
+    }
+
+    function findBestOffer(current) {
+        const exact = findExactOffer(current);
+        if (exact) {
+            return exact;
+        }
+        let best = null;
+        let bestScore = -1;
+        offers.forEach(function (offer) {
+            const combo = normalizeSelection(offer.combination || {});
+            if (!combinationMatches(combo, current)) {
+                return;
+            }
+            const score = Object.keys(normalizeSelection(current)).length;
+            if (score > bestScore) {
+                bestScore = score;
+                best = offer;
+            }
+        });
+        return best;
+    }
+
+    function mergeLiveOffers(liveOffers) {
+        const byUuid = {};
+        liveOffers.forEach(function (row) {
+            if (row && row.global_offer_uuid) {
+                byUuid[row.global_offer_uuid] = row;
+            }
+        });
+        offers.forEach(function (offer, index) {
+            const live = byUuid[offer.global_offer_uuid];
+            if (!live) {
+                return;
+            }
+            offers[index] = Object.assign({}, offer, {
+                stock: live.stock,
+                sellable: live.sellable,
+                quote_only: live.quote_only,
+                unit_price_minor: live.unit_price_minor,
+                currency: live.currency,
+                message: live.message,
+            });
+        });
+    }
+
+    let liveRefreshTimer = null;
+    let liveRefreshToken = 0;
+
+    function scheduleLiveAvailabilityRefresh() {
+        const liveUrl = variantAxes.dataset.variantLiveUrl || '';
+        if (!liveUrl) {
+            return;
+        }
+        if (liveRefreshTimer) {
+            clearTimeout(liveRefreshTimer);
+        }
+        liveRefreshTimer = setTimeout(refreshLiveAvailability, 120);
+    }
+
+    async function refreshLiveAvailability() {
+        const liveUrl = variantAxes.dataset.variantLiveUrl || '';
+        if (!liveUrl) {
+            return;
+        }
+        const token = ++liveRefreshToken;
+        try {
+            const params = new URLSearchParams();
+            params.set('product_id', String(<?= (int)$productId ?>));
+            const response = await fetch(liveUrl + '?' + params.toString(), {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+                cache: 'no-store',
+            });
+            if (!response.ok || token !== liveRefreshToken) {
+                return;
+            }
+            const payload = await response.json();
+            if (token !== liveRefreshToken || !payload || !payload.success || !Array.isArray(payload.offers)) {
+                return;
+            }
+            mergeLiveOffers(payload.offers);
+            applySelection(selection, { pinnedAxes: [], syncUrl: false });
         } catch (error) {
-            message.classList.add('is-error');
-            message.textContent = error && error.message ? error.message : '<?= $escape(__('加入购物车失败')) ?>';
-            button.disabled = false;
+            // Embedded catalog snapshot remains usable when live refresh fails.
+        }
+    }
+
+    function isOfferSellable(offer) {
+        if (!offer || !offer.sellable) {
+            return false;
+        }
+        if (offer.quote_only) {
+            return true;
+        }
+        return Math.max(0, Number(offer.stock) || 0) > 0;
+    }
+
+    function isOptionAvailable(axisCode, axisValue, current) {
+        const probe = Object.assign({}, current);
+        probe[axisCode] = axisValue;
+        return offers.some(function (offer) {
+            return combinationMatches(offer.combination || {}, probe);
+        });
+    }
+
+    function isOptionSellable(axisCode, axisValue, current) {
+        const probe = Object.assign({}, current);
+        probe[axisCode] = axisValue;
+        return offers.some(function (offer) {
+            return combinationMatches(offer.combination || {}, probe) && isOfferSellable(offer);
+        });
+    }
+
+    function resolveSelectionToInStock(desired, pinnedAxes) {
+        desired = normalizeSelection(desired);
+        pinnedAxes = Array.isArray(pinnedAxes)
+            ? pinnedAxes.map(function (code) {
+                return String(code || '').trim();
+            }).filter(Boolean)
+            : [];
+
+        let candidates = offers.filter(function (offer) {
+            const combo = normalizeSelection(offer.combination || {});
+            return pinnedAxes.every(function (code) {
+                return !desired[code] || combo[code] === desired[code];
+            });
+        });
+        if (candidates.length === 0) {
+            return desired;
+        }
+
+        const sellable = candidates.filter(isOfferSellable);
+        const pool = sellable.length > 0 ? sellable : candidates;
+
+        let best = pool[0];
+        let bestScore = -1;
+        pool.forEach(function (offer) {
+            const combo = normalizeSelection(offer.combination || {});
+            let score = isOfferSellable(offer) ? 1000 : 0;
+            Object.keys(desired).forEach(function (code) {
+                if (combo[code] === desired[code]) {
+                    score += 10;
+                }
+            });
+            if (score > bestScore) {
+                bestScore = score;
+                best = offer;
+            }
+        });
+
+        return normalizeSelection(best.combination || desired);
+    }
+
+    function currencySymbol(code) {
+        switch (String(code || '').toUpperCase()) {
+            case 'CNY':
+            case 'RMB':
+            case 'JPY':
+                return '¥';
+            case 'USD':
+                return '$';
+            case 'EUR':
+                return '€';
+            case 'GBP':
+                return '£';
+            default:
+                return String(code || '') + ' ';
+        }
+    }
+
+    function renderPrice(minor, currency) {
+        const whole = Math.floor(Math.max(0, Number(minor) || 0) / 100);
+        const fraction = String(Math.max(0, Number(minor) || 0) % 100).padStart(2, '0');
+        const symbol = currencySymbol(currency);
+        root.querySelectorAll('.product-native-detail__price-symbol').forEach(function (node) {
+            node.textContent = symbol;
+        });
+        root.querySelectorAll('.product-native-detail__price-whole').forEach(function (node) {
+            node.textContent = String(whole);
+        });
+        root.querySelectorAll('.product-native-detail__price-fraction').forEach(function (node) {
+            node.textContent = '.' + fraction;
+        });
+    }
+
+    function renderStock(offer) {
+        const stockNode = root.querySelector('.product-native-detail__stock');
+        if (!stockNode || !offer) {
+            return;
+        }
+        const stock = Math.max(0, Number(offer.stock) || 0);
+        const sellable = !!offer.sellable;
+        const quoteOnly = !!offer.quote_only;
+        stockNode.classList.remove('product-native-detail__stock--in-stock', 'product-native-detail__stock--out-stock');
+        if (quoteOnly) {
+            stockNode.textContent = <?= json_encode((string)__('按项目确认库存'), JSON_UNESCAPED_UNICODE) ?>;
+            stockNode.classList.add('product-native-detail__stock--out-stock');
+            return;
+        }
+        if (stock > 0 && sellable) {
+            stockNode.textContent = stock <= 10
+                ? (<?= json_encode((string)__('仅剩 %{1} 件'), JSON_UNESCAPED_UNICODE) ?>).replace('%{1}', String(stock))
+                : <?= json_encode((string)__('有货'), JSON_UNESCAPED_UNICODE) ?>;
+            stockNode.classList.add('product-native-detail__stock--in-stock');
+            return;
+        }
+        stockNode.textContent = <?= json_encode((string)__('暂时缺货'), JSON_UNESCAPED_UNICODE) ?>;
+        stockNode.classList.add('product-native-detail__stock--out-stock');
+    }
+
+    function resolveOptionGallery(option, selected) {
+        const color = String(selected.color || '').trim();
+        const byColor = option.gallery_by_color;
+        if (color !== '' && byColor && typeof byColor === 'object' && Array.isArray(byColor[color]) && byColor[color].length) {
+            return byColor[color].slice();
+        }
+        return Array.isArray(option.gallery_images) ? option.gallery_images.slice() : [];
+    }
+
+    function resolveSelectionPreview(current) {
+        const gallery = resolveSelectionGallery(current);
+        if (gallery.length > 0) {
+            return gallery[0];
+        }
+        const selected = normalizeSelection(current);
+        for (let index = 0; index < axes.length; index++) {
+            const axis = axes[index];
+            const axisCode = String(axis.code || '').trim();
+            const axisValue = selected[axisCode];
+            if (!axisCode || !axisValue) {
+                continue;
+            }
+            const options = Array.isArray(axis.options) ? axis.options : [];
+            for (let optionIndex = 0; optionIndex < options.length; optionIndex++) {
+                const option = options[optionIndex];
+                if (String(option.value || '').trim() !== axisValue) {
+                    continue;
+                }
+                const preview = String(option.swatch_image || '').trim();
+                if (preview !== '') {
+                    return preview;
+                }
+            }
+        }
+        return '';
+    }
+
+    function resolveSelectionGallery(current) {
+        const selected = normalizeSelection(current);
+        const styleType = String(selected.style_type || '').trim();
+        let images = [];
+        axes.forEach(function (axis) {
+            const axisCode = String(axis.code || '').trim();
+            const axisValue = selected[axisCode];
+            if (!axisCode || !axisValue) {
+                return;
+            }
+            const options = Array.isArray(axis.options) ? axis.options : [];
+            options.forEach(function (option) {
+                if (String(option.value || '').trim() !== axisValue) {
+                    return;
+                }
+                const gallery = resolveOptionGallery(option, selected);
+                if (gallery.length === 0) {
+                    return;
+                }
+                if (images.length === 0) {
+                    images = gallery.slice();
+                    return;
+                }
+                const intersection = images.filter(function (src) {
+                    return gallery.indexOf(src) >= 0;
+                });
+                if (intersection.length > 0) {
+                    images = intersection;
+                } else if (axisCode === 'color' && styleType !== '' && styleType !== 'set') {
+                    return;
+                } else {
+                    images = gallery.slice();
+                }
+            });
+        });
+        return images;
+    }
+
+    function renderGallery(offer) {
+        if (!primaryImage || !offer) {
+            return;
+        }
+        let images = resolveSelectionGallery(selection);
+        if (images.length === 0) {
+            images = Array.isArray(offer.images) && offer.images.length
+                ? offer.images.slice()
+                : (offer.image ? [offer.image] : []);
+        }
+        if (images.length === 0) {
+            return;
+        }
+
+        const preview = resolveSelectionPreview(selection);
+        if (preview !== '' && images.indexOf(preview) >= 0) {
+            images = [preview].concat(images.filter(function (src) {
+                return src !== preview;
+            }));
+        } else if (preview !== '') {
+            images = [preview].concat(images);
+        }
+
+        const gallery = root.querySelector('.product-native-detail__gallery');
+        if (!gallery) {
+            return;
+        }
+
+        let thumbs = gallery.querySelector('.product-native-detail__thumbs');
+        if (images.length <= 1) {
+            if (thumbs) {
+                thumbs.remove();
+            }
+            primaryImage.src = images[0];
+            return;
+        }
+
+        if (!thumbs) {
+            thumbs = document.createElement('div');
+            thumbs.className = 'product-native-detail__thumbs';
+            thumbs.setAttribute('role', 'tablist');
+            thumbs.setAttribute('aria-label', <?= json_encode((string)__('选择图片'), JSON_UNESCAPED_UNICODE) ?>);
+            gallery.insertBefore(thumbs, gallery.firstChild);
+        }
+
+        thumbs.innerHTML = '';
+        images.forEach(function (src, index) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.role = 'tab';
+            button.className = 'product-native-detail__thumb' + (index === 0 ? ' is-active' : '');
+            button.dataset.gallerySrc = src;
+            button.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
+            const img = document.createElement('img');
+            img.src = src;
+            img.alt = '';
+            button.appendChild(img);
+            bindGalleryThumb(button);
+            thumbs.appendChild(button);
+        });
+        primaryImage.src = images[0];
+        root.querySelectorAll('[data-gallery-src]').forEach(function (item) {
+            const active = item.dataset.gallerySrc === images[0];
+            item.classList.toggle('is-active', active);
+            item.setAttribute('aria-selected', active ? 'true' : 'false');
+        });
+    }
+
+    function renderPurchaseButtons(offer) {
+        const exactOffer = offer && findExactOffer(selection);
+        const sellable = !!(exactOffer && isOfferSellable(exactOffer) && exactOffer.global_offer_uuid);
+        root.querySelectorAll('[data-action="add-v2"], [data-action="buy-now"]').forEach(function (button) {
+            if (exactOffer) {
+                button.dataset.globalOfferUuid = exactOffer.global_offer_uuid || '';
+                button.dataset.productId = String(exactOffer.product_id || '');
+                button.dataset.providerCode = exactOffer.provider_code || 'product';
+            }
+            button.disabled = !sellable;
+        });
+        syncPurchaseQty();
+    }
+
+    function renderSelectionUi() {
+        const outOfStockLabel = <?= json_encode((string)__('暂时缺货'), JSON_UNESCAPED_UNICODE) ?>;
+        root.querySelectorAll('[data-variant-option]').forEach(function (button) {
+            const axisCode = button.dataset.variantAxis || '';
+            const axisValue = button.dataset.variantValue || '';
+            const selected = selection[axisCode] === axisValue;
+            const exists = isOptionAvailable(axisCode, axisValue, selection);
+            const inStock = isOptionSellable(axisCode, axisValue, selection);
+            button.classList.toggle('is-selected', selected);
+            button.classList.toggle('is-disabled', !exists);
+            button.classList.toggle('is-out-of-stock', exists && !inStock);
+            button.setAttribute('aria-current', selected ? 'true' : 'false');
+            button.disabled = !exists;
+            if (exists && !inStock) {
+                const baseLabel = button.dataset.variantLabel || axisValue;
+                button.setAttribute('title', outOfStockLabel);
+                button.setAttribute('aria-label', baseLabel + ' · ' + outOfStockLabel);
+            } else {
+                button.removeAttribute('title');
+                const baseLabel = button.dataset.variantLabel || '';
+                if (baseLabel !== '') {
+                    button.setAttribute('aria-label', baseLabel);
+                }
+            }
+        });
+    }
+
+    function syncUrl(current) {
+        const params = new URLSearchParams();
+        Object.keys(normalizeSelection(current)).forEach(function (axisCode) {
+            params.set(axisCode, current[axisCode]);
+        });
+        const nextUrl = basePath + (params.toString() ? ('?' + params.toString()) : '');
+        if (window.location.pathname + window.location.search !== nextUrl) {
+            window.history.replaceState(null, '', nextUrl);
+        }
+    }
+
+    function applySelection(nextSelection, options) {
+        options = options || {};
+        const pinnedAxes = Array.isArray(options.pinnedAxes) ? options.pinnedAxes : [];
+        selection = resolveSelectionToInStock(nextSelection, pinnedAxes);
+        renderSelectionUi();
+        const offer = findBestOffer(selection);
+        if (offer) {
+            renderGallery(offer);
+            renderPrice(offer.unit_price_minor, offer.currency);
+            renderStock(offer);
+        }
+        renderPurchaseButtons(offer);
+        if (!options || options.syncUrl !== false) {
+            syncUrl(selection);
+        }
+    }
+
+    root.querySelectorAll('[data-variant-option]').forEach(function (button) {
+        button.addEventListener('click', function () {
+            if (button.disabled) {
+                return;
+            }
+            const axisCode = button.dataset.variantAxis || '';
+            const axisValue = button.dataset.variantValue || '';
+            if (axisCode === '' || axisValue === '') {
+                return;
+            }
+            const nextSelection = Object.assign({}, selection);
+            if (nextSelection[axisCode] === axisValue) {
+                return;
+            }
+            nextSelection[axisCode] = axisValue;
+            applySelection(nextSelection, { pinnedAxes: [axisCode] });
+            scheduleLiveAvailabilityRefresh();
+        });
+    });
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlSelection = {};
+    axes.forEach(function (axis) {
+        const axisCode = String(axis.code || '').trim();
+        const axisValue = String(urlParams.get(axisCode) || '').trim();
+        if (axisCode !== '' && axisValue !== '') {
+            urlSelection[axisCode] = axisValue;
         }
     });
+    if (Object.keys(urlSelection).length > 0) {
+        applySelection(Object.assign({}, selection, urlSelection), {
+            pinnedAxes: Object.keys(urlSelection),
+            syncUrl: false,
+        });
+    } else {
+        applySelection(selection, { pinnedAxes: [] });
+    }
+    refreshLiveAvailability();
 })();
 </script>

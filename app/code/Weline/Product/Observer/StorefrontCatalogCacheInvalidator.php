@@ -19,14 +19,17 @@ final class StorefrontCatalogCacheInvalidator implements ObserverInterface
 {
     public function execute(Event &$event): void
     {
+        // website_id=0 is the default storefront scope and must still purge chrome caches.
         $websiteId = max(0, (int)($event->getData('website_id') ?? 0));
-        if ($websiteId <= 0) {
-            return;
-        }
 
         ObjectManager::getInstance(StorefrontHeaderNavFragmentCache::class)
             ->invalidateWebsite($websiteId);
         Partials::clearOutputCache();
+        try {
+            ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)
+                ->purgeProcessCacheForLogicalKey('theme.chrome.');
+        } catch (\Throwable) {
+        }
         ControllerFetchFileBefore::clearRuntimeCache();
         SlotRendererService::clearProcessMemoryCache();
     }

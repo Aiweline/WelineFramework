@@ -119,7 +119,9 @@ final class ProductCatalogCartItemSnapshotResolver
         ) {
             return $this->unavailable($identity, $selection, (string)__('商品未发布'), $sku);
         }
-        if ($storeId > 0 && !$this->storeOffers->isSelected($websiteId, $storeId, $offerId)) {
+        if ($scope->scopeKind !== ScopeIdentity::KIND_WEBSITE
+            && !$this->storeOffers->isSelected($websiteId, $storeId, $offerId)
+        ) {
             return $this->unavailable(
                 $identity,
                 $selection,
