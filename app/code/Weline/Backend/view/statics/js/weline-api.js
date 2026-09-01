@@ -415,6 +415,101 @@
         return (window.Weline && window.Weline.config) || window.__WelineThemeConfig || {};
     }
 
+    var LOCALE_PATH_PATTERN = /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/i;
+
+    function normalizeLangCode(value) {
+        return String(value || '').trim().replace(/-/g, '_');
+    }
+
+    function detectPathLanguage(pathname) {
+        var parts = String(pathname || '/').split('/').filter(Boolean);
+        for (var i = 0; i < parts.length; i += 1) {
+            if (LOCALE_PATH_PATTERN.test(parts[i])) {
+                return normalizeLangCode(parts[i]);
+            }
+        }
+        return '';
+    }
+
+    function readDocumentLanguage() {
+        try {
+            var el = document.documentElement;
+            if (!el) {
+                return '';
+            }
+            var raw = (typeof el.getAttribute === 'function')
+                ? (el.getAttribute('data-lang') || el.getAttribute('lang') || '')
+                : '';
+            return normalizeLangCode(raw || el.lang || '');
+        } catch (_error) {
+            return '';
+        }
+    }
+
+    // Path/query language: never read WELINE_USER_LANG cookie for QueryBin workers.
+    function resolveCurrentLanguage(fallback) {
+        return detectPathLanguage(window.location && window.location.pathname)
+            || readQueryLanguage()
+            || readDocumentLanguage()
+            || normalizeLangCode(fallback || '')
+            || '';
+    }
+
+    function readQueryLanguage() {
+        try {
+            var urlParams = new URLSearchParams((window.location && window.location.search) || '');
+            var candidates = [urlParams.get('locale'), urlParams.get('locale_code'), urlParams.get('lang')];
+            for (var i = 0; i < candidates.length; i += 1) {
+                var raw = String(candidates[i] || '').trim();
+                if (!raw || raw.toLowerCase() === 'default') {
+                    continue;
+                }
+                return normalizeLangCode(raw);
+            }
+        } catch (_error) {
+        }
+        return '';
+    }
+
+    function detectPathCurrency(pathname, available) {
+        var parts = String(pathname || '/').split('/').filter(Boolean);
+        var supported = {};
+        (available || []).forEach(function (code) {
+            var normalized = normalizeCurrencyCode(code);
+            if (/^[A-Z]{3}$/.test(normalized)) {
+                supported[normalized] = true;
+            }
+        });
+        for (var i = 0; i < parts.length; i += 1) {
+            var code = normalizeCurrencyCode(parts[i]);
+            if (/^[A-Z]{3}$/.test(code) && (Object.keys(supported).length === 0 || supported[code])) {
+                return code;
+            }
+        }
+        return '';
+    }
+
+    function readQueryCurrency(available) {
+        try {
+            var code = normalizeCurrencyCode(new URLSearchParams((window.location && window.location.search) || '').get('currency'));
+            if (!/^[A-Z]{3}$/.test(code)) {
+                return '';
+            }
+            var supported = {};
+            (available || []).forEach(function (entry) {
+                var normalized = normalizeCurrencyCode(entry);
+                if (/^[A-Z]{3}$/.test(normalized)) {
+                    supported[normalized] = true;
+                }
+            });
+            if (Object.keys(supported).length === 0 || supported[code]) {
+                return code;
+            }
+        } catch (_error) {
+        }
+        return '';
+    }
+
     function mergeApiConfig() {
         var runtimeConfig = getRuntimeConfig();
         return Object.assign({}, runtimeConfig.api || {}, window.WelineApiConfig || {});
@@ -483,13 +578,24 @@
             workerUrl: withDevCacheBust(sameOriginUrl(apiConfig.queryWorkerUrl || apiConfig.workerUrl || defaultQueryWorkerUrl())),
             deployVersion: String(apiConfig.deployVersion || apiConfig.deploy_version || runtimeConfig.deployVersion || runtimeConfig.deploy_version || 'dev'),
             workerBuildId: String(apiConfig.workerBuildId || apiConfig.worker_build_id || runtimeConfig.workerBuildId || runtimeConfig.worker_build_id || 'dev'),
-            locale: normalizeLocale(apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || ''),
+            locale: normalizeLocale(resolveCurrentLanguage(
+                apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || ''
+            )),
+            pathname: String((window.location && window.location.pathname) || '/'),
             defaultCurrency: normalizeCurrencyCode(apiConfig.defaultCurrency || apiConfig.default_currency || runtimeConfig.defaultCurrency || runtimeConfig.default_currency || 'CNY'),
             availableCurrencies: normalizeCurrencyList(apiConfig.availableCurrencies || apiConfig.supportedCurrencies || apiConfig.currencyCodes || apiConfig.currencies || runtimeConfig.availableCurrencies || runtimeConfig.supportedCurrencies || runtimeConfig.currencyCodes || runtimeConfig.currencies || []),
             backendBootstrapId: readBackendBootstrapId(),
             requestTimeoutMs: parseInt(apiConfig.requestTimeoutMs || runtimeConfig.requestTimeoutMs || 60000, 10)
         };
-        config.currency = normalizeCurrency(apiConfig.currency || apiConfig.currentCurrency || runtimeConfig.currentCurrency || '', config);
+        config.currency = normalizeCurrency(
+            detectPathCurrency(config.pathname, config.availableCurrencies)
+            || readQueryCurrency(config.availableCurrencies)
+            || apiConfig.currency
+            || apiConfig.currentCurrency
+            || runtimeConfig.currentCurrency
+            || config.defaultCurrency,
+            config
+        );
         return config;
     }
 
@@ -1057,7 +1163,7 @@
 
     BackendQueryBinClient.prototype.warmup = function (config) {
         config = config || buildQueryBinConfig();
-        if (!config.backendBootstrapId || this.backendWarmupComplete) {
+        if (!config.backendBootstrapId) {
             return Promise.resolve(null);
         }
         if (!this.backendWarmupPromise) {
@@ -1068,9 +1174,7 @@
                 this.backendWarmupComplete = true;
                 return result;
             }.bind(this)).finally(function () {
-                if (!this.backendWarmupComplete) {
-                    this.backendWarmupPromise = null;
-                }
+                this.backendWarmupPromise = null;
             }.bind(this));
         }
         return this.backendWarmupPromise;
@@ -1191,6 +1295,7 @@
                     deployVersion: config.deployVersion,
                     workerBuildId: config.workerBuildId,
                     locale: config.locale,
+                    pathname: config.pathname || (window.location && window.location.pathname) || '/',
                     currency: config.currency,
                     defaultCurrency: config.defaultCurrency,
                     availableCurrencies: config.availableCurrencies,

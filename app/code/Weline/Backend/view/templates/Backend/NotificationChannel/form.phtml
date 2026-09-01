@@ -41,7 +41,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 <?= $channel ? __('编辑渠道') : __('新建渠道') ?>
             </h4>
             <div>
-                <a href="<?= $this->getBackendUrl('*/backend/notificationchannel') ?>" class="w-button" data-tone="neutral" data-variant="outline">
+                <a href="@backend-url{'*/backend/notificationchannel'}" class="w-button" data-tone="neutral" data-variant="outline">
                     <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
                 </a>
             </div>
@@ -166,7 +166,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                         <button type="button" class="w-button" data-channel-form-action="test" data-tone="info" data-variant="outline">
                             <w:icon name="arrow-right" size="sm"></w:icon><lang>测试连接</lang>
                         </button>
-                        <a href="<?= $this->getBackendUrl('*/backend/notificationchannel') ?>" class="w-button" data-tone="neutral">
+                        <a href="@backend-url{'*/backend/notificationchannel'}" class="w-button" data-tone="neutral">
                             <lang>取消</lang>
                         </a>
                     </div>
@@ -261,7 +261,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             var form = document.getElementById('channelForm');
             var formData = new FormData(form);
 
-            var url = '<?= $this->getBackendUrl('*/backend/notificationchannel/save') ?>';
+            var url = '@backend-url{'*/backend/notificationchannel/save'}';
             var opts = { method: 'POST', body: new URLSearchParams(formData) };
             Weline.adminRequest('backend_admin', url, opts)
             .then(function(res) {
@@ -269,7 +269,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 if (data.success) {
                     Weline.UI.toast.success(data.message);
                     setTimeout(function() {
-                        window.location.href = '<?= $this->getBackendUrl('*/backend/notificationchannel') ?>';
+                        window.location.href = '@backend-url{'*/backend/notificationchannel'}';
                     }, 1000);
                 } else {
                     Weline.UI.toast.error(data.message);
@@ -287,7 +287,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
             Weline.UI.toast.info('<?= __('正在测试连接...') ?>');
 
-            var url = '<?= $this->getBackendUrl('*/backend/notificationchannel/test') ?>';
+            var url = '@backend-url{'*/backend/notificationchannel/test'}';
             var opts = { method: 'POST', body: new URLSearchParams(formData) };
             Weline.adminRequest('backend_admin', url, opts)
             .then(function(res) {

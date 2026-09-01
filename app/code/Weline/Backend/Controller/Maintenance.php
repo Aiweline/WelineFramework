@@ -9,6 +9,10 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\Manager\Message;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Maintenance\Service\MaintenanceContactEmailResolver;
+use Weline\Maintenance\Service\MaintenanceStaticGenerator;
+use Weline\SystemConfig\Api\ConfigReader;
+use Weline\SystemConfig\Api\ConfigStore;
 
 /**
  * 系统维护模式控制器
@@ -44,6 +48,10 @@ class Maintenance extends BackendController
             $this->assign('retry_after', $retryAfter);
             $this->assign('bypass_config', $bypassConfig);
             $this->assign('backup_config', $backupConfig);
+            $this->assign('developer_email', $this->getDeveloperEmail());
+            $this->assign('config_center_url', $this->getBackendUrl(
+                'weline_systemconfig/backend/config?module=Weline_Maintenance'
+            ));
             
             return $this->fetch();
             
@@ -70,8 +78,15 @@ class Maintenance extends BackendController
         try {
             $enabled = (bool)$this->request->getPost('enabled', false);
             $message = trim($this->request->getPost('message', ''));
+            $developerEmail = trim($this->request->getPost('developer_email', ''));
             
+            if ($developerEmail !== '' && filter_var($developerEmail, FILTER_VALIDATE_EMAIL) === false) {
+                return $this->jsonResponse(false, __('开发者联系邮箱格式不正确'));
+            }
+
             $this->setMaintenanceStatus($enabled, $message);
+            $this->saveDeveloperEmail($developerEmail);
+            $this->republishMaintenanceStaticPages();
             
             return $this->jsonResponse(true, __('维护模式状态已更新'));
             
@@ -99,6 +114,11 @@ class Maintenance extends BackendController
             $enabled = (bool)$this->request->getPost('enabled', false);
             $message = trim($this->request->getPost('message', ''));
             $retryAfter = (int)$this->request->getPost('retry_after', 60);
+            $developerEmail = trim($this->request->getPost('developer_email', ''));
+            
+            if ($developerEmail !== '' && filter_var($developerEmail, FILTER_VALIDATE_EMAIL) === false) {
+                return $this->jsonResponse(false, __('开发者联系邮箱格式不正确'));
+            }
             
             $env->setConfig('system.maintenance', $enabled);
             $env->setConfig('system.maintenance_message', $message);
@@ -137,6 +157,9 @@ class Maintenance extends BackendController
                 $backupConfig['backup_types'] = $backupTypes;
                 $env->setConfig('system.maintenance_backup', $backupConfig);
             }
+            
+            $this->saveDeveloperEmail($developerEmail);
+            $this->republishMaintenanceStaticPages();
             
             return $this->jsonResponse(true, __('配置保存成功'));
             
@@ -229,6 +252,42 @@ class Maintenance extends BackendController
         return $provider instanceof MaintenanceOperationsProviderInterface ? $provider : null;
     }
     
+    private function getDeveloperEmail(): string
+    {
+        try {
+            $reader = \Weline\Framework\Manager\ObjectManager::getInstance(ConfigReader::class);
+            return trim((string)$reader->getConfig(
+                MaintenanceContactEmailResolver::CONFIG_KEY,
+                MaintenanceContactEmailResolver::MODULE,
+                ConfigReader::area_BACKEND,
+                '',
+            ));
+        } catch (\Exception) {
+            return '';
+        }
+    }
+
+    private function saveDeveloperEmail(string $email): void
+    {
+        $store = \Weline\Framework\Manager\ObjectManager::getInstance(ConfigStore::class);
+        $store->setConfig(
+            MaintenanceContactEmailResolver::CONFIG_KEY,
+            $email,
+            MaintenanceContactEmailResolver::MODULE,
+            ConfigReader::area_BACKEND,
+        );
+    }
+
+    private function republishMaintenanceStaticPages(): void
+    {
+        try {
+            $retryAfter = (int)(Env::getInstance()->getConfig('maintenance_retry_after', 60));
+            (new MaintenanceStaticGenerator())->publishAll($retryAfter);
+        } catch (\Exception $e) {
+            Message::warning(__('维护静态页刷新失败：%{1}', $e->getMessage()));
+        }
+    }
+
     /**
      * JSON响应
      * 

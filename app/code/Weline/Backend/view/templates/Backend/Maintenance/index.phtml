@@ -65,6 +65,25 @@ $maintenanceMessage = $maintenance_message ?? __('系统维护中，请稍后再
                             </div>
                         </div>
                         <div style="--w-span-md:12;">
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="developer_email"><lang>开发者联系邮箱</lang></label>
+                                <input
+                                    type="email"
+                                    class="w-input"
+                                    id="developer_email"
+                                    name="developer_email"
+                                    value="<?= htmlspecialchars((string)($developer_email ?? '')) ?>"
+                                    placeholder="support@example.com"
+                                >
+                                <div class="w-field__hint">
+                                    <lang>维护页「需要帮助吗？」卡片中展示的联系邮箱。留空时回退到站点联系邮箱。</lang>
+                                    <?php if (!empty($config_center_url)): ?>
+                                        <a href="<?= htmlspecialchars((string)$config_center_url) ?>" class="w-link"><lang>在统一配置中心管理</lang></a>
+                                    <?php endif; ?>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="--w-span-md:12;">
                             <button type="submit" class="w-button" data-tone="primary">
                                 <w:icon name="save" size="sm"></w:icon><lang>保存设置</lang>
                             </button>
@@ -105,7 +124,7 @@ $maintenanceMessage = $maintenance_message ?? __('系统维护中，请稍后再
             var formData = new FormData(event.target);
             formData.append('enabled', document.getElementById('is_maintenance').checked ? '1' : '0');
             
-            var url = '<?= $this->getBackendUrl('*/backend/maintenance/toggle') ?>';
+            var url = '@backend-url{'*/backend/maintenance/toggle'}';
             var opts = { method: 'POST', body: formData };
             Weline.adminRequest('backend_admin', url, opts)
             .then(function(res) {

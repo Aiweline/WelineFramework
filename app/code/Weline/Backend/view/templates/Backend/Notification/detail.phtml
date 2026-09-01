@@ -62,13 +62,6 @@ foreach ($channels as $channel) {
     $channelLabels[] = (string)$channel;
 }
 
-$listUrl = $this->getBackendUrl('system/backend/notification');
-$detailUrlBase = $this->getBackendUrl('system/backend/notification/detail');
-$subscriptionUrl = $this->getBackendUrl('system/backend/notificationsubscription');
-$markTopicUrl = $this->getBackendUrl('system/backend/notification/markTopicRead');
-$prevUrl = $prevId > 0 ? $detailUrlBase . '?' . \http_build_query(['id' => $prevId]) : '';
-$nextUrl = $nextId > 0 ? $detailUrlBase . '?' . \http_build_query(['id' => $nextId]) : '';
-
 $icons = ObjectManager::getInstance(IconRegistry::class);
 $iconArrowLeft = $icons->render('arrow-left', 'sm');
 $iconArrowRight = $icons->render('arrow-right', 'sm');
@@ -82,9 +75,6 @@ $iconSettings = $icons->render('settings', 'sm');
 $iconType = $icons->render($typeIcon, 'md');
 $iconRead = $icons->render($readIcon, 'sm');
 
-$attrPrevUrl = $h($prevUrl);
-$attrNextUrl = $h($nextUrl);
-$attrMarkTopicUrl = $h($markTopicUrl);
 $attrConfirmTopic = $h((string)__('确定要将「%{name}」类的所有通知标记为已读吗？'));
 $attrSuccessMessage = $h((string)__('已标记为已读'));
 $attrFailureMessage = $h((string)__('操作失败'));
@@ -102,8 +92,6 @@ $attrTitle = $h($title);
 $attrTime = $h($displayTime);
 $attrReadTone = $h($readTone);
 $attrReadLabel = $h($readLabel);
-$attrListUrl = $h($listUrl);
-$attrSubscriptionUrl = $h($subscriptionUrl);
 
 $hasPrev = $prevId > 0;
 $hasNext = $nextId > 0;
@@ -111,24 +99,25 @@ $hasMetadata = $metadataRows !== [];
 $hasChannels = $channelLabels !== [];
 ?>
 <link rel="stylesheet" href="@static(Weline_Backend::css/notification-center.css)">
+<w:js>Weline_Backend::js/notification-center.js</w:js>
 
 <section
     class="w-notification-detail w-stack"
     data-w-component="notification-center"
     data-w-mode="detail"
-    data-w-prev-url="<?= $attrPrevUrl ?>"
-    data-w-next-url="<?= $attrNextUrl ?>"
-    data-w-mark-topic-url="<?= $attrMarkTopicUrl ?>"
+    data-w-prev-url="<?php if ($hasPrev): ?>@backend-url{'system/backend/notification/detail'|['id' => $prevId]}<?php endif; ?>"
+    data-w-next-url="<?php if ($hasNext): ?>@backend-url{'system/backend/notification/detail'|['id' => $nextId]}<?php endif; ?>"
+    data-w-mark-topic-url="@backend-url{'system/backend/notification/markTopicRead'}"
     data-w-confirm-topic="<?= $attrConfirmTopic ?>"
     data-w-success-message="<?= $attrSuccessMessage ?>"
     data-w-failure-message="<?= $attrFailureMessage ?>"
     data-w-request-failure-message="<?= $attrRequestFailureMessage ?>"
 >
     <header class="w-notification-detail__chrome">
-        <a href="<?= $attrListUrl ?>" class="w-notification-detail__back"><?php echo $iconArrowLeft; ?><lang>返回通知中心</lang></a>
+        <a href="@backend-url{'system/backend/notification'}" class="w-notification-detail__back"><?php echo $iconArrowLeft; ?><lang>返回通知中心</lang></a>
         <nav class="w-notification-detail__pager" aria-label="<?= $attrAdjacentNav ?>">
 <?php if ($hasPrev) { ?>
-            <a href="<?= $attrPrevUrl ?>" class="w-button" title="<?= $attrPrevTitle ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+            <a href="@backend-url{'system/backend/notification/detail'|['id' => $prevId]}" class="w-button" title="<?= $attrPrevTitle ?>" data-tone="neutral" data-variant="outline" data-size="sm">
                 <?php echo $iconArrowLeft; ?><lang>上一条</lang>
             </a>
 <?php } else { ?>
@@ -137,7 +126,7 @@ $hasChannels = $channelLabels !== [];
             </span>
 <?php } ?>
 <?php if ($hasNext) { ?>
-            <a href="<?= $attrNextUrl ?>" class="w-button" title="<?= $attrNextTitle ?>" data-tone="neutral" data-variant="outline" data-size="sm">
+            <a href="@backend-url{'system/backend/notification/detail'|['id' => $nextId]}" class="w-button" title="<?= $attrNextTitle ?>" data-tone="neutral" data-variant="outline" data-size="sm">
                 <lang>下一条</lang><?php echo $iconArrowRight; ?>
             </a>
 <?php } else { ?>
@@ -212,7 +201,7 @@ $hasChannels = $channelLabels !== [];
                     data-size="sm"
                 ><?php echo $iconCheck; ?><lang>此类全部已读</lang></button>
 <?php } ?>
-                <a href="<?= $attrSubscriptionUrl ?>" class="w-button" data-tone="primary" data-variant="outline" data-size="sm"><?php echo $iconSettings; ?><lang>订阅设置</lang></a>
+                <a href="@backend-url{'system/backend/notificationsubscription'}" class="w-button" data-tone="primary" data-variant="outline" data-size="sm"><?php echo $iconSettings; ?><lang>订阅设置</lang></a>
             </div>
             <span class="w-notification-detail__keyboard-hint w-text" data-tone="muted" data-size="sm"><?php echo $iconKey; ?><lang>使用 ← → 方向键切换</lang></span>
         </footer>

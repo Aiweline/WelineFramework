@@ -84,7 +84,7 @@ final class BackendWorkerAttestationResponseService
             $html = $prepared['html'];
 
             if (\substr_count($html, self::SLOT) !== 1
-                || \stripos($html, 'name="' . self::META_NAME . '"') !== false) {
+                || $this->htmlContainsBootstrapMeta($html)) {
                 throw $this->failure('backend_attestation_response_slot_invalid', 503);
             }
 
@@ -241,6 +241,18 @@ final class BackendWorkerAttestationResponseService
             }
         }
         $response->setHeader('Vary', $vary . ', Accept-Encoding');
+    }
+
+    private function htmlContainsBootstrapMeta(string $html): bool
+    {
+        // Match a real <meta name="…"> only. Page JS may contain the same
+        // name string inside querySelector(...) without being a decorated slot.
+        return \preg_match(
+            '/<meta\\b[^>]*\\bname=(["\'])'
+            . \preg_quote(self::META_NAME, '/')
+            . '\\1[^>]*>/i',
+            $html,
+        ) === 1;
     }
 
     private function headerValue(Response $response, string $name): string
