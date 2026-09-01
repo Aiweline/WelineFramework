@@ -14,9 +14,13 @@ final class FormSchemaServiceTest extends TestCase
         $schema = (new FormSchemaService())->normalize(['fields' => [
             ['key' => 'company', 'type' => 'text', 'sort_order' => 20],
             ['key' => 'email', 'type' => 'email', 'required' => true, 'sort_order' => 10],
+            ['key' => 'country', 'type' => 'country', 'required' => true, 'sort_order' => 15],
         ]]);
         self::assertSame('email', $schema['fields'][0]['key']);
         self::assertTrue($schema['fields'][0]['required']);
+        self::assertSame('country', $schema['fields'][1]['key']);
+        self::assertSame('country', $schema['fields'][1]['type']);
+        self::assertSame('global', $schema['fields'][1]['validation']['catalog']);
         self::assertSame('company_website', $schema['honeypot']);
     }
 
