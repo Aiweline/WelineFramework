@@ -1,0 +1,178 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var list<array<string,mixed>> $table_rows
+ * @var string $row_actions_json
+ * @var array<string,mixed> $pagination
+ * @var int $total
+ * @var string $status_filter
+ * @var string $locale_filter
+ * @var string $search_filter
+ * @var string $website_id_filter
+ * @var list<string> $allowed_statuses
+ * @var array<string,string> $status_labels
+ * @var string $websiteSelectValue
+ * @var string $websiteSelectDisplay
+ * @var string $websiteSelectOptionsJson
+ * @var string $catalog_category_url
+ * @var string $blogLocaleEmptyText
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    is_scalar($value) || $value === null ? (string)$value : (string)json_encode($value, JSON_UNESCAPED_UNICODE),
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8',
+);
+$tableRows = is_array($table_rows ?? null) ? $table_rows : [];
+$rowActionsJson = (string)($row_actions_json ?? '[]');
+$currentStatus = (string)($status_filter ?? '');
+$currentLocale = (string)($locale_filter ?? '');
+$currentSearch = (string)($search_filter ?? '');
+$statusLabels = is_array($status_labels ?? null) ? $status_labels : [];
+$totalText = $escape($total ?? 0);
+$currentPage = max(1, (int)($pagination['page'] ?? 1));
+$totalPages = max(1, (int)($pagination['lastPage'] ?? 1));
+
+$filterQuery = [];
+if ($currentStatus !== '') {
+    $filterQuery['status'] = $currentStatus;
+}
+if ($currentLocale !== '') {
+    $filterQuery['locale'] = $currentLocale;
+}
+if ($currentSearch !== '') {
+    $filterQuery['search'] = $currentSearch;
+}
+if ((string)($website_id_filter ?? '') !== '') {
+    $filterQuery['website_id'] = (string)$website_id_filter;
+}
+$filterQueryBase = $filterQuery === [] ? '?' : ('?' . http_build_query($filterQuery) . '&');
+
+$statusOptionsHtml = '<option value=""' . ($currentStatus === '' ? ' selected' : '') . '>'
+    . $escape(__('全部状态')) . '</option>';
+foreach (($allowed_statuses ?? []) as $statusOption) {
+    $statusOption = (string)$statusOption;
+    $statusOptionsHtml .= '<option value="' . $escape($statusOption) . '"'
+        . ($currentStatus === $statusOption ? ' selected' : '') . '>'
+        . $escape($statusLabels[$statusOption] ?? $statusOption) . '</option>';
+}
+
+$paginationHtml = '';
+if ($totalPages > 1) {
+    $paginationHtml = '<nav class="w-blog-post-admin__pagination" aria-label="' . $escape(__('文章分页')) . '">';
+    if ($currentPage > 1) {
+        $paginationHtml .= '<a class="w-button" data-tone="neutral" data-variant="outline" href="'
+            . $escape($filterQueryBase . 'page=' . ($currentPage - 1)) . '">' . $escape(__('上一页')) . '</a>';
+    }
+    $paginationHtml .= '<span class="w-text" data-tone="muted" data-size="sm">'
+        . $escape(__('第 %{1} / %{2} 页', [$currentPage, $totalPages])) . '</span>';
+    if ($currentPage < $totalPages) {
+        $paginationHtml .= '<a class="w-button" data-tone="neutral" data-variant="outline" href="'
+            . $escape($filterQueryBase . 'page=' . ($currentPage + 1)) . '">' . $escape(__('下一页')) . '</a>';
+    }
+    $paginationHtml .= '</nav>';
+}
+?>
+<link rel="stylesheet" href="@static(Weline_Blog::css/backend/blog-post-admin.css)?v=20260827-post-admin-dt">
+<div class="w-blog-post-admin" data-testid="blog-admin-list">
+    <div class="w-card w-blog-post-admin__toolbar">
+        <div class="w-blog-post-admin__intro">
+            <h4><lang>博客文章</lang></h4>
+            <p class="w-blog-post-admin__intro-meta"><lang>管理当前网站下的博客文章与发布状态</lang> · <?= $totalText ?></p>
+        </div>
+        <div class="w-blog-post-admin__actions">
+            <a class="w-button" data-tone="neutral" data-variant="outline" href="<?= $escape($catalog_category_url ?? '') ?>">
+                <lang>万能分类 · 博客</lang>
+            </a>
+            <a class="w-button" data-tone="primary" href="@url{'blog/backend/post-admin/form'}">
+                <w-icon name="plus" size="sm"></w-icon>
+                <span><lang>新建文章</lang></span>
+            </a>
+        </div>
+        <form method="get" class="w-blog-post-admin__filter" data-testid="blog-admin-filter-form" style="grid-column: 1 / -1;">
+            <div class="w-blog-post-admin__filter-grid">
+                <div class="w-blog-post-admin__filter-field">
+                    <label class="w-field__label" for="blog-website_trigger"><lang>网站</lang></label>
+                    <w:websites:website:select
+                        id="blog-website"
+                        name="website_id"
+                        value="websiteSelectValue"
+                        display="websiteSelectDisplay"
+                        options="websiteSelectOptionsJson"
+                        multiple="false"
+                        allow-empty="true"
+                        clearable="true"
+                        empty-label="@lang(全部网站)"
+                        placeholder="@lang(搜索网站名称或编码)"
+                    />
+                </div>
+                <div class="w-blog-post-admin__filter-field">
+                    <label class="w-field__label" for="blog-locale_trigger"><lang>语言</lang></label>
+                    <w:i18n:language:select
+                        id="blog-locale"
+                        name="locale"
+                        input-id="blog-locale-input"
+                        value="locale_filter"
+                        display-locale="locale_filter"
+                        allow-empty="true"
+                        empty-text="blogLocaleEmptyText"
+                    />
+                </div>
+                <div class="w-blog-post-admin__filter-field">
+                    <label class="w-field__label" for="blog-status"><lang>状态</lang></label>
+                    <select class="w-select" id="blog-status" name="status"><?= $statusOptionsHtml ?></select>
+                </div>
+                <div class="w-blog-post-admin__filter-field w-blog-post-admin__filter-field--search">
+                    <label class="w-field__label" for="blog-search"><lang>搜索</lang></label>
+                    <input class="w-input" id="blog-search" name="search" type="search"
+                           value="<?= $escape($currentSearch) ?>" placeholder="@lang(标题 / slug / 作者)">
+                </div>
+                <div class="w-blog-post-admin__filter-actions">
+                    <button class="w-button" type="submit" data-tone="primary"><lang>搜索</lang></button>
+                    <?php if ($currentStatus !== '' || $currentLocale !== '' || $currentSearch !== '' || (string)($website_id_filter ?? '') !== ''): ?>
+                        <a class="w-button" data-tone="neutral" data-variant="outline"
+                           href="@url{'blog/backend/post-admin/index'}"><lang>重置</lang></a>
+                    <?php endif; ?>
+                </div>
+            </div>
+        </form>
+    </div>
+
+    <div class="w-card w-blog-post-admin__table-card">
+        <script type="application/json"
+                id="blog-post-admin-local-rows"
+                data-no-extract="true"><?= json_encode(
+                    $tableRows,
+                    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP,
+                ) ?: '[]' ?></script>
+        <w:d-table id="blog-post-admin-list"
+                   model="Weline\Blog\Model\Post"
+                   scope="blog-post-admin-list"
+                   mode="local"
+                   local-data-el="#blog-post-admin-local-rows"
+                   select-field="post_id"
+                   show-actions="true"
+                   sticky-actions="true"
+                   row-actions="<?= $escape($rowActionsJson) ?>"
+                   editable="false"
+                   modal-edit="false"
+                   inline-edit="false"
+                   show-toolbar="false"
+                   show-config="false"
+                   show-pagination="false"
+                   searchable="false"
+                   sortable="true"
+                   data-testid="blog-post-admin-table">
+            <w:t-header>
+                <w:field belong="t-header" name="cover_image" type="image" width="72"><lang>封面</lang></w:field>
+                <w:field belong="t-header" name="article_head" type="text" width="18rem"><lang>标题 / Slug</lang></w:field>
+                <w:field belong="t-header" name="author" type="text" width="8rem"><lang>作者</lang></w:field>
+                <w:field belong="t-header" name="scope_markers" type="text" width="14rem"><lang>范围</lang></w:field>
+                <w:field belong="t-header" name="meta_cluster" type="text" width="12rem"><lang>语言 / 分类 / 状态</lang></w:field>
+                <w:field belong="t-header" name="updated_at" type="text" width="11rem" sortable="true"><lang>更新时间</lang></w:field>
+            </w:t-header>
+            <w:t-body></w:t-body>
+        </w:d-table>
+    </div>
+
+    <?= $paginationHtml ?>
+</div>

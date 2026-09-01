@@ -1,0 +1,8 @@
+<?php
+/** Category listing reuses the Amazon card grid template. */
+echo $this->fetch('Weline_Blog::templates/frontend/index.phtml', [
+    'blog_articles' => $this->getData('blog_articles'),
+    'blog_page_heading' => $this->getData('blog_page_heading'),
+    'blog_page_subtitle' => $this->getData('blog_page_subtitle'),
+    'blog_active_category_id' => $this->getData('blog_active_category_id'),
+]);
