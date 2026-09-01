@@ -1,0 +1,242 @@
+/**
+ * Supplier application page — Amazon-style inquiry skin.
+ * Tokens align with Customer account-login Amazon theme.
+ */
+.w-inquiry-suppliers--amazon {
+    --amz-text: #0f1111;
+    --amz-text-muted: #565959;
+    --amz-link: #007185;
+    --amz-border: #d5d9d9;
+    --amz-border-input: #888c8c;
+    --amz-surface: #ffffff;
+    --amz-surface-muted: #f0f2f2;
+    --amz-cta-bg: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
+    --amz-cta-bg-hover: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
+    --amz-cta-border: #fcd200;
+    --amz-focus: #e77600;
+    --amz-error: #b12704;
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 28rem;
+    margin-inline: auto;
+    padding-block: var(--weline-layout-spacing-xl, 2rem);
+    padding-inline: var(--weline-layout-spacing-md, 1rem);
+    color: var(--amz-text);
+}
+
+.w-inquiry-suppliers--amazon .w-inquiry-suppliers__card {
+    box-sizing: border-box;
+    width: 100%;
+    border: 1px solid var(--amz-border);
+    border-radius: 8px;
+    background: var(--amz-surface);
+    overflow: hidden;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__modal {
+    display: block;
+    position: relative;
+    inset: auto;
+    padding: 0;
+    place-items: unset;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__backdrop,
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__close {
+    display: none !important;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__dialog {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 1.25rem 1.5rem 1.5rem;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    color: var(--amz-text);
+    overflow: visible;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__body {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__body > h2,
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__title {
+    margin: 0;
+    font-size: 1.75rem;
+    font-weight: 400;
+    line-height: 1.2;
+    color: var(--amz-text);
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__body > p:not(.weline-inquiry__message),
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__description {
+    margin: 0;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: var(--amz-text-muted);
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__form {
+    display: grid;
+    gap: 0.85rem;
+    margin: 0;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field {
+    display: grid;
+    gap: 0.3rem;
+    margin: 0;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field > label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--amz-text);
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field > small {
+    font-size: 0.75rem;
+    color: var(--amz-text-muted);
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field textarea,
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field select {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-height: 2rem;
+    padding: 0.35rem 0.5rem;
+    border: 1px solid var(--amz-border-input);
+    border-radius: 3px;
+    background: var(--amz-surface);
+    box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08) inset;
+    color: var(--amz-text);
+    font: inherit;
+    font-size: 0.875rem;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field textarea {
+    min-height: 6rem;
+    resize: vertical;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field input:focus,
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field textarea:focus,
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field select:focus {
+    border-color: var(--amz-focus);
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(228, 121, 17, 0.35), 0 1px 2px rgba(15, 17, 17, 0.08) inset;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__choices {
+    display: grid;
+    gap: 0.35rem;
+    font-size: 0.8125rem;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__message {
+    min-height: 1.25em;
+    margin: 0;
+    font-size: 0.8125rem;
+    color: var(--amz-link);
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__message:empty {
+    display: none;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"],
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__submit {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2rem;
+    margin: 0.25rem 0 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid var(--amz-cta-border);
+    border-radius: 20px;
+    background: var(--amz-cta-bg);
+    color: var(--amz-text);
+    font: inherit;
+    font-size: 0.875rem;
+    font-weight: 650;
+    cursor: pointer;
+    box-shadow: none;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"]:hover:not(:disabled),
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"]:focus-visible,
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__submit:hover:not(:disabled),
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__submit:focus-visible {
+    background: var(--amz-cta-bg-hover);
+    outline: none;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"]:disabled,
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__submit:disabled {
+    opacity: 0.65;
+    cursor: wait;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field--country .w-address {
+    margin: 0;
+    font: inherit;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field--country .w-address__label {
+    font-size: 0.8125rem;
+    font-weight: 700;
+    color: var(--amz-text);
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field--country .w-address__control {
+    min-height: 2rem;
+    border: 1px solid var(--amz-border-input);
+    border-radius: 3px;
+    background: var(--amz-surface);
+    box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08) inset;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field--country .w-address__control:focus-within {
+    border-color: var(--amz-focus);
+    box-shadow: 0 0 0 3px rgba(228, 121, 17, 0.35), 0 1px 2px rgba(15, 17, 17, 0.08) inset;
+}
+
+.w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__field--country .w-address__input {
+    min-height: 2rem;
+    padding: 0.35rem 0.5rem;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+    color: var(--amz-text);
+    font: inherit;
+    font-size: 0.875rem;
+}
+
+@media (max-width: 36rem) {
+    .w-inquiry-suppliers--amazon {
+        max-width: none;
+        padding-block: var(--weline-layout-spacing-lg, 1.5rem);
+        padding-inline: var(--weline-layout-spacing-sm, 0.75rem);
+    }
+
+    .w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__dialog {
+        padding: 1rem 1.1rem 1.25rem;
+    }
+
+    .w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__body > h2,
+    .w-inquiry-suppliers--amazon .weline-inquiry--amazon .weline-inquiry__title {
+        font-size: 1.5rem;
+    }
+}

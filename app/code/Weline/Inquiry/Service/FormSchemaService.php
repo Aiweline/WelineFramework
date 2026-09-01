@@ -7,7 +7,7 @@ namespace Weline\Inquiry\Service;
 /** Validates the neutral schema; translations deliberately live outside this payload. */
 final class FormSchemaService
 {
-    public const FIELD_TYPES = ['text', 'textarea', 'email', 'tel', 'number', 'select', 'radio', 'checkbox', 'file', 'hidden'];
+    public const FIELD_TYPES = ['text', 'textarea', 'email', 'tel', 'number', 'select', 'radio', 'checkbox', 'file', 'hidden', 'country'];
 
     /** @param array<string,mixed> $schema @return array<string,mixed> */
     public function normalize(array $schema): array
@@ -33,9 +33,10 @@ final class FormSchemaService
             if (in_array($type, ['select', 'radio'], true) && $options === []) {
                 throw new \InvalidArgumentException('inquiry_schema_choice_options_required');
             }
+            $validation = $this->validation($field['validation'] ?? [], $type);
             $normalized[] = [
                 'key' => $key, 'type' => $type, 'required' => (bool)($field['required'] ?? false),
-                'options' => $options, 'validation' => $this->validation($field['validation'] ?? []),
+                'options' => $options, 'validation' => $validation,
                 'sort_order' => (int)($field['sort_order'] ?? $sortOrder),
             ];
         }
@@ -45,7 +46,7 @@ final class FormSchemaService
     }
 
     /** @param mixed $raw @return array<string,mixed> */
-    private function validation(mixed $raw): array
+    private function validation(mixed $raw, string $fieldType = 'text'): array
     {
         $raw = is_array($raw) ? $raw : [];
         $result = [];
@@ -56,6 +57,10 @@ final class FormSchemaService
             if (in_array($key, ['min', 'max'], true)) { $value = (float)$value; }
             if ($key === 'pattern') { $value = trim((string)$value); if (strlen($value) > 255) { throw new \InvalidArgumentException('inquiry_schema_pattern_too_long'); } }
             $result[$key] = $value;
+        }
+        if ($fieldType === 'country') {
+            $catalog = strtolower(trim((string)($raw['catalog'] ?? 'global')));
+            $result['catalog'] = in_array($catalog, ['installed', 'global'], true) ? $catalog : 'global';
         }
         return $result;
     }
