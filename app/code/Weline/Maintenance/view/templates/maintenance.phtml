@@ -1,52 +1,27 @@
 <?php
 /**
- * Standalone maintenance document. It is included directly by MaintenanceInterceptor,
- * so every asset URL is resolved here instead of relying on template post-processing.
+ * Standalone maintenance document with inline assets only.
+ * Included directly by MaintenanceInterceptor / MaintenanceStaticGenerator.
  *
  * @var \Weline\Framework\View\Template|null $template
  */
 
-use Weline\Framework\View\Data\DataInterface;
-
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
-$asset = static function (string $source, string $fallback) use ($template): string {
-    try {
-        if ($template instanceof \Weline\Framework\View\Template) {
-            $url = $template->fetchTagSource(DataInterface::dir_type_STATICS, $source);
-            if (is_string($url) && $url !== '') {
-                return $url;
-            }
-        }
-    } catch (\Throwable) {
-    }
-    return $fallback;
-};
-
-$foundationCss = $asset('Weline_Theme::ui/weline-foundation.css', '/Weline/Theme/view/statics/ui/weline-foundation.css');
-$frontendCss = $asset('Weline_Theme::ui/weline-frontend.css', '/Weline/Theme/view/statics/ui/weline-frontend.css');
-$pageCss = $asset('Weline_Theme::ui/pages/weline-maintenance.css', '/Weline/Theme/view/statics/ui/pages/weline-maintenance.css');
-$uiJs = $asset('Weline_Theme::ui/weline-ui.js', '/Weline/Theme/view/statics/ui/weline-ui.js');
-$pageJs = $asset('Weline_Theme::ui/pages/weline-maintenance.js', '/Weline/Theme/view/statics/ui/pages/weline-maintenance.js');
+$sanitizeFlag = static fn(string $markup): string => (string)preg_replace('/<\?xml[^?]*\?>/i', '', $markup);
 $currentLang = (string)($lang ?? 'zh_Hans_CN');
+$languageCatalog = is_array($languageCatalog ?? null) ? $languageCatalog : [];
+$currentLanguage = is_array($languageCatalog[$currentLang] ?? null) ? $languageCatalog[$currentLang] : null;
+$currentFlag = $sanitizeFlag((string)($currentLanguage['flag'] ?? ''));
+$currentLabel = (string)($currentLanguage['tag_label'] ?? ($currentLanguage['name'] ?? 'ZH'));
 $currentShort = strtoupper(substr($currentLang, 0, 2));
 if (str_starts_with($currentLang, 'zh_Hant')) {
     $currentShort = 'TW';
 } elseif (str_starts_with($currentLang, 'zh_Hans')) {
     $currentShort = 'ZH';
 }
-$languageOptions = [
-    'zh_Hans_CN' => '简体中文',
-    'en_US' => 'English',
-    'zh_Hant_TW' => '繁體中文',
-];
 ?>
 <!DOCTYPE html>
-<html
-    lang="<?= $escape($htmlLang ?? 'zh-CN') ?>"
-    data-w-area="frontend"
-    data-theme-preference="system"
-    data-theme="light"
->
+<html lang="<?= $escape($htmlLang ?? 'zh-CN') ?>" data-default-lang="<?= $escape($defaultLang ?? 'zh_Hans_CN') ?>" data-w-wait-gift="<?= !empty($waitGiftEnabled) ? '1' : '0' ?>" data-w-wave-id="<?= $escape((string)(is_array($wave ?? null) ? ($wave['wave_id'] ?? '') : '')) ?>">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -54,105 +29,900 @@ $languageOptions = [
     <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title><?= $escape($title ?? __('网站维护')) ?></title>
-    <link rel="stylesheet" href="<?= $escape($foundationCss) ?>">
-    <link rel="stylesheet" href="<?= $escape($frontendCss) ?>">
-    <link rel="stylesheet" href="<?= $escape($pageCss) ?>">
-    <script type="module" src="<?= $escape($uiJs) ?>"></script>
-    <script type="module" src="<?= $escape($pageJs) ?>"></script>
+    <title><?= $escape($title ?? '网站维护') ?></title>
+    <?php
+    $faviconUrl = (string)($maintenance_favicon_url ?? \Weline\Theme\Helper\SiteBrand::DEFAULT_ICON_PUBLIC_PATH);
+    $appleTouchIconUrl = (string)($maintenance_apple_touch_icon_url ?? \Weline\Theme\Helper\SiteBrand::DEFAULT_APPLE_TOUCH_ICON_PUBLIC_PATH);
+    ?>
+    <link rel="icon" type="image/png" sizes="128x128" href="<?= $escape($faviconUrl) ?>">
+    <link rel="shortcut icon" href="<?= $escape($faviconUrl) ?>">
+    <link rel="apple-touch-icon" sizes="180x180" href="<?= $escape($appleTouchIconUrl) ?>">
+    <style>
+        :root {
+            --amz-ink: #0f1111;
+            --amz-muted: #565959;
+            --amz-link: #007185;
+            --amz-link-hover: #c45500;
+            --amz-orange: #ff9900;
+            --amz-btn: #ffd814;
+            --amz-btn-border: #fcd200;
+            --amz-btn-hover: #f7ca00;
+            --amz-secondary-bg: #fff;
+            --amz-secondary-border: #d5d9d9;
+            --amz-secondary-hover: #f7fafa;
+            --amz-canvas: #eaeded;
+            --amz-surface: #ffffff;
+            --amz-border: #d5d9d9;
+            --amz-header: #131921;
+            --amz-header-accent: #232f3e;
+            --amz-progress-track: #e3e6e6;
+            --amz-shadow: 0 1px 2px rgba(15, 17, 17, 0.12);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            min-height: 100vh;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            font-family: "Amazon Ember", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+            background: var(--amz-canvas);
+            color: var(--amz-ink);
+            overflow-x: hidden;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        .maintenance-topbar {
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            min-height: 3.5rem;
+            padding:
+                max(0.65rem, env(safe-area-inset-top))
+                max(1rem, env(safe-area-inset-right))
+                0.65rem
+                max(1rem, env(safe-area-inset-left));
+            background: linear-gradient(180deg, var(--amz-header) 0%, var(--amz-header-accent) 100%);
+            color: #fff;
+            box-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+        }
+
+        .maintenance-brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.65rem;
+            min-width: 0;
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .maintenance-brand__logo-bar {
+            display: block;
+            height: 2rem;
+            width: auto;
+            max-width: min(12rem, 46vw);
+            object-fit: contain;
+            background: transparent;
+            padding: 0;
+        }
+
+        .maintenance-brand__mark {
+            display: grid;
+            place-items: center;
+            width: 2.25rem;
+            height: 2.25rem;
+            flex: 0 0 auto;
+            overflow: hidden;
+            border-radius: 4px;
+            background: #fff;
+        }
+
+        .maintenance-brand__logo {
+            max-width: 100%;
+            max-height: 100%;
+            object-fit: contain;
+        }
+
+        .maintenance-brand__wordmark {
+            font-size: 1.15rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .maintenance-brand__smile {
+            display: block;
+            width: 3.5rem;
+            height: 0.45rem;
+            margin-top: 0.1rem;
+            border: 2px solid var(--amz-orange);
+            border-top: 0;
+            border-radius: 0 0 2rem 2rem;
+        }
+
+        .maintenance-header {
+            position: relative;
+            z-index: 2;
+            margin-left: auto;
+        }
+
+        .maintenance-dev-preview-banner {
+            margin: 0;
+            padding: 0.7rem 1rem;
+            border-bottom: 1px solid #f0c14b;
+            background: #fcf6e8;
+            color: #8a6d1d;
+            font-size: 0.85rem;
+            line-height: 1.45;
+            text-align: center;
+        }
+
+        .maintenance-wrapper {
+            width: 100%;
+            max-width: 1120px;
+            margin: 0 auto;
+            flex: 1 1 auto;
+            padding:
+                2rem
+                max(1rem, env(safe-area-inset-right))
+                2.5rem
+                max(1rem, env(safe-area-inset-left));
+        }
+
+        .container {
+            text-align: center;
+            max-width: 960px;
+            margin: 0 auto;
+            padding: 1.75rem 1.5rem 2rem;
+            background: var(--amz-surface);
+            border: 1px solid var(--amz-border);
+            border-radius: 8px;
+            box-shadow: var(--amz-shadow);
+        }
+
+        .maintenance-language-switcher {
+            position: relative;
+        }
+
+        .language-switcher {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            border-radius: 4px;
+            color: #fff;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+            font-size: 0.8125rem;
+        }
+
+        .language-switcher:hover,
+        .language-switcher:focus-within {
+            background: rgba(255, 255, 255, 0.14);
+            border-color: var(--amz-orange);
+        }
+
+        .language-switcher__current {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 500;
+        }
+
+        .language-flag {
+            display: inline-flex;
+            inline-size: 1.35rem;
+            block-size: 1rem;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            border-radius: 2px;
+            flex: 0 0 auto;
+        }
+
+        .language-flag svg {
+            display: block;
+            inline-size: 1.35rem;
+            block-size: auto;
+            max-block-size: 1rem;
+        }
+
+        .language-switcher__chevron {
+            opacity: 0.85;
+            font-size: 0.7rem;
+        }
+
+        .language-options {
+            position: absolute;
+            top: calc(100% + 8px);
+            right: 0;
+            background: #fff;
+            border: 1px solid var(--amz-border);
+            border-radius: 4px;
+            min-width: 190px;
+            max-height: min(60vh, 24rem);
+            overflow: auto;
+            box-shadow: 0 4px 14px rgba(15, 17, 17, 0.18);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-6px);
+            transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+            z-index: 100;
+        }
+
+        .language-switcher:hover .language-options,
+        .language-switcher:focus-within .language-options {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0);
+        }
+
+        .language-option {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            color: var(--amz-ink);
+            text-decoration: none;
+            transition: background 0.12s ease;
+            border-bottom: 1px solid #f0f2f2;
+        }
+
+        .language-option:last-child {
+            border-bottom: none;
+        }
+
+        .language-option:hover {
+            background: #f7fafa;
+        }
+
+        .language-option.active {
+            background: #fef8e7;
+            color: var(--amz-ink);
+            font-weight: 700;
+        }
+
+        .language-option__label {
+            flex: 1 1 auto;
+            text-align: start;
+        }
+
+        .language-option__check {
+            opacity: 0;
+            font-size: 0.75rem;
+            color: var(--amz-link);
+        }
+
+        .language-option.active .language-option__check {
+            opacity: 1;
+        }
+
+        .icon-container {
+            width: auto;
+            min-width: 88px;
+            max-width: min(16rem, 70vw);
+            height: 88px;
+            margin: 0 auto 1.25rem;
+            padding: 0.65rem 1rem;
+            background: #fff8e7;
+            border: 1px solid #f0c14b;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .icon {
+            font-size: 2rem;
+            line-height: 1;
+            color: var(--amz-orange);
+            font-weight: 700;
+        }
+
+        .maintenance-logo {
+            max-width: 100%;
+            max-height: 72px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+        }
+
+        h1 {
+            font-size: clamp(1.5rem, 3.5vw, 1.85rem);
+            font-weight: 700;
+            margin-bottom: 0.65rem;
+            color: var(--amz-ink);
+            line-height: 1.25;
+        }
+
+        .subtitle {
+            font-size: 1rem;
+            color: var(--amz-muted);
+            margin-bottom: 1.25rem;
+            line-height: 1.6;
+        }
+
+        .wave-badge {
+            display: inline-block;
+            margin: 0 0 1rem;
+            padding: 0.2rem 0.55rem;
+            border: 1px solid var(--amz-border);
+            border-radius: 3px;
+            background: #f7f8f8;
+            color: var(--amz-muted);
+            font-size: 0.75rem;
+        }
+
+        .recovery-notice {
+            font-size: 0.95rem;
+            color: var(--amz-muted);
+            margin-bottom: 1.75rem;
+            line-height: 1.6;
+        }
+
+        .progress-container {
+            max-width: 28rem;
+            margin: 0 auto 1.5rem;
+        }
+
+        .progress {
+            height: 6px;
+            background: var(--amz-progress-track);
+            border-radius: 999px;
+            overflow: hidden;
+        }
+
+        .progress-bar {
+            height: 100%;
+            width: 32%;
+            background: linear-gradient(90deg, #f7ca00 0%, var(--amz-orange) 55%, #ff9900 100%);
+            border-radius: 999px;
+            animation: progress 2s ease-in-out infinite;
+        }
+
+        @keyframes progress {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(320%); }
+        }
+
+        .info-cards {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 1rem;
+            margin-top: 0.25rem;
+            text-align: left;
+        }
+
+        .card {
+            background: #fff;
+            border: 1px solid var(--amz-border);
+            border-radius: 8px;
+            padding: 1rem 1.05rem 1.1rem;
+            box-shadow: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .card:hover {
+            border-color: #bbb;
+            box-shadow: var(--amz-shadow);
+        }
+
+        .card-icon {
+            display: inline-grid;
+            place-items: center;
+            width: 1.75rem;
+            height: 1.75rem;
+            margin-bottom: 0.65rem;
+            border-radius: 999px;
+            background: #fff8e7;
+            border: 1px solid #f0c14b;
+            color: #b36b00;
+            font-size: 0.8rem;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .card h3 {
+            font-size: 0.95rem;
+            font-weight: 700;
+            margin-bottom: 0.4rem;
+            color: var(--amz-ink);
+        }
+
+        .card p {
+            font-size: 0.875rem;
+            color: var(--amz-muted);
+            line-height: 1.55;
+        }
+
+        .card a {
+            color: var(--amz-link);
+            text-decoration: none;
+        }
+
+        .card a:hover {
+            color: var(--amz-link-hover);
+            text-decoration: underline;
+        }
+
+        .action-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: center;
+            gap: 0.75rem;
+            margin-top: 1.75rem;
+        }
+
+        .refresh-btn,
+        .back-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            min-height: 2.4rem;
+            padding: 0.45rem 1.15rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            font-family: inherit;
+            transition: background 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
+        }
+
+        .refresh-btn {
+            color: var(--amz-ink);
+            background: linear-gradient(180deg, #ffe566 0%, var(--amz-btn) 55%, #f0c14b 100%);
+            border: 1px solid var(--amz-btn-border);
+            box-shadow: 0 2px 0 rgba(213, 217, 217, 0.5);
+        }
+
+        .refresh-btn:hover {
+            background: linear-gradient(180deg, #ffec80 0%, var(--amz-btn-hover) 60%, #e7b400 100%);
+        }
+
+        .back-btn {
+            color: var(--amz-ink);
+            background: linear-gradient(180deg, #fff 0%, var(--amz-secondary-hover) 100%);
+            border: 1px solid var(--amz-secondary-border);
+            box-shadow: 0 1px 0 rgba(213, 217, 217, 0.55);
+        }
+
+        .back-btn:hover {
+            background: var(--amz-secondary-hover);
+            border-color: #b9bdbd;
+        }
+
+        .maintenance-footer {
+            margin-top: auto;
+            padding:
+                1rem
+                max(1rem, env(safe-area-inset-right))
+                max(1.25rem, env(safe-area-inset-bottom))
+                max(1rem, env(safe-area-inset-left));
+            border-top: 1px solid var(--amz-border);
+            background: #fff;
+            color: var(--amz-muted);
+            font-size: 0.75rem;
+            text-align: center;
+        }
+
+        @media (max-width: 720px) {
+            .info-cards {
+                grid-template-columns: 1fr;
+            }
+
+            .container {
+                padding: 1.35rem 1rem 1.5rem;
+            }
+
+            .maintenance-brand__wordmark {
+                font-size: 1rem;
+            }
+
+            .language-options {
+                right: 0;
+                left: auto;
+                max-width: min(80vw, 16rem);
+            }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .progress-bar {
+                animation: none;
+                width: 100%;
+            }
+        }
+    </style>
 </head>
-<body class="w-maintenance-page">
-    <header class="w-maintenance-page__toolbar" aria-label="<?= $escape(__('页面工具')) ?>">
-        <div class="w-menu-root" data-w-component="menu" data-w-placement="bottom-end" data-w-anchor-mode="element">
-            <button
-                type="button"
-                class="w-button"
-                data-tone="neutral"
-                data-size="sm"
-                data-w-menu-trigger
-                aria-expanded="false"
-                aria-controls="w-maintenance-language-menu"
-                aria-label="<?= $escape(__('切换语言')) ?>"
-            >
-                <w-icon name="language" size="sm"></w-icon>
-                <span><?= $escape($currentShort) ?></span>
-                <w-icon name="chevron-down" size="xs"></w-icon>
-            </button>
-            <div id="w-maintenance-language-menu" class="w-menu" data-w-menu-panel role="menu" hidden>
-                <?php foreach ($languageOptions as $code => $label): ?>
-                    <a
-                        class="w-menu__item"
-                        role="menuitemradio"
-                        aria-checked="<?= $currentLang === $code ? 'true' : 'false' ?>"
-                        data-state="<?= $currentLang === $code ? 'active' : 'idle' ?>"
-                        href="?lang=<?= rawurlencode($code) ?>"
-                    >
-                        <w-icon name="<?= $currentLang === $code ? 'check' : 'circle' ?>" size="sm"></w-icon>
-                        <span><?= $escape($label) ?></span>
-                    </a>
-                <?php endforeach; ?>
+<body>
+    <header class="maintenance-topbar">
+        <a class="maintenance-brand" href="@url{'/'}">
+            <?php if (!empty($maintenance_logo_url)): ?>
+                <img
+                    src="<?= $escape($maintenance_logo_url) ?>"
+                    alt="<?= $escape($heading ?? 'Weline') ?>"
+                    class="maintenance-brand__logo-bar"
+                >
+            <?php else: ?>
+                <span class="maintenance-brand__mark" aria-hidden="true">
+                    <span class="icon" style="font-size:1rem;">W</span>
+                </span>
+                <span>
+                    <span class="maintenance-brand__wordmark">Weline</span>
+                    <span class="maintenance-brand__smile" aria-hidden="true"></span>
+                </span>
+            <?php endif; ?>
+        </a>
+        <?php if ($languageCatalog !== []): ?>
+        <div class="maintenance-header">
+            <div class="maintenance-language-switcher">
+                <div class="language-switcher" role="button" tabindex="0" aria-label="<?= $escape($switchLanguage ?? '切换语言') ?>">
+                    <span class="language-switcher__current">
+                        <?php if ($currentFlag !== ''): ?>
+                            <span class="language-flag" aria-hidden="true"><?= $currentFlag ?></span>
+                        <?php endif; ?>
+                        <span><?= $escape($currentShort) ?></span>
+                        <span class="language-switcher__chevron" aria-hidden="true">▾</span>
+                    </span>
+                    <div class="language-options" role="menu">
+                        <?php foreach ($languageCatalog as $code => $language): ?>
+                            <?php
+                            $optionFlag = $sanitizeFlag((string)($language['flag'] ?? ''));
+                            $optionLabel = (string)($language['tag_label'] ?? ($language['name'] ?? $code));
+                            ?>
+                            <a
+                                href="#"
+                                data-lang="<?= $escape((string)$code) ?>"
+                                class="language-option <?= $currentLang === $code ? 'active' : '' ?>"
+                                role="menuitemradio"
+                                aria-checked="<?= $currentLang === $code ? 'true' : 'false' ?>"
+                            >
+                                <?php if ($optionFlag !== ''): ?>
+                                    <span class="language-flag" aria-hidden="true"><?= $optionFlag ?></span>
+                                <?php endif; ?>
+                                <span class="language-option__label"><?= $escape($optionLabel) ?></span>
+                                <span class="language-option__check" aria-hidden="true">✓</span>
+                            </a>
+                        <?php endforeach; ?>
+                    </div>
+                </div>
             </div>
         </div>
+        <?php endif; ?>
     </header>
 
-    <main class="w-container w-maintenance-page__main">
-        <section class="w-card w-maintenance-page__hero" aria-labelledby="w-maintenance-title">
-            <div class="w-card__body">
-                <div class="w-maintenance-page__mark" aria-hidden="true">
-                    <?php if (!empty($maintenance_logo_url)): ?>
-                        <img class="w-maintenance-page__logo" src="<?= $escape($maintenance_logo_url) ?>" alt="">
-                    <?php else: ?>
-                        <w-icon name="settings" size="xl"></w-icon>
-                    <?php endif; ?>
-                </div>
-                <p class="w-maintenance-page__eyebrow"><?= $escape(__('系统状态')) ?></p>
-                <h1 id="w-maintenance-title"><?= $escape($heading ?? __('系统升级维护中')) ?></h1>
-                <p class="w-maintenance-page__subtitle">
-                    <?= $escape($message1 ?? __('网站正在维护中...')) ?><br>
-                    <?= $escape($message2 ?? __('请稍等片刻')) ?>
-                </p>
-                <div class="w-progress w-maintenance-page__progress" aria-label="<?= $escape(__('恢复检测中')) ?>">
-                    <div class="w-progress__bar"></div>
-                </div>
-                <p class="w-maintenance-page__recovery" data-w-maintenance-status aria-live="polite">
-                    <?= $escape($recoveryNotice ?? __('系统会自动检测恢复状态，服务恢复后将自动刷新，无需反复点击刷新。')) ?>
-                </p>
-            </div>
-        </section>
+    <?php if (!empty($devPreviewMode)): ?>
+        <p class="maintenance-dev-preview-banner" role="status">
+            <?= $escape($devPreviewBanner ?? '开发预览：此地址仅在 DEV 环境可用，上线后不可访问。') ?>
+        </p>
+    <?php endif; ?>
 
-        <section class="w-maintenance-page__cards" aria-label="<?= $escape(__('维护说明')) ?>">
-            <article class="w-card w-maintenance-page__card">
-                <div class="w-card__body">
-                    <w-icon name="help" size="lg"></w-icon>
-                    <h2><?= $escape($whyTitle ?? __('为什么网站会处于维护模式？')) ?></h2>
-                    <p><?= $escape($whyContent ?? __('网站可能发生系统升级事件，或者大多数的内容发生变化，程序员们正在维护或者升级数据以提供更加优质的服务。')) ?></p>
+    <div class="maintenance-wrapper">
+        <div class="container">
+            <div class="icon-container">
+                <?php if (!empty($maintenance_logo_url)): ?>
+                    <img src="<?= $escape($maintenance_logo_url) ?>" alt="" class="maintenance-logo">
+                <?php else: ?>
+                    <span class="icon" aria-hidden="true">!</span>
+                <?php endif; ?>
+            </div>
+
+            <h1><?= $escape($heading ?? '系统升级维护中') ?></h1>
+            <p class="subtitle">
+                <?= $escape($message1 ?? '网站正在维护中...') ?><br>
+                <?= $escape($message2 ?? '请稍等片刻') ?>
+            </p>
+            <?php if (!empty($waveIdShort)): ?>
+                <p class="wave-badge">
+                    <?= $escape($waveIdShort) ?>
+                </p>
+            <?php endif; ?>
+
+            <div class="progress-container" aria-label="<?= $escape($recoveryChecking ?? '恢复检测中') ?>">
+                <div class="progress">
+                    <div class="progress-bar"></div>
                 </div>
-            </article>
-            <article class="w-card w-maintenance-page__card">
-                <div class="w-card__body">
-                    <w-icon name="clock" size="lg"></w-icon>
-                    <h2><?= $escape($howLongTitle ?? __('多久能够恢复？')) ?></h2>
-                    <p><?= $escape($howLongContent ?? __('大部分的网站升级活动都只有几分钟甚至几秒钟的时间。')) ?></p>
+            </div>
+
+            <p class="recovery-notice" data-w-maintenance-status aria-live="polite">
+                <?= $escape($recoveryNotice ?? '正在尝试现场抢修，恢复后会自动进入，请耐心等待') ?>
+            </p>
+
+            <div class="info-cards" aria-label="<?= $escape($maintenanceInstructions ?? '维护说明') ?>">
+                <div class="card">
+                    <div class="card-icon" aria-hidden="true">1</div>
+                    <h3><?= $escape($whyTitle ?? '为什么网站会处于维护模式？') ?></h3>
+                    <p><?= $escape($whyContent ?? '') ?></p>
                 </div>
-            </article>
-            <article class="w-card w-maintenance-page__card">
-                <div class="w-card__body">
-                    <w-icon name="message" size="lg"></w-icon>
-                    <h2><?= $escape($helpTitle ?? __('需要帮助吗？')) ?></h2>
+
+                <div class="card">
+                    <div class="card-icon" aria-hidden="true">2</div>
+                    <h3><?= $escape($howLongTitle ?? '多久能够恢复？') ?></h3>
+                    <p><?= $escape($howLongContent ?? '') ?></p>
+                </div>
+
+                <div class="card">
+                    <div class="card-icon" aria-hidden="true">3</div>
+                    <h3><?= $escape($helpTitle ?? '需要帮助吗？') ?></h3>
                     <p>
-                        <?= $escape($helpContent ?? __('如果你长期看到这个页面，对网站存在疑惑，请联系：')) ?>
-                        <a href="mailto:<?= $escape($contactEmail ?? 'support@example.com') ?>"><?= $escape($contactEmail ?? 'support@example.com') ?></a>
+                        <?= $escape($helpContent ?? '') ?>
+                        <a href="mailto:<?= $escape($contactEmail ?? 'support@example.com') ?>">
+                            <?= $escape($contactEmail ?? 'support@example.com') ?>
+                        </a>
                     </p>
                 </div>
-            </article>
-        </section>
+            </div>
 
-        <div class="w-maintenance-page__actions">
-            <a href="/" class="w-button" data-tone="primary">
-                <w-icon name="home" size="sm"></w-icon>
-                <span><?= $escape($backHome ?? __('返回首页')) ?></span>
-            </a>
+            <div class="action-buttons">
+                <a href="@url{'/'}" class="back-btn">
+                    <span aria-hidden="true">←</span>
+                    <span><?= $escape($backHome ?? '返回首页') ?></span>
+                </a>
+                <button type="button" class="refresh-btn" data-w-maintenance-refresh>
+                    <span aria-hidden="true">↻</span>
+                    <span><?= $escape($refreshCurrentPage ?? '刷新当前页面') ?></span>
+                </button>
+            </div>
         </div>
-    </main>
+    </div>
+    <footer class="maintenance-footer">
+        &copy; <?= date('Y') ?> Weline
+    </footer>
+    <script>
+    (function () {
+        var LANG_RE = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
+        var CURRENCY_RE = /^[A-Z]{3}$/;
+        var defaultLang = document.documentElement.getAttribute('data-default-lang') || 'zh_Hans_CN';
+
+        function buildLocalePath(targetLang) {
+            var parts = (window.location.pathname || '/').split('/').filter(Boolean);
+            var withoutLang = parts.filter(function (part) { return !LANG_RE.test(part); });
+            var out = [];
+            var i = 0;
+            while (i < withoutLang.length && CURRENCY_RE.test(withoutLang[i])) {
+                out.push(withoutLang[i++]);
+            }
+            if (targetLang && targetLang !== defaultLang) {
+                out.push(targetLang);
+            }
+            while (i < withoutLang.length) {
+                out.push(withoutLang[i++]);
+            }
+            return out.length ? ('/' + out.join('/')) : '/';
+        }
+
+        function switchLocale(targetLang) {
+            if (!targetLang) {
+                return;
+            }
+            var url = new URL(window.location.href);
+            if (url.pathname.indexOf('/maintenance/frontend/dev-preview') !== -1) {
+                url.searchParams.set('lang', targetLang);
+                window.location.assign(url.pathname + url.search + url.hash);
+                return;
+            }
+            if (/^\/pub\/errors\/maintenance\//.test(url.pathname)) {
+                window.location.assign(targetLang === defaultLang ? '/' : ('/' + encodeURIComponent(targetLang) + '/'));
+                return;
+            }
+            url.pathname = buildLocalePath(targetLang);
+            ['lang', 'locale', 'locale_code'].forEach(function (key) { url.searchParams.delete(key); });
+            window.location.assign(url.pathname + url.search + url.hash);
+        }
+
+        document.querySelectorAll('a[data-lang]').forEach(function (link) {
+            link.addEventListener('click', function (event) {
+                event.preventDefault();
+                switchLocale(link.getAttribute('data-lang') || '');
+            });
+        });
+
+        var refreshButton = document.querySelector('[data-w-maintenance-refresh]');
+        if (refreshButton) {
+            refreshButton.addEventListener('click', function () {
+                window.location.reload();
+            });
+        }
+
+        <?php if (empty($devPreviewMode)): ?>
+        var initialDelay = 5000;
+        var maximumDelay = 30000;
+        var hardReloadDelay = 30000;
+        var jitter = 1500;
+        var timer = 0;
+        var hardTimer = 0;
+        var WAIT_STORAGE_KEY = 'weline_mw_wait_gift';
+
+        function waitGiftEnabled() {
+            return document.documentElement.getAttribute('data-w-wait-gift') === '1';
+        }
+
+        function pageKey(href) {
+            try {
+                var url = new URL(href || window.location.href);
+                return url.pathname + url.search;
+            } catch (e) {
+                return String(href || '');
+            }
+        }
+
+        function readWaitGift() {
+            try {
+                var raw = sessionStorage.getItem(WAIT_STORAGE_KEY);
+                if (!raw) {
+                    return null;
+                }
+                var data = JSON.parse(raw);
+                if (!data || !data.token || !data.url) {
+                    return null;
+                }
+                return { token: String(data.token), url: String(data.url) };
+            } catch (e) {
+                return null;
+            }
+        }
+
+        function storeWaitGift(token) {
+            var value = String(token || '');
+            try {
+                if (!value) {
+                    sessionStorage.removeItem(WAIT_STORAGE_KEY);
+                    return;
+                }
+                sessionStorage.setItem(WAIT_STORAGE_KEY, JSON.stringify({
+                    token: value,
+                    url: pageKey()
+                }));
+            } catch (e) {}
+        }
+
+        function postJson(url, body) {
+            return fetch(url, {
+                method: 'POST',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    Accept: 'application/json',
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body || {})
+            }).then(function (response) {
+                return response.json().catch(function () { return {}; }).then(function (data) {
+                    return { ok: response.ok, status: response.status, data: data || {} };
+                });
+            });
+        }
+
+        function issueWaitToken() {
+            if (!waitGiftEnabled()) {
+                return;
+            }
+            var existing = readWaitGift();
+            var body = existing && existing.url === pageKey() ? { token: existing.token } : {};
+            postJson('/maintenance/frontend/wait-gift/issue', body)
+                .then(function (result) {
+                    if (result.data && result.data.success && result.data.token) {
+                        storeWaitGift(result.data.token);
+                    }
+                })
+                .catch(function () {});
+        }
+
+        function probeUrl() {
+            var url = new URL(window.location.href);
+            if (/^\/pub\/errors\/maintenance\//.test(url.pathname)) {
+                url.pathname = '/';
+            }
+            url.hash = '';
+            url.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
+            return url;
+        }
+
+        function schedule(delay) {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(function () {
+                timer = 0;
+                check();
+            }, delay + Math.floor(Math.random() * jitter));
+        }
+
+        function scheduleHardReload() {
+            window.clearTimeout(hardTimer);
+            hardTimer = window.setTimeout(function () {
+                hardTimer = 0;
+                if (!document.hidden) {
+                    window.location.reload();
+                    return;
+                }
+                scheduleHardReload();
+            }, hardReloadDelay);
+        }
+
+        function probe(method) {
+            return fetch(probeUrl(), {
+                method: method,
+                cache: 'no-store',
+                credentials: 'same-origin',
+                redirect: 'manual',
+                headers: {
+                    Accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+                    'X-Maintenance-Recovery-Check': '1'
+                }
+            });
+        }
+
+        function isRecovered(response) {
+            if (response.type === 'opaqueredirect') {
+                return true;
+            }
+            var status = response.status;
+            if (status === 503) {
+                return false;
+            }
+            if (status === 0 || status === 500 || status === 502 || status === 504) {
+                return false;
+            }
+            return true;
+        }
+
+        function handle(response) {
+            if (isRecovered(response)) {
+                // Keep the same document URL; storefront JS redeems after reload.
+                window.location.reload();
+                return;
+            }
+            schedule(response.status === 503 ? initialDelay : maximumDelay);
+        }
+
+        function check() {
+            if (document.hidden) {
+                return;
+            }
+            probe('HEAD')
+                .then(function (response) {
+                    return [405, 501].includes(response.status) ? probe('GET') : response;
+                })
+                .then(handle)
+                .catch(function () {
+                    schedule(maximumDelay);
+                });
+        }
+
+        document.addEventListener('visibilitychange', function () {
+            if (document.hidden) {
+                window.clearTimeout(timer);
+                timer = 0;
+                window.clearTimeout(hardTimer);
+                hardTimer = 0;
+                return;
+            }
+            schedule(0);
+            scheduleHardReload();
+        });
+
+        issueWaitToken();
+        schedule(initialDelay);
+        scheduleHardReload();
+        <?php endif; ?>
+    })();
+    </script>
 </body>
 </html>

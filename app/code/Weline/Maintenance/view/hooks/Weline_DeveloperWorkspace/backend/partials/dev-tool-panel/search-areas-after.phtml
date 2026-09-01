@@ -1,0 +1,360 @@
+<?php
+/**
+ * Weline_Maintenance - 前台开发面板：高级维护（最右侧一级 Tab + 二级子页）
+ * Hook：Weline_DeveloperWorkspace::backend::partials::dev-tool-panel::search-areas-after
+ *
+ * 一级：高级维护（order 很高，保证在 SEO / 访问事件之后）
+ * 二级：维护页预览 + 其他模块通过 WelineAdvancedMaintenance.registerChild 挂入（如 DevRelay）
+ *
+ * @hook-priority 200
+ * @hook-sort-order 100
+ * @hook-solo false
+ */
+
+use Weline\Maintenance\Service\MaintenanceDevPreview;
+
+if (!MaintenanceDevPreview::isAvailable()) {
+    return;
+}
+
+$panelType = (string)($panelType ?? 'frontend');
+if ($panelType !== 'frontend') {
+    return;
+}
+
+$previewUrl = MaintenanceDevPreview::URI_MARKER;
+$previewApiUrl = MaintenanceDevPreview::apiUrl();
+$tabTitle = (string)__('高级维护');
+$previewSubTitle = (string)__('维护页');
+$hintText = (string)__('DEV 维护与连调入口');
+$noteText = (string)__('开发预览：此地址仅在 DEV 环境可用。点击下方链接在新标签页查看维护页，可在预览页内切换语言。');
+$openHtmlLabel = (string)__('打开维护页预览');
+$openJsonLabel = (string)__('打开 JSON 预览');
+?>
+<div id="dev-tool-search-area-maintenance-advanced" style="display: none;">
+    <div class="maintenance-advanced-toolbar">
+        <span class="maintenance-advanced-toolbar__title"><?= htmlspecialchars($tabTitle, ENT_QUOTES, 'UTF-8') ?></span>
+        <span class="maintenance-advanced-toolbar__hint"><?= htmlspecialchars($hintText, ENT_QUOTES, 'UTF-8') ?></span>
+    </div>
+</div>
+<style>
+    #dev-tool-panel .maintenance-advanced-toolbar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        min-height: 34px;
+        font-size: 12px;
+        color: #475569;
+    }
+    #dev-tool-panel .maintenance-advanced-toolbar__title {
+        font-weight: 700;
+        color: #1e293b;
+    }
+    #dev-tool-panel .maintenance-advanced-toolbar__hint {
+        color: #64748b;
+    }
+    #dev-tool-panel .wam-shell {
+        color: #0f172a;
+        font-size: 13px;
+    }
+    #dev-tool-panel .wam-subtabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 6px;
+        margin: 0 0 12px;
+        border: 1px solid #d8e1ec;
+        border-radius: 8px;
+        background: #eef3f8;
+    }
+    #dev-tool-panel .wam-subtab {
+        height: 36px;
+        border: 1px solid transparent;
+        border-radius: 7px;
+        background: transparent;
+        color: #40516a;
+        font-weight: 800;
+        padding: 0 14px;
+        cursor: pointer;
+    }
+    #dev-tool-panel .wam-subtab.is-active {
+        background: #ffffff;
+        border-color: #cbd5e1;
+        color: #0f172a;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.08);
+    }
+    #dev-tool-panel .wam-body {
+        min-height: 120px;
+    }
+    #dev-tool-panel .maintenance-advanced-links {
+        display: grid;
+        gap: 12px;
+        padding: 4px 0 8px;
+    }
+    #dev-tool-panel .maintenance-advanced-links__note {
+        margin: 0;
+        padding: 10px 12px;
+        border-radius: 8px;
+        border: 1px solid #fde68a;
+        background: #fffbeb;
+        color: #92400e;
+        font-size: 12px;
+        line-height: 1.5;
+    }
+    #dev-tool-panel .maintenance-advanced-links__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    #dev-tool-panel .maintenance-advanced-links__btn {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 36px;
+        padding: 8px 14px;
+        margin: 0;
+        border-radius: 8px;
+        border: 1px solid #1d4ed8;
+        background: #2563eb;
+        color: #ffffff !important;
+        font-size: 13px;
+        font-weight: 600;
+        line-height: 1.2;
+        text-decoration: none !important;
+        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.12);
+    }
+    #dev-tool-panel .maintenance-advanced-links__btn:hover {
+        background: #1d4ed8;
+        border-color: #1e40af;
+        color: #ffffff !important;
+    }
+    #dev-tool-panel .maintenance-advanced-links__btn--secondary {
+        background: #ffffff;
+        border-color: #334155;
+        color: #0f172a !important;
+    }
+    #dev-tool-panel .maintenance-advanced-links__btn--secondary:hover {
+        background: #f8fafc;
+        border-color: #0f172a;
+        color: #0f172a !important;
+    }
+</style>
+<script>
+(function () {
+    'use strict';
+
+    var TAB_ID = 'maintenance-advanced';
+    var TAB_TITLE = <?= json_encode($tabTitle, JSON_UNESCAPED_UNICODE) ?>;
+    var PREVIEW_SUB_ID = 'maintenance-preview';
+    var PREVIEW_SUB_TITLE = <?= json_encode($previewSubTitle, JSON_UNESCAPED_UNICODE) ?>;
+    var PREVIEW_URL = <?= json_encode($previewUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var PREVIEW_API_URL = <?= json_encode($previewApiUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var NOTE_TEXT = <?= json_encode($noteText, JSON_UNESCAPED_UNICODE) ?>;
+    var OPEN_HTML_LABEL = <?= json_encode($openHtmlLabel, JSON_UNESCAPED_UNICODE) ?>;
+    var OPEN_JSON_LABEL = <?= json_encode($openJsonLabel, JSON_UNESCAPED_UNICODE) ?>;
+    var ACTIVE_CHILD_KEY = 'weline_advanced_maintenance_child';
+    var children = {};
+    var activeChildId = PREVIEW_SUB_ID;
+    var shellMounted = false;
+
+    function escapeHtml(text) {
+        return String(text || '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
+
+    function sortedChildren() {
+        return Object.keys(children).map(function (id) {
+            return children[id];
+        }).sort(function (a, b) {
+            return (Number(a.order) || 100) - (Number(b.order) || 100);
+        });
+    }
+
+    function renderPreviewBody(host) {
+        if (!host) return;
+        host.innerHTML =
+            '<div class="maintenance-advanced-links">' +
+                '<p class="maintenance-advanced-links__note">' + escapeHtml(NOTE_TEXT) + '</p>' +
+                '<div class="maintenance-advanced-links__actions">' +
+                    '<a class="maintenance-advanced-links__btn" href="' + escapeHtml(PREVIEW_URL) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(OPEN_HTML_LABEL) + '</a>' +
+                    '<a class="maintenance-advanced-links__btn maintenance-advanced-links__btn--secondary" href="' + escapeHtml(PREVIEW_API_URL) + '" target="_blank" rel="noopener noreferrer">' + escapeHtml(OPEN_JSON_LABEL) + '</a>' +
+                '</div>' +
+            '</div>';
+    }
+
+    function ensurePreviewChild() {
+        if (children[PREVIEW_SUB_ID]) return;
+        children[PREVIEW_SUB_ID] = {
+            id: PREVIEW_SUB_ID,
+            title: PREVIEW_SUB_TITLE,
+            order: 10,
+            activate: function (host) {
+                renderPreviewBody(host);
+            }
+        };
+    }
+
+    function rememberActiveChild(id) {
+        activeChildId = id;
+        try { localStorage.setItem(ACTIVE_CHILD_KEY, id); } catch (e) {}
+    }
+
+    function readRememberedChild() {
+        try {
+            return localStorage.getItem(ACTIVE_CHILD_KEY) || '';
+        } catch (e) {
+            return '';
+        }
+    }
+
+    function activateChild(id) {
+        ensurePreviewChild();
+        var list = sortedChildren();
+        if (!children[id]) {
+            id = list.length ? list[0].id : PREVIEW_SUB_ID;
+        }
+        rememberActiveChild(id);
+
+        var shell = document.getElementById('wam-shell');
+        var body = document.getElementById('wam-body');
+        if (!shell || !body) {
+            return;
+        }
+
+        Array.prototype.forEach.call(shell.querySelectorAll('.wam-subtab'), function (btn) {
+            btn.classList.toggle('is-active', btn.getAttribute('data-wam-sub') === id);
+        });
+
+        body.innerHTML = '';
+        var child = children[id];
+        if (child && typeof child.activate === 'function') {
+            child.activate(body);
+        }
+    }
+
+    function mountShell(content) {
+        ensurePreviewChild();
+        var list = sortedChildren();
+        var remembered = readRememberedChild();
+        if (remembered && children[remembered]) {
+            activeChildId = remembered;
+        } else if (!children[activeChildId] && list.length) {
+            activeChildId = list[0].id;
+        }
+
+        var tabsHtml = list.map(function (child) {
+            return '<button type="button" class="wam-subtab' + (child.id === activeChildId ? ' is-active' : '') + '" data-wam-sub="' + escapeHtml(child.id) + '">' +
+                escapeHtml(child.title || child.id) +
+                '</button>';
+        }).join('');
+
+        content.innerHTML =
+            '<div class="wam-shell" id="wam-shell">' +
+                '<div class="wam-subtabs">' + tabsHtml + '</div>' +
+                '<div class="wam-body" id="wam-body"></div>' +
+            '</div>';
+
+        Array.prototype.forEach.call(content.querySelectorAll('.wam-subtab'), function (btn) {
+            btn.addEventListener('click', function () {
+                activateChild(btn.getAttribute('data-wam-sub'));
+            });
+        });
+
+        shellMounted = true;
+        activateChild(activeChildId);
+    }
+
+    function loadAdvancedMaintenanceContent() {
+        var content = document.getElementById('dev-tool-content');
+        if (!content) {
+            return;
+        }
+        mountShell(content);
+    }
+
+    function registerChild(manifest) {
+        if (!manifest || !manifest.id) {
+            return;
+        }
+        var id = String(manifest.id);
+        children[id] = {
+            id: id,
+            title: manifest.title || id,
+            order: Number(manifest.order) || 100,
+            activate: typeof manifest.activate === 'function' ? manifest.activate : function () {}
+        };
+        // 若当前已打开高级维护，刷新二级导航
+        var content = document.getElementById('dev-tool-content');
+        var shell = document.getElementById('wam-shell');
+        var activeMain = document.querySelector('#dev-tool-panel .dev-tool-tab.active');
+        if (content && shell && activeMain && activeMain.getAttribute('data-tab') === TAB_ID) {
+            mountShell(content);
+        }
+    }
+
+    // 吃掉提前排队的子页
+    window.__WELINE_ADVANCED_MAINTENANCE_CHILDREN__ = window.__WELINE_ADVANCED_MAINTENANCE_CHILDREN__ || {};
+    Object.keys(window.__WELINE_ADVANCED_MAINTENANCE_CHILDREN__).forEach(function (id) {
+        registerChild(window.__WELINE_ADVANCED_MAINTENANCE_CHILDREN__[id]);
+    });
+
+    window.WelineAdvancedMaintenance = {
+        parentTabId: TAB_ID,
+        registerChild: function (manifest) {
+            if (!manifest || !manifest.id) return;
+            window.__WELINE_ADVANCED_MAINTENANCE_CHILDREN__[String(manifest.id)] = manifest;
+            registerChild(manifest);
+        }
+    };
+
+    function registerTabManifest() {
+        var manifest = {
+            id: TAB_ID,
+            title: TAB_TITLE,
+            // 保证排在 SEO / 访问事件 / 其他扩展之后，落在最右侧
+            order: 9990,
+            activate: loadAdvancedMaintenanceContent
+        };
+
+        window.__WELINE_PANEL_TAB_QUEUE__ = window.__WELINE_PANEL_TAB_QUEUE__ || [];
+        window.__WELINE_PANEL_TABS__ = window.__WELINE_PANEL_TABS__ || {};
+        window.__WELINE_PANEL_TABS__[TAB_ID] = manifest;
+
+        if (window.WelinePanel && typeof window.WelinePanel.registerTab === 'function') {
+            window.WelinePanel.registerTab(manifest);
+        } else {
+            var queued = false;
+            for (var i = 0; i < window.__WELINE_PANEL_TAB_QUEUE__.length; i += 1) {
+                if (window.__WELINE_PANEL_TAB_QUEUE__[i] && window.__WELINE_PANEL_TAB_QUEUE__[i].id === TAB_ID) {
+                    queued = true;
+                    break;
+                }
+            }
+            if (!queued) {
+                window.__WELINE_PANEL_TAB_QUEUE__.push(manifest);
+            }
+        }
+
+        if (typeof window.DevToolPanelRegisterExtensionTab === 'function') {
+            window.DevToolPanelRegisterExtensionTab(TAB_ID, loadAdvancedMaintenanceContent);
+            return;
+        }
+        if (window.DevToolPanel && typeof window.DevToolPanel.registerExtensionTab === 'function') {
+            window.DevToolPanel.registerExtensionTab(TAB_ID, loadAdvancedMaintenanceContent);
+            return;
+        }
+        setTimeout(registerTabManifest, 50);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', registerTabManifest);
+    } else {
+        registerTabManifest();
+    }
+})();
+</script>
