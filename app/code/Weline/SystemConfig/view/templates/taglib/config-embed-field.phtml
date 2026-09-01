@@ -1,0 +1,147 @@
+<?php
+/**
+ * Per-field control for config embed (type → UI).
+ *
+ * @var array<string, mixed> $field
+ */
+$status = (string)($field['status'] ?? 'ok');
+$key = (string)($field['key'] ?? '');
+$label = (string)($field['label'] ?? $key);
+$description = (string)($field['description'] ?? '');
+$type = strtolower((string)($field['type'] ?? 'text'));
+$valueType = strtolower((string)($field['value_type'] ?? ''));
+if ($valueType === '') {
+    $valueType = match ($type) {
+        'switch', 'checkbox', 'boolean' => 'bool',
+        'number', 'int', 'integer' => 'int',
+        default => 'string',
+    };
+}
+$editable = !empty($field['editable']);
+$displayValue = (string)($field['display_value'] ?? '');
+$value = $field['value'] ?? null;
+$options = is_array($field['options'] ?? null) ? $field['options'] : [];
+$denyTip = (string)($field['deny_tip'] ?? '');
+$deeplink = (string)($field['deeplink'] ?? '');
+$baseVersion = (int)($field['base_version'] ?? 0);
+$isUndeclared = $status === 'undeclared';
+$disabled = !$editable;
+$title = $denyTip !== '' ? $denyTip : ($isUndeclared ? $description : '');
+$effectiveValue = $displayValue;
+if ($effectiveValue === '' && (is_scalar($value) || $value === null)) {
+    if (is_bool($value)) {
+        $effectiveValue = $value ? '1' : '0';
+    } else {
+        $effectiveValue = (string)($value ?? '');
+    }
+}
+$switchChecked = in_array(strtolower($effectiveValue), ['1', 'true', 'on', 'yes'], true)
+    || $value === true
+    || $value === 1;
+$rowClass = 'w-config-embed__field';
+if ($isUndeclared) {
+    $rowClass .= ' is-undeclared';
+}
+if ($status === 'forbidden' || $status === 'scope_denied') {
+    $rowClass .= ' is-disabled';
+}
+if ($status === 'sensitive_readonly') {
+    $rowClass .= ' is-sensitive';
+}
+?>
+<div
+    class="<?= htmlspecialchars($rowClass, ENT_QUOTES, 'UTF-8') ?>"
+    data-testid="config-embed-field"
+    data-config-key="<?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?>"
+    data-status="<?= htmlspecialchars($status, ENT_QUOTES, 'UTF-8') ?>"
+    data-field-type="<?= htmlspecialchars($type, ENT_QUOTES, 'UTF-8') ?>"
+    data-value-type="<?= htmlspecialchars($valueType, ENT_QUOTES, 'UTF-8') ?>"
+    data-base-version="<?= $baseVersion ?>"
+    <?= $title !== '' ? ' title="' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '"' : '' ?>
+>
+    <div class="w-config-embed__field-meta">
+        <div class="w-config-embed__label"><?= htmlspecialchars($label, ENT_QUOTES, 'UTF-8') ?></div>
+        <code class="w-config-embed__key"><?= htmlspecialchars($key, ENT_QUOTES, 'UTF-8') ?></code>
+        <?php if ($description !== ''): ?>
+            <div class="w-text" data-tone="<?= $isUndeclared ? 'danger' : 'muted' ?>" data-size="sm">
+                <?= htmlspecialchars($description, ENT_QUOTES, 'UTF-8') ?>
+            </div>
+        <?php endif; ?>
+        <?php if ($isUndeclared): ?>
+            <div class="w-alert" data-tone="danger" data-testid="config-embed-undeclared">
+                <lang>没有这个字段</lang>
+            </div>
+        <?php endif; ?>
+        <?php if ($status === 'sensitive_readonly' && $deeplink !== ''): ?>
+            <a class="w-link" data-testid="config-embed-sensitive-link" href="<?= htmlspecialchars($deeplink, ENT_QUOTES, 'UTF-8') ?>">
+                <lang>前往统一配置中心修改</lang>
+            </a>
+        <?php endif; ?>
+    </div>
+
+    <div class="w-config-embed__control w-field">
+        <div class="w-field__control">
+            <?php if ($isUndeclared): ?>
+                <input class="w-input" type="text" value="" disabled data-size="sm">
+            <?php elseif ($type === 'select' && $options !== []): ?>
+                <select
+                    class="w-select"
+                    data-w-config-embed-control
+                    data-size="sm"
+                    <?= $disabled ? ' disabled' : '' ?>
+                >
+                    <?php foreach ($options as $optionValue => $optionLabel): ?>
+                        <option value="<?= htmlspecialchars((string)$optionValue, ENT_QUOTES, 'UTF-8') ?>" <?= (string)$optionValue === $effectiveValue ? 'selected' : '' ?>>
+                            <?= htmlspecialchars((string)$optionLabel, ENT_QUOTES, 'UTF-8') ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            <?php elseif (in_array($type, ['switch', 'checkbox', 'boolean'], true)): ?>
+                <label class="w-switch" <?= $title !== '' ? ' title="' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '"' : '' ?>>
+                    <input
+                        type="checkbox"
+                        data-w-config-embed-control
+                        value="1"
+                        <?= $switchChecked ? ' checked' : '' ?>
+                        <?= $disabled ? ' disabled' : '' ?>
+                    >
+                </label>
+            <?php elseif ($type === 'textarea'): ?>
+                <textarea
+                    class="w-textarea"
+                    data-w-config-embed-control
+                    rows="2"
+                    data-size="sm"
+                    <?= $disabled ? ' disabled' : '' ?>
+                ><?= htmlspecialchars($effectiveValue, ENT_QUOTES, 'UTF-8') ?></textarea>
+            <?php elseif ($type === 'number'): ?>
+                <input
+                    class="w-input"
+                    type="number"
+                    data-w-config-embed-control
+                    value="<?= htmlspecialchars($effectiveValue, ENT_QUOTES, 'UTF-8') ?>"
+                    data-size="sm"
+                    <?= $disabled ? ' disabled' : '' ?>
+                >
+            <?php elseif (in_array($type, ['password', 'secret'], true) || !empty($field['is_sensitive'])): ?>
+                <input
+                    class="w-input"
+                    type="password"
+                    value="********"
+                    data-size="sm"
+                    disabled
+                    autocomplete="off"
+                >
+            <?php else: ?>
+                <input
+                    class="w-input"
+                    type="text"
+                    data-w-config-embed-control
+                    value="<?= htmlspecialchars($effectiveValue, ENT_QUOTES, 'UTF-8') ?>"
+                    data-size="sm"
+                    <?= $disabled ? ' disabled' : '' ?>
+                >
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

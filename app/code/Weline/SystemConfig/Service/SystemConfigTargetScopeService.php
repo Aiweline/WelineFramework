@@ -56,6 +56,8 @@ final class SystemConfigTargetScopeService
             || \array_key_exists('store_code', $input)
             || \array_key_exists('channel_code', $input);
 
+        // 筛选表单会提交分段键：空 website = Global，优先于可能过期的 hidden target_scope。
+        // 仅 target_scope 深链（无分段键）走下方 explicit 分支。
         if ($hasSegmentFields) {
             return $this->fromParts($website, $store, $channel, $scopeKind, $storeMode);
         }

@@ -10,6 +10,7 @@ Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存
 - [SystemConfig Scope 配置树计划](./scope-config-tree-plan.md)：配置模块子计划，定义 `system_config` 如何升级为统一 scope 配置系统。
 - [SystemConfig 与 Theme 虚拟布局总计划](./scope-config-theme-layout-master-plan.md)：跨模块总计划，关联 SystemConfig、Framework Scope、Theme 虚拟布局、产品/分类布局接入。
 - [Theme 虚拟布局与产品/分类布局计划](../../Theme/doc/virtual-layout-scope-plan.md)：Theme 模块子计划，说明虚拟布局、源码编辑、可视化编辑、AI 创建和定时恢复策略。
+- [**`<w:config:embed>` 配置嵌入标签使用指南**](./config-embed标签使用指南.md)：任意后台页嵌入已声明字段的完整属性、Scope、保存、ACL、type 矩阵与排错。
 
 ## 主要功能
 
@@ -33,6 +34,7 @@ Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存
 
 - 后台工作 Scope 用 Website / Store / Channel 三段选择；`Global` = 空 website。
 - **写目标只信表单显式** `target_scope` / `website_code+store_code+channel_code`；Session 仅 UI 恢复。
+- **地址栏跟随范围**：解析后的工作 Scope 会 302 规范化到含 `target_scope` + `website_code`/`store_code`/`channel_code` 的可分享 URL；切换筛选后复制链接不会改错层。仅 `target_scope` 深链在请求未带分段键时生效；筛选表单提交的空 `website_code` 表示 Global。
 - POST 强制 `form_key` CSRF + Same-Origin（Origin/Referer）；敏感字段需 `reauth_password`。
 - Query 写操作缺少显式 TargetScope 时拒绝：`system_config_write_requires_explicit_target_scope`。
 - 字段展示：`source_kind` / 覆盖 / 锁定 / 压制徽章。
@@ -42,6 +44,7 @@ Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存
   - Store / Channel：`<w:websites:store:select>` / `<w:websites:channel:select>`
   - Locale：`<w:i18n:language:select>`（空值归一为 `default`）
   - 切换 Website/Store/Channel/Module/Locale 会自动提交筛选表单；Website/Store 变更会清空下级段。
+- OAuth 类 adapter 可声明 `callback-path` / `callback-label`：配置中心在一键授权旁展示含当前 `target_scope` 的 Return URL，供复制到第三方 Developer App。
 
 ### 0.3 配置对象授权（TASK-P1B-004）
 
@@ -95,6 +98,38 @@ Weline SystemConfig 是系统的配置管理模块，提供了统一的配置存
 
 ## 使用方法
 
+### 配置嵌入（`<w:config:embed>`）
+
+> **完整用法（属性表、选择优先级、变量绑定、runtime、type 矩阵、排错）见：[config-embed标签使用指南.md](./config-embed标签使用指南.md)。**  
+> Taglib 场景入口：[场景映射表 — 业务页就地改配置](../../Taglib/doc/场景映射表.md)。
+
+在任意后台模板引用**已声明**的配置字段/分组/模块，按字段 `type` 各自渲染控件：
+
+```html
+<w:config:embed module="Weline_Payment" field="payment/method/paypal/enabled" />
+<w:config:embed module="Weline_Payment" fields="a,b,c" layout="horizontal" />
+<w:config:embed module="Weline_Payment" group="paypal_runtime" />
+<w:config:embed module="Weline_Payment" area="backend" />
+```
+
+列表循环推荐变量名绑定（无 `$`）：
+
+```php
+<?php $embedModule = $providerModule; $embedField = 'payment/method/' . $code . '/enabled'; ?>
+<w:config:embed module="embedModule" field="embedField" layout="inline" />
+```
+
+| 要点 | 行为 |
+|------|------|
+| Scope | 只信 URL（`target_scope` 或分段 code）；无 Session；缺省 Global |
+| 保存 | 变更即 `system_config.setScopedConfig` + toast；务必带 `locale=default` |
+| ACL | 无 UPDATE 灰显；未声明红标不阻断同级；敏感只读深链 |
+| 选择 | `field`/`fields` → `group` → 整 `module`+`area` |
+| layout | `vertical`（默认）/ `horizontal` / `inline`（表格列藏 meta） |
+| 声明 vs 消费 | `group`/`field`/`adapter`/`hint` 声明契约；`embed` 只消费 |
+
+首个业务样例：支付方式列表「是否启用」列（`Weline_Payment` `Backend/Method/index.phtml`）。
+
 ### 配置模板定义
 模块通过 Extends 模式把 PHTML 配置模板注册给 `Weline_SystemConfig`，SystemConfig 从 Extends registry 收集模板，不在 Web 运行时扫描模块目录。
 
@@ -146,6 +181,8 @@ app/code/{Vendor}/{Module}/extends/module/Weline_SystemConfig/Config/{area}/{cod
 - `module`: 配置模板所属模块，例如 `WeShop_Payment`
 - `area`: 配置区域，例如 `backend` 或 `frontend`
 - `guide_key`: 需要高亮的完整配置 key；支持逗号/分号/空格分隔的多个 key（也可传 `guide_keys`）
+  - 字段：完整 field key，例如 `payment/method/paypal/sandbox_credentials_source`
+  - 适配器：`adapter:{code}`，例如 `adapter:paypal.sandbox.authorize`（对应 `<w:config:adapter code="…">`）
 - `guide_locate`: 当前要定位的 key（多目标时用于标记「当前定位」；缺省为第一个 key）
 - `guide_title`: 顶部引导卡片标题
 - `guide_summary`: 顶部引导卡片说明
