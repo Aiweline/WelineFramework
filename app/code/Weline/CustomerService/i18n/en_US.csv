@@ -25,11 +25,11 @@
 语言代码不能为空,"Language code cannot be empty"
 语言设置成功,"Language set successfully"
 设置语言失败：%{1},"Failed to set language: %{1}"
-人机验证加载失败，请稍后重试,人机验证加载失败，请稍后重试
+人机验证加载失败，请稍后重试,"Captcha failed to load. Please try again later."
 邮箱地址不能为空,"Email address cannot be empty"
 邮箱格式不正确,"Invalid email format"
 会话令牌不能为空,"Session token cannot be empty"
-人机验证失败或已过期，请重试,人机验证失败或已过期，请重试
+人机验证失败或已过期，请重试,"Captcha verification failed or expired. Please try again."
 验证邮件已发送，请查收,"Verification email sent, please check"
 发送验证邮件失败，请稍后重试,"Failed to send verification email, please try again later"
 发送验证邮件失败：%{1},"Failed to send verification email: %{1}"
@@ -126,9 +126,9 @@ settings,settings
 最长,Longest
 秒,seconds
 提示,Prompt
-请注意,请注意
-操作失败,操作失败
-知道了,知道了
+请注意,"Please note"
+操作失败,"Operation failed"
+知道了,"Got it"
 客服服务,"Customer Service"
 我的语言,"My Language"
 显示模式,"Display Mode"
@@ -166,7 +166,7 @@ settings,settings
 绑定成功后，您将收到客服回复的邮件通知,"After successful binding, you will receive email notifications for customer service replies"
 返回上一页,"Go Back"
 如有问题，请,"If you have any questions, please"
-联系客服,"Contact Customer Service"
+联系客服,"Contact Support"
 保存失败,"Failed to save"
 启用客服服务,"Enable Customer Service"
 启用,Enable
@@ -252,7 +252,8 @@ ID,ID
 聊天记录,"Chat History"
 翻译：,Translation:
 "客服服务 - 邮箱绑定验证","Customer Service - Email Binding Verification"
-"邮件服务尚未配置。请先在后台 SMTP 设置中为 Weline_Smtp 或 Weline_CustomerService 添加发件人。","邮件服务尚未配置。请先在后台 SMTP 设置中为 Weline_Smtp 或 Weline_CustomerService 添加发件人。"
+"邮件服务尚未配置。请先在后台 SMTP 设置中为 Weline_Smtp 或 Weline_CustomerService 添加发件人。","Mail service is not configured. Please add a sender for Weline_Smtp or Weline_CustomerService in the backend SMTP settings first."
 客服系统,"Customer Service System"
-鐎广垺婀囬崷銊у殠,"Menu Bar"
-鐎广垺婀囩粋鑽ゅ殠,Menu
+页脚联系客服链接,"Footer Contact Support Link"
+"页脚帮助中心扩展槽：联系客服入口；点击打开悬浮客服聊天；默认注入 footer-help-links。","Footer help extras: contact support opens floating chat; default inject footer-help-links."
+页脚帮助中心默认展示联系客服（打开悬浮聊天）,"Footer help center defaults to Contact Support (open floating chat)"

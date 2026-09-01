@@ -170,7 +170,7 @@ $email = $this->getData('email') ?? '';
                 </div>
             <?php endif; ?>
             <div class="verify-actions">
-                <a href="/" class="w-button" data-tone="primary"><?= __('返回首页') ?></a>
+                <a href="@url{'/'}" class="w-button" data-tone="primary"><?= __('返回首页') ?></a>
             </div>
             <p class="help-text">
                 <?= __('绑定成功后，您将收到客服回复的邮件通知') ?>
@@ -182,11 +182,11 @@ $email = $this->getData('email') ?? '';
             <h1 class="verify-title"><?= __('验证失败') ?></h1>
             <p class="verify-message"><?= htmlspecialchars($message) ?></p>
             <div class="verify-actions">
-                <a href="/" class="w-button" data-tone="primary"><?= __('返回首页') ?></a>
+                <a href="@url{'/'}" class="w-button" data-tone="primary"><?= __('返回首页') ?></a>
                 <button class="w-button" type="button" data-cs-bind-back data-tone="neutral"><?= __('返回上一页') ?></button>
             </div>
             <p class="help-text">
-                <?= __('如有问题，请') ?> <a href="/" data-cs-bind-open-chat><?= __('联系客服') ?></a>
+                <?= __('如有问题，请') ?> <a href="@url{'/'}" data-cs-bind-open-chat><?= __('联系客服') ?></a>
             </p>
         <?php endif; ?>
     </div>
@@ -198,7 +198,7 @@ $email = $this->getData('email') ?? '';
             CustomerServiceWidget.toggleChat();
         } else {
             // 如果客服组件不可用，跳转到首页
-            window.location.href = '/';
+            window.location.href='@url{'/'}';
         }
     }
 

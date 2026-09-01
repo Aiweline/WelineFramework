@@ -1362,3 +1362,5 @@ const CustomerServiceWidget = (function() {
         sendBindEmail
     };
 })();
+
+window.CustomerServiceWidget = CustomerServiceWidget;

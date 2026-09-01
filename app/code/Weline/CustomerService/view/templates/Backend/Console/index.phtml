@@ -6,7 +6,7 @@ $agent = $this->getData('agent') ?? [];
 $sessions = $this->getData('sessions') ?? [];
 $waitingSessions = $this->getData('waitingSessions') ?? [];
 $statistics = $this->getData('statistics') ?? [];
-$consoleUrl = $this->getBackendUrl('customerservice/backend/console');
+$consolePath = 'customerservice/backend/console';
 $cssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-console.css');
 $statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-statistics.css');
 $jsUrl = $this->getViewFileUrl('Weline_CustomerService::js/backend-console.js');
@@ -229,13 +229,13 @@ $jsonForHtmlAttr = static function ($value) use ($jsonForScriptFlags): string {
 <script>
     // 初始化工作台
     const consoleConfig = {
-        consoleUrl: <?= json_encode($consoleUrl, $jsonForScriptFlags) ?>,
+        consoleUrl: "@backend-url{$consolePath}",
         agentId: <?= json_encode((int)($agent['agent_id'] ?? 0), $jsonForScriptFlags) ?>
     };
     
     CustomerServiceConsole.init(consoleConfig);
     CustomerServiceStatistics.init({
-        consoleUrl: <?= json_encode($consoleUrl, $jsonForScriptFlags) ?>,
+        consoleUrl: "@backend-url{$consolePath}",
         currentPeriod: 'today'
     });
 </script>
