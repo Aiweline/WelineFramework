@@ -297,10 +297,10 @@ function showToast(message, type) {
     Weline.UI.toast.show(message, { tone: tone });
 }
 
-var checkAvailabilityUrl = '<?= $this->getUrl('*/admin/domain/check-availability') ?>';
-var purchaseUrl = '<?= $this->getUrl('*/admin/domain/purchase') ?>';
-var ordersUrl = '<?= $this->getUrl('*/admin/domain/orders') ?>';
-var getRegistrarAccountsUrl = '<?= $this->getUrl('*/admin/domain/get-registrar-accounts') ?>?active_only=1';
+var checkAvailabilityUrl = '@url{'*/admin/domain/check-availability'}';
+var purchaseUrl = '@url{'*/admin/domain/purchase'}';
+var ordersUrl = '@url{'*/admin/domain/orders'}';
+var getRegistrarAccountsUrl = '@url{'*/admin/domain/get-registrar-accounts'}?active_only=1';
 var purchaseDialogModal = null;
 var pendingPurchasePayload = null;
 var purchaseProviderAccounts = {};

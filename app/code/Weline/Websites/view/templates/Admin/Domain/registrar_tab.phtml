@@ -143,10 +143,10 @@ function showToast(message, type) {
     Weline.UI.toast.show(message, { tone: tone });
 }
 
-var saveAccountUrl = '<?= $this->getUrl('*/admin/domain/save-account') ?>';
-var deleteAccountUrl = '<?= $this->getUrl('*/admin/domain/account') ?>';
-var testConnectionUrl = '<?= $this->getUrl('*/admin/domain/test-connection') ?>';
-var getRegistrarInfoUrl = '<?= $this->getUrl('*/admin/domain/registrar-info') ?>';
+var saveAccountUrl = '@url{'*/admin/domain/save-account'}';
+var deleteAccountUrl = '@url{'*/admin/domain/account'}';
+var testConnectionUrl = '@url{'*/admin/domain/test-connection'}';
+var getRegistrarInfoUrl = '@url{'*/admin/domain/registrar-info'}';
 
 var currentConfigFields = [];
 

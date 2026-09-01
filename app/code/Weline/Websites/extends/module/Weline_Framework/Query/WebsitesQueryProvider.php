@@ -536,9 +536,9 @@ class WebsitesQueryProvider implements QueryProviderInterface
                             'name'        => 'store_id',
                             'type'        => 'int',
                             'required'    => true,
-                            'min'         => 1,
+                            'min'         => 0,
                             'max'         => self::MAX_CATALOG_ID,
-                            'description' => __('Store ID'),
+                            'description' => __('Store ID；0 是系统默认店铺'),
                         ],
                     ],
                     'returns' => [
@@ -608,7 +608,7 @@ class WebsitesQueryProvider implements QueryProviderInterface
      */
     private function getSalesChannelCatalogV1(array $params): array
     {
-        $storeId = $this->requireExclusiveCanonicalCatalogId($params, 'store_id', 1, self::MAX_CATALOG_ID);
+        $storeId = $this->requireExclusiveCanonicalCatalogId($params, 'store_id', 0, self::MAX_CATALOG_ID);
         $parentStore = $this->storeCatalog->byId($storeId);
         if ($parentStore === null) {
             // 与 Catalog 服务一致：父级不存在时 byStore 会抛错；此处先校验以保持 fail-closed。

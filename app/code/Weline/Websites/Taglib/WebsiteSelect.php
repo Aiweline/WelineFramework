@@ -16,7 +16,7 @@ use Weline\Framework\Taglib\TaglibInterface;
  *     options="websiteSelectOptionsJson"
  *     multiple="true"
  *     empty-label="@lang(请选择站点)"
- *     placeholder="@lang(搜索站点名称或编码)"
+ *     placeholder="@lang(搜索站点名称或域名)"
  * />
  */
 class WebsiteSelect implements TaglibInterface
@@ -58,6 +58,7 @@ class WebsiteSelect implements TaglibInterface
             'clearable' => false,
             'on-select' => false,
             'on-change' => false,
+            'auto-submit' => false,
             'form' => false,
         ];
     }
@@ -79,19 +80,21 @@ class WebsiteSelect implements TaglibInterface
             $clearable = in_array(strtolower(trim($clearableRaw)), ['true', '1', 'yes'], true);
             $onSelect = (string)($attributes['on-select'] ?? '');
             $onChange = (string)($attributes['on-change'] ?? '');
+            $autoSubmitRaw = (string)($attributes['auto-submit'] ?? 'false');
+            $autoSubmit = in_array(strtolower(trim($autoSubmitRaw)), ['true', '1', 'yes'], true);
             $formAttr = (string)($attributes['form'] ?? '');
             $idLiteral = (string)$attributes['id'];
             $nameLiteral = (string)($attributes['name'] ?? 'website_ids');
 
             $attrs = $attributes;
-            unset($attrs['id'], $attrs['name'], $attrs['form'], $attrs['class'], $attrs['style'], $attrs['on-select'], $attrs['on-change'], $attrs['allow-empty'], $attrs['clearable'], $attrs['multiple']);
+            unset($attrs['id'], $attrs['name'], $attrs['form'], $attrs['class'], $attrs['style'], $attrs['on-select'], $attrs['on-change'], $attrs['auto-submit'], $attrs['allow-empty'], $attrs['clearable'], $attrs['multiple']);
             $attrs['id'] = $idLiteral;
             $code = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attrs);
             $multiFlag = $isMultiple ? 'true' : 'false';
             $emptyNotFound = (string)__('未找到匹配站点');
             $clearTitle = (string)__('清空');
             $defaultEmptyLabel = (string)__('请选择站点');
-            $defaultPlaceholder = (string)__('搜索站点名称或编码');
+            $defaultPlaceholder = (string)__('搜索站点名称或域名');
 
             $html = [];
             $html[] = '<?php ' . $code . ' ?>';
@@ -110,7 +113,7 @@ if ($__wss_placeholder === '') {
 PHP;
             $html[] = '<style>';
             $html[] = '.weline-website-select{position:relative;width:100%;min-width:0;color:var(--weline-theme-text,var(--backend-color-text-primary,#162033))}';
-            $html[] = '.weline-website-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;min-height:var(--weline-control-height,42px);padding:8px 12px;background:var(--weline-theme-surface,var(--backend-color-card-bg,#fff));border:1px solid var(--weline-theme-border-strong,var(--backend-color-border-default,#dbe3ef));border-radius:var(--weline-radius-md,6px);color:var(--weline-theme-text,var(--backend-color-text-primary,#162033));text-align:left;cursor:pointer}';
+            $html[] = '.weline-website-trigger{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;box-sizing:border-box;min-height:var(--weline-control-height);height:var(--weline-control-height);padding:0 var(--weline-space-3);background:var(--weline-theme-surface,var(--backend-color-card-bg,#fff));border:1px solid var(--weline-theme-border-strong,var(--backend-color-border-default,#dbe3ef));border-radius:var(--weline-radius-md,6px);color:var(--weline-theme-text,var(--backend-color-text-primary,#162033));text-align:left;cursor:pointer}';
             $html[] = '.weline-website-trigger:hover,.weline-website-select.is-open .weline-website-trigger{border-color:var(--weline-theme-primary,var(--backend-color-primary,#556ee6));box-shadow:var(--weline-theme-focus-ring,0 0 0 3px color-mix(in srgb,var(--weline-theme-primary,#556ee6) 26%,transparent));outline:0}';
             $html[] = '.weline-website-tags{display:flex;flex-wrap:wrap;gap:6px;align-items:center;flex:1;min-width:0;max-height:72px;overflow-x:auto;overflow-y:auto;-webkit-overflow-scrolling:touch}';
             $html[] = '.weline-website-empty{color:var(--weline-theme-text-subtle,var(--backend-color-text-secondary,#64748b));font-size:13px}';
@@ -140,7 +143,7 @@ PHP;
             $html[] = '.weline-website-empty-state{padding:7px 10px;border-radius:var(--weline-radius-sm,7px);text-align:center;color:var(--weline-theme-text-muted,var(--backend-color-text-secondary,#64748b))}';
             $html[] = '</style>';
 
-            $html[] = '<div class="weline-website-select ' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '" style="' . htmlspecialchars($style, ENT_QUOTES, 'UTF-8') . '" id="<?= htmlspecialchars($__wss_id, ENT_QUOTES, \'UTF-8\') ?>_wrapper" data-multiple="' . $multiFlag . '" data-component="website-select">';
+            $html[] = '<div class="weline-website-select ' . htmlspecialchars($class, ENT_QUOTES, 'UTF-8') . '" style="' . htmlspecialchars($style, ENT_QUOTES, 'UTF-8') . '" id="<?= htmlspecialchars($__wss_id, ENT_QUOTES, \'UTF-8\') ?>_wrapper" data-multiple="' . $multiFlag . '" data-w-auto-submit="' . ($autoSubmit ? 'true' : 'false') . '" data-component="website-select">';
             $html[] = '  <button type="button" class="weline-website-trigger" id="<?= htmlspecialchars($__wss_id, ENT_QUOTES, \'UTF-8\') ?>_trigger" aria-haspopup="listbox" aria-expanded="false">';
             $html[] = '      <div class="weline-website-tags" id="<?= htmlspecialchars($__wss_id, ENT_QUOTES, \'UTF-8\') ?>_tags"><span class="weline-website-empty" id="<?= htmlspecialchars($__wss_id, ENT_QUOTES, \'UTF-8\') ?>_display"><?= htmlspecialchars(trim((string)($Taglib__display ?? \'\'), "\'\"") !== \'\' ? trim((string)$Taglib__display, "\'\"") : $__wss_empty_label, ENT_QUOTES, \'UTF-8\') ?></span></div>';
             $html[] = '      <span class="weline-website-actions">';
@@ -171,6 +174,8 @@ PHP;
             $html[] = 'var emptyNotFound = ' . json_encode($emptyNotFound, JSON_THROW_ON_ERROR) . ';';
             $html[] = 'var onSelectFn = ' . json_encode($onSelect, JSON_THROW_ON_ERROR) . ';';
             $html[] = 'var onChangeCode = ' . json_encode($onChange, JSON_THROW_ON_ERROR) . ';';
+            $html[] = 'var autoSubmit = ' . ($autoSubmit ? 'true' : 'false') . ';';
+            $html[] = 'var formId = ' . json_encode($formAttr, JSON_THROW_ON_ERROR) . ';';
             $html[] = 'var optionsRaw = <?= json_encode($Taglib__options ?? "[]", JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR) ?>;';
             $html[] = 'var wrapper = document.getElementById(id + "_wrapper");';
             $html[] = 'var trigger = document.getElementById(id + "_trigger");';
@@ -203,15 +208,28 @@ PHP;
             $html[] = '    var label = String(item.label || item.name || "").trim();';
             $html[] = '    if (idText && label === idText) { label = ""; }';
             $html[] = '    else if (idText && label.indexOf(idText + " ") === 0) { label = label.slice(idText.length).trim(); }';
+            $html[] = '    var url = String(item.url || item.base_url || "").trim();';
+            $html[] = '    var domain = String(item.domain || item.host || "").trim().toLowerCase();';
+            $html[] = '    if (!domain && url) { try { domain = String((new URL(url)).hostname || "").toLowerCase(); } catch (e) { domain = ""; } }';
+            $html[] = '    var code = String(item.code || "").trim();';
+            $html[] = '    var meta = String(item.meta || "").trim();';
+            $html[] = '    if (!meta) { meta = domain || code; }';
+            $html[] = '    else if (domain && meta.toLowerCase().indexOf(domain) === -1) { meta = domain + (code && code !== meta ? (" · " + code) : (meta ? (" · " + meta) : "")); }';
             $html[] = '    return {';
             $html[] = '      value: value,';
             $html[] = '      idText: idText,';
             $html[] = '      label: label,';
-            $html[] = '      meta: String(item.meta || item.code || ""),';
+            $html[] = '      meta: meta,';
+            $html[] = '      url: url,';
+            $html[] = '      domain: domain,';
+            $html[] = '      code: code,';
             $html[] = '      group: String(item.group || ""),';
             $html[] = '      raw: item';
             $html[] = '    };';
             $html[] = '  }).filter(function(item){ return item.value !== ""; });';
+            $html[] = '}';
+            $html[] = 'function optionSearchHaystack(item){';
+            $html[] = '  return [item.label, item.meta, item.url, item.domain, item.code, item.value, item.idText].map(function(part){ return String(part || "").toLowerCase(); }).join(" ");';
             $html[] = '}';
             $html[] = 'function normalizeSelectedValue(value){';
             $html[] = '  var raw = String(value == null ? "" : value).trim();';
@@ -226,12 +244,24 @@ PHP;
             $html[] = '  if (!raw) return [];';
             $html[] = '  return raw.split(",").map(function(v){ return normalizeSelectedValue(v); }).filter(function(v){ return v !== ""; });';
             $html[] = '}';
+            $html[] = 'function resolveForm(){';
+            $html[] = '  if (formId) {';
+            $html[] = '    var byId = document.getElementById(formId);';
+            $html[] = '    if (byId instanceof HTMLFormElement) return byId;';
+            $html[] = '  }';
+            $html[] = '  if (hidden && hidden.form instanceof HTMLFormElement) return hidden.form;';
+            $html[] = '  return null;';
+            $html[] = '}';
             $html[] = 'function emitChange(item){';
             $html[] = '  try { hidden.dispatchEvent(new Event("change", { bubbles: true })); } catch(e) {}';
             $html[] = '  if (onSelectFn && typeof window[onSelectFn] === "function") {';
             $html[] = '    window[onSelectFn](item || null, { selected: selected.slice(), values: selected.slice() });';
             $html[] = '  }';
             $html[] = '  if (onChangeCode) { try { (new Function(onChangeCode))(); } catch(e) { console.error(e); } }';
+            $html[] = '  if (autoSubmit) {';
+            $html[] = '    var form = resolveForm();';
+            $html[] = '    if (form) { try { if (typeof form.requestSubmit === "function") form.requestSubmit(); else form.submit(); } catch(e) { console.error(e); } }';
+            $html[] = '  }';
             $html[] = '}';
             $html[] = 'function isPicked(value){ return selected.indexOf(String(value)) > -1; }';
             $html[] = 'function syncHidden(){ hidden.value = selected.join(","); if (clearBtn) clearBtn.hidden = !(clearable && !isMultiple && selected.length > 0); }';
@@ -261,7 +291,7 @@ PHP;
             $html[] = 'function renderList(keyword){';
             $html[] = '  var kw = String(keyword || "").trim().toLowerCase();';
             $html[] = '  var filtered = options.filter(function(item){';
-            $html[] = '    return !kw || item.label.toLowerCase().indexOf(kw) > -1 || item.meta.toLowerCase().indexOf(kw) > -1 || item.value.toLowerCase().indexOf(kw) > -1 || String(item.idText || "").toLowerCase().indexOf(kw) > -1;';
+            $html[] = '    return !kw || optionSearchHaystack(item).indexOf(kw) > -1;';
             $html[] = '  });';
             $html[] = '  var html = "";';
             $html[] = '  if (allowEmpty && !isMultiple && !kw) {';
@@ -420,7 +450,7 @@ PHP;
     public static function document(): string
     {
         return htmlspecialchars(
-            '<h3><code>&lt;w:websites:website:select&gt;</code></h3><p>站点选择标签，支持搜索、标签展示、站点 ID（#12）、多选、allow-empty（Global）与 on-change。</p>',
+            '<h3><code>&lt;w:websites:website:select&gt;</code></h3><p>站点选择标签，支持搜索、标签展示、站点 ID（#12）、多选、allow-empty（Global）、on-change 与 auto-submit（选择后立即提交关联 form，对齐 LanguageSelect）。</p>',
             ENT_NOQUOTES
         );
     }

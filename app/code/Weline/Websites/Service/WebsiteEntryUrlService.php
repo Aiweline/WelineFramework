@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Websites\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Http\Request;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteDomain;
 
@@ -85,5 +86,58 @@ final class WebsiteEntryUrlService
         }
 
         return $base . '/' . $backendKey . '/admin/login';
+    }
+
+    /**
+     * Backend chrome (e.g. topbar「访问前端」): prefer live request base over DB localhost.
+     */
+    public function resolveStorefrontForBackendChrome(Request $request, array $websiteRow): string
+    {
+        $fromRequest = \trim($request->getBaseHost());
+        if ($fromRequest !== '') {
+            return \rtrim($fromRequest, '/');
+        }
+
+        $entry = $this->resolveForListingRow($websiteRow);
+
+        return $this->withCurrentRequestPort((string)($entry['frontend_url'] ?? ''));
+    }
+
+    /**
+     * Local WLS often stores website.url without :port while the live request has one.
+     */
+    public function withCurrentRequestPort(string $url): string
+    {
+        $url = \trim($url);
+        if ($url === '') {
+            return '';
+        }
+        $parts = \parse_url($url);
+        if (!\is_array($parts) || empty($parts['host']) || isset($parts['port'])) {
+            return $url;
+        }
+        $httpHost = (string)($_SERVER['HTTP_HOST'] ?? '');
+        if ($httpHost === '' || !\preg_match('/:(\d+)\z/', $httpHost, $m)) {
+            return $url;
+        }
+        $port = (int)$m[1];
+        if ($port <= 0) {
+            return $url;
+        }
+        $scheme = (string)($parts['scheme'] ?? 'http');
+        $httpsOn = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
+        $forwarded = \strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
+        if ($httpsOn || $forwarded === 'https') {
+            $scheme = 'https';
+        }
+        $rebuild = $scheme . '://' . $parts['host'] . ':' . $port;
+        if (!empty($parts['path'])) {
+            $rebuild .= $parts['path'];
+        }
+        if (isset($parts['query']) && $parts['query'] !== '') {
+            $rebuild .= '?' . $parts['query'];
+        }
+
+        return $rebuild;
     }
 }

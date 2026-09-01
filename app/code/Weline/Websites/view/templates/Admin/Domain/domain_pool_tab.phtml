@@ -17,10 +17,9 @@ if (!is_array($poolRows)) {
     $poolRows = [];
 }
 
-$poolListUrl = $this->getUrl('*/admin/domain/get-domain-pool-list');
-$poolFlowLogUrl = $this->getUrl('*/admin/domain/get-pool-flow-log');
-$cleanInvalidUrl = $this->getUrl('*/admin/domain/clean-pool-invalid-domains');
-$cleanMispointedUrl = $this->getUrl('*/admin/domain/clean-pool-mispointed-apex-dns');
+$poolListPath = '*/admin/domain/get-domain-pool-list';
+$cleanInvalidPath = '*/admin/domain/clean-pool-invalid-domains';
+$cleanMispointedPath = '*/admin/domain/clean-pool-mispointed-apex-dns';
 $formKey = (string) $this->getFormKeyValue();
 ?>
 
@@ -251,14 +250,12 @@ $formKey = (string) $this->getFormKeyValue();
     <ul class="w-pagination pagination-sm" id="weline-pool-pagination" data-justify="center" style="--w-mb:0;"></ul>
 </nav>
 
-
-
 <script>
 (function(){
 'use strict';
-var poolListUrl = <?= json_encode($poolListUrl) ?>;
-var cleanInvalidUrl = <?= json_encode($cleanInvalidUrl) ?>;
-var cleanMispointedUrl = <?= json_encode($cleanMispointedUrl) ?>;
+var poolListUrl = "@url{$poolListPath}";
+var cleanInvalidUrl = "@url{$cleanInvalidPath}";
+var cleanMispointedUrl = "@url{$cleanMispointedPath}";
 var formKey = <?= json_encode($formKey) ?>;
 var currentPage = <?= (int) $poolPage ?>;
 var pageSize = <?= (int) $poolLimit ?>;

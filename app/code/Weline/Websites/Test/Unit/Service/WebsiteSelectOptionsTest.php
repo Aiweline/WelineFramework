@@ -21,8 +21,34 @@ final class WebsiteSelectOptionsTest extends TestCase
 
         self::assertSame(
             [
-                ['value' => '0', 'label' => 'Default', 'meta' => 'default'],
-                ['value' => '1', 'label' => 'Shop', 'meta' => 'shop'],
+                ['value' => '0', 'label' => 'Default', 'meta' => 'default', 'code' => 'default'],
+                ['value' => '1', 'label' => 'Shop', 'meta' => 'shop', 'code' => 'shop'],
+            ],
+            $options
+        );
+    }
+
+    public function testFromRowsPrefersDomainInMetaAndKeepsUrl(): void
+    {
+        $options = WebsiteSelectOptions::fromRows([
+            [
+                'website_id' => 2,
+                'name' => 'Demo',
+                'code' => 'demo',
+                'url' => 'https://demo.weline.test:9555/',
+            ],
+        ]);
+
+        self::assertSame(
+            [
+                [
+                    'value' => '2',
+                    'label' => 'Demo',
+                    'meta' => 'demo.weline.test',
+                    'url' => 'https://demo.weline.test:9555',
+                    'domain' => 'demo.weline.test',
+                    'code' => 'demo',
+                ],
             ],
             $options
         );

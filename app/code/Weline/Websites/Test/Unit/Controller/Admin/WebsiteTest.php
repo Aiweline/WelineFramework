@@ -98,6 +98,23 @@ class WebsiteTest extends TestCore
         $this->assertStringNotContainsString('/component/offcanvas/error', $sourceCode);
     }
 
+    public function testWebsiteSaveCatchRethrowsResponseTerminateException(): void
+    {
+        foreach (['add', 'edit'] as $method) {
+            $methodCode = $this->getMethodSource(Website::class, $method);
+            $this->assertMatchesRegularExpression(
+                '/catch\s*\(\s*\\\\Throwable\s+\$e\s*\)\s*\{[\s\S]*?\}\s*[\s\S]*?\$this->redirect\(\'component\/backend\/offcanvas\/getSuccess/m',
+                $methodCode,
+                $method . ' must redirect to offcanvas success outside the Throwable catch block',
+            );
+            $this->assertDoesNotMatchRegularExpression(
+                '/try\s*\{[\s\S]*?\$this->redirect\(\'component\/backend\/offcanvas\/getSuccess[\s\S]*?\}\s*catch\s*\(\s*\\\\Throwable/m',
+                $methodCode,
+                $method . ' must not call success redirect inside the same try that catches Throwable',
+            );
+        }
+    }
+
     public function testAddRejectsNonPositivePersistedWebsiteId(): void
     {
         $addCode = $this->getMethodSource(Website::class, 'add');
@@ -152,7 +169,7 @@ class WebsiteTest extends TestCore
         $searchAjaxCode = $this->getMethodSource(Website::class, 'searchAjax');
 
         $this->assertStringContainsString('return $this->fetchJson($payload)', $searchAjaxCode);
-        $this->assertStringContainsString("template('Weline_Websites::templates/Admin/Website/table.phtml')", $searchAjaxCode);
+        $this->assertStringContainsString("template('Weline_Websites::templates/Admin/Website/datatable.phtml')", $searchAjaxCode);
         $this->assertStringNotContainsString('exit;', $searchAjaxCode);
         $this->assertStringNotContainsString('echo json_encode', $searchAjaxCode);
         $this->assertStringNotContainsString('header(', $searchAjaxCode);
@@ -178,10 +195,9 @@ class WebsiteTest extends TestCore
 
         $templateContent = file_get_contents($templatePath);
 
-        $this->assertStringContainsString("params.append('page', '1')", $templateContent);
-        $this->assertStringContainsString("params.append('pageSize', pageSize)", $templateContent);
         $this->assertStringContainsString('method="get"', $templateContent);
-        $this->assertStringContainsString('window.location.assign', $templateContent);
+        $this->assertStringContainsString('website-admin-list', $templateContent);
+        $this->assertStringNotContainsString('window.location.assign', $templateContent);
         $this->assertStringNotContainsString('fetch(ajaxUrl', $templateContent);
         $this->assertStringNotContainsString('X-Requested-With', $templateContent);
         $this->assertStringNotContainsString('XMLHttpRequest', $templateContent);
