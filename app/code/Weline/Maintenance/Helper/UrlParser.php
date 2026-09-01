@@ -49,9 +49,18 @@ class UrlParser
         $server['WELINE_BACKEND_AREA'] = \Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?: 'admin';
         $server['WELINE_AREA_ROUTE'] = '';
         $server['WELINE_AREA'] = 'frontend';
-        $cookieCurrency = strtoupper(trim((string)(\w_env_cookie('WELINE_USER_CURRENCY') ?? '')));
-        $server['WELINE_USER_CURRENCY'] = self::isValidCurrencyCode($cookieCurrency) ? $cookieCurrency : 'CNY';
-        $server['WELINE_USER_LANG'] = \w_env_cookie('WELINE_USER_LANG') ?? 'zh_Hans_CN';
+        // Path/query-only: seed hard defaults; path segments overwrite below.
+        // Do not read preference cookies.
+        try {
+            $server['WELINE_USER_CURRENCY'] = \Weline\Framework\App\State::resolveWebsiteDefaultCurrency();
+        } catch (\Throwable) {
+            $server['WELINE_USER_CURRENCY'] = 'CNY';
+        }
+        try {
+            $server['WELINE_USER_LANG'] = \Weline\Framework\App\State::resolveWebsiteDefaultLanguage();
+        } catch (\Throwable) {
+            $server['WELINE_USER_LANG'] = 'zh_Hans_CN';
+        }
         $server['WELINE_WEBSITE_ID'] = w_env('website.id') ?? '';
         $server['WELINE_WEBSITE_CODE'] = w_env('website.code') ?? '';
         $server['WELINE_WEBSITE_URL'] = w_env('website_url') ?? '';

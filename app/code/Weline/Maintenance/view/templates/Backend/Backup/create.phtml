@@ -50,7 +50,7 @@
                         <button type="submit" class="w-button" id="submitBtn" data-tone="primary">
                             <w:icon name="save" size="sm"></w:icon><lang>创建备份</lang>
                         </button>
-                        <a href="<?= $this->getBackendUrl('maintenance/backend/backup/index') ?>" class="w-button" data-tone="neutral">
+                        <a href="@backend-url{'maintenance/backend/backup/index'}" class="w-button" data-tone="neutral">
                             <lang>返回列表</lang>
                         </a>
                     </div>
@@ -78,7 +78,7 @@
 
         var formData = new FormData(event.target);
         
-        var createUrl = '<?= $this->getBackendUrl('maintenance/backend/backup/create') ?>';
+        var createUrl = '@backend-url{'maintenance/backend/backup/create'}';
         var createOpts = { method: 'POST', body: formData };
         Weline.adminRequest('maintenance', createUrl, createOpts)
         .then(function(res) {
@@ -86,7 +86,7 @@
             if (data.success) {
                 Weline.UI.toast.success(data.message);
                 setTimeout(function() {
-                    location.href = '<?= $this->getBackendUrl('maintenance/backend/backup/index') ?>';
+                    location.href = '@backend-url{'maintenance/backend/backup/index'}';
                 }, 1500);
             } else {
                 Weline.UI.toast.error(data.message);

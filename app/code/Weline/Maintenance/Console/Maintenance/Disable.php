@@ -19,6 +19,7 @@ use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Maintenance\Helper\WlsMaintenanceSync;
+use Weline\Maintenance\Service\UpgradeWaveService;
 
 class Disable implements \Weline\Framework\Console\CommandInterface
 {
@@ -45,6 +46,11 @@ class Disable implements \Weline\Framework\Console\CommandInterface
     public function execute(array $args = [], array $data = [])
     {
         Env::getInstance()->setConfig('system.maintenance', false);
+        $wave = (new UpgradeWaveService())->markRecovered();
+        if ($wave !== null) {
+            $deadline = (int)($wave['redeem_deadline_at'] ?? 0);
+            $this->printing->note(__('维护礼金兑礼窗口已开启，截止时间戳：%{1}', [(string)$deadline]));
+        }
         $this->printing->success(__('维护模式已关闭！'));
         WlsMaintenanceSync::syncAfterCliToggle($this->printing, false, $args);
     }
