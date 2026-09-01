@@ -43,15 +43,6 @@ $formatBytes = static function (mixed $value): string {
 };
 
 $config = [
-    'urls' => [
-        'status' => $this->getBackendUrl('admin/system/cache/status'),
-        'status_batch' => $this->getBackendUrl('admin/system/cache/status-batch'),
-        'clear' => $this->getBackendUrl('admin/system/cache/clear'),
-        'clear_all' => $this->getBackendUrl('admin/system/cache/clearAll'),
-        'stats' => $this->getBackendUrl('admin/system/cache/stats'),
-        'pool_stats' => $this->getBackendUrl('admin/system/cache/pool-stats'),
-        'run_cron' => $this->getBackendUrl('admin/system/cache/run-cron-task'),
-    ],
     'strings' => [
         'enabled' => (string)__('已启用'),
         'disabled' => (string)__('已禁用'),
@@ -99,10 +90,12 @@ $config = [
         'title_force_flush_all' => (string)__('强制清理全部缓存'),
     ],
 ];
-$cachePageConfigJson = \json_encode(
-    $config,
-    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
-) ?: '{}';
+$cachePageConfigJsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+$cachePageConfigTail = \json_encode($config, $cachePageConfigJsonFlags);
+if (!\is_string($cachePageConfigTail) || $cachePageConfigTail === '' || $cachePageConfigTail[0] !== '{') {
+    $cachePageConfigTail = '{}';
+}
+$cachePageConfigTailBody = \substr($cachePageConfigTail, 1); // drop leading "{"
 ?>
 
 <link rel="stylesheet" href="<?= $this->getStaticUrl('Weline_CacheManager/system/cache-admin.css') ?>">
@@ -203,7 +196,7 @@ $cachePageConfigJson = \json_encode(
                 <div class="weline-cache-summary-line"><lang>当前显示</lang> <strong id="cache-filtered-total"><?= $formatCount($summary['filtered_total'] ?? \count($cacheItems)) ?></strong> / <strong id="cache-total-reference"><?= $formatCount($summary['total'] ?? \count($cacheItems)) ?></strong></div>
             </div>
 
-            <w:form method="get" action="@var($this->getBackendUrl('admin/system/cache'))" class="weline-cache-filters">
+            <w:form method="get" action="@backend-url{'admin/system/cache'}" class="weline-cache-filters">
                 <div class="weline-cache-field">
                     <label for="cache-search"><lang>搜索</lang></label>
                     <input id="cache-search" class="weline-cache-input" type="text" name="search" value="<?= htmlspecialchars((string)($filterSearch ?? '')) ?>" placeholder="<?= __('例如 identity、适配器、模块、说明') ?>">
@@ -234,7 +227,7 @@ $cachePageConfigJson = \json_encode(
                 </div>
                 <div class="weline-cache-filter-actions">
                     <button type="submit" class="weline-cache-btn weline-cache-btn--primary"><w:icon name="search" size="sm"></w:icon><lang>应用筛选</lang></button>
-                    <a class="weline-cache-btn weline-cache-btn--secondary" href="<?= $this->getBackendUrl('admin/system/cache') ?>"><w:icon name="star" size="sm"></w:icon><lang>重置</lang></a>
+                    <a class="weline-cache-btn weline-cache-btn--secondary" href="@backend-url{'admin/system/cache'}"><w:icon name="star" size="sm"></w:icon><lang>重置</lang></a>
                 </div>
             </w:form>
         </section>
@@ -383,5 +376,5 @@ $cachePageConfigJson = \json_encode(
     </div>
 </div>
 
-<script id="weline-cache-page-config" type="application/json"><?= $cachePageConfigJson ?></script>
+<script id="weline-cache-page-config" type="application/json">{"urls":{"status":"@backend-url{'admin/system/cache/status'}","status_batch":"@backend-url{'admin/system/cache/status-batch'}","clear":"@backend-url{'admin/system/cache/clear'}","clear_all":"@backend-url{'admin/system/cache/clearAll'}","stats":"@backend-url{'admin/system/cache/stats'}","pool_stats":"@backend-url{'admin/system/cache/pool-stats'}","run_cron":"@backend-url{'admin/system/cache/run-cron-task'}"},<?= $cachePageConfigTailBody ?></script>
 <script src="<?= $this->getStaticUrl('Weline_CacheManager/system/cache-admin.js') ?>"></script>
