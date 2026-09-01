@@ -1,0 +1,54 @@
+<?php
+/**
+ * 网站列表 DataTable 片段（local 模式）
+ *
+ * @var \Weline\Framework\View\Template $this
+ * @var list<array<string,mixed>> $table_rows
+ * @var string $row_actions_json
+ * @var string $pagination
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    is_scalar($value) || $value === null ? (string)$value : (string)json_encode($value, JSON_UNESCAPED_UNICODE),
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8',
+);
+$tableRows = is_array($table_rows ?? null) ? $table_rows : [];
+$rowActionsJson = (string)($row_actions_json ?? '[]');
+$paginationHtml = (string)($pagination ?? '');
+?>
+<script type="application/json"
+        id="website-admin-local-rows"
+        data-no-extract="true"><?= json_encode(
+            $tableRows,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP,
+        ) ?: '[]' ?></script>
+<w:d-table id="website-admin-list"
+           model="Weline\Websites\Model\Website"
+           scope="website-admin-list"
+           mode="local"
+           local-data-el="#website-admin-local-rows"
+           select-field="website_id"
+           show-actions="true"
+           sticky-actions="true"
+           row-actions="<?= $escape($rowActionsJson) ?>"
+           editable="false"
+           modal-edit="false"
+           inline-edit="false"
+           show-toolbar="false"
+           show-config="true"
+           show-pagination="false"
+           searchable="false"
+           sortable="true"
+           filter-mode="client"
+           data-testid="website-admin-table">
+    <w:t-header>
+        <w:field belong="t-header" name="site_head" type="text" width="18rem" sortable="true"><lang>站点</lang></w:field>
+        <w:field belong="t-header" name="access_entry" type="text" width="16rem"><lang>访问入口</lang></w:field>
+        <w:field belong="t-header" name="market_cluster" type="text" width="12rem"><lang>语言 / 货币</lang></w:field>
+        <w:field belong="t-header" name="store_channel_summary" type="text" width="14rem"><lang>Store / Channel</lang></w:field>
+    </w:t-header>
+    <w:t-body></w:t-body>
+</w:d-table>
+<?php if ($paginationHtml !== ''): ?>
+<div class="w-website-admin__pagination"><?= $paginationHtml ?></div>
+<?php endif; ?>

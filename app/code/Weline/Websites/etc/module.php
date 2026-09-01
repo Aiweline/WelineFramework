@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Websites',
-    "version" => '1.8.1',
+    "version" => '1.8.2',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
@@ -10,6 +10,7 @@ return [
         'Weline_Component' => '*',
         'Weline_Currency' => '*',
         'Weline_Cron' => '*',
+        'Weline_DataTable' => '*',
         'Weline_Framework' => '*',
         'Weline_I18n' => '*',
         'Weline_SystemConfig' => '*',
@@ -34,6 +35,7 @@ return [
         \Weline\Framework\Runtime\FrontendWorkerScopeProviderInterface::class => \Weline\Websites\Integration\Framework\FrontendWorkerScopeProvider::class,
         \Weline\Websites\Api\ScopeMaintenanceRepositoryInterface::class => \Weline\Websites\Service\OrmScopeMaintenanceRepository::class,
         \Weline\Backend\Api\Runtime\FrontendStartPageRouteProviderInterface::class => \Weline\Websites\Integration\Backend\FrontendStartPageRouteProvider::class,
+        \Weline\Backend\Api\Runtime\CurrentWebsiteStorefrontUrlProviderInterface::class => \Weline\Websites\Integration\Backend\CurrentWebsiteStorefrontUrlProvider::class,
         \Weline\Server\Api\Tls\AcmeDnsTxtPollPolicyProviderInterface::class => \Weline\Websites\Integration\Server\AcmeDnsTxtPollPolicyProvider::class,
         \Weline\Server\Api\Tls\ActiveCertificateDomainSourceInterface::class => \Weline\Websites\Integration\Server\ActiveCertificateDomainSource::class,
         'localization_provider.Weline_Websites' => \Weline\Websites\Api\Localization\LocalizationProvider::class,

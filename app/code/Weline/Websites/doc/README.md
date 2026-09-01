@@ -13,7 +13,7 @@
 
 `Weline_Websites` 不只是“网站 CRUD 模块”。它同时承担：
 
-- 网站主数据：网站、域名、语言、货币、时区、scope。
+- 网站主数据：网站、域名、语言、货币、时区、scope。后台编辑表单的「默认语言/默认货币」必须是单选 Taglib；不得继承同页域名多选的 `multiple` 泄漏，否则保存会落回关联列表首项（常见为 `en_US`）。
 - 店铺与渠道：Website 之下的 Store（normal|dev|test）与 SalesChannel，Scope 三段主键的后两段。
 - Store 商品复制：后台向导归 Websites 所有，业务动作只通过 Product 自有
   `product_copy` QueryProvider 执行；页面 ACL 是
@@ -28,8 +28,8 @@
 
 ## 核心约定
 
-- 系统默认网站固定是 `website_id=0`、`code=default`。这是有效站点，不是空值、未选择或异常 ID。
-- `DefaultWebsiteService` 会在安装/修复链路里确保默认网站存在，并在必要时把历史 `default` 站点迁移回 ID `0`。任何站点逻辑都不能把 `0` 过滤掉。
+- 系统默认网站固定是 `website_id=0`、`code=default`。这是有效站点，不是空值、未选择或异常 ID。其默认店铺 / 默认渠道主键同样固定为 `store_id=0`、`channel_id=0`。
+- `DefaultWebsiteService` 会在安装/修复链路里确保默认网站存在，并在必要时把历史 `default` 站点迁移回 ID `0`；`StoreChannelSeedService` 同步保证默认店铺/渠道为 ID `0`。任何站点逻辑都不能把这些 `0` 过滤掉。
 - `Model/Website.php` 在删除前会强拦截 `0/default`，并拒绝物理删除仍有 Store/SalesChannel 引用的普通站；保存前会自动为 URL 补协议；保存后通过进程默认主连接在同一写事务内补种默认 Store/Channel 并登记 namespace generation，失败整体回滚，parser/process/WLS 副作用在物理提交后执行。不同逻辑数据库的 Model Hook 会在业务写前 fail-closed，不支持跨库缓存权威。
 - 当前请求命中的网站由 `Observer/DetectWebsite.php` 负责解析。它会把结果写入 `RequestContext`、`ScopeContext` 和 `WebsiteData`。其他模块读取当前站点时，优先取 `WebsiteData`，不要自己重复匹配域名。
 - 新建或修改 Website/Domain 后会推进
@@ -47,7 +47,7 @@
 - Website 默认时区只写当前 `RequestContext`，不得修改 PHP 进程全局 timezone。`QueryBin` 成功响应的 `scope_meta` 只包含 Scope 身份、locale/currency/timezone 和 context version 等安全字段，不包含 Token、签名、bootstrap ID 或密钥。
 - 跨模块与前端调用网站能力时，优先使用已发布的 `w_query('websites', ...)`，不要直接依赖内部服务类。
 - 站点选择 Taglib：
-  - `<w:websites:website:select>`：站点搜索单选/多选；`allow-empty` 可表示 Global。
+  - `<w:websites:website:select>`：站点搜索单选/多选；`allow-empty` 可表示 Global；筛选场景写 `auto-submit="true"`（选择即提交关联 form，对齐 LanguageSelect，不要再放「切换」按钮）。
   - `<w:websites:store:select>` / `<w:websites:channel:select>`：Store / Channel code 可搜索单选，选项由调用方传入 JSON；空值分别表示 Website 层 / Store 层。
   - 共用渲染器：`Taglib/SearchableCodeSelect.php`。
 - 网站表单的语言与货币选项分别读取 I18n `LocaleRepositoryInterface` 和 Currency

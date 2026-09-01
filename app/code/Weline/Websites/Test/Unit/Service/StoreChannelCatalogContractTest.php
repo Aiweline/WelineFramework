@@ -343,13 +343,13 @@ final class StoreChannelCatalogContractTest extends TestCase
             BP . 'app/code/Weline/Websites/view/templates/Admin/Website/index.phtml',
         );
         self::assertStringContainsString('method="get"', $index);
-        self::assertStringContainsString('<label for="search-input"', $index);
+        self::assertStringContainsString('for="search-input"', $index);
 
         $form = (string)\file_get_contents(
             BP . 'app/code/Weline/Websites/view/templates/Admin/Website/form.phtml',
         );
         $table = (string)\file_get_contents(
-            BP . 'app/code/Weline/Websites/view/templates/Admin/Website/table.phtml',
+            BP . 'app/code/Weline/Websites/view/templates/Admin/Website/datatable.phtml',
         );
         foreach ([$form, $table] as $template) {
             self::assertDoesNotMatchRegularExpression(
@@ -395,7 +395,7 @@ final class StoreChannelCatalogContractTest extends TestCase
         }
 
         self::assertSame(0, $catalogOperations[0]['params'][0]['min'] ?? null);
-        self::assertSame(1, $catalogOperations[1]['params'][0]['min'] ?? null);
+        self::assertSame(0, $catalogOperations[1]['params'][0]['min'] ?? null);
         self::assertSame(2147483647, $catalogOperations[0]['params'][0]['max'] ?? null);
         self::assertSame(2147483647, $catalogOperations[1]['params'][0]['max'] ?? null);
         self::assertSame(
@@ -461,7 +461,7 @@ final class StoreChannelCatalogContractTest extends TestCase
             ['website_id' => 0, 'unexpected' => true],
         ];
         yield 'missing store' => ['getSalesChannelCatalogV1', []];
-        yield 'zero store' => ['getSalesChannelCatalogV1', ['store_id' => 0]];
+        yield 'negative store' => ['getSalesChannelCatalogV1', ['store_id' => -1]];
         yield 'store above signed int' => ['getSalesChannelCatalogV1', ['store_id' => 2147483648]];
         yield 'store with extra parameter' => [
             'getSalesChannelCatalogV1',

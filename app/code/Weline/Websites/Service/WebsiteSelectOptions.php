@@ -12,8 +12,8 @@ namespace Weline\Websites\Service;
 final class WebsiteSelectOptions
 {
     /**
-     * @param list<mixed> $rows website 行（website_id|id、name、code）
-     * @return list<array{value: string, label: string, meta: string}>
+     * @param list<mixed> $rows website 行（website_id|id、name、code、url|domain）
+     * @return list<array{value: string, label: string, meta: string, url?: string, domain?: string, code?: string}>
      */
     public static function fromRows(array $rows): array
     {
@@ -30,11 +30,32 @@ final class WebsiteSelectOptions
             $seen[$id] = true;
             $name = \trim((string)($row['name'] ?? ''));
             $code = \trim((string)($row['code'] ?? ''));
-            $options[] = [
+            $url = \rtrim(\trim((string)($row['url'] ?? $row['base_url'] ?? '')), '/');
+            $domain = \strtolower(\trim((string)($row['domain'] ?? '')));
+            if ($domain === '' && $url !== '') {
+                $domain = \strtolower((string)(\parse_url($url, \PHP_URL_HOST) ?: ''));
+            }
+            $metaParts = [];
+            if ($domain !== '') {
+                $metaParts[] = $domain;
+            } elseif ($code !== '') {
+                $metaParts[] = $code;
+            }
+            $option = [
                 'value' => (string)$id,
                 'label' => $name !== '' ? $name : (string)__('站点 %{1}', [$id]),
-                'meta' => $code,
+                'meta' => \implode(' · ', $metaParts),
             ];
+            if ($url !== '') {
+                $option['url'] = $url;
+            }
+            if ($domain !== '') {
+                $option['domain'] = $domain;
+            }
+            if ($code !== '') {
+                $option['code'] = $code;
+            }
+            $options[] = $option;
         }
 
         return $options;

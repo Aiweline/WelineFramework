@@ -27,6 +27,9 @@ class SalesChannel extends Model
     private ?int $catalogInvalidationDeletedWebsiteId = null;
     private bool $catalogDeletePrepared = false;
 
+    /** 系统默认店铺的默认渠道主键，对齐 Store::ID_DEFAULT */
+    public const ID_DEFAULT = 0;
+
     /** 默认渠道代码，底层禁止删除 */
     public const CODE_DEFAULT = 'default';
     public const CODE_MAX_LENGTH = 64;
@@ -124,9 +127,9 @@ class SalesChannel extends Model
             $this->valueForSave(self::schema_fields_WEBSITE_ID, $existing),
             __('渠道必须显式归属 Website（website_id=0 是合法默认站）'),
         );
-        $storeId = self::positiveInteger(
+        $storeId = self::nonNegativeInteger(
             $this->valueForSave(self::schema_fields_STORE_ID, $existing),
-            __('渠道必须归属一个明确的店铺'),
+            __('渠道必须归属一个明确的店铺（store_id=0 是系统默认店铺）'),
         );
         $this->setData(self::schema_fields_WEBSITE_ID, $websiteId);
         $this->setData(self::schema_fields_STORE_ID, $storeId);
@@ -178,9 +181,9 @@ class SalesChannel extends Model
     private function prepareCatalogDelete(): void
     {
         $probe = $this->loadExistingForDelete(false);
-        $storeId = self::positiveInteger(
+        $storeId = self::nonNegativeInteger(
             $probe->getData(self::schema_fields_STORE_ID),
-            __('渠道必须归属一个明确的店铺'),
+            __('渠道必须归属一个明确的店铺（store_id=0 是系统默认店铺）'),
         );
         $store = $this->requireActiveParentStore($storeId);
         $row = $this->loadExistingForDelete(true);
@@ -276,13 +279,13 @@ class SalesChannel extends Model
             return [null, null];
         }
         $id = (int)$this->getData(self::schema_fields_ID);
-        if ($id <= 0) {
-            throw new \RuntimeException(__('渠道 ID 必须是正整数'));
+        if ($id < 0) {
+            throw new \RuntimeException(__('渠道 ID 不能为负数（0 是系统默认渠道）'));
         }
         $probe = $this->loadExistingRow($id, false, __('要更新的渠道不存在'));
-        $storeId = self::positiveInteger(
+        $storeId = self::nonNegativeInteger(
             $probe->getData(self::schema_fields_STORE_ID),
-            __('渠道必须归属一个明确的店铺'),
+            __('渠道必须归属一个明确的店铺（store_id=0 是系统默认店铺）'),
         );
         $store = $this->requireActiveParentStore($storeId);
         $current = $this->loadExistingRow($id, true, __('要更新的渠道不存在'));
@@ -298,8 +301,8 @@ class SalesChannel extends Model
             throw new \RuntimeException(__('删除渠道前必须加载明确的渠道记录'));
         }
         $id = (int)$this->getData(self::schema_fields_ID);
-        if ($id <= 0) {
-            throw new \RuntimeException(__('删除渠道前必须提供有效渠道 ID'));
+        if ($id < 0) {
+            throw new \RuntimeException(__('删除渠道前必须提供有效渠道 ID（0 是系统默认渠道）'));
         }
         // delete() has already prepared its DELETE query before delete_before()
         // runs. A shallow clone shares that bound query and clearQuery() would

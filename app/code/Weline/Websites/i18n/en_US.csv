@@ -85,7 +85,7 @@ follow_registrar|provider_account|none,follow_registrar|provider_account|none
 "按 Website 读取 Store Catalog v1（后台 LIST ACL 过滤）","Read Store Catalog v1 by Website (backend LIST ACL filtering)"
 "Website ID（含 0=default）","Website ID (including 0=default)"
 "按 Store 读取 SalesChannel Catalog v1（后台 LIST ACL 过滤）","Read SalesChannel Catalog v1 by Store (backend LIST ACL filtering)"
-"Store ID","Store ID"
+"Store ID；0 是系统默认店铺","Store ID; 0 is the system default store"
 店铺不存在,"The store does not exist"
 "Catalog 参数必须且只能包含 %{1}","The Catalog parameter must and can only contain %{1}"
 "Catalog 参数 %{1} 必须是规范整数","Catalog parameter %{1} must be a canonical integer"
@@ -298,7 +298,7 @@ id属性不能为空,"The id attribute cannot be empty"
 "未找到匹配 Channel","No matching Channel"
 未找到匹配站点,"No matching website found"
 请选择站点,"Please select a website"
-搜索站点名称或编码,"Search site name or code"
+搜索站点名称或域名,"Search site name or domain"
 "Website 层","Website level"
 "搜索 Store","Search Store"
 "未找到匹配 Store","No matching Store"
@@ -312,13 +312,14 @@ id属性不能为空,"The id attribute cannot be empty"
 网站URL,"Site URL"
 请输入有效的URL,"Please enter a valid URL"
 默认货币,"Default Currency"
-请选择,"Please select"
 不设置则从关联货币中选择第一个,"If not set, the first one will be selected from the associated currencies."
 默认语言,"Default Language"
+请选择,"Please select"
 不设置则从关联语言中选择第一个,"If not set, the first one will be selected from the associated languages."
 关联货币,"Associated Currency"
-按住Ctrl或Cmd键可多选,"Hold Ctrl or Cmd to select multiple"
+点击选择关联货币，默认货币不可取消,"Click to select associated currencies; default currency cannot be removed"
 关联语言,"Associated Language"
+按住Ctrl或Cmd键可多选,"Hold Ctrl or Cmd to select multiple"
 取消,Cancel
 域名管理标签页导航,"Domain Management Tab Navigation"
 "在域名管理页面的标签页导航区域动态追加标签页按钮。其他模块（如 Server 模块的证书管理）可通过此 Hook 注入新的 Tab 按钮。","Dynamically append tab buttons in the domain management page navigation area. Other modules (e.g., Server module certificate management) can inject new tabs via this Hook."
@@ -356,6 +357,7 @@ Weline（本地）,"Weline (local)"
 "货币 %{1} 不被当前网站允许","Currency %{1} is not allowed on the current site"
 当前后台站点与该管理员绑定站点不一致，无法登录,"The current backend site is inconsistent with the administrator's binding site and cannot be logged in."
 域名购买成功后续生命周期步骤失败：%{1},"Subsequent lifecycle steps failed after successful domain purchase: %{1}"
+"WLS 本地域名注册后同步域名池失败（%{1}）：%{2}","WLS 本地域名注册后同步域名池失败（%{1}）：%{2}"
 系统正在升级维护，请稍后再试。,"The system is being upgraded and maintained, please try again later."
 更新证书状态失败：%{1},"Update certificate status failed: %{1}"
 当前请求没有匹配到可用网站,"The current request does not match an available website"
@@ -378,6 +380,7 @@ Weline（本地）,"Weline (local)"
 "站点或域名记录包含无效 website_id：%{1}","Site or domain record contains invalid website_id: %{1}"
 "当前 Host/URI 同优先级匹配到多个网站，已拒绝请求","The current Host/URI matches multiple websites with the same priority, and the request has been rejected."
 清除域名池证书状态失败：%{1},"Failed to clear domain pool certificate status: %{1}"
+"WLS 域名启用后补写域名池失败（%{1}）：%{2}","WLS 域名启用后补写域名池失败（%{1}）：%{2}"
 "同步 HTTPS 状态失败：%{1}","Sync HTTPS status failed: %{1}"
 "Amazon Web Services Route 53 域名注册服务，支持域名注册、DNS 管理和健康检查。","Amazon Web Services Route 53 domain registration service, supporting domain registration, DNS management, and health checks."
 "Access Key ID","Access Key ID"
@@ -887,15 +890,19 @@ plus,plus
 trash,trash
 清理误同步的DNS服务商域名,"Clean up mis-synchronized DNS service provider domain names"
 网站目录行必须是网站模型或数组,"Site directory row must be a site model or array"
+访问前端,"Access frontend"
+管理后端,"Management backend"
+删除,Delete
 "网站目录行缺少 website_id","The website directory row is missing website_id"
 网站ID必须是非负规范整数,"Site ID must be a non-negative canonical integer"
+添加网站,"Add website"
 请至少选择一个域名,"Please select at least one domain"
 "该域名根路径已被站点「%{1}」使用，请使用子路径（如 /shop）","The domain root path is already used by site 「%{1}」. Please use a subpath (e.g. /shop)"
 "该地址 %{1} 已被站点「%{2}」使用","The address %{1} is already used by site 「%{2}」"
 网站保存失败，未能获取网站ID,"Failed to save site, unable to retrieve site ID"
 网站保存后快照不存在,"The snapshot does not exist after saving the website"
-网站添加成功,"Website added successfully"
 "网站添加失败: %{1}","Failed to add site: %{1}"
+网站添加成功,"Website added successfully"
 网站ID与当前编辑目标不一致,"The website ID is inconsistent with the current editing target"
 网站更新成功,"Site updated successfully"
 站点名称不能为空,"Site Name cannot be empty"
@@ -923,7 +930,6 @@ trash,trash
 直进子站后台,"Go directly to the backend of the sub-site"
 login,login
 主站直进已授权子站后台,"Directly access the main site to the backend of authorized sub-sites"
-添加网站,"Add website"
 edit,edit
 快速创建站点,"Create a site quickly"
 删除网站,"Delete website"
@@ -1321,7 +1327,7 @@ lock,lock
 "店铺模式创建后不可变更：%{1} → %{2} 被拒绝","The store model cannot be changed after it is created: %{1} → %{2} rejected"
 默认店铺代码不允许修改,"The default store code does not allow modification"
 "店铺独立入口 URL 必须是不含账号、查询或片段的规范 http/https 地址","The store independent entrance URL must be a canonical http/https address without an account, query or fragment."
-"店铺 ID 必须是正整数","Store ID must be a positive integer"
+"店铺 ID 不能为负数（0 是系统默认店铺）","Store ID cannot be negative (0 is the system default store)"
 "店铺父 Website 在更新锁定期间发生变化","Store parent Website changed during update lock"
 要更新的店铺不存在,"The store to be updated does not exist"
 "店铺所属 Website 不存在","The website the store belongs to does not exist"
@@ -1334,7 +1340,7 @@ lock,lock
 渠道名称不能为空,"Channel name cannot be empty"
 "渠道名称不能超过 %{1} 个字符","SalesChannel name cannot exceed %{1} characters"
 "渠道必须显式归属 Website（website_id=0 是合法默认站）","The channel must explicitly belong to Website (website_id=0 is the legal default site)"
-渠道必须归属一个明确的店铺,"The channel must belong to a clear store"
+"渠道必须归属一个明确的店铺（store_id=0 是系统默认店铺）","A channel must belong to an explicit store (store_id=0 is the system default store)"
 "渠道创建后不允许迁移到其他 Website 或店铺","Once the channel is created, it is not allowed to be migrated to other websites or stores."
 "渠道 website_id 必须与所属店铺一致","The channel website_id must be consistent with the store it belongs to."
 "渠道默认标记只能是 0 或 1","Channel default tag can only be 0 or 1"
@@ -1347,55 +1353,28 @@ lock,lock
 默认渠道不允许删除,"Default channels are not allowed to be deleted"
 渠道所属店铺不存在,"The store to which the channel belongs does not exist"
 非活动店铺下不允许新增、更新或删除销售渠道,"Adding, updating or deleting sales channels is not allowed under inactive stores."
-"渠道 ID 必须是正整数","Channel ID must be a positive integer"
+"渠道 ID 不能为负数（0 是系统默认渠道）","Channel ID cannot be negative (0 is the system default channel)"
 要更新的渠道不存在,"The channel to be updated does not exist"
 渠道父店铺在更新锁定期间发生变化,"Channel parent store changes during update lock"
 删除渠道前必须加载明确的渠道记录,"Explicit channel records must be loaded before deleting a channel"
-"删除渠道前必须提供有效渠道 ID","A valid channel ID is required before deleting a channel"
+"删除渠道前必须提供有效渠道 ID（0 是系统默认渠道）","A valid channel ID is required before deletion (0 is the system default channel)"
 要删除的渠道不存在,"The channel to be deleted does not exist"
-"Store / SalesChannel 目录","Store / SalesChannel Directory"
 访问入口,"Access entry"
 "语言 / 货币","Language / Currency"
-操作,Actions
-暂无网站数据,"No website data"
-只读,Read-only
-"暂无 Store/Channel 目录，请运行 setup:upgrade 补齐默认目录。","No Store/Channel directory is available. Run setup:upgrade to restore the default directory."
-默认,Default
-"此 Store 暂无 SalesChannel","This Store has no SalesChannel"
-未生成访问地址,"No access URL generated"
-主,host
-货币,Currency
-语言,Language
-访问前端,"Access frontend"
-管理后端,"Management backend"
-正式,Normal
-开发,Development
-测试,Test
-活动,Active
-墓碑,Tombstone
-"Store 与 SalesChannel 只读目录","Read-only Store and SalesChannel directory"
-"%{1} 个 Store","%{1} Store(s)"
-启用,Enable
-停用,Disabled
-"SalesChannel 列表","SalesChannel list"
-请先绑定域名,"Please bind domain name first"
-有功能授权时从主站直进子站后台，无需再登录,"When there is function authorization, you can go directly to the sub-site backend from the main site without logging in again."
-您确定要删除此网站吗？,"Are you sure you want to delete this site?"
-删除,Delete
-后台,Backend
+"Store / Channel","Store / Channel"
+管理多站点、域名、语言与货币配置,管理多站点、域名、语言与货币配置
+搜索,Search
+清除,Clear
 使用说明,Instructions
 网站,Website
 代表一个独立站点，可配置多个域名、语言与货币,"Represents an independent site, can configure multiple domains, languages, and currencies"
 "Store / SalesChannel","Store / SalesChannel"
-列表只读展示站点下的店铺模式、生命周期与销售渠道，不在此处修改目录。,"The list shows Store mode, lifecycle, and SalesChannel data as read-only; the directory cannot be modified here."
-关联域名,"Associated Domain"
-一个网站可绑定多个域名，主域名用于默认访问,"A website can be bound to multiple domain names, and the main domain name is used for default access."
-编辑/删除,Edit/Delete
-在操作列中可编辑网站或删除（请谨慎操作）,"In the action column, you can edit the website or delete it (please proceed with caution)"
-搜索网站,"Search site"
-搜索,Search
-清除,Clear
-搜索名称、代码或URL,"Search name, code, or URL"
+列表只读展示摘要，修改请前往商店管理,列表只读展示摘要，修改请前往商店管理
+字段配置,字段配置
+可将时区等辅助信息合并到站点列,可将时区等辅助信息合并到站点列
+刷新,Refresh
+保存,Save
+您确定要删除此网站吗？,"Are you sure you want to delete this site?"
 可由选择域名自动生成（域名转下划线），可修改,"Auto-generated from first selected domain (dots to underscores)"
 网站子路径,"Site Subpath"
 可选；留空表示直接使用域名根路径，填写后会应用到当前选择的所有域名。,"Optional; leave blank to use the domain root path directly; if filled in, it will apply to all currently selected domains."
@@ -1403,20 +1382,31 @@ lock,lock
 "此处仅展示目录。Store 模式、生命周期与 SalesChannel 不会随 Website 表单保存而修改。","This directory is read-only. Store mode, lifecycle, and SalesChannel data are not changed when the Website form is saved."
 "保存 Website 后，系统会在升级与站点保存流程中建立默认 Store 和 SalesChannel。","After the Website is saved, the upgrade and website-save flows create its default Store and SalesChannel."
 "当前 Website 暂无 Store/Channel 目录，请运行 setup:upgrade 补齐默认目录。","This Website has no Store/Channel directory. Run setup:upgrade to restore the default directory."
+默认,Default
+"此 Store 暂无 SalesChannel","This Store has no SalesChannel"
 选择域名,"Select Domain"
 从域名池选择已就绪的域名（可多选）；选择后网站代码将自动填充，子路径由上方统一控制。,"Select ready domains from the domain pool (multi-select allowed); after selection, the site code will be auto-filled, and the sub-path is controlled uniformly from above."
 默认时区,"Default Time Zone"
 搜索时区...,"Search Timezone..."
-输入关键词搜索时区,"Enter keywords to search time zone"
-保存,Save
+点击选择时区，可输入关键词搜索,"Click to select a timezone; type keywords to search"
 返回,Back
+正式,Normal
+开发,Development
+测试,Test
+活动,Active
+墓碑,Tombstone
 "业务范围 (Scope)",Scope
 如：catalog,"For example: catalog"
 用于标识站点的业务来源，留空表示通用站点。由系统自动设置。,"Used to identify the business source of the site; leave blank for a general site. Set automatically by the system."
 首页入口路由,"Homepage entry route"
 继承全局首页配置,"Inherit global homepage configuration"
 选择后，此站点访问根路径时会进入该前台路由；为空则继承全局开始路由。,"When selected, this site's root path enters this frontend route; leave empty to inherit the global start route."
+"Store 与 SalesChannel 只读目录","Read-only Store and SalesChannel directory"
+启用,Enable
+停用,Disabled
+"SalesChannel 列表","SalesChannel list"
 "已选择 %{1} 个域名","%{1} domains selected"
+点击选择时区,"Click to select timezone"
 "Store 商品复制向导","Store Product Copy Wizard"
 "目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。"
 持久化事务模式,"Persistence transaction model"
@@ -1498,6 +1488,7 @@ HTTPS状态,"HTTPS status"
 证书有效,"Certificate Valid"
 即将过期,"About to Expire"
 服务商,"Service provider"
+操作,Actions
 从域名商导入域名,"Import domains from domain registrar"
 选择域名商账户,"Select Domain Registrar Account"
 全选,"Select All"
@@ -1780,6 +1771,7 @@ DNS管理,"DNS management"
 订单号,"Order No."
 数量,Count
 时间,Time
+后台,Backend
 域名池,"Domain Pool"
 域名商管理,"Registrar Management"
 域名购买,"Domain Purchase"
@@ -2157,7 +2149,6 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 后台请求组件不可用，请刷新页面后重试。,"The background request component is unavailable, please refresh the page and try again."
 请选择网站,"Please select a website"
 "Website Scope 管理工作台","Website Scope Management Workbench"
-切换网站,"Switch website"
 商店代码,"store code"
 商店名称,"store name"
 模式,model
@@ -2486,6 +2477,9 @@ download,download
 虚拟主题生成失败,"Virtual theme generation failed"
 "provider_code 不能为空","provider_code cannot be empty"
 "admin_user_id 必须大于 0","admin_user_id must be greater than 0"
+"WLS 本地域名注册同步","WLS 本地域名注册同步"
+域名池保存后无法取得有效记录。,"Unable to obtain valid records after saving the domain name pool."
+"WLS 域名使用同步（%{1}）","WLS 域名使用同步（%{1}）"
 "本地测试域名必须是单标签 *.weline.test。","The local test domain name must be the single label *.weline.test."
 没有可检查的本地测试域名。,"There is no local test domain to check."
 已找到可直接启动建站的本地测试域名。,"A local test domain name has been found that can directly start website building."
@@ -2539,6 +2533,10 @@ download,download
 默认渠道补种失败,"Default channel reseeding failed"
 默认渠道并发补种后无法回读,"The default channel cannot be read back after concurrent reseeding."
 "默认渠道补种读取到无效 store_id","The default channel reseeding reads an invalid store_id"
+"默认店铺 ID %{1} 已被非 default 店铺占用，无法迁移。","Default store ID %{1} is occupied by a non-default store and cannot be migrated."
+"默认店铺迁移到 store_id=0 后无法回读","Unable to re-read the default store after migrating to store_id=0"
+"默认渠道 ID %{1} 已被非 default 渠道占用，无法迁移。","Default channel ID %{1} is occupied by a non-default channel and cannot be migrated."
+"默认渠道迁移到 channel_id=0 后无法回读","Unable to re-read the default channel after migrating to channel_id=0"
 "既有默认店铺不满足 default/normal/启用/active 不变量","The existing default store does not satisfy the default/normal/enable/active invariants."
 "既有默认渠道不满足父 Scope/default/启用不变量","The existing default channel does not satisfy the parent Scope/default/enable invariant"
 "补种目标 Website 不存在","The replanting target website does not exist"
@@ -2752,6 +2750,14 @@ download,download
 "当前检测为注册商侧或与其关联的 DNS。若与目标服务商不一致，请检查是否已在注册商处修改 NS 并等待传播。","Currently detected as the registrar's or its associated DNS. If it does not match the target service provider, please check if NS has been modified at the registrar and wait for propagation."
 "当前解析由第三方 DNS 提供（非注册商默认）。若添加记录失败，请到该 DNS 服务商控制台操作。","Current resolution is provided by a third-party DNS (not the registrar's default). If adding records fails, please operate in the DNS provider's console."
 "未解析到有效 IP，请检查域名是否已添加 A 或 AAAA 记录","Not resolved to a valid IP. Please check if the domain has an A or AAAA record added."
+默认站点,默认站点
+全部语言,全部语言
+"%{1} 种语言","%{1} 种语言"
+全部货币,全部货币
+"默认 %{1}","默认 %{1}"
+"%{1} 种货币","%{1} 种货币"
+"暂无 Store/Channel","暂无 Store/Channel"
+"%{1} Store · %{2} Channel","%{1} Store · %{2} Channel"
 该域名已有进行中的配置流程,"This domain already has a configuration process in progress."
 "配置订单已创建（使用已有域名），请继续 DNS/CDN/证书 步骤","Configure order created (using existing domain), please proceed with DNS/CDN/Certificate steps"
 "域名购买成功，请继续 DNS/CDN/证书 步骤","Domain purchase successful, please continue with DNS/CDN/Certificate steps"
@@ -2776,7 +2782,6 @@ download,download
 目标域名当前不可购买。,"The target domain is currently unavailable for purchase."
 域名购买失败。,"Domain name purchase failed."
 "目标地址 %{1} 已绑定到其他站点「%{2}」。","The destination address %{1} is bound to another site ""%{2}""."
-域名池保存后无法取得有效记录。,"Unable to obtain valid records after saving the domain name pool."
 "目标地址 %{1} 已绑定到其他站点「%{2}」，不能自动改绑。","Address %{1} is already bound to site \%{2}\ and cannot be rebound automatically."""""""""""""""
 目标域名已绑定到其他站点，不能自动改绑。,"The target domain name has been bound to other sites and cannot be automatically changed."
 域名记录保存后未能验证站点绑定。,"Failed to verify site binding after saving domain name record."
@@ -3138,6 +3143,43 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+搜索站点名称或编码,"Search site name or code"
+点击选择货币（可多选）,点击选择货币（可多选）
+点击选择货币,点击选择货币
+搜索货币代码、名称或符号,搜索货币代码、名称或符号
+清空选择,清空选择
+点击选择语言（可多选）,点击选择语言（可多选）
+点击选择语言,点击选择语言
+搜索国家、语言或代码...,搜索国家、语言或代码...
+已支持,已支持
+"缺少 data-provider / data-operation","缺少 data-provider / data-operation"
+删除请求失败,删除请求失败
+确认删除吗？,确认删除吗？
+"Store ID","Store ID"
+"店铺 ID 必须是正整数","Store ID must be a positive integer"
+渠道必须归属一个明确的店铺,"The channel must belong to a clear store"
+"渠道 ID 必须是正整数","Channel ID must be a positive integer"
+"删除渠道前必须提供有效渠道 ID","A valid channel ID is required before deleting a channel"
+切换网站,"Switch website"
+输入关键词搜索时区,"Enter keywords to search time zone"
+"%{1} 个 Store","%{1} Store(s)"
+请先绑定域名,"Please bind domain name first"
+有功能授权时从主站直进子站后台，无需再登录,"When there is function authorization, you can go directly to the sub-site backend from the main site without logging in again."
+搜索名称、代码或URL,"Search name, code, or URL"
+"Store / SalesChannel 目录","Store / SalesChannel Directory"
+暂无网站数据,"No website data"
+只读,Read-only
+"暂无 Store/Channel 目录，请运行 setup:upgrade 补齐默认目录。","No Store/Channel directory is available. Run setup:upgrade to restore the default directory."
+未生成访问地址,"No access URL generated"
+主,host
+货币,Currency
+语言,Language
+列表只读展示站点下的店铺模式、生命周期与销售渠道，不在此处修改目录。,"The list shows Store mode, lifecycle, and SalesChannel data as read-only; the directory cannot be modified here."
+关联域名,"Associated Domain"
+一个网站可绑定多个域名，主域名用于默认访问,"A website can be bound to multiple domain names, and the main domain name is used for default access."
+编辑/删除,Edit/Delete
+在操作列中可编辑网站或删除（请谨慎操作）,"In the action column, you can edit the website or delete it (please proceed with caution)"
+搜索网站,"Search site"
 "三入口共用 ProductCopyService；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","The three entries share ProductCopyService; mandatory preview before submission. The inventory defaults to 0, and you need to explicitly check it to copy the quantity."
 "跨 Website：先建目标站目录（分类新 UUID），再写 Store overlay；不抬升来源 Store 覆盖。","Cross-Website: Create the target website directory (new UUID for classification) first, and then write the Store overlay; do not increase the source Store overlay."
 "请选择目标 Website 与 Store","Please select the target Website and Store"
