@@ -80,8 +80,8 @@ final class WebsiteBackendEntryBridgeService
         }
         $row[Website::schema_fields_ID] = $targetWebsiteId;
         $entry = $this->entryUrlService->resolveForListingRow($row);
-        $frontendUrl = $this->withCurrentRequestPort((string)($entry['frontend_url'] ?? ''));
-        $loginUrl = $this->withCurrentRequestPort((string)($entry['backend_url'] ?? ''));
+        $frontendUrl = $this->entryUrlService->withCurrentRequestPort((string)($entry['frontend_url'] ?? ''));
+        $loginUrl = $this->entryUrlService->withCurrentRequestPort((string)($entry['backend_url'] ?? ''));
         if ($frontendUrl === '' || $loginUrl === '') {
             throw new \RuntimeException((string)__('该站尚未绑定可访问域名'));
         }
@@ -104,44 +104,6 @@ final class WebsiteBackendEntryBridgeService
             'backend_login_url' => $loginUrl,
             'consume_url' => $origin . $consumePath . '?token=' . \rawurlencode($token),
         ];
-    }
-
-    /**
-     * Local WLS often stores website.url without :port while the live request has one.
-     */
-    private function withCurrentRequestPort(string $url): string
-    {
-        $url = \trim($url);
-        if ($url === '') {
-            return '';
-        }
-        $parts = \parse_url($url);
-        if (!\is_array($parts) || empty($parts['host']) || isset($parts['port'])) {
-            return $url;
-        }
-        $httpHost = (string)($_SERVER['HTTP_HOST'] ?? '');
-        if ($httpHost === '' || !\preg_match('/:(\d+)\z/', $httpHost, $m)) {
-            return $url;
-        }
-        $port = (int)$m[1];
-        if ($port <= 0) {
-            return $url;
-        }
-        $scheme = (string)($parts['scheme'] ?? 'http');
-        $httpsOn = !empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off';
-        $forwarded = \strtolower((string)($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? ''));
-        if ($httpsOn || $forwarded === 'https') {
-            $scheme = 'https';
-        }
-        $rebuild = $scheme . '://' . $parts['host'] . ':' . $port;
-        if (!empty($parts['path'])) {
-            $rebuild .= $parts['path'];
-        }
-        if (isset($parts['query']) && $parts['query'] !== '') {
-            $rebuild .= '?' . $parts['query'];
-        }
-
-        return $rebuild;
     }
 
     /**

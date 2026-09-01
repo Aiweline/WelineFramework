@@ -28,9 +28,9 @@ $formatBytes = static function (int $bytes): string {
     $power = min((int)floor(log($bytes, 1024)), count($units) - 1);
     return round($bytes / (1024 ** $power), 2) . ' ' . $units[$power];
 };
-$createUrl = $this->getBackendUrl('*/backup/create');
-$deleteUrl = $createUrl;
-$downloadUrl = $createUrl;
+$createPath = '*/backup/create';
+$deletePath = $createPath;
+$downloadPath = $createPath;
 $websiteSelectOptions = \Weline\Websites\Service\WebsiteSelectOptions::fromRows($websites);
 $websiteSelectValue = '';
 $websiteSelectDisplay = '';
@@ -297,9 +297,9 @@ $websiteSelectOptionsJson = json_encode($websiteSelectOptions, JSON_UNESCAPED_UN
     'use strict';
 
     var config = {
-        createUrl: <?= $jsonForScript($createUrl) ?>,
-        deleteUrl: <?= $jsonForScript($deleteUrl) ?>,
-        downloadUrl: <?= $jsonForScript($downloadUrl) ?>,
+        createUrl: "@backend-url{$createPath}",
+        deleteUrl: "@backend-url{$deletePath}",
+        downloadUrl: "@backend-url{$downloadPath}",
         text: {
             creating: <?= $jsonForScript((string)__('正在创建...')) ?>,
             createDefault: <?= $jsonForScript((string)__('创建备份')) ?>,

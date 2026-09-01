@@ -1,0 +1,176 @@
+@layer page {
+    .w-website-admin {
+        display: grid;
+        gap: var(--weline-space-4);
+        width: 100%;
+        min-width: 0;
+        color: var(--weline-theme-text);
+    }
+
+    .w-website-admin__toolbar {
+        display: grid;
+        grid-template-columns: minmax(12rem, max-content) minmax(0, 1fr);
+        gap: var(--weline-space-5);
+        align-items: end;
+        margin: 0;
+        padding: var(--weline-space-5);
+        overflow: visible;
+        background:
+            linear-gradient(120deg, var(--weline-theme-primary-surface), transparent 46%),
+            var(--weline-theme-surface);
+        border-color: var(--weline-theme-border);
+        box-shadow: var(--weline-theme-shadow-sm);
+    }
+
+    .w-website-admin__intro {
+        display: grid;
+        gap: var(--weline-space-2);
+        min-width: 0;
+    }
+
+    .w-website-admin__intro h4 {
+        display: inline-flex;
+        align-items: center;
+        gap: var(--weline-space-2);
+        margin: 0;
+        color: var(--weline-theme-text);
+        font-size: var(--weline-font-size-xl);
+        line-height: 1.2;
+    }
+
+    .w-website-admin__intro-meta {
+        display: inline-flex;
+        align-items: center;
+        width: fit-content;
+        max-width: 100%;
+        min-height: var(--weline-control-height-sm);
+        padding: 0 var(--weline-space-3);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-round);
+        background: var(--weline-theme-surface-muted);
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+    }
+
+    .w-website-admin__actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--weline-space-2);
+        justify-content: flex-end;
+        align-items: center;
+    }
+
+    .w-website-admin__filter {
+        width: 100%;
+        min-width: 0;
+        margin: 0;
+        padding: var(--weline-space-3) var(--weline-space-4);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-theme-surface-raised);
+    }
+
+    .w-website-admin__filter-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.4fr) auto;
+        gap: var(--weline-space-3);
+        align-items: end;
+    }
+
+    .w-website-admin__filter-field {
+        display: grid;
+        gap: var(--weline-space-2);
+        min-width: 0;
+    }
+
+    .w-website-admin__filter-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--weline-space-2);
+        align-items: center;
+    }
+
+    .w-website-admin__guide {
+        margin: 0;
+    }
+
+    .w-website-admin__guide-toggle {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-3);
+        width: 100%;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        color: inherit;
+        cursor: pointer;
+        text-align: left;
+    }
+
+    .w-website-admin__guide-toggle:focus-visible {
+        outline: 3px solid var(--weline-theme-primary);
+        outline-offset: 4px;
+        border-radius: var(--weline-radius-sm);
+    }
+
+    .w-website-admin__guide-body {
+        display: none;
+        margin-top: var(--weline-space-3);
+        color: var(--weline-theme-text-muted);
+    }
+
+    .w-website-admin__guide-body.is-open {
+        display: block;
+    }
+
+    .w-website-admin__guide-body ul {
+        margin: 0;
+        padding-left: var(--weline-space-5);
+    }
+
+    .w-website-admin__table-card {
+        margin: 0;
+        min-width: 0;
+        overflow: hidden;
+    }
+
+    .w-website-admin__table-card .w-datatable__cell[data-field="site_head"],
+    .w-website-admin__table-card .w-datatable__cell[data-field="access_entry"] {
+        word-break: break-word;
+    }
+
+    .w-website-admin__table-card .w-datatable__cell[data-field="site_head"] {
+        font-weight: 600;
+    }
+
+    .w-website-admin__table-card .w-datatable__cell[data-field="access_entry"] {
+        color: var(--weline-theme-primary);
+        font-size: var(--weline-font-size-sm);
+    }
+
+    .w-website-admin__table-card .w-datatable__cell[data-field="store_channel_summary"],
+    .w-website-admin__table-card .w-datatable__cell[data-field="market_cluster"] {
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+    }
+
+    .w-website-admin__pagination {
+        padding: var(--weline-space-4);
+        border-top: 1px solid var(--weline-theme-border);
+    }
+
+    @media (max-width: 48rem) {
+        .w-website-admin__toolbar {
+            grid-template-columns: 1fr;
+        }
+
+        .w-website-admin__actions {
+            justify-content: flex-start;
+        }
+
+        .w-website-admin__filter-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+}

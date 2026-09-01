@@ -23,8 +23,8 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
 
     public function byStore(int $storeId): array
     {
-        if ($storeId <= 0 || $storeId > self::MAX_CATALOG_ID) {
-            throw new \InvalidArgumentException((string)__('店铺 ID 必须是正整数'));
+        if ($storeId < 0 || $storeId > self::MAX_CATALOG_ID) {
+            throw new \InvalidArgumentException((string)__('店铺 ID 不能为负数（0 是系统默认店铺）'));
         }
         $parentStore = $this->requireStore($storeId);
         $rows = $this->newChannel()
@@ -38,7 +38,7 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
 
     public function byCode(int $storeId, string $channelCode): ?SalesChannelSummary
     {
-        if ($storeId <= 0) {
+        if ($storeId < 0) {
             return null;
         }
         $this->assertCatalogIdMaximum($storeId, __('店铺 ID'));
@@ -59,7 +59,7 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
 
     public function byId(int $channelId): ?SalesChannelSummary
     {
-        if ($channelId <= 0) {
+        if ($channelId < 0) {
             return null;
         }
         $this->assertCatalogIdMaximum($channelId, __('销售渠道 ID'));
@@ -74,7 +74,7 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
 
     public function defaultChannel(int $storeId): ?SalesChannelSummary
     {
-        if ($storeId <= 0) {
+        if ($storeId < 0) {
             return null;
         }
         $this->assertCatalogIdMaximum($storeId, __('店铺 ID'));
@@ -124,9 +124,9 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
                 throw new \RuntimeException((string)__('销售渠道目录包含非法数据行'));
             }
 
-            $id = $this->requireIntegerField($row, SalesChannel::schema_fields_ID, 1);
+            $id = $this->requireIntegerField($row, SalesChannel::schema_fields_ID, 0);
             $websiteId = $this->requireIntegerField($row, SalesChannel::schema_fields_WEBSITE_ID, 0);
-            $storeId = $this->requireIntegerField($row, SalesChannel::schema_fields_STORE_ID, 1);
+            $storeId = $this->requireIntegerField($row, SalesChannel::schema_fields_STORE_ID, 0);
             if ($expectedStoreId !== null && $storeId !== $expectedStoreId) {
                 throw new \RuntimeException(
                     (string)__('销售渠道 %{1} 的店铺 ID 与查询范围不一致', [$id])

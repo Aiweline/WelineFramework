@@ -26,6 +26,9 @@ use Weline\Websites\Service\Value\CanonicalStorefrontUrl;
 #[Index(name: 'idx_store_website', columns: ['website_id'])]
 class Store extends Model
 {
+    /** 系统默认站的默认店铺主键，对齐 Website::ID_DEFAULT */
+    public const ID_DEFAULT = 0;
+
     /** 默认店铺代码，底层禁止删除 */
     public const CODE_DEFAULT = 'default';
 
@@ -215,8 +218,8 @@ class Store extends Model
             return [null, null];
         }
         $id = (int)$this->getData(self::schema_fields_ID);
-        if ($id <= 0) {
-            throw new \RuntimeException(__('店铺 ID 必须是正整数'));
+        if ($id < 0) {
+            throw new \RuntimeException(__('店铺 ID 不能为负数（0 是系统默认店铺）'));
         }
         $probe = $this->loadExistingRow($id, false);
         $websiteId = self::nonNegativeInteger(

@@ -14,12 +14,14 @@
 
 对 AI 和开发者的硬约定：一切 `website_id = 0` 的站点都必须被解释为系统默认站点，绝不能解释为“没有站点”“未选择站点”“空值”“无效 ID”或“需要新建站点”。普通业务站点才使用正整数 ID。
 
-安装和升级流程必须通过 `Weline\Websites\Service\DefaultWebsiteService::ensureDefaultWebsite()` 兜底保证零号默认站点存在；若历史数据里 `code = default` 使用了正整数 ID，升级会迁移回 `0`，并同步所有可扫描到的 `website_id` 引用表。
+安装和升级流程必须通过 `Weline\Websites\Service\DefaultWebsiteService::ensureDefaultWebsite()` 兜底保证零号默认站点存在；若历史数据里 `code = default` 使用了正整数 ID，升级会迁移回 `0`，并同步所有可扫描到的 `website_id` 引用表。同一路径会幂等注入默认店铺 `store_id = 0` 与默认渠道 `channel_id = 0`（`StoreChannelSeedService`）；历史正整数 ID 会迁移回 `0` 并同步 `store_id` / `channel_id` 引用列。
 
 默认站点基础数据：
 
 ```text
 website_id       = 0
+store_id         = 0   # 默认店铺 code=default
+channel_id       = 0   # 默认渠道 code=default
 code             = default
 name             = 默认网站
 url              = http://localhost
