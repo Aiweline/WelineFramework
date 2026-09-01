@@ -70,11 +70,8 @@ moduleDescribe(test, MODULE, 'R4.3 SystemConfig 真实 WebUI 写操作', () => {
         });
 
         const filter = page.locator('#wsc-filter-form');
-        await filter.locator('[name="search"]').fill(data.key);
-        await Promise.all([
-          page.waitForLoadState('domcontentloaded'),
-          filter.locator('button[type="submit"]').click(),
-        ]);
+        await page.locator('[data-w-system-config-search-input]').fill(data.key);
+        await page.locator('[data-w-system-config-search-trigger]').click();
 
         const row = page.locator(`[data-testid="system-config-field"][data-config-key="${data.key}"]`);
         await expect(row).toBeVisible({ timeout: 30000 });
