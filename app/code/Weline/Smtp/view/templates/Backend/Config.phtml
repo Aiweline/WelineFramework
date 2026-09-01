@@ -657,7 +657,7 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
         }
         var form = document.createElement('form');
         form.method = 'POST';
-        form.action = '<?= $this->getBackendUrl('smtp/backend/config/posttest') ?>';
+        form.action = '@backend-url{'smtp/backend/config/posttest'}';
         var c = document.createElement('input'); c.type = 'hidden'; c.name = 'smtp_test_address'; c.value = to;
         form.appendChild(c);
         if (code) {
@@ -686,7 +686,7 @@ $mailAccountsJson = is_string($mailAccountsJson) && $mailAccountsJson !== '' ? $
             return;
         }
         savingSenders = true;
-        var url = '<?= $this->getBackendUrl('smtp/backend/config/saveSenders') ?>';
+        var url = '@backend-url{'smtp/backend/config/saveSenders'}';
         var body = JSON.stringify({
             senders: senders,
             sender_contacts: contacts,
