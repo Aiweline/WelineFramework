@@ -15,6 +15,15 @@
   短期能力凭证。WLS 跨 Worker 跳转尚未恢复身份时允许凭证完成成功页首屏，
   已存在登录身份时仍拒绝其他 customer 的订单
 
+## 视觉（布局 Shopify / 色板 Amazon）
+
+- 布局：保留 Shopify 风格两栏（主表单 + sticky 订单摘要）、panel 卡片与 860px 以下单列响应式
+- 色板：`.weline-checkout` 作用域内定义 `--checkout-text` `#0f1111`、`--checkout-text-secondary` `#565959`、`--checkout-link` `#007185`、`--checkout-border` `#ddd`、`--checkout-cta-bg` `#ffd814`（深色字）
+- 优惠券：`checkout-summary-discount` 槽 + `Weline_Marketing::checkout-coupon` 部件（默认 Amazon 灰底应用按钮）；禁止 Hook 直出模板
+- 收货地址：`checkout-shipping-address` 槽 + `Weline_Shipping::checkout-shipping-address` 部件（`<w:theme:address>` 级联 + 已存地址选择）；Checkout 禁止裸拼国家/省/市 input
+- 优先复用 Theme Amazon token（`--color-text-*` / `--color-link`）；CTA 黄按钮写死 Amazon 黄，避免站点品牌主色（如品红）污染结账主按钮
+- 入口页：`/checkout`
+
 ## 入口
 
 | 表面 | 路径 |

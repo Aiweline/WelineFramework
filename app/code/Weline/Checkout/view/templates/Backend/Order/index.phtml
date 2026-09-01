@@ -12,7 +12,6 @@ $total_pages = (int)($total_pages ?? 1);
 $status = (string)($status ?? '');
 $payment_status = (string)($payment_status ?? '');
 $keyword = (string)($keyword ?? '');
-$action = $this->getUrl('*/backend/order/index');
 ?>
 <div class="w-grid">
     <div style="--w-span:12;">
@@ -33,7 +32,7 @@ $action = $this->getUrl('*/backend/order/index');
                 <h4 class="w-card__title" style="--w-mb:0;"><lang>订单列表</lang></h4>
             </div>
             <div class="w-card__body">
-                <w:form method="get" action="@var($action)" style="--w-mb:var(--weline-space-4);">
+                <w:form method="get" action="@url{'*/backend/order/index'}" style="--w-mb:var(--weline-space-4);">
                     <div class="w-grid" style="--w-gap:var(--weline-space-2);">
                         <div style="--w-span-md:4;">
                             <input type="text" name="keyword" class="w-input" value="<?= htmlspecialchars($keyword) ?>" placeholder="<?= __('订单号关键词') ?>">
@@ -92,7 +91,7 @@ $action = $this->getUrl('*/backend/order/index');
                                         <td><?= htmlspecialchars((string)($row['created_time'] ?? $row['created_at'] ?? '')) ?></td>
                                         <td>
                                             <?php if ($orderId !== ''): ?>
-                                                <a class="w-button" href="<?= $this->getUrl('*/backend/order/view', ['order_id' => $orderId]) ?>" data-tone="primary" data-size="sm">
+                                                <a class="w-button" href="@url{'*/backend/order/view'|['order_id' => $orderId]}" data-tone="primary" data-size="sm">
                                                     <?= __('查看') ?>
                                                 </a>
                                             <?php endif; ?>

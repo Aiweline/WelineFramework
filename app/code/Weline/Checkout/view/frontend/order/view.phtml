@@ -27,7 +27,6 @@ $currency = strtoupper(trim((string)($order['currency'] ?? 'CNY'))) ?: 'CNY';
 $orderUuid = trim((string)($order['order_uuid'] ?? ''));
 $displayNumber = trim((string)($order['display_number'] ?? '')) ?: $orderUuid;
 $status = trim((string)($order['status'] ?? ''));
-$accountOrdersUrl = $this->getUrl('customer/account/index') . '#orders';
 ?>
 <main class="order-view-page" data-checkout-order-view data-order-uuid="<?= $escape($orderUuid) ?>">
     <header class="order-view-page__header">
@@ -35,7 +34,7 @@ $accountOrdersUrl = $this->getUrl('customer/account/index') . '#orders';
             <p class="order-view-page__eyebrow"><?= __('订单中心') ?></p>
             <h1><?= __('订单详情') ?></h1>
         </div>
-        <a href="<?= $escape($accountOrdersUrl) ?>" class="order-view-page__back"><?= __('返回我的订单') ?></a>
+        <a href="@url{'customer/account/index'}#orders" class="order-view-page__back"><?= __('返回我的订单') ?></a>
     </header>
 
     <section class="order-info-section" aria-labelledby="order-info-heading" weline-code="checkout.order.view.info">
@@ -113,9 +112,9 @@ $accountOrdersUrl = $this->getUrl('customer/account/index') . '#orders';
         --checkout-order-muted: #5b6472;
         --checkout-order-surface: #ffffff;
         --checkout-order-border: #d9dde3;
-        width: min(1040px, calc(100% - 32px));
+        width: min(100%, var(--weline-layout-content-max-width));
         margin: 0 auto;
-        padding: 40px 0 64px;
+        padding: 40px var(--weline-layout-content-padding-inline) 64px;
         color: var(--checkout-order-text);
     }
     .order-view-page__header {
@@ -239,8 +238,8 @@ $accountOrdersUrl = $this->getUrl('customer/account/index') . '#orders';
     }
     @media (max-width: 720px) {
         .order-view-page {
-            width: min(100% - 24px, 1040px);
-            padding: 28px 0 48px;
+            width: min(100%, var(--weline-layout-content-max-width));
+            padding: 28px var(--weline-layout-content-padding-inline) 48px;
         }
         .order-view-page__header {
             align-items: stretch;

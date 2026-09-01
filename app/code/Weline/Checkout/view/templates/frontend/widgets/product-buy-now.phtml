@@ -1,0 +1,66 @@
+<?php
+
+/**
+ * Checkout-owned buy-now button for the product-info purchase actions slot.
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {product-buy-now}
+ * @widget.name {立即结账}
+ * @widget.description {产品主要信息购买操作槽：Cart V2 加购后跳转结账页}
+ * @widget.type {product}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["product"]}
+ * @widget.supports {["layout-product-purchase-actions","product-purchase-actions","product-buy-now","buy-now"]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-purchase-actions", "area":"content", "sort_order":10, "required":true, "reason":"产品主要信息默认由 Checkout 提供立即结账按钮", "config":{} }]}
+ */
+
+use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('product-buy-now');
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
+    || (bool)($this->getData('editor_mode') ?? false);
+
+$offer = StorefrontOfferResolver::resolve($this);
+if ($offer === [] && !$isPreviewMode) {
+    return;
+}
+
+$productId = max(0, (int)($offer['product_id'] ?? 0));
+$offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
+$sellable = !empty($offer['sellable']);
+$quoteOnly = !empty($offer['quote_only']);
+
+if ($quoteOnly || (!$isPreviewMode && (!$sellable || $offerUuid === ''))) {
+    return;
+}
+?>
+<div class="weline-checkout-product-buy-now"
+     data-weline-load="cart"
+     data-widget-module="Weline_Checkout"
+     data-widget-code="product-buy-now"
+     data-uid="<?= $escape($scope->uid) ?>"
+     data-purchase-loading="<?= $escape(__('正在前往结账...')) ?>"
+     data-purchase-success="<?= $escape(__('正在前往结账...')) ?>"
+     data-purchase-error="<?= $escape(__('结账准备失败')) ?>"
+     weline-code="<?= $escape($scope->code) ?>">
+    <button type="button"
+            class="product-native-detail__buy-now weline-pixel::buy-now"
+            data-action="buy-now"
+            data-testid="product-buy-now"
+            data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
+            data-product-id="<?= $productId ?>"
+            data-global-offer-uuid="<?= $escape($offerUuid) ?>"
+            data-checkout-url="@url{'checkout'}"
+            data-qty="1"
+            <?= $isPreviewMode ? 'disabled' : '' ?>>
+        <?= __('立即结账') ?>
+    </button>
+</div>
