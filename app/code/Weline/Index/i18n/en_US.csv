@@ -17,7 +17,6 @@
 常驻运行时,"Persistent runtime"
 "启动框架内置 HTTPS 服务，默认首页可通过 %{url} 访问。","Start the built-in HTTPS service; the default homepage is available at %{url}."
 """Unsupported contact operation: %{1}""","Unsupported contact operation: %{1}"
-"""﻿""""Unsupported contact operation: %{1}""""""","Unsupported contact operation: %{1}"
 首页导航,"Home navigation"
 "WelineFramework 首页","WelineFramework home"
 快捷入口,"Quick links"
