@@ -111,12 +111,11 @@ class Dictionary extends Model implements DictionaryRepositoryInterface
     public function listByWordPrefix(string $prefix): array
     {
         $model = clone $this;
-        $rows = $model->clearData()->clearQuery()
+        $entries = [];
+        foreach ($model->clearData()->clearQuery()
             ->where(self::schema_fields_WORD, $prefix . '%', 'LIKE')
             ->select()
-            ->fetchArray();
-        $entries = [];
-        foreach ((array)$rows as $row) {
+            ->fetchIterator() as $row) {
             if (!\is_array($row)) {
                 continue;
             }
@@ -125,6 +124,7 @@ class Dictionary extends Model implements DictionaryRepositoryInterface
                 $entries[] = $entry;
             }
         }
+
         return $entries;
     }
 

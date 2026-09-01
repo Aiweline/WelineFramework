@@ -62,6 +62,7 @@ class AiTranslationQueueService
             'force' => $force,
             'requested_by' => $requestedBy,
             'manual' => $requestedBy === 'manual' || !empty($overrides['manual']),
+            'consecutive_failures' => 0,
         ], $overrides);
 
         $result = w_query('queue', 'create', [
@@ -90,6 +91,14 @@ class AiTranslationQueueService
                 'publish' => (bool)($currentContent['publish'] ?? $this->config->shouldAutoPublish()),
                 'force' => false,
                 'manual' => !empty($currentContent['manual']),
+                'words' => is_array($currentContent['words'] ?? null) ? $currentContent['words'] : [],
+                'word_filter' => is_array($currentContent['word_filter'] ?? null) ? $currentContent['word_filter'] : [],
+                'module_name' => (string)($currentContent['module_name'] ?? ''),
+                'word_prefix' => (string)($currentContent['word_prefix'] ?? ''),
+                'allow_key_only_words' => !empty($currentContent['allow_key_only_words']),
+                'domain' => (string)($currentContent['domain'] ?? ''),
+                'requested_by' => (string)($currentContent['requested_by'] ?? 'continuation'),
+                'consecutive_failures' => max(0, (int)($currentContent['consecutive_failures'] ?? 0)),
             ],
             'continuation',
             false,

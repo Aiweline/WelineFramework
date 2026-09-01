@@ -19,53 +19,97 @@ class AiTranslationExportService
      *
      * @return array<string, mixed>
      */
+    /**
+     * Incrementally appends AI translations to each source module's target locale CSV.
+     *
+     * @return array<string, mixed>
+     */
     public function exportAiTranslationsToModules(string $localeCode): array
     {
         $localeCode = $this->normalizeLocaleCode($localeCode);
-        $rows = $this->localeDictionary->clear()->reset()
-            ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
-            ->where(LocaleDictionary::schema_fields_IS_AI, 1)
-            ->where(LocaleDictionary::schema_fields_TRANSLATE, '', '!=')
-            ->select()
-            ->fetchArray();
-
         $exported = 0;
         $skipped = 0;
         $modules = [];
         $errors = [];
+        $csvCache = [];
+        $dirtyCsvFiles = [];
+        $page = 1;
+        $pageSize = 500;
 
-        foreach ((array)$rows as $row) {
-            $word = trim((string)($row[LocaleDictionary::schema_fields_WORD] ?? ''));
-            $translation = trim((string)($row[LocaleDictionary::schema_fields_TRANSLATE] ?? ''));
-            $moduleName = trim((string)($row[LocaleDictionary::schema_fields_SOURCE_MODULE] ?? ''));
-            if ($word === '' || $translation === '' || $translation === $word || $moduleName === '') {
-                $skipped++;
-                continue;
+        while (true) {
+            $offset = ($page - 1) * $pageSize;
+            $rows = $this->localeDictionary->clear()->reset()
+                ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
+                ->where(LocaleDictionary::schema_fields_IS_AI, 1)
+                ->where(LocaleDictionary::schema_fields_TRANSLATE, '', '!=')
+                ->order(LocaleDictionary::schema_fields_MD5, 'ASC')
+                ->limit($pageSize, $offset)
+                ->select()
+                ->fetchArray();
+
+            if (empty($rows)) {
+                break;
             }
 
-            $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
-            $basePath = is_array($moduleInfo) ? rtrim((string)($moduleInfo['base_path'] ?? ''), "\\/") : '';
-            if ($basePath === '' || !is_dir($basePath)) {
-                $errors[] = (string)__('模块 %{1} 不存在，跳过词：%{2}', [$moduleName, $word]);
-                $skipped++;
-                continue;
+            foreach ((array)$rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $word = trim((string)($row[LocaleDictionary::schema_fields_WORD] ?? ''));
+                $translation = trim((string)($row[LocaleDictionary::schema_fields_TRANSLATE] ?? ''));
+                $moduleName = trim((string)($row[LocaleDictionary::schema_fields_SOURCE_MODULE] ?? ''));
+                if ($word === '' || $translation === '' || $translation === $word || $moduleName === '') {
+                    $skipped++;
+                    continue;
+                }
+
+                $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
+                $basePath = is_array($moduleInfo) ? rtrim((string)($moduleInfo['base_path'] ?? ''), "\\/") : '';
+                if ($basePath === '' || !is_dir($basePath)) {
+                    $errors[] = (string)__('模块 %{1} 不存在，跳过词：%{2}', [$moduleName, $word]);
+                    $skipped++;
+                    continue;
+                }
+
+                $csvFile = $basePath . DS . 'i18n' . DS . $localeCode . '.csv';
+                if (!isset($csvCache[$csvFile])) {
+                    $csvCache[$csvFile] = I18nCsvCodec::readWords($csvFile);
+                }
+                $word = I18nCsvCodec::normalizeWord($word);
+                $translation = I18nCsvCodec::normalizeTranslation($translation);
+                // 乱码词/译文只跳过本条，本批其余词照常写回。
+                if ($word === '' || $translation === '' || $translation === $word) {
+                    $skipped++;
+                    continue;
+                }
+                $existingTranslation = trim((string)($csvCache[$csvFile][$word] ?? ''));
+                if ($existingTranslation !== '' && $existingTranslation !== $word) {
+                    $skipped++;
+                    continue;
+                }
+
+                try {
+                    $csvCache[$csvFile][$word] = $translation;
+                    $dirtyCsvFiles[$csvFile] = true;
+                    $this->markExported((string)($row[LocaleDictionary::schema_fields_MD5] ?? ''));
+                    $modules[$moduleName] = ($modules[$moduleName] ?? 0) + 1;
+                    $exported++;
+                } catch (\Throwable $throwable) {
+                    $errors[] = (string)__('导出 %{1} 到模块 %{2} 失败：%{3}', [$word, $moduleName, $throwable->getMessage()]);
+                }
             }
 
-            $csvFile = $basePath . DS . 'i18n' . DS . $localeCode . '.csv';
-            $existing = $this->readCsvWords($csvFile);
-            $existingTranslation = trim((string)($existing[$word] ?? ''));
-            if ($existingTranslation !== '' && $existingTranslation !== $word) {
-                $skipped++;
-                continue;
+            if (count($rows) < $pageSize) {
+                break;
             }
+            $page++;
+        }
 
+        foreach (array_keys($dirtyCsvFiles) as $csvFile) {
             try {
-                $this->appendCsvRow($csvFile, $word, $translation);
-                $this->markExported((string)($row[LocaleDictionary::schema_fields_MD5] ?? ''));
-                $modules[$moduleName] = ($modules[$moduleName] ?? 0) + 1;
-                $exported++;
+                I18nCsvCodec::writeWords($csvFile, $csvCache[$csvFile] ?? []);
             } catch (\Throwable $throwable) {
-                $errors[] = (string)__('导出 %{1} 到模块 %{2} 失败：%{3}', [$word, $moduleName, $throwable->getMessage()]);
+                $errors[] = (string)__('写入 CSV 失败：%{1} — %{2}', [$csvFile, $throwable->getMessage()]);
             }
         }
 
@@ -80,6 +124,347 @@ class AiTranslationExportService
             'modules' => $modules,
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Modules that currently have AI translations for the locale (for export picker).
+     *
+     * @return list<array{module:string,count:int}>
+     */
+    public function listAiSourceModules(string $localeCode): array
+    {
+        $localeCode = $this->normalizeLocaleCode($localeCode);
+        if ($localeCode === '') {
+            return [];
+        }
+
+        $counts = [];
+        $page = 1;
+        $pageSize = 500;
+        while (true) {
+            $offset = ($page - 1) * $pageSize;
+            $rows = $this->localeDictionary->clear()->reset()
+                ->fields(LocaleDictionary::schema_fields_SOURCE_MODULE)
+                ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
+                ->where(LocaleDictionary::schema_fields_IS_AI, 1)
+                ->where(LocaleDictionary::schema_fields_TRANSLATE, '', '!=')
+                ->order(LocaleDictionary::schema_fields_MD5, 'ASC')
+                ->limit($pageSize, $offset)
+                ->select()
+                ->fetchArray();
+
+            if (empty($rows)) {
+                break;
+            }
+
+            foreach ((array)$rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $moduleName = trim((string)($row[LocaleDictionary::schema_fields_SOURCE_MODULE] ?? ''));
+                if ($moduleName === '') {
+                    continue;
+                }
+                $counts[$moduleName] = ($counts[$moduleName] ?? 0) + 1;
+            }
+
+            if (count($rows) < $pageSize) {
+                break;
+            }
+            $page++;
+        }
+
+        arsort($counts);
+        $out = [];
+        foreach ($counts as $moduleName => $count) {
+            $out[] = [
+                'module' => (string)$moduleName,
+                'count' => (int)$count,
+            ];
+        }
+
+        return $out;
+    }
+
+
+    /**
+     * 将指定模块在词典库中的译文写回该模块 i18n/{locale}.csv（开发环境）。
+     *
+     * @return array<string, mixed>
+     */
+    public function exportModuleTranslations(string $moduleName, string $localeCode, bool $aiOnly = false): array
+    {
+        $localeCode = $this->normalizeLocaleCode($localeCode);
+        $moduleName = trim($moduleName);
+        if ($moduleName === '') {
+            return [
+                'success' => false,
+                'exported' => 0,
+                'skipped' => 0,
+                'errors' => [(string)__('模块名不能为空')],
+            ];
+        }
+
+        $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
+        $basePath = is_array($moduleInfo) ? rtrim((string)($moduleInfo['base_path'] ?? ''), "\\/") : '';
+        if ($basePath === '' || !is_dir($basePath)) {
+            return [
+                'success' => false,
+                'exported' => 0,
+                'skipped' => 0,
+                'errors' => [(string)__('模块 %{1} 不存在', [$moduleName])],
+            ];
+        }
+
+        $query = $this->localeDictionary->clear()->reset()
+            ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
+            ->where(LocaleDictionary::schema_fields_TRANSLATE, '', '!=')
+            ->where(LocaleDictionary::schema_fields_SOURCE_MODULE, $moduleName);
+
+        if ($aiOnly) {
+            // 与「待写回」一致：只取尚未标记导出的 AI 行（增量写回）。
+            $query->where(LocaleDictionary::schema_fields_IS_AI, 1)
+                ->where(LocaleDictionary::schema_fields_EXPORTED_AT, null);
+        }
+
+        $rows = $query->select()->fetchArray();
+        $rowsByWord = [];
+        foreach ((array)$rows as $row) {
+            $word = trim((string)($row[LocaleDictionary::schema_fields_WORD] ?? ''));
+            if ($word !== '') {
+                $rowsByWord[$word] = $row;
+            }
+        }
+
+        // 全量路径才按源 CSV 回填词典；AI 增量写回只处理 pending 行。
+        if (!$aiOnly) {
+            $sourceCsv = $basePath . DS . 'i18n' . DS . $this->resolveSourceLocale() . '.csv';
+            foreach (array_keys(I18nCsvCodec::readWords(is_file($sourceCsv) ? $sourceCsv : '')) as $word) {
+                if (isset($rowsByWord[$word])) {
+                    continue;
+                }
+                $dbRow = $this->localeDictionary->reset()
+                    ->where(LocaleDictionary::schema_fields_WORD, $word)
+                    ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
+                    ->where(LocaleDictionary::schema_fields_TRANSLATE, '', '!=')
+                    ->find()
+                    ->fetch();
+                if ((int)$dbRow->getId() > 0) {
+                    $rowsByWord[$word] = $dbRow->getData();
+                }
+            }
+        }
+
+        $exported = 0;
+        $skipped = 0;
+        $errors = [];
+        $csvFile = $basePath . DS . 'i18n' . DS . $localeCode . '.csv';
+        $existing = I18nCsvCodec::readWords($csvFile);
+        $dirty = false;
+
+        foreach ($rowsByWord as $row) {
+            $word = I18nCsvCodec::normalizeWord((string)($row[LocaleDictionary::schema_fields_WORD] ?? ''));
+            $translation = I18nCsvCodec::normalizeTranslation((string)($row[LocaleDictionary::schema_fields_TRANSLATE] ?? ''));
+            $md5 = (string)($row[LocaleDictionary::schema_fields_MD5] ?? '');
+            if ($word === '' || $translation === '' || $translation === $word) {
+                $skipped++;
+                continue;
+            }
+
+            $existingTranslation = trim((string)($existing[$word] ?? ''));
+            if ($existingTranslation !== '' && $existingTranslation !== $word) {
+                // CSV 已有译文：不再重复写入，但仍标记已导出以清零「待写回」。
+                if ($aiOnly && $md5 !== '') {
+                    $this->markExported($md5);
+                }
+                $skipped++;
+                continue;
+            }
+
+            try {
+                $existing[$word] = $translation;
+                $dirty = true;
+                $this->markExported($md5);
+                $exported++;
+            } catch (\Throwable $throwable) {
+                $errors[] = (string)__('导出 %{1} 到模块 %{2} 失败：%{3}', [$word, $moduleName, $throwable->getMessage()]);
+            }
+        }
+
+        if ($dirty) {
+            try {
+                I18nCsvCodec::writeWords($csvFile, $existing);
+            } catch (\Throwable $throwable) {
+                $errors[] = (string)__('写入 CSV 失败：%{1} — %{2}', [$csvFile, $throwable->getMessage()]);
+            }
+        }
+
+        if ($exported > 0) {
+            $this->publisher->publishLocale($localeCode);
+        }
+
+        return [
+            'success' => $errors === [],
+            'exported' => $exported,
+            'skipped' => $skipped,
+            'module' => $moduleName,
+            'csv_file' => $csvFile,
+            'errors' => $errors,
+            'message' => (string)__(
+                '模块 %{1} 已写回 %{2} 条到 CSV，跳过 %{3} 条。',
+                [$moduleName, (string)$exported, (string)$skipped],
+            ),
+        ];
+    }
+
+    /**
+     * Fill target-locale CSV gaps from dictionary (any source), keyed by source-locale CSV.
+     * Used by module writeback pipeline so DB-already-translated words still land in CSV.
+     *
+     * @return array{
+     *     success: bool,
+     *     exported: int,
+     *     skipped: int,
+     *     gap_before: int,
+     *     gap_after: int,
+     *     module: string,
+     *     csv_file: string,
+     *     errors: list<string>,
+     *     message: string
+     * }
+     */
+    public function exportModuleCsvGaps(string $moduleName, string $localeCode): array
+    {
+        $localeCode = $this->normalizeLocaleCode($localeCode);
+        $moduleName = trim($moduleName);
+        $empty = [
+            'success' => false,
+            'exported' => 0,
+            'skipped' => 0,
+            'gap_before' => 0,
+            'gap_after' => 0,
+            'module' => $moduleName,
+            'csv_file' => '',
+            'errors' => [],
+            'message' => '',
+        ];
+        if ($moduleName === '') {
+            $empty['errors'][] = (string)__('模块名不能为空');
+            $empty['message'] = $empty['errors'][0];
+
+            return $empty;
+        }
+
+        $moduleInfo = Env::getInstance()->getModuleInfo($moduleName);
+        $basePath = is_array($moduleInfo) ? rtrim((string)($moduleInfo['base_path'] ?? ''), "\\/") : '';
+        if ($basePath === '' || !is_dir($basePath)) {
+            $empty['errors'][] = (string)__('模块 %{1} 不存在', [$moduleName]);
+            $empty['message'] = $empty['errors'][0];
+
+            return $empty;
+        }
+
+        $sourceLocale = $this->resolveSourceLocale();
+        $sourceCsv = $basePath . DS . 'i18n' . DS . $sourceLocale . '.csv';
+        $csvFile = $basePath . DS . 'i18n' . DS . $localeCode . '.csv';
+        $sourceWords = I18nCsvCodec::readWords(is_file($sourceCsv) ? $sourceCsv : '');
+        $existing = I18nCsvCodec::readWords(is_file($csvFile) ? $csvFile : '');
+
+        $gapWords = [];
+        foreach (array_keys($sourceWords) as $word) {
+            $word = I18nCsvCodec::normalizeWord((string)$word);
+            if ($word === '') {
+                continue;
+            }
+            $csvTranslation = trim((string)($existing[$word] ?? ''));
+            if ($csvTranslation !== '' && $csvTranslation !== $word) {
+                continue;
+            }
+            $gapWords[] = $word;
+        }
+
+        $gapBefore = count($gapWords);
+        $exported = 0;
+        $skipped = 0;
+        $errors = [];
+        $dirty = false;
+
+        foreach ($gapWords as $word) {
+            $dbRow = $this->localeDictionary->clear()->reset()
+                ->where(LocaleDictionary::schema_fields_WORD, $word)
+                ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
+                ->where(LocaleDictionary::schema_fields_TRANSLATE, '', '!=')
+                ->find()
+                ->fetch();
+            if ((int)$dbRow->getId() <= 0) {
+                $skipped++;
+                continue;
+            }
+            $translation = I18nCsvCodec::normalizeTranslation((string)$dbRow->getData(LocaleDictionary::schema_fields_TRANSLATE));
+            $md5 = (string)$dbRow->getData(LocaleDictionary::schema_fields_MD5);
+            if ($translation === '' || $translation === $word) {
+                $skipped++;
+                continue;
+            }
+            try {
+                $existing[$word] = $translation;
+                $dirty = true;
+                if ($md5 !== '') {
+                    $this->markExported($md5);
+                }
+                $exported++;
+            } catch (\Throwable $throwable) {
+                $errors[] = (string)__('导出 %{1} 到模块 %{2} 失败：%{3}', [
+                    $word,
+                    $moduleName,
+                    $throwable->getMessage(),
+                ]);
+            }
+        }
+
+        if ($dirty) {
+            try {
+                I18nCsvCodec::writeWords($csvFile, $existing);
+            } catch (\Throwable $throwable) {
+                $errors[] = (string)__('写入 CSV 失败：%{1} — %{2}', [$csvFile, $throwable->getMessage()]);
+            }
+        }
+
+        $gapAfter = 0;
+        foreach (array_keys($sourceWords) as $word) {
+            $word = I18nCsvCodec::normalizeWord((string)$word);
+            if ($word === '') {
+                continue;
+            }
+            $csvTranslation = trim((string)($existing[$word] ?? ''));
+            if ($csvTranslation === '' || $csvTranslation === $word) {
+                $gapAfter++;
+            }
+        }
+
+        if ($exported > 0) {
+            $this->publisher->publishLocale($localeCode);
+        }
+
+        return [
+            'success' => $errors === [],
+            'exported' => $exported,
+            'skipped' => $skipped,
+            'gap_before' => $gapBefore,
+            'gap_after' => $gapAfter,
+            'module' => $moduleName,
+            'csv_file' => $csvFile,
+            'errors' => $errors,
+            'message' => (string)__(
+                '模块 %{1}/%{2}：差额写回 %{3} 条，剩余差额 %{4}。',
+                [$moduleName, $localeCode, (string)$exported, (string)$gapAfter],
+            ),
+        ];
+    }
+
+    private function resolveSourceLocale(): string
+    {
+        return trim(str_replace('-', '_', (string)Env::default_LANGUAGE_CODE));
     }
 
     /**
@@ -105,18 +490,7 @@ class AiTranslationExportService
         }
 
         $path = sys_get_temp_dir() . DS . 'i18n-language-pack-' . $localeCode . '-' . date('YmdHis') . '.csv';
-        $handle = fopen($path, 'wb');
-        if ($handle === false) {
-            throw new \RuntimeException((string)__('无法创建导出文件。'));
-        }
-
-        fwrite($handle, "\xEF\xBB\xBF");
-        foreach ($words as $word => $translation) {
-            if ($word !== '' && $translation !== '') {
-                fputcsv($handle, [$word, $translation]);
-            }
-        }
-        fclose($handle);
+        I18nCsvCodec::writeWords($path, $words);
 
         return $path;
     }
@@ -159,54 +533,6 @@ class AiTranslationExportService
         }
     }
 
-    /**
-     * @return array<string, string>
-     */
-    private function readCsvWords(string $csvFile): array
-    {
-        if (!is_file($csvFile)) {
-            return [];
-        }
-
-        $handle = fopen($csvFile, 'rb');
-        if ($handle === false) {
-            return [];
-        }
-
-        $words = [];
-        while (($row = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-            $word = trim((string)($row[0] ?? ''));
-            if ($word !== '') {
-                $words[$word] = trim((string)($row[1] ?? ''));
-            }
-        }
-        fclose($handle);
-
-        return $words;
-    }
-
-    private function appendCsvRow(string $csvFile, string $word, string $translation): void
-    {
-        $dir = dirname($csvFile);
-        if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
-            throw new \RuntimeException((string)__('无法创建目录：%{1}', [$dir]));
-        }
-
-        $needsNewLine = is_file($csvFile) && filesize($csvFile) > 0;
-        $handle = fopen($csvFile, 'ab');
-        if ($handle === false) {
-            throw new \RuntimeException((string)__('无法写入文件：%{1}', [$csvFile]));
-        }
-
-        if ($needsNewLine) {
-            $tail = file_get_contents($csvFile, false, null, max(0, filesize($csvFile) - 1));
-            if ($tail !== false && $tail !== "\n") {
-                fwrite($handle, PHP_EOL);
-            }
-        }
-        fputcsv($handle, [$word, $translation]);
-        fclose($handle);
-    }
 
     private function markExported(string $md5): void
     {

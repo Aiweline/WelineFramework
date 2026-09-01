@@ -20,7 +20,8 @@ function sameValues(left, right) {
 }
 
 export function register(UI) {
-    UI.define('language-select', ({ element, listen, emit, floating }) => {
+    try {
+        UI.define('language-select', ({ element, listen, emit, floating }) => {
         const trigger = element.querySelector('.w-language-select__trigger');
         const tags = element.querySelector('[data-w-language-tags]');
         const field = element.querySelector('[data-w-language-field]');
@@ -436,4 +437,9 @@ export function register(UI) {
             },
         };
     });
+    } catch (error) {
+        if (!(error instanceof Error) || !/already (defined|registered)/i.test(error.message)) {
+            throw error;
+        }
+    }
 }

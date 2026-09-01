@@ -1,193 +1,89 @@
 <?php
 declare(strict_types=1);
 
-/*
- * 本文件由 秋枫雁飞 编写，所有解释权归Aiweline所有。
- * 邮箱：aiweline@qq.com
- * 网址：aiweline.com
- * 论坛：https://bbs.aiweline.com
- */
-
 namespace Weline\I18n\Cron;
 
 use Weline\Cron\CronTaskInterface;
-use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Service\AiTranslationService;
-use Weline\I18n\Model\Locale;
+use Weline\I18n\Service\AiTranslationConfig;
+use Weline\I18n\Service\AiTranslationQueueService;
+use Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationQueueService;
 
 /**
- * AI批量翻译定时任务
- * 
- * 功能：
- * - 每小时执行一次
- * - 批量翻译词典（每次1000个词）
- * - 增量翻译（已存在的翻译不会重新翻译）
- * - 自动为所有配置的语言进行翻译
+ * AI 批量翻译定时任务：仅入队，不直接调用翻译，避免与队列 worker 并发重复选词。
  */
 class AiTranslation implements CronTaskInterface
 {
-    /**
-     * @var AiTranslationService
-     */
-    private AiTranslationService $translationService;
-
-    /**
-     * @var Locale
-     */
-    private Locale $localeModel;
-
-    /**
-     * 构造函数
-     */
-    public function __construct()
-    {
-        $this->translationService = ObjectManager::getInstance(AiTranslationService::class);
-        $this->localeModel = ObjectManager::getInstance(Locale::class);
+    public function __construct(
+        private readonly AiTranslationConfig $config,
+        private readonly AiTranslationQueueService $queueService,
+        private readonly LocalModelTranslationQueueService $localModelQueueService,
+    ) {
     }
 
-    /**
-     * 任务名称
-     */
     public function name(): string
     {
         return 'I18n AI批量翻译任务';
     }
 
-    /**
-     * 执行名称
-     */
     public function execute_name(): string
     {
         return 'i18n_ai_translation';
     }
 
-    /**
-     * 任务描述
-     */
     public function tip(): string
     {
-        return '每小时批量翻译词典，每次翻译1000个词，增量翻译（已存在的翻译不会重新翻译）';
+        return '每小时为已启用语言入队 AI 翻译（词典 + LocalModel 业务多语言）；实际执行由队列 worker 串行处理';
     }
 
-    /**
-     * Cron时间表达式 - 每小时执行一次
-     */
     public function cron_time(): string
     {
         return '0 * * * *';
     }
 
-    /**
-     * 执行任务
-     */
     public function execute(): string
     {
         $startTime = microtime(true);
-        $results = [];
 
         try {
-            // 获取所有启用的语言
-            $locales = $this->getEnabledLocales();
-
-            if (empty($locales)) {
-                return __('没有启用的语言需要翻译');
+            if (!$this->config->isEnabled()) {
+                return (string)__('I18n AI 自动翻译未启用，cron 已跳过');
             }
 
-            // 为每个语言执行翻译
-            foreach ($locales as $locale) {
-                $localeCode = $locale[Locale::schema_fields_CODE] ?? '';
-                
-                // 跳过中文（源语言）
-                if (empty($localeCode) || strpos($localeCode, 'zh_Hans') !== false) {
-                    continue;
-                }
-
-                // 执行批量翻译（每次1000个词）
-                $result = $this->translationService->batchTranslateDictionary(
-                    $localeCode,
-                    'zh_Hans_CN', // 源语言：简体中文
-                    1000 // 每次翻译1000个词
-                );
-
-                $results[] = [
-                    'locale' => $localeCode,
-                    'result' => $result
-                ];
+            $enabledLocales = $this->config->getEnabledLocaleCodes();
+            if ($enabledLocales === []) {
+                return (string)__('没有启用的 AI 翻译语言');
             }
 
-            // 统计结果
-            $totalTranslated = 0;
-            $totalFailed = 0;
-            $messages = [];
-
-            foreach ($results as $item) {
-                $locale = $item['locale'];
-                $result = $item['result'];
-                
-                $totalTranslated += $result['translated'] ?? 0;
-                $totalFailed += $result['failed'] ?? 0;
-
-                if ($result['success'] && ($result['translated'] ?? 0) > 0) {
-                    $messages[] = __('%{1}: 成功翻译 %{2} 个词', [$locale, $result['translated']]);
-                } elseif (!$result['success']) {
-                    $messages[] = __('%{1}: 翻译失败 - %{2}', [$locale, $result['message'] ?? '未知错误']);
-                }
-            }
-
+            $queueIds = $this->queueService->enqueueEnabledLocales('cron', false);
+            $localModelQueueId = $this->localModelQueueService->enqueue('cron');
             $duration = round(microtime(true) - $startTime, 2);
 
-            if ($totalTranslated > 0) {
-                return __('AI批量翻译完成 - 总计翻译: %{1}, 失败: %{2}, 耗时: %{3}秒\n%{4}', [
-                    $totalTranslated,
-                    $totalFailed,
-                    $duration,
-                    implode("\n", $messages)
-                ]);
-            } else {
-                return __('所有语言的词典都已完成翻译，无需翻译新词');
+            if ($queueIds === [] && $localModelQueueId <= 0) {
+                return (string)__(
+                    '所有启用语言与 LocalModel 翻译队列均已有待运行/运行中任务，cron 未重复入队（耗时 %{1} 秒）',
+                    [$duration],
+                );
             }
-        } catch (\Exception $e) {
-            $errorMessage = $e->getMessage();
-            
-            return __('AI批量翻译异常: %{1}', [$errorMessage]);
+
+            $lines = [];
+            foreach ($queueIds as $localeCode => $queueId) {
+                $lines[] = (string)__('词典 %{1}: 队列 #%{2}', [$localeCode, $queueId]);
+            }
+            if ($localModelQueueId > 0) {
+                $lines[] = (string)__('LocalModel: 队列 #%{1}', [$localModelQueueId]);
+            }
+
+            return (string)__(
+                "AI 翻译 cron 入队完成 - 词典语言数: %{1}, LocalModel: %{2}, 耗时: %{3} 秒\n%{4}",
+                [count($queueIds), $localModelQueueId > 0 ? '1' : '0', $duration, implode("\n", $lines)],
+            );
+        } catch (\Throwable $throwable) {
+            return (string)__('AI批量翻译异常: %{1}', [$throwable->getMessage()]);
         }
     }
 
-    /**
-     * 获取启用的语言
-     * 
-     * @return array
-     */
-    private function getEnabledLocales(): array
-    {
-        try {
-            $locales = $this->localeModel->clear()
-                ->where(Locale::schema_fields_IS_ACTIVE, 1)
-                ->select()
-                ->fetch()
-                ->getItems();
-
-            return $locales ?: [];
-        } catch (\Exception $e) {
-            return [
-                [Locale::schema_fields_CODE => 'en_US'],
-                [Locale::schema_fields_CODE => 'ja_JP'],
-            ];
-        }
-    }
-
-    /**
-     * 调度任务超时解锁时间（分钟）
-     * 
-     * 当任务长时间阻塞，超过一定的时间后自动解锁
-     * 防止任务永远得不到运行的情况
-     * 
-     * @param int $minute 默认30分钟超时自动解锁
-     * @return int
-     */
     public function unlock_timeout(int $minute = 30): int
     {
-        return 60; // 60分钟超时自动解锁
+        return 60;
     }
 }
-

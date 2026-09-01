@@ -10,6 +10,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\I18n\Api\Seo\LocalizedUrlBuilderInterface;
+use Weline\I18n\Helper\InlineSvgIdUniquifier;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\I18n\Service\LocaleCatalogScope;
@@ -49,6 +50,8 @@ class LanguageSwitcher implements TaglibInterface
         self::$htmlCache = [];
         self::$languageCache = [];
         self::$chromeDictionaryCache = [];
+        self::$switcherRenderSeq = 0;
+        InlineSvgIdUniquifier::resetSequence();
     }
 
     public static function name(): string
@@ -290,7 +293,7 @@ class LanguageSwitcher implements TaglibInterface
                 . '|navigation=' . $navigation
                 . '|show_search=' . ($showSearch ? '1' : '0')
                 . '|label_mode=' . $labelMode
-                . '|markup=weline-ui-2-language-switcher-component-20'
+                . '|markup=weline-ui-2-language-switcher-component-22'
                 . '|mount=' . $websiteMount
                 . '|inst=' . $renderSeq;
             $now = \microtime(true);
@@ -330,7 +333,10 @@ class LanguageSwitcher implements TaglibInterface
                     . ' placeholder="' . htmlspecialchars($searchPlaceholder, ENT_QUOTES, 'UTF-8') . '"'
                     . ' autocomplete="off" data-w-language-search'
                     . ' aria-label="' . htmlspecialchars($searchPlaceholder, ENT_QUOTES, 'UTF-8') . '"></div>';
-                $html[] = '        <p class="w-language-switcher__empty" data-w-language-empty hidden>'
+            }
+            $html[] = '        <div class="w-language-switcher__list" data-w-language-list>';
+            if ($showSearch) {
+                $html[] = '            <p class="w-language-switcher__empty" data-w-language-empty hidden>'
                     . htmlspecialchars($labelNoMatch, ENT_QUOTES, 'UTF-8')
                     . '</p>';
             }
@@ -339,9 +345,9 @@ class LanguageSwitcher implements TaglibInterface
                 $countryNameRaw = (string)($languageGroup['country_name'] ?? $labelUngrouped);
                 $countryCodeRaw = (string)($languageGroup['country_code'] ?? '');
                 $groupId = $switcherId . '-group-' . (int)$groupIndex;
-                $html[] = '        <div class="w-language-switcher__group" role="group" aria-labelledby="'
+                $html[] = '            <div class="w-language-switcher__group" role="group" aria-labelledby="'
                     . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8') . '">';
-                $html[] = '            <div id="' . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8')
+                $html[] = '                <div id="' . htmlspecialchars($groupId, ENT_QUOTES, 'UTF-8')
                     . '" class="w-menu__header w-language-switcher__group-label"><span>'
                     . htmlspecialchars($countryNameRaw, ENT_QUOTES, 'UTF-8') . '</span><small>'
                     . htmlspecialchars($countryCodeRaw, ENT_QUOTES, 'UTF-8') . '</small></div>';
@@ -376,7 +382,7 @@ class LanguageSwitcher implements TaglibInterface
                         $countryNameRaw,
                         $countryCodeRaw,
                     ], static fn(string $part): bool => $part !== '')));
-                    $html[] = '            <a class="w-menu__item w-language-switcher__option"'
+                    $html[] = '                <a class="w-menu__item w-language-switcher__option"'
                         . ' role="menuitemradio" aria-checked="' . ($active ? 'true' : 'false') . '"'
                         . ' data-state="' . ($active ? 'active' : 'idle') . '"'
                         . ' data-i18n-authoritative-href="1" data-language-option="1"'
@@ -390,20 +396,23 @@ class LanguageSwitcher implements TaglibInterface
                         . htmlspecialchars(\implode(' | ', $metaParts), ENT_QUOTES, 'UTF-8')
                         . '</small></span></a>';
                 }
-                $html[] = '        </div>';
+                $html[] = '            </div>';
             }
+            $html[] = '        </div>';
 
             if ($showLanguageRequest) {
                 $requestDialogId = $switcherId . '-request-dialog';
                 $requestTitleId = $switcherId . '-request-title';
-                $html[] = '        <div class="w-menu__divider"></div>';
-                $html[] = '        <button type="button" class="w-menu__item w-language-switcher__request"'
+                $html[] = '        <div class="w-language-switcher__footer">';
+                $html[] = '            <div class="w-menu__divider"></div>';
+                $html[] = '            <button type="button" class="w-menu__item w-language-switcher__request"'
                     . ' role="menuitem" data-language-request-open'
                     . ' aria-haspopup="dialog"'
                     . ' aria-controls="' . htmlspecialchars($requestDialogId, ENT_QUOTES, 'UTF-8') . '">'
                     . '<w-icon name="language" size="sm"></w-icon><span>'
                     . htmlspecialchars($labelRequest, ENT_QUOTES, 'UTF-8')
                     . '</span></button>';
+                $html[] = '        </div>';
             }
 
             $html[] = '    </div>';
@@ -1019,7 +1028,9 @@ class LanguageSwitcher implements TaglibInterface
             return '';
         }
 
-        return (string)preg_replace('/<\\?xml[^?]*\\?>/i', '', $markup);
+        $markup = (string)preg_replace('/<\\?xml[^?]*\\?>/i', '', $markup);
+
+        return InlineSvgIdUniquifier::uniquify($markup);
     }
 
     private static function resolveCurrentSearch(Request $request): string

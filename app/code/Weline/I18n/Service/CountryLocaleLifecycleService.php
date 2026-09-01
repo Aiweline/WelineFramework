@@ -699,6 +699,12 @@ class CountryLocaleLifecycleService
         }
 
         ObjectManager::getInstance(RuntimeCacheBroadcaster::class)->broadcast();
+
+        try {
+            ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+                ->dispatch('Weline_I18n::locale_catalog_changed');
+        } catch (\Throwable) {
+        }
     }
 
     /** @deprecated use invalidateLocaleCatalogCaches() */

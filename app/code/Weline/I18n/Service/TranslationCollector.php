@@ -12,6 +12,7 @@ declare(strict_types=1);
 namespace Weline\I18n\Service;
 
 use Weline\Framework\App\Env;
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\I18n\Api\Translation\TranslationCollectorInterface;
 
 /**
@@ -34,11 +35,18 @@ class TranslationCollector implements TranslationCollectorInterface
 
     private function yieldFiberCheckpoint(int $processedFiles): void
     {
-        if ($processedFiles % self::FIBER_CHECKPOINT_INTERVAL !== 0 || !class_exists(\Fiber::class)) {
+        if ($processedFiles % self::FIBER_CHECKPOINT_INTERVAL !== 0) {
             return;
         }
 
-        if (\Fiber::getCurrent() !== null) {
+        // WLS SSE/HTTP Fiber 必须走 SchedulerSystem；裸 Fiber::suspend 不会被调度器唤醒。
+        if (class_exists(SchedulerSystem::class)) {
+            SchedulerSystem::yield();
+
+            return;
+        }
+
+        if (class_exists(\Fiber::class) && \Fiber::getCurrent() !== null) {
             \Fiber::suspend();
         }
     }

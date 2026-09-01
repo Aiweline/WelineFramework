@@ -4,6 +4,8 @@
 
 Weline I18n 是系统的国际化翻译模块，提供了完整的多语言支持功能。该模块支持语言包管理、自动翻译、本地化模型、国家地区管理等功能，为系统提供企业级的国际化解决方案。
 
+**跨模块硬规则**：各业务模块须维护齐全 `i18n/zh_Hans_CN.csv` 与 `en_US.csv`，改词或改 CSV 后必须 `php bin/w i18n:collect` 才生效。CSV 统一 UTF-8（文件头最多一个 BOM，键内禁止 BOM），详见 [模块翻译 CSV 规范](./模块翻译CSV规范.md)。
+
 ## 跨模块公共契约
 
 其他模块只能引用 `Weline\I18n\Api\*`。禁止直接引用 I18n 的 `Model`、`Service`、`Helper`，也不要通过
@@ -135,7 +137,7 @@ Weline.Api.resource('i18n_admin').action({
 - 服务端 `LanguageSwitcher::buildLanguageHref()` 统一生成前后台语言路径：已识别后台前缀时直接在前缀后插入语言段，不把模块路由段误判为第二个后台前缀。
 - 后台顶栏 `<w:i18n:switcher />` 与前台一致，读取当前/默认网站的 `WebsiteLanguage`；`ActiveLocaleCodeProvider`（已安装+已激活）仅作网站无语言行时的回退。表单侧 `<w:i18n:language:select catalog="installed" />` 仍可单独使用安装态目录
 - `<w:i18n:switcher />` **必须运行时渲染**（编译期只输出 `LanguageSwitcher::render()` 调用），禁止把语言列表 HTML 烘焙进 `com_*.phtml`；否则 Worker chrome 预热/非后台编译上下文会把「仅中文」冻进模板
-- `<w:i18n:language:select />` 与 `<w:i18n:switcher />` 共享 `LanguageSelect::getLanguageItems()` 作为唯一语言目录：统一按国家分组，组内展示地区语言、参考名称与 Locale 代码，搜索同时覆盖国家、语言和代码。PageBuilder、网站表单、SystemConfig、字典和后台顶栏只需使用官方 Taglib，不再各自维护语言 option
+- `<w:i18n:language:select />` 与 `<w:i18n:switcher />` 共享 `LanguageSelect::getLanguageItems()` 作为唯一语言目录：统一按国家分组，组内展示地区语言、参考名称与 Locale 代码，搜索同时覆盖国家、语言和代码。PageBuilder、网站表单、SystemConfig、字典和后台顶栏只需使用官方 Taglib，不再各自维护语言 option。未声明 `multiple` 时必须单选，不得继承同页其他 Taglib 泄漏的 `Taglib__multiple`
 - `LanguageSelect catalog="installed|global"`：管理表单默认只显示已安装语言；语言支持申请使用
   Symfony Intl 全球目录。`disabled-values` 会保留站点已支持语言但禁止再次选择。全球目录
   不重复内嵌 SVG 国旗，浏览器按 `country_code` 生成 Unicode 国旗，以保持 QueryBin 响应在
@@ -217,6 +219,9 @@ $i18n->convertToLanguageFile();
 
 ### 本地化模型使用
 
+> **业务字段多语言（LocalModel + `<local>` 标签）**：抽屉与 AI 翻译目标只读取当前站点 `WebsiteLanguage`（与已安装激活求交集），不枚举全量已安装语言。完整用例、属性说明、控制器 JOIN、AI 翻译与排错，见专用指南：
+> **[local标签与LocalModel指南.md](./local标签与LocalModel指南.md)**
+
 跨模块扩展必须使用 `Weline\I18n\Api\Localization` 下的公开契约。旧的
 `Weline\I18n\LocalModel`、`LocalModelInterface` 与 `TraitLocalModel` 名称保留为兼容别名，
 新代码不要继续引用旧命名空间。
@@ -286,7 +291,7 @@ class Product implements LocalModelInterface
 
 前台头部语言切换器（`header-language-switcher`）只展示当前站点 `WebsiteLanguage` 允许的语言。若 Cookie / 路径残留了站点未启用的语言码，服务端 `State::getLang()` 会回落到网站默认语言，切换器也会把当前项强制对齐到列表内首个可用语言，避免头部出现「语言 AR」这类幽灵短码，以及选项名称被错误 locale 渲染成阿拉伯文。
 
-切回默认语言时会写入 `WELINE_USER_LANG`（非 HttpOnly，供 JS 读写）；服务端 `App::syncCookieRouteStateFromServer()` 也会用 `State::getLang()` 纠正无效残留 Cookie。
+切回默认语言时只导航路径（默认语无前缀则 reload）并过期清除残留 `WELINE_USER_LANG*`；**不再写入**语言偏好 Cookie。服务端 `App::syncCookieRouteStateFromServer()` 会过期清除无效残留。无前缀时可用 `?lang=` / `?locale=` 作兼容入口（路径段仍最高）。
 
 页头语言与货币选择器的搜索、选项和跳转逻辑仍由 `Frontend/header-choice-selector-assets.phtml` 负责，浮层定位统一委托给 Theme.js 的 `window.WelineSmartDropdown` 基座。基座在打开、悬停以及视口 resize/scroll 时重新检测可视区域：四边保留至少 8px 安全边距并夹取到视口内；下方空间不足且上方更宽裕时自动向上翻转；列表高度按剩余空间收敛，避免窄屏产生横向滚动或被上下边缘截断。Taglib 选择器浮层由标签输出内的 `WelineTaglibFloatingDropdown`（`FloatingDropdownEmitter`）自洽，不向 Theme.js 写入标签 hover 逻辑。
 
@@ -330,6 +335,9 @@ class LanguageController
 ```
 
 ### 翻译标签使用
+
+静态 UI 文案使用 `<lang>` / `__()`；**业务实体字段**的多语言编辑使用 `<local>` 标签，见 [local标签与LocalModel指南.md](./local标签与LocalModel指南.md)。
+
 ```html
 <!-- 在模板中使用翻译 -->
 <h1>{__('欢迎使用系统')}</h1>

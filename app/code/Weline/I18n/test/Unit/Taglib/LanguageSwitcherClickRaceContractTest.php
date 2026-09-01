@@ -13,14 +13,18 @@ final class LanguageSwitcherClickRaceContractTest extends TestCase
         $taglib = $this->read('Taglib/LanguageSwitcher.php');
         $runtime = $this->read('view/statics/js/language-switcher.js');
 
-        self::assertStringContainsString('|markup=weline-ui-2-language-switcher-component-20', $taglib);
+        self::assertStringContainsString('|markup=weline-ui-2-language-switcher-component-22', $taglib);
         self::assertStringContainsString('data-w-component="menu language-switcher"', $taglib);
         self::assertStringContainsString('data-w-anchor-mode="element"', $taglib);
         self::assertStringContainsString('data-w-language-search', $taglib);
+        self::assertStringContainsString('w-language-switcher__list', $taglib);
+        self::assertStringContainsString('data-w-language-list', $taglib);
+        self::assertStringContainsString('w-language-switcher__footer', $taglib);
         self::assertStringContainsString('data-w-search=', $taglib);
         self::assertStringContainsString('translateChrome', $taglib);
         self::assertStringContainsString('loadChromeDictionary', $taglib);
         self::assertStringContainsString('applySearchFilter', $runtime);
+        self::assertStringContainsString('w-language-switcher__footer', $runtime);
         self::assertStringContainsString('installGlobalLanguageOptionCapture', $runtime);
         self::assertStringContainsString('resolveSwitcherRootForOption', $runtime);
         self::assertStringContainsString('Prefer the panel nested under this switcher root', $runtime);

@@ -1,0 +1,114 @@
+.w-local-bulk-root {
+    display: inline-flex;
+}
+
+.w-local-bulk-dialog {
+    inline-size: min(640px, calc(100vw - 32px));
+}
+
+.w-local-bulk-dialog .w-dialog__body {
+    display: grid;
+    gap: var(--weline-space-4, 1rem);
+}
+
+.w-local-bulk-dialog__summary {
+    display: grid;
+    gap: var(--weline-space-2, 0.5rem);
+}
+
+.w-local-bulk-dialog__progress-track {
+    block-size: 8px;
+    border-radius: 999px;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    overflow: hidden;
+}
+
+.w-local-bulk-dialog__progress-bar {
+    block-size: 100%;
+    inline-size: 0;
+    border-radius: inherit;
+    background: var(--backend-color-primary, #556ee6);
+    transition: inline-size 0.25s ease;
+}
+
+.w-local-bulk-dialog__progress-text {
+    font-size: 0.875rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.w-local-bulk-dialog__steps {
+    display: grid;
+    gap: var(--weline-space-2, 0.5rem);
+    max-block-size: 280px;
+    overflow: auto;
+    padding-inline-end: 4px;
+}
+
+.w-local-bulk-step {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--weline-space-2, 0.5rem);
+    align-items: start;
+    padding: 10px 12px;
+    border: 1px solid var(--backend-color-border-light, #e9ecef);
+    border-radius: var(--backend-border-radius-md, 8px);
+    background: var(--backend-color-card-bg, #fff);
+}
+
+.w-local-bulk-step__icon {
+    inline-size: 24px;
+    block-size: 24px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: var(--backend-color-bg-tertiary, #e9ecef);
+    color: var(--backend-color-text-muted, #adb5bd);
+}
+
+.w-local-bulk-step__label {
+    font-weight: 600;
+    font-size: 0.875rem;
+}
+
+.w-local-bulk-step__message {
+    grid-column: 2;
+    font-size: 0.8125rem;
+    color: var(--backend-color-text-secondary, #6c757d);
+}
+
+.w-local-bulk-step.is-running {
+    border-color: var(--backend-color-primary, #556ee6);
+}
+
+.w-local-bulk-step.is-running .w-local-bulk-step__icon {
+    background: var(--backend-color-primary-light, #e8f4fd);
+    color: var(--backend-color-primary, #556ee6);
+}
+
+.w-local-bulk-step.is-success .w-local-bulk-step__icon,
+.w-local-bulk-step.is-skipped .w-local-bulk-step__icon {
+    background: var(--backend-color-success-light, #daf4ea);
+    color: var(--backend-color-success, #34c38f);
+}
+
+.w-local-bulk-step.is-failed .w-local-bulk-step__icon {
+    background: var(--backend-color-danger-light, #fde8e8);
+    color: var(--backend-color-danger, #f46a6a);
+}
+
+.w-local-bulk-dialog__log {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+    font-size: 12px;
+    line-height: 1.5;
+    max-block-size: 120px;
+    overflow: auto;
+    padding: 10px 12px;
+    border-radius: var(--backend-border-radius-md, 8px);
+    background: var(--backend-color-sidebar-bg, #212529);
+    color: var(--backend-color-text-secondary, #ced4da);
+}
+
+.w-local-bulk-dialog__footer[hidden] {
+    display: none !important;
+}
