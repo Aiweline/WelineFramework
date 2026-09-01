@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Controller\Backend;
 
+use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Manager\MessageManager;
 use Weline\I18n\Model\Dictionary as WordDictionary;
 use Weline\I18n\Model\I18n;
@@ -10,6 +11,7 @@ use Weline\I18n\Model\Locale;
 use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 use Weline\I18n\Service\AiTranslationConfig;
 use Weline\I18n\Service\AiTranslationExportService;
+use Weline\I18n\Service\AiTranslationModuleWorkspaceService;
 use Weline\I18n\Service\AiTranslationQueueService;
 use Weline\I18n\Service\AiTranslationService;
 
@@ -22,6 +24,7 @@ class AiTranslation extends BaseController
         private readonly AiTranslationQueueService $queueService,
         private readonly AiTranslationService $translationService,
         private readonly AiTranslationExportService $exportService,
+        private readonly AiTranslationModuleWorkspaceService $moduleWorkspace,
         private readonly WordDictionary $dictionary,
         private readonly LocaleDictionary $localeDictionary
     ) {
@@ -37,9 +40,21 @@ class AiTranslation extends BaseController
 
     public function index()
     {
+        $tab = trim((string)$this->request->getGet('tab', 'locales'));
+        if (!in_array($tab, ['locales', 'modules'], true)) {
+            $tab = 'locales';
+        }
+        $moduleSearch = trim((string)$this->request->getGet('module_q', ''));
+
         $config = $this->config->getConfig();
         $this->assign('config', $config);
+        $this->assign('active_tab', $tab);
+        $this->assign('module_search', $moduleSearch);
         $this->assign('locales', $this->buildLocaleRows($config));
+        $this->assign(
+            'modules',
+            $tab === 'modules' ? $this->moduleWorkspace->listModulesLite($moduleSearch) : [],
+        );
         $this->assign('stats', [
             'total_words' => (int)$this->dictionary->clear()->reset()->count(),
             'enabled_locales' => count($this->config->getEnabledLocaleCodes()),
@@ -49,6 +64,223 @@ class AiTranslation extends BaseController
         ]);
 
         return $this->fetch();
+    }
+
+    public function getModuleLocaleMatrix()
+    {
+        $moduleName = trim((string)$this->request->getGet(
+            'module_name',
+            (string)$this->request->getPost('module_name', ''),
+        ));
+        $names = $this->resolveLocaleDisplayNames();
+        $wantsSse = $this->wantsModuleMatrixSse();
+
+        if ($moduleName === '') {
+            if ($wantsSse) {
+                $this->layoutType = null;
+                $sse = new SseWriter();
+                $sse->start();
+                $sse->sendError((string)__('缺少模块名'), 400);
+                $sse->complete(['success' => false]);
+
+                return;
+            }
+
+            return $this->asyncJsonResponse(false, (string)__('缺少模块名'));
+        }
+
+        if ($wantsSse) {
+            $this->layoutType = null;
+            $this->moduleWorkspace->streamModuleLocaleMatrix(
+                new SseWriter(),
+                $moduleName,
+                $names,
+            );
+
+            return;
+        }
+
+        $bundle = $this->moduleWorkspace->getModuleLocaleMatrixBundle($moduleName);
+        $locales = $bundle['locales'];
+        foreach ($locales as &$localeRow) {
+            $code = (string)($localeRow['code'] ?? '');
+            $localeRow['name'] = $names[$code] ?? $code;
+        }
+        unset($localeRow);
+
+        $source = $bundle['source'] ?? ['locale' => '', 'word_count' => 0];
+        $sourceLocale = (string)($source['locale'] ?? '');
+        if ($sourceLocale !== '') {
+            $source['name'] = $names[$sourceLocale] ?? $sourceLocale;
+        }
+
+        return $this->asyncJsonResponse(true, '', [
+            'module' => $moduleName,
+            'source' => $source,
+            'locales' => $locales,
+        ]);
+    }
+
+    /**
+     * EventSource sends Accept: text/event-stream; also allow ?sse=1.
+     */
+    private function wantsModuleMatrixSse(): bool
+    {
+        if ((string)$this->request->getGet('sse', '') === '1') {
+            return true;
+        }
+        $acceptRaw = $this->request->getHeader('Accept');
+        if (is_array($acceptRaw)) {
+            $accept = strtolower(implode(',', array_map('strval', $acceptRaw)));
+        } else {
+            $accept = strtolower((string)($acceptRaw ?? ''));
+        }
+        if ($accept === '') {
+            $accept = strtolower((string)($this->request->getServer('HTTP_ACCEPT') ?? ''));
+        }
+
+        return str_contains($accept, 'text/event-stream');
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function resolveLocaleDisplayNames(): array
+    {
+        $displayLocale = \Weline\Framework\Http\Cookie::getLangLocal();
+        $names = [];
+        foreach ($this->config->getInstalledActiveLocaleCodes() as $localeCode) {
+            $localeCode = trim((string)$localeCode);
+            if ($localeCode === '') {
+                continue;
+            }
+            $displayName = $localeCode;
+            try {
+                $displayName = (string)$this->i18n->getLocaleName($localeCode, $displayLocale);
+            } catch (\Throwable) {
+            }
+            $names[$localeCode] = $displayName !== '' ? $displayName : $localeCode;
+        }
+
+        return $names;
+    }
+
+    /**
+     * EventSource (GET + sse=1) streams translate/writeback progress.
+     */
+    public function getModuleTranslateAndWriteback()
+    {
+        return $this->dispatchModuleTranslateAndWriteback(true);
+    }
+
+    public function postModuleTranslateAndWriteback()
+    {
+        return $this->dispatchModuleTranslateAndWriteback(false);
+    }
+
+    private function dispatchModuleTranslateAndWriteback(bool $fromGet)
+    {
+        $isAsyncRequest = $this->isAsyncRequest();
+        $wantsSse = $this->wantsModuleMatrixSse();
+
+        if ($fromGet) {
+            $moduleName = trim((string)$this->request->getGet(
+                'module_name',
+                (string)$this->request->getPost('module_name', ''),
+            ));
+            $localeCodes = $this->resolveLocaleCodesFromRequest(true);
+        } else {
+            if (!$this->request->isPost()) {
+                if ($wantsSse) {
+                    $this->layoutType = null;
+                    $sse = new SseWriter();
+                    $sse->start();
+                    $sse->sendError((string)__('请求方式错误。'), 405);
+                    $sse->complete(['success' => false]);
+
+                    return;
+                }
+                if ($isAsyncRequest) {
+                    return $this->asyncJsonResponse(false, (string)__('请求方式错误。'));
+                }
+                MessageManager::error(__('请求方式错误。'));
+
+                return $this->redirect('*/backend/ai-translation', ['tab' => 'modules']);
+            }
+            $moduleName = trim((string)$this->request->getPost('module_name', ''));
+            $localeCodes = $this->resolveLocaleCodesFromRequest(false);
+        }
+
+        if ($wantsSse) {
+            $this->layoutType = null;
+            $this->moduleWorkspace->streamTranslateAndWriteback(
+                new SseWriter(),
+                $moduleName,
+                $localeCodes,
+                $this->resolveLocaleDisplayNames(),
+            );
+
+            return;
+        }
+
+        if ($fromGet) {
+            return $this->asyncJsonResponse(false, (string)__('请使用 SSE（Accept: text/event-stream 或 ?sse=1）'));
+        }
+
+        try {
+            $result = $this->moduleWorkspace->translateAndWriteback($moduleName, $localeCodes);
+            $message = (string)($result['message'] ?? __('操作完成'));
+            $ok = !empty($result['success']);
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse($ok, $message, $result);
+            }
+            if ($ok) {
+                MessageManager::success($message);
+            } else {
+                MessageManager::warning($message);
+            }
+            foreach ((array)($result['errors'] ?? []) as $error) {
+                MessageManager::warning((string)$error);
+            }
+        } catch (\Throwable $throwable) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('模块一键翻译并写回失败：%{1}', [$throwable->getMessage()]));
+            }
+            MessageManager::error(__('模块一键翻译并写回失败：%{1}', [$throwable->getMessage()]));
+        }
+
+        $redirectParams = ['tab' => 'modules'];
+        if ($moduleName !== '') {
+            $redirectParams['module_q'] = $moduleName;
+        }
+
+        return $this->redirect('*/backend/ai-translation', $redirectParams);
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveLocaleCodesFromRequest(bool $fromGet): array
+    {
+        $localeCodes = $fromGet
+            ? $this->request->getGet('locale_codes', $this->request->getGet('locale_codes[]', []))
+            : $this->request->getPost('locale_codes', []);
+
+        if (is_string($localeCodes)) {
+            $localeCodes = str_contains($localeCodes, ',')
+                ? explode(',', $localeCodes)
+                : [$localeCodes];
+        }
+        if (!is_array($localeCodes)) {
+            $localeCodes = $localeCodes === '' || $localeCodes === null
+                ? []
+                : [trim((string)$localeCodes)];
+        }
+
+        return array_values(array_filter(array_map(
+            static fn ($code): string => trim((string)$code),
+            $localeCodes,
+        )));
     }
 
     public function postSave()
@@ -141,18 +373,42 @@ class AiTranslation extends BaseController
         }
 
         $localeCode = trim((string)$this->request->getPost('locale_code', ''));
+        $moduleName = trim((string)$this->request->getPost('module_name', ''));
         try {
-            $result = $this->exportService->exportAiTranslationsToModules($localeCode);
-            $moduleCount = count((array)($result['modules'] ?? []));
-            $message = (string)__('已增量导出 %{1} 条 AI 译文到 %{2} 个模块语言包，跳过 %{3} 条。', [
-                (string)($result['exported'] ?? 0),
-                (string)$moduleCount,
-                (string)($result['skipped'] ?? 0),
-            ]);
-            if ($isAsyncRequest) {
-                return $this->asyncJsonResponse(true, $message, $result);
+            if ($moduleName !== '' && $moduleName !== '*') {
+                $result = $this->exportService->exportModuleTranslations($moduleName, $localeCode, true);
+                $message = (string)($result['message'] ?? __('模块 %{1} 已写回 %{2} 条到 CSV，跳过 %{3} 条。', [
+                    $moduleName,
+                    (string)($result['exported'] ?? 0),
+                    (string)($result['skipped'] ?? 0),
+                ]));
+            } else {
+                $result = $this->exportService->exportAiTranslationsToModules($localeCode);
+                $modules = (array)($result['modules'] ?? []);
+                $moduleCount = count($modules);
+                $modulePreview = implode(', ', array_slice(array_keys($modules), 0, 8));
+                if ($moduleCount > 8) {
+                    $modulePreview .= ', …';
+                }
+                $message = (string)__('已增量导出 %{1} 条 AI 译文到 %{2} 个模块语言包，跳过 %{3} 条。', [
+                    (string)($result['exported'] ?? 0),
+                    (string)$moduleCount,
+                    (string)($result['skipped'] ?? 0),
+                ]);
+                if ($modulePreview !== '') {
+                    $message .= ' ' . (string)__('涉及模块：%{1}', [$modulePreview]);
+                }
             }
-            MessageManager::success($message);
+
+            if ($isAsyncRequest) {
+                $ok = empty($result['errors']);
+                return $this->asyncJsonResponse($ok, $message, $result);
+            }
+            if (!empty($result['errors'])) {
+                MessageManager::warning($message);
+            } else {
+                MessageManager::success($message);
+            }
             foreach ((array)($result['errors'] ?? []) as $error) {
                 MessageManager::warning($error);
             }
@@ -165,6 +421,7 @@ class AiTranslation extends BaseController
 
         return $this->redirect('*/backend/ai-translation');
     }
+
 
     public function postExportGlobal()
     {
@@ -200,6 +457,7 @@ class AiTranslation extends BaseController
     {
         $rows = [];
         $displayLocale = \Weline\Framework\Http\Cookie::getLangLocal();
+        $sourceLocale = (string)($config['source_locale'] ?? AiTranslationConfig::DEFAULT_SOURCE_LOCALE);
         foreach ($this->config->getInstalledActiveLocaleCodes() as $localeCode) {
             $displayName = $localeCode;
             try {
@@ -209,6 +467,7 @@ class AiTranslation extends BaseController
 
             $localeConfig = $config['locales'][$localeCode] ?? [];
             $enabled = !empty($localeConfig['enabled']);
+            $isSource = $localeCode === $sourceLocale;
 
             $translated = (int)$this->localeDictionary->clear()->reset()
                 ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
@@ -219,28 +478,49 @@ class AiTranslation extends BaseController
                 ->where(LocaleDictionary::schema_fields_IS_AI, 1)
                 ->where(LocaleDictionary::schema_fields_TRANSLATE, '', '!=')
                 ->count();
-            $pending = $this->translationService->countUntranslatedWords(
-                $localeCode,
-                (string)($config['source_locale'] ?? AiTranslationConfig::DEFAULT_SOURCE_LOCALE)
-            );
+            $pending = $isSource
+                ? 0
+                : $this->translationService->countUntranslatedWords($localeCode, $sourceLocale);
             $queue = $this->getLatestQueue($localeCode);
+            $queueStatus = strtolower(trim((string)($queue['status'] ?? '')));
+            $queueResult = trim((string)($queue['result'] ?? ''));
+            $queueIsError = in_array($queueStatus, ['error', 'failed', 'fail'], true);
+            $queueSummary = $this->summarizeQueueResult($queueResult);
 
             $rows[] = [
                 'code' => $localeCode,
                 'name' => $displayName ?: $localeCode,
                 'enabled' => $enabled,
-                'is_source' => $localeCode === (string)($config['source_locale'] ?? ''),
+                'is_source' => $isSource,
                 'translated' => $translated,
                 'ai_translated' => $aiTranslated,
                 'pending' => $pending,
                 'queue_id' => (int)($queue['queue_id'] ?? 0),
                 'queue_status' => (string)($queue['status'] ?? ''),
-                'queue_result' => (string)($queue['result'] ?? ''),
+                'queue_result' => $queueResult,
+                'queue_result_summary' => $queueSummary,
+                'queue_is_error' => $queueIsError,
+                'export_modules' => $isSource ? [] : $this->exportService->listAiSourceModules($localeCode),
             ];
         }
 
         return $rows;
     }
+
+    private function summarizeQueueResult(string $result): string
+    {
+        $result = trim(preg_replace('/\s+/u', ' ', $result) ?? $result);
+        if ($result === '') {
+            return '';
+        }
+        if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+            return mb_strlen($result) > 180 ? (mb_substr($result, 0, 180) . '…') : $result;
+        }
+
+        return strlen($result) > 180 ? (substr($result, 0, 180) . '…') : $result;
+    }
+
+
 
     /**
      * @return array<string, mixed>|null

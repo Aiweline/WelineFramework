@@ -1,26 +1,28 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
 ?>
+<link rel="stylesheet" href="@static(Weline_I18n::css/local-translation.css)">
 <script src="@static(Weline_I18n::js/backend-admin.js)"></script>
 <!-- start page message -->
 <div class="w-grid">
     <template>Weline_Component::message.phtml</template>
 </div> <!-- end message -->
-<div class="w-grid">
+<div class="w-grid w-local-translation">
     <div style="--w-span:12;">
         <div class="w-card">
             <div class="w-card__body">
-                <div style="--w-span:6;">
+                <div class="w-local-translation__search" style="--w-span:12;">
                     <block class='Weline\Component\Block\Form\Search' id='translate-search'
-                           vars='req'
                            cache='0'
-                           params='model,id,value,field'
-                           var-params='{search:req.search,model:req.model,id:req.id,value:req.value,field:req
-                           .field}'
-                           action='*/backend/taglib/local' method='get' keyword='search' value=''
+                           params='model,id,value,field,search'
+                           action='*/backend/taglib/local' method='get' keyword='search'
                            placeholder='@lang{请输入关键词}'></block>
                 </div>
-                <w:form id="localTranslationForm" role='form' class="w-form" novalidate='' action='{{action}}' method='post' data-async-action='taglib-local-save'>
+                <form id="localTranslationForm" role="form" class="w-form" novalidate action="{{action}}" method="post" data-async-action="taglib-local-save" data-weline-form="1" data-w-local-form="1">
+                    <input type="hidden" name="model" value="{{model}}">
+                    <input type="hidden" name="field" value="{{field}}">
+                    <input type="hidden" name="id" value="{{id}}">
+                    <input type="hidden" name="value" value="{{value}}">
                     <!--基础信息-->
                     <div class="w-grid w-field">
                         <empty name="local_descriptions">
@@ -30,28 +32,30 @@
                             <input type='hidden' name='description[{{v.local_code}}][local_code]'
                                    value='{{v.local_code}}'>
                             <input type='hidden' name='description[{{v.local_code}}][{{id_field}}]' value='{{id}}'>
-                            <div style="--w-span-lg:12;">
-                                <div class="w-field__control" style="--w-mb:var(--weline-space-4);">
-                                    <span class="w-field__addon" title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
+                            <div class="w-local-translation__field" style="--w-span-lg:12;">
+                                <div class="w-field__control w-local-translation__control">
+                                    <span class="w-field__addon w-local-translation__flag" title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
                                         {{v.local.flag}}
                                     </span>
-                                    <input class="w-input" type='text' id='{{v.local_code}}-{{field}}-input' placeholder='{{v[$field]}}' aria-label='{{v[$field]}}' value='{{v[$field]}}' name='description[{{v.local_code}}][{{field}}]' required='required' aria-describedby='{{v.local_code}}-{{field}}-input-addon'>
-                                    <div class="w-field__hint">
-                                        <lang>填写正确！</lang>
-                                    </div>
-                                    <span class="w-field__addon" title='{{v.local.name}}'>
+                                    <input class="w-input w-local-translation__input" type='text' id='{{v.local_code}}-{{field}}-input' placeholder='{{v[$field]}}' aria-label='{{v[$field]}}' value='{{v[$field]}}' name='description[{{v.local_code}}][{{field}}]' required='required' aria-describedby='{{v.local_code}}-{{field}}-input-addon {{v.local_code}}-{{field}}-locale-label'>
+                                    <span class="w-field__addon w-local-translation__locale" id='{{v.local_code}}-{{field}}-locale-label' title='{{v.local.name}}'>
                                         {{v.local.name}}
                                     </span>
                                 </div>
+                                <p class="w-field__hint w-local-translation__hint">
+                                    <lang>填写正确！</lang>
+                                </p>
                             </div>
                         </foreach>
                     </div>
-                    <div class="w-field">
+                    <?php if (empty($this->getData('is_embed'))): ?>
+                    <div class="w-field" data-w-local-inline-submit>
                         <button class="w-button" type='submit' data-tone="primary">
                             <lang>提交</lang>
                         </button>
                     </div>
-                </w:form>
+                    <?php endif; ?>
+                </form>
                 {{local_pagination}}
             </div>
         </div>

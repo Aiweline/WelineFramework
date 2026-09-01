@@ -16,6 +16,7 @@ class AiTranslationConfig
     public const DEFAULT_BATCH_SIZE = 100;
     public const MAX_BATCH_SIZE = 1000;
     public const DEFAULT_STRATEGY = 'light';
+    public const MAX_CONSECUTIVE_BATCH_FAILURES = 3;
 
     public function __construct(
         private readonly SystemConfig $systemConfig,

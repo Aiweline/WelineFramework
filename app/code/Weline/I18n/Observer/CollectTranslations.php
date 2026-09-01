@@ -18,8 +18,8 @@ use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 use Weline\I18n\Service\AiTranslationQueueService;
 
 /**
- * 收集翻译词观察者
- * 监听 Weline_I18n::collect_translations 事件，将翻译词存储到I18n字典表中
+ * @deprecated 请改用 Weline\Framework\Phrase\DictionaryEvents::register 或 dictionary_register Observer。
+ * 收集翻译词观察者（legacy shim 已迁至 CollectTranslationsShimObserver）
  */
 class CollectTranslations implements ObserverInterface
 {

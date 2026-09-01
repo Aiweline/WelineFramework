@@ -30,10 +30,22 @@
         <observer name="Weline_I18n::template_compile_extract_js_modules" instance="Weline\I18n\Observer\TemplateCompile" disabled="false" shared="true" sort="100"/>
     </event>
     <event name="Weline_I18n::collect_translations">
-        <observer name="Weline_I18n::collect_translations" instance="Weline\I18n\Observer\CollectTranslations" disabled="false" shared="true" sort="10"/>
+        <observer name="Weline_I18n::collect_translations_shim" instance="Weline\I18n\Observer\CollectTranslationsShimObserver" disabled="false" shared="true" sort="10"/>
     </event>
     <event name="Weline_Framework_MarketplaceMeta::collect_translations">
-        <observer name="Weline_I18n::marketplace_meta_collect_translations" instance="Weline\I18n\Observer\CollectTranslations" disabled="false" shared="true" sort="10"/>
+        <observer name="Weline_I18n::marketplace_meta_collect_translations_shim" instance="Weline\I18n\Observer\CollectTranslationsShimObserver" disabled="false" shared="true" sort="10"/>
+    </event>
+    <event name="Weline_Framework_Phrase::dictionary_compile">
+        <observer name="Weline_I18n::dictionary_compile" instance="Weline\I18n\Observer\DictionaryCompileObserver" disabled="false" shared="true" sort="10"/>
+    </event>
+    <event name="Weline_Framework_Phrase::dictionary_compile_after">
+        <observer name="Weline_I18n::dictionary_compile_after" instance="Weline\I18n\Observer\DictionaryCompileAfterObserver" disabled="false" shared="true" sort="10"/>
+    </event>
+    <event name="Weline_Framework_Phrase::dictionary_register">
+        <observer name="Weline_I18n::dictionary_register" instance="Weline\I18n\Observer\DictionaryRegisterObserver" disabled="false" shared="true" sort="10"/>
+    </event>
+    <event name="Weline_Framework_Phrase::dictionary_translate">
+        <observer name="Weline_I18n::dictionary_translate" instance="Weline\I18n\Observer\DictionaryTranslateObserver" disabled="false" shared="true" sort="10"/>
     </event>
     <event name="Weline_Framework_Setup::upgrade_after">
         <observer name="Weline_I18n::setup_upgrade_collect_translations" instance="Weline\I18n\Observer\SetupUpgradeCollectTranslations" disabled="false" shared="true" sort="100"/>

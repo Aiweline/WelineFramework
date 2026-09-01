@@ -19,5 +19,19 @@ final class LanguageSelectFieldNameLiteralContractTest extends TestCase
         );
 
         self::assertStringContainsString("\$Taglib__name = 'locale_code';", $compiled);
+        self::assertStringContainsString('$Taglib__multiple = false;', $compiled);
+    }
+
+    public function testOmittedMultipleForcesSingleSelectEvenAfterLeak(): void
+    {
+        $compiled = (LanguageSelect::callback())(
+            'w:i18n:language:select',
+            [],
+            [],
+            ['id' => 'website_default_language_selector', 'name' => 'default_language', 'allow-empty' => 'true'],
+        );
+
+        self::assertStringContainsString('$Taglib__multiple = false;', $compiled);
+        self::assertStringContainsString("\$Taglib__name = 'default_language';", $compiled);
     }
 }

@@ -15,6 +15,8 @@ namespace Weline\I18n\Controller\Backend;
 use Weline\Framework\App\Debug;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\DictionaryCompiler;
+use Weline\Framework\Phrase\DictionaryEvents;
 use Weline\Framework\Phrase\Parser as PhraseParser;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
@@ -23,26 +25,36 @@ use Weline\I18n\Model\Locale\Dictionary as LocaleDictionary;
 use Weline\I18n\Model\Dictionary as WordDictionary;
 use Weline\I18n\Parser as I18nParser;
 use Weline\I18n\Service\AiTranslationQueueService;
+use Weline\I18n\Service\DictionaryCollectService;
+use Weline\I18n\Service\DictionaryModuleCatalogService;
 use Weline\I18n\Service\RuntimeCacheBroadcaster;
+use Weline\Framework\Http\Sse\SseWriter;
+use Weline\Framework\Security\Token;
 
 class Dictionary extends BaseController
 {
     private \Weline\I18n\Model\Dictionary $dictionary;
     private LocaleDictionary $localeDictionary;
     private AiTranslationQueueService $aiTranslationQueueService;
+    private DictionaryCollectService $dictionaryCollectService;
+    private DictionaryModuleCatalogService $moduleCatalogService;
 
     function __construct(
         Locale $locale,
         I18n $i18n,
         \Weline\I18n\Model\Dictionary $dictionary,
         LocaleDictionary $localeDictionary,
-        AiTranslationQueueService $aiTranslationQueueService
+        AiTranslationQueueService $aiTranslationQueueService,
+        DictionaryCollectService $dictionaryCollectService,
+        DictionaryModuleCatalogService $moduleCatalogService,
     )
     {
         parent::__construct($locale, $i18n);
         $this->dictionary = $dictionary;
         $this->localeDictionary = $localeDictionary;
         $this->aiTranslationQueueService = $aiTranslationQueueService;
+        $this->dictionaryCollectService = $dictionaryCollectService;
+        $this->moduleCatalogService = $moduleCatalogService;
     }
 
     function get()
@@ -50,6 +62,9 @@ class Dictionary extends BaseController
         // 获取参数
         $localeCode = $this->request->getParam('locale_code', \Weline\Framework\Http\Cookie::getLangLocal());
         $search = $this->request->getParam('search', '');
+        $moduleFilter = trim((string)$this->request->getParam('module', ''));
+        $activeTab = trim((string)$this->request->getParam('tab', 'dictionary'));
+        $moduleSearch = trim((string)$this->request->getParam('module_search', ''));
         $page = (int)$this->request->getParam('page', 1);
         $pageSize = (int)$this->request->getParam('page_size', 20);
         
@@ -67,6 +82,9 @@ class Dictionary extends BaseController
         if ($search) {
             $search = addslashes($search);
             $query->where($this->dictionary::schema_fields_WORD, '%' . $search . '%', 'like');
+        }
+        if ($moduleFilter !== '') {
+            $query->where($this->dictionary::schema_fields_MODULE, $moduleFilter);
         }
         
         // 使用框架分页功能
@@ -103,6 +121,7 @@ class Dictionary extends BaseController
             $t = $translations[$word] ?? null;
             $combinedItems[] = [
                 'word' => $word,
+                'module' => (string)$item->getData($this->dictionary::schema_fields_MODULE),
                 'translate' => $t[$this->localeDictionary::schema_fields_TRANSLATE] ?? $word,
                 'locale_code' => $t[$this->localeDictionary::schema_fields_LOCALE_CODE] ?? $localeCode,
                 'md5' => $t[$this->localeDictionary::schema_fields_MD5] ?? null,
@@ -114,10 +133,11 @@ class Dictionary extends BaseController
         $pagination = $allTranslations->getPagination();
         
         // 计算翻译进度
-        $progressStats = $this->getTranslationProgress($localeCode);
+        $progressStats = $this->getTranslationProgress($localeCode, $moduleFilter);
         
         // 获取可用的区域列表
         $availableLocales = $this->getAvailableLocales();
+        $availableModules = $this->getAvailableModules();
         
         // 格式化时间显示
         $formattedItems = [];
@@ -131,8 +151,14 @@ class Dictionary extends BaseController
         $this->assign('pagination', $pagination);
         $this->assign('locale_code', $localeCode);
         $this->assign('search', $search);
+        $this->assign('module_filter', $moduleFilter);
+        $this->assign('available_modules', $availableModules);
         $this->assign('available_locales', $availableLocales);
         $this->assign('progress_stats', $progressStats);
+        $this->assign('active_tab', $activeTab === 'modules' ? 'modules' : 'dictionary');
+        $this->assign('module_search', $moduleSearch);
+        $this->assign('module_catalog', $this->moduleCatalogService->listModules($localeCode, $moduleSearch));
+        $this->assign('module_export_dev', $this->moduleCatalogService->isDevEnvironment());
         
         // 显示提示信息
         // 如果没有数据，显示提示信息（通过模板变量传递，不直接输出Message）
@@ -307,6 +333,37 @@ class Dictionary extends BaseController
         return $translations[$localeCode] ?? $translations['en_US'];
     }
     
+    /**
+     * 获取词典中已登记的模块列表（用于筛选与按模块批量翻译）。
+     *
+     * @return list<string>
+     */
+    private function getAvailableModules(): array
+    {
+        try {
+            $rows = $this->dictionary->reset()
+                ->fields($this->dictionary::schema_fields_MODULE)
+                ->where($this->dictionary::schema_fields_MODULE, '', '!=')
+                ->group($this->dictionary::schema_fields_MODULE)
+                ->select()
+                ->fetchArray();
+
+            $modules = [];
+            foreach ($rows as $row) {
+                $module = trim((string)($row[$this->dictionary::schema_fields_MODULE] ?? ''));
+                if ($module !== '') {
+                    $modules[] = $module;
+                }
+            }
+
+            sort($modules, SORT_STRING);
+
+            return $modules;
+        } catch (\Exception $e) {
+            return [];
+        }
+    }
+
     /**
      * 获取可用的区域列表
      */
@@ -955,47 +1012,161 @@ class Dictionary extends BaseController
     /**
      * 获取翻译进度统计
      */
-    private function getTranslationProgress($localeCode)
+    private function getTranslationProgress(string $localeCode, string $moduleFilter = ''): array
     {
-        if (!$localeCode) {
+        if ($localeCode === '') {
             return [
                 'total' => 0,
                 'translated' => 0,
                 'untranslated' => 0,
-                'progress_percent' => 0
+                'progress_percent' => 0,
             ];
         }
-        
+
         try {
-            // 总数：词典表中的所有词汇数
-            $total = $this->dictionary->reset()->count();
-            
-            // 已翻译数：该语言已翻译的词汇数（翻译不为空且不等于原文）
-            $translated = $this->localeDictionary->reset()
-                ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode)
-                ->where('translate', null, 'IS NOT NULL')
-                ->where('translate', '', '!=')
-                ->total();
-            
-            $untranslated = $total - $translated;
+            $moduleFilter = trim($moduleFilter);
+
+            $baseQuery = $this->dictionary->reset();
+            if ($moduleFilter !== '') {
+                $baseQuery->where($this->dictionary::schema_fields_MODULE, $moduleFilter);
+            }
+            $baseTotal = (int)$baseQuery->count();
+
+            $localeTotal = $this->countLocaleDictionaryEntries($localeCode, $moduleFilter);
+            $total = max($baseTotal, $localeTotal);
+
+            $translated = $this->countLocaleTranslatedEntries($localeCode, $moduleFilter);
+            $untranslated = max(0, $total - $translated);
             $progressPercent = $total > 0 ? round(($translated / $total) * 100, 1) : 0;
-            
+
             return [
                 'total' => $total,
                 'translated' => $translated,
                 'untranslated' => $untranslated,
-                'progress_percent' => $progressPercent
+                'progress_percent' => $progressPercent,
             ];
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
+            w_log_error('I18n dictionary progress stats failed: ' . $e->getMessage(), [
+                'locale_code' => $localeCode,
+                'module_filter' => $moduleFilter,
+            ], 'i18n');
             return [
                 'total' => 0,
                 'translated' => 0,
                 'untranslated' => 0,
-                'progress_percent' => 0
+                'progress_percent' => 0,
             ];
         }
     }
-    
+
+    /**
+     * 统计目标语言下的 locale 词典条目数。
+     */
+    private function countLocaleDictionaryEntries(string $localeCode, string $moduleFilter = ''): int
+    {
+        $query = $this->localeDictionary->reset()
+            ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $localeCode);
+        $this->applyModuleScopeToLocaleQuery($query, $moduleFilter);
+
+        return (int)$query->count();
+    }
+
+    /**
+     * 统计目标语言下已真正翻译的条目数（译文非空且不等于原文）。
+     */
+    private function countLocaleTranslatedEntries(string $localeCode, string $moduleFilter = ''): int
+    {
+        $table = $this->localeDictionary->getTable();
+        $localeField = $this->localeDictionary::schema_fields_LOCALE_CODE;
+        $translateField = $this->localeDictionary::schema_fields_TRANSLATE;
+        $wordField = $this->localeDictionary::schema_fields_WORD;
+        $localeCodeSql = str_replace("'", "''", $localeCode);
+
+        $conditions = [
+            "{$localeField} = '{$localeCodeSql}'",
+            "{$translateField} IS NOT NULL",
+            "{$translateField} <> ''",
+            "{$translateField} <> {$wordField}",
+        ];
+
+        $moduleCondition = $this->buildModuleScopeSqlCondition($moduleFilter);
+        if ($moduleCondition !== '') {
+            $conditions[] = $moduleCondition;
+        }
+
+        $sql = 'SELECT COUNT(*) AS translated_count FROM ' . $table . ' WHERE ' . implode(' AND ', $conditions);
+        $rows = $this->localeDictionary->reset()->query($sql)->fetchArray();
+        $row = is_array($rows[0] ?? null) ? $rows[0] : (is_array($rows) ? $rows : []);
+
+        return (int)($row['translated_count'] ?? 0);
+    }
+
+    /**
+     * 为 locale 词典查询附加模块范围。
+     */
+    private function applyModuleScopeToLocaleQuery(\Weline\I18n\Model\Locale\Dictionary $query, string $moduleFilter): void
+    {
+        $moduleFilter = trim($moduleFilter);
+        if ($moduleFilter === '') {
+            return;
+        }
+
+        $moduleWords = $this->getModuleWords($moduleFilter);
+        if ($moduleWords !== []) {
+            $query->where($this->localeDictionary::schema_fields_WORD, $moduleWords, 'in');
+            return;
+        }
+
+        $query->where($this->localeDictionary::schema_fields_SOURCE_MODULE, $moduleFilter);
+    }
+
+    /**
+     * 构建模块范围 SQL 条件（供聚合统计使用）。
+     */
+    private function buildModuleScopeSqlCondition(string $moduleFilter): string
+    {
+        $moduleFilter = trim($moduleFilter);
+        if ($moduleFilter === '') {
+            return '';
+        }
+
+        $moduleWords = $this->getModuleWords($moduleFilter);
+        if ($moduleWords !== []) {
+            $quotedWords = array_map(
+                static fn (string $word): string => "'" . str_replace("'", "''", $word) . "'",
+                $moduleWords
+            );
+
+            return $this->localeDictionary::schema_fields_WORD . ' IN (' . implode(',', $quotedWords) . ')';
+        }
+
+        $moduleSql = str_replace("'", "''", $moduleFilter);
+
+        return $this->localeDictionary::schema_fields_SOURCE_MODULE . " = '{$moduleSql}'";
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function getModuleWords(string $moduleFilter): array
+    {
+        $rows = $this->dictionary->reset()
+            ->fields($this->dictionary::schema_fields_WORD)
+            ->where($this->dictionary::schema_fields_MODULE, $moduleFilter)
+            ->select()
+            ->fetchArray();
+
+        $words = [];
+        foreach ($rows as $row) {
+            $word = trim((string)($row[$this->dictionary::schema_fields_WORD] ?? ''));
+            if ($word !== '') {
+                $words[] = $word;
+            }
+        }
+
+        return $words;
+    }
+
     /**
      * 异步保存翻译
      */
@@ -1218,133 +1389,33 @@ class Dictionary extends BaseController
     }
 
     /**
-     * 收集真实翻译词汇
+     * 收集真实翻译词汇（JSON，兼容 bin-query）
      */
     public function postCollectWords()
     {
         try {
-            // 调用I18n模型的convertToLanguageFile方法来收集词汇
-            $this->i18n->convertToLanguageFile(false);
-            
             $defaultLanguageCode = Env::default_LANGUAGE_CODE;
-            $words = $this->normalizeCollectedWords($this->i18n->getLocalWords($defaultLanguageCode));
-            $validatedWords = [];
-            foreach ($words as $word => $translate) {
-                $validatedWords[WordDictionary::assertWord($word)] = $translate;
+            $localeCode = trim((string)$this->request->getPost('locale_code', $defaultLanguageCode));
+            if ($localeCode === '') {
+                $localeCode = $defaultLanguageCode;
             }
-            $words = $validatedWords;
-            $wordCountBefore = (int)$this->dictionary->reset()->count();
-            $defaultLocaleCountBefore = (int)$this->localeDictionary->reset()
-                ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
-                ->count();
-            $collectedCount = 0;
-            $defaultLocaleCount = 0;
-            
-            if (empty($words)) {
+
+            $result = $this->dictionaryCollectService->collect($localeCode);
+            if (!$result['success']) {
                 return $this->fetchJson([
-                    'success' => true,
-                    'count' => 0,
-                    'message' => __('没有找到需要收集的词汇')
+                    'success' => false,
+                    'message' => $result['message'] ?? __('收集失败'),
                 ]);
-            }
-            
-            $wordKeys = array_keys($words);
-            $existingRecords = [];
-            foreach (array_chunk($wordKeys, 200) as $wordChunk) {
-                $records = $this->dictionary->reset()
-                    ->where($this->dictionary::schema_fields_WORD, $wordChunk, 'IN')
-                    ->select()
-                    ->fetchArray();
-                foreach ((array)$records as $record) {
-                    $word = (string)($record[$this->dictionary::schema_fields_WORD] ?? '');
-                    if ($word !== '') {
-                        $existingRecords[$word] = true;
-                    }
-                }
-            }
-            
-            // 构建插入数据（排除已存在的）
-            $insertData = [];
-            foreach ($words as $word => $translate) {
-                if (!isset($existingRecords[$word])) {
-                    $insertData[] = [
-                        $this->dictionary::schema_fields_WORD => $word,
-                        $this->dictionary::schema_fields_IS_BACKEND => 0,
-                        $this->dictionary::schema_fields_MODULE => ''
-                    ];
-                    $collectedCount++;
-                }
-            }
-            
-            // 批量插入新词汇
-            if (!empty($insertData)) {
-                # 分批插入
-                $insertData = array_chunk($insertData, 999);
-                foreach ($insertData as $insertDataItem) {
-                    $this->dictionary->reset()
-                    ->insert($insertDataItem, $this->dictionary::schema_fields_WORD)
-                    ->fetch();
-                }
-            }
-
-            // 默认语言译文跟随真实收集值写入，避免显示成“暂无翻译数据”。
-            foreach (array_chunk($wordKeys, 200) as $wordChunk) {
-                $existingLocaleWords = [];
-                $localeRecords = $this->localeDictionary->reset()
-                    ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
-                    ->where($this->localeDictionary::schema_fields_WORD, $wordChunk, 'IN')
-                    ->select()
-                    ->fetchArray();
-                foreach ((array)$localeRecords as $record) {
-                    $word = (string)($record[$this->localeDictionary::schema_fields_WORD] ?? '');
-                    if ($word !== '') {
-                        $existingLocaleWords[$word] = true;
-                    }
-                }
-
-                $defaultLocaleRows = [];
-                foreach ($wordChunk as $word) {
-                    if (isset($existingLocaleWords[$word])) {
-                        continue;
-                    }
-                    $defaultLocaleRows[] = [
-                        $this->localeDictionary::schema_fields_WORD => $word,
-                        $this->localeDictionary::schema_fields_LOCALE_CODE => $defaultLanguageCode,
-                        $this->localeDictionary::schema_fields_TRANSLATE => $words[$word] ?? $word,
-                        $this->localeDictionary::schema_fields_MD5 => $this->localeDictionary->getMd5($word, $defaultLanguageCode)
-                    ];
-                    $defaultLocaleCount++;
-                }
-
-                if ($defaultLocaleRows) {
-                    $this->localeDictionary->reset()
-                        ->insert($defaultLocaleRows, $this->localeDictionary::schema_fields_MD5)
-                        ->fetch();
-                }
-            }
-
-            // 以真实落库增量为准；ON CONFLICT 更新不应计作新增词条。
-            $collectedCount = max(0, (int)$this->dictionary->reset()->count() - $wordCountBefore);
-            $defaultLocaleCount = max(
-                0,
-                (int)$this->localeDictionary->reset()
-                    ->where($this->localeDictionary::schema_fields_LOCALE_CODE, $defaultLanguageCode)
-                    ->count() - $defaultLocaleCountBefore
-            );
-
-            $queued = [];
-            if ($collectedCount > 0) {
-                $queued = $this->aiTranslationQueueService->enqueueEnabledLocales('dictionary_collect');
             }
 
             return $this->fetchJson([
                 'success' => true,
-                'count' => $collectedCount,
-                'default_locale_count' => $defaultLocaleCount,
-                'queue_count' => count($queued),
-                'message' => __('收集完成')
+                'count' => $result['count'],
+                'default_locale_count' => $result['default_locale_count'],
+                'queue_count' => $result['queue_count'],
+                'message' => $result['message'],
+                'progress' => $this->getTranslationProgress($localeCode),
             ]);
-            
         } catch (\Exception $e) {
             w_log_error('I18n dictionary collect failed: ' . $e->getMessage(), [
                 'trace' => substr($e->getTraceAsString(), 0, 1200),
@@ -1354,6 +1425,50 @@ class Dictionary extends BaseController
                 'message' => $e->getMessage()
             ]);
         }
+    }
+
+    /**
+     * 收集词典 SSE 流（POST）
+     */
+    public function postCollectWordsStream(): void
+    {
+        $this->streamCollectWords();
+    }
+
+    /**
+     * 收集词典 SSE 流（GET 兼容）
+     */
+    public function getCollectWordsStream(): void
+    {
+        $this->streamCollectWords();
+    }
+
+    private function streamCollectWords(): void
+    {
+        $this->layoutType = null;
+
+        $csrfPost = (string) $this->request->getPost('csrf', (string) $this->request->getGet('csrf', ''));
+        $csrfValid = Token::get('csrf');
+        if ($csrfValid === null || !\hash_equals($csrfValid, $csrfPost)) {
+            $sse = new SseWriter();
+            $sse->start();
+            $sse->sendError((string) __('CSRF 验证失败'));
+            $sse->complete(['success' => false]);
+
+            return;
+        }
+
+        $defaultLanguageCode = Env::default_LANGUAGE_CODE;
+        $localeCode = trim((string) $this->request->getPost('locale_code', (string) $this->request->getGet('locale_code', $defaultLanguageCode)));
+        if ($localeCode === '') {
+            $localeCode = $defaultLanguageCode;
+        }
+
+        $this->dictionaryCollectService->stream(
+            new SseWriter(),
+            $localeCode,
+            fn (string $code): array => $this->getTranslationProgress($code),
+        );
     }
 
     private function normalizeCollectedWords(array $words): array
@@ -1668,6 +1783,116 @@ class Dictionary extends BaseController
             // 记录错误但不影响主流程
             Debug::log('updateBaseDictionaryViewData', '更新基础词典表视图数据失败: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * 模块 Tab：模块列表 JSON（切换语言/搜索时刷新）。
+     */
+    public function getModuleCatalog()
+    {
+        $localeCode = trim((string)$this->request->getGet('locale_code', ''));
+        $search = trim((string)$this->request->getGet('module_search', ''));
+
+        return $this->fetchJson([
+            'success' => true,
+            'items' => $this->moduleCatalogService->listModules($localeCode, $search),
+            'dev_environment' => $this->moduleCatalogService->isDevEnvironment(),
+        ]);
+    }
+
+    /**
+     * 模块 Tab：对单个模块执行 AI 翻译（仅该模块词条）。
+     */
+    public function postModuleTranslate()
+    {
+        $localeCode = trim((string)$this->request->getPost('locale_code', ''));
+        $module = trim((string)$this->request->getPost('module', ''));
+
+        if ($localeCode === '' || $module === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少目标语言或模块'),
+            ]);
+        }
+
+        $result = $this->moduleCatalogService->translateModule($module, $localeCode);
+        if ($result['success'] && !isset($result['message'])) {
+            $result['message'] = (string)__(
+                '模块 %{1} 本批翻译 %{2} 条，剩余 %{3} 条',
+                [$module, (string)($result['translated'] ?? 0), (string)($result['remaining'] ?? 0)],
+            );
+        }
+        $result['module_row'] = $this->findModuleCatalogRow($localeCode, $module);
+
+        return $this->fetchJson($result);
+    }
+
+    /**
+     * 模块 Tab：写回模块 i18n CSV（开发环境）。
+     */
+    public function postModuleExportCsv()
+    {
+        $localeCode = trim((string)$this->request->getPost('locale_code', ''));
+        $module = trim((string)$this->request->getPost('module', ''));
+
+        if ($localeCode === '' || $module === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少目标语言或模块'),
+            ]);
+        }
+
+        $result = $this->moduleCatalogService->exportModuleToCsv($module, $localeCode);
+        $result['module_row'] = $this->findModuleCatalogRow($localeCode, $module);
+
+        return $this->fetchJson($result);
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function findModuleCatalogRow(string $localeCode, string $module): ?array
+    {
+        foreach ($this->moduleCatalogService->listModules($localeCode) as $row) {
+            if (($row['module'] ?? '') === $module) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * 按模块批量 AI 翻译（dispatch dictionary_translate）。
+     * @deprecated 请使用模块 Tab 的 postModuleTranslate
+     */
+    public function postBatchTranslate()
+    {
+        $localeCode = trim((string)$this->request->getPost('locale_code', ''));
+        $module = trim((string)$this->request->getPost('module', ''));
+        if ($localeCode === '') {
+            return $this->fetchJson([
+                'success' => false,
+                'message' => __('缺少目标语言'),
+            ]);
+        }
+
+        $options = [
+            'owner' => 'Weline_I18n:dictionary_admin',
+            'publish' => true,
+        ];
+        if ($module !== '') {
+            $options['owner'] = $module;
+        }
+
+        $result = DictionaryEvents::translate($module !== '' ? $module : 'Weline_I18n', $localeCode, $options);
+
+        return $this->fetchJson([
+            'success' => !empty($result['success']),
+            'message' => (string)($result['message'] ?? __('批量翻译任务已提交')),
+            'data' => $result,
+            'progress' => $this->getTranslationProgress($localeCode, $module),
+        ]);
     }
     
 }
