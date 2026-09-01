@@ -66,6 +66,17 @@ final class CartV2CacheStore implements CartV2CartStoreInterface
         $cache->setCustom($indexKey, $keys, self::TTL);
     }
 
+    public function touch(string $cartKey): bool
+    {
+        $cart = $this->get($cartKey);
+        if (!is_array($cart)) {
+            return false;
+        }
+        $this->set($cartKey, $cart);
+
+        return true;
+    }
+
     public function listByScopeKey(string $scopeKey): array
     {
         $cache = w_cache(self::CACHE_IDENTITY);

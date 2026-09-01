@@ -9,25 +9,35 @@ $escape = static fn(mixed $value): string => \htmlspecialchars((string)$value, E
 $copy = [
     'loading' => (string)__('正在加载购物车...'),
     'emptyTitle' => (string)__('购物车是空的'),
-    'emptyMessage' => (string)__('浏览车型并选择适合您市场的产品。'),
+    'emptyMessage' => (string)__('浏览商品，把喜欢的加入购物车吧。'),
     'loadFailed' => (string)__('购物车加载失败，请重试。'),
     'product' => (string)__('商品'),
-    'price' => (string)__('单价'),
+    'price' => (string)__('价格'),
     'quantity' => (string)__('数量'),
     'subtotal' => (string)__('小计'),
     'update' => (string)__('更新'),
-    'remove' => (string)__('移除'),
+    'remove' => (string)__('删除'),
+    'decreaseQty' => (string)__('减少数量'),
+    'increaseQty' => (string)__('增加数量'),
     'mutationFailed' => (string)__('购物车更新失败，请重试。'),
+    'guestTokenIssueFailed' => (string)__('无法创建游客购物车会话'),
+    'shippingNote' => (string)__('税费与运费将在结算时计算'),
+    'subtotalItems' => (string)__('小计（%1 件商品）'),
+    'unitPrice' => (string)__('单价'),
 ];
 ?>
-<section class="weline-cart-shell" data-cart-content="1" data-weline-cart aria-busy="true" weline-code="cart.cart.section_1">
-    <div class="weline-cart-shell__header">
-        <div>
-            <h1><?= __('购物车') ?></h1>
-            <p><?= __('检查商品数量，确认无误后进入结账。') ?></p>
-        </div>
-        <a class="weline-cart-shell__continue" href="<?= $escape($this->getUrl('products')) ?>"><?= __('继续购物') ?></a>
-    </div>
+<link rel="stylesheet"
+      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260827-cart-amazon1">
+
+<section class="weline-cart-shell weline-cart-shell--amazon"
+         data-cart-content="1"
+         data-weline-cart
+         aria-busy="true"
+         weline-code="cart.cart.section_1">
+    <header class="weline-cart-shell__header">
+        <h1><?= __('购物车') ?></h1>
+        <p class="weline-cart-shell__subtitle" data-cart-subtitle hidden></p>
+    </header>
 
     <div class="weline-cart-shell__state" data-cart-state="loading" role="status" aria-live="polite">
         <span class="weline-cart-shell__spinner" aria-hidden="true"></span>
@@ -37,7 +47,7 @@ $copy = [
     <div class="weline-cart-shell__state" data-cart-state="empty" hidden>
         <h2><?= $escape($copy['emptyTitle']) ?></h2>
         <p><?= $escape($copy['emptyMessage']) ?></p>
-        <a class="weline-cart-shell__continue" href="<?= $escape($this->getUrl('products')) ?>"><?= __('浏览车型') ?></a>
+        <a class="weline-cart-shell__continue" href="@url{'products'}"><?= __('浏览商品') ?></a>
     </div>
 
     <div class="weline-cart-shell__state weline-cart-shell__state--error" data-cart-state="error" role="alert" hidden>
@@ -47,378 +57,29 @@ $copy = [
     </div>
 
     <div class="weline-cart-shell__grid" data-cart-state="ready" hidden>
-        <div class="weline-cart-shell__items">
+        <div class="weline-cart-shell__items-card">
             <p class="weline-cart-shell__message" data-cart-message role="status" aria-live="polite"></p>
-            <table>
-                <thead>
-                <tr>
-                    <th><?= $escape($copy['product']) ?></th>
-                    <th><?= $escape($copy['price']) ?></th>
-                    <th><?= $escape($copy['quantity']) ?></th>
-                    <th><?= $escape($copy['subtotal']) ?></th>
-                </tr>
-                </thead>
-                <tbody data-cart-items></tbody>
-            </table>
+            <div class="weline-cart-shell__price-head">
+                <span><?= $escape($copy['price']) ?></span>
+            </div>
+            <div class="weline-cart-shell__list" data-cart-items></div>
         </div>
 
         <aside class="weline-cart-shell__summary" aria-label="<?= $escape(__('订单摘要')) ?>">
             <h2><?= __('订单摘要') ?></h2>
             <div class="weline-cart-shell__summary-list">
-                <div class="weline-cart-shell__summary-row">
-                    <span><?= __('商品数量') ?></span>
-                    <strong data-cart-count>0</strong>
-                </div>
-                <div class="weline-cart-shell__summary-row">
-                    <span><?= __('小计') ?></span>
-                    <strong data-cart-subtotal>--</strong>
-                </div>
                 <div class="weline-cart-shell__summary-row total">
-                    <span><?= __('合计') ?></span>
+                    <span data-cart-subtotal-label><?= $escape($copy['subtotal']) ?></span>
                     <strong data-cart-grand-total>--</strong>
                 </div>
             </div>
-            <a class="weline-cart-shell__checkout" href="<?= $escape($this->getUrl('checkout')) ?>"><?= __('去结算') ?></a>
+            <a class="weline-cart-shell__checkout" href="@url{'checkout'}"><?= __('去结算') ?></a>
+            <a class="weline-cart-shell__continue weline-cart-shell__summary-continue"
+               href="@url{'products'}"><?= __('继续购物') ?></a>
+            <p class="weline-cart-shell__summary-note"><?= $escape($copy['shippingNote']) ?></p>
         </aside>
     </div>
 </section>
-
-<style>
-    .weline-cart-shell {
-        width: min(1180px, calc(100% - 40px));
-        margin: 0 auto;
-        padding: 48px 0 64px;
-        color: var(--weline-layout-text-primary, #111827);
-    }
-
-    .weline-cart-shell__header {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 24px;
-    }
-
-    .weline-cart-shell h1,
-    .weline-cart-shell h2,
-    .weline-cart-shell p {
-        margin: 0;
-    }
-
-    .weline-cart-shell h1 {
-        font-size: 32px;
-        line-height: 1.2;
-    }
-
-    .weline-cart-shell p {
-        margin-top: 8px;
-        color: var(--weline-layout-text-secondary, #64748b);
-    }
-
-    .weline-cart-shell__continue {
-        min-height: 40px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        padding: 0 14px;
-        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
-        border-radius: 8px;
-        color: var(--weline-layout-link-color, #2563eb);
-        font-weight: 700;
-        text-decoration: none;
-    }
-
-    .weline-cart-shell__state {
-        min-height: 260px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 14px;
-        padding: 36px 20px;
-        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
-        border-radius: 8px;
-        background: var(--weline-layout-surface-primary, #fff);
-        text-align: center;
-    }
-
-    .weline-cart-shell__state[hidden],
-    .weline-cart-shell__grid[hidden] {
-        display: none;
-    }
-
-    .weline-cart-shell__state h2,
-    .weline-cart-shell__state p {
-        margin: 0;
-    }
-
-    .weline-cart-shell__spinner {
-        width: 32px;
-        height: 32px;
-        border: 3px solid var(--weline-theme-border-color-subtle, #e5e7eb);
-        border-top-color: var(--weline-layout-link-color, #2563eb);
-        border-radius: 50%;
-        animation: weline-cart-spin .7s linear infinite;
-    }
-
-    .weline-cart-shell__retry {
-        min-height: 42px;
-        padding: 0 18px;
-        border: 0;
-        border-radius: 8px;
-        background: var(--weline-layout-link-color, #2563eb);
-        color: var(--weline-theme-on-primary, #fff);
-        font: inherit;
-        font-weight: 800;
-        cursor: pointer;
-    }
-
-    @keyframes weline-cart-spin {
-        to { transform: rotate(360deg); }
-    }
-
-    .weline-cart-shell__grid {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) 320px;
-        gap: 24px;
-        align-items: start;
-    }
-
-    .weline-cart-shell__items,
-    .weline-cart-shell__summary {
-        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
-        border-radius: 8px;
-        background: var(--weline-layout-surface-primary, #fff);
-        box-shadow: var(--weline-theme-shadow-sm, 0 10px 24px rgba(15, 23, 42, .06));
-    }
-
-    .weline-cart-shell table {
-        width: 100%;
-        border-collapse: collapse;
-    }
-
-    .weline-cart-shell th,
-    .weline-cart-shell td {
-        padding: 16px;
-        text-align: left;
-        border-bottom: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
-        vertical-align: top;
-    }
-
-    .weline-cart-shell tr:last-child td {
-        border-bottom: 0;
-    }
-
-    .weline-cart-shell th {
-        font-size: 13px;
-        color: var(--weline-layout-text-secondary, #64748b);
-        font-weight: 700;
-    }
-
-    .weline-cart-shell td small {
-        display: block;
-        margin-top: 4px;
-        color: var(--weline-layout-text-secondary, #64748b);
-    }
-
-    .weline-cart-shell__message {
-        min-height: 22px;
-        padding: 12px 16px 0;
-        color: var(--weline-layout-text-secondary, #64748b);
-        font-size: 14px;
-    }
-
-    .weline-cart-shell__message.is-error {
-        color: var(--weline-theme-danger-color, #b42318);
-    }
-
-    .weline-cart-shell__quantity-controls {
-        display: flex;
-        align-items: center;
-        flex-wrap: nowrap;
-        gap: 8px;
-    }
-
-    .weline-cart-shell__quantity-input {
-        width: 68px;
-        min-height: 38px;
-        padding: 0 8px;
-        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
-        border-radius: 6px;
-        background: var(--weline-layout-surface-primary, #fff);
-        color: inherit;
-        font: inherit;
-    }
-
-    .weline-cart-shell__action {
-        min-height: 38px;
-        padding: 0 12px;
-        border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
-        border-radius: 6px;
-        background: transparent;
-        color: var(--weline-layout-link-color, #2563eb);
-        font: inherit;
-        font-weight: 700;
-        flex: 0 0 auto;
-        white-space: nowrap;
-        cursor: pointer;
-    }
-
-    .weline-cart-shell__action--remove {
-        min-height: 32px;
-        margin-top: 10px;
-        color: var(--weline-theme-danger-color, #b42318);
-    }
-
-    .weline-cart-shell__action:disabled {
-        cursor: wait;
-        opacity: .55;
-    }
-
-    .weline-cart-shell__summary {
-        padding: 20px;
-    }
-
-    .weline-cart-shell__summary h2 {
-        font-size: 20px;
-        line-height: 1.25;
-    }
-
-    .weline-cart-shell__summary-list {
-        margin: 14px 0 0;
-    }
-
-    .weline-cart-shell__summary-row {
-        display: flex;
-        justify-content: space-between;
-        gap: 16px;
-        padding: 10px 0;
-        border-bottom: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
-    }
-
-    .weline-cart-shell__summary-row.total {
-        font-weight: 800;
-        font-size: 18px;
-        border-bottom: 0;
-    }
-
-    .weline-cart-shell__summary-row span,
-    .weline-cart-shell__summary-row strong {
-        margin: 0;
-    }
-
-    .weline-cart-shell__checkout {
-        min-height: 44px;
-        margin-top: 18px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        border-radius: 8px;
-        background: var(--weline-layout-link-color, #2563eb);
-        color: var(--weline-theme-on-primary, #fff);
-        text-decoration: none;
-        font-weight: 800;
-    }
-
-    @media (max-width: 800px) {
-        .weline-cart-shell {
-            width: min(100% - 28px, 1180px);
-            padding: 32px 0 48px;
-        }
-
-        .weline-cart-shell__header {
-            flex-direction: column;
-        }
-
-        .weline-cart-shell__grid {
-            grid-template-columns: 1fr;
-        }
-
-        .weline-cart-shell__items {
-            overflow-x: auto;
-        }
-
-        .weline-cart-shell table {
-            min-width: 620px;
-        }
-    }
-
-    @media (max-width: 640px) {
-        .weline-cart-shell__items {
-            overflow: visible;
-        }
-
-        .weline-cart-shell table,
-        .weline-cart-shell thead,
-        .weline-cart-shell tbody,
-        .weline-cart-shell tr,
-        .weline-cart-shell th,
-        .weline-cart-shell td {
-            display: block;
-        }
-
-        .weline-cart-shell table {
-            min-width: 0;
-        }
-
-        .weline-cart-shell thead {
-            display: none;
-        }
-
-        .weline-cart-shell tbody {
-            display: grid;
-            gap: 12px;
-            padding: 14px;
-        }
-
-        .weline-cart-shell tr {
-            display: grid;
-            gap: 10px;
-            padding: 14px;
-            border: 1px solid var(--weline-theme-border-color-subtle, #e5e7eb);
-            border-radius: 8px;
-            background: var(--weline-layout-surface-primary, #fff);
-        }
-
-        .weline-cart-shell th,
-        .weline-cart-shell td {
-            border-bottom: 0;
-            padding: 0;
-        }
-
-        .weline-cart-shell td {
-            display: flex;
-            justify-content: space-between;
-            gap: 16px;
-            text-align: right;
-        }
-
-        .weline-cart-shell td::before {
-            content: attr(data-label);
-            flex: 0 0 auto;
-            color: var(--weline-layout-text-secondary, #64748b);
-            font-size: 13px;
-            font-weight: 700;
-            text-align: left;
-        }
-
-        .weline-cart-shell td:first-child {
-            display: block;
-            text-align: left;
-        }
-
-        .weline-cart-shell td:first-child::before {
-            display: block;
-            margin-bottom: 8px;
-        }
-
-        .weline-cart-shell td:not(:first-child) {
-            min-width: 0;
-            white-space: normal;
-            word-break: keep-all;
-        }
-    }
-</style>
 
 <script>
 (function () {
@@ -432,22 +93,42 @@ $copy = [
     const copy = <?= json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     const stateNodes = Array.from(root.querySelectorAll('[data-cart-state]'));
     const itemsNode = root.querySelector('[data-cart-items]');
-    const countNode = root.querySelector('[data-cart-count]');
-    const subtotalNode = root.querySelector('[data-cart-subtotal]');
+    const subtitleNode = root.querySelector('[data-cart-subtitle]');
+    const subtotalLabelNode = root.querySelector('[data-cart-subtotal-label]');
     const grandTotalNode = root.querySelector('[data-cart-grand-total]');
     const errorNode = root.querySelector('[data-cart-error]');
     const messageNode = root.querySelector('[data-cart-message]');
     const retryButton = root.querySelector('[data-cart-retry]');
     const guestTokenStorageKey = 'weline.cart.guest_token';
     let cartApi = null;
+    let guestToken = '';
+    try {
+        guestToken = String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
+    } catch (error) {
+        // Storage can be unavailable in privacy-restricted browser contexts.
+    }
 
-    function cartIdentity() {
-        try {
-            const guestToken = String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
-            return guestToken ? { guest_token: guestToken } : {};
-        } catch (error) {
-            return {};
+    async function ensureGuestToken() {
+        if (guestToken) {
+            return guestToken;
         }
+        const result = await (await getCartApi()).issueGuestToken({});
+        const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
+        guestToken = String((payload && payload.guest_token) || (result && result.guest_token) || '').trim();
+        if (!guestToken) {
+            throw new Error(copy.guestTokenIssueFailed);
+        }
+        try {
+            window.sessionStorage.setItem(guestTokenStorageKey, guestToken);
+        } catch (error) {
+            // The current cart request still owns the token even if storage is unavailable.
+        }
+        return guestToken;
+    }
+
+    async function cartIdentity() {
+        const token = await ensureGuestToken();
+        return { guest_token: token };
     }
 
     function text(value) {
@@ -485,64 +166,126 @@ $copy = [
         return (text(currency).trim() || 'CNY') + ' ' + formattedAmount;
     }
 
-    function cell(label, value) {
-        const node = document.createElement('td');
-        node.dataset.label = label;
-        node.textContent = text(value);
-        return node;
+    function subtotalItemsLabel(count) {
+        const template = copy.subtotalItems || '';
+        if (template.indexOf('%1') !== -1) {
+            return template.replace('%1', String(count));
+        }
+        return copy.subtotal + ' (' + count + ')';
     }
 
-    function productCell(item) {
-        const node = document.createElement('td');
-        node.dataset.label = copy.product;
-        const name = document.createElement('strong');
-        name.textContent = text(item && item.name);
-        node.appendChild(name);
+    function buildLine(item, currency) {
+        const row = document.createElement('article');
+        row.className = 'weline-cart-shell__line';
+        row.dataset.cartLine = '1';
+        const itemId = text(item && item.item_id).trim();
+        if (itemId) {
+            row.dataset.itemId = itemId;
+        }
+
+        const quantity = Math.max(1, Number(item && (item.qty || item.quantity)) || 1);
+        const maxQty = Math.max(1, Number(item && item.stock) || 999);
+        const image = text(item && item.image).trim();
+        const unitAmount = amountFromMinor(item, 'unit_price_minor', 'price');
+        const rowAmount = amountFromMinor(item, 'row_total_minor', 'row_total');
+
+        const media = document.createElement('div');
+        media.className = 'weline-cart-shell__line-media';
+        if (image) {
+            const img = document.createElement('img');
+            img.src = image;
+            img.alt = '';
+            media.appendChild(img);
+        }
+
+        const details = document.createElement('div');
+        details.className = 'weline-cart-shell__line-details';
+
+        const title = document.createElement('strong');
+        title.className = 'weline-cart-shell__line-title';
+        title.textContent = text(item && item.name);
+        details.appendChild(title);
+
         const skuValue = text(item && item.sku).trim();
         if (skuValue) {
             const sku = document.createElement('small');
+            sku.className = 'weline-cart-shell__line-sku';
             sku.textContent = 'SKU: ' + skuValue;
-            node.appendChild(sku);
+            details.appendChild(sku);
         }
+
+        const meta = document.createElement('div');
+        meta.className = 'weline-cart-shell__line-meta';
+
+        const qtyWrap = document.createElement('div');
+        qtyWrap.className = 'weline-cart-shell__qty';
+
+        const decrease = document.createElement('button');
+        decrease.type = 'button';
+        decrease.dataset.qtyDecrease = '1';
+        decrease.dataset.itemId = itemId;
+        decrease.setAttribute('aria-label', copy.decreaseQty);
+        decrease.textContent = '−';
+        if (quantity <= 1) {
+            decrease.disabled = true;
+        }
+
+        const input = document.createElement('input');
+        input.type = 'number';
+        input.className = 'weline-cart-shell__qty-input';
+        input.min = '1';
+        input.max = String(maxQty);
+        input.value = String(quantity);
+        input.dataset.cartQuantity = itemId;
+        input.setAttribute('aria-label', copy.quantity + ' ' + text(item && item.name));
+
+        const increase = document.createElement('button');
+        increase.type = 'button';
+        increase.dataset.qtyIncrease = '1';
+        increase.dataset.itemId = itemId;
+        increase.setAttribute('aria-label', copy.increaseQty);
+        increase.textContent = '+';
+        if (quantity >= maxQty) {
+            increase.disabled = true;
+        }
+
+        qtyWrap.appendChild(decrease);
+        qtyWrap.appendChild(input);
+        qtyWrap.appendChild(increase);
+
         const remove = document.createElement('button');
         remove.type = 'button';
         remove.className = 'weline-cart-shell__action weline-cart-shell__action--remove';
         remove.dataset.cartAction = 'remove';
-        remove.dataset.itemId = text(item && item.item_id);
+        remove.dataset.itemId = itemId;
         remove.textContent = copy.remove;
         remove.setAttribute('aria-label', copy.remove + ' ' + text(item && item.name));
-        node.appendChild(remove);
-        return node;
-    }
 
-    function quantityCell(item, quantity) {
-        const node = document.createElement('td');
-        node.dataset.label = copy.quantity;
-        const controls = document.createElement('div');
-        controls.className = 'weline-cart-shell__quantity-controls';
-        const input = document.createElement('input');
-        input.type = 'number';
-        input.className = 'weline-cart-shell__quantity-input';
-        input.min = '1';
-        input.max = String(Math.max(1, Number(item && item.stock) || 999));
-        input.value = String(quantity);
-        input.dataset.cartQuantity = text(item && item.item_id);
-        input.setAttribute('aria-label', copy.quantity + ' ' + text(item && item.name));
-        const update = document.createElement('button');
-        update.type = 'button';
-        update.className = 'weline-cart-shell__action';
-        update.dataset.cartAction = 'update';
-        update.dataset.itemId = text(item && item.item_id);
-        update.textContent = copy.update;
-        controls.appendChild(input);
-        controls.appendChild(update);
-        node.appendChild(controls);
-        return node;
+        meta.appendChild(qtyWrap);
+        meta.appendChild(remove);
+        details.appendChild(meta);
+
+        const priceCol = document.createElement('div');
+        priceCol.className = 'weline-cart-shell__line-price';
+        priceCol.textContent = money(rowAmount, currency);
+
+        const unitPrice = document.createElement('small');
+        unitPrice.className = 'weline-cart-shell__line-unit';
+        unitPrice.textContent = copy.unitPrice + ': ' + money(unitAmount, currency);
+        priceCol.appendChild(unitPrice);
+
+        row.appendChild(media);
+        row.appendChild(details);
+        row.appendChild(priceCol);
+        return row;
     }
 
     function render(summary) {
         const items = Array.isArray(summary && summary.items) ? summary.items : [];
         if (!items.length || Boolean(summary && summary.is_empty)) {
+            if (subtitleNode) {
+                subtitleNode.hidden = true;
+            }
             showState('empty');
             return;
         }
@@ -550,20 +293,16 @@ $copy = [
         itemsNode.textContent = '';
         const currency = text(summary && summary.currency || items[0] && items[0].currency || 'CNY');
         items.forEach(function (item) {
-            const row = document.createElement('tr');
-            const quantity = Math.max(1, Number(item && (item.qty || item.quantity)) || 1);
-            row.appendChild(productCell(item));
-            row.appendChild(cell(copy.price, money(amountFromMinor(item, 'unit_price_minor', 'price'), currency)));
-            row.appendChild(quantityCell(item, quantity));
-            row.appendChild(cell(copy.subtotal, money(amountFromMinor(item, 'row_total_minor', 'row_total'), currency)));
-            itemsNode.appendChild(row);
+            itemsNode.appendChild(buildLine(item, currency));
         });
 
         const count = Number(summary && (summary.cart_count ?? summary.item_count)) || 0;
-        const subtotal = amountFromMinor(summary, 'subtotal_minor', 'subtotal');
         const grandTotal = amountFromMinor(summary, 'grand_total_minor', 'grand_total');
-        setText(countNode, count);
-        setText(subtotalNode, money(subtotal, currency));
+        if (subtitleNode) {
+            setText(subtitleNode, subtotalItemsLabel(count));
+            subtitleNode.hidden = false;
+        }
+        setText(subtotalLabelNode, subtotalItemsLabel(count));
         setText(grandTotalNode, money(grandTotal, currency));
         showState('ready');
     }
@@ -584,7 +323,7 @@ $copy = [
         showState('loading');
         try {
             const cart = await getCartApi();
-            const result = await cart.getV2Cart(cartIdentity());
+            const result = await cart.getV2Cart(await cartIdentity());
             const summary = result && result.data && typeof result.data === 'object' ? result.data : result;
             if (!summary || summary.success === false) {
                 throw new Error(text(summary && summary.message) || copy.loadFailed);
@@ -596,30 +335,16 @@ $copy = [
         }
     }
 
-    if (retryButton) {
-        retryButton.addEventListener('click', loadCart);
-    }
-
-    root.addEventListener('click', async function (event) {
-        const button = event.target.closest('[data-cart-action]');
-        if (!button || button.disabled) {
-            return;
-        }
-        const itemId = text(button.dataset.itemId).trim();
-        const action = text(button.dataset.cartAction);
-        const quantityInput = root.querySelector('[data-cart-quantity="' + CSS.escape(itemId) + '"]');
-        button.disabled = true;
+    async function mutateCart(action, itemId, qty) {
         root.setAttribute('aria-busy', 'true');
         setText(messageNode, '');
         messageNode && messageNode.classList.remove('is-error');
         try {
             const cart = await getCartApi();
-            const params = Object.assign(cartIdentity(), { item_id: itemId });
+            const params = Object.assign(await cartIdentity(), { item_id: itemId });
             const result = action === 'remove'
                 ? await cart.removeV2(params)
-                : await cart.updateV2(Object.assign(params, {
-                    qty: Math.max(1, Number(quantityInput && quantityInput.value) || 1),
-                }));
+                : await cart.updateV2(Object.assign(params, { qty: Math.max(1, Number(qty) || 1) }));
             const summary = result && result.data && typeof result.data === 'object' ? result.data : result;
             if (!summary || summary.success === false) {
                 throw new Error(text(summary && summary.message) || copy.mutationFailed);
@@ -629,9 +354,45 @@ $copy = [
         } catch (error) {
             setText(messageNode, error && error.message ? error.message : copy.mutationFailed);
             messageNode && messageNode.classList.add('is-error');
-            button.disabled = false;
+            throw error;
         } finally {
             root.setAttribute('aria-busy', 'false');
+        }
+    }
+
+    if (retryButton) {
+        retryButton.addEventListener('click', loadCart);
+    }
+
+    root.addEventListener('click', async function (event) {
+        const button = event.target.closest('[data-cart-action], [data-qty-decrease], [data-qty-increase]');
+        if (!button || button.disabled) {
+            return;
+        }
+
+        const itemId = text(button.dataset.itemId).trim();
+        if (!itemId) {
+            return;
+        }
+
+        const quantityInput = root.querySelector('[data-cart-quantity="' + CSS.escape(itemId) + '"]');
+        let action = text(button.dataset.cartAction);
+        let nextQty = Math.max(1, Number(quantityInput && quantityInput.value) || 1);
+
+        if (button.hasAttribute('data-qty-decrease')) {
+            action = 'update';
+            nextQty = Math.max(1, nextQty - 1);
+        } else if (button.hasAttribute('data-qty-increase')) {
+            action = 'update';
+            const maxQty = Math.max(1, Number(quantityInput && quantityInput.max) || 999);
+            nextQty = Math.min(maxQty, nextQty + 1);
+        }
+
+        button.disabled = true;
+        try {
+            await mutateCart(action, itemId, nextQty);
+        } catch (error) {
+            button.disabled = false;
         }
     });
 

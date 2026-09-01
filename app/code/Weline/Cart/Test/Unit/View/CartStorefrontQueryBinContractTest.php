@@ -16,7 +16,9 @@ final class CartStorefrontQueryBinContractTest extends TestCase
         self::assertStringContainsString("api.resource('cart')", $template);
         self::assertStringContainsString("const guestTokenStorageKey = 'weline.cart.guest_token'", $template);
         self::assertStringContainsString('window.sessionStorage.getItem(guestTokenStorageKey)', $template);
-        self::assertStringContainsString('getV2Cart(cartIdentity())', $template);
+        self::assertStringContainsString('issueGuestToken', $template);
+        self::assertStringContainsString('ensureGuestToken', $template);
+        self::assertStringContainsString('await cartIdentity()', $template);
         self::assertStringContainsString('data-cart-state="loading"', $template);
         self::assertStringContainsString('data-cart-state="empty"', $template);
         self::assertStringContainsString('data-cart-state="ready"', $template);
@@ -76,22 +78,41 @@ final class CartStorefrontQueryBinContractTest extends TestCase
 
     public function testQuantityActionLabelsNeverWrapVertically(): void
     {
-        $template = $this->template();
+        $css = $this->amazonCss();
 
         self::assertMatchesRegularExpression(
-            '/\\.weline-cart-shell__action\\s*\\{[^}]*white-space:\\s*nowrap;/s',
-            $template,
+            '/\\.weline-cart-shell--amazon \\.weline-cart-shell__action\\s*\\{[^}]*white-space:\\s*nowrap;/s',
+            $css,
         );
         self::assertMatchesRegularExpression(
-            '/\\.weline-cart-shell__quantity-controls\\s*\\{[^}]*flex-wrap:\\s*nowrap;/s',
-            $template,
+            '/\\.weline-cart-shell--amazon \\.weline-cart-shell__qty\\s*\\{[^}]*flex-wrap:\\s*nowrap;/s',
+            $css,
         );
+    }
+
+    public function testCartPageUsesAmazonSurfaceAndStylesheet(): void
+    {
+        $template = $this->template();
+
+        self::assertStringContainsString('weline-cart-shell--amazon', $template);
+        self::assertStringContainsString('@static(Weline_Cart::css/cart-page-amazon.css)&v=', $template);
+        self::assertStringContainsString('weline-cart-shell__line', $template);
+        self::assertStringContainsString('data-qty-decrease', $template);
+        self::assertStringContainsString('weline-cart-shell__checkout', $template);
+        self::assertStringNotContainsString('<table', $template);
     }
 
     private function template(): string
     {
         return (string)file_get_contents(
             BP . 'app/code/Weline/Cart/view/templates/frontend/cart/index.phtml',
+        );
+    }
+
+    private function amazonCss(): string
+    {
+        return (string)file_get_contents(
+            BP . 'app/code/Weline/Cart/view/statics/css/cart-page-amazon.css',
         );
     }
 }

@@ -72,6 +72,40 @@ final class CartV2ServiceTest extends TestCase
         self::assertSame(0, $svc->cartCountForScope($this->scopeA()));
         self::assertSame(1, $svc->cartCountForScope($this->scopeB()));
     }
+    public function testGetCartWithoutGuestTokenReturnsEmptySummary(): void
+    {
+        $offerUuid = '11111111-1111-4111-8111-111111111111';
+        $svc = $this->service([
+            $offerUuid => [
+                'name' => 'Offer A',
+                'unit_price_minor' => 1000,
+                'currency' => 'CNY',
+                'stock' => 10,
+                'sellable' => true,
+            ],
+        ]);
+        $summary = $svc->getCart($this->scopeA());
+        self::assertTrue($summary['success']);
+        self::assertTrue($summary['is_empty']);
+        self::assertSame(0, $summary['item_count']);
+        self::assertSame(CartV2Service::OWNER_GUEST, $summary['owner_kind']);
+        self::assertSame('', (string)$summary['owner_id']);
+        self::assertNull($summary['guest_token']);
+
+        try {
+            $svc->add(
+                $this->scopeA(),
+                new OfferIdentity('product', $offerUuid, legacyProductId: 1),
+                [],
+                1,
+                null,
+            );
+            self::fail('guest add without token must fail');
+        } catch (CartV2ConflictException $e) {
+            self::assertSame(CartV2Service::ERROR_GUEST_TOKEN, $e->errorCode());
+        }
+    }
+
 
     public function testSameGuestTokenRemainsIsolatedAcrossThreeSegmentScopes(): void
     {
