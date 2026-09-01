@@ -463,6 +463,56 @@ final class ProjectServingManifestStoreTest extends TestCase
         self::assertArrayHasKey($digests[3], $references);
     }
 
+    public function testExplicitTerminalCleanupRetiresStrictSameLaunchSupersession(): void
+    {
+        $store = new ProjectServingManifestStore($this->root);
+        $registration = $this->registration('terminal-clean', [
+            $this->route('terminal-clean.example.test'),
+        ]);
+        $endpointPublication = $store->publishFromRegistration($registration);
+        $registration['project_generation'] = 6;
+        $registration['request_digest'] = \str_repeat('d', 64);
+        $registration['non_certificate_desired_digest'] = \str_repeat('e', 64);
+        $current = $store->publishFromRegistration($registration);
+        self::assertGreaterThan(
+            (int)$endpointPublication['generation'],
+            (int)$current['generation'],
+        );
+        $terminalFence = [
+            'project_uuid' => (string)$registration['project_uuid'],
+            'instance_generation' => (int)$registration['instance_generation'],
+            'master_epoch' => (int)$registration['master_epoch'],
+            'launch_id' => (string)$registration['launch_id'],
+        ];
+
+        try {
+            $store->retireInactiveInstanceReferences(
+                'terminal-clean',
+                (int)$endpointPublication['generation'],
+                (string)$endpointPublication['digest'],
+                terminalEndpointFence: [
+                    ...$terminalFence,
+                    'launch_id' => \str_repeat('f', 32),
+                ],
+            );
+            self::fail('Another Master launch must not authorize superseded cleanup.');
+        } catch (\RuntimeException $exception) {
+            self::assertStringContainsString(
+                'another inactive endpoint generation',
+                $exception->getMessage(),
+            );
+        }
+        self::assertFileExists($store->currentPointerPath('terminal-clean'));
+
+        $store->retireInactiveInstanceReferences(
+            'terminal-clean',
+            (int)$endpointPublication['generation'],
+            (string)$endpointPublication['digest'],
+            terminalEndpointFence: $terminalFence,
+        );
+        self::assertFileDoesNotExist($store->currentPointerPath('terminal-clean'));
+    }
+
     public function testInactiveInstanceRetirementReplaysPastCorruptHistoricalLkg(): void
     {
         $store = new ProjectServingManifestStore($this->root);

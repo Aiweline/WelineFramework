@@ -78,23 +78,45 @@ $panelPluginRefreshRoutesRefreshed = !empty($panelPluginRefreshResult['routes_re
 $panelPluginRefreshRouteCount = (int)($panelPluginRefreshResult['route_count'] ?? 0);
 $panelPluginRefreshPluginCount = (int)($panelPluginRefreshResult['plugin_count'] ?? 0);
 $panelPluginRefreshContributionCount = (int)($panelPluginRefreshResult['contribution_count'] ?? 0);
-$dashboardUrl = $this->getBackendUrl('*/backend/wls-panel');
-$projectsUrl = $this->getBackendUrl('*/backend/wls-panel/projects');
-$gatewayUrl = $this->getBackendUrl('*/backend/wls-panel/gateway');
-$pluginViewerUrl = $this->getBackendUrl('*/backend/wls-panel/plugin');
-$marketplaceUrl = $this->getBackendUrl('*/backend/wls-panel/marketplace');
-$securityUrl = $this->getBackendUrl('*/backend/wls-panel/security');
-$securityLogsUrl = $this->getBackendUrl('*/backend/wls-panel/security-logs');
-$securityRulesPanelUrl = $this->getBackendUrl('*/backend/wls-panel/security-rules');
-$securityPolicyUrl = $this->getBackendUrl('*/backend/wls-panel/security-policy');
-$securityAuditUrl = $this->getBackendUrl('*/backend/wls-panel/security-audit');
-$projectSaveUrl = $this->getBackendUrl('*/backend/wls-panel/project-save');
-$projectDeleteUrl = $this->getBackendUrl('*/backend/wls-panel/project-delete');
-$securityRulesSaveUrl = $this->getBackendUrl('*/backend/wls-panel/security-rules-save');
-$pluginRefreshUrl = $this->getBackendUrl('*/backend/wls-panel/plugin-refresh');
-$projectAdminUrl = $this->getBackendUrl('admin');
-$appStoreIndexUrl = $this->getBackendUrl('appstore/backend');
-$appStoreInstalledUrl = $this->getBackendUrl('appstore/backend/installed');
+$template = $this;
+$dashboardPath = '*/backend/wls-panel';
+$projectsPath = '*/backend/wls-panel/projects';
+$gatewayPath = '*/backend/wls-panel/gateway';
+$pluginViewerPath = '*/backend/wls-panel/plugin';
+$marketplacePath = '*/backend/wls-panel/marketplace';
+$securityPath = '*/backend/wls-panel/security';
+$securityLogsPath = '*/backend/wls-panel/security-logs';
+$securityRulesPanelPath = '*/backend/wls-panel/security-rules';
+$securityPolicyPath = '*/backend/wls-panel/security-policy';
+$securityAuditPath = '*/backend/wls-panel/security-audit';
+$projectSavePath = '*/backend/wls-panel/project-save';
+$projectDeletePath = '*/backend/wls-panel/project-delete';
+$securityRulesSavePath = '*/backend/wls-panel/security-rules-save';
+$pluginRefreshPath = '*/backend/wls-panel/plugin-refresh';
+$projectAdminPath = 'admin';
+$appStoreIndexPath = 'appstore/backend';
+$appStoreInstalledPath = 'appstore/backend/installed';
+// PHP builders still need absolute URLs; templates use @backend-url{$*Path}.
+$toBackendUrl = static function (string $path, array $params = []) use ($template): string {
+    return (string)$template->getBackendUrl($path, $params);
+};
+$dashboardUrl = $toBackendUrl($dashboardPath);
+$projectsUrl = $toBackendUrl($projectsPath);
+$gatewayUrl = $toBackendUrl($gatewayPath);
+$pluginViewerUrl = $toBackendUrl($pluginViewerPath);
+$marketplaceUrl = $toBackendUrl($marketplacePath);
+$securityUrl = $toBackendUrl($securityPath);
+$securityLogsUrl = $toBackendUrl($securityLogsPath);
+$securityRulesPanelUrl = $toBackendUrl($securityRulesPanelPath);
+$securityPolicyUrl = $toBackendUrl($securityPolicyPath);
+$securityAuditUrl = $toBackendUrl($securityAuditPath);
+$projectSaveUrl = $toBackendUrl($projectSavePath);
+$projectDeleteUrl = $toBackendUrl($projectDeletePath);
+$securityRulesSaveUrl = $toBackendUrl($securityRulesSavePath);
+$pluginRefreshUrl = $toBackendUrl($pluginRefreshPath);
+$projectAdminUrl = $toBackendUrl($projectAdminPath);
+$appStoreIndexUrl = $toBackendUrl($appStoreIndexPath);
+$appStoreInstalledUrl = $toBackendUrl($appStoreInstalledPath);
 $appStorePlatformResolution = $this->getData('appStorePlatformResolution');
 $appStorePlatformResolution = is_array($appStorePlatformResolution) ? $appStorePlatformResolution : [];
 $appStorePlatformUrl = rtrim((string)($appStorePlatformResolution['platform_url'] ?? 'https://app.aiweline.com'), '/');
@@ -107,11 +129,16 @@ $appStorePlatformEnvironmentLabel = match ($appStorePlatformEnvironment) {
     default => $appStorePlatformEnvironment !== '' ? $appStorePlatformEnvironment : __('未知应用商城'),
 };
 $appStorePlatformEnvironmentClass = $appStorePlatformEnvironment === 'production' ? 'is-on' : '';
-$serverManagerUrl = $this->getBackendUrl('*/backend/server-manager');
-$securityAdvancedRulesUrl = $this->getBackendUrl('*/backend/server-monitor/security-rules');
-$attackLogUrl = $this->getBackendUrl('*/backend/server-monitor/attack-log');
-$sslUrl = $this->getBackendUrl('*/backend/ssl-certificate');
-$optimizationUrl = $this->getBackendUrl('*/backend/optimization-guide');
+$serverManagerPath = '*/backend/server-manager';
+$securityAdvancedRulesPath = '*/backend/server-monitor/security-rules';
+$attackLogPath = '*/backend/server-monitor/attack-log';
+$sslPath = '*/backend/ssl-certificate';
+$optimizationPath = '*/backend/optimization-guide';
+$serverManagerUrl = $toBackendUrl($serverManagerPath);
+$securityAdvancedRulesUrl = $toBackendUrl($securityAdvancedRulesPath);
+$attackLogUrl = $toBackendUrl($attackLogPath);
+$sslUrl = $toBackendUrl($sslPath);
+$optimizationUrl = $toBackendUrl($optimizationPath);
 $managedProjectCount = (int)($dashboardMetrics['managed_projects'] ?? count($projectCards));
 $securityEventCount = (int)($dashboardMetrics['security_events'] ?? 0);
 $runtimeRunningInstances = (int)($runtimeData['running_instances'] ?? 0);
@@ -162,7 +189,6 @@ $buildWlsMarketplaceUrl = static function (string $query = '') use ($appStoreInd
     }
     return $appStoreIndexUrl . '?' . http_build_query($params);
 };
-$template = $this;
 $buildPanelEntryUrl = static function (string $url) use ($template): string {
     $url = trim($url);
     if ($url === '' || str_starts_with($url, '#')) {
@@ -451,58 +477,59 @@ $resolveProjectActionLinks = static function (array $project) use (
         'gateway' => $gatewayUrl,
     ];
 };
-$wlsOnlineMarketplaceUrl = $buildWlsMarketplaceUrl();
-$wlsInstalledPluginsUrl = $appStoreInstalledUrl . '?' . http_build_query([
+$wlsMarketplaceFilterParams = [
     'tag' => $wlsPluginTag,
     'surface' => $wlsPluginSurface,
     'wls_panel_return' => 1,
-]);
+];
+$wlsOnlineMarketplaceUrl = $buildWlsMarketplaceUrl();
+$wlsInstalledPluginsUrl = $appStoreInstalledUrl . '?' . http_build_query($wlsMarketplaceFilterParams);
 
 $navItems = [
-    ['key' => 'dashboard', 'label' => __('仪表盘'), 'url' => $dashboardUrl],
-    ['key' => 'projects', 'label' => __('项目'), 'url' => $projectsUrl],
-    ['key' => 'nginx', 'label' => __('Nginx 公网入口'), 'url' => $gatewayUrl],
+    ['key' => 'dashboard', 'label' => __('仪表盘'), 'path' => $dashboardPath],
+    ['key' => 'projects', 'label' => __('项目'), 'path' => $projectsPath],
+    ['key' => 'nginx', 'label' => __('Nginx 公网入口'), 'path' => $gatewayPath],
     [
         'key' => 'security',
         'label' => __('安全'),
-        'url' => $securityUrl,
+        'path' => $securityPath,
         'children' => [
-            ['key' => 'security', 'label' => __('概览'), 'url' => $securityUrl],
-            ['key' => 'security_logs', 'label' => __('攻击日志'), 'url' => $securityLogsUrl],
-            ['key' => 'security_rules', 'label' => __('规则'), 'url' => $securityRulesPanelUrl],
-            ['key' => 'security_policy', 'label' => __('项目策略'), 'url' => $securityPolicyUrl],
-            ['key' => 'security_audit', 'label' => __('策略审计'), 'url' => $securityAuditUrl],
+            ['key' => 'security', 'label' => __('概览'), 'path' => $securityPath],
+            ['key' => 'security_logs', 'label' => __('攻击日志'), 'path' => $securityLogsPath],
+            ['key' => 'security_rules', 'label' => __('规则'), 'path' => $securityRulesPanelPath],
+            ['key' => 'security_policy', 'label' => __('项目策略'), 'path' => $securityPolicyPath],
+            ['key' => 'security_audit', 'label' => __('策略审计'), 'path' => $securityAuditPath],
         ],
     ],
-    ['key' => 'marketplace', 'label' => __('商城'), 'url' => $marketplaceUrl],
+    ['key' => 'marketplace', 'label' => __('商城'), 'path' => $marketplacePath],
 ];
 
 $quickActions = [
     [
         'title' => __('Nginx 公网入口'),
         'meta' => __('公网入口固定为项目隔离 Nginx；WLS 仅提供 127.0.0.1 明文 HTTP/1.1 回源'),
-        'url' => $gatewayUrl,
+        'path' => $gatewayPath,
         'status' => __('公网协议所有者：Nginx；WLS 仅提供内部 HTTP/1.1 回源。'),
         'tone' => 'green',
     ],
     [
         'title' => __('WLS 运行时'),
         'meta' => __('工作进程、会话、内存服务'),
-        'url' => $serverManagerUrl,
+        'path' => $serverManagerPath,
         'status' => __('%{1} 个运行中，%{2} 个工作进程', [$runtimeRunningInstances, $runtimeWorkers]),
         'tone' => 'blue',
     ],
     [
         'title' => __('安全规则'),
         'meta' => __('攻击规则和防护日志'),
-        'url' => $securityRulesPanelUrl,
+        'path' => $securityRulesPanelPath,
         'status' => __('7 天内拦截 %{1} 次', [$blockedSecurityEvents]),
         'tone' => 'amber',
     ],
     [
         'title' => __('SSL 证书'),
         'meta' => __('证书和域名绑定'),
-        'url' => $sslUrl,
+        'path' => $sslPath,
         'status' => __('就绪'),
         'tone' => 'violet',
     ],
@@ -534,7 +561,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                 ?>
                 <div class="wls-nav-group">
                     <a class="<?= $isActive ? 'is-active' : '' ?>"
-                       href="<?= $item['url'] ?>"
+                       href="@backend-url{$item['path']}"
                        <?= $isActive && $item['key'] === $activePage ? 'aria-current="page"' : '' ?>>
                         <span><?= $item['label'] ?></span>
                     </a>
@@ -543,14 +570,14 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             <?php foreach ($navChildren as $navChild): ?>
                                 <?php
                                 $navChildKey = (string)($navChild['key'] ?? '');
-                                $navChildUrl = trim((string)($navChild['url'] ?? ''));
-                                if ($navChildKey === '' || $navChildUrl === '') {
+                                $navChildPath = trim((string)($navChild['path'] ?? ''));
+                                if ($navChildKey === '' || $navChildPath === '') {
                                     continue;
                                 }
                                 $navChildActive = $navChildKey === $activePage;
                                 ?>
                                 <a class="wls-nav-subnav-item <?= $navChildActive ? 'is-active' : '' ?>"
-                                   href="<?= $escapeHtml($navChildUrl) ?>"
+                                   href="@backend-url{$navChildPath}"
                                    <?= $navChildActive ? 'aria-current="page"' : '' ?>>
                                     <?= $escapeHtml((string)($navChild['label'] ?? $navChildKey)) ?>
                                 </a>
@@ -676,8 +703,8 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         title="<?= __('切换主题') ?>">
                     <span data-wls-theme-icon><?= htmlspecialchars($darkThemeLabel, ENT_QUOTES, 'UTF-8') ?></span>
                 </button>
-                <a class="wls-primary-button" href="<?= $projectAdminUrl ?>"><?= __('项目后台') ?></a>
-                <a class="wls-secondary-button" href="<?= $projectAdminUrl ?>"><?= __('返回框架后台') ?></a>
+                <a class="wls-primary-button" href="@backend-url{$projectAdminPath}"><?= __('项目后台') ?></a>
+                <a class="wls-secondary-button" href="@backend-url{$projectAdminPath}"><?= __('返回框架后台') ?></a>
             </div>
         </header>
 
@@ -771,16 +798,16 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     </div>
                     <div class="wls-marketplace-console-actions">
                         <a class="wls-primary-button"
-                           href="<?= htmlspecialchars($wlsOnlineMarketplaceUrl, ENT_QUOTES, 'UTF-8') ?>">
+                           href="@backend-url{$appStoreIndexPath|$wlsMarketplaceFilterParams}">
                             <?= __('打开应用商城') ?>
                         </a>
                         <a class="wls-secondary-button"
-                           href="<?= htmlspecialchars($wlsInstalledPluginsUrl, ENT_QUOTES, 'UTF-8') ?>">
+                           href="@backend-url{$appStoreInstalledPath|$wlsMarketplaceFilterParams}">
                             <?= __('已安装应用') ?>
                         </a>
                         <w:form class="wls-inline-action-form"
                               method="post"
-                              action="@var($pluginRefreshUrl)"
+                              action="@backend-url{$pluginRefreshPath}"
                               data-wls-plugin-refresh-form>
                             <button class="wls-secondary-button"
                                     type="submit"
@@ -939,9 +966,9 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <h2 id="wls-security-title"><?= $escapeHtml($securityPageHeading) ?></h2>
                     </div>
                     <div class="wls-section-actions">
-                        <a class="wls-secondary-button" href="<?= $escapeHtml($securityRulesPanelUrl) ?>"><?= __('规则') ?></a>
-                        <a class="wls-secondary-button" href="<?= $escapeHtml($securityLogsUrl) ?>"><?= __('攻击日志') ?></a>
-                        <a class="wls-secondary-button" href="<?= $escapeHtml($securityAdvancedRulesUrl) ?>"><?= __('高级规则') ?></a>
+                        <a class="wls-secondary-button" href="@backend-url{$securityRulesPanelPath}"><?= __('规则') ?></a>
+                        <a class="wls-secondary-button" href="@backend-url{$securityLogsPath}"><?= __('攻击日志') ?></a>
+                        <a class="wls-secondary-button" href="@backend-url{$securityAdvancedRulesPath}"><?= __('高级规则') ?></a>
                     </div>
                 </div>
                 <?php if ($panelNotice !== ''): ?>
@@ -1111,7 +1138,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     <?php else: ?>
                         <w:form class="wls-domain-policy-form"
                               method="post"
-                              action="@var($securityRulesSaveUrl)">
+                              action="@backend-url{$securityRulesSavePath}">
                             <input type="hidden" name="save_mode" value="domain_override">
                             <input type="hidden" name="security_scope" value="<?= $escapeHtml($domainPolicyScope) ?>">
                             <input type="hidden" name="security_domain" value="<?= $escapeHtml($domainPolicyDomain) ?>">
@@ -1513,7 +1540,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         </div>
                         <span class="wls-status-pill"><?= __('最近变更') ?></span>
                     </div>
-                    <w:form class="wls-filter-bar wls-security-audit-filter" method="get" action="@var($securityAuditUrl)">
+                    <w:form class="wls-filter-bar wls-security-audit-filter" method="get" action="@backend-url{$securityAuditPath}">
                         <input type="hidden" name="security_scope" value="<?= $escapeHtml((string)($securityFilters['scope'] ?? 'all')) ?>">
                         <input type="hidden" name="security_instance" value="<?= $escapeHtml((string)($securityFilters['instance'] ?? '')) ?>">
                         <input type="hidden" name="security_ip" value="<?= $escapeHtml((string)($securityFilters['ip'] ?? '')) ?>">
@@ -1585,7 +1612,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         </label>
                         <div class="wls-filter-actions">
                             <button class="wls-primary-button" type="submit"><?= __('应用审计过滤') ?></button>
-                            <a class="wls-secondary-button" href="<?= $escapeHtml($securityAuditUrl) ?>"><?= __('重置审计') ?></a>
+                            <a class="wls-secondary-button" href="@backend-url{$securityAuditPath}"><?= __('重置审计') ?></a>
                         </div>
                     </w:form>
                     <?php if ($securityPolicyAudit === []): ?>
@@ -1663,7 +1690,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                     <w:form class="wls-security-rules-form"
                           data-wls-security-rules-form
                           method="post"
-                          action="@var($securityRulesSaveUrl)">
+                          action="@backend-url{$securityRulesSavePath}">
                         <div class="wls-form-title-row">
                             <div>
                                 <h3><?= __('公共规则编辑器') ?></h3>
@@ -2032,9 +2059,9 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             <span class="wls-shell-kicker"><?= __('最近事件') ?></span>
                             <h3><?= __('最近攻击日志') ?></h3>
                         </div>
-                        <a class="wls-secondary-button" href="<?= $escapeHtml($attackLogUrl) ?>"><?= __('打开完整日志') ?></a>
+                        <a class="wls-secondary-button" href="@backend-url{$attackLogPath}"><?= __('打开完整日志') ?></a>
                     </div>
-                    <w:form class="wls-filter-bar wls-security-log-filter" method="get" action="@var($securityLogsUrl)">
+                    <w:form class="wls-filter-bar wls-security-log-filter" method="get" action="@backend-url{$securityLogsPath}">
                         <label>
                             <span><?= __('项目范围') ?></span>
                             <select name="security_scope">
@@ -2104,7 +2131,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         </label>
                         <div class="wls-filter-actions">
                             <button class="wls-primary-button" type="submit"><?= __('应用过滤') ?></button>
-                            <a class="wls-secondary-button" href="<?= $escapeHtml($securityLogsUrl) ?>"><?= __('重置') ?></a>
+                            <a class="wls-secondary-button" href="@backend-url{$securityLogsPath}"><?= __('重置') ?></a>
                         </div>
                     </w:form>
                     <?php if ($securityRecentAttacks === []): ?>
@@ -2343,7 +2370,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <span class="wls-shell-kicker"><?= __('插件菜单') ?></span>
                         <h2 id="wls-plugin-contributions-title"><?= __('WLS 面板插件入口') ?></h2>
                     </div>
-                    <a class="wls-secondary-button" href="<?= $escapeHtml($marketplaceUrl) ?>">
+                    <a class="wls-secondary-button" href="@backend-url{$marketplacePath}">
                         <?= __('管理插件') ?>
                     </a>
                 </div>
@@ -2462,11 +2489,11 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                         <span class="wls-shell-kicker"><?= __('运维') ?></span>
                         <h2><?= __('Nginx 公网入口') ?> · <?= __('安全') ?> · <?= __('WLS 运行时') ?></h2>
                     </div>
-                    <a class="wls-secondary-button" href="<?= $escapeHtml($attackLogUrl) ?>"><?= __('攻击日志') ?></a>
+                    <a class="wls-secondary-button" href="@backend-url{$attackLogPath}"><?= __('攻击日志') ?></a>
                 </div>
                 <div class="wls-action-grid">
                     <?php foreach ($quickActions as $action): ?>
-                        <a class="wls-action-card tone-<?= $action['tone'] ?>" href="<?= $action['url'] ?>">
+                        <a class="wls-action-card tone-<?= $action['tone'] ?>" href="@backend-url{$action['path']}">
                             <span><?= $action['status'] ?></span>
                             <strong><?= $action['title'] ?></strong>
                             <small><?= $action['meta'] ?></small>
@@ -2505,7 +2532,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                             <a href="<?= $buildPanelProjectUrl() ?>"><?= __('清除编辑') ?></a>
                         <?php endif; ?>
                     </div>
-                    <w:form method="post" action="@var($projectSaveUrl)" aria-labelledby="wls-project-editor-title">
+                    <w:form method="post" action="@backend-url{$projectSavePath}" aria-labelledby="wls-project-editor-title">
                         <input type="hidden" name="project_id" value="<?= $projectFormId ?>">
                         <div class="wls-form-grid">
                             <label class="wls-form-field">
@@ -2960,7 +2987,7 @@ $panelPluginCapabilityCount = max($installedWlsPluginCount, count($operationCapa
                                    data-wls-project-operation="deploy"><?= __('部署') ?></a>
                                 <?php if ($projectType === 'registered' && $projectId > 0): ?>
                                     <a href="<?= $buildPanelProjectUrl(['edit_project_id' => $projectId]) ?>"><?= __('编辑') ?></a>
-                                    <w:form class="wls-delete-form" method="post" action="@var($projectDeleteUrl)">
+                                    <w:form class="wls-delete-form" method="post" action="@backend-url{$projectDeletePath}">
                                         <input type="hidden" name="project_id" value="<?= $projectId ?>">
                                         <button class="wls-link-button" type="submit"><?= __('删除') ?></button>
                                     </w:form>

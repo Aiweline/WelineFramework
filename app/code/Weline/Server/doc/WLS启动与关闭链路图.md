@@ -9,6 +9,7 @@
   它不会下载/编译 legacy Managed Nginx，也不会借首装执行 upgrade/repair/rebootstrap。
   `wls` 不发现、不建立也不修改宿主网关。
 - `server:stop name-a name-b`、`server:stop --prefix <prefix>` 与 `server:stop --all` 都只在外层枚举多个实例；每个实例仍复用同一关闭协议并单独获取 stop lock。
+- `server:start [name] -clean` 仅针对当前命名实例：普通启动绝不自动删除旧资料；显式 clean 只在实例离线且全部代际证明成立时退役旧端点，再进入完整新代启动。
 
 ## 启动链路图
 
@@ -18,8 +19,12 @@ flowchart TB
     B --> C{"启动分支?"}
     C -->|无效/不兼容 edge 契约| C1["启动前非零拒绝<br/>不创建 Master/Worker"]
     C -->|--master-only| M1["runMasterOnly(instance)<br/>只校验 endpoint schema v4<br/>读取嵌套 runtime_selection"]
-    C -->|默认 WLS| D["acquireStartLock(instance)"]
-    D --> E["getServerConfig()<br/>CLI > 实例 > env > auto"]
+    C -->|默认 WLS| D["getServerConfig()<br/>先保留旧实例配置"]
+    D --> D0{"显式 -clean / --clean?"}
+    D0 -->|否| E["acquireStartLock(instance)"]
+    D0 -->|是| D1["cleanupInactiveInstance(instance)<br/>lifecycle/start lock + endpoint inode/content CAS<br/>authority-last 退役 serving 引用；不发送进程信号"]
+    D1 -->|在线/锁占用/身份变化| C1
+    D1 -->|离线且证明通过| E
     E --> E0["ProjectIdentityStore<br/>UUIDv4 + desired/certificate generation CAS"]
     E0 --> E1{"EdgeRuntimeDecision"}
     E1 -->|gateway| E2["只读 status/discover<br/>受信 wls-edge/2 ready 则加入<br/>否则仅 virgin host + 签名发行包可首装<br/>bootstrap journal 同 fingerprint 恢复"]
@@ -109,6 +114,8 @@ flowchart TB
 
 ## 关键分支说明
 
+- 纯 WLS 冷恢复遇到 endpoint manifest 与 current pointer 不一致时，普通 `server:start` 返回非零并明确提示 `php bin/w server:start [name] -clean`。它不自动接受后继清单，也不删除旧资料。
+- 显式 `-clean` 只清理当前实例。端点若已停止但 current manifest 严格更新，只在旧/新清单同属 `project_uuid + instance_generation + master_epoch + launch_id + master_pid` 时退役当前引用；同代摘要冲突、不同启动代、在线 PID、锁占用或端点 CAS 变化均中止。清理成功后重新分配 instance generation、launch id 与 serving manifest generation，按普通链路启动 Master/Worker。
 - `server:stop` 可接收多个空格分隔的实例名，例如 `php bin/w server:stop api worker`；名称按输入顺序去重，逐个获取实例级 stop lock 并执行完整单实例关闭链路。某个实例锁被占用时只跳过该实例，继续处理后续名称。
 - 新启动在停止旧实例之前产生不可变 `RuntimeSelection`，并以 endpoint schema v4 写入嵌套 `runtime_selection`。`--master-only` 只接受这一个事实源；旧 endpoint、缺失/未知字段或根级 topology/listener/event/SSL 投影都在绑定端口前拒绝，不重新推导或升级。
 - 内部拓扑的 `auto` 在所有平台固定为 Direct：Linux 优先经能力验证的 `reuseport`，不可用时回退 Master-owned `shared_fd`；macOS 使用 `shared_fd`；Windows 为 Nginx 均衡的独立 `worker_ports`。所有平台仍允许显式 Dispatcher；已删除的 independent/遗留模式、配置键和命令行别名没有兼容读取入口。
@@ -188,6 +195,14 @@ flowchart TB
 - Windows：必须在原生 Windows 做 2/4/8/16 Worker cold/warm 多轮，核对 PowerShell 返回 PID、IPC REGISTER PID、helper TTL/临时文件回收和 Defender 下 p95；macOS/模拟单元结果不代替该门禁。
 - macOS：核对 batch PID = Worker `getmypid()` = REGISTER PID；launcher 退出后 PPID 重托管可接受，但不得残留 `php -r`/shell；用 `lsof -p {worker_pid}` 确认只有 Direct loopback H1 listener FD 3 可从 Master 继承，control/lock 和其它 listen FD 不得泄漏。
 - Linux：必须独立 CI/实机重复 PID/PPID/残留进程检查，并用 `/proc/{worker_pid}/fd` 确认 reuseport 默认不继承 Master listener，shared_fd 回退只继承经校验的 listener，control/lock 与其它 FD 隔离；另验证 fresh H1 分布、loopback H1、SO_REUSEPORT 门禁和容器 subreaper。公网 TLS 另对项目托管 Nginx 验证。
+
+## TLS 证书热更失败隔离
+
+- exact reload 失败先校验并提交当前 manifest fence，冻结 generation/digest/route_count，随后撤回 Master-owned admission listener，并按 `pid + process_name + launch_id + pname` 精确终止不能证明 ACK 的 TLS participant。
+- 任一 listener、ACK、进程身份、终止后置条件或状态持久化仍不确定时，进入 `tls_serving_quarantined`：清除待复活 TLS 槽位，后续批量启动、单体启动和 resurrection 都被拒绝。
+- 隔离不再调用整 Master `requestStop`。认证 IPC 与 Master 主循环保持在线，`status` 同时报告 `running/control_port` 和 `tls_serving_quarantined`；修复证书后由操作者执行显式整代重启恢复数据面。
+- `quarantineSslServing` 只有在最终 population scan 无剩余目标且无失败时返回 `success=true`；否则保留 `remaining_workers/failures`，但仍报告 `master_control_plane_preserved=true`，不得用 Master 退出掩盖未知子进程。
+- STOP 客户端仅在收到 `Stopping`/`state=stopping` 且完成条件成立时接受 EOF 成功；`success=false`（包括 Unauthorized）是立即终态失败，不打印“Master 已关闭连接”或“控制端口已接受 STOP”。
 
 ## Worker 重载约束
 

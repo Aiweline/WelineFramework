@@ -689,8 +689,23 @@ final class WorkerPolicyKernel
                 if ($systemPath) {
                     return null;
                 }
+                // Wait-gift APIs must reach PHP (file ledger); do not serve static 503 JSON here.
+                if ($this->isMaintenanceWaitGiftPath((string)($parsed['path'] ?? ''))) {
+                    return null;
+                }
+                // Maintenance HTML embeds Theme logo/favicon under /Weline/.../*.png (and
+                // /static/, /pub/errors/, …). Short-circuiting those to 503 HTML makes
+                // the browser show broken images. Align with MaintenanceInterceptor.
+                if ($this->isMaintenanceStaticAssetPath((string)($parsed['path'] ?? ''))) {
+                    return null;
+                }
                 if ($this->maintenanceMode) {
-                    return $this->deny($parsed, $envelope->peerIp, (bool)$envelope->attributes['trusted_proxy'], 503, $descriptor->id);
+                    return $this->maintenanceResponse(
+                        $parsed,
+                        $envelope->peerIp,
+                        (bool)$envelope->attributes['trusted_proxy'],
+                        $descriptor->id,
+                    );
                 }
                 return null;
 
@@ -1011,6 +1026,54 @@ final class WorkerPolicyKernel
         }
 
         return \preg_match('#^/\.well-known/acme-challenge/[A-Za-z0-9_-]{1,256}/?$#D', $path) === 1;
+    }
+
+    /**
+     * Maintenance wait-gift endpoints (issue/heartbeat/abandon/redeem/wave).
+     * These are intentionally allowed through the policy short-circuit so
+     * Weline_Maintenance can mint/validate file-ledger tokens without DB.
+     */
+    private function isMaintenanceWaitGiftPath(string $path): bool
+    {
+        $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
+
+        return \str_starts_with($pathOnly, '/maintenance/frontend/wait-gift');
+    }
+
+    /**
+     * Static assets that must reach PHP/static serving during maintenance.
+     *
+     * Mirrors Weline\Maintenance\Observer\MaintenanceInterceptor white-list:
+     * extension fan-out plus /static/, /pub/static/, /pub/media/, /pub/errors/,
+     * and /view/statics/ module assets. Theme default logo lives at
+     * /Weline/Theme/view/theme/.../logo.png and is matched by extension.
+     */
+    private function isMaintenanceStaticAssetPath(string $path): bool
+    {
+        $pathOnly = (string)(\parse_url($path, \PHP_URL_PATH) ?: $path);
+        $lower = \strtolower($pathOnly);
+
+        if (\str_starts_with($lower, '/static/')
+            || \str_starts_with($lower, '/pub/static/')
+            || \str_starts_with($lower, '/pub/media/')
+            || \str_starts_with($lower, '/pub/errors/')
+            || \str_contains($lower, '/view/statics/')
+        ) {
+            return true;
+        }
+
+        $slash = \strrpos($lower, '/');
+        $basename = $slash === false ? $lower : \substr($lower, $slash + 1);
+        if ($basename === '' || \str_starts_with($basename, '.')) {
+            return false;
+        }
+
+        $dot = \strrpos($basename, '.');
+        if ($dot === false || $dot === \strlen($basename) - 1) {
+            return false;
+        }
+
+        return isset(self::PATH_SCAN_STATIC_EXTENSIONS[\substr($basename, $dot + 1)]);
     }
 
     /**
@@ -1445,6 +1508,46 @@ final class WorkerPolicyKernel
             $trustedProxy,
         );
     }
+    /**
+     * Policy action maintenance_response: framework maintenance HTML/JSON, never bare text.
+     *
+     * @param array<string, mixed> $parsed
+     */
+    private function maintenanceResponse(
+        array $parsed,
+        string $clientIp,
+        bool $trustedProxy,
+        string $reason,
+    ): WorkerPolicyDecision {
+        $headers = \is_array($parsed['headers'] ?? null) ? $parsed['headers'] : [];
+        $path = (string)($parsed['path'] ?? '/');
+        $query = (string)($parsed['query'] ?? '');
+        if ($query !== '') {
+            $path .= '?' . $query;
+        }
+        $response = \Weline\Server\Http\ServiceUnavailablePage::httpResponse(
+            \Weline\Server\Http\ServiceUnavailablePage::VARIANT_MAINTENANCE,
+            policyDigest: $this->loadedDigest,
+            retryAfter: 5,
+            headers: $headers,
+            path: $path,
+        );
+
+        return WorkerPolicyDecision::deny(
+            $clientIp,
+            (string)($parsed['method'] ?? 'GET'),
+            (string)($parsed['protocol'] ?? 'HTTP/1.1'),
+            (string)($parsed['target'] ?? '/'),
+            $path,
+            $headers,
+            (string)($parsed['body'] ?? ''),
+            $response,
+            $reason,
+            $this->loadedDigest,
+            $trustedProxy,
+        );
+    }
+
 
     private function reconnectSharedStateIfDue(): void
     {

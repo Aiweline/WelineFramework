@@ -92,6 +92,29 @@ final class PureWlsServingManifestRecoveryContractTest extends TestCase
         self::assertNull($method->invoke(null, $endpoint, $endpoint['gateway'], $foreign));
     }
 
+    public function testStaleManifestFailurePromptsExplicitTargetedCleanStart(): void
+    {
+        $execute = $this->methodSource(Start::class, 'execute');
+
+        self::assertStringContainsString(
+            "hasCliArgvToken(['--clean', '-clean'])",
+            $execute,
+        );
+        self::assertMatchesRegularExpression(
+            '/if \(\$cleanRequested && !\$masterOnly\).*cleanupInactiveInstance\(\$instanceName\)/s',
+            $execute,
+        );
+        self::assertStringContainsString("'php bin/w server:start'", $execute);
+        self::assertStringContainsString(". ' -clean'", $execute);
+        self::assertStringContainsString(
+            '旧运行资料不会被普通启动自动删除',
+            $execute,
+        );
+
+        $help = $this->methodSource(Start::class, 'help');
+        self::assertStringContainsString("'-clean, --clean'", $help);
+    }
+
     public function testMonotonicRebuildUsesWholeProjectAuthorityAndPreservesSiblingDomain(): void
     {
         $ensure = $this->methodSource(Start::class, 'ensureSslCertificate');

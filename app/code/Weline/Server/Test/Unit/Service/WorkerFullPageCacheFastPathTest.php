@@ -125,7 +125,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
                 'version' => 1,
                 'full_uri' => 'https://example.test/',
                 'method' => 'GET',
-                'cookie_header' => 'WELINE_USER_LANG=zh_Hans_CN; WELINE_USER_CURRENCY=CNY',
+                'cookie_header' => '',
                 'identity_digest' => \hash('sha256', $cacheKey),
                 'cache_key' => $cacheKey,
             ];
@@ -244,7 +244,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
             'version' => 1,
             'full_uri' => 'https://example.test/',
             'method' => 'GET',
-            'cookie_header' => 'WELINE_USER_LANG=zh_Hans_CN; WELINE_USER_CURRENCY=CNY',
+            'cookie_header' => '',
             'identity_digest' => \hash('sha256', $cacheKey),
             'cache_key' => $cacheKey,
         ];
@@ -333,7 +333,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
                 'version' => 1,
                 'full_uri' => 'https://other.example.test/',
                 'method' => 'GET',
-                'cookie_header' => 'WELINE_USER_LANG=zh_Hans_CN; WELINE_USER_CURRENCY=CNY',
+                'cookie_header' => '',
                 'identity_digest' => \hash('sha256', 'aaaaaaaaaaaaaaaa'),
                 'cache_key' => 'aaaaaaaaaaaaaaaa',
             ]);
@@ -361,7 +361,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
                 'version' => 1,
                 'full_uri' => 'https://example.test/',
                 'method' => 'GET',
-                'cookie_header' => 'WELINE_USER_LANG=zh_Hans_CN; WELINE_USER_CURRENCY=CNY',
+                'cookie_header' => '',
                 'identity_digest' => \hash('sha256', 'bbbbbbbbbbbbbbbb'),
                 'cache_key' => 'bbbbbbbbbbbbbbbb',
             ]);
@@ -395,7 +395,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
                 'version' => 1,
                 'full_uri' => 'https://example.test/',
                 'method' => 'GET',
-                'cookie_header' => 'WELINE_USER_LANG=zh_Hans_CN; WELINE_USER_CURRENCY=CNY',
+                'cookie_header' => '',
                 'identity_digest' => \hash('sha256', $cacheKey),
                 'cache_key' => $cacheKey,
             ];
@@ -458,7 +458,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
                 'version' => 1,
                 'full_uri' => 'https://example.test/',
                 'method' => 'GET',
-                'cookie_header' => 'WELINE_USER_LANG=zh_Hans_CN; WELINE_USER_CURRENCY=CNY',
+                'cookie_header' => '',
                 'identity_digest' => \hash('sha256', $cacheKey),
                 'cache_key' => $cacheKey,
             ];
@@ -505,7 +505,7 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
                 'version' => 1,
                 'full_uri' => 'https://example.test/',
                 'method' => 'GET',
-                'cookie_header' => 'WELINE_USER_LANG=zh_Hans_CN; WELINE_USER_CURRENCY=CNY',
+                'cookie_header' => '',
                 'identity_digest' => \hash('sha256', $cacheKey),
                 'cache_key' => $cacheKey,
             ];
