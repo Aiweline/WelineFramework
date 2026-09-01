@@ -133,6 +133,9 @@ chart,chart
 "Search 查询参数超过允许长度","Search 查询参数超过允许长度"
 "Search 禁止无来源的成功响应","Search 禁止无来源的成功响应"
 "未知 search shard 实体：%{1}","未知 search shard 实体：%{1}"
+"Search Provider 索引重建","Search Provider 索引重建"
+"定时重建 Blog 等 Provider 搜索索引，保证前台只读索引","定时重建 Blog 等 Provider 搜索索引，保证前台只读索引"
+"Provider 索引定时重建完成：站点 %{1} 个，文档 %{2} 条","Provider 索引定时重建完成：站点 %{1} 个，文档 %{2} 条"
 "MIG-P3C：Search full clone shadow 到持久 alias CAS allowlist",MIG-P3C：搜索完整克隆影子到持久别名CAS白名单
 打印帮助,打印帮助
 "在登记 full clone 只读清点 Product/Search/alias/rollout 证据","在登记 full clone 只读清点 Product/Search/alias/rollout 证据"
@@ -148,6 +151,14 @@ chart,chart
 "shadow 观察窗 locale（preflight/apply 必需）","shadow 观察窗 locale（preflight/apply 必需）"
 "shadow 观察窗 currency（preflight/apply 必需）","shadow 观察窗 currency（preflight/apply 必需）"
 显示本帮助,显示本帮助
+"Provider 索引已重建：%{1}（website_id=%{2}，文档 %{3} 条）","Provider 索引已重建：%{1}（website_id=%{2}，文档 %{3} 条）"
+"全部 Provider 索引已重建（website_id=%{1}，文档 %{2} 条）","全部 Provider 索引已重建（website_id=%{1}，文档 %{2} 条）"
+"重建 Search Provider 内容索引（Blog 等非 Product 类型）","重建 Search Provider 内容索引（Blog 等非 Product 类型）"
+"仅重建指定 provider code（如 blog）","仅重建指定 provider code（如 blog）"
+"Website 维度，默认 0","Website 维度，默认 0"
+显示帮助,显示帮助
+"重建全部 Provider 索引","重建全部 Provider 索引"
+"仅重建 Blog 索引","仅重建 Blog 索引"
 """Search shard 重复声明表 %{1}""","Search shard 重复声明表 %{1}"
 当前类型,当前类型
 全部%{1},全部%{1}

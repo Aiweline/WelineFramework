@@ -261,7 +261,7 @@ final class SearchIndexStore implements SearchIndexStorageInterface
         string $locale = '',
         string $currency = '',
     ): array {
-        if ($storeId <= 0 || $channelId <= 0) {
+        if ($storeId < 0 || $channelId < 0) {
             throw new \InvalidArgumentException('search_scope_identity_invalid');
         }
 
@@ -319,9 +319,9 @@ final class SearchIndexStore implements SearchIndexStorageInterface
         if ($normalized['entity_type'] === ''
             || $normalized['entity_id'] === ''
             || $normalized['website_code'] === ''
-            || $normalized['store_id'] <= 0
+            || $normalized['store_id'] < 0
             || $normalized['store_code'] === ''
-            || $normalized['channel_id'] <= 0
+            || $normalized['channel_id'] < 0
             || $normalized['channel_code'] === ''
         ) {
             throw new \InvalidArgumentException('search_document_scope_identity_invalid');

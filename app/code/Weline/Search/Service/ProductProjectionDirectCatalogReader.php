@@ -127,11 +127,13 @@ final class ProductProjectionDirectCatalogReader implements ProductDirectCatalog
                 continue;
             }
             if ($needle !== '') {
-                $haystack = \mb_strtolower(
+                $haystack = \mb_strtolower(\trim(
                     (string)($document['title'] ?? '')
                     . ' '
-                    . (string)($document['sku'] ?? ''),
-                );
+                    . (string)($document['sku'] ?? '')
+                    . ' '
+                    . (string)($document['keywords'] ?? ''),
+                ));
                 if (!\str_contains($haystack, $needle)) {
                     continue;
                 }

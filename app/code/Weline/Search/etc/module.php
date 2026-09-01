@@ -4,16 +4,17 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Search',
-    'version' => '1.4.3',
+    'version' => '1.4.4',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
         'Weline_SystemConfig' => '*',
         'Weline_Websites' => '*',
         'Weline_Queue' => '*',
+    ],
+    'optional' => [
         'Weline_Product' => '*',
     ],
-    'optional' => [],
     'provides' => [
         \Weline\Search\Api\SearchShardRegistryInterface::class
             => \Weline\Search\Model\SearchShardRegistry::class,
@@ -25,5 +26,7 @@ return [
             => \Weline\Search\Service\ProductProjectionDirectCatalogReader::class,
         \Weline\Search\Api\SearchDegradeMarkerStoreInterface::class
             => \Weline\Search\Service\DatabaseSearchDegradeMarkerStore::class,
+        \Weline\Search\Api\SearchProviderIndexStorageInterface::class
+            => \Weline\Search\Service\DatabaseSearchProviderIndexStore::class,
     ],
 ];

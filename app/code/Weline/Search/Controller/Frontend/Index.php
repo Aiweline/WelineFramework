@@ -56,6 +56,7 @@ final class Index extends FrontendController
         $this->assign('search_category_id', $categoryId);
         $this->assign('search_types', $searchTypes);
         $this->assign('search_type_labels', $this->registry->typeLabelMap($searchTypes));
+        $this->assign('search_hit_templates', $this->registry->hitTemplateMap());
         $this->assign(
             'search_category_breadcrumb',
             $this->registry->resolveScopeBreadcrumb($type, $categoryId, $searchTypes),
