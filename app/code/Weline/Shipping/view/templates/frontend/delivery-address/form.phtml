@@ -1,18 +1,17 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
 $address = $this->getData('address');
-$frontendUrl = $this->getUrl('');
 $isEdit = $address && $address->getId();
 ?>
 <div class="delivery-address-form">
     <div class="page-header" style="--w-mb:var(--weline-space-6);">
         <h2><?= $isEdit ? __('编辑收货地址') : __('新增收货地址') ?></h2>
-        <a href="<?= $frontendUrl ?>shipping/delivery/index" class="w-button" data-tone="neutral">
+        <a href="@url{'shipping/delivery/index'}" class="w-button" data-tone="neutral">
             <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
         </a>
     </div>
 
-    <w:form id="addressForm" method="POST" action="@var($frontendUrl)shipping/delivery/save">
+    <w:form id="addressForm" method="POST" action="@url{'shipping/delivery/save'}">
         <?php if ($isEdit): ?>
             <input type="hidden" name="delivery_address_id" value="<?= $address->getId() ?>">
         <?php endif; ?>
@@ -76,7 +75,7 @@ $isEdit = $address && $address->getId();
             <button type="submit" class="w-button" data-tone="primary">
                 <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
             </button>
-            <a href="<?= $frontendUrl ?>shipping/delivery/index" class="w-button" data-tone="neutral">
+            <a href="@url{'shipping/delivery/index'}" class="w-button" data-tone="neutral">
                 <?= __('取消') ?>
             </a>
         </div>

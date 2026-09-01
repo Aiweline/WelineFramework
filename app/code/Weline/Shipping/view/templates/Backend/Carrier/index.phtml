@@ -2,7 +2,6 @@
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
 
-
 use Weline\Shipping\Model\Carrier;
 
 $carriers = $this->getData('carriers') ?? [];
@@ -13,8 +12,6 @@ $totalPages = $this->getData('total_pages') ?? 1;
 $keyword = $this->getData('keyword') ?? '';
 $isActive = $this->getData('is_active');
 
-$backendBase = $this->getBackendUrl('shipping/backend/carrier');
-$createUrl = $this->getBackendUrl('shipping/backend/carrier/edit');
 $embed = $this->getData('embed') ?? false;
 $dialogJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
 $confirmMessages = [
@@ -53,14 +50,14 @@ $confirmMessages = [
                                         <h5 class="w-card__title" style="--w-mb:0;"><?= __('快递公司列表') ?></h5>
                                     </div>
                                     <div class="w-text" data-align="end" style="--w-span-md:6;">
-                                        <a href="<?= $createUrl ?>" class="w-button" data-testid="shipping-carrier-create" data-tone="primary">
+                                        <a href="@backend-url{'shipping/backend/carrier/edit'}" class="w-button" data-testid="shipping-carrier-create" data-tone="primary">
                                             <w:icon name="plus" size="sm"></w:icon> <?= __('新增快递公司') ?>
                                         </a>
                                     </div>
                                 </div>
                             </div>
                             <div class="w-card__body">
-                                <w:form method="get" action="@var($backendBase)" style="--w-mb:var(--weline-space-4);">
+                                <w:form method="get" action="@backend-url{'shipping/backend/carrier'}" style="--w-mb:var(--weline-space-4);">
                                     <div class="w-grid" style="--w-gap:var(--weline-space-4);">
                                         <div style="--w-span-md:4;">
                                             <input type="text" name="keyword" class="w-input" placeholder="<?= __('搜索快递公司代码或名称') ?>" value="<?= htmlspecialchars($keyword) ?>">
@@ -78,7 +75,7 @@ $confirmMessages = [
                                             </button>
                                         </div>
                                         <div style="--w-span-md:2;">
-                                            <a href="<?= $backendBase ?>" class="w-button" data-w-width="full" data-tone="neutral">
+                                            <a href="@backend-url{'shipping/backend/carrier'}" class="w-button" data-w-width="full" data-tone="neutral">
                                                 <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
                                             </a>
                                         </div>
@@ -135,13 +132,13 @@ $confirmMessages = [
                                                     <td><?= htmlspecialchars((string)$carrier->getData(Carrier::schema_fields_SORT_ORDER)) ?></td>
                                                     <td>
                                                         <div class="w-button-group" role="group">
-                                                            <a href="<?= $this->getBackendUrl('shipping/backend/carrier/edit?id=' . $carrier->getId()) ?>" class="w-button" title="<?= __('编辑') ?>" data-tone="primary" data-size="sm">
+                                                            <a href="@backend-url{'shipping/backend/carrier/edit'|['id' => $carrier->getId()]}" class="w-button" title="<?= __('编辑') ?>" data-tone="primary" data-size="sm">
                                                                 <w:icon name="edit" size="sm"></w:icon>
                                                             </a>
-                                                            <a href="<?= $this->getBackendUrl('shipping/backend/carrier/toggle?id=' . $carrier->getId()) ?>" class="w-button btn-<?= $carrier->getData(Carrier::schema_fields_IS_ACTIVE) ? 'warning' : 'success' ?>" title="<?= $carrier->getData(Carrier::schema_fields_IS_ACTIVE) ? __('禁用') : __('启用') ?>" data-carrier-confirm="<?= $carrier->getData(Carrier::schema_fields_IS_ACTIVE) ? 'disableCarrier' : 'enableCarrier' ?>" data-size="sm">
+                                                            <a href="@backend-url{'shipping/backend/carrier/toggle'|['id' => $carrier->getId()]}" class="w-button btn-<?= $carrier->getData(Carrier::schema_fields_IS_ACTIVE) ? 'warning' : 'success' ?>" title="<?= $carrier->getData(Carrier::schema_fields_IS_ACTIVE) ? __('禁用') : __('启用') ?>" data-carrier-confirm="<?= $carrier->getData(Carrier::schema_fields_IS_ACTIVE) ? 'disableCarrier' : 'enableCarrier' ?>" data-size="sm">
                                                                 <i class="mdi mdi-<?= $carrier->getData(Carrier::schema_fields_IS_ACTIVE) ? 'close' : 'check' ?>"></i>
                                                             </a>
-                                                            <a href="<?= $this->getBackendUrl('shipping/backend/carrier/delete?id=' . $carrier->getId()) ?>" class="w-button" title="<?= __('删除') ?>" data-carrier-confirm="deleteCarrier" data-tone="danger" data-size="sm">
+                                                            <a href="@backend-url{'shipping/backend/carrier/delete'|['id' => $carrier->getId()]}" class="w-button" title="<?= __('删除') ?>" data-carrier-confirm="deleteCarrier" data-tone="danger" data-size="sm">
                                                                 <w:icon name="trash" size="sm"></w:icon>
                                                             </a>
                                                         </div>
@@ -156,19 +153,19 @@ $confirmMessages = [
                                         <nav aria-label="分页导航">
                                             <ul class="w-pagination" data-justify="center" style="--w-mt:var(--weline-space-4);">
                                                 <li class="w-pagination__item <?= $page <= 1 ? 'disabled' : '' ?>">
-                                                    <a class="w-pagination__link" href="<?= $backendBase ?>?page=<?= $page - 1 ?>&limit=<?= $limit ?><?= $keyword ? '&keyword=' . urlencode($keyword) : '' ?><?= $isActive !== null && $isActive !== '' ? '&is_active=' . $isActive : '' ?>">
+                                                    <a class="w-pagination__link" href="@backend-url{'shipping/backend/carrier'}?page=<?= $page - 1 ?>&limit=<?= $limit ?><?= $keyword ? '&keyword=' . urlencode($keyword) : '' ?><?= $isActive !== null && $isActive !== '' ? '&is_active=' . $isActive : '' ?>">
                                                         <?= __('上一页') ?>
                                                     </a>
                                                 </li>
                                                 <?php for ($i = max(1, $page - 2); $i <= min($totalPages, $page + 2); $i++): ?>
                                                     <li class="w-pagination__item <?= $i === $page ? 'active' : '' ?>">
-                                                        <a class="w-pagination__link" href="<?= $backendBase ?>?page=<?= $i ?>&limit=<?= $limit ?><?= $keyword ? '&keyword=' . urlencode($keyword) : '' ?><?= $isActive !== null && $isActive !== '' ? '&is_active=' . $isActive : '' ?>">
+                                                        <a class="w-pagination__link" href="@backend-url{'shipping/backend/carrier'}?page=<?= $i ?>&limit=<?= $limit ?><?= $keyword ? '&keyword=' . urlencode($keyword) : '' ?><?= $isActive !== null && $isActive !== '' ? '&is_active=' . $isActive : '' ?>">
                                                             <?= $i ?>
                                                         </a>
                                                     </li>
                                                 <?php endfor; ?>
                                                 <li class="w-pagination__item <?= $page >= $totalPages ? 'disabled' : '' ?>">
-                                                    <a class="w-pagination__link" href="<?= $backendBase ?>?page=<?= $page + 1 ?>&limit=<?= $limit ?><?= $keyword ? '&keyword=' . urlencode($keyword) : '' ?><?= $isActive !== null && $isActive !== '' ? '&is_active=' . $isActive : '' ?>">
+                                                    <a class="w-pagination__link" href="@backend-url{'shipping/backend/carrier'}?page=<?= $page + 1 ?>&limit=<?= $limit ?><?= $keyword ? '&keyword=' . urlencode($keyword) : '' ?><?= $isActive !== null && $isActive !== '' ? '&is_active=' . $isActive : '' ?>">
                                                         <?= __('下一页') ?>
                                                     </a>
                                                 </li>

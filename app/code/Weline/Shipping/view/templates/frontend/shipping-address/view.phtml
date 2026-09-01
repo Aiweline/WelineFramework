@@ -1,16 +1,15 @@
 <?php
 /**@var \Weline\Framework\View\Template $this */
 $address = $this->getData('address');
-$frontendUrl = $this->getUrl('');
 ?>
 <div class="shipping-address-view">
     <div class="page-header" style="--w-mb:var(--weline-space-6);">
         <h2><?= __('发货地址详情') ?></h2>
         <div>
-            <a href="<?= $frontendUrl ?>shipping/address/form?id=<?= $address->getId() ?>" class="w-button" data-tone="primary">
+            <a href="@url{'shipping/address/form'|['id' => $address->getId()]}" class="w-button" data-tone="primary">
                 <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
             </a>
-            <a href="<?= $frontendUrl ?>shipping/address/index" class="w-button" data-tone="neutral">
+            <a href="@url{'shipping/address/index'}" class="w-button" data-tone="neutral">
                 <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
             </a>
         </div>
