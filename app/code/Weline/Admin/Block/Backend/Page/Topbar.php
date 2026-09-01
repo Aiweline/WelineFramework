@@ -14,6 +14,7 @@ namespace Weline\Admin\Block\Backend\Page;
 use Weline\Admin\Api\Localization\BackendLocaleCatalogInterface;
 use Weline\Backend\Api\Auth\BackendUserContext;
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
+use Weline\Backend\Api\Runtime\CurrentWebsiteStorefrontUrlProviderInterface;
 use Weline\Framework\Session\Auth\AuthenticatedSessionInterface;
 use Weline\Framework\Session\SessionFactory;
 use Weline\Backend\Api\Config\BackendConfigStore;
@@ -82,6 +83,13 @@ class Topbar extends \Weline\Framework\View\Block
             $current_language['code'] = Cookie::getLang();
         }
         $this->assign('current_language', $current_language);
+
+        $storefrontUrl = '';
+        $storefrontProvider = $this->runtimeProviderResolver->resolve(CurrentWebsiteStorefrontUrlProviderInterface::class);
+        if ($storefrontProvider instanceof CurrentWebsiteStorefrontUrlProviderInterface) {
+            $storefrontUrl = \trim($storefrontProvider->resolve($this->request));
+        }
+        $this->assign('storefront_url', $storefrontUrl);
     }
 
     public function getAvatar()

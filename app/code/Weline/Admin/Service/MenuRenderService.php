@@ -520,9 +520,19 @@ class MenuRenderService
         $icon = $this->renderIcon((string)($menu['icon'] ?? 'circle'));
 
         if ($route === '' && $topLevel) {
-            $html = '<li class="w-backend-nav__group" data-source="' . $sourceId . '">';
-            $html .= $icon . '<span>' . $title . '</span></li>';
-            return $html . ($hasNodes ? $this->renderSubMenu($nodes) : '');
+            if (!$hasNodes) {
+                $html = '<li class="w-backend-nav__group" data-source="' . $sourceId . '">';
+                $html .= $icon . '<span>' . $title . '</span></li>';
+                return $html;
+            }
+            // Top-level group with children: keep one hoverable icon in collapsed rail.
+            $open = $this->hasActiveChild($nodes);
+            $html = '<li class="w-backend-nav__entry w-backend-nav__entry--group" data-source="' . $sourceId . '">';
+            $html .= '<details class="w-backend-nav__disclosure"' . ($open ? ' open' : '') . '>';
+            $html .= '<summary class="w-backend-nav__item w-backend-nav__item--group">';
+            $html .= $icon . '<span>' . $title . '</span>' . $this->renderIcon('chevron-down', 'sm');
+            $html .= '</summary><ul class="w-backend-nav__list">' . $this->renderSubMenu($nodes) . '</ul></details></li>';
+            return $html;
         }
 
         $active = $route !== '' && $this->isMenuActive($this->formatMenuUrlCached($menu));
@@ -549,7 +559,29 @@ class MenuRenderService
 
     private function renderIcon(string $name, string $size = 'md'): string
     {
-        return ObjectManager::getInstance(IconRegistry::class)->render(trim($name), $size);
+        return ObjectManager::getInstance(IconRegistry::class)->render($this->resolveMenuIconName($name), $size);
+    }
+
+    private function resolveMenuIconName(string $icon): string
+    {
+        $registry = ObjectManager::getInstance(IconRegistry::class);
+        $icon = trim($icon);
+        if ($icon !== '' && $registry->has($icon)) {
+            return $icon;
+        }
+        if ($icon === '') {
+            return 'circle';
+        }
+
+        $legacyMap = ObjectManager::getInstance(\Weline\Backend\Setup\Ui\LegacyIconNameMap::class);
+        foreach ([$icon, 'mdi mdi-' . ltrim($icon, '-'), 'mdi-' . ltrim($icon, '-')] as $candidate) {
+            $mapped = $legacyMap->map($candidate);
+            if ($mapped !== null && $registry->has($mapped)) {
+                return $mapped;
+            }
+        }
+
+        return 'circle';
     }
 
     public function translateMenuTitle(string $title, string $sourceId = ''): string

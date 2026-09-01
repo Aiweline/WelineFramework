@@ -31,6 +31,8 @@ use Weline\Framework\Session\Session;
 use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\Strategy\WlsStrategy;
 use Weline\Backend\Api\Config\BackendConfigStore;
+use Weline\Backend\Api\Runtime\CurrentWebsiteStorefrontUrlProviderInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
@@ -182,6 +184,13 @@ class Login extends \Weline\Framework\App\Controller\BackendController
         }
         $loginBgUrl = $loginBg !== '' ? '/pub/media/' . $loginBg : self::DEFAULT_LOGIN_BG_URL;
         $this->assign('login_bg_url', $loginBgUrl);
+        $storefrontUrl = '';
+        $storefrontProvider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(CurrentWebsiteStorefrontUrlProviderInterface::class);
+        if ($storefrontProvider instanceof CurrentWebsiteStorefrontUrlProviderInterface) {
+            $storefrontUrl = trim($storefrontProvider->resolve($this->request));
+        }
+        $this->assign('storefront_url', $storefrontUrl);
         // 登录页本身就是一个独立完整模板，不依赖通用布局包装。
         // 在 WLS 下直接返回 detached HTML Response，避免控制器 fetch 事件链
         // 或后续结果归一化把登录页 body 吞成空响应。
