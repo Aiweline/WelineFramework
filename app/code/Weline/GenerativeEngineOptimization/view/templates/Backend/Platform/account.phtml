@@ -11,7 +11,7 @@
         <button type="button" class="btn btn-primary" onclick="showAddAccountModal()">
             <i class="mdi mdi-plus"></i> <?= __('添加账户') ?>
         </button>
-        <a href="<?= $this->getUrl('generativeengineoptimization/backend/platform') ?>" class="btn btn-secondary">
+        <a href="@url{'generativeengineoptimization/backend/platform'}" class="btn btn-secondary">
             <?= __('返回') ?>
         </a>
     </div>
@@ -138,7 +138,7 @@ function testConnection(accountId) {
     const formData = new FormData();
     formData.append('account_id', accountId);
     
-    var testUrl = '<?= $this->getUrl('generativeengineoptimization/backend/platform/testConnection') ?>';
+    var testUrl = '@url{'generativeengineoptimization/backend/platform/testConnection'}';
     var testOpts = { method: 'POST', body: formData };
     window.Weline.Api.request(testUrl, testOpts)
     .then(function(res) {
@@ -178,7 +178,7 @@ document.getElementById('account-form').addEventListener('submit', function(e) {
     
     const formData = new FormData(this);
     
-    var saveUrl = '<?= $this->getUrl('generativeengineoptimization/backend/platform/saveAccount') ?>';
+    var saveUrl = '@url{'generativeengineoptimization/backend/platform/saveAccount'}';
     var saveOpts = { method: 'POST', body: formData };
     window.Weline.Api.request(saveUrl, saveOpts)
     .then(function(res) {
