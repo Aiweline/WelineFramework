@@ -16,20 +16,35 @@
 请重试,"Please try again"
 "模块 %{1} 加载失败：未找到 %{2}","Module %{1} failed to load: %{2} not found."
 "模块 %{1} 加载失败：无法加载 %{2}","Module %{1} failed to load: unable to load %{2}"
+维护补偿礼金,"Maintenance compensation gift"
+不过也要恭喜您——若您耐心等到升级完成，我们将发放补偿礼金。请先不要关闭。,"Good news: wait until upgrade finishes and we'll issue a compensation gift. Please keep this page open."
+"恢复后约 10 分钟内自动领取，请勿关闭本页。","Auto-claim within ~10 minutes after recovery. Please keep this page open."
+非常抱歉，给您带来不便。,"We're sorry for the inconvenience."
+耐心等待,"Wait patiently"
+抱歉，网站正在升级维护,"Sorry — the site is upgrading"
+请稍候片刻，恢复后即可继续。,"Please wait a moment; you can continue after recovery."
+稍后再来,"Come back later"
+正在等待恢复…,"Waiting for recovery…"
 "预加载模块 %{1} 失败","Preloading module %{1} failed"
 登录/注册页面,"Login/Register page"
 用户中心/账户相关页面,"User center/account-related pages"
 API相关页面,"API related pages"
 购物车相关页面,"Cart-related pages"
-自动预加载模块,"Auto-preload modules"
+路径启发式预加载,路径启发式预加载
 页面,Page
 原因,Reason
 模块,Module.
 时间,Time
-模块预加载完成,"Module preload complete"
-模块预加载失败,"Module preload failed"
+路径启发式预加载完成,路径启发式预加载完成
+路径启发式预加载失败,路径启发式预加载失败
 错误,Error
-当前页面无需预加载模块,"No preload module is needed for the current page"
+"路径启发式：本页无匹配路由（部件模块见 data-weline-load）","路径启发式：本页无匹配路由（部件模块见 data-weline-load）"
+"按需加载 Dom 微核失败","按需加载 Dom 微核失败"
+部件属性模块加载,部件属性模块加载
+立即加载,立即加载
+已跳过（路径启发式/已加载）,"Skipped (path heuristic / already loaded)"
+仅声明,仅声明
+"本页 DOM 无 data-weline-load / data-weline-declare","本页 DOM 无 data-weline-load / data-weline-declare"
 "WLS 已启动","WLS is started"
 模板加载正常,"Template loads normally"
 网站维护中…,"The website is under maintenance..."
@@ -40,6 +55,10 @@ API相关页面,"API related pages"
 切换,Toggle
 用户不存在，请先在系统中注册,"The user does not exist, please register in the system first"
 用户头像,"User Avatar"
+自动预加载模块,"Auto-preload modules"
+模块预加载完成,"Module preload complete"
+模块预加载失败,"Module preload failed"
+当前页面无需预加载模块,"No preload module is needed for the current page"
 查看全部,"View all"
 查看更多,"View More"
 "JS: inject_path函数path路径不允许为空！","JS: The inject_path function path is not allowed to be empty!"

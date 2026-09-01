@@ -51,6 +51,8 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
         $white_urls[] = 'Weline/Theme/view/statics/ui/';
         $white_urls[] = 'static/Weline/Theme/ui/';
         $white_urls[] = 'Weline/Theme/view/theme/backend/assets/images/theme/logo.png';
+        $white_urls[] = 'Weline/Theme/view/theme/frontend/assets/images/theme/icon.png';
+        $white_urls[] = 'Weline/Theme/view/theme/frontend/assets/images/theme/apple-touch-icon.png';
         $white_urls[] = 'Weline/Backend/view/statics/img/favicon.png';
         $white = false;
         foreach ($white_urls as $white_url_string) {
@@ -63,7 +65,7 @@ class Maintenance implements \Weline\Framework\Event\ObserverInterface
         $data->setData('white_urls', $white_urls);
         if (!$white) {
             // 获取语言（从事件数据中读取，如果事件数据中有的话）
-            $lang = $data->getData('language') ?? \w_env('user.lang') ?? \w_env_cookie('WELINE_USER_LANG') ?? 'zh_Hans_CN';
+            $lang = $data->getData('language') ?? \Weline\Framework\App\State::getLang();
             // 设置语言到 Request，以便模板能够使用正确的语言
             $request->setData('WELINE_USER_LANG', $lang);
             \w_env_set('user.lang', $lang);

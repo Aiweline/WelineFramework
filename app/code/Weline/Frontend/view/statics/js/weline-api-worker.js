@@ -18,6 +18,7 @@
     let workerScopeBootstrapId = '';
     let workerBackendBootstrapId = '';
     let handshakePromise = null;
+    let signedRequestChain = Promise.resolve();
 
     self.addEventListener('message', async (event) => {
         const message = event.data || {};
@@ -50,8 +51,7 @@
             }
             const packetPayload = buildPayload(message, config);
             const capability = resolveCapability(packetPayload);
-            await ensureSession(config);
-            const result = await postSigned(config, packetPayload, capability);
+            let result = await executeSignedRequest(config, packetPayload, capability);
             self.postMessage({
                 id,
                 ok: result.responseOk && result.body && result.body.ok === true,
@@ -117,7 +117,14 @@
             endpoint: config.endpoint || '/api/framework/query-bin',
             deployVersion,
             workerBuildId,
-            locale: normalizeLocale(config.locale || config.currentLang || config.current_lang || ''),
+            locale: normalizeLocale(
+                config.locale
+                || config.currentLang
+                || config.current_lang
+                || detectPathLanguage(config.pathname || config.path || '')
+                || ''
+            ),
+            pathname: String(config.pathname || config.path || ''),
             defaultCurrency: normalizeCurrencyCode(config.defaultCurrency || config.default_currency || 'CNY'),
             availableCurrencies: normalizeCurrencyList(
                 config.availableCurrencies || config.supportedCurrencies || config.currencyCodes || config.currencies || []
@@ -133,6 +140,18 @@
     function normalizeLocale(value) {
         const locale = String(value || '').trim();
         return /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/.test(locale) ? locale : '';
+    }
+
+    const LOCALE_PATH_PATTERN = /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/i;
+
+    function detectPathLanguage(pathname) {
+        const parts = String(pathname || '/').split('/').filter(Boolean);
+        for (let i = 0; i < parts.length; i += 1) {
+            if (LOCALE_PATH_PATTERN.test(parts[i])) {
+                return String(parts[i]).trim().replace(/-/g, '_');
+            }
+        }
+        return '';
     }
 
     function normalizeCurrencyCode(value) {
@@ -255,14 +274,16 @@
             return workerSession;
         }
 
-        if (workerSession && (workerSession.scope_bound === true || workerSession.attested_area === 'backend')) {
-            const backendSession = workerSession.attested_area === 'backend';
-            throw Object.assign(new Error(backendSession
-                ? 'The backend page attestation has expired or changed. Reload the page to continue.'
-                : 'The page Scope has expired or changed. Reload the page to continue.'), {
-                code: backendSession ? 'backend_attestation_invalid' : 'scope_reload_required',
+        if (workerSession && workerSession.scope_bound === true && workerSession.attested_area !== 'backend') {
+            throw Object.assign(new Error('The page Scope has expired or changed. Reload the page to continue.'), {
+                code: 'scope_reload_required',
                 status: 401,
             });
+        }
+        if (workerSession && workerSession.attested_area === 'backend') {
+            // Backend PHP Session may still be valid while the Worker token or
+            // page bootstrap bridge is stale (WLS reload, deploy rotation, etc.).
+            workerSession = null;
         }
         if (workerSession && (
             workerScopeBootstrapId !== config.scopeBootstrapId ||
@@ -339,51 +360,106 @@
         return body.data;
     }
 
+    function enqueueSignedRequest(task) {
+        const run = signedRequestChain.then(task, task);
+        signedRequestChain = run.catch(() => {});
+        return run;
+    }
+
+    async function executeSignedRequest(config, payload, capability) {
+        let result = await postSigned(config, payload, capability);
+        if (!result.responseOk && isNonceReuse(result.status, result.body)) {
+            // Nonce replay means this exact signed request was already committed.
+            // The session is still valid — only mint a fresh nonce and retry once.
+            result = await postSigned(config, payload, capability);
+        } else if (!result.responseOk && shouldInvalidateWorkerSession(result.status, result.body)) {
+            workerSession = null;
+            result = await postSigned(config, payload, capability);
+        }
+        return result;
+    }
+
+    function isNonceReuse(status, body) {
+        if (status !== 401) {
+            return false;
+        }
+        const message = body && body.error && body.error.message
+            ? String(body.error.message)
+            : '';
+        return /nonce has already been used/i.test(message);
+    }
+
+    function shouldInvalidateWorkerSession(status, body) {
+        if (status !== 401) {
+            return false;
+        }
+        if (isNonceReuse(status, body)) {
+            return false;
+        }
+        const code = body && body.error && typeof body.error.code === 'string'
+            ? body.error.code.toLowerCase()
+            : '';
+        return code === 'auth_error' || code === 'backend_attestation_invalid';
+    }
+
     async function postSigned(config, payload, capability) {
-        const rawBody = encodePacket(payload);
-        const timestamp = String(Math.floor(Date.now() / 1000));
-        const nonce = randomHex(16);
-        const bodyHash = await sha256Hex(rawBody);
-        const signatureBase = [
-            'POST',
-            SIGNED_PATH,
-            config.deployVersion,
-            config.workerBuildId,
-            capability,
-            nonce,
-            timestamp,
-            bodyHash,
-        ].join('\n');
-        const signature = await hmacSha256Hex(workerSession.signing_secret, signatureBase);
+        return enqueueSignedRequest(async () => {
+            await ensureSession(config);
+            if (!workerSession || typeof workerSession.signing_secret !== 'string' || workerSession.signing_secret === '') {
+                throw Object.assign(new Error('Weline worker session is unavailable.'), {
+                    code: 'auth_error',
+                    status: 401,
+                });
+            }
+            const rawBody = encodePacket(payload);
+            const timestamp = String(Math.floor(Date.now() / 1000));
+            const nonce = randomHex(16);
+            const bodyHash = await sha256Hex(rawBody);
+            const signatureBase = [
+                'POST',
+                SIGNED_PATH,
+                config.deployVersion,
+                config.workerBuildId,
+                capability,
+                nonce,
+                timestamp,
+                bodyHash,
+            ].join('\n');
+            const signature = await hmacSha256Hex(workerSession.signing_secret, signatureBase);
 
-        const response = await fetch(config.endpoint, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': CONTENT_TYPE,
-                'X-Weline-Protocol': PROTOCOL,
-                'X-Weline-Worker-Protocol': WORKER_PROTOCOL,
-                'X-Weline-Deploy-Version': config.deployVersion,
-                'X-Weline-Worker-Build-Id': config.workerBuildId,
-                'X-Weline-Worker-Session': workerSession.worker_session_token,
-                'X-Weline-Worker-Capability': capability,
-                'X-Weline-Worker-Nonce': nonce,
-                'X-Weline-Worker-Timestamp': timestamp,
-                'X-Weline-Worker-Body-Hash': bodyHash,
-                'X-Weline-Worker-Signature': signature,
-            },
-            body: rawBody,
+            const response = await fetch(config.endpoint, {
+                method: 'POST',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    'Content-Type': CONTENT_TYPE,
+                    'X-Weline-Protocol': PROTOCOL,
+                    'X-Weline-Worker-Protocol': WORKER_PROTOCOL,
+                    'X-Weline-Deploy-Version': config.deployVersion,
+                    'X-Weline-Worker-Build-Id': config.workerBuildId,
+                    'X-Weline-Worker-Session': workerSession.worker_session_token,
+                    'X-Weline-Worker-Capability': capability,
+                    'X-Weline-Worker-Nonce': nonce,
+                    'X-Weline-Worker-Timestamp': timestamp,
+                    'X-Weline-Worker-Body-Hash': bodyHash,
+                    'X-Weline-Worker-Signature': signature,
+                },
+                body: rawBody,
+            });
+
+            const responseBytes = new Uint8Array(await response.arrayBuffer());
+            const body = responseBytes.length > 0 ? decodeResponsePacket(response, responseBytes) : null;
+            if (shouldInvalidateWorkerSession(response.status, body)) {
+                workerSession = null;
+            }
+            return {
+                responseOk: response.ok,
+                status: response.status,
+                statusText: response.statusText || '',
+                headers: collectHeaders(response.headers),
+                body,
+            };
         });
-
-        const responseBytes = new Uint8Array(await response.arrayBuffer());
-        const body = responseBytes.length > 0 ? decodeResponsePacket(response, responseBytes) : null;
-        return {
-            responseOk: response.ok,
-            status: response.status,
-            statusText: response.statusText || '',
-            headers: collectHeaders(response.headers),
-            body,
-        };
     }
 
     function detectMaintenance(status, body) {

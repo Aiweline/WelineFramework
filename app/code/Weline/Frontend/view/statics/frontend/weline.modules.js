@@ -1,8 +1,7 @@
 /**
  * Weline Frontend 模块配置
- * 
- * 此文件定义前端可用的JS模块
- * 格式：JSON对象，包含 modules 和 moduleAliases
+ *
+ * 模块名必须是裸 JS 标识符（编译器不合并带连字符的引号键）。
  */
 window.WelineModulesConfig = window.WelineModulesConfig || {};
 window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
@@ -17,35 +16,42 @@ Object.assign(window.WelineModulesConfig.modules, {
         globalVar: "Weline",
         description: "Weline前端框架主入口"
     },
-    "weline-api": {
+    welineApi: {
         paths: [
             "Weline_Frontend::js/weline-api.js"
         ],
         globalVar: "WelineApiModule",
         description: "Weline API模块"
     },
-    "weline-api-account": {
+    welineApiAccount: {
         paths: [
             "Weline_Frontend::js/weline-api-account.js"
         ],
         globalVar: "WelineAccountModule",
         description: "Weline API账户模块"
     },
-    "weline-api-token-storage": {
+    welineApiTokenStorage: {
         paths: [
             "Weline_Frontend::js/weline-api-token-storage.js"
         ],
         globalVar: "WelineTokenStorage",
         description: "Weline API Token存储模块"
     },
-    "weline-api-worker": {
+    welineApiWorker: {
         paths: [
             "Weline_Frontend::js/weline-api-worker.js"
         ],
         globalVar: null,
         description: "Weline API Worker（Web Worker，无全局变量）"
     },
-    "weline-switcher": {
+    welineDom: {
+        paths: [
+            "Weline_Frontend::js/weline-api-dom.js"
+        ],
+        globalVar: "WelineDomModule",
+        description: "按需 DOM 微核：委托/出现即回调/声明式 data-weline-when|on"
+    },
+    welineSwitcher: {
         paths: [
             "Weline_Frontend::js/weline-switcher.js"
         ],
@@ -68,12 +74,13 @@ Object.assign(window.WelineModulesConfig.modules, {
     }
 });
 
-// 合并模块别名
+// 合并模块别名（短名 → 注册名）
 Object.assign(window.WelineModulesConfig.moduleAliases, {
-    api: "weline-api",
-    account: "weline-api-account",
-    tokenStorage: "weline-api-token-storage",
-    worker: "weline-api-worker",
-    switcher: "weline-switcher",
+    api: "welineApi",
+    account: "welineApiAccount",
+    tokenStorage: "welineApiTokenStorage",
+    worker: "welineApiWorker",
+    dom: "welineDom",
+    switcher: "welineSwitcher",
     geolocation: "location"
 });
