@@ -15,7 +15,7 @@ $keyword = $this->getData('keyword') ?: '';
     <h1><?= __('订单管理') ?></h1>
     
     <div class="filters">
-        <w:form method="get" action="@var($this->getBackendUrl('checkout/backend/order/index'))">
+        <w:form method="get" action="@backend-url{'checkout/backend/order/index'}">
             <div class="filter-group">
                 <label><?= __('订单状态') ?>:</label>
                 <select name="status">
@@ -82,7 +82,7 @@ $keyword = $this->getData('keyword') ?: '';
                     <td><?= $this->escapeHtml($order['currency']) ?> <?= number_format($order['total_amount'], 2) ?></td>
                     <td><?= $this->escapeHtml($order['created_time']) ?></td>
                     <td>
-                        <a href="<?= $this->getBackendUrl('checkout/backend/order/view', ['order_id' => $order['order_id']]) ?>" class="w-button" data-tone="primary" data-size="sm">
+                        <a href="@backend-url{'checkout/backend/order/view'|['order_id' => $order['order_id']]}" class="w-button" data-tone="primary" data-size="sm">
                             <?= __('查看') ?>
                         </a>
                     </td>
@@ -96,7 +96,7 @@ $keyword = $this->getData('keyword') ?: '';
     <?php if ($totalPages > 1): ?>
     <div class="w-pagination">
         <?php for ($i = 1; $i <= $totalPages; $i++): ?>
-        <a href="<?= $this->getBackendUrl('checkout/backend/order/index', ['page' => $i]) ?>" class="w-pagination__link <?= $i === $page ? 'active' : '' ?>">
+        <a href="@backend-url{'checkout/backend/order/index'|['page' => $i]}" class="w-pagination__link <?= $i === $page ? 'active' : '' ?>">
             <?= $i ?>
         </a>
         <?php endfor; ?>

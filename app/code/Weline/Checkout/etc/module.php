@@ -16,6 +16,7 @@ return [
     ],
     "optional" => [
         'Weline_Tax' => '*',
+        'Weline_Marketing' => '*',
     ],
     "provides" => [
         \Weline\Checkout\Api\CheckoutSessionStoreInterface::class

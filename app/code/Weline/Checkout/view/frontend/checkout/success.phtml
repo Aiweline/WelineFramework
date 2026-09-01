@@ -44,10 +44,6 @@ if (is_array($orderV2)) {
 }
 $orderV2DisplayNumber = $orderV2DisplayNumber !== '' ? $orderV2DisplayNumber : $requestOrderUuid;
 $orderV2StatusLabel = $orderV2StatusLabels[$orderV2Status] ?? $orderV2Status;
-$accountOrdersUrl = $this->getUrl('customer/account/index') . '#orders';
-$accountOrderDetailUrl = $requestOrderUuid !== ''
-    ? $this->getUrl('customer/account/index', ['order_uuid' => $requestOrderUuid]) . '#orders'
-    : $accountOrdersUrl;
 ?>
 <section class="checkout-success-page"
     data-testid="checkout-success"
@@ -111,14 +107,14 @@ $accountOrderDetailUrl = $requestOrderUuid !== ''
 
     <div class="order-actions">
         <?php if ($requestOrderUuid !== ''): ?>
-        <a href="<?= $escape($accountOrderDetailUrl) ?>" class="w-button weline-pixel::view_order" data-tone="primary">
+        <a href="<?php if ($requestOrderUuid !== ''): ?>@url{'customer/account/index'|['order_uuid' => $requestOrderUuid]}#orders<?php else: ?>@url{'customer/account/index'}#orders<?php endif; ?>" class="w-button weline-pixel::view_order" data-tone="primary">
             <?= __('查看订单详情') ?>
         </a>
         <?php endif; ?>
-        <a href="<?= $escape($accountOrdersUrl) ?>" class="w-button weline-pixel::view_orders" data-tone="neutral">
+        <a href="@url{'customer/account/index'}#orders" class="w-button weline-pixel::view_orders" data-tone="neutral">
             <?= __('返回订单列表') ?>
         </a>
-        <a href="<?= $this->getUrl('products') ?>" class="w-button weline-pixel::continue_shopping" data-tone="neutral">
+        <a href="@url{'products'}" class="w-button weline-pixel::continue_shopping" data-tone="neutral">
             <?= __('继续购物') ?>
         </a>
     </div>
@@ -126,9 +122,11 @@ $accountOrderDetailUrl = $requestOrderUuid !== ''
 
 <style>
     .checkout-success-page {
-        width: min(760px, calc(100% - 32px));
+        box-sizing: border-box;
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 760px;
         margin: 0 auto;
-        padding: clamp(56px, 8vw, 96px) 0;
+        padding: clamp(56px, 8vw, 96px) var(--weline-layout-content-padding-inline);
         color: var(--weline-layout-text-primary, #111827);
     }
 
