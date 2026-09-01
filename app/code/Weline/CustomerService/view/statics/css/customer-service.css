@@ -1,7 +1,32 @@
 /**
- * 客服服务前端浮层 — 对齐 Weline UI tokens / 控件契约
+ * 客服服务前端浮层 — Amazon chrome 对齐（--weline-chrome-*）+ Weline 控件契约
  */
 @layer page {
+    .customer-service-widget,
+    .customer-service-widget--amazon {
+        --cs-accent: var(--weline-chrome-primary, #ff9900);
+        --cs-accent-hover: var(--weline-chrome-primary-dark, #e68900);
+        --cs-on-accent: #111111;
+        --cs-header-bg: var(--weline-chrome-bg-dark, #131921);
+        --cs-header-text: var(--weline-chrome-text-light, #ffffff);
+        --cs-header-text-muted: var(--weline-chrome-text-light-secondary, #dddddd);
+        --cs-surface: var(--weline-chrome-bg-primary, #ffffff);
+        --cs-surface-muted: var(--weline-chrome-bg-secondary, #f3f3f3);
+        --cs-canvas: var(--weline-chrome-body-bg, #ffffff);
+        --cs-text: var(--weline-chrome-body-text, #0f1111);
+        --cs-text-muted: var(--weline-chrome-body-text-secondary, #565959);
+        --cs-text-subtle: var(--weline-chrome-text-muted, #888888);
+        --cs-border: var(--weline-chrome-border-default, #d5d9d9);
+        --cs-border-strong: var(--color-border-emphasis, #a6a6a6);
+        --cs-focus: var(--weline-chrome-border-focus, var(--cs-accent));
+        --cs-success: #067d62;
+        --cs-info: #007185;
+        --cs-radius-window: 8px;
+        --cs-radius-control: 4px;
+        --cs-shadow: 0 4px 16px rgba(15, 17, 17, 0.15);
+        --cs-shadow-lg: 0 8px 28px rgba(15, 17, 17, 0.2);
+    }
+
     .cs-icon {
         display: inline-block;
         vertical-align: middle;
@@ -14,7 +39,7 @@
         right: calc(var(--weline-space-5) + var(--weline-safe-area-right));
         z-index: var(--weline-z-overlay);
         font-family: var(--weline-font-sans);
-        color: var(--weline-theme-text);
+        color: var(--cs-text);
         transition: opacity var(--weline-motion-normal) ease, visibility var(--weline-motion-normal) ease, transform var(--weline-motion-normal) ease;
     }
 
@@ -28,16 +53,17 @@
     .cs-chat-button {
         width: 3.75rem;
         height: 3.75rem;
-        background: var(--weline-theme-primary);
+        background: var(--cs-header-bg);
+        border: 1px solid color-mix(in srgb, var(--cs-header-text) 12%, transparent);
         border-radius: var(--weline-radius-round);
         display: flex;
         align-items: center;
         justify-content: center;
         cursor: pointer;
-        box-shadow: var(--weline-theme-shadow-md);
+        box-shadow: var(--cs-shadow);
         transition: transform var(--weline-motion-normal) ease, box-shadow var(--weline-motion-normal) ease, background-color var(--weline-motion-fast) ease;
         position: relative;
-        color: var(--weline-theme-on-primary);
+        color: var(--cs-header-text);
     }
 
     .cs-chat-button .cs-icon {
@@ -47,8 +73,8 @@
 
     .cs-chat-button:hover {
         transform: scale(1.06);
-        background: var(--weline-theme-primary-hover);
-        box-shadow: var(--weline-theme-shadow-lg);
+        background: var(--weline-chrome-bg-dark-secondary, #232f3e);
+        box-shadow: var(--cs-shadow-lg);
     }
 
     .cs-badge {
@@ -76,22 +102,22 @@
         width: 0.625rem;
         height: 0.625rem;
         border-radius: var(--weline-radius-round);
-        border: 2px solid var(--weline-theme-on-primary);
+        border: 2px solid var(--cs-header-bg);
         box-sizing: border-box;
         pointer-events: none;
         transition: background-color var(--weline-motion-normal) ease;
     }
 
     .cs-status-dot.cs-status-online {
-        background-color: var(--weline-theme-success);
+        background-color: var(--cs-success);
     }
 
     .cs-status-dot.cs-status-ai {
-        background-color: var(--weline-theme-info);
+        background-color: var(--cs-info);
     }
 
     .cs-status-dot.cs-status-offline {
-        background-color: var(--weline-theme-text-subtle);
+        background-color: var(--cs-text-subtle);
     }
 
     .cs-status-label {
@@ -100,29 +126,29 @@
         max-width: 100%;
         font-size: var(--weline-font-size-xs);
         padding: 0.1rem 0.5rem;
-        border-radius: var(--weline-radius-round);
+        border-radius: var(--cs-radius-control);
         margin: 0;
         font-weight: 550;
         line-height: 1.35;
-        background-color: color-mix(in srgb, var(--weline-theme-text-subtle) 18%, transparent);
-        color: var(--weline-theme-text-subtle);
+        background-color: color-mix(in srgb, var(--cs-text-subtle) 18%, transparent);
+        color: var(--cs-text-subtle);
         transition: background-color var(--weline-motion-normal) ease, color var(--weline-motion-normal) ease;
         white-space: nowrap;
     }
 
     .cs-status-label.cs-status-online {
-        background-color: color-mix(in srgb, var(--weline-theme-success) 22%, transparent);
-        color: var(--weline-theme-success);
+        background-color: color-mix(in srgb, var(--cs-success) 18%, transparent);
+        color: var(--cs-success);
     }
 
     .cs-status-label.cs-status-ai {
-        background-color: color-mix(in srgb, var(--weline-theme-info) 22%, transparent);
-        color: var(--weline-theme-info);
+        background-color: color-mix(in srgb, var(--cs-info) 18%, transparent);
+        color: var(--cs-info);
     }
 
     .cs-status-label.cs-status-offline {
-        background-color: color-mix(in srgb, var(--weline-theme-text-subtle) 18%, transparent);
-        color: var(--weline-theme-text-subtle);
+        background-color: color-mix(in srgb, var(--cs-text-subtle) 18%, transparent);
+        color: var(--cs-text-subtle);
     }
 
     .cs-chat-window {
@@ -134,19 +160,19 @@
         height: min(37.5rem, calc(100dvh - 6.5rem));
         max-width: calc(100vw - 2.5rem);
         max-height: min(80vh, calc(100dvh - 6.5rem));
-        background: var(--weline-theme-surface);
-        color: var(--weline-theme-text);
-        border: 1px solid var(--weline-theme-border);
-        border-radius: var(--weline-radius-lg);
-        box-shadow: var(--weline-theme-shadow-lg);
+        background: var(--cs-surface);
+        color: var(--cs-text);
+        border: 1px solid var(--cs-border);
+        border-radius: var(--cs-radius-window);
+        box-shadow: var(--cs-shadow-lg);
         display: flex;
         flex-direction: column;
         overflow: hidden;
     }
 
     .cs-chat-header {
-        background: var(--weline-theme-primary);
-        color: var(--weline-theme-on-primary);
+        background: var(--cs-header-bg);
+        color: var(--cs-header-text);
         padding: var(--weline-space-3) var(--weline-space-4);
         display: flex;
         align-items: center;
@@ -183,23 +209,23 @@
     }
 
     .cs-chat-header .cs-status-label {
-        background-color: color-mix(in srgb, var(--weline-theme-on-primary) 18%, transparent);
-        color: color-mix(in srgb, var(--weline-theme-on-primary) 88%, transparent);
+        background-color: color-mix(in srgb, var(--cs-header-text) 14%, transparent);
+        color: var(--cs-header-text-muted);
     }
 
     .cs-chat-header .cs-status-label.cs-status-online {
-        background-color: color-mix(in srgb, var(--weline-theme-success) 28%, transparent);
-        color: var(--weline-theme-on-primary);
+        background-color: color-mix(in srgb, var(--cs-success) 24%, transparent);
+        color: #b7f0d8;
     }
 
     .cs-chat-header .cs-status-label.cs-status-ai {
-        background-color: color-mix(in srgb, var(--weline-theme-info) 28%, transparent);
-        color: var(--weline-theme-on-primary);
+        background-color: color-mix(in srgb, var(--cs-info) 24%, transparent);
+        color: #b8e8ef;
     }
 
     .cs-chat-header .cs-status-label.cs-status-offline {
-        background-color: color-mix(in srgb, var(--weline-theme-on-primary) 16%, transparent);
-        color: color-mix(in srgb, var(--weline-theme-on-primary) 82%, transparent);
+        background-color: color-mix(in srgb, var(--cs-header-text) 12%, transparent);
+        color: var(--cs-header-text-muted);
     }
 
     .cs-chat-actions {
@@ -211,31 +237,32 @@
 
     .cs-chat-header .cs-btn-icon,
     .cs-chat-header .w-button.cs-btn-icon {
-        background: color-mix(in srgb, var(--weline-theme-on-primary) 18%, transparent);
+        background: color-mix(in srgb, var(--cs-header-text) 12%, transparent);
         border-color: transparent;
-        color: var(--weline-theme-on-primary);
+        color: var(--cs-header-text);
         width: 2rem;
         height: 2rem;
         min-height: 2rem;
         min-inline-size: 2rem;
         inline-size: 2rem;
         padding: 0;
+        border-radius: var(--cs-radius-control);
     }
 
     .cs-chat-header .cs-btn-icon:hover,
     .cs-chat-header .w-button.cs-btn-icon:hover {
-        background: color-mix(in srgb, var(--weline-theme-on-primary) 28%, transparent);
-        color: var(--weline-theme-on-primary);
+        background: color-mix(in srgb, var(--cs-header-text) 20%, transparent);
+        color: var(--cs-header-text);
     }
 
     .cs-btn-icon {
-        background: color-mix(in srgb, var(--weline-theme-on-primary) 18%, transparent);
+        background: color-mix(in srgb, var(--cs-header-text) 12%, transparent);
         border: 1px solid transparent;
-        color: var(--weline-theme-on-primary);
+        color: var(--cs-header-text);
         width: 2rem;
         height: 2rem;
         min-height: 2rem;
-        border-radius: var(--weline-radius-sm);
+        border-radius: var(--cs-radius-control);
         cursor: pointer;
         display: inline-flex;
         align-items: center;
@@ -245,12 +272,12 @@
     }
 
     .cs-btn-icon:hover {
-        background: color-mix(in srgb, var(--weline-theme-on-primary) 28%, transparent);
+        background: color-mix(in srgb, var(--cs-header-text) 20%, transparent);
     }
 
     .cs-settings-panel {
-        background: var(--weline-theme-surface-muted);
-        border-bottom: 1px solid var(--weline-theme-border);
+        background: var(--cs-surface-muted);
+        border-bottom: 1px solid var(--cs-border);
         padding: var(--weline-space-3) var(--weline-space-4);
     }
 
@@ -271,7 +298,7 @@
         align-items: center;
         gap: var(--weline-space-2);
         font-size: var(--weline-font-size-sm);
-        color: var(--weline-theme-text-muted);
+        color: var(--cs-text-muted);
         font-weight: 550;
     }
 
@@ -283,22 +310,22 @@
         min-height: var(--weline-control-height-sm);
         padding-block: var(--weline-space-1);
         font-size: var(--weline-font-size-sm);
-        background: var(--weline-theme-surface);
-        color: var(--weline-theme-text);
-        border: 1px solid var(--weline-theme-border-strong);
-        border-radius: var(--weline-radius-sm);
+        background: var(--cs-surface);
+        color: var(--cs-text);
+        border: 1px solid var(--cs-border-strong);
+        border-radius: var(--cs-radius-control);
     }
 
     .cs-chat-body {
         flex: 1;
         overflow-y: auto;
         padding: var(--weline-space-5);
-        background: var(--weline-theme-canvas);
+        background: var(--cs-canvas);
     }
 
     .cs-welcome-message {
         text-align: center;
-        color: var(--weline-theme-text-muted);
+        color: var(--cs-text-muted);
         padding: var(--weline-space-5);
     }
 
@@ -327,27 +354,28 @@
     .cs-message-bubble {
         max-width: 75%;
         padding: var(--weline-space-3) var(--weline-space-4);
-        border-radius: var(--weline-radius-lg);
+        border-radius: var(--cs-radius-window);
         word-wrap: break-word;
         position: relative;
     }
 
     .cs-message.customer .cs-message-bubble {
-        background: var(--weline-theme-primary);
-        color: var(--weline-theme-on-primary);
-        border-bottom-right-radius: var(--weline-radius-sm);
+        background: var(--cs-surface-muted);
+        color: var(--cs-text);
+        border: 1px solid var(--cs-border);
+        border-bottom-right-radius: var(--cs-radius-control);
     }
 
     .cs-message.agent .cs-message-bubble {
-        background: var(--weline-theme-surface);
-        color: var(--weline-theme-text);
-        border: 1px solid var(--weline-theme-border);
-        border-bottom-left-radius: var(--weline-radius-sm);
+        background: var(--cs-surface);
+        color: var(--cs-text);
+        border: 1px solid var(--cs-border);
+        border-bottom-left-radius: var(--cs-radius-control);
     }
 
     .cs-message-time {
         font-size: var(--weline-font-size-xs);
-        color: var(--weline-theme-text-subtle);
+        color: var(--cs-text-subtle);
         margin-top: var(--weline-space-1);
         padding: 0 var(--weline-space-1);
     }
@@ -373,26 +401,26 @@
     }
 
     .cs-message.customer .cs-message-original {
-        border-bottom-color: color-mix(in srgb, var(--weline-theme-on-primary) 35%, transparent);
+        border-bottom-color: color-mix(in srgb, var(--cs-border-strong) 70%, transparent);
     }
 
     .cs-lang-tag {
         display: inline-block;
         font-size: 0.625rem;
         padding: 0.1rem 0.35rem;
-        border-radius: var(--weline-radius-sm);
+        border-radius: var(--cs-radius-control);
         margin-left: var(--weline-space-2);
-        background: color-mix(in srgb, var(--weline-theme-text) 10%, transparent);
+        background: color-mix(in srgb, var(--cs-text) 8%, transparent);
     }
 
     .cs-message.customer .cs-lang-tag {
-        background: color-mix(in srgb, var(--weline-theme-on-primary) 22%, transparent);
+        background: color-mix(in srgb, var(--cs-text) 10%, transparent);
     }
 
     .cs-chat-footer {
-        border-top: 1px solid var(--weline-theme-border);
+        border-top: 1px solid var(--cs-border);
         padding: var(--weline-space-4);
-        background: var(--weline-theme-surface);
+        background: var(--cs-surface);
     }
 
     .cs-language-selector {
@@ -402,10 +430,10 @@
     .cs-language-selector .w-select,
     .cs-language-selector select {
         width: 100%;
-        background: var(--weline-theme-surface);
-        color: var(--weline-theme-text);
-        border: 1px solid var(--weline-theme-border-strong);
-        border-radius: var(--weline-radius-md);
+        background: var(--cs-surface);
+        color: var(--cs-text);
+        border: 1px solid var(--cs-border-strong);
+        border-radius: var(--cs-radius-control);
     }
 
     .cs-input-area {
@@ -424,39 +452,39 @@
         max-height: 7.5rem;
         height: auto;
         padding: var(--weline-space-2) var(--weline-space-3);
-        border: 1px solid var(--weline-theme-border-strong);
-        border-radius: var(--weline-radius-md);
+        border: 1px solid var(--cs-border-strong);
+        border-radius: var(--cs-radius-control);
         font-size: var(--weline-font-size-sm);
         line-height: var(--weline-line-height);
         resize: none;
         font-family: inherit;
-        background: var(--weline-theme-surface);
-        color: var(--weline-theme-text);
+        background: var(--cs-surface);
+        color: var(--cs-text);
         color-scheme: inherit;
         box-shadow: none;
     }
 
     .cs-message-input::placeholder,
     .cs-chat-footer .w-textarea::placeholder {
-        color: var(--weline-theme-text-subtle);
+        color: var(--cs-text-subtle);
     }
 
     .cs-message-input:hover,
     .cs-chat-footer .w-textarea:hover {
-        border-color: var(--weline-theme-primary);
+        border-color: var(--cs-border-strong);
     }
 
     .cs-message-input:focus,
     .cs-chat-footer .w-textarea:focus {
         outline: 0;
-        border-color: var(--weline-theme-focus);
-        box-shadow: var(--weline-theme-focus-ring);
+        border-color: var(--cs-focus);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--cs-focus) 24%, transparent);
     }
 
     .cs-message-input:disabled,
     .cs-chat-footer .w-textarea:disabled {
-        background: var(--weline-theme-surface-muted);
-        color: var(--weline-theme-text-muted);
+        background: var(--cs-surface-muted);
+        color: var(--cs-text-muted);
         cursor: not-allowed;
     }
 
@@ -466,10 +494,10 @@
         min-width: 2.5rem;
         min-height: 2.5rem;
         padding: 0;
-        background: var(--weline-theme-primary);
-        color: var(--weline-theme-on-primary);
-        border: 1px solid var(--weline-theme-primary);
-        border-radius: var(--weline-radius-md);
+        background: var(--cs-accent);
+        color: var(--cs-on-accent);
+        border: 1px solid var(--cs-accent);
+        border-radius: var(--cs-radius-control);
         cursor: pointer;
         display: inline-flex;
         align-items: center;
@@ -479,8 +507,8 @@
     }
 
     .cs-send-button:hover:not(:disabled) {
-        background: var(--weline-theme-primary-hover);
-        border-color: var(--weline-theme-primary-hover);
+        background: var(--cs-accent-hover);
+        border-color: var(--cs-accent-hover);
     }
 
     .cs-send-button:disabled {
@@ -526,21 +554,21 @@
     }
 
     .cs-modal-content {
-        background: var(--weline-theme-surface);
-        color: var(--weline-theme-text);
-        border: 1px solid var(--weline-theme-border);
-        border-radius: var(--weline-radius-lg);
+        background: var(--cs-surface);
+        color: var(--cs-text);
+        border: 1px solid var(--cs-border);
+        border-radius: var(--cs-radius-window);
         width: min(31.25rem, 100%);
         max-height: 90vh;
         display: flex;
         flex-direction: column;
         overflow: hidden;
-        box-shadow: var(--weline-theme-shadow-lg);
+        box-shadow: var(--cs-shadow-lg);
     }
 
     .cs-modal-header {
         padding: var(--weline-space-5);
-        border-bottom: 1px solid var(--weline-theme-border);
+        border-bottom: 1px solid var(--cs-border);
         display: flex;
         align-items: center;
         justify-content: space-between;
@@ -551,7 +579,7 @@
         margin: 0;
         font-size: var(--weline-font-size-lg);
         font-weight: 650;
-        color: var(--weline-theme-text);
+        color: var(--cs-text);
     }
 
     .cs-modal-close {
@@ -559,28 +587,28 @@
         border: 1px solid transparent;
         font-size: var(--weline-font-size-lg);
         cursor: pointer;
-        color: var(--weline-theme-text-muted);
+        color: var(--cs-text-muted);
         padding: 0;
         width: 2rem;
         height: 2rem;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        border-radius: var(--weline-radius-sm);
+        border-radius: var(--cs-radius-control);
         transition: background-color var(--weline-motion-fast) ease, color var(--weline-motion-fast) ease;
     }
 
     .cs-modal-close.w-button[data-tone="quiet"] {
         background: transparent;
         border-color: transparent;
-        color: var(--weline-theme-text-muted);
+        color: var(--cs-text-muted);
     }
 
     .cs-modal-close.w-button[data-tone="quiet"]:hover,
     .cs-modal-close.w-modal-close:hover {
-        background: var(--weline-theme-surface-hover);
+        background: var(--cs-surface-muted);
         border-color: transparent;
-        color: var(--weline-theme-text);
+        color: var(--cs-text);
     }
 
     .cs-modal-body {
@@ -591,16 +619,16 @@
 
     .cs-modal-copy {
         margin: 0 0 var(--weline-space-3);
-        color: var(--weline-theme-text);
+        color: var(--cs-text);
         line-height: var(--weline-line-height);
     }
 
     .cs-modal-note {
         margin: 0 0 var(--weline-space-4);
         padding: var(--weline-space-3);
-        border-radius: var(--weline-radius-md);
-        background: var(--weline-theme-primary-surface);
-        color: var(--weline-theme-text-muted);
+        border-radius: var(--cs-radius-control);
+        background: color-mix(in srgb, var(--cs-accent) 10%, var(--cs-surface));
+        color: var(--cs-text-muted);
         font-size: var(--weline-font-size-sm);
         line-height: var(--weline-line-height);
     }
@@ -630,7 +658,7 @@
         display: block;
         margin-bottom: var(--weline-space-2);
         font-weight: 550;
-        color: var(--weline-theme-text);
+        color: var(--cs-text);
         font-size: var(--weline-font-size-sm);
     }
 
@@ -640,29 +668,29 @@
         width: 100%;
         min-height: var(--weline-control-height);
         padding: var(--weline-space-2) var(--weline-space-3);
-        border: 1px solid var(--weline-theme-border-strong);
-        border-radius: var(--weline-radius-md);
+        border: 1px solid var(--cs-border-strong);
+        border-radius: var(--cs-radius-control);
         font-size: var(--weline-font-size-sm);
-        background: var(--weline-theme-surface);
-        color: var(--weline-theme-text);
+        background: var(--cs-surface);
+        color: var(--cs-text);
         color-scheme: inherit;
     }
 
     .cs-form-input::placeholder,
     .cs-modal .w-input::placeholder {
-        color: var(--weline-theme-text-subtle);
+        color: var(--cs-text-subtle);
     }
 
     .cs-form-input:focus,
     .cs-modal .w-input:focus {
         outline: 0;
-        border-color: var(--weline-theme-focus);
-        box-shadow: var(--weline-theme-focus-ring);
+        border-color: var(--cs-focus);
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--cs-focus) 24%, transparent);
     }
 
     .cs-modal-footer {
         padding: var(--weline-space-5);
-        border-top: 1px solid var(--weline-theme-border);
+        border-top: 1px solid var(--cs-border);
         display: flex;
         gap: var(--weline-space-3);
         justify-content: flex-end;
@@ -672,7 +700,7 @@
         padding: 0 var(--weline-space-5);
         min-height: var(--weline-control-height);
         border: 1px solid transparent;
-        border-radius: var(--weline-radius-md);
+        border-radius: var(--cs-radius-control);
         font-size: var(--weline-font-size-sm);
         font-weight: 650;
         cursor: pointer;
@@ -683,30 +711,30 @@
     }
 
     .cs-btn-primary {
-        background: var(--weline-theme-primary);
-        border-color: var(--weline-theme-primary);
-        color: var(--weline-theme-on-primary);
+        background: var(--cs-accent);
+        border-color: var(--cs-accent);
+        color: var(--cs-on-accent);
     }
 
     .cs-btn-primary:hover {
-        background: var(--weline-theme-primary-hover);
-        border-color: var(--weline-theme-primary-hover);
+        background: var(--cs-accent-hover);
+        border-color: var(--cs-accent-hover);
     }
 
     .cs-btn-secondary {
-        background: var(--weline-theme-surface);
-        border-color: var(--weline-theme-border-strong);
-        color: var(--weline-theme-text);
+        background: var(--cs-surface);
+        border-color: var(--cs-border-strong);
+        color: var(--cs-text);
     }
 
     .cs-btn-secondary:hover {
-        background: var(--weline-theme-surface-hover);
+        background: var(--cs-surface-muted);
     }
 
     .cs-loading {
         text-align: center;
         padding: var(--weline-space-5);
-        color: var(--weline-theme-text-subtle);
+        color: var(--cs-text-subtle);
     }
 
     .cs-loading i {

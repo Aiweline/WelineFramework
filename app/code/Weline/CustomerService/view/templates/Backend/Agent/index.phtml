@@ -3,9 +3,7 @@
 use Weline\Backend\Model\BackendUser;
 use Weline\Framework\Manager\ObjectManager; $agents = $this->getData('agents') ?? [];
 $statisticsCssUrl = $this->getViewFileUrl('Weline_CustomerService::css/backend-statistics.css');
-$saveUrl = $this->getBackendUrl("customerservice/backend/agent/save");
-$deleteUrl = $this->getBackendUrl("customerservice/backend/agent/remove");
-$statisticsUrl = $this->getBackendUrl("customerservice/backend/agent/agent-statistics"); // 获取后台用户列表（用于选择关联用户）
+// 获取后台用户列表（用于选择关联用户）
 /** @var BackendUser $backendUser */
 $backendUser = ObjectManager::getInstance(BackendUser::class);
 $backendUsers = $backendUser->reset()->select()->csAdmin()->getItems(); // 语言列表
@@ -101,7 +99,7 @@ function csAdmin(url, options){ options=options||{}; var body=options.body; if(b
 }
 </script>
 <script>
-const AgentManager = { saveUrl: <?= json_encode($saveUrl, $jsonForScriptFlags) ?>, deleteUrl: <?= json_encode($deleteUrl, $jsonForScriptFlags) ?>, statisticsUrl: <?= json_encode($statisticsUrl, $jsonForScriptFlags) ?>, agents: <?= json_encode($agents, $jsonForScriptFlags) ?>
+const AgentManager = { saveUrl: "@backend-url{'customerservice/backend/agent/save'}", deleteUrl: "@backend-url{'customerservice/backend/agent/remove'}", statisticsUrl: "@backend-url{'customerservice/backend/agent/agent-statistics'}", agents: <?= json_encode($agents, $jsonForScriptFlags) ?>
 }; const CustomerServiceDefaultLocale = <?= json_encode($customerServiceDefaultLocale, $jsonForScriptFlags) ?>; function getAgentLanguageSelector(id) { const root = document.getElementById(id + '_wrapper'); return root && window.Weline && window.Weline.UI ? window.Weline.UI.get(root, 'language-select') : null;
 } function syncAgentLanguageSelection(locale, supportedLocales) { const primarySelector = getAgentLanguageSelector('customer_service_primary_locale_selector'); const supportedSelector = getAgentLanguageSelector('customer_service_supported_locales_selector'); const primaryLocale = String(locale || CustomerServiceDefaultLocale || '').trim(); let nextSupportedLocales = Array.isArray(supportedLocales) ? supportedLocales.slice() : []; nextSupportedLocales = nextSupportedLocales .map(value => String(value || '').trim()) .filter((value, index, list) => value && list.indexOf(value) === index); if (primaryLocale && nextSupportedLocales.indexOf(primaryLocale) === -1) { nextSupportedLocales.unshift(primaryLocale); } if (primarySelector) { primarySelector.setValue(primaryLocale); } if (supportedSelector) { supportedSelector.setReadonlyValues(primaryLocale ? [primaryLocale] : []); supportedSelector.setValues(nextSupportedLocales); }
 } document.addEventListener('weline:ui:language-select:change', event => { if (event.target && event.target.id === 'customer_service_primary_locale_selector_wrapper') { const primary = getAgentLanguageSelector('customer_service_primary_locale_selector'); const supported = getAgentLanguageSelector('customer_service_supported_locales_selector'); if (primary && supported) { syncAgentLanguageSelection(primary.getValue(), supported.getValues()); } }

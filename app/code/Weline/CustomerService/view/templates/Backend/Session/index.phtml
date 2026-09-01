@@ -73,7 +73,7 @@ $sessionText = [
                             <td><?= $session['message_count'] ?? 0 ?></td>
                             <td><?= $session['created_at'] ?></td>
                             <td>
-                                <a href="<?= $htmlAttr($this->getBackendUrl('customerservice/backend/session/view', ['session_id' => $session['session_id']])) ?>" class="w-button" data-tone="primary" data-size="sm">
+                                <a href="@backend-url{'customerservice/backend/session/view'|['session_id' => $session['session_id']]}" class="w-button" data-tone="primary" data-size="sm">
                                     <?= __('查看') ?>
                                 </a>
                                 <?php if ($session['status'] !== 'closed'): ?>
@@ -104,7 +104,7 @@ function csAdmin(url, options){
 </script>
 <script>
 const customerServiceSessionText = <?= json_encode($sessionText, $jsonForScriptFlags) ?>;
-const customerServiceSessionCloseUrl = <?= json_encode($this->getBackendUrl('customerservice/backend/session/close'), $jsonForScriptFlags) ?>;
+const customerServiceSessionCloseUrl = "@backend-url{'customerservice/backend/session/close'}";
 
 function showSessionToast(type, message) {
     const text = String(message || customerServiceSessionText.closeFailed);
