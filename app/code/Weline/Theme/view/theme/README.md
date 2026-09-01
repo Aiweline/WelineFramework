@@ -46,6 +46,7 @@ theme/
   - 路径规则是 `theme/{area}/partials/{type}/{option}.phtml`。
   - 应通过 `Weline\Theme\Block\Partials` 加载，由主题配置、预览 scope、父主题回退共同决定最终文件。
   - partial 模板可直接使用 `meta`、`layout`、`theme`、`colors` 等数据。
+- 用户可见文案优先 `<lang>` / `@lang()` / `@lang{}`；详见 `app/code/Weline/Theme/doc/开发/Theme开发总指南.md` §4.1。
 
 - `widgets/`
   - 路径规则是 `theme/{area}/widgets/{type}/{code}/default.phtml`。

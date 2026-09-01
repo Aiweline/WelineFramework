@@ -27,6 +27,7 @@ class AddressTaglibRuntimeCallbackTest extends TestCore
                 'searchable' => 'true',
                 'cascade' => 'true',
                 'district' => 'true',
+                'catalog' => 'global',
                 // Absolute url avoids unit-test DB via w_url().
                 'url' => 'https://example.test/shipping/frontend/region/list',
             ],
@@ -38,8 +39,16 @@ class AddressTaglibRuntimeCallbackTest extends TestCore
         $this->assertStringContainsString('checkout-delivery-quick-add', $html);
         $this->assertStringContainsString('province|city|district', $html);
         $this->assertStringNotContainsString('<?php', $html);
-        $this->assertStringNotContainsString('Weline_Taglib_resolve', $html);
+        $this->assertStringContainsString('&quot;catalog&quot;:&quot;global&quot;', $html);
         $this->assertStringNotContainsString('$Taglib__', $html);
+    }
+
+    public function testDocumentDescribesGlobalCatalog(): void
+    {
+        $doc = Address::document();
+        $this->assertStringContainsString('catalog', $doc);
+        $this->assertStringContainsString('global', $doc);
+        $this->assertStringContainsString('installed', $doc);
     }
 
     public function testCompileCallbackStillPrefacesAttributeResolverPhp(): void

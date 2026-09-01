@@ -188,7 +188,19 @@ final class PreviewNavigationResolver
         if (!empty($parts['query'])) {
             \parse_str((string)$parts['query'], $existingQuery);
         }
-        $query = \array_replace($existingQuery, $this->previewContextService->toQueryParams($context));
+
+        $previewToken = \trim((string)($context['preview_token'] ?? ''));
+        $shell = (string)($context['shell'] ?? PreviewContextService::SHELL_PREVIEW);
+        $path = \strtolower((string)($parts['path'] ?? '/'));
+        $isLiveStorefrontPreview = $shell === PreviewContextService::SHELL_PREVIEW
+            && !\str_contains($path, '/theme/frontend/theme-preview/');
+
+        if ($isLiveStorefrontPreview && $previewToken !== '') {
+            $query = $existingQuery;
+            $query[PreviewTokenService::TOKEN_KEY] = $previewToken;
+        } else {
+            $query = \array_replace($existingQuery, $this->previewContextService->toQueryParams($context));
+        }
 
         $scheme = isset($parts['scheme']) ? $parts['scheme'] . '://' : '';
         $host = (string)($parts['host'] ?? '');

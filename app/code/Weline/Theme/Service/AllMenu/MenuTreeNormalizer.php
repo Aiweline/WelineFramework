@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\AllMenu;
 
+use Weline\Framework\App\State;
+use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\WidgetI18n;
 
 /**
@@ -58,6 +61,7 @@ final class MenuTreeNormalizer
     /**
      * Flatten to navItems shape. `text` / `description` are resolved for the
      * active storefront locale (node i18n map first, then WidgetI18n / __()).
+     * Relative `url` values are rebuilt via getFrontendUrl so currency/lang path follows.
      *
      * @param list<array<string, mixed>> $tree
      * @return list<array<string, mixed>>
@@ -71,15 +75,23 @@ final class MenuTreeNormalizer
             }
             $item = [
                 'text' => $this->resolveDisplayName($node),
-                'url' => (string)($node['url'] ?? '#'),
+                'url' => $this->localizeUrl((string)($node['url'] ?? '#')),
             ];
             $image = trim((string)($node['image'] ?? $node['img'] ?? $node['icon_url'] ?? ''));
             if ($image !== '') {
                 $item['image'] = $image;
             }
+            $banner = trim((string)($node['banner'] ?? ''));
+            if ($banner !== '' && !str_starts_with($banner, 'data:image/')) {
+                $item['banner'] = $banner;
+            }
             $description = $this->resolveDisplayDescription($node);
             if ($description !== '') {
                 $item['description'] = $description;
+            }
+            $summary = trim((string)($node['summary'] ?? ''));
+            if ($summary !== '') {
+                $item['summary'] = $summary;
             }
             $children = $node['children'] ?? [];
             if (is_array($children) && $children !== []) {
@@ -176,9 +188,19 @@ final class MenuTreeNormalizer
             $node['description'] = $description;
         }
 
+        $summary = trim((string)($raw['summary'] ?? ''));
+        if ($summary !== '') {
+            $node['summary'] = $summary;
+        }
+
         $image = $this->normalizeImageValue($raw['image'] ?? null);
         if ($image !== null && $image !== '') {
             $node['image'] = $image;
+        }
+
+        $banner = trim((string)($raw['banner'] ?? ''));
+        if ($banner !== '' && !str_starts_with($banner, 'data:image/')) {
+            $node['banner'] = $banner;
         }
 
         $ref = trim((string)($raw['ref'] ?? ''));
@@ -199,6 +221,76 @@ final class MenuTreeNormalizer
         }
 
         return $node;
+    }
+
+    /**
+     * Rebuild relative storefront hrefs with the active currency/lang path prefix.
+     */
+    public function localizeUrl(string $url): string
+    {
+        $url = trim($url);
+        if ($url === '' || $url === '#') {
+            return $url !== '' ? $url : '#';
+        }
+        if (
+            preg_match('#^(?:[a-z][a-z0-9+.-]*:)?//#i', $url) === 1
+            || str_starts_with($url, 'mailto:')
+            || str_starts_with($url, 'tel:')
+            || str_starts_with($url, 'javascript:')
+        ) {
+            return $url;
+        }
+
+        $path = ltrim($url, '/');
+        if ($path === '') {
+            return $this->frontendUrl('/');
+        }
+
+        $segments = array_values(array_filter(explode('/', $path), static fn(string $s): bool => $s !== ''));
+        while ($segments !== []) {
+            $first = (string)$segments[0];
+            if (State::isAllowedLanguageCode($first)) {
+                array_shift($segments);
+                continue;
+            }
+            try {
+                $probe = '/' . $first . '/';
+                if (\Weline\Framework\Http\Url::detectCurrency($probe, $first)) {
+                    array_shift($segments);
+                    continue;
+                }
+            } catch (\Throwable) {
+                // Unit/CLI without full Env bootstrap: do not invent currency stripping.
+            }
+            break;
+        }
+
+        $route = implode('/', $segments);
+
+        return $this->frontendUrl($route !== '' ? $route : '/');
+    }
+
+    private function frontendUrl(string $route): string
+    {
+        try {
+            $request = ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
+
+            return (string)$request->getUrlBuilder()->getFrontendUrl(ltrim($route, '/'));
+        } catch (\Throwable) {
+            try {
+                /** @var Url $url */
+                $url = ObjectManager::getInstance(Url::class);
+
+                return (string)$url->getFrontendUrl(ltrim($route, '/'));
+            } catch (\Throwable) {
+                $route = trim($route);
+                if ($route === '' || $route === '/') {
+                    return '/';
+                }
+
+                return str_starts_with($route, '/') ? $route : '/' . $route;
+            }
+        }
     }
 
     private function resolveStorefrontLocale(): string

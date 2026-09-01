@@ -37,7 +37,9 @@
 
 6. **@media 断点例外**：`@media` 条件里**禁止** `var(--breakpoint-*)` / `var(--token-bp-*)`（浏览器会忽略整条规则，布局全乱）。断点须写 `768px` 等字面量；变量盘里的 `--breakpoint-md` 等只供 JS/文档，不进 `@media`。
 
-7. **提取必须绑定组件（写回 + 接线）**：把 `35px` 提成 `--control-height-sm` 时须三步同批完成：
+7. **内容区宽度（layout content width）**：与 `theme-layout-content-width.md` 配套——宽度/gutter **无局部例外**；已包 `.w-container` 的业务页 `padding-inline: 0`；未包容器页用 `--weline-layout-content-max-width` + `--weline-layout-content-padding-inline`，禁止 `1440px` 等 fallback。颜色/特质 Hero 可模块内 scope 自定义。
+
+8. **提取必须绑定组件（写回 + 接线）**：把 `35px` 提成 `--control-height-sm` 时须三步同批完成：
    - **叶子默认**：`variables/_spacing.css` 写 `--control-height-sm: 35px`（与提取前一致）；
    - **桥接**：`theme.css` 的 `--weline-theme-control-height-sm` → `var(--control-height-sm)`；
    - **组件消费**：`.w-button` / `.btn` / `input` 等用 `min-height: var(--weline-component-control-height-sm)`，禁止在组件 CSS 再留 `35px` 或空变量。
@@ -46,6 +48,8 @@
 错误示例：提取成 `--token-color-e2e8f0` 只塞进 `_auto-literals.css`，色系盘与 Editor 均无项 → 页面/编辑器表现为「变量没设置」。
 
 正确示例：映射到 `--color-bg-tertiary` / `--color-border-subtle`，或在 `_colors.css` + `_light.css` 新增语义名并给叶子值。
+
+语义角色 × 强度矩阵、Foundation 桥接与 `data-tone` 约定见 [`theme-semantic-color-matrix.md`](./theme-semantic-color-matrix.md)。
 
 ## 禁止
 

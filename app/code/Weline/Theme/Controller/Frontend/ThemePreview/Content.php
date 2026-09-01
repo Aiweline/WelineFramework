@@ -23,6 +23,7 @@ use Weline\Theme\Service\Scoped\ThemeEditorContextFactory;
 use Weline\Theme\Service\Scoped\ThemeScopedPreviewResolver;
 use Weline\Theme\Service\ThemePageTypeResolver;
 use Weline\Theme\Service\ThemePreviewContentRenderer;
+use Weline\Theme\Service\ThemePreviewRenderCache;
 use Weline\Theme\Service\ThemeTargetIdentityResolver;
 use Weline\Theme\Service\ThemeTargetTypeRegistry;
 
@@ -131,49 +132,91 @@ class Content extends FrontendController
             $layoutOption,
             $controlledPreview,
         );
-        $previewPayload = $previewContentRenderer->build(
-            $themeId,
-            $layoutType,
-            $status,
-            $versionId,
-            [],
-            $typedEditorContext,
-        );
         $editorArea = (string)($context['editor_area'] ?? PreviewContextService::AREA_FRONTEND);
         $scope = (string)($context['scope'] ?? PreviewContextService::DEFAULT_SCOPE);
-        $layoutMeta = $this->resolveLayoutMetaForPreview($themeId, $layoutType, $layoutOption, $editorArea, $scope);
-        if ($typedEditorContext instanceof ThemeEditorContext) {
-            /** @var ThemeScopedPreviewResolver $scopedPreview */
-            $scopedPreview = ObjectManager::getInstance(ThemeScopedPreviewResolver::class);
-            $layoutMeta = $scopedPreview->resolveLayoutMeta($typedEditorContext, $status);
-        }
-        $targetPreviewPayload = $this->resolveTargetPreviewPayload($context, $layoutType, $layoutOption, $editorArea, $scope);
-        $targetPreviewMeta = $this->buildTargetPreviewMeta($targetPreviewPayload);
-        $this->assign('content', $previewPayload['content']);
-        $this->assign('target_preview_payload', $targetPreviewPayload ?: []);
-        $this->assign('meta', array_merge([
-            'showHeader' => true,
-            'showFooter' => true,
-            'showStatistics' => true,
-            'showFeatures' => true,
-            'showProducts' => true,
-            'showTestimonials' => true,
-            'showNews' => true,
-            'showPartners' => true,
-        ], $previewPayload['meta'], $layoutMeta, $targetPreviewMeta));
+        $targetType = \trim((string)($context['target_type'] ?? 'global'));
+        $targetId = \max(0, (int)($context['target_id'] ?? 0));
 
-        $html = (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
-        if ($typedEditorContext instanceof ThemeEditorContext) {
-            $html = $this->injectScopedAppearance($html, $typedEditorContext, $status);
-        }
-        $editorMode = (string)$this->request->getParam('editor_mode', '');
-        if ($html !== '' && ($editorMode === '1' || $editorMode === 'true')) {
-            /** @var EditorModeAssetInjector $injector */
-            $injector = ObjectManager::getInstance(EditorModeAssetInjector::class);
-            $html = $injector->inject($html);
-        }
+        /** @var ThemePreviewRenderCache $previewRenderCache */
+        $previewRenderCache = ObjectManager::getInstance(ThemePreviewRenderCache::class);
 
-        return $html;
+        return $previewRenderCache->remember(
+            $themeId,
+            $layoutType,
+            $layoutOption,
+            $status,
+            (string)($context['locale'] ?? ''),
+            $typedEditorContext,
+            $versionId,
+            $targetType !== '' ? $targetType : 'global',
+            $targetId,
+            function () use (
+                $previewContentRenderer,
+                $themeId,
+                $layoutType,
+                $layoutOption,
+                $status,
+                $versionId,
+                $typedEditorContext,
+                $editorArea,
+                $scope,
+                $context,
+            ): string {
+                $previewPayload = $previewContentRenderer->build(
+                    $themeId,
+                    $layoutType,
+                    $status,
+                    $versionId,
+                    [],
+                    $typedEditorContext,
+                );
+                $layoutMeta = $this->resolveLayoutMetaForPreview(
+                    $themeId,
+                    $layoutType,
+                    $layoutOption,
+                    $editorArea,
+                    $scope,
+                );
+                if ($typedEditorContext instanceof ThemeEditorContext) {
+                    /** @var ThemeScopedPreviewResolver $scopedPreview */
+                    $scopedPreview = ObjectManager::getInstance(ThemeScopedPreviewResolver::class);
+                    $layoutMeta = $scopedPreview->resolveLayoutMeta($typedEditorContext, $status);
+                }
+                $targetPreviewPayload = $this->resolveTargetPreviewPayload(
+                    $context,
+                    $layoutType,
+                    $layoutOption,
+                    $editorArea,
+                    $scope,
+                );
+                $targetPreviewMeta = $this->buildTargetPreviewMeta($targetPreviewPayload);
+                $this->assign('content', $previewPayload['content']);
+                $this->assign('target_preview_payload', $targetPreviewPayload ?: []);
+                $this->assign('meta', \array_merge([
+                    'showHeader' => true,
+                    'showFooter' => true,
+                    'showStatistics' => true,
+                    'showFeatures' => true,
+                    'showProducts' => true,
+                    'showTestimonials' => true,
+                    'showNews' => true,
+                    'showPartners' => true,
+                ], $previewPayload['meta'], $layoutMeta, $targetPreviewMeta));
+
+                $html = (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
+                if ($typedEditorContext instanceof ThemeEditorContext) {
+                    $html = $this->injectScopedAppearance($html, $typedEditorContext, $status);
+                }
+                $editorMode = (string)$this->request->getParam('editor_mode', '');
+                if ($html !== '' && ($editorMode === '1' || $editorMode === 'true')) {
+                    /** @var EditorModeAssetInjector $injector */
+                    $injector = ObjectManager::getInstance(EditorModeAssetInjector::class);
+                    $html = $injector->inject($html);
+                }
+
+                return $html;
+            },
+        );
     }
 
     private function injectScopedAppearance(

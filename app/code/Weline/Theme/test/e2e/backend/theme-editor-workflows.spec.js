@@ -189,8 +189,8 @@ moduleDescribe(test, MODULE, 'theme editor workflows', () => {
           exclusive: false,
         });
         expectEditorSuccess(buttonSave, 'save button widget');
-        const buttonLayoutId = Number(buttonSave.data?.layout_id || 0);
-        expect(buttonLayoutId).toBeGreaterThan(0);
+        const buttonNodeUid = String(buttonSave.data?.node_uid || '').trim().toLowerCase();
+        expect(/^[a-f0-9]{32}$/.test(buttonNodeUid), JSON.stringify(buttonSave)).toBeTruthy();
 
         const cardSave = await callEditorRequest(page, '/theme/backend/theme-editor/save-widget', 'POST', {
           theme_id: themeId,
@@ -208,12 +208,13 @@ moduleDescribe(test, MODULE, 'theme editor workflows', () => {
           exclusive: false,
         });
         expectEditorSuccess(cardSave, 'save card widget');
-        const cardLayoutId = Number(cardSave.data?.layout_id || 0);
-        expect(cardLayoutId).toBeGreaterThan(0);
+        const cardNodeUid = String(cardSave.data?.node_uid || '').trim().toLowerCase();
+        expect(/^[a-f0-9]{32}$/.test(cardNodeUid), JSON.stringify(cardSave)).toBeTruthy();
+        expect(cardNodeUid).not.toBe(buttonNodeUid);
 
         const widgetConfig = await callEditorRequest(
           page,
-          `/theme/backend/theme-editor/widget-config?layout_id=${buttonLayoutId}`,
+          `/theme/backend/theme-editor/widget-config?node_uid=${buttonNodeUid}`,
           'GET',
         );
         expectEditorSuccess(widgetConfig, 'widget config');
@@ -221,7 +222,7 @@ moduleDescribe(test, MODULE, 'theme editor workflows', () => {
         expect(Object.keys(widgetConfig.data?.params || {})).toContain('text');
 
         const updateConfig = await callEditorRequest(page, '/theme/backend/theme-editor/update-config', 'POST', {
-          layout_id: buttonLayoutId,
+          node_uid: buttonNodeUid,
           config: {
             text: 'E2E Button Updated',
             type: 'secondary',
@@ -232,10 +233,10 @@ moduleDescribe(test, MODULE, 'theme editor workflows', () => {
         expect(String(updateConfig.preview_html || '')).toContain('E2E Button Updated');
 
         const updateSort = await callEditorRequest(page, '/theme/backend/theme-editor/update-sort', 'POST', {
-          sort_data: [
-            { layout_id: buttonLayoutId, sort_order: 0 },
-            { layout_id: cardLayoutId, sort_order: 1 },
-          ],
+          sort_data: {
+            [buttonNodeUid]: 0,
+            [cardNodeUid]: 1,
+          },
         });
         expectEditorSuccess(updateSort, 'update sort');
 

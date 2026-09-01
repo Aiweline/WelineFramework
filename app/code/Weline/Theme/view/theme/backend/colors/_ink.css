@@ -1,0 +1,161 @@
+/**
+ * Backend Theme - 水墨 palette
+ *
+ * 中国水墨美学后台品牌色盘：宣纸底、墨色字阶、朱砂主色、石青链接
+ * @meta.name {default="水墨",name="水墨",description="水墨，用于描述色系的名称"}
+ * @meta.description {default="中国水墨美学后台色盘：宣纸底、墨色字阶、朱砂主色与石青链接",name="中国水墨美学后台色盘：宣纸底、墨色字阶、朱砂主色与石青链接",description="中国水墨美学后台色盘：宣纸底、墨色字阶、朱砂主色与石青链接，用于描述色系的用途"}
+ * @meta.theme {default="ink",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
+ * @meta.panel {default="color",name="panel",description="panel"}
+ * @meta.disk_kind {default="colors",name="disk_kind",description="disk_kind"}
+ * @meta.palette_role {default="brand",name="palette_role",description="palette_role"}
+ */
+
+:root,
+[data-theme="ink"],
+[data-theme="default"] {
+    /* Brand — 朱砂 */
+    --backend-color-primary: #b84a3c;
+    --backend-color-primary-rgb: 184, 74, 60;
+    --backend-color-primary-light: #d4786a;
+    --backend-color-primary-dark: #963b30;
+    --backend-color-primary-hover: #963b30;
+    --backend-color-primary-active: #7a3028;
+    --backend-color-primary-border: #963b30;
+    --backend-color-primary-bg-subtle: rgba(184, 74, 60, 0.12);
+    --backend-color-primary-bg-light: rgba(184, 74, 60, 0.18);
+
+    /* Wheel-card aliases（配色盘卡片解析 --color-primary） */
+    --color-primary: #b84a3c;
+    --color-bg-secondary: #ede9e1;
+
+    /* Typography — 墨分五色 */
+    --backend-color-text-primary: #1c1c1c;
+    --backend-color-text-secondary: #4a4a48;
+    --backend-color-text-tertiary: #7a7874;
+    --backend-color-text-disabled: #b8b4ac;
+    --backend-color-text-muted: #5c5a56;
+    --backend-color-text-light: #f7f4ef;
+    --backend-color-text-light-secondary: #d4cfc5;
+    --backend-color-text-dark: #1c1c1c;
+    --backend-color-text-placeholder: #9a968e;
+    --backend-color-text-inverse: #fffefa;
+
+    /* Surfaces — 宣纸 */
+    --backend-color-bg-primary: #fffefa;
+    --backend-color-bg-secondary: #ede9e1;
+    --backend-color-bg-tertiary: #e0dbd2;
+    --backend-color-bg-dark: #1f2124;
+    --backend-color-bg-dark-secondary: #16181a;
+    --backend-color-bg-dark-tertiary: #2c3034;
+    --backend-color-bg-body: #f7f4ef;
+    --backend-color-bg-surface: #fffefa;
+    --backend-color-bg-overlay: rgba(28, 28, 28, 0.48);
+
+    /* Borders — 淡墨线 */
+    --backend-color-border-default: #d4cfc5;
+    --backend-color-border-emphasis: #a8a299;
+    --backend-color-border-focus: var(--backend-color-primary);
+    --backend-color-border-light: #e8e4dc;
+    --backend-color-border-dark: #7a7874;
+
+    /* Status — 石绿 / 胭脂 / 赭石 / 花青 */
+    --backend-color-success: #4a7c59;
+    --backend-color-success-rgb: 74, 124, 89;
+    --backend-color-success-light: #6a9a78;
+    --backend-color-success-dark: #3a6448;
+    --backend-color-success-hover: #3a6448;
+    --backend-color-success-bg-subtle: rgba(74, 124, 89, 0.12);
+    --backend-color-success-border: #3a6448;
+
+    --backend-color-danger: #a63d3d;
+    --backend-color-danger-rgb: 166, 61, 61;
+    --backend-color-danger-light: #c46565;
+    --backend-color-danger-dark: #8b3333;
+    --backend-color-danger-hover: #8b3333;
+    --backend-color-danger-bg-subtle: rgba(166, 61, 61, 0.12);
+    --backend-color-danger-border: #8b3333;
+
+    --backend-color-warning: #c4893f;
+    --backend-color-warning-rgb: 196, 137, 63;
+    --backend-color-warning-light: #d4a66a;
+    --backend-color-warning-dark: #a06e2f;
+    --backend-color-warning-hover: #a06e2f;
+    --backend-color-warning-bg-subtle: rgba(196, 137, 63, 0.14);
+    --backend-color-warning-border: #a06e2f;
+
+    --backend-color-info: #4a6b8a;
+    --backend-color-info-rgb: 74, 107, 138;
+    --backend-color-info-light: #6a89a6;
+    --backend-color-info-dark: #3a5670;
+    --backend-color-info-hover: #3a5670;
+    --backend-color-info-bg-subtle: rgba(74, 107, 138, 0.12);
+    --backend-color-info-border: #3a5670;
+
+    /* Links — 石青 */
+    --backend-color-link: #3d6b78;
+    --backend-color-link-hover: #b84a3c;
+    --backend-color-link-visited: #5c4a6e;
+    --backend-color-link-active: var(--backend-color-primary-active);
+
+    /* Components */
+    --backend-color-sidebar-bg: #fffefa;
+    --backend-color-sidebar-text: var(--backend-color-text-primary);
+    --backend-color-sidebar-hover: rgba(184, 74, 60, 0.06);
+    --backend-color-sidebar-active: var(--backend-color-primary-bg-subtle);
+    --backend-color-sidebar-border: #e8e4dc;
+
+    --backend-color-header-bg: rgba(255, 254, 250, 0.88);
+    --backend-color-header-text: var(--backend-color-text-primary);
+    --backend-color-header-border: rgba(168, 162, 153, 0.22);
+
+    --backend-color-table-bg: #fffefa;
+    --backend-color-table-bg-striped: #f7f4ef;
+    --backend-color-table-bg-hover: #f0ebe3;
+    --backend-color-table-border: #e0dbd2;
+
+    --backend-color-card-bg: #fffefa;
+    --backend-color-card-border: #d4cfc5;
+    --backend-color-card-header-bg: #f7f4ef;
+
+    --backend-color-input-bg: #fffefa;
+    --backend-color-input-border: #d4cfc5;
+    --backend-color-input-focus-border: var(--backend-color-primary);
+    --backend-color-input-disabled-bg: #ede9e1;
+
+    --backend-color-btn-primary: var(--backend-color-primary);
+    --backend-color-btn-primary-hover: var(--backend-color-primary-hover);
+    --backend-color-btn-secondary: #4a4a48;
+    --backend-color-btn-secondary-hover: #1c1c1c;
+
+    /* Scrollbar */
+    --backend-scrollbar-width: 4px;
+    --backend-scrollbar-thumb: #c4bfb5;
+    --backend-scrollbar-thumb-hover: #a8a299;
+    --backend-scrollbar-track: rgba(237, 233, 225, 0.5);
+
+    /* Alerts */
+    --backend-color-alert-warning-bg: #faf0e0;
+    --backend-color-alert-warning-text: #7a5520;
+    --backend-color-alert-warning-border: #e8d0a8;
+    --backend-color-alert-success-bg: #e4efe7;
+    --backend-color-alert-success-text: #2f523b;
+    --backend-color-alert-success-border: #b5d0bd;
+    --backend-color-alert-danger-bg: #f8ede9;
+    --backend-color-alert-danger-text: #7a3028;
+    --backend-color-alert-danger-border: #e8c4bc;
+    --backend-color-alert-info-bg: #e8eef3;
+    --backend-color-alert-info-text: #2f465c;
+    --backend-color-alert-info-border: #b8c8d6;
+
+    /* Elevation — soft ink wash shadows */
+    --backend-card-shadow: 0 18px 40px rgba(28, 28, 28, 0.06);
+    --backend-dropdown-shadow: 0 24px 48px rgba(28, 28, 28, 0.10);
+    --backend-modal-shadow: 0 24px 60px rgba(28, 28, 28, 0.14);
+    --backend-header-shadow: 0 8px 30px rgba(28, 28, 28, 0.06);
+    --backend-sidebar-shadow: 16px 0 32px rgba(28, 28, 28, 0.03);
+    --backend-focus-ring: 0 0 0 0.2rem rgba(184, 74, 60, 0.18);
+
+    /* Accent gradient — 朱砂 → 石青（克制） */
+    --backend-color-gradient-start: #b84a3c;
+    --backend-color-gradient-end: #3d6b78;
+}

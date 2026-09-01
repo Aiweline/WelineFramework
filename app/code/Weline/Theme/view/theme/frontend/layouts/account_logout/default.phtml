@@ -149,8 +149,8 @@
                     <h1><?= __('您已退出登录') ?></h1>
                     <p><?= __('当前会话已经结束。你可以返回首页继续浏览，或重新登录进入账户中心。') ?></p>
                     <div class="account-logout__actions">
-                        <a class="account-logout__button account-logout__button--primary" href="/"><?= __('返回首页') ?></a>
-                        <a class="account-logout__button" href="/customer/account/login"><?= __('重新登录') ?></a>
+                        <a class="account-logout__button account-logout__button--primary" href="@url{'/'}"><?= __('返回首页') ?></a>
+                        <a class="account-logout__button" href="@url{'customer/account/login'}"><?= __('重新登录') ?></a>
                     </div>
                 </div>
             </if>

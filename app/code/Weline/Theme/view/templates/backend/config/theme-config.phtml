@@ -8,15 +8,10 @@
 /** @var string|null $previewUrlFrontend */
 /** @var string|null $previewUrlBackend */
 
-
 $area = $area ?: 'frontend';
 $scope = $scope ?: 'default';
 
 // API URLs
-$optionsUrl = $this->getUrl('theme/backend/config/themeConfig/options');
-$saveSelectionUrl = $this->getUrl('theme/backend/config/themeConfig/saveSelection');
-$fileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/fileParams');
-$saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFileParams');
 ?>
 <!-- 页面标题 -->
                 <div class="row">
@@ -26,7 +21,7 @@ $saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFilePar
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="#" data-theme-config-noop-link><?= __('系统') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="<?= $this->getUrl('theme/backend/index') ?>"><?= __('主题管理') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="@url{'theme/backend/index'}"><?= __('主题管理') ?></a></li>
                                     <li class="breadcrumb-item active"><?= __('主题配置') ?></li>
                                 </ol>
                             </div>
@@ -49,7 +44,7 @@ $saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFilePar
                     <div class="col-12">
                         <div class="card mb-0">
                             <div class="card-body py-2">
-                                <w:form method="get" action="@var($this->getUrl('theme/backend/config/themeConfig'))" id="theme-select-form" class="row g-2 align-items-center">
+                                <w:form method="get" action="@url{'theme/backend/config/themeConfig'}" id="theme-select-form" class="row g-2 align-items-center">
                                     <div class="col-auto">
                                         <label class="form-label mb-0 small"><?= __('主题') ?>:</label>
                                     </div>

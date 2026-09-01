@@ -183,6 +183,22 @@ function selectedWidget() {
   return selectedDefaultWidget;
 }
 
+function rowWidgetIdentity(row) {
+  const nodeUid = String((row && row.node_uid) || '').trim().toLowerCase();
+  if (/^[a-f0-9]{32}$/.test(nodeUid)) {
+    return nodeUid;
+  }
+  const layoutId = Number((row && row.layout_id) || 0);
+  return layoutId > 0 ? String(layoutId) : '';
+}
+
+function structureWidgetLocator(page, identity) {
+  const safe = String(identity || '').replace(/"/g, '\\"');
+  return page.locator(
+    `.preview-widget-item[data-node-uid="${safe}"], .preview-widget-item[data-layout-id="${safe}"]`,
+  ).first();
+}
+
 function findDefaultInjection(items, expected = selectedWidget()) {
   return (items || []).find((item) => item
     && item.module === expected.module
@@ -320,8 +336,8 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
         await applyFromApplicationsTab(page);
 
         let rows = await waitForWidgetRows(themeId, identity, 1);
-        const firstLayoutId = Number(rows[0].layout_id || 0);
-        expect(firstLayoutId).toBeGreaterThan(0);
+        const firstIdentity = rowWidgetIdentity(rows[0]);
+        expect(firstIdentity, JSON.stringify(rows[0])).toBeTruthy();
         expect(rows[0].slot_id).toBe(selectedWidget().slot_id);
         expect(rows[0].area).toBe(selectedWidget().area);
         expect(rows[0].status).toBe('draft');
@@ -336,7 +352,7 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
         await expect(defaultInjectionItem(page)).toHaveCount(0, { timeout: 30000 });
 
         await page.locator('.preview-tab[data-view="structure"]').click();
-        const structureWidget = page.locator(`.preview-widget-item[data-layout-id="${firstLayoutId}"]`).first();
+        const structureWidget = structureWidgetLocator(page, firstIdentity);
         await expect(structureWidget).toBeVisible({ timeout: 30000 });
         await structureWidget.hover();
         await structureWidget.locator('.w-theme-editor-delete-widget').click({ force: true });
@@ -357,9 +373,9 @@ moduleDescribe(test, MODULE, 'theme editor default injections', () => {
 
         await applyFromApplicationsTab(page);
         rows = await waitForWidgetRows(themeId, identity, 1);
-        const secondLayoutId = Number(rows[0].layout_id || 0);
-        expect(secondLayoutId).toBeGreaterThan(0);
-        expect(secondLayoutId).not.toBe(firstLayoutId);
+        const secondIdentity = rowWidgetIdentity(rows[0]);
+        expect(secondIdentity, JSON.stringify(rows[0])).toBeTruthy();
+        expect(secondIdentity).not.toBe(firstIdentity);
         await expect(defaultInjectionItem(page)).toHaveCount(0, { timeout: 30000 });
       } finally {
         if (identity) {

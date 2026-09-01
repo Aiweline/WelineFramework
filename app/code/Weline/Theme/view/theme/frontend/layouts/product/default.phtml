@@ -175,7 +175,7 @@ $this->assign('meta', $meta);
 
             <!-- ========== 商品评论容器（仅 slot；部件由 Review default_injections 注入，禁止布局直接 w:widget） ========== -->
             <if condition="meta.showReviews">
-                <section class="product-detail-layout__reviews" weline-code="theme.product.section_reviews">
+                <section class="product-detail-layout__reviews" id="product-reviews" weline-code="theme.product.section_reviews">
                     <div class="product-detail-layout__reviews-container">
                         <w:hook>Weline_Theme::frontend::layouts::product::reviews-before</w:hook>
                         <w:slot id="product-reviews"
@@ -305,7 +305,7 @@ $this->assign('meta', $meta);
 
     /* ---- 页面主体 ---- */
     .product-detail-layout__main {
-        padding: var(--spacing-4, var(--weline-space-4, 1rem)) 0;
+        padding-block: var(--spacing-2, var(--weline-space-2, 0.5rem)) 0;
     }
 
     .product-detail-layout__container {
@@ -577,7 +577,7 @@ $this->assign('meta', $meta);
 
     @media (max-width: 768px) {
         .product-detail-layout__main {
-            padding: var(--spacing-3) 0;
+            padding-block: var(--spacing-1, var(--weline-space-1, 0.25rem)) 0;
         }
 
         .product-detail-layout__container {

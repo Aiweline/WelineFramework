@@ -80,3 +80,4 @@
 - 新增或修改布局、片段、部件时，先补 `@meta.*` / `@param.*` / `@widget.*` 注释。
 - 主题配置走 `ThemeData` / `ThemeConfigManager`，不要在这里重新引入 `theme.json`。
 - `head/default.phtml` 负责加载前台 theme 资源和生成的布局 CSS；其他模板不要重复做全局入口工作。
+- **用户可见文案优先 `<lang>` / `@lang()` / `@lang{}`**，不要在 HTML 正文或属性里写 `<?= __('...') ?>`。无参数时编译期生成静态译文，性能与可维护性均优于运行时 `__()`；`w:*` 标签属性只能用 `@lang`。详见 `app/code/Weline/Theme/doc/开发/Theme开发总指南.md` §4.1。

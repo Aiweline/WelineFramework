@@ -8,7 +8,6 @@
 /** @var string|null $previewUrlFrontend */
 /** @var string|null $previewUrlBackend */
 
-
 $area = $area ?: 'frontend';
 $scope = $scope ?: 'default';
 $identityId = null;
@@ -20,15 +19,12 @@ if ($theme) {
     }
 }
 
-// 生成目录配置回调JSON（使用JSON_UNESCAPED_SLASHES和JSON_UNESCAPED_UNICODE确保格式正确）
-$dirConfigUrl = $this->getUrl('theme/backend/config/layout/dirConfigForm');
-$dirConfigCallback = json_encode([
-    'url' => $dirConfigUrl
-], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+// 目录配置回调：URL 用模板标签编译（勿把 @url 写进 PHP 字符串）
+$dirConfigCallbackPrefix = '{"url":"';
+$dirConfigCallbackSuffix = '"}';
 
 // 生成布局激活回调URL（用于标记当前选中的布局节点）
 // 注意：方法名 getActiveLayouts 对应路由 activeLayouts（去掉 get 前缀，首字母小写）
-$layoutActiveCallbackUrl = $this->getUrl('theme/backend/config/layout/activeLayouts');
 ?>
 <!-- 页面标题 -->
                 <div class="row">
@@ -38,7 +34,7 @@ $layoutActiveCallbackUrl = $this->getUrl('theme/backend/config/layout/activeLayo
                             <div class="page-title-right">
                                 <ol class="breadcrumb m-0">
                                     <li class="breadcrumb-item"><a href="#" data-theme-config-noop-link><?= __('系统') ?></a></li>
-                                    <li class="breadcrumb-item"><a href="<?= $this->getUrl('theme/backend/index') ?>"><?= __('主题管理') ?></a></li>
+                                    <li class="breadcrumb-item"><a href="@url{'theme/backend/index'}"><?= __('主题管理') ?></a></li>
                                     <li class="breadcrumb-item active"><?= __('主题配置') ?></li>
                                 </ol>
                             </div>
@@ -61,7 +57,7 @@ $layoutActiveCallbackUrl = $this->getUrl('theme/backend/config/layout/activeLayo
                     <div class="col-12">
                         <div class="card mb-0">
                             <div class="card-body py-2">
-                                <w:form method="get" action="@var($this->getUrl('theme/backend/config/layout/edit'))" id="theme-edit-form" class="row g-2 align-items-center">
+                                <w:form method="get" action="@url{'theme/backend/config/layout/edit'}" id="theme-edit-form" class="row g-2 align-items-center">
                                     <div class="col-auto">
                                         <label class="form-label mb-0 small"><?= __('主题') ?>:</label>
                                     </div>
@@ -163,7 +159,7 @@ $layoutActiveCallbackUrl = $this->getUrl('theme/backend/config/layout/activeLayo
                                         </ul>
                                         <div class="tab-content config-panel">
                                             <div class="tab-pane fade show active" id="fe-layouts">
-                                                <w:meta-manager namespace="theme" area="frontend" scope="$scope" identity-id="$identityId" type="layout" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-frontend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallback) ?>" layout-active-callback="<?= htmlspecialchars($layoutActiveCallbackUrl) ?>"/>
+                                                <w:meta-manager namespace="theme" area="frontend" scope="$scope" identity-id="$identityId" type="layout" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-frontend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallbackPrefix, ENT_QUOTES) ?>"@url{'theme/backend/config/layout/dirConfigForm'}"<?= htmlspecialchars($dirConfigCallbackSuffix, ENT_QUOTES) ?>" layout-active-callback="@url{'theme/backend/config/layout/activeLayouts'}"/>
                                             </div>
                                             <div class="tab-pane fade" id="fe-colors">
                                                 <?php 
@@ -189,7 +185,7 @@ $layoutActiveCallbackUrl = $this->getUrl('theme/backend/config/layout/activeLayo
                                                 <?php endif; ?>
                                             </div>
                                             <div class="tab-pane fade" id="fe-partials">
-                                                <w:meta-manager namespace="theme" area="frontend" scope="$scope" identity-id="$identityId" type="partial" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-frontend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallback) ?>"/>
+                                                <w:meta-manager namespace="theme" area="frontend" scope="$scope" identity-id="$identityId" type="partial" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-frontend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallbackPrefix, ENT_QUOTES) ?>"@url{'theme/backend/config/layout/dirConfigForm'}"<?= htmlspecialchars($dirConfigCallbackSuffix, ENT_QUOTES) ?>"/>
                                             </div>
                                             <div class="tab-pane fade" id="fe-variables">
                                                 <?php if (!empty($frontendVariables)): ?>
@@ -235,7 +231,7 @@ $layoutActiveCallbackUrl = $this->getUrl('theme/backend/config/layout/activeLayo
                                         </ul>
                                         <div class="tab-content config-panel">
                                             <div class="tab-pane fade show active" id="be-layouts">
-                                                <w:meta-manager namespace="theme" area="backend" scope="$scope" identity-id="$identityId" type="layout" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-backend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallback) ?>" layout-active-callback="<?= htmlspecialchars($layoutActiveCallbackUrl) ?>"/>
+                                                <w:meta-manager namespace="theme" area="backend" scope="$scope" identity-id="$identityId" type="layout" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-backend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallbackPrefix, ENT_QUOTES) ?>"@url{'theme/backend/config/layout/dirConfigForm'}"<?= htmlspecialchars($dirConfigCallbackSuffix, ENT_QUOTES) ?>" layout-active-callback="@url{'theme/backend/config/layout/activeLayouts'}"/>
                                             </div>
                                             <div class="tab-pane fade" id="be-colors">
                                                 <?php if (!empty($backendColorPalettes)): ?>
@@ -252,7 +248,7 @@ $layoutActiveCallbackUrl = $this->getUrl('theme/backend/config/layout/activeLayo
                                                 <?php endif; ?>
                                             </div>
                                             <div class="tab-pane fade" id="be-partials">
-                                                <w:meta-manager namespace="theme" area="backend" scope="$scope" identity-id="$identityId" type="partial" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-backend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallback) ?>"/>
+                                                <w:meta-manager namespace="theme" area="backend" scope="$scope" identity-id="$identityId" type="partial" default-namespace="theme" show-filters="true" show-tree="true" min-depth="4" on-save="theme-meta-backend-saved" dir-config-callback="<?= htmlspecialchars($dirConfigCallbackPrefix, ENT_QUOTES) ?>"@url{'theme/backend/config/layout/dirConfigForm'}"<?= htmlspecialchars($dirConfigCallbackSuffix, ENT_QUOTES) ?>"/>
                                             </div>
                                             <div class="tab-pane fade" id="be-variables">
                                                 <?php if (!empty($backendVariables)): ?>

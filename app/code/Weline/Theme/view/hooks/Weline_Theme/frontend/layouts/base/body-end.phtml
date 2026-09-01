@@ -18,6 +18,8 @@ window.Weline = window.Weline || {};
 window.Weline.Theme = window.Weline.Theme || {};
 window.Weline.Theme.storefrontPlaceholderSrc = <?= $placeholderSrcJson ?: '""' ?>;
 </script>
-<script src="@static(Weline_Theme::js/storefront-image-fallback.js)?v=20260825-imgph3"
-        defer
-        data-no-extract="true"></script>
+<?php // mini-cart-drawer：由 mini-cart-icon 组件自带；shopper-toast CSS 在 theme.css（主题全局） ?>
+<div hidden
+     data-weline-load="storefrontImageFallback"
+     aria-hidden="true"></div>
+<?php // Theme 全局店面 JS：经 modules + data-weline-load，禁止 @static 直引 ?>

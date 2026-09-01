@@ -50,15 +50,18 @@ use YourVendor\YourModule\Service\LocationService;
 
 $service = ObjectManager::getInstance(LocationService::class);
 $currentLocation = $service->getCurrentLocation();
-
-$line1 = (string)__('配送至');
-$line2 = $currentLocation ? $currentLocation->getDisplayName() : (string)__('请选择地址');
 ?>
-<a href="/location/select" class="location-link" title="<?= __('选择配送地址') ?>">
+<a href="/location/select" class="location-link" title="@lang(选择配送地址)">
     <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
     <div class="location-text">
-        <span class="location-line-1"><?= $line1 ?></span>
-        <span class="location-line-2"><?= htmlspecialchars($line2) ?></span>
+        <span class="location-line-1"><lang>配送至</lang></span>
+        <span class="location-line-2">
+            <?php if ($currentLocation): ?>
+                <?= htmlspecialchars($currentLocation->getDisplayName()) ?>
+            <?php else: ?>
+                <lang>请选择地址</lang>
+            <?php endif; ?>
+        </span>
     </div>
 </a>
 ```
@@ -74,6 +77,7 @@ $line2 = $currentLocation ? $currentLocation->getDisplayName() : (string)__('请
 ## 注意事项
 
 - 建议链接跳转到专门的地址/仓库选择页面，或弹出侧边栏/弹窗进行选择。
+- 固定文案优先 `<lang>` / `@lang()`；动态地址名等业务数据仍用 PHP 输出并 `htmlspecialchars`。
 - 输出内容会直接渲染在现有 `.header-location` 容器内部，注意保持结构与主题样式兼容。
 - 如果 Hook 模板未输出任何内容，则会回退到默认的“配送至 中国大陆”文案。
 

@@ -54,6 +54,16 @@ export function register(UI) {
             const tab = event.target?.closest?.('[data-w-mega-tab], [data-mega-tab]');
             if (!tab) return;
             if (event.type === 'click') {
+                const href = (tab.getAttribute?.('href') || '').trim();
+                const navigable = href !== '' && href !== '#' && !/^javascript:/i.test(href);
+                if (navigable) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    activateFromTab(tab);
+                    const absolute = tab instanceof HTMLAnchorElement && tab.href ? tab.href : href;
+                    window.location.assign(absolute);
+                    return;
+                }
                 event.preventDefault();
                 event.stopPropagation();
             }

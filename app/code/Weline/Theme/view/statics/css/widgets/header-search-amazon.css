@@ -148,6 +148,30 @@
     color: inherit;
 }
 
+/* Dark flyout (portaled outside .weline-header): beat foundation w-menu light hover */
+.search-type-submenu .w-menu__item:hover,
+.search-type-submenu .w-menu__item:focus-visible,
+.search-type-submenu .w-menu__item.is-active,
+.search-type-submenu .w-menu__item[aria-selected="true"],
+.search-type-submenu .search-type-node.is-open > .search-type-option--branch,
+.search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch {
+    background: rgba(255, 255, 255, 0.14) !important;
+    color: var(--weline-chrome-text-on-inverse, #ffffff) !important;
+    outline: 0;
+}
+
+.search-type-submenu .w-menu__item:hover .search-type-option-chevron,
+.search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
+.search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
+.search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.search-type-submenu .w-menu__item.is-active .search-type-option-check,
+.search-type-submenu .w-menu__item[aria-selected="true"] .search-type-option-check {
+    color: var(--weline-chrome-primary, #ff9900) !important;
+}
+
 .search-category-select,
 .search-type-select {
     position: absolute;

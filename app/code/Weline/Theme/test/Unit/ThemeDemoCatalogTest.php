@@ -19,6 +19,7 @@ class ThemeDemoCatalogTest extends TestCase
         self::assertSame($products[0]['image'], ThemeDemoCatalog::productImage(99));
         self::assertNotSame('', $products[0]['name']);
         self::assertGreaterThan(0, $products[0]['price']);
+        self::assertSame(1, $products[0]['is_demo']);
     }
 
     public function testFormatPrice(): void

@@ -62,8 +62,8 @@
 
 <?php
 $themeId = $theme && is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? $theme['identity_id'] ?? null);
-$getUrl = $this->getUrl('theme/backend/config/layout/getComponentParams');
-$modalUrl = $this->getUrl('theme/backend/config/layout/getComponentParamsModal');
+$getPath = 'theme/backend/config/layout/getComponentParams';
+$modalPath = 'theme/backend/config/layout/getComponentParamsModal';
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
@@ -84,8 +84,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     const themeId = <?= json_encode($themeId, $jsonForScriptFlags) ?>;
     const area = <?= json_encode($area, $jsonForScriptFlags) ?>;
     const scope = <?= json_encode($scope, $jsonForScriptFlags) ?>;
-    const getUrl = <?= json_encode($getUrl, $jsonForScriptFlags) ?>;
-    const modalUrl = <?= json_encode($modalUrl, $jsonForScriptFlags) ?>;
+    const getUrl = "@url{$getPath}";
+    const modalUrl = "@url{$modalPath}";
     const selectThemeTitle = <?= json_encode((string)__('提示'), $jsonForScriptFlags) ?>;
     const selectThemeText = <?= json_encode((string)__('请先选择主题'), $jsonForScriptFlags) ?>;
     const confirmButtonText = <?= json_encode((string)__('确定'), $jsonForScriptFlags) ?>;

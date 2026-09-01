@@ -9,6 +9,7 @@ use Weline\Framework\Cache\Adapter\FileAdapter;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\CookieScope;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
@@ -289,7 +290,15 @@ class PreviewTokenService
      */
     public function clearPreviewCookie(): void
     {
-        Cookie::delete(self::TOKEN_KEY, $this->cookieOptions());
+        $options = $this->cookieOptions();
+        Cookie::delete(self::TOKEN_KEY, $options);
+
+        $qualified = CookieScope::qualifyName(self::TOKEN_KEY);
+        if ($qualified !== self::TOKEN_KEY) {
+            Cookie::delete($qualified, $options);
+        }
+
+        self::resetRequestState();
     }
 
     /**

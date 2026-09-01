@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Model;
 
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\SchemaDiffExcludedModelInterface;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
@@ -12,7 +13,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: 'Theme 虚拟布局版本表')]
 #[Index(name: 'idx_theme_virtual_layout_version_asset', columns: ['virtual_layout_id', 'version_no'], type: 'KEY', comment: '虚拟布局版本索引')]
 #[Index(name: 'idx_theme_virtual_layout_version_status', columns: ['virtual_layout_id', 'status'], type: 'KEY', comment: '虚拟布局版本状态索引')]
-class ThemeVirtualLayoutVersion extends Model
+class ThemeVirtualLayoutVersion extends Model implements SchemaDiffExcludedModelInterface
 {
     public const schema_table = 'theme_virtual_layout_version';
     public const schema_primary_key = 'version_id';

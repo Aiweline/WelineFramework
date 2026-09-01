@@ -51,7 +51,7 @@ $textColor = ThemeUiColor::sanitize($this->getData('text_color') ?? '', 'var(--w
     <?php if ($description !== ''): ?>
         <p class="widget-description"><?= $esc((string)$description) ?></p>
     <?php endif; ?>
-    <w:form class="newsletter-form" action="/newsletter/subscribe" method="post">
+    <w:form class="newsletter-form" action="@url{'newsletter/subscribe'}" method="post">
         <input type="email" name="email" class="newsletter-input" placeholder="<?= $esc((string)$placeholder) ?>" required>
         <button type="submit" class="newsletter-submit"><?= $esc((string)$buttonText) ?></button>
     </w:form>

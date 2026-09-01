@@ -242,4 +242,25 @@ class ThemeEditorRequestParamsTest extends TestCore
         $this->expectExceptionMessage('theme_scope_publish_method_invalid');
         $source->invoke($provider, '/theme/backend/theme-editor/publish-scoped-workspace', 'GET');
     }
+
+    public function testEditorRequestBridgeMapsRequiredDefaultsAndThemeAiRoutes(): void
+    {
+        $provider = (string)\file_get_contents(
+            BP . 'app/code/Weline/Theme/extends/module/Weline_Framework/Query/ThemeQueryProvider.php'
+        );
+
+        foreach ([
+            "'/theme/backend/theme-editor/reconcile-required-defaults'" => 'postReconcileRequiredDefaults()',
+            "'/theme/backend/theme-editor/apply-required-defaults'" => 'postApplyRequiredDefaults()',
+            "'/theme/backend/theme-editor/widget-field-i18n'" => 'getWidgetFieldI18n()',
+            "'/theme/backend/ai/agents'" => 'createDirectThemeAi()->getAgents()',
+            "'/theme/backend/ai/publish'" => 'createDirectThemeAi()->postPublish()',
+            "'/theme/backend/ai/prepare-refine'" => 'createDirectThemeAi()->postPrepareRefine()',
+        ] as $route => $handler) {
+            self::assertStringContainsString($route, $provider, $route);
+            self::assertStringContainsString($handler, $provider, $handler);
+        }
+
+        self::assertStringContainsString("'/theme/backend/ai/'", $provider);
+    }
 }

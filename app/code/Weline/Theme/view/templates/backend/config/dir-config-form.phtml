@@ -495,7 +495,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         
         // 加载颜色变量
         function loadColorVariables(params, modal) {
-            var url = '<?= $this->getUrl("theme/backend/config/layout/getColorVariables") ?? "/theme/backend/config/layout/getColorVariables" ?>';
+            var url = "@url{'theme/backend/config/layout/getColorVariables'}";
             var formData = new FormData();
             formData.append('theme_id', params.themeId);
             formData.append('area', params.area);
@@ -634,7 +634,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             saveBtn.disabled = true;
             saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span><?= __('保存中...') ?>';
             
-            var url = '<?= $this->getUrl("theme/backend/config/layout/saveColorVariables") ?? "/theme/backend/config/layout/saveColorVariables" ?>';
+            var url = "@url{'theme/backend/config/layout/saveColorVariables'}";
             var formData = new FormData();
             formData.append('theme_id', params.themeId);
             formData.append('area', params.area);

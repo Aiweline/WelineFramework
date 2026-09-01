@@ -37,11 +37,11 @@
    class="hamburger-menu-btn"
    id="hamburger-menu"
    role="button"
-   aria-label="<?= __('打开全部分类菜单') ?>"
+   aria-label="@lang(打开全部分类菜单)"
    aria-expanded="false"
    aria-controls="categories-sidebar">
     <i class="fas fa-bars" aria-hidden="true"></i>
-    <span class="hamburger-label"><?= __('全部') ?></span>
+    <span class="hamburger-label"><lang>全部</lang></span>
 </a>
 ```
 

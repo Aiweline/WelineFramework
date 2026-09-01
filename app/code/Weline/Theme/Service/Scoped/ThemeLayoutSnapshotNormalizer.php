@@ -7,6 +7,7 @@ namespace Weline\Theme\Service\Scoped;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Service\TemplateInlineWidgetMerger;
 
 /** Normalize legacy grouped layout-version snapshots into the canonical node map. */
 final class ThemeLayoutSnapshotNormalizer
@@ -35,6 +36,9 @@ final class ThemeLayoutSnapshotNormalizer
                 }
                 $config = \is_array($config) ? $config : [];
                 unset($config['_theme_release_id'], $config['_theme_scope_draft_projection']);
+                if (!empty($config[TemplateInlineWidgetMerger::CONFIG_TEMPLATE_DELETED])) {
+                    continue;
+                }
                 $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
                 if (\preg_match('/^[a-f0-9]{32}$/D', $uid) !== 1) {
                     $uid = $this->legacyNodeUid($widget, $config);

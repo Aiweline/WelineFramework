@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Model;
 
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\SchemaDiffExcludedModelInterface;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
@@ -15,7 +16,7 @@ use Weline\Theme\Api\Layout\LayoutIdentityHasher;
 #[Index(name: 'idx_theme_virtual_layout_unique', columns: ['layout_identity_hash'], type: 'UNIQUE', comment: '虚拟布局身份唯一索引')]
 #[Index(name: 'idx_theme_virtual_layout_lookup', columns: ['theme_id', 'area', 'layout_type', 'layout_option', 'locale_code', 'is_active'], type: 'KEY', comment: '虚拟布局运行时查询索引')]
 #[Index(name: 'idx_theme_virtual_layout_target', columns: ['target_type', 'target_id'], type: 'KEY', comment: '目标身份索引')]
-class ThemeVirtualLayout extends Model
+class ThemeVirtualLayout extends Model implements SchemaDiffExcludedModelInterface
 {
     public const schema_table = 'theme_virtual_layout';
     public const schema_primary_key = 'virtual_layout_id';

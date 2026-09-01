@@ -206,36 +206,81 @@
         return regionApiPromise;
     }
 
-    function loadRegions(sourceUrl, countryCode) {
+    function buildSourceRequestUrl(sourceUrl, countryCode, catalog) {
+        var url = text(sourceUrl || defaultSourceUrl);
+        var sep = url.indexOf('?') >= 0 ? '&' : '?';
+        if (text(catalog) === 'global') {
+            url += sep + 'catalog=global';
+            sep = '&';
+        }
+        if (text(countryCode)) {
+            url += sep + 'country_code=' + encodeURIComponent(text(countryCode).toUpperCase());
+        }
+        return url;
+    }
+
+    function fetchRegionsFromSource(sourceUrl, countryCode, catalog) {
+        return fetch(buildSourceRequestUrl(sourceUrl, countryCode, catalog), {
+            credentials: 'same-origin',
+            headers: {Accept: 'application/json'}
+        }).then(function (response) {
+            if (!response.ok) {
+                throw new Error('region fetch failed');
+            }
+            return response.json();
+        }).then(function (payload) {
+            return normalizeRegions(regionsFromPayload(payload));
+        });
+    }
+
+    function loadRegions(sourceUrl, countryCode, catalog) {
         sourceUrl = text(sourceUrl || defaultSourceUrl);
         countryCode = text(countryCode).toUpperCase();
-        var cacheKey = sourceUrl + '|' + countryCode;
-        if (Array.isArray(window.WelineShippingRegions) && !countryCode) {
+        catalog = text(catalog || 'installed');
+        if (catalog !== 'global') {
+            catalog = 'installed';
+        }
+        var cacheKey = sourceUrl + '|' + countryCode + '|' + catalog;
+        if (Array.isArray(window.WelineShippingRegions) && !countryCode && catalog === 'installed') {
             return Promise.resolve(normalizeRegions(window.WelineShippingRegions));
         }
-        if (!window.Weline || !window.Weline.Api) {
-            return Promise.resolve(fallbackRegions());
-        }
         if (!regionSources[cacheKey]) {
-            regionSources[cacheKey] = getRegionApi().then(function (RegionApi) {
-                var params = {};
-                if (countryCode) {
-                    params.country_code = countryCode;
-                }
-                return RegionApi.list(params, {silent: true});
-            }).then(function (payload) {
-                return normalizeRegions(regionsFromPayload(payload));
-            }).catch(function () {
-                return fallbackRegions();
-            });
+            if (catalog === 'global') {
+                regionSources[cacheKey] = fetchRegionsFromSource(sourceUrl, countryCode, catalog).catch(function () {
+                    return fallbackRegions();
+                });
+            } else if (!window.Weline || !window.Weline.Api) {
+                regionSources[cacheKey] = Promise.resolve(fallbackRegions());
+            } else {
+                regionSources[cacheKey] = getRegionApi().then(function (RegionApi) {
+                    var params = {catalog: catalog};
+                    if (countryCode) {
+                        params.country_code = countryCode;
+                    }
+                    return RegionApi.list(params, {silent: true});
+                }).then(function (payload) {
+                    return normalizeRegions(regionsFromPayload(payload));
+                }).catch(function () {
+                    return fallbackRegions();
+                });
+            }
         }
 
         return regionSources[cacheKey];
     }
 
-    function groupFor(code, sourceUrl) {
+    function groupFor(code, sourceUrl, catalog) {
         if (!groups[code]) {
-            groups[code] = {code: code, controls: {}, state: {}, regions: fallbackRegions(), fixed: {}, cascade: true, sourceUrl: frontendRoute(sourceUrl || defaultSourceUrl)};
+            groups[code] = {
+                code: code,
+                controls: {},
+                state: {},
+                regions: fallbackRegions(),
+                fixed: {},
+                cascade: true,
+                catalog: text(catalog || 'installed') === 'global' ? 'global' : 'installed',
+                sourceUrl: frontendRoute(sourceUrl || defaultSourceUrl)
+            };
         }
         return groups[code];
     }
@@ -870,8 +915,9 @@
             code = 'w-address-auto-' + (++autoCode);
         }
         root.dataset.addressCode = code;
-        var group = groupFor(code, config.sourceUrl || defaultSourceUrl);
+        var group = groupFor(code, config.sourceUrl || defaultSourceUrl, config.catalog || 'installed');
         group.cascade = config.cascade !== false;
+        group.catalog = text(config.catalog || group.catalog || 'installed') === 'global' ? 'global' : 'installed';
         group.labels = labelsFor(config);
         group.sourceUrl = frontendRoute(config.sourceUrl || group.sourceUrl || defaultSourceUrl);
         ['country', 'province', 'city'].forEach(function (level) {
@@ -919,7 +965,7 @@
             }
         });
         updateGroup(group);
-        loadRegions(group.sourceUrl).then(function (regions) {
+        loadRegions(group.sourceUrl, '', group.catalog).then(function (regions) {
             group.regions = regions || [];
             // 异步加载会覆盖本地合成国家；按已锁定国家重新注入。
             ensureCountryInRegions(
@@ -1008,7 +1054,7 @@
 
         // 切国家时带 country_code 重新拉列表，触发服务端 ensure 入库后再渲染级联。
         if (countryCode) {
-            return loadRegions(group.sourceUrl, countryCode).then(function (regions) {
+            return loadRegions(group.sourceUrl, countryCode, group.catalog).then(function (regions) {
                 group.regions = regions || [];
                 ensureCountryInRegions(group, countryCode, countryName || countryCode);
                 return finish();
@@ -1019,7 +1065,7 @@
             return Promise.resolve(finish());
         }
 
-        return loadRegions(group.sourceUrl).then(function (regions) {
+        return loadRegions(group.sourceUrl, '', group.catalog).then(function (regions) {
             group.regions = regions || [];
             return finish();
         });

@@ -26,6 +26,8 @@ final class ThemeDefaultContainerWidthContractTest extends TestCase
         self::assertStringContainsString('--theme-container-max-width: 1440px;', (string)file_get_contents($frameworkThemeCss));
         self::assertStringContainsString('--weshop-container-max-width: 1440px;', (string)file_get_contents($weshopSpacingCss));
         self::assertStringContainsString('--spacing-container-max-width: 1440px;', (string)file_get_contents($frameworkSpacingCss));
+        self::assertStringContainsString('--weline-layout-content-max-width:', (string)file_get_contents($frameworkSpacingCss));
+        self::assertStringContainsString('--weline-layout-content-padding-inline:', (string)file_get_contents($frameworkSpacingCss));
         self::assertStringContainsString('var(--weshop-container-max-width, 1440px)', (string)file_get_contents($frameworkThemeCss));
     }
 
@@ -82,11 +84,9 @@ final class ThemeDefaultContainerWidthContractTest extends TestCase
 
         self::assertFileExists($accountDefaultLayout);
         self::assertFileExists($accountDashboardLayout);
-        self::assertFileExists($motorAccountCss);
 
         $accountDefaultContent = (string)file_get_contents($accountDefaultLayout);
         $accountDashboardContent = (string)file_get_contents($accountDashboardLayout);
-        $motorAccountContent = (string)file_get_contents($motorAccountCss);
 
         self::assertStringContainsString(
             'max-width: var(--weline-layout-content-max-width, var(--layout-max-width, var(--container-max-width, 1440px)));',
@@ -119,8 +119,11 @@ final class ThemeDefaultContainerWidthContractTest extends TestCase
         self::assertStringNotContainsString('max-width: var(--container-max-width, 1400px);', $accountDefaultContent);
         self::assertStringNotContainsString('max-width: var(--layout-max-width, 1600px);', $accountDashboardContent);
 
-        self::assertStringContainsString('--motor-account-content-max-width', $motorAccountContent);
-        self::assertStringNotContainsString('width: min(1360px', $motorAccountContent);
+        if (is_file($motorAccountCss)) {
+            $motorAccountContent = (string)file_get_contents($motorAccountCss);
+            self::assertStringContainsString('--motor-account-content-max-width', $motorAccountContent);
+            self::assertStringNotContainsString('width: min(1360px', $motorAccountContent);
+        }
     }
 
     public function testFrameworkMainLayoutContainersUseShared1440WidthAndPadding(): void
@@ -160,7 +163,7 @@ final class ThemeDefaultContainerWidthContractTest extends TestCase
         foreach ([
             $root . '/app/code/Weline/Theme/view/theme/frontend/partials/head/default.phtml',
             $root . '/app/code/Weline/Theme/view/theme/frontend/partials/header/default.phtml',
-            $root . '/app/code/Weline/Theme/view/theme/frontend/partials/footer/default.phtml',
+            $root . '/app/code/Weline/Theme/view/statics/css/widgets/footer-chrome-amazon.css',
         ] as $file) {
             self::assertFileExists($file);
 

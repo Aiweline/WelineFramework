@@ -11,9 +11,6 @@ $area = $area ?: 'frontend';
 $scope = $scope ?: 'default';
 
 // API URLs
-$saveUrl = $this->getUrl('theme/backend/config/variables/save');
-$saveVariableUrl = $this->getUrl('theme/backend/config/variables/saveVariable');
-$refreshPreviewUrl = $this->getUrl('theme/backend/config/variables/refreshPreview');
 
 $categories = $data['categories'] ?? [];
 $fileName = $data['name'] ?? ucfirst($file);
@@ -326,7 +323,7 @@ $fileName = $data['name'] ?? ucfirst($file);
             
             formData.append('variables', JSON.stringify(variables));
             
-            WelineThemeBinQuery.request('<?= $saveUrl ?>', { method: 'POST', body: formData })
+            WelineThemeBinQuery.request('@url{'theme/backend/config/variables/save'}', { method: 'POST', body: formData })
             .then(function(response) {
                 var data = (function(r){ var b=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness); return (b&&typeof b.unwrapBusiness==='function')?b.unwrapBusiness(r):r.data; })(response);
                 if (response.ok && data && data.code === 200) {
@@ -383,7 +380,7 @@ $fileName = $data['name'] ?? ucfirst($file);
             formData.append('meta_identify', metaIdentify);
             formData.append('value', value);
             
-            WelineThemeBinQuery.request('<?= $saveVariableUrl ?>', { method: 'POST', body: formData, silent: true })
+            WelineThemeBinQuery.request('@url{'theme/backend/config/variables/saveVariable'}', { method: 'POST', body: formData, silent: true })
                 .then(function(response) {
                     var data = (function(r){ var b=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness); return (b&&typeof b.unwrapBusiness==='function')?b.unwrapBusiness(r):r.data; })(response);
                     if (response.ok && data && data.code === 200 && data.preview_url) {
@@ -482,7 +479,7 @@ $fileName = $data['name'] ?? ucfirst($file);
             formData.append('variables', JSON.stringify(variables));
             
             var opts = { method: 'POST', body: formData };
-            var req = WelineThemeBinQuery.request('<?= $saveUrl ?>', opts);
+            var req = WelineThemeBinQuery.request('@url{'theme/backend/config/variables/save'}', opts);
             req.then(function(res) {
                 var data = (res && res.data) || res;
                 if (data.code === 200) {

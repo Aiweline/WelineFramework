@@ -20,10 +20,15 @@
  * @param show_wishlist {default=true,type="bool",label="显示收藏"}
  * @param show_compare {default=true,type="bool",label="显示对比"}
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ * @param label_new_bg {default="",type="color",label="新品标签背景",description="留空使用主题全局色盘"}
+ * @param label_new_text {default="",type="color",label="新品标签文字",description="留空使用主题全局色盘"}
+ * @param label_sale_bg {default="",type="color",label="促销标签背景",description="留空使用主题全局色盘"}
+ * @param label_sale_text {default="",type="color",label="促销标签文字",description="留空使用主题全局色盘"}
  */
 
 
 use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ThemeUiColor;
 use Weline\Theme\Helper\WidgetUiScope;
@@ -51,12 +56,15 @@ foreach ($products as &$product) {
 }
 unset($product);
 
+$labelOverrides = ProductLabelStyle::widgetOverridesFromTemplate($this);
+$scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
+
 ?>
 
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>">
+         data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
     <h3 class="widget-title">
         <w:icon name="link" size="sm"></w:icon>
         <?= htmlspecialchars($title) ?>
@@ -87,6 +95,14 @@ unset($product);
                     </div>
                     
                     <div class="product-link-wrap">
+                        <?php
+                        $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
+                        echo $this->fetch('Weline_Theme::theme/frontend/partials/product/labels.phtml', [
+                            'is_demo' => $labelFlags['is_demo'],
+                            'is_new' => $labelFlags['is_new'],
+                            'is_sale' => $labelFlags['is_sale'],
+                        ]);
+                        ?>
                         <a href="<?= htmlspecialchars($productUrl) ?>" class="product-link">
                             <img src="<?= htmlspecialchars($productImage) ?>" 
                                  alt="<?= htmlspecialchars($productName) ?>"

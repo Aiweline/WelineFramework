@@ -39,6 +39,16 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringContainsString('data-w-menu-panel', $source);
         self::assertStringContainsString("menuItem.className = 'w-menu__item'", $source);
         self::assertStringContainsString('window.Weline.UI.mount(navMoreWrapper)', $source);
+        self::assertStringContainsString('id="header-nav-fill"', $source);
+        self::assertMatchesRegularExpression(
+            '/\.header-nav-fill,\s*\n\.header-nav-right-slot,\s*\n\.header-nav-links-slot\s*\{[^}]*flex:\s*0\s+1\s+auto;/s',
+            $source
+        );
+        self::assertMatchesRegularExpression(
+            '/\.header-nav-fill-inner\s*\{[^}]*width:\s*auto;/s',
+            $source
+        );
+        self::assertStringContainsString('内容自适应且未被压缩时', $source);
         self::assertStringNotContainsString('function checkNavFillOverflow()', $source);
         self::assertMatchesRegularExpression(
             '/\.header-nav-links\s*\{[^}]*gap:\s*var\(--weline-space-5\)/s',
@@ -130,6 +140,9 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         $accountSource = (string)file_get_contents($account);
         self::assertStringContainsString('.login-text::after', $accountSource);
         self::assertStringContainsString("@url{'customer/account/login'}", $accountSource);
+        self::assertStringContainsString('data-w-header-account="1"', $accountSource);
+        self::assertStringContainsString('data-weline-load="api,account"', $accountSource);
+        self::assertStringContainsString('createFrontendSession', $accountSource);
         self::assertStringNotContainsString('href="/account/login"', $accountSource);
 
         $cartSource = (string)file_get_contents($cart);
@@ -139,5 +152,21 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringContainsString('mobile-menu-toggle', $fullSource);
         self::assertStringContainsString('is-drawer-open', $fullSource);
         self::assertStringNotContainsString('.header-nav {\n        display: none;', $fullSource);
+    }
+
+    public function testHeaderAccountWidgetDeclaresApiAccountModules(): void
+    {
+        $account = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/header/account/default.phtml';
+        self::assertFileExists($account);
+        $accountSource = (string)file_get_contents($account);
+        self::assertStringContainsString('data-w-header-account="1"', $accountSource);
+        self::assertStringContainsString('data-weline-load="api,account"', $accountSource);
+        self::assertStringContainsString('header-account-links', $accountSource);
+        self::assertStringContainsString('account-dropdown-menu', $accountSource);
+        self::assertStringContainsString('display: block', $accountSource);
+        self::assertStringContainsString('.account-dropdown .dropdown-menu', $accountSource);
+        self::assertStringNotContainsString('data-weline-load="api,account"', (string)file_get_contents(
+            dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/default.phtml'
+        ));
     }
 }

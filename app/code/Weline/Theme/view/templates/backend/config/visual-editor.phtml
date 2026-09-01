@@ -9,15 +9,6 @@ $area = $area ?: 'frontend';
 $scope = $scope ?: 'default';
 $backendThemeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Backend\Api\View\BackendThemeConfigInterface::class);
 
-// API URLs
-$optionsUrl = $this->getUrl('theme/backend/config/themeConfig/options');
-$saveSelectionUrl = $this->getUrl('theme/backend/config/themeConfig/saveSelection');
-$fileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/fileParams');
-$saveFileParamsUrl = $this->getUrl('theme/backend/config/themeConfig/saveFileParams');
-$publishPreviewScopeUrl = $this->getUrl('theme/backend/config/themeConfig/publishPreviewScope');
-$discardPreviewScopeUrl = $this->getUrl('theme/backend/config/themeConfig/discardPreviewScope');
-$syncThemeModeUrl = $this->getUrl('theme/backend/config/themeConfig/syncThemeMode');
-
 $themeIdValue = 0;
 $themeNameValue = __('未选择主题');
 if (is_object($theme)) {
@@ -34,13 +25,6 @@ if (is_object($theme)) {
     }
 }
 $hasTheme = $themeIdValue > 0;
-$paletteConfigUrl = $hasTheme
-    ? $this->getUrl('theme/backend/config/variables', [
-        'theme_id' => $themeIdValue,
-        'area' => $area,
-        'scope' => $scope,
-    ])
-    : '#';
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
@@ -125,11 +109,11 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             </div>
             
             <div class="area-switcher btn-group btn-group-sm">
-                <a href="<?= $hasTheme ? $this->getUrl('*/*/*', ['area' => 'frontend', 'theme_id' => $themeIdValue]) : '#' ?>" 
+                <a href="<?php if ($hasTheme): ?>@url{'*/*/*'|['area' => 'frontend', 'theme_id' => $themeIdValue]}<?php else: ?>#<?php endif; ?>" 
                    class="btn <?= $area === 'frontend' ? 'btn-primary' : 'btn-outline-secondary' ?>">
                    <i class="mdi mdi-web"></i> <?= __('前端') ?>
                 </a>
-                <a href="<?= $hasTheme ? $this->getUrl('*/*/*', ['area' => 'backend', 'theme_id' => $themeIdValue]) : '#' ?>" 
+                <a href="<?php if ($hasTheme): ?>@url{'*/*/*'|['area' => 'backend', 'theme_id' => $themeIdValue]}<?php else: ?>#<?php endif; ?>" 
                    class="btn <?= $area === 'backend' ? 'btn-primary' : 'btn-outline-secondary' ?>">
                    <i class="mdi mdi-cog"></i> <?= __('后端') ?>
                 </a>
@@ -138,7 +122,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         
         <div class="toolbar-center">
             <div class="theme-palette-shortcut me-3">
-                <a href="<?= $paletteConfigUrl ?>"
+                <a href="<?php if ($hasTheme): ?>@url{'theme/backend/config/variables'|['theme_id' => $themeIdValue, 'area' => $area, 'scope' => $scope]}<?php else: ?>#<?php endif; ?>"
                    class="btn btn-sm btn-outline-secondary <?= $hasTheme ? '' : 'disabled' ?>"
                    <?= $hasTheme ? 'target="_blank" rel="noopener"' : 'aria-disabled="true"' ?>
                    title="<?= __('配置当前主题色盘') ?>">
@@ -190,7 +174,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         </div>
         
         <div class="toolbar-right">
-            <a href="<?= $this->getUrl('theme/backend/index') ?>" class="btn btn-sm btn-outline-secondary me-2">
+            <a href="@url{'theme/backend/index'}" class="btn btn-sm btn-outline-secondary me-2">
                 <?= __('Exit') ?>
             </a>
             <button type="button" class="btn btn-sm btn-outline-warning me-2" id="discard-preview-btn">
@@ -295,7 +279,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         <!-- Center Panel: Live Preview -->
         <main class="preview-panel">
             <div class="preview-container desktop" id="preview-container">
-                <iframe src="<?= $hasTheme ? $this->getUrl('theme/backend/index/preview', ['theme_id' => $themeIdValue, 'area' => $area]) : 'about:blank' ?>" 
+                <iframe src="<?php if ($hasTheme): ?>@url{'theme/backend/index/preview'|['theme_id' => $themeIdValue, 'area' => $area]}<?php else: ?>about:blank<?php endif; ?>" 
                         frameborder="0" id="preview-iframe" title="<?= __('预览') ?>"></iframe>
                 <div class="preview-loading" id="preview-loading">
                     <div class="spinner-border text-primary" role="status"></div>
@@ -374,14 +358,14 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         locale: <?= json_encode($currentLocale, $jsonForScriptFlags) ?>,
         availableLocales: <?= json_encode($locales, $jsonForScriptFlags) ?>,
         urls: {
-            options: <?= json_encode($optionsUrl, $jsonForScriptFlags) ?>,
-            saveSelection: <?= json_encode($saveSelectionUrl, $jsonForScriptFlags) ?>,
-            fileParams: <?= json_encode($fileParamsUrl, $jsonForScriptFlags) ?>,
-            saveFileParams: <?= json_encode($saveFileParamsUrl, $jsonForScriptFlags) ?>,
-            publishPreviewScope: <?= json_encode($publishPreviewScopeUrl, $jsonForScriptFlags) ?>,
-            discardPreviewScope: <?= json_encode($discardPreviewScopeUrl, $jsonForScriptFlags) ?>,
-            syncThemeMode: <?= json_encode($syncThemeModeUrl, $jsonForScriptFlags) ?>,
-            upload: <?= json_encode($this->getUrl('theme/backend/config/layout/upload'), $jsonForScriptFlags) ?>
+            options: "@url{'theme/backend/config/themeConfig/options'}",
+            saveSelection: "@url{'theme/backend/config/themeConfig/saveSelection'}",
+            fileParams: "@url{'theme/backend/config/themeConfig/fileParams'}",
+            saveFileParams: "@url{'theme/backend/config/themeConfig/saveFileParams'}",
+            publishPreviewScope: "@url{'theme/backend/config/themeConfig/publishPreviewScope'}",
+            discardPreviewScope: "@url{'theme/backend/config/themeConfig/discardPreviewScope'}",
+            syncThemeMode: "@url{'theme/backend/config/themeConfig/syncThemeMode'}",
+            upload: "@url{'theme/backend/config/layout/upload'}"
         },
         translations: {
             loading: <?= json_encode((string)__('Loading...'), $jsonForScriptFlags) ?>,

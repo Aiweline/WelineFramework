@@ -548,7 +548,24 @@
                         menu.insertBefore(item, menu.firstChild);
                     }
                 }
-                if (menu.childElementCount === 0) more.hidden = true;
+            }
+
+            // Pack back the most recently overflowed items while leftover space remains.
+            // Prevents an empty gap next to「更多」when one large removal frees room for smaller controls.
+            let packGuard = 0;
+            while (menu.childElementCount > 0 && packGuard < 64) {
+                packGuard += 1;
+                const candidate = menu.firstChild;
+                if (!(candidate instanceof HTMLElement)) break;
+                itemsHost.append(candidate);
+                if (usedWidth(element, more) > limit + 1) {
+                    menu.insertBefore(candidate, menu.firstChild);
+                    break;
+                }
+            }
+
+            if (menu.childElementCount === 0) {
+                more.hidden = true;
             }
 
             if (more.hidden) {
@@ -653,6 +670,9 @@
         apiSaveWidget: '',
         apiUpdateConfig: '',
         apiDeleteWidget: '',
+        apiChromeMode: '',
+        apiDetachChrome: '',
+        apiRestoreChrome: '',
         apiWidgets: '',
         apiDefaultInjections: '',
         apiApplyDefaultInjection: '',
@@ -665,6 +685,11 @@
         apiSaveLayoutSelection: '',
         apiSaveLayoutConfig: '',
         apiAiTranslateConfig: '',
+        apiThemeAiAgents: '',
+        apiThemeAiComponentStream: '',
+        apiThemeAiRefineStream: '',
+        apiThemeAiPublish: '',
+        apiThemeAiPrepareRefine: '',
         apiVirtualThemeAiCatalog: '',
         apiVirtualThemeCreateDraft: '',
         apiVirtualThemeBlockAction: '',
@@ -680,6 +705,7 @@
         apiSaveVersion: '',
         apiSwitchVersion: '',
         apiRestoreOriginal: '',
+        apiClearThemeCache: '',
         apiResetDraftResources: '',
         apiPublishVersion: '',
         apiDeleteVersion: '',
@@ -718,6 +744,8 @@
         previewDropFallbackTimer: null,
         lastPreviewInsertSortOrder: null,
         selectedSlot: null, // 当前选中的插槽
+        chromeModeCache: null, // SharedChromeService resolveModes payload
+        chromeModeFetchedAt: 0,
         originalWidgetOrder: new Map(), // 保存原始部件顺序
         originalGroupOrder: [], // 保存原始分组顺序
         previewRefreshInFlight: false,
@@ -733,6 +761,7 @@
         versionPanelOpen: false, // 版本面板是否展开
         // 嵌套距离：elementsFromPoint 得到的层级栈 [0]=最外，lastHoverPoint 为 iframe 内坐标
         lockHeld: false,
+        currentUserId: 0,
         lockHeartbeatTimer: null,
         lockLifecycleBound: false,
         lockConflictInfo: null,
@@ -752,6 +781,7 @@
         editorFullscreenFallback: false,
         configLocale: '',
         widgetLibraryTab: 'general',
+        libraryTypeFilters: { types: [], aiOnly: false },
         widgetLibraryRenderMode: 'widgets',
         widgetLibraryTabCounts: { general: 0, basic: 0, applications: 0 },
         defaultInjectionLib: {
@@ -760,6 +790,8 @@
             loading: false,
             applyingKey: '',
             renderAfterLoad: false,
+            reconciling: false,
+            dismissedBlockers: {},
         },
         scopeIdentity: null,
         legacyScopeReadonly: false,
@@ -2203,6 +2235,32 @@
         };
     }
 
+    function payloadStoreModeFromScopeIdentity(fallbackPayload = {}) {
+        const identity = state.scopeIdentity;
+        const kind = String(identity?.scope_kind || '').trim().toLowerCase();
+        // Global / Website ScopeIdentity must keep store_mode=null. Coercing to
+        // "normal" breaks ScopeIdentity::fromWebsiteClaims / fromGlobalClaims.
+        if (kind === 'global' || kind === 'website') {
+            return null;
+        }
+        if (identity && Object.prototype.hasOwnProperty.call(identity, 'store_mode')
+            && identity.store_mode !== undefined
+            && identity.store_mode !== null
+            && String(identity.store_mode).trim() !== ''
+        ) {
+            return String(identity.store_mode).trim().toLowerCase();
+        }
+        const fromPayload = fallbackPayload?.store_mode;
+        if (fromPayload !== undefined && fromPayload !== null && String(fromPayload).trim() !== '') {
+            return String(fromPayload).trim().toLowerCase();
+        }
+        const fromUrl = getCurrentWindowParam('store_mode');
+        if (fromUrl !== null && fromUrl !== undefined && String(fromUrl).trim() !== '') {
+            return String(fromUrl).trim().toLowerCase();
+        }
+        return kind === 'store' || kind === 'channel' ? 'normal' : null;
+    }
+
     function buildLayoutVersionIdentityPayload(extra = {}) {
         const layoutType = getEffectiveLayoutType();
         const layoutOption = getEffectiveLayoutOption();
@@ -2220,7 +2278,7 @@
             scope,
             locale: editorLocale,
             locale_code: editorLocale,
-            store_mode: identityPayload.store_mode || getCurrentWindowParam('store_mode') || 'normal',
+            store_mode: payloadStoreModeFromScopeIdentity(identityPayload),
             target_type: targetType,
             target_id: targetId,
             editor_context: editorContext,
@@ -2304,6 +2362,9 @@
     async function saveLockedVirtualLayoutDraft() {
         if (!config.apiVirtualThemeCreateDraft) {
             throw new Error('Virtual layout draft endpoint is unavailable');
+        }
+        if (!(await ensureVirtualLayoutAssetAvailable())) {
+            throw new Error(translateUiText('虚拟布局资产表已移除，请使用主题编辑器 scoped 工作区'));
         }
         const payload = buildLayoutLockVirtualIdentityPayload({
             use_ai: 0,
@@ -2527,6 +2588,7 @@
         const nextType = normalizeLayoutOptionValue(layoutType || getCurrentPageType() || 'homepage') || 'homepage';
         state.pageType = nextType;
         state.layoutType = nextType;
+        invalidateSharedChromeModeCache();
         state.layoutOption = resolveLayoutOptionForType(nextType, layoutOption || state.layoutOption);
         if (elements.pageTypeSelect && elements.pageTypeSelect.value !== nextType) {
             elements.pageTypeSelect.value = nextType;
@@ -2869,6 +2931,219 @@
         return context;
     }
 
+    const SHARED_CHROME_CARRIER_PAGE_TYPE = 'homepage';
+    const SHARED_CHROME_AREAS = ['header', 'footer'];
+
+    function isSharedChromeArea(area) {
+        return SHARED_CHROME_AREAS.includes(String(area || '').trim().toLowerCase());
+    }
+
+    function isSharedChromeSlot(slotId) {
+        const id = String(slotId || '').trim().toLowerCase();
+        if (!id) {
+            return false;
+        }
+        return SHARED_CHROME_AREAS.some((area) => id === area || id.startsWith(`${area}-`) || id.startsWith(`${area}_`));
+    }
+
+    function isSharedChromeTarget(area, slotId) {
+        return isSharedChromeArea(area) || isSharedChromeSlot(slotId);
+    }
+
+    function inferSharedChromeArea(area, slotId) {
+        const normalizedArea = String(area || '').trim().toLowerCase();
+        if (isSharedChromeArea(normalizedArea)) {
+            return normalizedArea;
+        }
+        const id = String(slotId || '').trim().toLowerCase();
+        for (const chromeArea of SHARED_CHROME_AREAS) {
+            if (id === chromeArea || id.startsWith(`${chromeArea}-`) || id.startsWith(`${chromeArea}_`)) {
+                return chromeArea;
+            }
+        }
+        return '';
+    }
+
+    function invalidateSharedChromeModeCache() {
+        state.chromeModeCache = null;
+        state.chromeModeFetchedAt = 0;
+    }
+
+    async function fetchSharedChromeMode(force = false) {
+        if (!state.themeId || !config.apiChromeMode) {
+            return null;
+        }
+        const now = Date.now();
+        if (!force && state.chromeModeCache && (now - state.chromeModeFetchedAt) < 5000) {
+            return state.chromeModeCache;
+        }
+        const layoutType = getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage') || 'homepage';
+        const payload = {
+            theme_id: state.themeId,
+            page_type: layoutType,
+            layout_type: layoutType,
+            layout_option: getEffectiveLayoutOption(state.layoutOption || 'default'),
+            editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
+            editor_context: buildTypedEditorContext('layout'),
+            scope: { identity: state.scopeIdentity },
+            ...getLayoutLockVirtualPayload(),
+        };
+        const result = await apiJson(config.apiChromeMode, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        if (!result?.success) {
+            throw new Error(result?.message || translateUiText('加载页头页脚继承状态失败'));
+        }
+        state.chromeModeCache = result.data || null;
+        state.chromeModeFetchedAt = now;
+        return state.chromeModeCache;
+    }
+
+    function resolveSharedChromeSlotMode(chromeMode, area) {
+        const slot = chromeMode?.slots?.[area];
+        if (!slot) {
+            return chromeMode?.is_carrier ? 'local' : 'inherit';
+        }
+        return String(slot.mode || 'inherit');
+    }
+
+    async function resolveChromeWriteLayoutType(area, slotId) {
+        const currentType = getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage') || 'homepage';
+        if (currentType === SHARED_CHROME_CARRIER_PAGE_TYPE || !isSharedChromeTarget(area, slotId)) {
+            return currentType;
+        }
+        try {
+            const chromeMode = await fetchSharedChromeMode(false);
+            const chromeArea = inferSharedChromeArea(area, slotId);
+            const mode = resolveSharedChromeSlotMode(chromeMode, chromeArea);
+            return mode === 'inherit' ? SHARED_CHROME_CARRIER_PAGE_TYPE : currentType;
+        } catch (error) {
+            console.warn('[ThemeEditor] chrome mode lookup failed; keep current layout type', error);
+            return currentType;
+        }
+    }
+
+    function buildSharedChromePanelHtml(chromeMode, area) {
+        if (!chromeMode || chromeMode.is_carrier) {
+            return `
+                <div class="shared-chrome-panel" data-chrome-mode="carrier">
+                    <div class="w-badge" data-tone="primary">${escapeHtml(translateUiText('全局页头/页脚'))}</div>
+                    <p class="w-text" data-tone="muted">${escapeHtml(translateUiText('当前在全局 chrome 载体编辑；修改后全站跟随。'))}</p>
+                </div>
+            `;
+        }
+        const mode = resolveSharedChromeSlotMode(chromeMode, area);
+        if (mode === 'inherit') {
+            return `
+                <div class="shared-chrome-panel" data-chrome-mode="inherit">
+                    <div class="w-badge" data-tone="success">${escapeHtml(translateUiText('全局 · 跟随站点 chrome'))}</div>
+                    <p class="w-text" data-tone="muted">${escapeHtml(translateUiText('默认继承全局页头/页脚。在此编辑会写入全站；若仅本布局需要不同 chrome，请改为独立。'))}</p>
+                    <div class="shared-chrome-actions">
+                        <button type="button" class="w-btn" data-tone="warning" data-chrome-action="detach" data-chrome-area="${escapeHtml(area)}">
+                            ${escapeHtml(translateUiText('改为本布局独立'))}
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+        return `
+            <div class="shared-chrome-panel" data-chrome-mode="local">
+                <div class="w-badge" data-tone="warning">${escapeHtml(translateUiText('本布局独立 chrome'))}</div>
+                <p class="w-text" data-tone="muted">${escapeHtml(translateUiText('此布局已切断全局页头/页脚。恢复继承后将重新跟随站点 chrome。'))}</p>
+                <div class="shared-chrome-actions">
+                    <button type="button" class="w-btn" data-tone="primary" data-chrome-action="restore" data-chrome-area="${escapeHtml(area)}">
+                        ${escapeHtml(translateUiText('恢复全局继承'))}
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    async function ensureSharedChromePanel(containerEl, area, slotId) {
+        if (!containerEl || !isSharedChromeTarget(area, slotId)) {
+            return;
+        }
+        const chromeArea = inferSharedChromeArea(area, slotId) || 'header';
+        let panelHost = containerEl.querySelector('[data-shared-chrome-host="1"]');
+        if (!panelHost) {
+            panelHost = document.createElement('div');
+            panelHost.setAttribute('data-shared-chrome-host', '1');
+            containerEl.insertBefore(panelHost, containerEl.firstChild);
+        }
+        panelHost.innerHTML = `<div class="w-theme-editor-loading-state"><span class="w-spinner" role="status"></span></div>`;
+        try {
+            const chromeMode = await fetchSharedChromeMode(false);
+            panelHost.innerHTML = buildSharedChromePanelHtml(chromeMode, chromeArea);
+            panelHost.querySelectorAll('[data-chrome-action]').forEach((button) => {
+                button.addEventListener('click', async () => {
+                    const action = button.getAttribute('data-chrome-action');
+                    const targetArea = button.getAttribute('data-chrome-area') || chromeArea;
+                    await handleSharedChromeAction(action, targetArea);
+                });
+            });
+        } catch (error) {
+            panelHost.innerHTML = `<p class="w-text" data-tone="danger">${escapeHtml(error?.message || translateUiText('加载页头页脚继承状态失败'))}</p>`;
+        }
+    }
+
+    async function handleSharedChromeAction(action, area) {
+        if (!state.themeId) {
+            showToast(translateUiText('请先选择主题'), 'warning');
+            return;
+        }
+        const layoutType = getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage') || 'homepage';
+        if (layoutType === SHARED_CHROME_CARRIER_PAGE_TYPE) {
+            showToast(translateUiText('全局载体无需切换继承'), 'info');
+            return;
+        }
+        const areas = area ? [area] : SHARED_CHROME_AREAS;
+        if (action === 'detach') {
+            const ok = window.confirm(translateUiText('确定改为本布局独立页头/页脚？之后仅本布局生效，不再跟随全局。'));
+            if (!ok) {
+                return;
+            }
+        }
+        const endpoint = action === 'restore' ? config.apiRestoreChrome : config.apiDetachChrome;
+        const payload = {
+            theme_id: state.themeId,
+            page_type: layoutType,
+            layout_type: layoutType,
+            layout_option: getEffectiveLayoutOption(state.layoutOption || 'default'),
+            editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
+            editor_context: buildTypedEditorContext('layout'),
+            scope: { identity: state.scopeIdentity },
+            areas,
+            ...getLayoutLockVirtualPayload(),
+        };
+        try {
+            const result = await apiJson(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!result?.success) {
+                throw new Error(result?.message || translateUiText('操作失败'));
+            }
+            invalidateSharedChromeModeCache();
+            showToast(result.message || translateUiText('已更新页头页脚继承'), 'success');
+            try {
+                await syncLayoutWorkspaceAfterServerMutation(result);
+            } catch (workspaceError) {
+                console.warn('[ThemeEditor] chrome action workspace sync failed', workspaceError);
+            }
+            if (typeof loadLayoutPreview === 'function') {
+                loadLayoutPreview();
+            }
+            if (state.selectedSlot) {
+                await renderSlotInfoPanel(state.selectedSlot);
+            }
+        } catch (error) {
+            showToast(error?.message || translateUiText('操作失败'), 'error');
+        }
+    }
+
     function scopedWorkspaceKey(resourceType, options = {}) {
         const context = buildTypedEditorContext(resourceType, options);
         const identity = context.scope?.identity || {};
@@ -2894,6 +3169,38 @@
         return state.scopedWorkspaces[scopedWorkspaceKey(resourceType, options)] || null;
     }
 
+    function applyScopedWorkspaceSnapshot(resourceType, snapshot, options = {}) {
+        if (!snapshot || typeof snapshot !== 'object') {
+            return null;
+        }
+        const key = scopedWorkspaceKey(resourceType, options);
+        const current = state.scopedWorkspaces[key] || {};
+        const next = { ...current, ...snapshot };
+        if (Object.prototype.hasOwnProperty.call(snapshot, 'expected_parent_release_id')) {
+            next.expected_parent_release_id = snapshot.expected_parent_release_id ?? null;
+        }
+        if (snapshot.revision_id !== undefined && snapshot.draft_revision_id === undefined) {
+            next.draft_revision_id = snapshot.revision_id;
+        }
+        state.scopedWorkspaces[key] = next;
+        state.hasChanges = true;
+        renderThemeBindingOwnership();
+        renderScopedConflictPanel();
+        return next;
+    }
+
+    async function syncLayoutWorkspaceAfterServerMutation(response, options = {}) {
+        const snapshot = response?.scoped_workspace
+            || response?.data?.workspace
+            || response?.data?.scoped_workspace
+            || response?.workspace
+            || null;
+        if (snapshot && typeof snapshot === 'object') {
+            return applyScopedWorkspaceSnapshot('layout', snapshot, options);
+        }
+        return loadScopedWorkspace('layout', { ...options, skipReconcile: true });
+    }
+
     async function loadScopedWorkspace(resourceType, options = {}) {
         if (!config.apiScopedWorkspace || !state.scopeIdentity) return null;
         const url = new URL(config.apiScopedWorkspace, window.location.origin);
@@ -2905,40 +3212,53 @@
         state.scopedWorkspaces[key] = result.data || {};
         renderThemeBindingOwnership();
         renderScopedConflictPanel();
+        if (resourceType === 'layout' && options.skipReconcile !== true) {
+            const queued = Promise.resolve(state.pendingScopedMutation).catch(() => {}).then(function() {
+                return reconcileRequiredDefaultsAfterDraftReady();
+            });
+            state.pendingScopedMutation = queued.catch(() => undefined);
+        }
         return state.scopedWorkspaces[key];
     }
 
     function queueScopedChanges(resourceType, changes, options = {}) {
         const run = async () => {
             const key = scopedWorkspaceKey(resourceType, options);
-            const workspace = state.scopedWorkspaces[key]
-                || await loadScopedWorkspace(resourceType, options);
-            if (!workspace) throw new Error('Scoped workspace is unavailable');
-            const result = await apiJson(config.apiScopedWorkspace, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    editor_context: buildTypedEditorContext(resourceType, options),
-                    expected_revision: Number(workspace.revision || 0),
-                    expected_parent_release_id: workspace.expected_parent_release_id ?? null,
-                    changes,
-                    summary: options.summary || '',
-                }),
-            });
-            if (!result?.success) throw new Error(result?.message || 'Save scoped changes failed');
-            const next = { ...workspace, ...(result.data || {}) };
-            next.expected_parent_release_id = result.data?.expected_parent_release_id ?? workspace.expected_parent_release_id ?? null;
-            next.draft_revision_id = result.data?.revision_id ?? workspace.draft_revision_id ?? null;
-            state.scopedWorkspaces[key] = next;
-            state.hasChanges = true;
-            renderThemeBindingOwnership();
-            renderScopedConflictPanel();
-            return next;
+            const attempt = async (allowRetry) => {
+                const workspace = state.scopedWorkspaces[key]
+                    || await loadScopedWorkspace(resourceType, { ...options, skipReconcile: true });
+                if (!workspace) throw new Error('Scoped workspace is unavailable');
+                const result = await apiJson(config.apiScopedWorkspace, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        editor_context: buildTypedEditorContext(resourceType, options),
+                        expected_revision: Number(workspace.revision || 0),
+                        expected_parent_release_id: workspace.expected_parent_release_id ?? null,
+                        changes,
+                        summary: options.summary || '',
+                    }),
+                });
+                if (!result?.success) {
+                    const message = String(result?.message || 'Save scoped changes failed');
+                    if (allowRetry && message.includes('theme_scope_revision_conflict')) {
+                        await loadScopedWorkspace(resourceType, { ...options, skipReconcile: true });
+                        return attempt(false);
+                    }
+                    throw new Error(message);
+                }
+                const next = { ...workspace, ...(result.data || {}) };
+                next.expected_parent_release_id = result.data?.expected_parent_release_id ?? workspace.expected_parent_release_id ?? null;
+                next.draft_revision_id = result.data?.revision_id ?? workspace.draft_revision_id ?? null;
+                state.scopedWorkspaces[key] = next;
+                state.hasChanges = true;
+                renderThemeBindingOwnership();
+                renderScopedConflictPanel();
+                return next;
+            };
+            return attempt(true);
         };
         const queued = Promise.resolve(state.pendingScopedMutation).catch(() => {}).then(run);
-        // Callers still receive the rejecting promise so they can restore the
-        // previous selector/value. The queue tail itself must settle, otherwise
-        // one failed request would poison every later flush and context switch.
         state.pendingScopedMutation = queued.catch(() => undefined);
         return queued;
     }
@@ -2968,6 +3288,9 @@
                 await loadScopedWorkspace(resourceType, options);
             }
             throw new Error(result?.message || 'Publish scoped workspace failed');
+        }
+        if (result?.data?.blocked) {
+            throw new Error('theme_scope_structural_conflict');
         }
         state.scopedWorkspaces[key] = await loadScopedWorkspace(resourceType, options);
         return result.data || null;
@@ -3016,6 +3339,14 @@
                     );
                 }
                 throw new Error(result?.message || 'Publish scoped workspace failed');
+            }
+            if (result?.data?.blocked) {
+                state.scopedWorkspaces[key] = {
+                    ...workspace,
+                    status: 'conflict',
+                    conflicts: Array.isArray(result.data.conflicts) ? result.data.conflicts : [],
+                };
+                throw new Error('theme_scope_structural_conflict');
             }
             state.scopedWorkspaces[key] = {
                 ...workspace,
@@ -3425,6 +3756,66 @@
         return /^[a-f0-9]{32}$/.test(uid) ? uid : '';
     }
 
+    function resolveDomWidgetIdentity(element) {
+        if (!element) {
+            return { layoutId: '', nodeUid: '' };
+        }
+        const nodeUid = validNodeUid(
+            element.dataset?.nodeUid
+            || element.getAttribute?.('data-node-uid')
+            || ''
+        );
+        const layoutId = String(
+            element.dataset?.layoutId
+            || element.getAttribute?.('data-layout-id')
+            || ''
+        ).trim();
+        return {
+            layoutId: nodeUid || layoutId,
+            nodeUid: nodeUid || validNodeUid(layoutId),
+        };
+    }
+
+    function widgetIdentityDataAttrs(layoutId) {
+        const nodeUid = validNodeUid(layoutId);
+        const raw = String(layoutId || '').trim();
+        let attrs = '';
+        // Hex identity is node_uid only; keep data-layout-id for non-hex legacy keys.
+        if (nodeUid) {
+            attrs += ` data-node-uid="${escapeHtml(nodeUid)}"`;
+        } else if (raw) {
+            attrs += ` data-layout-id="${escapeHtml(raw)}"`;
+        }
+        return attrs;
+    }
+
+    function applyWidgetIdentityToElement(element, layoutId) {
+        if (!element) {
+            return { layoutId: '', nodeUid: '' };
+        }
+        const nodeUid = validNodeUid(layoutId);
+        const raw = String(layoutId || '').trim();
+        if (nodeUid) {
+            element.dataset.nodeUid = nodeUid;
+            element.setAttribute('data-node-uid', nodeUid);
+            delete element.dataset.layoutId;
+            element.removeAttribute('data-layout-id');
+            return { layoutId: nodeUid, nodeUid };
+        }
+        if (raw) {
+            element.dataset.layoutId = raw;
+            element.setAttribute('data-layout-id', raw);
+            delete element.dataset.nodeUid;
+            element.removeAttribute('data-node-uid');
+            return { layoutId: raw, nodeUid: '' };
+        }
+        delete element.dataset.layoutId;
+        delete element.dataset.nodeUid;
+        element.removeAttribute('data-layout-id');
+        element.removeAttribute('data-node-uid');
+        return { layoutId: '', nodeUid: '' };
+    }
+
     function scopedValuesEqual(left, right) {
         if (Object.is(left, right)) return true;
         if (Array.isArray(left) || Array.isArray(right)) {
@@ -3475,16 +3866,8 @@
     }
 
     async function queueRemovedLayoutNode(response, hints = {}) {
-        const nodeUid = resolveRemovedLayoutNodeUid(response, hints);
-        if (!nodeUid) {
-            console.warn('[ThemeEditor] Skip scoped remove_node tombstone: missing node_uid', hints);
-            return;
-        }
-        await queueScopedChanges('layout', [{
-            op: 'remove_node',
-            path: `/nodes/${nodeUid}`,
-            node_uid: nodeUid,
-        }], { summary: 'layout_node_removed' });
+        void hints;
+        await syncLayoutWorkspaceAfterServerMutation(response);
     }
 
     function resolveRemovedLayoutNodeUid(response, hints = {}) {
@@ -3569,15 +3952,33 @@
     }
 
     function resolveWidgetDeleteTarget(button, bar) {
-        const layoutId = String(bar?.dataset?.layoutId || button?.dataset?.layoutId || '').trim();
+        const layoutId = resolveDomWidgetIdentity(bar || button).layoutId
+            || resolveDomWidgetIdentity(button).layoutId;
         const templateRef = String(bar?.dataset?.templateRef || button?.dataset?.templateRef || '').trim();
         const stackTop = (state.nestStack && state.nestStack.length) ? String(state.nestStack[0]).trim() : '';
         const identity = stackTop || layoutId || templateRef;
         const isTemplate = identity.startsWith('tpl:') || (!layoutId && templateRef !== '');
         return {
-            layoutId: isTemplate ? '' : (layoutId || (/^\d+$/.test(identity) ? identity : '')),
+            layoutId: isTemplate ? '' : (layoutId || (/^\d+$/.test(identity) ? identity : (validNodeUid(identity) ? identity : ''))),
             templateRef: isTemplate ? (templateRef || identity) : templateRef,
             slotId: String(button?.dataset?.slotId || bar?.dataset?.slotId || '').trim(),
+        };
+    }
+
+    function buildWidgetIdentityPayloadFields(identityInput, widgetContext = {}) {
+        const layoutId = typeof identityInput === 'object'
+            ? String(identityInput?.layoutId || identityInput?.layout_id || '').trim()
+            : String(identityInput || '').trim();
+        const nodeUid = validNodeUid(
+            typeof identityInput === 'object'
+                ? (identityInput?.nodeUid || identityInput?.node_uid || widgetContext.nodeUid || layoutId)
+                : (widgetContext.nodeUid || layoutId)
+        );
+        const numericLayoutId = /^\d+$/.test(layoutId) ? parseInt(layoutId, 10) : 0;
+        // Greenfield: identity key is node_uid. Only send positive layout_id for pre-drop numeric rows.
+        return {
+            layout_id: (!nodeUid && numericLayoutId > 0) ? numericLayoutId : 0,
+            node_uid: nodeUid || (!numericLayoutId ? layoutId : ''),
         };
     }
 
@@ -3585,18 +3986,22 @@
         const layoutId = typeof identityInput === 'object'
             ? String(identityInput?.layoutId || '').trim()
             : String(identityInput || '').trim();
+        const identityFields = buildWidgetIdentityPayloadFields(identityInput, widgetContext);
         const templateRef = typeof identityInput === 'object'
             ? String(identityInput?.templateRef || '').trim()
             : '';
         return {
-            layout_id: layoutId || 0,
+            ...identityFields,
             template_ref: templateRef || widgetContext.templateRef || '',
             theme_id: state.themeId,
             slot_id: slotId || widgetContext.slotId || '',
             area: area || widgetContext.area || 'content',
-            layout_type: state.layoutType || 'homepage',
-            layout_option: state.layoutOption || 'default',
-            editor_area: state.editorArea || 'frontend',
+            page_type: getEffectivePageType(state.pageType || 'homepage'),
+            layout_type: getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage'),
+            layout_option: getEffectiveLayoutOption(state.layoutOption || 'default'),
+            editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
+            editor_context: buildTypedEditorContext('layout'),
+            scope: { identity: state.scopeIdentity },
             widget_module: widgetContext.widgetModule || '',
             widget_type: widgetContext.widgetType || '',
             widget_code: widgetContext.widgetCode || '',
@@ -3608,9 +4013,17 @@
         const layoutId = typeof identityInput === 'object'
             ? String(identityInput?.layoutId || '').trim()
             : String(identityInput || '').trim();
+        const nodeUid = validNodeUid(
+            typeof identityInput === 'object'
+                ? (identityInput?.nodeUid || layoutId)
+                : layoutId
+        );
         const templateRef = typeof identityInput === 'object'
             ? String(identityInput?.templateRef || '').trim()
             : '';
+        if (nodeUid) {
+            return `[data-node-uid="${cssIdentifier(nodeUid)}"]`;
+        }
         if (layoutId) {
             return dataLayoutIdSelector(layoutId);
         }
@@ -3656,7 +4069,7 @@
         await state.pendingScopedMutation;
         const options = { locale: normalizedLocale || 'default' };
         const current = getScopedWorkspaceState(resourceType, options)
-            || await loadScopedWorkspace(resourceType, options);
+            || await loadScopedWorkspace(resourceType, { ...options, skipReconcile: true });
         const changes = scopedConfigCommands(prefix, configValues, current?.draft_payload || {});
         if (changes.length === 0) return current;
         return queueScopedChanges(resourceType, changes, {
@@ -3668,6 +4081,86 @@
             });
             return workspace;
         });
+    }
+
+    /**
+     * Default-locale save-widget-config already wrote scoped layout; sync revision only.
+     * Locale saves still need client-side i18n ownership patches.
+     */
+    async function finalizeWidgetConfigSave(nodeUid, configValues, locale, saveResult) {
+        nodeUid = validNodeUid(nodeUid);
+        const normalizedLocale = String(locale || '').trim();
+        if (normalizedLocale) {
+            return queueWidgetConfigOwnership(nodeUid, configValues, normalizedLocale);
+        }
+        const workspace = await syncLayoutWorkspaceAfterServerMutation(saveResult);
+        if (nodeUid && workspace) {
+            document.querySelectorAll(`[data-scope-node-uid="${nodeUid}"]`).forEach((container) => {
+                renderWidgetConfigOwnership(container, nodeUid, workspace, '');
+            });
+        }
+        return workspace;
+    }
+
+    async function requestSaveWidgetConfig(payload, locale = '') {
+        const run = async () => {
+            const attempt = async (allowRetry) => {
+                const area = payload.area
+                    || state.selectedWidget?.dataset?.area
+                    || state.selectedSlot?.area
+                    || '';
+                const slotId = payload.slot_id
+                    || state.selectedWidget?.dataset?.slotId
+                    || state.selectedSlot?.id
+                    || '';
+                let writeLayoutType = getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage') || 'homepage';
+                try {
+                    writeLayoutType = await resolveChromeWriteLayoutType(area, slotId);
+                } catch (error) {
+                    console.warn('[ThemeEditor] chrome config write layout resolve failed', error);
+                }
+                const enriched = {
+                    ...payload,
+                    theme_id: payload.theme_id || state.themeId,
+                    page_type: writeLayoutType,
+                    layout_type: writeLayoutType,
+                    layout_option: payload.layout_option || getEffectiveLayoutOption(state.layoutOption || 'default'),
+                    editor_area: payload.editor_area || getEffectiveEditorArea(state.editorArea || 'frontend'),
+                    editor_context: payload.editor_context || buildTypedEditorContext('layout', { layout_type: writeLayoutType }),
+                    scope: payload.scope || { identity: state.scopeIdentity },
+                    area: area || payload.area || undefined,
+                    slot_id: slotId || payload.slot_id || undefined,
+                    ...getLayoutLockVirtualPayload(),
+                };
+                const result = await apiJson(getWidgetConfigSaveUrl(), {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(enriched),
+                });
+                if (!result?.success) {
+                    const message = String(result?.message || translateUiText('保存失败'));
+                    if (allowRetry && message.includes('theme_scope_revision_conflict')) {
+                        await loadScopedWorkspace('layout', { skipReconcile: true });
+                        return attempt(false);
+                    }
+                    throw new Error(message);
+                }
+                const normalizedConfig = (result.config && typeof result.config === 'object')
+                    ? result.config
+                    : (payload.config || {});
+                await finalizeWidgetConfigSave(
+                    result.node_uid || payload.node_uid,
+                    normalizedConfig,
+                    locale,
+                    result,
+                );
+                return result;
+            };
+            return attempt(true);
+        };
+        const queued = Promise.resolve(state.pendingScopedMutation).catch(() => {}).then(run);
+        state.pendingScopedMutation = queued.catch(() => undefined);
+        return queued;
     }
 
     async function queueLayoutConfigOwnership(configValues, locale = '') {
@@ -3816,76 +4309,24 @@
     }
 
     /**
-     * Frontend preview is a capability URL. The typed editor context describes
-     * what may be rendered, while the server-issued token authorizes that exact
-     * Scope/Theme/Layout/Locale snapshot. Never treat the raw typed context as
-     * an authorization credential.
+     * Editor-canvas / btnPreview (#btnPreview) URL builder.
+     *
+     * Loads /theme/frontend/theme-preview/content under the backend session +
+     * typed editor_context. Must NEVER call start-preview: that API persists
+     * shell=preview, HttpOnly weline_preview_token Cookie, and the storefront
+     * exit float. Only #btnFrontendPreview / openFrontendPreview may do that.
      */
     async function buildAuthorizedLayoutPreviewUrl(overrides = {}) {
         const rawUrl = buildLayoutPreviewUrl(overrides);
         const url = new URL(rawUrl, window.location.origin);
-        if (url.searchParams.get('preview_area') !== 'frontend') {
-            return rawUrl;
-        }
-
-        const themeId = parseInt(url.searchParams.get('theme_id') || '0', 10) || 0;
-        const layoutType = url.searchParams.get('layout_type') || getEffectiveLayoutType();
-        const layoutOption = url.searchParams.get('layout_option') || getEffectiveLayoutOption();
-        const rawLocale = url.searchParams.get('locale') || '';
-        const locale = rawLocale === 'default' ? '' : rawLocale;
-        let editorContext = buildTypedEditorContext('layout', {
-            area: 'frontend',
-            theme_id: themeId,
-            layout_type: layoutType,
-            layout_option: layoutOption,
-            locale: locale || 'default',
-        });
-        try {
-            const encodedContext = url.searchParams.get('editor_context');
-            if (encodedContext) {
-                editorContext = JSON.parse(encodedContext);
-            }
-        } catch (error) {
-            throw new Error(translateUiText('预览上下文无效'));
-        }
-
-        const versionId = parseInt(url.searchParams.get('version_id') || '0', 10) || null;
-        const payload = buildLayoutVersionIdentityPayload({
-            theme_id: themeId,
-            frontend_theme_id: parseInt(url.searchParams.get('frontend_theme_id') || String(themeId), 10) || themeId,
-            backend_theme_id: parseInt(url.searchParams.get('backend_theme_id') || '0', 10) || 0,
-            page_type: layoutType,
-            layout_type: layoutType,
-            layout_option: layoutOption,
-            editor_area: 'frontend',
-            preview_area: 'frontend',
-            preview_mode: url.searchParams.get('preview_mode') || 'live',
-            status: url.searchParams.get('status') || state.previewStatus || 'draft',
-            locale,
-            locale_code: locale,
-            target_type: editorContext.target_type || 'global',
-            target_id: parseInt(editorContext.target_id || 0, 10) || 0,
-            editor_context: editorContext,
-            version_id: versionId,
-        });
-        if (!versionId) {
-            delete payload.version_id;
-        }
-
-        const result = await apiJson(config.apiStartPreview, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(payload),
-        });
-        const token = String(result?.data?.token || '').trim();
-        if (!result?.success || !token) {
-            throw new Error(result?.message || translateUiText('预览授权失败'));
-        }
-
-        url.searchParams.set('weline_preview_token', token);
+        // Defensive: editor canvas must not carry a live storefront preview token.
+        url.searchParams.delete('weline_preview_token');
         return url.toString();
+    }
+
+    function resolveThemePreviewGatewayUrl() {
+        const contentEndpoint = String(config.apiFrontendLayoutPreview || '/theme/frontend/theme-preview/content');
+        return contentEndpoint.replace(/\/content\/?$/, '/gateway');
     }
 
     async function setLayoutPreviewSource(overrides = {}) {
@@ -3937,9 +4378,14 @@
         config.apiSaveWidget = container.dataset.apiSaveWidget || `${config.apiBase}/save-widget`;
         config.apiUpdateConfig = container.dataset.apiUpdateConfig || `${config.apiBase}/update-config`;
         config.apiDeleteWidget = container.dataset.apiDeleteWidget || `${config.apiBase}/delete-widget`;
+        config.apiChromeMode = container.dataset.apiChromeMode || `${config.apiBase}/chrome-mode`;
+        config.apiDetachChrome = container.dataset.apiDetachChrome || `${config.apiBase}/detach-chrome`;
+        config.apiRestoreChrome = container.dataset.apiRestoreChrome || `${config.apiBase}/restore-chrome`;
         config.apiWidgets = container.dataset.apiWidgets || `${config.apiBase}/widgets`;
         config.apiDefaultInjections = container.dataset.apiDefaultInjections || `${config.apiBase}/default-injections`;
         config.apiApplyDefaultInjection = container.dataset.apiApplyDefaultInjection || `${config.apiBase}/apply-default-injection`;
+        config.apiReconcileRequiredDefaults = container.dataset.apiReconcileRequiredDefaults || `${config.apiBase}/reconcile-required-defaults`;
+        config.apiApplyRequiredDefaults = container.dataset.apiApplyRequiredDefaults || `${config.apiBase}/apply-required-defaults`;
         config.apiInitSlotDefaults = container.dataset.apiInitSlotDefaults || `${config.apiBase}/init-slot-defaults`;
         config.apiPublish = container.dataset.apiPublish || `${config.apiBase}/publish`;
         config.apiPreview = container.dataset.apiPreview || `${config.apiBase}/preview`;
@@ -3951,6 +4397,11 @@
         config.apiSaveLayoutSelection = container.dataset.apiSaveLayoutSelection || `${config.apiBase}/save-layout-selection`;
         config.apiSaveLayoutConfig = container.dataset.apiSaveLayoutConfig || `${config.apiBase}/save-layout-config`;
         config.apiAiTranslateConfig = container.dataset.apiAiTranslateConfig || `${config.apiBase}/ai-translate-config`;
+        config.apiThemeAiAgents = container.dataset.apiThemeAiAgents || '/theme/backend/ai/agents';
+        config.apiThemeAiComponentStream = container.dataset.apiThemeAiComponentStream || '/theme/backend/ai/component-stream';
+        config.apiThemeAiRefineStream = container.dataset.apiThemeAiRefineStream || '/theme/backend/ai/refine-stream';
+        config.apiThemeAiPublish = container.dataset.apiThemeAiPublish || '/theme/backend/ai/publish';
+        config.apiThemeAiPrepareRefine = container.dataset.apiThemeAiPrepareRefine || '/theme/backend/ai/prepare-refine';
         config.apiVirtualThemeAiCatalog = container.dataset.apiVirtualThemeAiCatalog || '/theme/backend/virtual-theme/ai-catalog';
         config.apiVirtualThemeCreateDraft = container.dataset.apiVirtualThemeCreateDraft || '/theme/backend/virtual-theme/create-draft';
         config.apiVirtualThemeBlockAction = container.dataset.apiVirtualThemeBlockAction || '/theme/backend/virtual-theme/block-action';
@@ -3968,7 +4419,9 @@
         config.apiSaveVersion = container.dataset.apiSaveVersion || `${config.apiBase}/save-version`;
         config.apiSwitchVersion = container.dataset.apiSwitchVersion || `${config.apiBase}/switch-version`;
         config.apiRestoreOriginal = container.dataset.apiRestoreOriginal || `${config.apiBase}/restore-original`;
+        config.apiClearThemeCache = container.dataset.apiClearThemeCache || `${config.apiBase}/clear-theme-cache`;
         config.apiResetDraftResources = container.dataset.apiResetDraftResources || `${config.apiBase}/reset-draft-resources`;
+        config.apiFactoryReset = container.dataset.apiFactoryReset || `${config.apiBase}/factory-reset`;
         config.apiPublishVersion = container.dataset.apiPublishVersion || `${config.apiBase}/publish-version`;
         config.apiDeleteVersion = container.dataset.apiDeleteVersion || `${config.apiBase}/delete-version`;
         config.apiRenameVersion = container.dataset.apiRenameVersion || `${config.apiBase}/rename-version`;
@@ -3985,6 +4438,9 @@
         config.apiForceTakeover = container.dataset.apiForceTakeover || `${config.apiBase}/force-takeover`;
         config.apiScopedWorkspace = container.dataset.apiScopedWorkspace || `${config.apiBase}/scoped-workspace`;
         config.apiPublishScopedWorkspace = container.dataset.apiPublishScopedWorkspace || `${config.apiBase}/publish-scoped-workspace`;
+        config.fileManagerConnectorBase = container.dataset.fileManagerConnectorBase
+            || container.getAttribute('data-file-manager-connector-base')
+            || '';
 
         // Preview-related endpoints and call sites (baseline for TDD)
         // - apiRenderWidget: used by renderWidgetPreview()/preview render flows
@@ -3994,6 +4450,7 @@
         // - apiSaveWidget/save-widget-config: save flows that should return preview_html
 
         state.themeId = parseInt(container.dataset.themeId) || 0;
+        state.currentUserId = parseInt(container.dataset.editorUserId || '0', 10) || 0;
         state.pageType = container.dataset.pageType || 'default';
         state.editorArea = container.dataset.editorArea || 'frontend';
         state.previewStatus = container.dataset.previewStatus || getCurrentWindowParam('status') || 'draft';
@@ -4013,6 +4470,7 @@
             : String(getCurrentWindowParam('locale') || container.dataset.configLocale || '').trim();
         syncThemeEditorLocaleDataset();
         _installedLocalesCache = parseInstalledLocales(container.dataset.installedLocales || '[]');
+        _installedLocalesCacheWebsiteId = getScopeWebsiteId();
 
         // 缓存 DOM 元素
         elements = {
@@ -4033,6 +4491,7 @@
             configModeWidget: document.getElementById('configModeWidget'),
             widgetPanel: document.getElementById('widgetPanel'),
             widgetLibraryTabs: document.getElementById('widgetLibraryTabs'),
+            widgetLibraryTypeFilters: document.getElementById('widgetLibraryTypeFilters'),
             widgetList: document.getElementById('widgetList'),
             widgetSearch: document.getElementById('widgetSearch'),
             previewFrame: document.getElementById('previewFrame'),
@@ -4045,6 +4504,7 @@
             btnPublish: document.getElementById('btnPublish'),
             btnFrontendPreview: document.getElementById('btnFrontendPreview'),
             btnRestoreLayout: document.getElementById('btnRestoreLayout'),
+            btnClearThemeCache: document.getElementById('btnClearThemeCache'),
             btnResetDraftResources: document.getElementById('btnResetDraftResources'),
             resetDraftModal: document.getElementById('themeEditorResetDraftModal'),
             btnResetDraftConfirm: document.getElementById('btnResetDraftConfirm'),
@@ -4497,6 +4957,16 @@
             );
         });
 
+        document.addEventListener('click', function(e) {
+            const btn = e.target.closest('.w-theme-editor-remove-default-injection');
+            if (!btn) {
+                return;
+            }
+            e.preventDefault();
+            e.stopPropagation();
+            removeDefaultInjection(btn.getAttribute('data-injection-key') || '', btn);
+        });
+
 	        // 组件预览按钮（部件库列表中的「预览」）
 	        document.addEventListener('click', function(e) {
 	            const btn = e.target.closest('.w-theme-editor-preview-component');
@@ -4696,7 +5166,7 @@
                 return;
             }
             e.preventDefault();
-            if (form.id === 'widgetConfigForm' || form.dataset.layoutId || form.dataset.templateRef) {
+            if (form.id === 'widgetConfigForm' || resolveDomWidgetIdentity(form).layoutId || form.dataset.templateRef) {
                 Promise.resolve(saveWidgetConfig(form)).catch(() => undefined);
             }
         });
@@ -4709,7 +5179,7 @@
                     e.preventDefault();
                     e.stopImmediatePropagation();
                     const fieldKey = i18nBtn.dataset.field;
-                    const layoutId = i18nBtn.dataset.layoutId;
+                    const layoutId = resolveDomWidgetIdentity(i18nBtn).layoutId;
                     const panelId = 'i18n_panel_' + layoutId + '_' + fieldKey.replace(/\./g, '_');
                     const panel = document.getElementById(panelId) || i18nBtn.closest('.w-param-field, .config-field, .translatable-field')?.querySelector('.w-param-i18n-panel, .i18n-edit-panel');
                     if (!panel) return;
@@ -4740,7 +5210,9 @@
                     const panel = aiBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                     const fieldKey = aiBtn.dataset.field || panel?.dataset.field;
                     // TE-CAP-020: template widgets may have empty layout_id; AI translate only needs source text.
-                    const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId || '';
+                    const layoutId = resolveDomWidgetIdentity(aiBtn).layoutId
+                        || resolveDomWidgetIdentity(panel).layoutId
+                        || '';
                     if (panel && fieldKey) {
                         await translateI18nValues(layoutId, fieldKey, panel, aiBtn);
                     } else {
@@ -4754,7 +5226,8 @@
                     e.stopImmediatePropagation();
                     const panel = saveBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                     const fieldKey = saveBtn.dataset.field || panel?.dataset.field;
-                    const layoutId = saveBtn.dataset.layoutId || panel?.dataset.layoutId;
+                    const layoutId = resolveDomWidgetIdentity(saveBtn).layoutId
+                        || resolveDomWidgetIdentity(panel).layoutId;
                     if (panel && fieldKey && layoutId) {
                         await saveI18nValues(layoutId, fieldKey, panel);
                     }
@@ -4767,7 +5240,7 @@
         const themeEditorRoot = document.getElementById('themeEditor');
         if (themeEditorRoot) {
             function scheduleWidgetConfigAutoSave(form) {
-                const layoutId = form.dataset.layoutId;
+                const layoutId = resolveDomWidgetIdentity(form).layoutId;
                 if (!layoutId) return;
                 scheduleEditorAutoSave(
                     `widget-config:${layoutId}`,
@@ -4826,7 +5299,7 @@
             const deleteBtn = e.target.closest('.w-theme-editor-delete-config');
             if (deleteBtn) {
                 e.preventDefault();
-                const layoutId = deleteBtn.dataset.layoutId;
+                const layoutId = resolveDomWidgetIdentity(deleteBtn).layoutId;
                 if (!layoutId) return;
                 // 尝试从结构面板获取 slotId
                 const structureItem = document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`);
@@ -4889,6 +5362,15 @@
             elements.btnRestoreLayout.addEventListener('click', handleRestoreLayout);
         }
 
+        if (elements.btnClearThemeCache) {
+            elements.btnClearThemeCache.addEventListener('click', () => {
+                handleClearThemeCache().catch((error) => {
+                    console.error('[ThemeEditor] Clear theme cache error:', error);
+                    showToast(translateUiText('清理 Theme 缓存失败：') + (error?.message || ''), 'error');
+                });
+            });
+        }
+
         if (elements.btnResetDraftConfirm) {
             elements.btnResetDraftConfirm.addEventListener('click', () => {
                 executeResetDraftResources(false).catch((error) => {
@@ -4907,6 +5389,15 @@
         }
         if (elements.btnResetDraftCancel && elements.resetDraftModal) {
             elements.btnResetDraftCancel.addEventListener('click', () => closeResetDraftModal());
+        }
+        const btnFactoryResetConfirm = document.getElementById('btnFactoryResetConfirm');
+        if (btnFactoryResetConfirm) {
+            btnFactoryResetConfirm.addEventListener('click', () => {
+                executeFactoryReset().catch((error) => {
+                    console.error('[ThemeEditor] Factory reset error:', error);
+                    showToast(translateUiText('完全初始化失败：') + (error?.message || ''), 'error');
+                });
+            });
         }
 
         // 刷新预览按钮
@@ -5419,8 +5910,136 @@
             && clientY <= rect.bottom;
     }
 
+    function ensurePreviewDropBridge() {
+        let bridge = document.getElementById('previewDropBridge');
+        if (bridge) {
+            return bridge;
+        }
+
+        const host = elements.previewFrame?.parentElement
+            || document.getElementById('previewViewPreview');
+        if (!host) {
+            return null;
+        }
+
+        bridge = document.createElement('div');
+        bridge.id = 'previewDropBridge';
+        bridge.className = 'preview-drop-bridge';
+        bridge.setAttribute('aria-hidden', 'true');
+        bridge.addEventListener('dragover', handlePreviewDropBridgeDragOver);
+        bridge.addEventListener('dragleave', handlePreviewDropBridgeDragLeave);
+        bridge.addEventListener('drop', handlePreviewDropBridgeDrop);
+        host.appendChild(bridge);
+        return bridge;
+    }
+
+    function setPreviewDropBridgeActive(active) {
+        const bridge = ensurePreviewDropBridge();
+        if (!bridge) {
+            return;
+        }
+        bridge.classList.toggle('is-active', !!active);
+    }
+
+    function mapParentPointToIframePoint(clientX, clientY) {
+        const frame = elements.previewFrame;
+        if (!frame) {
+            return null;
+        }
+
+        const rect = frame.getBoundingClientRect();
+        const x = Number(clientX);
+        const y = Number(clientY);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            return null;
+        }
+
+        return {
+            x: x - rect.left,
+            y: y - rect.top,
+            inside: x >= rect.left && x <= rect.right && y >= rect.top && y <= rect.bottom,
+        };
+    }
+
+    function resolvePreviewDropViaBridge(clientX, clientY) {
+        const mapped = mapParentPointToIframePoint(clientX, clientY);
+        if (!mapped || !mapped.inside || !state.draggingWidget) {
+            return null;
+        }
+
+        const api = elements.previewFrame?.contentWindow?.Weline?.Theme?.Preview;
+        if (!api || typeof api.resolveDropAtPoint !== 'function') {
+            return null;
+        }
+
+        const candidate = api.resolveDropAtPoint(mapped.x, mapped.y, state.draggingWidget);
+        if (candidate) {
+            rememberPreviewDropCandidate(candidate);
+        }
+        return candidate;
+    }
+
+    function handlePreviewDropBridgeDragOver(e) {
+        if (!state.draggingWidget || state.previewDragCancelled) {
+            return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+        const candidate = resolvePreviewDropViaBridge(e.clientX, e.clientY);
+        e.dataTransfer.dropEffect = candidate ? 'copy' : 'none';
+    }
+
+    function handlePreviewDropBridgeDragLeave(e) {
+        const bridge = e.currentTarget;
+        if (bridge && bridge.contains(e.relatedTarget)) {
+            return;
+        }
+        clearPreviewDropCandidate(state.previewDragSessionId);
+        try {
+            const api = elements.previewFrame?.contentWindow?.Weline?.Theme?.Preview;
+            if (api && typeof api.clearDropFeedback === 'function') {
+                api.clearDropFeedback();
+            }
+        } catch (err) {
+            // ignore cross-document access races while preview reloads
+        }
+    }
+
+    async function handlePreviewDropBridgeDrop(e) {
+        if (!state.draggingWidget || state.previewDragCancelled) {
+            return;
+        }
+
+        e.preventDefault();
+        e.stopPropagation();
+
+        const sessionId = state.previewDragSessionId;
+        const candidate = resolvePreviewDropViaBridge(e.clientX, e.clientY) || state.previewDropCandidate;
+        if (sessionId && candidate) {
+            await commitPreviewDropCandidate(sessionId).catch((error) => {
+                console.error('[ThemeEditor] Preview drop bridge commit failed:', error);
+            });
+        } else if (mapParentPointToIframePoint(e.clientX, e.clientY)?.inside) {
+            // 计划约定：松手在预览上不得静默丢弃；无合法插槽时必须提示。
+            showToast(translateUiText('无法放入当前位置，请拖到可接收的插槽'), 'warning');
+        }
+        setPreviewDropBridgeActive(false);
+    }
+
     function shouldCommitPreviewDropOnDragEnd(event, sessionId) {
-        const candidate = state.previewDropCandidate;
+        let candidate = state.previewDropCandidate;
+        if ((!candidate || candidate.sessionId !== sessionId)
+            && previewFrameContainsDragEnd(event) !== false
+            && state.draggingWidget) {
+            const clientX = Number(event?.clientX);
+            const clientY = Number(event?.clientY);
+            if (Number.isFinite(clientX) && Number.isFinite(clientY) && !(clientX === 0 && clientY === 0)) {
+                resolvePreviewDropViaBridge(clientX, clientY);
+                candidate = state.previewDropCandidate;
+            }
+        }
+
         if (state.previewDragCancelled
             || !candidate
             || candidate.sessionId !== sessionId
@@ -5502,6 +6121,7 @@
             state.previewDropFallbackTimer = null;
         }
         notifyPreviewDragState('end', null, sessionId);
+        setPreviewDropBridgeActive(false);
         state.isDragging = false;
         state.dragInsertIndex = null;
         state.draggingWidget = null;
@@ -5514,6 +6134,27 @@
     function handlePreviewDragCancel(event) {
         if (event.key !== 'Escape' || !state.isDragging) return;
         cancelPreviewDragSession();
+    }
+
+    async function handlePreviewExitFromIframe() {
+        try {
+            await fetch(`${resolveThemePreviewGatewayUrl()}?exit=1`, {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Accept': 'application/json',
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: JSON.stringify({}),
+            });
+        } catch (error) {
+            console.warn('[ThemeEditor] Preview exit gateway failed:', error);
+        }
+        await setLayoutPreviewSource({ _t: Date.now() });
+        if (isPreviewInteractionMode()) {
+            setInteractionMode('edit', { syncUrl: false });
+        }
     }
 
     function handleIframeMessage(e) {
@@ -5586,6 +6227,26 @@
                         console.error('[ThemeEditor] Preview locale change failed:', error);
                         showToast(error?.message || translateUiText('语言切换失败，已恢复原语言'), 'error');
                     });
+                break;
+            }
+            case 'preview-exit':
+                void handlePreviewExitFromIframe();
+                break;
+            case 'widget-health': {
+                const severity = String(data.severity || 'warning');
+                const summary = String(data.summary || '').trim();
+                if (summary) {
+                    showToast(summary, severity === 'error' ? 'error' : (severity === 'warning' ? 'warning' : 'info'));
+                }
+                const findings = Array.isArray(data.findings) ? data.findings : [];
+                findings.slice(0, 5).forEach((item) => {
+                    const first = Array.isArray(item?.issues) && item.issues[0] ? item.issues[0] : null;
+                    if (!first) return;
+                    const label = String(item.name || item.code || 'widget');
+                    const slot = item.slot ? ` @${item.slot}` : '';
+                    const tone = item.severity === 'error' ? 'error' : (item.severity === 'warning' ? 'warning' : 'info');
+                    showToast(`${label}${slot}：${first.message || first.code || 'HTML 异常'}`, tone);
+                });
                 break;
             }
             case 'slot-hover-sync':
@@ -5814,6 +6475,9 @@
             // 无部件，显示空状态
             renderSlotEmptyState(slot);
         }
+
+        const areaCode = slot.area || inferAreaFromSlotId(slotId);
+        await ensureSharedChromePanel(elements.configContent, areaCode, slotId);
     }
 
     /**
@@ -5845,10 +6509,11 @@
         // 2. 查找原有标记的部件元素
         const selectors = [
             `${dataAttributeSelector('data-wslot', slotId)} .weline-template-widget[data-template-ref]`,
-            `${dataAttributeSelector('data-wslot', slotId)} .widget-wrapper[data-layout-id]`,
-            `${dataAttributeSelector('data-wslot', slotId)} [data-layout-id]`,
+            `${dataAttributeSelector('data-wslot', slotId)} .widget-wrapper[data-node-uid]`,
+            // non-hex legacy identity: covered by WIDGET_IDENTITY_MATCH ([data-layout-id])
+            `${dataAttributeSelector('data-wslot', slotId)} ${WIDGET_IDENTITY_MATCH}`,
             `.area-widgets${dataAttributeSelector('data-area', slotId)} .preview-widget-item`,
-            `.area-widgets${dataAttributeSelector('data-area', slotId)} [data-layout-id]`,
+            `.area-widgets${dataAttributeSelector('data-area', slotId)} ${WIDGET_IDENTITY_MATCH}`,
             `.${cssIdentifier(slotId)}-slot-widgets .preview-widget-item`,
             `.container-slot${dataAttributeSelector('data-slot', slotId)} .preview-widget-item`,
             `.area-slot${dataAttributeSelector('data-slot', slotId)} .preview-widget-item`,
@@ -5874,9 +6539,9 @@
 
                 if (slotContainer) {
                     console.log(`findWidgetsInSlot: 找到 slot 容器，检查内部内容...`);
-                    // 检查容器内是否有任何带 data-layout-id 或 widget 相关类名的元素
+                    // 检查容器内是否有任何带身份标记或 widget 相关类名的元素
                     const innerWidgets = slotContainer.querySelectorAll(
-                        '[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"], .widget-wrapper, .widget-content'
+                        `${WIDGET_IDENTITY_MATCH}, .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"], .widget-wrapper, .widget-content`
                     );
 
                     if (innerWidgets.length > 0) {
@@ -5932,16 +6597,18 @@
         }
 
         // 构建手风琴 HTML
+        // disclosure 需要 data-w-disclosure-panel；collapseId 必须含索引，避免同 layoutId/templateRef 多实例撞 id
         let accordionHtml = '';
         for (let i = 0; i < widgetsData.length; i++) {
             const widget = widgetsData[i];
             const isFirst = i === 0;
-            const collapseId = `widgetConfig_${String(widget.layoutId || widget.templateRef || i).replace(/[^\w:-]/g, '_')}`;
+            const identityKey = String(widget.layoutId || widget.templateRef || 'item').replace(/[^\w:-]/g, '_');
+            const collapseId = `widgetConfig_${i}_${identityKey}`;
             const identityAttr = widget.layoutId
-                ? `data-layout-id="${escapeHtml(widget.layoutId)}"`
+                ? widgetIdentityDataAttrs(widget.layoutId).trim()
                 : `data-template-ref="${escapeHtml(widget.templateRef)}"`;
             const bodyIdentityAttr = widget.layoutId
-                ? `data-layout-id="${escapeHtml(widget.layoutId)}"`
+                ? widgetIdentityDataAttrs(widget.layoutId).trim()
                 : `data-template-ref="${escapeHtml(widget.templateRef)}"`;
 
             const icon = widgetTypeIconName(widget.widgetType);
@@ -5962,7 +6629,7 @@
                             ${iconSvg('arrowDown')}
                         </div>
                     </button>
-                    <div id="${collapseId}" class="slot-widget-body" ${bodyIdentityAttr} ${isFirst ? '' : 'hidden'}>
+                    <div id="${collapseId}" class="slot-widget-body" data-w-disclosure-panel ${bodyIdentityAttr} ${isFirst ? '' : 'hidden'}>
                         <div class="widget-config-loading w-theme-editor-loading-state">
                             <span class="w-spinner" role="status"><span class="w-visually-hidden">加载中...</span></span>
                         </div>
@@ -5998,26 +6665,31 @@
         elements.configContent.innerHTML = html;
         getEditorUi().mount(elements.configContent);
 
-        // 为每个部件加载配置表单
-        for (const widget of widgetsData) {
+        // 按手风琴项实例加载配置（不可用 querySelector 按 layoutId/templateRef，同类型多实例会撞第一个）
+        const accordionItems = elements.configContent.querySelectorAll('.slot-widget-accordion-item');
+        accordionItems.forEach((item, index) => {
+            const widget = widgetsData[index];
+            if (!widget) return;
+            const body = item.querySelector('.slot-widget-body');
+            if (!(body instanceof HTMLElement)) return;
             if (widget.layoutId) {
-                loadWidgetConfigForAccordion(widget.layoutId);
+                loadWidgetConfigForAccordion(widget.layoutId, null, body);
             } else if (widget.templateRef) {
-                loadWidgetConfigForAccordion(widget.templateRef, widget.element);
+                loadWidgetConfigForAccordion(widget.templateRef, widget.element, body);
             }
-        }
+        });
 
-        // 绑定手风琴头部点击事件（加载配置）
-        document.querySelectorAll('.slot-widget-header').forEach(header => {
+        // 绑定手风琴头部点击事件（懒加载配置；展开/收起由 disclosure 组件处理）
+        elements.configContent.querySelectorAll('.slot-widget-header').forEach(header => {
             header.addEventListener('click', function() {
                 const body = this.nextElementSibling;
-                const layoutId = body?.dataset.layoutId;
+                const layoutId = resolveDomWidgetIdentity(body).layoutId;
                 const templateRef = body?.dataset.templateRef;
                 if (body?.querySelector('.widget-config-loading')) {
                     if (layoutId) {
-                        loadWidgetConfigForAccordion(layoutId);
+                        loadWidgetConfigForAccordion(layoutId, null, body);
                     } else if (templateRef) {
-                        loadWidgetConfigForAccordion(templateRef);
+                        loadWidgetConfigForAccordion(templateRef, null, body);
                     }
                 }
             });
@@ -6290,13 +6962,15 @@
         }
     }
 
-    async function loadWidgetConfigForAccordion(identity, widgetElement = null) {
+    async function loadWidgetConfigForAccordion(identity, widgetElement = null, configBodyEl = null) {
         const identityValue = String(identity || '').trim();
         const isTemplate = identityValue.startsWith('tpl:');
         const selector = isTemplate
             ? dataTemplateRefSelector(identityValue)
             : dataLayoutIdSelector(identityValue);
-        const configBody = document.querySelector(`.slot-widget-body${selector}`);
+        const configBody = configBodyEl instanceof HTMLElement
+            ? configBodyEl
+            : document.querySelector(`.slot-widget-body${selector}`);
         if (!configBody) return;
 
         // 如果已加载，跳过
@@ -6694,6 +7368,8 @@
             const fieldClass = translatable ? 'config-field translatable-field' : 'config-field';
             const safeKey = escapeHtml(key);
             const safeLayoutId = escapeHtml(layoutId || '');
+            const safeNodeUid = escapeHtml(validNodeUid(layoutId) || safeLayoutId);
+            const identityAttrs = widgetIdentityDataAttrs(layoutId);
             const safeFieldId = escapeHtml(fieldId);
             const safeLabel = escapeHtml(label);
             const safeDescription = escapeHtml(description);
@@ -6705,7 +7381,7 @@
             // 字段头部：标签 + 多语言按钮
             fieldHtml += `<div class="config-field-header">
                 <label class="config-label" for="${safeFieldId}">${safeLabel}</label>
-                ${translatable ? `<button type="button" class="w-button w-theme-editor-i18n-edit" data-tone="neutral" data-variant="outline" data-size="sm" aria-expanded="false" data-field="${safeKey}" data-layout-id="${safeLayoutId}" title="编辑多语言">
+                ${translatable ? `<button type="button" class="w-button w-theme-editor-i18n-edit" data-tone="neutral" data-variant="outline" data-size="sm" aria-expanded="false" data-field="${safeKey}"${identityAttrs} title="编辑多语言">
                     ${iconSvg('language')}
                     <span>多语言</span>
                 </button>` : ''}
@@ -6823,17 +7499,17 @@
 
             // 多语言编辑区（统一空容器，由 fetchInstalledLocales 动态填充）
             if (translatable) {
-                fieldHtml += `<div class="w-param-i18n-panel i18n-edit-panel" id="i18n_panel_${safeLayoutId}_${safeKey}" data-field="${safeKey}" data-layout-id="${safeLayoutId}" data-state="closed" aria-hidden="true" hidden>
+                fieldHtml += `<div class="w-param-i18n-panel i18n-edit-panel" id="i18n_panel_${safeNodeUid || safeLayoutId}_${safeKey}" data-field="${safeKey}"${identityAttrs} data-state="closed" aria-hidden="true" hidden>
                     <div class="w-param-i18n-header i18n-panel-header">
                         <span>${iconSvg('global')} 多语言配置</span>
                         <button type="button" class="w-button w-theme-editor-i18n-close" data-tone="quiet" data-size="sm" data-icon-only="true" data-close-i18n data-field="${safeKey}" aria-label="关闭多语言配置">${iconSvg('close')}</button>
                     </div>
                     <div class="w-param-i18n-body i18n-panel-body"></div>
                     <div class="w-param-i18n-footer i18n-panel-footer">
-                        <button type="button" class="w-button w-theme-editor-ai-i18n" data-tone="neutral" data-variant="outline" data-size="sm" data-ai-i18n data-field="${safeKey}" data-layout-id="${safeLayoutId}">
+                        <button type="button" class="w-button w-theme-editor-ai-i18n" data-tone="neutral" data-variant="outline" data-size="sm" data-ai-i18n data-field="${safeKey}"${identityAttrs}>
                             AI翻译
                         </button>
-                        <button type="button" class="w-button w-theme-editor-save-i18n" data-tone="primary" data-size="sm" data-save-i18n data-field="${safeKey}" data-layout-id="${safeLayoutId}">
+                        <button type="button" class="w-button w-theme-editor-save-i18n" data-tone="primary" data-size="sm" data-save-i18n data-field="${safeKey}"${identityAttrs}>
                             ${iconSvg('save')} 保存多语言
                         </button>
                     </div>
@@ -6902,13 +7578,13 @@
         }
 
         return `
-            <form class="widget-accordion-config-form w-param-form" data-layout-id="${escapeHtml(layoutId)}">
+            <form class="widget-accordion-config-form w-param-form"${widgetIdentityDataAttrs(layoutId)}>
                 ${groupsHtml}
                 <div class="config-actions">
                     <button type="submit" class="w-button" data-tone="primary">
                         ${iconSvg('save')} 保存配置
                     </button>
-                    <button type="button" class="w-button w-theme-editor-delete-widget" data-tone="danger" data-variant="outline" data-layout-id="${escapeHtml(layoutId)}">
+                    <button type="button" class="w-button w-theme-editor-delete-widget" data-tone="danger" data-variant="outline"${widgetIdentityDataAttrs(layoutId)}>
                         ${iconSvg('delete')} 删除
                     </button>
                 </div>
@@ -7028,7 +7704,7 @@
                 e.preventDefault();
                 e.stopImmediatePropagation();
                 const fieldKey = i18nBtn.dataset.field;
-                const layoutId = i18nBtn.dataset.layoutId;
+                const layoutId = resolveDomWidgetIdentity(i18nBtn).layoutId;
                 const panelId = 'i18n_panel_' + layoutId + '_' + fieldKey.replace(/\./g, '_');
                 const panel = document.getElementById(panelId) || i18nBtn.closest('.w-param-field, .config-field')?.querySelector('.w-param-i18n-panel, .i18n-edit-panel');
                 if (!panel) return;
@@ -7063,7 +7739,9 @@
                 const panel = aiBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                 const fieldKey = aiBtn.dataset.field || panel?.dataset.field;
                 // TE-CAP-020: template widgets may have empty layout_id; AI translate only needs source text.
-                const layoutId = aiBtn.dataset.layoutId || panel?.dataset.layoutId || '';
+                const layoutId = resolveDomWidgetIdentity(aiBtn).layoutId
+                    || resolveDomWidgetIdentity(panel).layoutId
+                    || '';
                 if (panel && fieldKey) {
                     await translateI18nValues(layoutId, fieldKey, panel, aiBtn);
                 } else {
@@ -7079,7 +7757,8 @@
                 e.stopImmediatePropagation();
                 const panel = saveBtn.closest('.w-param-i18n-panel, .i18n-edit-panel');
                 const fieldKey = saveBtn.dataset.field || panel?.dataset.field;
-                const layoutId = saveBtn.dataset.layoutId || panel?.dataset.layoutId;
+                const layoutId = resolveDomWidgetIdentity(saveBtn).layoutId
+                    || resolveDomWidgetIdentity(panel).layoutId;
                 if (panel && fieldKey && layoutId) {
                     await saveI18nValues(layoutId, fieldKey, panel);
                 }
@@ -7410,48 +8089,18 @@
             }
         });
 
-        // 保存按钮
+        // 保存按钮：提交由 document 级 submit 委托统一走 saveWidgetConfig，避免双重保存抢 revision
         container.querySelectorAll('.w-param-form').forEach(form => {
-            form.addEventListener('submit', async function(e) {
-                e.preventDefault();
-                const layoutId = this.dataset.layoutId;
-                const configData = collectWidgetConfigData(this);
-
-                try {
-                    const result = await apiJson(getWidgetConfigSaveUrl(), {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            layout_id: layoutId,
-                            config: configData,
-                            locale: getActiveConfigLocale() || null,
-                        })
-                    });
-
-                    if (result.success) {
-                        const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
-                        await queueWidgetConfigOwnership(result.node_uid, normalizedConfig, getActiveConfigLocale());
-                        showToast('配置已保存', 'success');
-                        if (!getActiveConfigLocale() && state.selectedWidget) {
-                            state.selectedWidget.dataset.config = JSON.stringify(normalizedConfig);
-                        }
-                        // 更新预览
-                        if (result.preview_html) {
-                            updateWidgetPreviewInIframe(layoutId, result.preview_html);
-                        }
-                    } else {
-                        showToast(result.message || '保存失败', 'error');
-                    }
-                } catch (err) {
-                    showToast('保存失败', 'error');
-                }
-            });
+            if (form.dataset.wThemeEditorSubmitDelegated === '1') {
+                return;
+            }
+            form.dataset.wThemeEditorSubmitDelegated = '1';
         });
 
         // 删除按钮
         container.querySelectorAll('.w-param-btn-delete-widget, .w-theme-editor-delete-widget').forEach(btn => {
             btn.addEventListener('click', async function() {
-                const layoutId = this.dataset.layoutId;
+                const layoutId = resolveDomWidgetIdentity(this).layoutId;
 
                 const confirmed = await showCustomConfirm(
                     '确认删除部件？',
@@ -7502,7 +8151,7 @@
                                 widgetEl.remove();
 
                                 // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
-                                if (slot && !slot.querySelector('[data-layout-id]')) {
+                                if (slot && !slot.querySelector(WIDGET_IDENTITY_MATCH)) {
                                     if (result.has_original && result.original_html) {
                                         // 有原始内容，恢复模板默认的内容（剥离可能混入的 widget-wrapper）
                                         slot.innerHTML = stripWidgetWrappersFromHtml(result.original_html);
@@ -7610,8 +8259,8 @@
      * 绑定数组项事件
      */
     function rememberWidgetPreviewArrayItem(item) {
-        const form = item.closest('form[data-layout-id]');
-        const layoutId = form?.dataset?.layoutId;
+        const form = item.closest('form[data-node-uid], form[data-layout-id]');
+        const layoutId = resolveDomWidgetIdentity(form).layoutId;
         const itemsContainer = item.closest('.array-items-container') || item.closest('.w-param-array-items');
         if (!form || !layoutId || !itemsContainer) {
             return;
@@ -8066,8 +8715,22 @@
         return `[${attrName}="${safeValue}"]`;
     }
 
+    // Shared DOM matchers: prefer data-node-uid; data-layout-id only for non-hex legacy keys.
+    const WIDGET_WRAPPER_MATCH = '.widget-wrapper[data-node-uid], .widget-wrapper[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]';
+    const WIDGET_IDENTITY_MATCH = '[data-node-uid], [data-layout-id]';
+    const PREVIEW_OR_CODE_WIDGET_MATCH = '.preview-widget[data-node-uid], .preview-widget[data-layout-id], [data-widget-code][data-node-uid], [data-widget-code][data-layout-id]';
+
     function dataLayoutIdSelector(layoutId) {
-        return dataAttributeSelector('data-layout-id', layoutId);
+        const value = String(layoutId || '').trim();
+        if (!value) {
+            return '';
+        }
+        const nodeUid = validNodeUid(value);
+        if (nodeUid) {
+            // Greenfield: hex identity lives only on data-node-uid (no dual data-layout-id match).
+            return dataAttributeSelector('data-node-uid', nodeUid);
+        }
+        return dataAttributeSelector('data-layout-id', value);
     }
 
     function dataTemplateRefSelector(templateRef) {
@@ -8089,22 +8752,28 @@
         if (!element || element.nodeType !== 1) {
             return null;
         }
-        if (element.matches('.weline-template-widget[data-template-ref], .widget-wrapper[data-layout-id], .widget-wrapper[data-weline-template-widget="1"]')) {
+        if (element.matches(WIDGET_WRAPPER_MATCH)) {
             return element;
         }
-        return element.closest('.weline-template-widget[data-template-ref], .widget-wrapper[data-layout-id], .widget-wrapper[data-weline-template-widget="1"]');
+        return element.closest(WIDGET_WRAPPER_MATCH);
     }
 
     function readWidgetIdentityFromElement(element) {
         const wrapper = resolveWidgetWrapper(element) || element;
-        const layoutId = String(wrapper?.dataset?.layoutId || wrapper?.getAttribute?.('data-layout-id') || '').trim();
+        const rawLayoutId = String(wrapper?.dataset?.layoutId || wrapper?.getAttribute?.('data-layout-id') || '').trim();
+        const nodeUid = validNodeUid(
+            wrapper?.dataset?.nodeUid || wrapper?.getAttribute?.('data-node-uid') || ''
+        ) || validNodeUid(rawLayoutId);
+        const layoutId = nodeUid || rawLayoutId;
+        const domKey = layoutId;
         const templateRef = String(wrapper?.dataset?.templateRef || wrapper?.getAttribute?.('data-template-ref') || '').trim();
         return {
             wrapper,
-            layoutId,
+            nodeUid,
+            layoutId: domKey,
             templateRef,
-            identity: layoutId || templateRef,
-            isTemplate: layoutId === '' && templateRef !== '',
+            identity: domKey || templateRef,
+            isTemplate: domKey === '' && templateRef !== '',
             widgetCode: String(wrapper?.dataset?.widgetCode || wrapper?.getAttribute?.('data-widget-code') || '').trim(),
             widgetModule: String(wrapper?.dataset?.widgetModule || wrapper?.getAttribute?.('data-widget-module') || '').trim(),
             widgetType: String(wrapper?.dataset?.widgetType || wrapper?.getAttribute?.('data-widget-type') || '').trim(),
@@ -8227,7 +8896,7 @@
         }
 
         if (layoutId) {
-            widgetElement.dataset.layoutId = layoutId;
+            applyWidgetIdentityToElement(widgetElement, layoutId);
         }
         if (templateRef) {
             widgetElement.dataset.templateRef = templateRef;
@@ -8270,15 +8939,14 @@
 
     function handleIframeWidgetElementClick(target) {
         const widgetWrapper = target?.closest?.(
-            '.widget-wrapper[data-layout-id], .preview-widget[data-layout-id], [data-widget-code][data-layout-id], '
-            + '.weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]'
+            `${WIDGET_WRAPPER_MATCH}, ${PREVIEW_OR_CODE_WIDGET_MATCH}`
         );
         if (!widgetWrapper) {
             return false;
         }
 
         const nestedSlot = target.closest('[data-wslot], [data-slot], .content-slot');
-        if (nestedSlot && nestedSlot.closest('.widget-wrapper[data-layout-id], .weline-template-widget') === widgetWrapper) {
+        if (nestedSlot && nestedSlot.closest(`${WIDGET_WRAPPER_MATCH}`) === widgetWrapper) {
             // 点在子槽上时交给 slot 选择；点在模板部件本体上继续
             if (target.closest('[data-wslot], [data-slot]') !== widgetWrapper && nestedSlot.contains(widgetWrapper) === false) {
                 return false;
@@ -8287,7 +8955,7 @@
 
         handlePreviewWidgetSelected({
             type: 'widget-selected',
-            layoutId: widgetWrapper.dataset.layoutId || widgetWrapper.getAttribute('data-layout-id') || '',
+            layoutId: resolveDomWidgetIdentity(widgetWrapper).layoutId,
             templateRef: widgetWrapper.dataset.templateRef || widgetWrapper.getAttribute('data-template-ref') || '',
             widgetCode: widgetWrapper.dataset.widgetCode || widgetWrapper.getAttribute('data-widget-code') || '',
             widgetModule: widgetWrapper.dataset.widgetModule || widgetWrapper.getAttribute('data-widget-module') || '',
@@ -8306,7 +8974,8 @@
      */
     function handlePreviewWidgetSelected(data) {
         const widgetElement = resolvePreviewWidgetElement(data);
-        if (data.templateRef && widgetElement && !widgetElement.dataset.layoutId) {
+        const existingIdentity = resolveDomWidgetIdentity(widgetElement);
+        if (data.templateRef && widgetElement && !existingIdentity.layoutId) {
             widgetElement.dataset.templateRef = data.templateRef;
             if (data.slotId) {
                 widgetElement.dataset.slotId = data.slotId;
@@ -8316,7 +8985,12 @@
         state.selectedSlot = null;
         openConfigPanelForWidgetSelection();
         setConfigMode('widget');
-        markPreviewWidgetSelected(widgetElement.dataset.layoutId || widgetElement.dataset.templateRef || '');
+        markPreviewWidgetSelected(
+            resolveDomWidgetIdentity(widgetElement).layoutId
+            || widgetElement?.dataset?.templateRef
+            || data.templateRef
+            || ''
+        );
         loadWidgetConfig(widgetElement);
     }
 
@@ -8326,7 +9000,7 @@
      */
     async function materializeTemplateWidgetIfNeeded(widgetElement, configData) {
         if (!widgetElement) return null;
-        const existingLayoutId = widgetElement.dataset.layoutId || widgetElement.getAttribute('data-layout-id') || '';
+        const existingLayoutId = resolveDomWidgetIdentity(widgetElement).layoutId;
         if (existingLayoutId) return existingLayoutId;
 
         const templateRef = widgetElement.dataset.templateRef || widgetElement.getAttribute('data-template-ref') || '';
@@ -8363,11 +9037,12 @@
             switchToPreview: false,
         });
         const layoutId = result?.data?.layout_id || null;
-        if (layoutId) {
-            widgetElement.dataset.layoutId = String(layoutId);
-            widgetElement.setAttribute('data-layout-id', String(layoutId));
+        const nodeUid = validNodeUid(result?.data?.node_uid || result?.node_uid || '');
+        const domKey = nodeUid || (layoutId ? String(layoutId) : '');
+        if (domKey) {
+            applyWidgetIdentityToElement(widgetElement, domKey);
         }
-        return layoutId ? String(layoutId) : null;
+        return domKey || null;
     }
 
     /**
@@ -8828,9 +9503,183 @@
         });
     }
 
+
+    function getLibraryTypeFilters() {
+        if (!state.libraryTypeFilters || typeof state.libraryTypeFilters !== 'object') {
+            state.libraryTypeFilters = { types: [], aiOnly: false };
+        }
+        if (!Array.isArray(state.libraryTypeFilters.types)) {
+            state.libraryTypeFilters.types = [];
+        }
+        return state.libraryTypeFilters;
+    }
+
+    function isLibraryAppType(type) {
+        return type === 'applications' || type === 'app_default' || type === 'app_recommend';
+    }
+
+    function hasLibraryAppTypeSelection(filters) {
+        return (filters.types || []).some((t) => isLibraryAppType(t) && t !== 'applications');
+    }
+
+    function syncLibraryTypeFilterChips() {
+        const filters = getLibraryTypeFilters();
+        const root = elements.widgetLibraryTypeFilters;
+        if (!root) return;
+        root.querySelectorAll('[data-library-type]').forEach((chip) => {
+            const type = chip.getAttribute('data-library-type') || '';
+            let active = false;
+            if (type === 'ai') {
+                active = !!filters.aiOnly;
+            } else if (type === 'applications') {
+                active = filters.types.includes('app_default') && filters.types.includes('app_recommend');
+            } else {
+                active = filters.types.includes(type);
+            }
+            chip.classList.toggle('is-active', active);
+            chip.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+    }
+
+    function appendLibraryTypeFilterParams(url, mode) {
+        const filters = getLibraryTypeFilters();
+        if (mode === 'widgets') {
+            const tabs = filters.types.filter((t) => t === 'general' || t === 'basic');
+            if (tabs.length) {
+                url.searchParams.set('library_tabs', tabs.join(','));
+            }
+        } else if (mode === 'applications') {
+            const hasDefault = filters.types.includes('app_default');
+            const hasRecommend = filters.types.includes('app_recommend');
+            if (hasDefault && !hasRecommend) {
+                url.searchParams.set('install_mode', 'default');
+            } else if (hasRecommend && !hasDefault) {
+                url.searchParams.set('install_mode', 'recommend');
+            }
+        }
+        if (filters.aiOnly) {
+            url.searchParams.set('ai_generated', '1');
+        }
+    }
+
+    function applyLibraryTypeChipSelection(type, options = {}) {
+        const filters = getLibraryTypeFilters();
+        const silent = options.silent === true;
+        const appTypes = ['app_default', 'app_recommend'];
+        const widgetTypes = ['general', 'basic'];
+        if (type === 'ai') {
+            filters.aiOnly = !filters.aiOnly;
+        } else if (type === 'applications') {
+            filters.types = filters.types.filter((t) => !widgetTypes.includes(t));
+            const hasBoth = filters.types.includes('app_default') && filters.types.includes('app_recommend');
+            if (hasBoth) {
+                filters.types = filters.types.filter((t) => !appTypes.includes(t));
+            } else {
+                filters.types = filters.types.filter((t) => !appTypes.includes(t));
+                filters.types.push('app_default', 'app_recommend');
+            }
+        } else {
+            const isApp = isLibraryAppType(type);
+            const isWidget = widgetTypes.includes(type);
+            if (isApp) {
+                filters.types = filters.types.filter((t) => !widgetTypes.includes(t));
+            } else if (isWidget) {
+                filters.types = filters.types.filter((t) => !isLibraryAppType(t));
+            }
+            if (filters.types.includes(type)) {
+                filters.types = filters.types.filter((t) => t !== type);
+            } else {
+                filters.types = [...filters.types, type];
+            }
+        }
+        syncLibraryTypeFilterChips();
+        const hasApp = hasLibraryAppTypeSelection(filters);
+        const hasWidget = filters.types.some((t) => t === 'general' || t === 'basic');
+        if (hasApp) {
+            setWidgetLibraryTab('applications', { silent, skipChipSync: true });
+            return;
+        }
+        if (hasWidget) {
+            const nextTab = filters.types.includes('basic') && !filters.types.includes('general')
+                ? 'basic'
+                : 'general';
+            setWidgetLibraryTab(nextTab, { silent, skipChipSync: true });
+            return;
+        }
+        // AI-only or cleared types: refresh current mode
+        if (state.widgetLibraryTab === 'applications') {
+            loadDefaultInjectionLibrary({ silent });
+        } else {
+            reloadWidgetLibrary({ silent: true });
+        }
+    }
+
+    function syncLibraryTypeFiltersFromTab(tab) {
+        const filters = getLibraryTypeFilters();
+        const aiOnly = !!filters.aiOnly;
+        if (tab === 'applications') {
+            filters.types = filters.types.filter((t) => t === 'app_default' || t === 'app_recommend');
+            if (!filters.types.length) {
+                filters.types = ['app_default', 'app_recommend'];
+            }
+        } else if (tab === 'basic') {
+            filters.types = ['basic'];
+        } else {
+            filters.types = ['general'];
+        }
+        filters.aiOnly = aiOnly;
+        syncLibraryTypeFilterChips();
+    }
+
+    /** 大 Tab（通用/基础/应用）切换时仅同步 Chip 视觉，不写入 library_tabs 过滤条件。 */
+    function syncLibraryTypeFilterChipsFromTab(tab) {
+        const filters = getLibraryTypeFilters();
+        const root = elements.widgetLibraryTypeFilters;
+        if (!root) {
+            return;
+        }
+        root.querySelectorAll('[data-library-type]').forEach((chip) => {
+            const type = chip.getAttribute('data-library-type') || '';
+            let active = false;
+            if (type === 'ai') {
+                active = !!filters.aiOnly;
+            } else if (tab === 'applications') {
+                if (type === 'applications') {
+                    active = filters.types.includes('app_default') && filters.types.includes('app_recommend');
+                } else if (type === 'app_default' || type === 'app_recommend') {
+                    active = filters.types.includes(type);
+                }
+            } else if (tab === 'basic') {
+                active = type === 'basic';
+            } else {
+                active = type === 'general';
+            }
+            chip.classList.toggle('is-active', active);
+            chip.setAttribute('aria-pressed', active ? 'true' : 'false');
+        });
+    }
+
+    function initWidgetLibraryTypeFilters() {
+        const root = elements.widgetLibraryTypeFilters;
+        if (!root || root.dataset.bound === '1') {
+            return;
+        }
+        root.dataset.bound = '1';
+        root.addEventListener('click', function (e) {
+            const chip = e.target.closest('[data-library-type]');
+            if (!chip) return;
+            e.preventDefault();
+            applyLibraryTypeChipSelection(chip.getAttribute('data-library-type') || '');
+        });
+        syncLibraryTypeFilterChips();
+    }
+
     function setWidgetLibraryTab(tab, options = {}) {
         const previousMode = state.widgetLibraryRenderMode || 'widgets';
         state.widgetLibraryTab = tab === 'basic' || tab === 'applications' ? tab : 'general';
+        if (!options.skipChipSync) {
+            syncLibraryTypeFilterChipsFromTab(state.widgetLibraryTab);
+        }
         if (state.widgetLibraryTab === 'applications') {
             applyWidgetLibraryTabVisibility();
             loadDefaultInjectionLibrary({ silent: options.silent === true });
@@ -8849,7 +9698,8 @@
         }
         elements.widgetLibraryTabs.hidden = false;
         bindWidgetLibraryTabButtons();
-        setWidgetLibraryTab(state.widgetLibraryTab || 'general', { silent: true });
+        initWidgetLibraryTypeFilters();
+        setWidgetLibraryTab(state.widgetLibraryTab || 'general', { silent: true, skipChipSync: true });
     }
 
     function bindWidgetLibraryTabButtons() {
@@ -8891,6 +9741,24 @@
             const tab = el.getAttribute('data-widget-library-tab-count') || 'general';
             el.textContent = String(counts[tab] || 0);
         });
+
+        const appsTab = elements.widgetLibraryTabs.querySelector('[data-widget-library-tab="applications"]');
+        if (appsTab) {
+            const exceptionCount = countDefaultInjectionExceptions(state.defaultInjectionLib?.items || []);
+            let badge = appsTab.querySelector('[data-default-injection-exception-count]');
+            if (exceptionCount > 0) {
+                if (!badge) {
+                    badge = document.createElement('span');
+                    badge.className = 'widget-library-tab-exception-count';
+                    badge.setAttribute('data-default-injection-exception-count', '1');
+                    appsTab.appendChild(badge);
+                }
+                badge.textContent = String(exceptionCount);
+                badge.hidden = false;
+            } else if (badge) {
+                badge.hidden = true;
+            }
+        }
     }
 
     function applyWidgetLibraryTabVisibility() {
@@ -8981,6 +9849,7 @@
         if (state.themeId) url.searchParams.set('theme_id', String(state.themeId));
         if (state.editorArea) url.searchParams.set('editor_area', state.editorArea);
         appendWidgetLibraryFilterParams(url);
+        appendLibraryTypeFilterParams(url, 'widgets');
         url.searchParams.set('offset', String(lib.offset));
         url.searchParams.set('limit', String(lib.limit));
         if (lib.keyword) url.searchParams.set('keyword', lib.keyword);
@@ -9009,6 +9878,7 @@
         if (lib.keyword) {
             url.searchParams.set('keyword', lib.keyword);
         }
+        appendLibraryTypeFilterParams(url, 'applications');
         return url.toString();
     }
 
@@ -9097,6 +9967,20 @@
         }
 
         listEl.innerHTML = '';
+        const toolbar = document.createElement('div');
+        toolbar.className = 'widget-default-injection-toolbar';
+        const applyAllBtn = document.createElement('button');
+        applyAllBtn.type = 'button';
+        applyAllBtn.className = 'w-button w-theme-editor-apply-required-defaults';
+        applyAllBtn.dataset.tone = 'primary';
+        applyAllBtn.dataset.size = 'sm';
+        applyAllBtn.innerHTML = iconSvg('cursor') + '<span>' + escapeHtml(translateUiText('一键安装默认项')) + '</span>';
+        applyAllBtn.addEventListener('click', function() {
+            applyRequiredDefaultsBatch(applyAllBtn);
+        });
+        toolbar.appendChild(applyAllBtn);
+        listEl.appendChild(toolbar);
+
         items.forEach(function(item) {
             const itemEl = createDefaultInjectionItem(item);
             if (itemEl) {
@@ -9104,6 +9988,7 @@
             }
         });
         updateWidgetLibraryTabCounts();
+        fitWidgetPreviews();
     }
 
     function isDefaultInjectionApplied(item) {
@@ -9118,64 +10003,628 @@
             || item.applied === 1;
     }
 
+    function defaultInjectionInstallMode(item) {
+        if (!item || typeof item !== 'object') {
+            return 'recommend';
+        }
+        if (item.install_mode === 'default' || item.required === true || item.required === 1) {
+            return 'default';
+        }
+        return 'recommend';
+    }
+
+    function defaultInjectionBlockerDismissKey(injectionKey) {
+        return 'weline.theme.defaultInjection.blockerDismissed.' + String(injectionKey || '');
+    }
+
+    function isDefaultInjectionBlockerDismissed(injectionKey) {
+        const key = String(injectionKey || '');
+        if (!key) {
+            return false;
+        }
+        const defaults = state.defaultInjectionLib || {};
+        if (defaults.dismissedBlockers && defaults.dismissedBlockers[key]) {
+            return true;
+        }
+        try {
+            return sessionStorage.getItem(defaultInjectionBlockerDismissKey(key)) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    function dismissDefaultInjectionBlocker(injectionKey) {
+        const key = String(injectionKey || '');
+        if (!key) {
+            return;
+        }
+        const defaults = state.defaultInjectionLib || (state.defaultInjectionLib = {});
+        defaults.dismissedBlockers = defaults.dismissedBlockers || {};
+        defaults.dismissedBlockers[key] = true;
+        try {
+            sessionStorage.setItem(defaultInjectionBlockerDismissKey(key), '1');
+        } catch (e) {
+            // ignore storage failures
+        }
+        updateWidgetLibraryTabCounts();
+    }
+
+    function clearDefaultInjectionBlockerDismiss(injectionKey) {
+        const key = String(injectionKey || '');
+        if (!key) {
+            return;
+        }
+        const defaults = state.defaultInjectionLib || {};
+        if (defaults.dismissedBlockers) {
+            delete defaults.dismissedBlockers[key];
+        }
+        try {
+            sessionStorage.removeItem(defaultInjectionBlockerDismissKey(key));
+        } catch (e) {
+            // ignore
+        }
+    }
+
+    function countDefaultInjectionExceptions(items) {
+        let count = 0;
+        (Array.isArray(items) ? items : []).forEach(function(item) {
+            const blocker = item && item.install_blocker;
+            const code = blocker && blocker.code ? String(blocker.code) : '';
+            if (!code || code === 'not_applicable') {
+                return;
+            }
+            if (isDefaultInjectionBlockerDismissed(item.injection_key)) {
+                return;
+            }
+            count += 1;
+        });
+        return count;
+    }
+
+    function resolveDefaultInjectionBlockerSummary(blocker) {
+        const code = String((blocker && blocker.code) || '');
+        const message = String((blocker && blocker.message) || '');
+        const known = {
+            slot_has_template_inline_widgets: '目标插槽已有模板内联部件，无法自动安装',
+            layout_slot_missing: '当前布局不存在目标插槽',
+            slot_does_not_accept_widget: '目标插槽不接受该部件',
+            exclusive_slot_occupied: '独占插槽已被其他部件占用',
+            template_inline: '目标插槽已有模板内联部件，无法自动安装',
+            slot_mismatch: '目标插槽不接受该部件',
+            slot_occupied: '独占插槽已被其他部件占用',
+        };
+        const phrase = known[message] || known[code] || '';
+        if (phrase) {
+            return translateUiText(phrase);
+        }
+        if (message) {
+            return translateUiText(message);
+        }
+        if (code) {
+            return translateUiText(code);
+        }
+        return translateUiText('安装失败');
+    }
+
+    function buildDefaultInjectionBlockerDetailNode(item, blocker) {
+        const root = document.createElement('div');
+        root.className = 'widget-default-injection-blocker-detail';
+
+        const summary = document.createElement('p');
+        summary.className = 'widget-default-injection-blocker-detail-summary';
+        summary.textContent = resolveDefaultInjectionBlockerSummary(blocker);
+        root.appendChild(summary);
+
+        const meta = document.createElement('dl');
+        meta.className = 'widget-default-injection-blocker-detail-meta';
+        const wCode = String((item && item.code) || '');
+        const wName = item ? resolveWidgetLibraryName(item.name, wCode) : '';
+        const rows = [
+            [translateUiText('错误码'), String((blocker && blocker.code) || '-')],
+            [translateUiText('错误标识'), String((blocker && blocker.message) || '-')],
+            [translateUiText('部件'), wName ? (wName + (wCode ? ' (' + wCode + ')' : '')) : (wCode || '-')],
+            [translateUiText('Slot'), String((item && item.slot_id) || '-')],
+            [translateUiText('区域'), String((item && item.area) || '-')],
+            [translateUiText('页面类型'), String((item && (item.layout_type || item.page_type)) || '-')],
+        ];
+        rows.forEach(function(pair) {
+            const dt = document.createElement('dt');
+            dt.textContent = pair[0];
+            const dd = document.createElement('dd');
+            dd.textContent = pair[1];
+            meta.appendChild(dt);
+            meta.appendChild(dd);
+        });
+        root.appendChild(meta);
+        return root;
+    }
+
+    function showDefaultInjectionBlockerDetail(item, blocker) {
+        const ui = getEditorUi();
+        if (!ui || !ui.dialog || typeof ui.dialog.alert !== 'function') {
+            return Promise.resolve();
+        }
+        return ui.dialog.alert(buildDefaultInjectionBlockerDetailNode(item, blocker), {
+            title: translateUiText('安装失败详情'),
+            confirmLabel: translateUiText('知道了'),
+            tone: 'warning',
+            size: 'lg',
+        });
+    }
+
+    function defaultInjectionCanRemove(item) {
+        return isDefaultInjectionApplied(item)
+            && item.removable !== false
+            && validNodeUid(item.node_uid || '');
+    }
+
+    function defaultInjectionCanLocate(item) {
+        return isDefaultInjectionApplied(item);
+    }
+
+    function findDefaultInjectionPreviewElement(item) {
+        if (!item || typeof item !== 'object') {
+            return null;
+        }
+        const nodeUid = validNodeUid(item.node_uid || item.layout_id || '');
+        const slotId = String(item.slot_id || '').trim();
+        const widgetCode = String(item.code || '').trim();
+        let iframeDoc = null;
+        try {
+            iframeDoc = elements.previewFrame?.contentDocument || elements.previewFrame?.contentWindow?.document || null;
+        } catch (err) {
+            iframeDoc = null;
+        }
+        if (!iframeDoc) {
+            return null;
+        }
+
+        if (nodeUid) {
+            const selector = resolveWidgetElementSelector({ nodeUid, layoutId: nodeUid });
+            const byUid = iframeDoc.querySelector(
+                `.widget-wrapper${selector}, .preview-widget${selector}, .weline-template-widget${selector}, ${selector}`
+            );
+            if (byUid) {
+                return byUid;
+            }
+        }
+
+        if (slotId && widgetCode) {
+            const slotEl = iframeDoc.querySelector(
+                `[data-wslot="${cssIdentifier(slotId)}"], [data-slot="${cssIdentifier(slotId)}"]`
+            );
+            if (slotEl) {
+                return slotEl.querySelector(
+                    `[data-widget-code="${cssIdentifier(widgetCode)}"], [weline-code="${cssIdentifier(widgetCode)}"]`
+                ) || slotEl.querySelector(`[data-template-ref$="${cssIdentifier(widgetCode)}"]`);
+            }
+        }
+
+        if (widgetCode) {
+            return iframeDoc.querySelector(`[data-widget-code="${cssIdentifier(widgetCode)}"]`);
+        }
+
+        return null;
+    }
+
+    function locateDefaultInjectionInPreview(item) {
+        if (!defaultInjectionCanLocate(item)) {
+            showToast(translateUiText('请先安装该应用部件'), 'info');
+            return false;
+        }
+
+        let located = false;
+        const nodeUid = validNodeUid(item.node_uid || item.layout_id || '');
+        const previewEl = findDefaultInjectionPreviewElement(item);
+        if (previewEl) {
+            previewEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            previewEl.classList.add('widget-locate-flash');
+            setTimeout(function() {
+                previewEl.classList.remove('widget-locate-flash');
+            }, 1800);
+            const identity = resolveDomWidgetIdentity(previewEl);
+            handlePreviewWidgetSelected({
+                type: 'widget-selected',
+                layoutId: identity.layoutId || nodeUid,
+                templateRef: previewEl.dataset.templateRef || previewEl.getAttribute('data-template-ref') || '',
+                widgetCode: item.code || previewEl.dataset.widgetCode || '',
+                widgetModule: item.module || previewEl.dataset.widgetModule || '',
+                widgetType: item.type || previewEl.dataset.widgetType || '',
+                widgetName: item.name || item.code || '',
+                config: previewEl.dataset.config || previewEl.getAttribute('data-config') || '{}',
+                slotId: item.slot_id || '',
+            });
+            located = true;
+        }
+
+        if (nodeUid) {
+            const structureEl = document.querySelector(`.preview-widget-item${dataLayoutIdSelector(nodeUid)}`);
+            if (structureEl) {
+                structureEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                selectWidget(structureEl);
+                located = true;
+            }
+        }
+
+        if (!located) {
+            showToast(translateUiText('预览中未找到该部件，请先刷新预览'), 'warning');
+        }
+        return located;
+    }
+
+    async function removeDefaultInjection(injectionKey, buttonEl) {
+        injectionKey = String(injectionKey || '').trim();
+        if (!injectionKey) {
+            return;
+        }
+        const defaults = state.defaultInjectionLib;
+        if (defaults.removingKey) {
+            return;
+        }
+        const item = (Array.isArray(defaults.items) ? defaults.items : []).find(function(row) {
+            return String(row.injection_key || '') === injectionKey;
+        });
+        if (!item) {
+            return;
+        }
+        if (!defaultInjectionCanRemove(item)) {
+            showToast(translateUiText('该部件为模板内嵌，无法从此卸载'), 'info');
+            return;
+        }
+
+        defaults.removingKey = injectionKey;
+        if (buttonEl) {
+            buttonEl.disabled = true;
+        }
+        try {
+            await handleWidgetDelete({
+                nodeUid: validNodeUid(item.node_uid),
+                layoutId: validNodeUid(item.node_uid) || String(item.layout_id || ''),
+                slotId: String(item.slot_id || ''),
+            }, String(item.slot_id || ''));
+        } finally {
+            defaults.removingKey = '';
+            if (buttonEl) {
+                buttonEl.disabled = false;
+            }
+        }
+    }
+
     function createDefaultInjectionItem(item) {
         if (!item || typeof item !== 'object') {
             return null;
         }
         const applied = isDefaultInjectionApplied(item);
+        const installMode = defaultInjectionInstallMode(item);
+        const notApplicable = item.not_applicable === true
+            || (item.install_blocker && item.install_blocker.code === 'not_applicable');
+        const blocker = (!notApplicable && item.install_blocker && item.install_blocker.code)
+            ? item.install_blocker
+            : null;
+        const injectionKey = String(item.injection_key || '');
+        const wCode = String(item.code || '');
+        const wModule = String(item.module || '');
+        const wType = String(item.type || '');
+        const wName = resolveWidgetLibraryName(item.name, wCode);
+        const wDesc = resolveWidgetLibraryDescription(item.reason || item.description || '', wCode);
+        const previewHtml = String(item.preview_html || '');
+
         const el = document.createElement('div');
-        el.className = 'widget-default-injection-item' + (applied ? ' is-applied' : '');
-        el.dataset.injectionKey = item.injection_key || '';
+        el.className = 'widget-item widget-default-injection-item'
+            + (applied ? ' is-applied' : '')
+            + (notApplicable ? ' is-not-applicable' : '')
+            + (blocker ? ' has-install-blocker' : '');
+        el.dataset.injectionKey = injectionKey;
         el.dataset.injectionStatus = applied ? 'applied' : 'missing';
-        const name = item.name || item.code || translateUiText('未命名部件');
-        const moduleText = [item.module, item.type, item.code].filter(Boolean).join(' / ');
+        el.dataset.installMode = installMode;
+        el.dataset.widgetCode = wCode;
+        el.dataset.widgetModule = wModule;
+        el.dataset.widgetType = wType;
+        el.dataset.widgetName = wName;
+        if (validNodeUid(item.node_uid || '')) {
+            el.dataset.nodeUid = validNodeUid(item.node_uid);
+        }
+        if (item.slot_id) {
+            el.dataset.slotId = String(item.slot_id);
+        }
+
+        const previewWrap = document.createElement('div');
+        previewWrap.className = 'widget-preview';
+
+        const canvas = document.createElement('div');
+        canvas.className = 'widget-preview-canvas'
+            + (applied ? ' widget-default-injection-locate-target' : '');
+        canvas.dataset.widgetModule = wModule;
+        canvas.dataset.widgetCode = wCode;
+        canvas.dataset.widgetArea = state.editorArea || 'frontend';
+        if (applied) {
+            canvas.setAttribute('role', 'button');
+            canvas.setAttribute('tabindex', '0');
+            canvas.title = translateUiText('点击定位到预览中的部件');
+            canvas.setAttribute('aria-label', translateUiText('点击定位到预览中的部件'));
+        }
+        mountWidgetPreviewHtml(canvas, previewHtml);
+
+        const overlay = document.createElement('div');
+        overlay.className = 'widget-preview-overlay';
+
+        const titleRow = document.createElement('div');
+        titleRow.className = 'widget-preview-title-row';
+
+        const titleEl = document.createElement('div');
+        titleEl.className = 'widget-preview-title';
+        titleEl.title = wName;
+        titleEl.textContent = wName;
+
+        const badges = document.createElement('div');
+        badges.className = 'widget-default-injection-badges';
+        if (applied) {
+            badges.insertAdjacentHTML(
+                'beforeend',
+                '<span class="widget-default-injection-badge is-applied">' + iconSvg('check')
+                + escapeHtml(translateUiText('已应用')) + '</span>'
+            );
+        }
+        badges.insertAdjacentHTML(
+            'beforeend',
+            '<span class="widget-default-injection-badge is-mode-' + escapeHtml(installMode) + '">'
+            + iconSvg(installMode === 'default' ? 'bolt' : 'info')
+            + escapeHtml(translateUiText(installMode === 'default' ? '默认安装' : '推荐'))
+            + '</span>'
+        );
+        if (item.is_ai_generated || (item.widget && item.widget.is_ai_generated)) {
+            badges.insertAdjacentHTML(
+                'beforeend',
+                '<span class="widget-default-injection-badge widget-ai-generated-badge">AI</span>'
+            );
+            el.dataset.isAiGenerated = '1';
+        }
+        titleEl.appendChild(badges);
+
+        const actionGroup = document.createElement('div');
+        actionGroup.className = 'w-theme-editor-widget-actions';
+        if (!applied && !notApplicable) {
+            const applyBtn = document.createElement('button');
+            applyBtn.type = 'button';
+            applyBtn.className = 'w-button w-theme-editor-apply-default-injection w-theme-editor-apply-default-injection-current';
+            applyBtn.dataset.tone = 'primary';
+            applyBtn.dataset.size = 'sm';
+            applyBtn.dataset.iconOnly = 'true';
+            applyBtn.dataset.applyScope = 'current';
+            applyBtn.dataset.injectionKey = injectionKey;
+            applyBtn.title = translateUiText('应用当前身份');
+            applyBtn.setAttribute('aria-label', translateUiText('应用当前身份'));
+            applyBtn.innerHTML = iconSvg('plus');
+            actionGroup.appendChild(applyBtn);
+        } else if (defaultInjectionCanRemove(item)) {
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'w-button w-theme-editor-remove-default-injection';
+            removeBtn.dataset.tone = 'danger';
+            removeBtn.dataset.size = 'sm';
+            removeBtn.dataset.iconOnly = 'true';
+            removeBtn.dataset.injectionKey = injectionKey;
+            removeBtn.title = translateUiText('卸载');
+            removeBtn.setAttribute('aria-label', translateUiText('卸载'));
+            removeBtn.innerHTML = iconSvg('delete');
+            actionGroup.appendChild(removeBtn);
+        }
+
+        titleRow.appendChild(titleEl);
+        titleRow.appendChild(actionGroup);
+
+        const descEl = document.createElement('div');
+        descEl.className = 'widget-preview-desc';
         const targetParts = [
             item.layout_type || item.page_type || '',
-            item.layout_option ? `${translateUiText('布局')}: ${item.layout_option}` : '',
-            item.slot_id ? `${translateUiText('Slot')}: ${item.slot_id}` : '',
-            item.area ? `${translateUiText('区域')}: ${item.area}` : '',
+            item.slot_id ? (translateUiText('Slot') + ': ' + item.slot_id) : '',
+            item.area ? (translateUiText('区域') + ': ' + item.area) : '',
         ].filter(Boolean);
-        const reason = item.reason || item.description || '';
-        const statusBadge = applied
-            ? '<span class="widget-default-injection-badge is-applied">' + iconSvg('check') + escapeHtml(translateUiText('已应用')) + '</span>'
-            : (item.required
-                ? '<span class="widget-default-injection-badge">' + iconSvg('warning') + escapeHtml(translateUiText('强烈推荐')) + '</span>'
-                : '');
-        const scopePrompt = applied
-            ? translateUiText('已在当前布局身份中')
-            : translateUiText('恢复范围：仅当前布局身份');
+        descEl.title = [wDesc, targetParts.join(' · ')].filter(Boolean).join(' | ');
+        descEl.textContent = wDesc || targetParts.join(' · ');
 
-        el.innerHTML = '<div class="widget-default-injection-header">'
-            + '<div class="widget-default-injection-title">'
-            + '<div class="widget-default-injection-name">' + escapeHtml(name) + '</div>'
-            + '<div class="widget-default-injection-module">' + escapeHtml(moduleText) + '</div>'
-            + '</div>'
-            + statusBadge
-            + '</div>'
-            + '<div class="widget-default-injection-target">' + escapeHtml(targetParts.join(' · ')) + '</div>'
-            + (reason ? '<div class="widget-default-injection-reason">' + escapeHtml(reason) + '</div>' : '')
-            + '<div class="widget-default-injection-scope">' + iconSvg('info') + '<span>' + escapeHtml(scopePrompt) + '</span></div>'
-            + (applied
-                ? ''
-                : ('<div class="widget-default-injection-actions">'
-                    + '<button type="button" class="btn-apply-default-injection w-theme-editor-apply-default-injection w-theme-editor-apply-default-injection-current" data-apply-scope="current" data-injection-key="' + escapeHtml(item.injection_key || '') + '" title="' + escapeHtml(translateUiText('只恢复当前布局身份')) + '">'
-                    + iconSvg('cursor') + '<span>' + escapeHtml(translateUiText('应用当前身份')) + '</span>'
-                    + '</button>'
-                    + '</div>'));
+        overlay.appendChild(titleRow);
+        overlay.appendChild(descEl);
+
+        if (blocker && !isDefaultInjectionBlockerDismissed(injectionKey)) {
+            const summaryText = resolveDefaultInjectionBlockerSummary(blocker);
+            const alert = document.createElement('div');
+            alert.className = 'widget-default-injection-blocker w-alert is-clickable';
+            alert.dataset.tone = 'warning';
+            alert.setAttribute('role', 'button');
+            alert.setAttribute('tabindex', '0');
+            alert.setAttribute('aria-label', translateUiText('点击查看安装失败详情'));
+            alert.title = translateUiText('点击查看详情');
+            alert.innerHTML = '<div class="widget-default-injection-blocker-body">'
+                + '<strong>' + escapeHtml(translateUiText('安装失败')) + '</strong>'
+                + '<span class="widget-default-injection-blocker-summary">' + escapeHtml(summaryText) + '</span>'
+                + '<em class="widget-default-injection-blocker-hint">' + escapeHtml(translateUiText('点击查看详情')) + '</em>'
+                + '</div>';
+            const openDetail = function(e) {
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                showDefaultInjectionBlockerDetail(item, blocker);
+            };
+            alert.addEventListener('click', openDetail);
+            alert.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    openDetail(e);
+                }
+            });
+            const closeBtn = document.createElement('button');
+            closeBtn.type = 'button';
+            closeBtn.className = 'w-button widget-default-injection-blocker-dismiss';
+            closeBtn.dataset.tone = 'neutral';
+            closeBtn.dataset.variant = 'ghost';
+            closeBtn.dataset.size = 'sm';
+            closeBtn.dataset.iconOnly = 'true';
+            closeBtn.title = translateUiText('关闭');
+            closeBtn.setAttribute('aria-label', translateUiText('关闭'));
+            closeBtn.innerHTML = iconSvg('close');
+            closeBtn.addEventListener('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                dismissDefaultInjectionBlocker(injectionKey);
+                alert.remove();
+                el.classList.remove('has-install-blocker');
+            });
+            alert.appendChild(closeBtn);
+            overlay.appendChild(alert);
+        }
+
+        previewWrap.appendChild(overlay);
+        previewWrap.appendChild(canvas);
+        el.appendChild(previewWrap);
+
+        if (applied) {
+            const openLocate = function(e) {
+                if (e) {
+                    if (e.target.closest('.w-theme-editor-widget-actions')) {
+                        return;
+                    }
+                    if (e.target.closest('.widget-default-injection-blocker')) {
+                        return;
+                    }
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+                locateDefaultInjectionInPreview(item);
+            };
+            canvas.addEventListener('click', openLocate);
+            canvas.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    openLocate(e);
+                }
+            });
+            overlay.addEventListener('click', function(e) {
+                if (e.target.closest('.w-theme-editor-widget-actions')
+                    || e.target.closest('.widget-default-injection-blocker')) {
+                    return;
+                }
+                openLocate(e);
+            });
+        }
+
+        if (isWidgetPreviewFallbackHtml(previewHtml)) {
+            canvas.dataset.previewPending = '1';
+        }
 
         return el;
+    }
+
+    async function reconcileRequiredDefaultsAfterDraftReady() {
+        if (!state.themeId || !config.apiReconcileRequiredDefaults) {
+            return;
+        }
+        const defaults = state.defaultInjectionLib;
+        if (defaults.reconciling) {
+            return;
+        }
+        defaults.reconciling = true;
+        try {
+            const payload = buildLayoutVersionIdentityPayload({
+                editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
+            });
+            const result = await apiJson(config.apiReconcileRequiredDefaults, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!result || !result.success) {
+                return;
+            }
+            const blockers = Array.isArray(result.blockers) ? result.blockers : [];
+            blockers.forEach(function(entry) {
+                if (entry && entry.injection_key) {
+                    clearDefaultInjectionBlockerDismiss(entry.injection_key);
+                }
+            });
+            if (result.scoped_workspace) {
+                applyScopedWorkspaceSnapshot('layout', result.scoped_workspace);
+            } else if (Number(result.applied || 0) > 0) {
+                await loadScopedWorkspace('layout', { skipReconcile: true });
+            }
+            await refreshDefaultInjectionApplications({
+                render: state.widgetLibraryTab === 'applications',
+                silent: true,
+            });
+            if (Number(result.applied || 0) > 0 && typeof loadLayoutPreview === 'function') {
+                loadLayoutPreview();
+            }
+        } finally {
+            defaults.reconciling = false;
+        }
+    }
+
+    async function applyRequiredDefaultsBatch(buttonEl) {
+        if (!state.themeId || !config.apiApplyRequiredDefaults) {
+            return;
+        }
+        const defaults = state.defaultInjectionLib;
+        if (defaults.applyingKey) {
+            return;
+        }
+        defaults.applyingKey = 'batch:required';
+        if (buttonEl) {
+            buttonEl.disabled = true;
+        }
+        try {
+            await Promise.resolve(state.pendingScopedMutation).catch(() => {});
+            const payload = buildLayoutVersionIdentityPayload({
+                editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
+            });
+            const result = await apiJson(config.apiApplyRequiredDefaults, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+            if (!result || !result.success) {
+                showToast(result?.message || translateUiText('一键安装失败'), 'error');
+                return;
+            }
+            const blockers = Array.isArray(result?.blockers) ? result.blockers : [];
+            blockers.forEach(function(entry) {
+                if (entry && entry.injection_key) {
+                    clearDefaultInjectionBlockerDismiss(entry.injection_key);
+                }
+            });
+            await syncLayoutWorkspaceAfterServerMutation(result);
+            await refreshDefaultInjectionApplications({
+                render: state.widgetLibraryTab === 'applications',
+                silent: true,
+            });
+            const applied = Number(result?.applied || 0);
+            if (applied > 0 && typeof loadLayoutPreview === 'function') {
+                loadLayoutPreview();
+            }
+            if (applied > 0) {
+                showToast(translateUiText('已安装默认部件') + ' (' + applied + ')', 'success');
+            } else if (blockers.length > 0) {
+                showToast(translateUiText('部分默认部件无法安装，请查看应用卡片'), 'warning');
+            } else {
+                showToast(translateUiText('没有可安装的默认部件'), 'info');
+            }
+        } catch (err) {
+            console.warn('[ThemeEditor] apply required defaults failed:', err);
+            showToast(err?.message || translateUiText('一键安装失败'), 'error');
+        } finally {
+            defaults.applyingKey = '';
+            if (buttonEl) {
+                buttonEl.disabled = false;
+            }
+        }
     }
 
     async function applyDefaultInjection(injectionKey, buttonEl, applyScope = 'current') {
         injectionKey = String(injectionKey || '').trim();
         if (!injectionKey) {
-            showToast(translateUiText('缺少应用项标识'), 'warning');
             return;
         }
         applyScope = String(applyScope || 'current').trim() === 'all' ? 'all' : 'current';
         const defaults = state.defaultInjectionLib;
         if (defaults.applyingKey) {
-            showToast(translateUiText('正在应用推荐部件，请稍候'), 'info');
             return;
         }
 
@@ -9197,14 +10646,41 @@
             });
 
             if (!result || !result.success) {
-                showToast(result?.message || translateUiText('应用失败'), 'error');
+                const benignMsg = String(result?.message || '');
+                if (!result?.blocker && (benignMsg === 'already_applied' || benignMsg === 'applied')) {
+                    await refreshDefaultInjectionApplications({
+                        render: state.widgetLibraryTab === 'applications',
+                        silent: true,
+                    });
+                    return;
+                }
+                clearDefaultInjectionBlockerDismiss(injectionKey);
+                const items = Array.isArray(defaults.items) ? defaults.items : [];
+                items.forEach(function(item) {
+                    if (String(item.injection_key || '') !== injectionKey) {
+                        return;
+                    }
+                    if (result?.blocker) {
+                        item.install_blocker = result.blocker;
+                        return;
+                    }
+                    item.install_blocker = {
+                        code: 'apply_failed',
+                        message: result?.message || translateUiText('应用失败'),
+                    };
+                });
+                if (state.widgetLibraryTab === 'applications') {
+                    renderDefaultInjectionItems(items);
+                } else {
+                    updateWidgetLibraryTabCounts();
+                }
                 return;
             }
 
-            await loadScopedWorkspace('layout');
+            await syncLayoutWorkspaceAfterServerMutation(result);
 
             const data = result.data || {};
-            const layoutId = data.layout_id || '';
+            const layoutId = data.node_uid || data.layout_id || '';
             const widgetData = data.widget || {
                 module: data.module || '',
                 type: data.type || '',
@@ -9227,23 +10703,30 @@
                 });
             }
 
-            if (result.preview_html && layoutId) {
+            if (typeof loadLayoutPreview === 'function') {
+                loadLayoutPreview();
+            } else if (result.preview_html && layoutId) {
                 const targetSlotId = data.slot_id || (data.area === 'footer' ? 'footer' : data.area === 'header' ? 'header' : null);
                 updateWidgetPreviewInIframe(layoutId, result.preview_html, true, targetSlotId);
-            } else {
-                loadLayoutPreview();
             }
 
-            const appliedCount = Number(result.applied_count || data.applied_count || 0);
-            const successMessage = result.message
-                || (applyScope === 'all' && appliedCount > 1
-                    ? translateUiText('已应用到所有布局身份')
-                    : translateUiText('已应用推荐部件'));
-            showToast(successMessage, 'success');
             await refreshDefaultInjectionApplications({ render: state.widgetLibraryTab === 'applications', silent: true });
         } catch (err) {
             console.error('[ThemeEditor] apply default injection failed:', err);
-            showToast(err?.message || translateUiText('应用失败'), 'error');
+            clearDefaultInjectionBlockerDismiss(injectionKey);
+            const items = Array.isArray(defaults.items) ? defaults.items : [];
+            items.forEach(function(item) {
+                if (String(item.injection_key || '') !== injectionKey) {
+                    return;
+                }
+                item.install_blocker = {
+                    code: 'apply_failed',
+                    message: err?.message || translateUiText('应用失败'),
+                };
+            });
+            if (state.widgetLibraryTab === 'applications') {
+                renderDefaultInjectionItems(items);
+            }
         } finally {
             defaults.applyingKey = '';
             if (buttonEl) {
@@ -9555,6 +11038,10 @@
         }
         if (wExclusive) {
             titleEl.insertAdjacentHTML('beforeend', ' <span class="w-badge" data-tone="warning" title="独占部件">' + iconSvg('eye') + '</span>');
+        }
+        if (w.is_ai_generated || w.isAiGenerated || (w.meta && w.meta.is_ai_generated)) {
+            titleEl.insertAdjacentHTML('beforeend', ' <span class="w-badge widget-ai-generated-badge" data-tone="accent" title="AI 生成">AI</span>');
+            itemEl.dataset.isAiGenerated = '1';
         }
 
 	        const previewBtn = document.createElement('button');
@@ -9921,7 +11408,7 @@
 
         if (modalBody) {
             const params = widgetMeta.params || {};
-            let formHtml = `<form id="modalConfigForm" data-layout-id="${escapeHtml(layoutId)}" data-widget-code="${escapeHtml(widgetMeta.code || '')}" data-widget-module="${escapeHtml(widgetMeta.module || '')}">`;
+            let formHtml = `<form id="modalConfigForm"${widgetIdentityDataAttrs(layoutId)} data-widget-code="${escapeHtml(widgetMeta.code || '')}" data-widget-module="${escapeHtml(widgetMeta.module || '')}">`;
 
             // 添加预览区域
             formHtml += `
@@ -10003,53 +11490,42 @@
      * T012: 配置保存后使用返回的 preview_html 更新预览，不再使用实时 API
      */
     async function saveConfigFromModal(form, widgetMeta) {
-        const layoutId = form.dataset.layoutId;
+        const layoutId = resolveDomWidgetIdentity(form).layoutId;
         if (!layoutId) {
             showToast('缺少布局ID', 'error');
             return;
         }
 
         const configData = collectWidgetConfigData(form);
+        const locale = getActiveConfigLocale() || '';
 
         try {
-            const result = await apiJson(getWidgetConfigSaveUrl(), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    layout_id: layoutId,
-                    config: configData,
-                    locale: getActiveConfigLocale() || null,
-                }),
-            });
+            const result = await requestSaveWidgetConfig({
+                node_uid: layoutId,
+                config: configData,
+                locale: locale || null,
+            }, locale);
 
-            if (result.success) {
-                const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
-                await queueWidgetConfigOwnership(result.node_uid, normalizedConfig, getActiveConfigLocale());
-                showToast('配置已保存', 'success');
+            showToast('配置已保存', 'success');
 
-                // T012: 使用返回的 preview_html 更新预览，不再触发 layout-preview 请求
-                if (result.preview_html) {
-                    const previewBox = document.getElementById('modalWidgetPreview');
-                    if (previewBox) {
-                        previewBox.innerHTML = sanitizeHtmlForEditorPreview(result.preview_html);
-                    }
-
-                    // 更新 iframe 中对应部件的预览（如果存在）
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html);
+            // T012: 使用返回的 preview_html 更新预览，不再触发 layout-preview 请求
+            if (result.preview_html) {
+                const previewBox = document.getElementById('modalWidgetPreview');
+                if (previewBox) {
+                    previewBox.innerHTML = sanitizeHtmlForEditorPreview(result.preview_html);
                 }
 
-                // 关闭模态框
-                hideEditorModal(document.getElementById('widgetConfigModal'));
-
-                // 注意：不再调用 refreshPreview()，已通过 preview_html 更新
-            } else {
-                // T015: 保存失败时保持当前预览，仅显示错误提示
-                showToast(result.message || '保存失败', 'error');
-                // 不更新预览，保持上一次的状态
+                // 更新 iframe 中对应部件的预览（如果存在）
+                updateWidgetPreviewInIframe(layoutId, result.preview_html);
             }
+
+            // 关闭模态框
+            hideEditorModal(document.getElementById('widgetConfigModal'));
+
+            // 注意：不再调用 refreshPreview()，已通过 preview_html 更新
         } catch (err) {
             // T015: 网络错误时保持当前预览，继续编辑
-            showToast('保存失败，请检查网络连接', 'error');
+            showToast(err?.message || translateUiText('保存失败，请检查网络连接'), 'error');
             // 不更新预览，不关闭模态框，允许用户重试
         }
     }
@@ -10069,7 +11545,7 @@
     function getIframeSlotWidgetRoots(container) {
         if (!container) return [];
         const candidates = Array.from(container.querySelectorAll(
-            ':scope > .widget-wrapper[data-layout-id], :scope > [data-layout-id].widget-wrapper, :scope > .widget-wrapper[data-widget-code]'
+            ':scope > .widget-wrapper[data-node-uid], :scope > .widget-wrapper[data-layout-id], :scope > [data-node-uid].widget-wrapper, :scope > [data-layout-id].widget-wrapper, :scope > .widget-wrapper[data-widget-code]'
         ));
         return candidates.filter((el, index) => !candidates.slice(0, index).some((parent) => parent.contains(el)));
     }
@@ -10166,7 +11642,7 @@
 
                         // 找到插槽，插入新部件
                         const wrapper = iframe.contentDocument.createElement('div');
-                        wrapper.setAttribute('data-layout-id', layoutId);
+                        applyWidgetIdentityToElement(wrapper, layoutId);
                         wrapper.setAttribute('data-slot-id', slotId);
                         wrapper.classList.add('widget-wrapper', 'widget-new');
                         wrapper.classList.add('w-theme-editor-position-context');
@@ -10358,7 +11834,7 @@
             if (slotWidgets) {
                 currentCount = slotWidgets.querySelectorAll('.preview-widget-item').length;
             } else {
-                currentCount = slotEl.querySelectorAll('.preview-widget-item, .widget-wrapper[data-layout-id]').length;
+                currentCount = slotEl.querySelectorAll(`.preview-widget-item, .widget-wrapper[data-node-uid], .widget-wrapper[data-layout-id]`).length;
             }
         }
 
@@ -10545,7 +12021,7 @@
 
 	    function resolveSelectedWidgetInnerSlot(widgetData) {
 	        const selectedWidget = state.selectedWidget;
-	        const layoutId = selectedWidget?.dataset?.layoutId || selectedWidget?.getAttribute?.('data-layout-id') || '';
+	        const layoutId = resolveDomWidgetIdentity(selectedWidget).layoutId;
 	        if (!selectedWidget || !layoutId) {
 	            return null;
 	        }
@@ -10586,7 +12062,7 @@
 
 	    function resolveSelectedWidgetParentSlot(widgetData) {
 	        const selectedWidget = state.selectedWidget;
-	        const layoutId = selectedWidget?.dataset?.layoutId || selectedWidget?.getAttribute?.('data-layout-id') || '';
+	        const layoutId = resolveDomWidgetIdentity(selectedWidget).layoutId;
 	        if (!layoutId) {
 	            return null;
 	        }
@@ -10689,13 +12165,22 @@
         }
         state.saveInProgress = true;
 
+        const currentPageType = getEffectivePageType(state.pageType || 'homepage');
+        const currentLayoutType = getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage');
+        let writeLayoutType = currentLayoutType;
+        try {
+            writeLayoutType = await resolveChromeWriteLayoutType(area, slotId);
+        } catch (error) {
+            console.warn('[ThemeEditor] chrome write layout resolve failed', error);
+        }
+
         const payload = {
             theme_id: state.themeId,
-            page_type: getEffectivePageType(state.pageType || 'homepage'),
-            layout_type: getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage'),
+            page_type: writeLayoutType,
+            layout_type: writeLayoutType,
             layout_option: getEffectiveLayoutOption(state.layoutOption || 'default'),
             editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
-            editor_context: buildTypedEditorContext('layout'),
+            editor_context: buildTypedEditorContext('layout', { layout_type: writeLayoutType }),
             scope: { identity: state.scopeIdentity },
             ...getLayoutLockVirtualPayload(),
             area: area,
@@ -10709,6 +12194,10 @@
             exclusive: (widgetData.config && widgetData.config.template_ref) ? false : exclusive,
         };
 
+        if (writeLayoutType !== currentLayoutType) {
+            showToast(translateUiText('正在编辑全局页头/页脚（全站生效）'), 'info');
+        }
+
         try {
             const result = await apiJson(config.apiSaveWidget, {
                 method: 'POST',
@@ -10718,7 +12207,7 @@
 
 
             if (result.success) {
-                await queueAddedLayoutNode(payload, result.data || {});
+                const nodeUid = result.data?.node_uid || '';
                 const widgetName = widgetData.name || widgetData.code;
                 const displaySlot = slotId || area;
                 showToast(
@@ -10726,12 +12215,16 @@
                     'success'
                 );
 
-                const layoutId = result.data?.layout_id;
-                if (layoutId) {
-                    addWidgetToStructureView(area, slotId, widgetData, layoutId, exclusive);
+                if (nodeUid) {
+                    addWidgetToStructureView(area, slotId, widgetData, nodeUid, exclusive);
+                    try {
+                        await syncLayoutWorkspaceAfterServerMutation(result);
+                    } catch (workspaceError) {
+                        console.warn('[ThemeEditor] refresh scoped layout after add failed', workspaceError);
+                    }
                 }
                 notifyDashboardLayoutMutated('widget-added', {
-                    layoutId: layoutId || null,
+                    nodeUid: nodeUid || null,
                     slotId: slotId || null,
                     area: area || null,
                 });
@@ -10740,17 +12233,16 @@
                     switchPreviewView('preview');
                 }
 
-                if (result.preview_html && layoutId) {
-                    // 结构视图拖入时 slotId 可能为 null，用 area 推导插槽 ID，避免找不到插槽而整页刷新导致 footer 变白
+                if (typeof loadLayoutPreview === 'function') {
+                    loadLayoutPreview();
+                } else if (result.preview_html && nodeUid) {
                     const targetSlotId = slotId ?? (
                         area === 'footer' ? 'footer'
                             : area === 'header' ? 'header'
                                 : area === 'content' ? 'content'
                                     : null
                     );
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html, true, targetSlotId, sortOrder);
-                } else {
-                    loadLayoutPreview();
+                    updateWidgetPreviewInIframe(nodeUid, result.preview_html, true, targetSlotId, sortOrder);
                 }
 
                 state.lastPreviewInsertSortOrder = null;
@@ -10863,6 +12355,7 @@
         e.dataTransfer.setData('text/plain', dragPayload);
         e.dataTransfer.effectAllowed = 'copy';
         notifyPreviewDragState('start', widgetData);
+        setPreviewDropBridgeActive(true);
 
         // 高亮可放置区域
         highlightAllowedAreas(widgetData.position);
@@ -11256,7 +12749,7 @@
         const widgetHtml = `
             <div class="preview-widget-item widget-new${safeTemplateRef ? ' is-template-widget' : ''}"
                  id="${escapeHtml(widgetDomId)}"
-                 ${safeLayoutId ? `data-layout-id="${safeLayoutId}"` : ''}
+                 ${widgetIdentityDataAttrs(layoutId).trim()}
                  ${safeTemplateRef ? `data-template-ref="${safeTemplateRef}"` : ''}
                  data-slot-id="${safeSlotId}"
                  data-widget-code="${safeWidgetCode}"
@@ -11723,12 +13216,12 @@
         let layoutId = '';
         let templateRef = '';
         if (identityOrLayoutId && typeof identityOrLayoutId === 'object') {
-            layoutId = String(identityOrLayoutId.layoutId || '').trim();
+            layoutId = String(identityOrLayoutId.layoutId || identityOrLayoutId.nodeUid || '').trim();
             templateRef = String(identityOrLayoutId.templateRef || '').trim();
         } else {
             layoutId = String(identityOrLayoutId || '').trim();
         }
-        const safeLayoutId = escapeHtml(layoutId || '');
+        const identityAttrs = widgetIdentityDataAttrs(layoutId);
         const safeTemplateRef = escapeHtml(templateRef || '');
         const safeSlotId = escapeHtml(slotId || '');
         let html = `<div class="widget-hover-actions"`
@@ -11736,12 +13229,12 @@
             + ` data-w-float-self="1"`
             + ` data-w-placement="top-end"`
             + ` data-w-portal="0"`
-            + (safeLayoutId ? ` data-layout-id="${safeLayoutId}"` : '')
+            + identityAttrs
             + (safeTemplateRef ? ` data-template-ref="${safeTemplateRef}"` : '')
             + '>';
 
         // 嵌套距离：信息、上级、下级（仅这三者按栈下标；替换/删除/移动仍用最外层）
-        html += `<button class="w-theme-editor-widget-info" title="信息" data-action="info" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}">
+        html += `<button class="w-theme-editor-widget-info" title="信息" data-action="info"${identityAttrs} data-template-ref="${safeTemplateRef}">
                     ${WIDGET_ACTION_ICONS.info}
                  </button>`;
         html += `<button class="w-theme-editor-penetrate-up" title="上级" data-action="penetrate-up" hidden>
@@ -11750,35 +13243,35 @@
         html += `<button class="w-theme-editor-penetrate-down" title="下穿" data-action="penetrate-down" hidden>
                     ${WIDGET_ACTION_ICONS.penetrateDown}
                  </button>`;
-        html += `<button class="w-theme-editor-widget-config" title="配置" data-action="config" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-config" title="配置" data-action="config"${identityAttrs} data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.config}
                  </button>`;
-        html += `<button class="w-theme-editor-widget-ai-edit" title="AI编辑" data-action="ai-edit" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-ai-edit" title="AI编辑" data-action="ai-edit"${identityAttrs} data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.aiEdit}
                  </button>`;
-        html += `<button class="w-theme-editor-widget-ai-rebuild" title="AI重建" data-action="ai-rebuild" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-ai-rebuild" title="AI重建" data-action="ai-rebuild"${identityAttrs} data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.aiRebuild}
                  </button>`;
-        html += `<button class="w-theme-editor-widget-ai-image" title="AI图片资源重新生成" data-action="ai-image" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-ai-image" title="AI图片资源重新生成" data-action="ai-image"${identityAttrs} data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.aiImage}
                  </button>`;
 
         // 替换按钮 - 所有部件都有
-        html += `<button class="w-theme-editor-widget-replace" title="替换部件" data-action="replace" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-replace" title="替换部件" data-action="replace"${identityAttrs} data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.replace}
                  </button>`;
 
         // 删除按钮 - 所有部件都有
-        html += `<button class="w-theme-editor-widget-delete" title="删除部件" data-action="delete" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
+        html += `<button class="w-theme-editor-widget-delete" title="删除部件" data-action="delete"${identityAttrs} data-template-ref="${safeTemplateRef}" data-slot-id="${safeSlotId}">
                     ${WIDGET_ACTION_ICONS.delete}
                  </button>`;
 
         // 非独占部件显示上下移动按钮
         if (!isExclusive) {
-            html += `<button class="w-theme-editor-widget-move-up" title="上移" data-action="move-up" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" ${isFirst ? 'disabled' : ''}>
+            html += `<button class="w-theme-editor-widget-move-up" title="上移" data-action="move-up"${identityAttrs} data-template-ref="${safeTemplateRef}" ${isFirst ? 'disabled' : ''}>
                         ${WIDGET_ACTION_ICONS.moveUp}
                      </button>`;
-            html += `<button class="w-theme-editor-widget-move-down" title="下移" data-action="move-down" data-layout-id="${safeLayoutId}" data-template-ref="${safeTemplateRef}" ${isLast ? 'disabled' : ''}>
+            html += `<button class="w-theme-editor-widget-move-down" title="下移" data-action="move-down"${identityAttrs} data-template-ref="${safeTemplateRef}" ${isLast ? 'disabled' : ''}>
                         ${WIDGET_ACTION_ICONS.moveDown}
                      </button>`;
         }
@@ -11805,9 +13298,7 @@
         const seen = new Set();
         const stack = [];
         for (const el of list) {
-            const wrapper = el.closest && el.closest(
-                '.widget-wrapper[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]'
-            );
+            const wrapper = el.closest && el.closest(WIDGET_WRAPPER_MATCH);
             if (!wrapper) continue;
             const id = getWidgetSiblingIdentity(wrapper);
             if (id && !seen.has(id)) {
@@ -11982,8 +13473,62 @@
         slotEl.classList.add('slot-active');
     }
 
+    function readSlotSelectionFromToolbar(bar, doc) {
+        if (!(bar instanceof HTMLElement)) {
+            return null;
+        }
+
+        const raw = bar.getAttribute('data-slot-selection') || '';
+        if (raw) {
+            try {
+                const parsed = JSON.parse(raw);
+                const normalized = normalizeSelectedSlot(parsed);
+                if (normalized?.id) {
+                    return normalized;
+                }
+            } catch (err) {
+                console.warn('[ThemeEditor] Invalid data-slot-selection on toolbar:', err);
+            }
+        }
+
+        const slotEl = resolveSlotElementForToolbar(bar, doc);
+        if (slotEl instanceof HTMLElement) {
+            const slotId = String(
+                slotEl.getAttribute('data-wslot')
+                || slotEl.getAttribute('data-slot')
+                || bar.dataset.slotId
+                || bar.getAttribute('data-slot-id')
+                || ''
+            ).trim();
+            if (slotId) {
+                syncSlotToolbarOwnerMeta(bar, slotEl);
+                return normalizeSelectedSlot(buildSlotInfoFromElement(slotId, slotEl));
+            }
+        }
+
+        const fallbackId = String(
+            bar.dataset.slotId
+            || bar.getAttribute('data-slot-id')
+            || bar.dataset.wslot
+            || ''
+        ).trim();
+        if (!fallbackId) {
+            return null;
+        }
+
+        return normalizeSelectedSlot({
+            id: fallbackId,
+            name: bar.dataset.wslotName || fallbackId,
+            accept: '*',
+            reject: '',
+            area: bar.dataset.wslotPosition || inferAreaFromSlotId(fallbackId),
+        });
+    }
+
     /**
-     * 插槽工具条点击由父页捕获阶段委托（对齐部件 bindWidgetActionEvents，避免 .widget-hover-actions 吞掉无 data-action 的按钮）。
+     * 插槽工具条点击由父页捕获阶段委托。
+     * 优先读工具条自带的 data-slot-selection（与 openWidgetPanelForSlotSelection / handleSlotSelected 对齐）；
+     * 若资料不足则不拦截，让 iframe 内 selectSlot / slot-init-defaults 继续走 postMessage。
      */
     function bindSlotToolbarActionEvents(doc) {
         if (!doc || !doc.body || doc.body._slotToolbarActionEventsBound) {
@@ -12008,48 +13553,33 @@
                 return;
             }
 
+            const slotInfo = readSlotSelectionFromToolbar(bar, doc);
+            if (!slotInfo || !slotInfo.id) {
+                // 不 toast、不 stop：放行 iframe 按钮 listener（selectSlot / postPreviewMessage）
+                return;
+            }
+
             e.preventDefault();
             e.stopPropagation();
             e.stopImmediatePropagation();
-
-            const slotEl = resolveSlotElementForToolbar(bar, doc);
-            if (!(slotEl instanceof HTMLElement)) {
-                showToast(translateUiText('缺少插槽标识'), 'warning');
-                return;
-            }
 
             if (isPreviewInteractionMode()) {
                 setInteractionMode('edit');
             }
 
-            syncSlotToolbarOwnerMeta(bar, slotEl);
-
-            const slotId = String(
-                slotEl.getAttribute('data-wslot')
-                || slotEl.getAttribute('data-slot')
-                || bar.dataset.slotId
-                || ''
-            ).trim();
-            if (!slotId) {
-                showToast(translateUiText('缺少插槽标识'), 'warning');
-                return;
-            }
             if (isSelect) {
-                handleSlotSelected(buildSlotInfoFromElement(slotId, slotEl));
-                highlightPreviewSlotSelection(doc, slotEl);
+                handleSlotSelected(slotInfo);
+                const slotEl = resolveSlotElementForToolbar(bar, doc);
+                if (slotEl) {
+                    highlightPreviewSlotSelection(doc, slotEl);
+                }
                 return;
             }
 
             void initSlotDefaultsFromPreview({
-                slot_id: slotId,
-                area: slotEl.getAttribute('data-wslot-position')
-                    || slotEl.getAttribute('data-position')
-                    || bar.dataset.wslotPosition
-                    || '',
-                name: slotEl.getAttribute('data-wslot-name')
-                    || slotEl.getAttribute('data-name')
-                    || bar.dataset.wslotName
-                    || '',
+                slot_id: slotInfo.id,
+                area: slotInfo.area || '',
+                name: slotInfo.name || '',
             }).catch(function(error) {
                 console.error('[ThemeEditor] Slot init defaults failed:', error);
                 showToast(error?.message || translateUiText('初始化失败'), 'error');
@@ -12171,12 +13701,12 @@
         const iframeDoc = iframe.contentDocument;
 
         // 查找所有部件包装器（布局行 + 模板内嵌 w:widget）
-        let widgetWrappers = Array.from(iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id], .weline-template-widget[data-template-ref]'));
+        let widgetWrappers = Array.from(iframeDoc.querySelectorAll(WIDGET_WRAPPER_MATCH));
         if (widgetWrappers.length === 0) {
-            widgetWrappers = Array.from(iframeDoc.querySelectorAll('[data-layout-id], [data-weline-template-widget="1"][data-template-ref]')).filter(function (el) {
+            widgetWrappers = Array.from(iframeDoc.querySelectorAll(`${WIDGET_IDENTITY_MATCH}, [data-weline-template-widget="1"][data-template-ref]`)).filter(function (el) {
                 var parent = el.parentElement;
                 while (parent) {
-                    if (parent.matches('[data-layout-id], [data-weline-template-widget="1"][data-template-ref]')) {
+                    if (parent.matches(`${WIDGET_IDENTITY_MATCH}, [data-weline-template-widget="1"][data-template-ref]`)) {
                         return false;
                     }
                     parent = parent.parentElement;
@@ -12207,7 +13737,7 @@
 
             // 计算同层部件位置
             const siblings = wrapper.parentElement?.querySelectorAll(
-                '[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]'
+                `${WIDGET_IDENTITY_MATCH}, .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]`
             ) || [];
             const siblingArray = Array.from(siblings).filter(el => readWidgetIdentityFromElement(el).identity);
             const currentIndex = siblingArray.indexOf(wrapper);
@@ -12260,7 +13790,7 @@
             return;
         }
 
-        iframeDoc.querySelectorAll('.weline-template-widget[data-template-ref]:not([data-layout-id])').forEach((wrapper) => {
+        iframeDoc.querySelectorAll('.weline-template-widget[data-template-ref]:not([data-node-uid]):not([data-layout-id])').forEach((wrapper) => {
             const identity = readWidgetIdentityFromElement(wrapper);
             if (!identity.templateRef) {
                 return;
@@ -12341,7 +13871,8 @@
                     return;
                 }
                 state.nestStack = pending;
-                state.nestIndex = 0;
+                // Deepest under pointer: hover the leaf widget, not its outer ancestor.
+                state.nestIndex = pending.length ? pending.length - 1 : 0;
                 setShowActionsByNest();
             }, NEST_HOVER_STICKY_MS);
         }
@@ -12352,9 +13883,7 @@
                 return false;
             }
             clearNestHoverClearTimer();
-            const wrapper = bar.closest(
-                '.widget-wrapper[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]'
-            );
+            const wrapper = bar.closest(WIDGET_WRAPPER_MATCH);
             if (wrapper) {
                 const identity = getWidgetSiblingIdentity(wrapper);
                 if (identity) {
@@ -12363,9 +13892,7 @@
                         const chain = [];
                         let node = wrapper;
                         while (node && node !== doc.body) {
-                            if (node.matches && node.matches(
-                                '.widget-wrapper[data-layout-id], .weline-template-widget[data-template-ref], .widget-wrapper[data-weline-template-widget="1"]'
-                            )) {
+                            if (node.matches && node.matches(WIDGET_WRAPPER_MATCH)) {
                                 const id = getWidgetSiblingIdentity(node);
                                 if (id) chain.unshift(id);
                             }
@@ -12412,7 +13939,7 @@
                     state.nestStack = stack.length ? stack : state.nestStack;
                     if (stack.length && stack[0] !== prevTop) {
                         const keepIdx = stack.indexOf(currentIdentity);
-                        state.nestIndex = keepIdx >= 0 ? keepIdx : 0;
+                        state.nestIndex = keepIdx >= 0 ? keepIdx : (stack.length - 1);
                     }
                     setShowActionsByNest();
                     return;
@@ -12428,7 +13955,8 @@
             const prevTop = state.nestStack[0];
             state.nestStack = stack;
             if (stack[0] !== prevTop) {
-                state.nestIndex = 0;
+                // New hover tree: select deepest (hovered) widget; penetrate-up still reaches ancestors.
+                state.nestIndex = stack.length ? stack.length - 1 : 0;
             }
             if (!stack.length) {
                 doc.querySelectorAll('.widget-wrapper.show-actions').forEach(w => w.classList.remove('show-actions'));
@@ -12453,6 +13981,10 @@
         // 使用事件委托 - 必须在最早阶段阻止冒泡
         doc.body.addEventListener('click', function(e) {
             if (isPreviewInteractionMode()) {
+                return;
+            }
+            // 购物控件等标记了 data-editor-interactive / data-mini-cart-* 的区域保持原生交互。
+            if (isShopperRuntimeEventTarget(e.target)) {
                 return;
             }
             if (e.target.closest('.widget-hover-actions[data-slot-hover-actions="1"]')) {
@@ -12480,15 +14012,20 @@
 
             const action = button.dataset.action;
             const bar = button.closest('.widget-hover-actions');
-            const layoutId = bar ? bar.dataset.layoutId : button.dataset.layoutId;
+            const layoutId = resolveDomWidgetIdentity(bar || button).layoutId
+                || resolveDomWidgetIdentity(button).layoutId;
             const slotId = button.dataset.slotId;
 
             switch (action) {
                 case 'info':
                 case 'config': {
-                    const effectiveIdentity = (state.nestStack && state.nestStack.length && state.nestStack[state.nestIndex] != null)
+                    const nestedIdentity = (state.nestStack && state.nestStack.length && state.nestStack[state.nestIndex] != null)
                         ? state.nestStack[state.nestIndex]
-                        : (bar?.dataset?.layoutId || bar?.dataset?.templateRef || layoutId);
+                        : '';
+                    const barIdentity = resolveDomWidgetIdentity(bar).layoutId
+                        || bar?.dataset?.templateRef
+                        || layoutId;
+                    const effectiveIdentity = nestedIdentity || barIdentity;
                     const item = document.querySelector(`.preview-widget-item${dataWidgetIdentitySelector(effectiveIdentity)}`);
                     if (item) {
                         selectWidget(item);
@@ -12534,7 +14071,7 @@
                     let effectiveSlotId = slotId;
                     const iframe = elements.previewFrame;
                     if (iframe && iframe.contentDocument) {
-                        const targetWidget = iframe.contentDocument.querySelector(`[data-layout-id="${effectiveLayoutId}"]`);
+                        const targetWidget = iframe.contentDocument.querySelector(dataLayoutIdSelector(effectiveLayoutId));
                         if (targetWidget) {
                             effectiveSlotId = targetWidget.getAttribute('data-slot-id') ||
                                 targetWidget.closest('[data-wslot]')?.getAttribute('data-wslot') ||
@@ -12615,41 +14152,23 @@
         return state.virtualThemeAiCatalog;
     }
 
+    async function ensureVirtualLayoutAssetAvailable() {
+        try {
+            const catalog = await loadVirtualThemeAiCatalog(false);
+            if (catalog && catalog.virtual_layout_asset_available === false) {
+                showToast(translateUiText('虚拟布局资产表已移除，请使用主题编辑器 scoped 工作区'), 'warning');
+                return false;
+            }
+        } catch (err) {
+            // Catalog may be unavailable; write paths still fail-closed on the server.
+            console.warn('[ThemeEditor] virtual layout availability check skipped:', err);
+        }
+        return true;
+    }
+
     function normalizeCatalogItems(catalog, key) {
         const bucket = catalog && catalog[key] ? catalog[key] : {};
         return Array.isArray(bucket.items) ? bucket.items : [];
-    }
-
-    function renderAiSkillChoices(items) {
-        if (!items.length) {
-            return '<div class="w-theme-editor-ai-dialog__empty">暂无可选技能</div>';
-        }
-        return items.map((item) => {
-            const code = String(item.code || '');
-            const checked = item.locked || item.manual ? 'checked' : '';
-            const disabled = item.readonly && !item.locked && !item.manual ? 'disabled' : '';
-            return `<label class="w-theme-editor-ai-dialog__choice">
-                <input type="checkbox" name="virtual_ai_skill" value="${escapeHtml(code)}" ${checked} ${disabled}>
-                <span><strong>${escapeHtml(item.name || code)}</strong><br><small>${escapeHtml(item.description || code)}</small></span>
-            </label>`;
-        }).join('');
-    }
-
-    function renderAiStyleChoices(items) {
-        const auto = `<label class="w-theme-editor-ai-dialog__choice">
-            <input type="radio" name="virtual_ai_style" value="" checked>
-            <span><strong>自动匹配</strong><br><small>由 Theme AI 根据当前指令选择方向</small></span>
-        </label>`;
-        if (!items.length) {
-            return auto;
-        }
-        return auto + items.map((item) => {
-            const code = String(item.code || '');
-            return `<label class="w-theme-editor-ai-dialog__choice">
-                <input type="radio" name="virtual_ai_style" value="${escapeHtml(code)}">
-                <span><strong>${escapeHtml(item.name || code)}</strong><br><small>${escapeHtml(item.description || code)}</small></span>
-            </label>`;
-        }).join('');
     }
 
     function readCheckedValues(root, selector) {
@@ -12659,17 +14178,109 @@
             .filter(Boolean);
     }
 
-    async function openVirtualThemeAiDialog(action, layoutId, slotId) {
-        let catalog = {};
+    function encodeThemeAiStreamParams(payload) {
         try {
-            catalog = await loadVirtualThemeAiCatalog(false);
+            return btoa(unescape(encodeURIComponent(JSON.stringify(payload || {}))));
         } catch (err) {
-            console.warn('[ThemeEditor] AI catalog unavailable:', err);
+            console.warn('[ThemeEditor] theme AI params encode failed:', err);
+            return '';
+        }
+    }
+
+    function buildThemeAiStreamUrl(endpoint, payload) {
+        const url = new URL(endpoint, window.location.origin);
+        const encoded = encodeThemeAiStreamParams(payload);
+        if (encoded) {
+            url.searchParams.set('params', encoded);
+        }
+        return url.toString();
+    }
+
+    function runThemeAiSse(endpoint, payload) {
+        return new Promise((resolve, reject) => {
+            if (!window.EventSource) {
+                reject(new Error('EventSource 不可用'));
+                return;
+            }
+            const source = new EventSource(buildThemeAiStreamUrl(endpoint, payload), { withCredentials: true });
+            let settled = false;
+            const finish = (fn, value) => {
+                if (settled) return;
+                settled = true;
+                try { source.close(); } catch (e) {}
+                fn(value);
+            };
+            const onComplete = (event) => {
+                let data = {};
+                try {
+                    data = JSON.parse(event.data || '{}');
+                } catch (err) {
+                    finish(reject, new Error('AI 完成事件解析失败'));
+                    return;
+                }
+                if (data && data.success) {
+                    finish(resolve, data);
+                    return;
+                }
+                finish(reject, new Error((data && data.message) || 'AI 生成失败'));
+            };
+            const onErrorEvent = (event) => {
+                let message = 'AI 流式失败';
+                try {
+                    const data = JSON.parse(event.data || '{}');
+                    if (data && data.message) message = data.message;
+                } catch (err) {}
+                finish(reject, new Error(message));
+            };
+            source.addEventListener('complete', onComplete);
+            source.addEventListener('error', (event) => {
+                // Browser transport error vs named SSE error event
+                if (event && event.data) {
+                    onErrorEvent(event);
+                    return;
+                }
+                if (!settled) {
+                    finish(reject, new Error('AI 连接中断'));
+                }
+            });
+            source.addEventListener('failed', onErrorEvent);
+        });
+    }
+
+    async function loadThemeAiAgents() {
+        if (!config.apiThemeAiAgents) {
+            return [];
+        }
+        const url = new URL(config.apiThemeAiAgents, window.location.origin);
+        url.searchParams.set('scenario', 'theme_component_generation');
+        const result = await apiJson(url.toString(), { silent: true });
+        if (!result || result.success === false) {
+            throw new Error((result && result.message) || 'AI Agent 列表加载失败');
+        }
+        const agents = result.data && Array.isArray(result.data.agents) ? result.data.agents : [];
+        return agents;
+    }
+
+    function renderThemeAiAgentOptions(agents) {
+        if (!agents.length) {
+            return '<option value="theme_component_builder">theme_component_builder</option>';
+        }
+        return agents.map((agent, index) => {
+            const code = String(agent.agent_code || agent.code || agent.id || 'theme_component_builder');
+            const name = String(agent.name || agent.label || code);
+            const selected = index === 0 ? ' selected' : '';
+            return `<option value="${escapeHtml(code)}"${selected}>${escapeHtml(name)}</option>`;
+        }).join('');
+    }
+
+    async function openThemeComponentAiDialog(action) {
+        let agents = [];
+        try {
+            agents = await loadThemeAiAgents();
+        } catch (err) {
+            console.warn('[ThemeEditor] theme AI agents unavailable:', err);
         }
         const label = getWidgetAiActionLabel(action);
-        const skillItems = normalizeCatalogItems(catalog, 'skills');
-        const styleItems = normalizeCatalogItems(catalog, 'styles');
-
         return new Promise((resolve) => {
             const container = document.createElement('dialog');
             container.className = 'w-dialog w-theme-editor-ai-dialog';
@@ -12682,28 +14293,22 @@
                 <header class="w-dialog__header">
                     <h2 class="w-dialog__title">${escapeHtml(label)}</h2>
                     <button type="button" class="w-button" data-w-close data-tone="quiet" data-size="sm"
-                            data-virtual-ai-cancel aria-label="关闭"></button>
+                            data-theme-ai-cancel aria-label="关闭"></button>
                 </header>
                 <div class="w-dialog__body w-theme-editor-ai-dialog__body">
                     <label class="w-field w-theme-editor-ai-dialog__field">
                         <span class="w-field__label">指令</span>
-                        <textarea class="w-textarea w-theme-editor-ai-dialog__textarea" data-virtual-ai-instructions
-                                  placeholder="说明这个 block 要如何变化" autofocus></textarea>
+                        <textarea class="w-textarea w-theme-editor-ai-dialog__textarea" data-theme-ai-instructions
+                                  placeholder="说明这个部件要如何变化" autofocus></textarea>
                     </label>
-                    <fieldset class="w-theme-editor-ai-dialog__field">
-                        <legend class="w-theme-editor-ai-dialog__label">技能</legend>
-                        <div class="w-theme-editor-ai-dialog__grid">${renderAiSkillChoices(skillItems)}</div>
-                    </fieldset>
-                    <fieldset class="w-theme-editor-ai-dialog__field">
-                        <legend class="w-theme-editor-ai-dialog__label">方向</legend>
-                        <div class="w-theme-editor-ai-dialog__grid">${renderAiStyleChoices(styleItems)}</div>
-                    </fieldset>
-                    <input type="hidden" data-virtual-ai-layout-id value="${escapeHtml(layoutId)}">
-                    <input type="hidden" data-virtual-ai-slot-id value="${escapeHtml(slotId || '')}">
+                    <label class="w-field w-theme-editor-ai-dialog__field">
+                        <span class="w-field__label">Agent</span>
+                        <select class="w-select" data-theme-ai-agent>${renderThemeAiAgentOptions(agents)}</select>
+                    </label>
                 </div>
                 <footer class="w-dialog__footer">
-                    <button type="button" class="w-button" data-tone="neutral" data-virtual-ai-cancel>取消</button>
-                    <button type="button" class="w-button" data-tone="primary" data-virtual-ai-confirm>${escapeHtml(label)}</button>
+                    <button type="button" class="w-button" data-tone="neutral" data-theme-ai-cancel>取消</button>
+                    <button type="button" class="w-button" data-tone="primary" data-theme-ai-confirm>${escapeHtml(label)}</button>
                 </footer>
             `;
             document.body.appendChild(container);
@@ -12718,15 +14323,13 @@
                 resolve(result);
             };
             container.addEventListener('close', finish, { once: true });
-            container.querySelectorAll('[data-virtual-ai-cancel]').forEach((button) => {
+            container.querySelectorAll('[data-theme-ai-cancel]').forEach((button) => {
                 button.addEventListener('click', () => getEditorUi().dialog.close(container, 'cancel'));
             });
-            container.querySelector('[data-virtual-ai-confirm]')?.addEventListener('click', () => {
+            container.querySelector('[data-theme-ai-confirm]')?.addEventListener('click', () => {
                 result = {
-                    instructions: String(container.querySelector('[data-virtual-ai-instructions]')?.value || ''),
-                    selected_skill_codes: readCheckedValues(container, 'input[name="virtual_ai_skill"]'),
-                    selected_style_codes: readCheckedValues(container, 'input[name="virtual_ai_style"]'),
-                    use_ai: true,
+                    instructions: String(container.querySelector('[data-theme-ai-instructions]')?.value || '').trim(),
+                    agent_code: String(container.querySelector('[data-theme-ai-agent]')?.value || 'theme_component_builder').trim() || 'theme_component_builder',
                 };
                 getEditorUi().dialog.close(container, 'confirm');
             });
@@ -12736,58 +14339,166 @@
         });
     }
 
+    function resolveWidgetTargetMeta(layoutId) {
+        const iframeDoc = getPreviewDocument();
+        const widgetEl = iframeDoc?.querySelector(dataLayoutIdSelector(layoutId))
+            || document.querySelector(`.preview-widget-item${dataLayoutIdSelector(layoutId)}`);
+        const moduleName = String(widgetEl?.getAttribute('data-widget-module') || widgetEl?.dataset?.widgetModule || '').trim();
+        const widgetType = String(widgetEl?.getAttribute('data-widget-type') || widgetEl?.dataset?.widgetType || '').trim();
+        const widgetCode = String(widgetEl?.getAttribute('data-widget-code') || widgetEl?.dataset?.widgetCode || '').trim();
+        const componentId = parseInt(widgetEl?.getAttribute('data-component-id') || widgetEl?.dataset?.componentId || '0', 10) || 0;
+        const publishedVersionId = parseInt(widgetEl?.getAttribute('data-published-version-id') || widgetEl?.dataset?.publishedVersionId || '0', 10) || 0;
+        const sourceType = String(widgetEl?.getAttribute('data-source-type') || widgetEl?.dataset?.sourceType || '').trim().toLowerCase();
+        let config = {};
+        try {
+            const raw = widgetEl?.getAttribute('data-widget-config') || widgetEl?.dataset?.widgetConfig || '';
+            if (raw) config = typeof raw === 'string' ? JSON.parse(raw) : (raw || {});
+        } catch (err) {
+            config = {};
+        }
+        const isThemeComponent = moduleName === 'Weline_Theme'
+            && (widgetType === 'theme_component' || widgetCode.includes('/') || widgetCode.startsWith('basic/'));
+        const isVirtual = sourceType === 'virtual' || componentId > 0 || (isThemeComponent && publishedVersionId > 0);
+        return {
+            module: moduleName,
+            type: widgetType,
+            code: widgetCode,
+            componentId,
+            publishedVersionId,
+            sourceType,
+            config: config && typeof config === 'object' ? config : {},
+            isThemeComponent,
+            isVirtual,
+            widgetEl,
+        };
+    }
+
+    function shallowMergeWidgetConfig(baseConfig, previousConfig) {
+        const base = baseConfig && typeof baseConfig === 'object' ? { ...baseConfig } : {};
+        const prev = previousConfig && typeof previousConfig === 'object' ? previousConfig : {};
+        Object.keys(prev).forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(base, key) || key in base) {
+                base[key] = prev[key];
+            } else if (Object.keys(base).length === 0) {
+                base[key] = prev[key];
+            }
+        });
+        // Prefer overlapping keys from previous even when base has defaults.
+        Object.keys(base).forEach((key) => {
+            if (Object.prototype.hasOwnProperty.call(prev, key)) {
+                base[key] = prev[key];
+            }
+        });
+        return base;
+    }
+
     async function handleWidgetAiAction(action, layoutId, slotId, button) {
         if (!layoutId) {
             showToast('缺少 block 身份', 'warning');
             return;
         }
-        const dialog = await openVirtualThemeAiDialog(action, layoutId, slotId);
+        if (!config.apiThemeAiPublish || !config.apiThemeAiComponentStream) {
+            showToast('Theme AI API 未接线', 'error');
+            return;
+        }
+
+        const dialog = await openThemeComponentAiDialog(action);
         if (!dialog) {
             return;
         }
 
         setWidgetAiButtonLoading(button, true);
         try {
-            const result = await apiJson(config.apiVirtualThemeBlockAction, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    action: action,
-                    theme_id: state.themeId || 0,
-                    area: state.editorArea || 'frontend',
-                    page_type: state.layoutType || getCurrentPageType() || 'homepage',
-                    layout_type: state.layoutType || getCurrentPageType() || 'homepage',
-                    layout_option: state.layoutOption || 'default',
-                    layout_id: layoutId,
-                    slot_id: slotId || '',
-                    request_id: `block-${action}-${layoutId}-${Date.now()}`,
-                    instructions: dialog.instructions,
-                    selected_skill_codes: dialog.selected_skill_codes,
-                    selected_style_codes: dialog.selected_style_codes,
-                    use_ai: 1,
-                    ...getLayoutLockVirtualPayload(),
-                })
-            });
-            if (!result.success) {
-                throw new Error(result.message || `${getWidgetAiActionLabel(action)}失败`);
+            const target = resolveWidgetTargetMeta(layoutId);
+            const area = state.editorArea || 'frontend';
+            const themeId = state.themeId || 0;
+            let instructions = dialog.instructions || '';
+            if (action === 'ai-image') {
+                instructions = ('请重点重生成模板中的图片与媒体资源。\n' + instructions).trim();
+            }
+            if (!instructions) {
+                instructions = getWidgetAiActionLabel(action);
             }
 
-            const data = result.data || {};
-            if (data.layout_option) {
-                await refreshLayoutOptions({
-                    layout_type: state.layoutType || getCurrentPageType() || 'homepage',
-                    layout_option: data.layout_option,
-                    silent: true
+            const useRefine = action === 'ai-edit' && target.isVirtual && (target.componentId > 0 || target.publishedVersionId > 0);
+            let draftVersionId = 0;
+
+            if (useRefine) {
+                const prepare = await apiJson(config.apiThemeAiPrepareRefine, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        component_id: target.componentId || 0,
+                        published_version_id: target.publishedVersionId || 0,
+                    }),
                 });
+                if (!prepare?.success || !(prepare.data?.draft_version_id > 0)) {
+                    throw new Error(prepare?.message || '准备精修草稿失败');
+                }
+                draftVersionId = Number(prepare.data.draft_version_id);
+                const streamResult = await runThemeAiSse(config.apiThemeAiRefineStream, {
+                    theme_id: themeId,
+                    area,
+                    draft_version_id: draftVersionId,
+                    agent_code: dialog.agent_code,
+                    instructions,
+                    slot_id: slotId || '',
+                });
+                draftVersionId = Number(streamResult.draft_version_id || draftVersionId);
+            } else {
+                const streamResult = await runThemeAiSse(config.apiThemeAiComponentStream, {
+                    theme_id: themeId,
+                    area,
+                    agent_code: dialog.agent_code,
+                    name: target.code || getWidgetAiActionLabel(action),
+                    description: instructions,
+                    requirements: instructions,
+                    reference_component_code: target.code || '',
+                    slot_id: slotId || '',
+                    category: 'content',
+                });
+                draftVersionId = Number(streamResult.draft_version_id || 0);
             }
-            showToast(result.message || `${getWidgetAiActionLabel(action)}草稿已生成`, 'success');
+
+            if (!(draftVersionId > 0)) {
+                throw new Error('缺少 draft_version_id');
+            }
+
+            const published = await apiJson(config.apiThemeAiPublish, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ draft_version_id: draftVersionId }),
+            });
+            if (!published?.success || !published.data?.widget) {
+                throw new Error(published?.message || '发布虚拟部件失败');
+            }
+
+            const widget = { ...(published.data.widget || {}) };
+            const defaultConfig = widget.default_config || widget.defaultConfig || {};
+            widget.config = shallowMergeWidgetConfig(defaultConfig, target.config);
+
+            const placed = await placeWidgetFromProvider(widget, {
+                insert_mode: 'replace',
+                anchor_layout_id: layoutId,
+                slot_id: slotId || '',
+                area: inferAreaFromSlotId(slotId) || undefined,
+            });
+            if (!placed || placed.success === false) {
+                throw new Error((placed && placed.message) || '生成成功，但替换放置失败');
+            }
+
+            if (typeof reloadWidgetLibrary === 'function') {
+                await reloadWidgetLibrary({ silent: true });
+            }
+            showToast(published.message || `${getWidgetAiActionLabel(action)}完成`, 'success');
         } catch (err) {
-            console.error('[ThemeEditor] block AI action failed:', err);
+            console.error('[ThemeEditor] theme component AI action failed:', err);
             showToast(err.message || `${getWidgetAiActionLabel(action)}失败`, 'error');
         } finally {
             setWidgetAiButtonLoading(button, false);
         }
     }
+
 
     /**
      * 绑定 iframe 内 slot 的点击事件
@@ -12819,7 +14530,7 @@
 
             // 如果点击的是 widget-wrapper 内的子插槽，优先处理子插槽选择
             // 只有点击 widget-wrapper 但没有命中子插槽时才跳过
-            const inWidgetWrapper = e.target.closest('.widget-wrapper') || e.target.closest('[data-layout-id]');
+            const inWidgetWrapper = e.target.closest('.widget-wrapper') || e.target.closest(WIDGET_IDENTITY_MATCH);
             if (inWidgetWrapper && !e.target.closest('[data-wslot]') && !e.target.closest('[data-slot]')) {
                 return;
             }
@@ -12948,16 +14659,29 @@
      * 处理部件删除
      */
     async function handleWidgetDelete(identityInput, slotId) {
-        const deleteTarget = typeof identityInput === 'object' && identityInput !== null
+        const raw = typeof identityInput === 'object' && identityInput !== null
             ? identityInput
+            : String(identityInput || '').trim();
+        const deleteTarget = typeof raw === 'object'
+            ? {
+                layoutId: String(raw.layoutId || '').trim(),
+                nodeUid: validNodeUid(raw.nodeUid || raw.layoutId || ''),
+                templateRef: String(raw.templateRef || '').trim(),
+                slotId: String(raw.slotId || slotId || '').trim(),
+            }
             : {
-                layoutId: String(identityInput || '').trim(),
-                templateRef: String(identityInput || '').startsWith('tpl:') ? String(identityInput || '').trim() : '',
+                layoutId: raw.startsWith('tpl:') ? '' : raw,
+                nodeUid: validNodeUid(raw),
+                templateRef: raw.startsWith('tpl:') ? raw : '',
                 slotId: String(slotId || '').trim(),
             };
+        if (deleteTarget.nodeUid && !/^\d+$/.test(deleteTarget.layoutId)) {
+            // Canonical key is node_uid; keep layoutId filled for callers that still read that field.
+            deleteTarget.layoutId = deleteTarget.layoutId || deleteTarget.nodeUid;
+        }
         console.log('[ThemeEditor] Delete widget:', deleteTarget, 'in slot:', slotId);
 
-        if (!deleteTarget.layoutId && !deleteTarget.templateRef) {
+        if (!deleteTarget.layoutId && !deleteTarget.nodeUid && !deleteTarget.templateRef) {
             showToast('缺少部件标识，无法删除', 'error');
             return;
         }
@@ -13007,7 +14731,7 @@
             if (result.success) {
                 await queueRemovedLayoutNode(result, {
                     layoutId: deleteTarget.layoutId || result.layout_id,
-                    nodeUid: widgetContext.nodeUid,
+                    nodeUid: deleteTarget.nodeUid || widgetContext.nodeUid || result?.data?.node_uid || result?.node_uid,
                 });
                 // 从 iframe 中移除部件并恢复原始内容
                 const iframe = elements.previewFrame;
@@ -13021,7 +14745,9 @@
                         // 移除部件元素
                         widgetEl.remove();
 
-                        const remainingWidgets = slot ? slot.querySelector('[data-layout-id]') : null;
+                        const remainingWidgets = slot
+                            ? slot.querySelector('[data-node-uid], [data-layout-id]')
+                            : null;
 
                         // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
                         if (slot && !remainingWidgets) {
@@ -13043,9 +14769,11 @@
                 }
 
                 // 从结构视图中移除
-                const structureSelector = deleteTarget.layoutId
-                    ? dataLayoutIdSelector(deleteTarget.layoutId)
-                    : dataTemplateRefSelector(deleteTarget.templateRef);
+                const structureSelector = deleteTarget.nodeUid
+                    ? `[data-node-uid="${cssIdentifier(deleteTarget.nodeUid)}"]`
+                    : (deleteTarget.layoutId
+                        ? dataLayoutIdSelector(deleteTarget.layoutId)
+                        : dataTemplateRefSelector(deleteTarget.templateRef));
                 const structureItem = document.querySelector(`.preview-widget-item${structureSelector}`);
                 if (structureItem) {
                     structureItem.remove();
@@ -13054,6 +14782,7 @@
                 showToast('部件已删除', 'success');
                 notifyDashboardLayoutMutated('widget-deleted', {
                     layoutId: deleteTarget.layoutId || result.layout_id || null,
+                    nodeUid: deleteTarget.nodeUid || result?.data?.node_uid || result?.node_uid || null,
                     templateRef: deleteTarget.templateRef || null,
                     slotId: effectiveSlotId || slotId || null,
                 });
@@ -13086,7 +14815,7 @@
         if (!widgetEl) return;
 
         const prevWidget = widgetEl.previousElementSibling;
-        if (!prevWidget || !prevWidget.hasAttribute('data-layout-id')) {
+        if (!prevWidget || (!prevWidget.hasAttribute('data-layout-id') && !prevWidget.hasAttribute('data-node-uid'))) {
             showToast('已经是第一个部件', 'info');
             return;
         }
@@ -13113,7 +14842,7 @@
         if (!widgetEl) return;
 
         const nextWidget = widgetEl.nextElementSibling;
-        if (!nextWidget || !nextWidget.hasAttribute('data-layout-id')) {
+        if (!nextWidget || (!nextWidget.hasAttribute('data-layout-id') && !nextWidget.hasAttribute('data-node-uid'))) {
             showToast('已经是最后一个部件', 'info');
             return;
         }
@@ -13132,6 +14861,8 @@
      * @deprecated 插槽内排序已改用 persistSlotSortOrder，此函数仅作备用
      */
     async function swapWidgetOrder(layoutId1, layoutId2) {
+        const nodeUid1 = validNodeUid(layoutId1) || '';
+        const nodeUid2 = validNodeUid(layoutId2) || '';
         try {
             const result = await apiJson(config.apiBase + '/swap-widget-order', {
                 method: 'POST',
@@ -13140,8 +14871,10 @@
                 },
                 body: JSON.stringify({
                     theme_id: state.themeId,
-                    layout_id_1: layoutId1,
-                    layout_id_2: layoutId2
+                    node_uid_1: nodeUid1,
+                    node_uid_2: nodeUid2,
+                    layout_id_1: /^\d+$/.test(String(layoutId1 || '')) ? parseInt(layoutId1, 10) : 0,
+                    layout_id_2: /^\d+$/.test(String(layoutId2 || '')) ? parseInt(layoutId2, 10) : 0,
                 })
             });
 
@@ -13149,8 +14882,16 @@
                 await queueLayoutNodePlacementOwnership(result.data?.nodes || [], 'layout_nodes_swapped');
                 const iframe = elements.previewFrame;
                 if (iframe && iframe.contentDocument) {
-                    const el1 = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId1}"]`);
-                    const el2 = iframe.contentDocument.querySelector(`[data-layout-id="${layoutId2}"]`);
+                    const sel1 = resolveWidgetElementSelector({
+                        layoutId: String(layoutId1 || ''),
+                        nodeUid: result.data?.node_uid_1 || nodeUid1,
+                    });
+                    const sel2 = resolveWidgetElementSelector({
+                        layoutId: String(layoutId2 || ''),
+                        nodeUid: result.data?.node_uid_2 || nodeUid2,
+                    });
+                    const el1 = sel1 ? iframe.contentDocument.querySelector(sel1) : null;
+                    const el2 = sel2 ? iframe.contentDocument.querySelector(sel2) : null;
 
                     if (el1 && el2) {
                         if (el1.compareDocumentPosition(el2) & Node.DOCUMENT_POSITION_FOLLOWING) {
@@ -13189,7 +14930,7 @@
         if (!slotEl) return;
 
         // 获取插槽内所有部件
-        const widgets = slotEl.querySelectorAll('[data-layout-id]');
+        const widgets = slotEl.querySelectorAll('[data-node-uid], [data-layout-id]');
 
         widgets.forEach((widget, index) => {
             const upBtn = widget.querySelector('.w-theme-editor-widget-move-up');
@@ -13213,7 +14954,7 @@
     function setDraggableOnSlotWidgets(iframeDoc) {
         if (!iframeDoc) return;
 
-        const widgets = iframeDoc.querySelectorAll('.widget-wrapper[data-layout-id], [data-layout-id]');
+        const widgets = iframeDoc.querySelectorAll(`${WIDGET_WRAPPER_MATCH}, ${WIDGET_IDENTITY_MATCH}`);
         widgets.forEach(widget => {
             const slotId = widget.getAttribute('data-slot-id') ||
                            widget.closest('[data-wslot]')?.getAttribute('data-wslot') || '';
@@ -13248,10 +14989,10 @@
         }
         iframeDoc.body._sortableDelegationBound = true;
 
-        // —— 辅助函数：从事件目标找到最近的带 data-layout-id 的 widget-wrapper ——
+        // —— 辅助函数：从事件目标找到最近的部件 wrapper（优先 node_uid） ——
         function resolveWidget(target) {
-            return target.closest('.widget-wrapper[data-layout-id]') ||
-                   target.closest('[data-layout-id]');
+            return target.closest(WIDGET_WRAPPER_MATCH) ||
+                   target.closest(WIDGET_IDENTITY_MATCH);
         }
 
         // —— 辅助函数：取 widget 所属 slotId ——
@@ -13270,7 +15011,7 @@
 
             e.stopPropagation();
 
-            const layoutId = widget.getAttribute('data-layout-id');
+            const layoutId = resolveDomWidgetIdentity(widget).layoutId;
             e.dataTransfer.setData('text/plain', layoutId);
             e.dataTransfer.effectAllowed = 'move';
 
@@ -13353,7 +15094,7 @@
             targetWidget.classList.remove('drag-over-top', 'drag-over-bottom');
 
             const sourceLayoutId = state.sortDragging.layoutId;
-            const targetLayoutId = targetWidget.getAttribute('data-layout-id');
+            const targetLayoutId = resolveDomWidgetIdentity(targetWidget).layoutId;
             if (sourceLayoutId === targetLayoutId) return;
 
             // 计算插入位置
@@ -13386,17 +15127,22 @@
                        iframeDoc.querySelector(dataAttributeSelector('data-slot', slotId));
         if (!slotEl) return false;
 
-        // 找到装部件的容器：取第一个带 data-layout-id 的节点的 parentNode
-        const firstWidget = slotEl.querySelector('[data-layout-id]');
+        // 找到装部件的容器：取第一个带 data-node-uid / data-layout-id 的节点的 parentNode
+        const firstWidget = slotEl.querySelector('[data-node-uid], [data-layout-id]');
         const container = firstWidget ? firstWidget.parentNode : slotEl;
 
-        // 只取容器下直接子级中带 data-layout-id 的部件，避免嵌套 slot 内部件混入
-        const widgets = Array.from(container.children).filter(el => el.hasAttribute('data-layout-id'));
+        // 只取容器下直接子级中带 data-layout-id / data-node-uid 的部件，避免嵌套 slot 内部件混入
+        const widgets = Array.from(container.children).filter(el =>
+            el.hasAttribute('data-layout-id') || el.hasAttribute('data-node-uid')
+        );
         if (widgets.length === 0) return true; // 无部件则不需要排序
 
         const sortData = {};
         widgets.forEach((widget, index) => {
-            sortData[widget.getAttribute('data-layout-id')] = index;
+            const key = resolveDomWidgetIdentity(widget).layoutId;
+            if (key) {
+                sortData[key] = index;
+            }
         });
 
         try {
@@ -13445,8 +15191,8 @@
         if (!iframe || !iframe.contentDocument) return;
 
         const iframeDoc = iframe.contentDocument;
-        const sourceEl = iframeDoc.querySelector(`[data-layout-id="${sourceLayoutId}"]`);
-        const targetEl = iframeDoc.querySelector(`[data-layout-id="${targetLayoutId}"]`);
+        const sourceEl = iframeDoc.querySelector(dataLayoutIdSelector(sourceLayoutId));
+        const targetEl = iframeDoc.querySelector(dataLayoutIdSelector(targetLayoutId));
 
         if (!sourceEl || !targetEl) return;
 
@@ -13634,7 +15380,15 @@
      */
     function buildSavedWidgetConfigUrl(layoutId, locale) {
         const apiUrl = new URL(`${config.apiBase}/widget-config`, window.location.origin);
-        apiUrl.searchParams.set('layout_id', layoutId);
+        const nodeUid = validNodeUid(layoutId);
+        if (nodeUid) {
+            apiUrl.searchParams.set('node_uid', nodeUid);
+        } else if (/^\d+$/.test(String(layoutId || ''))) {
+            apiUrl.searchParams.set('layout_id', String(layoutId));
+        } else if (layoutId) {
+            apiUrl.searchParams.set('layout_id', String(layoutId));
+            apiUrl.searchParams.set('node_uid', String(layoutId));
+        }
         if (locale) {
             apiUrl.searchParams.set('locale', locale);
         }
@@ -13668,7 +15422,7 @@
             const form = modalBody.querySelector('.w-param-form');
             if (form) {
                 form.id = 'widgetConfigFormModal';
-                form.setAttribute('data-layout-id', layoutId);
+                applyWidgetIdentityToElement(form, layoutId);
                 if (widgetElement) {
                     form.setAttribute('data-widget-element-id', 'widget_' + layoutId);
                 }
@@ -13687,7 +15441,8 @@
         }
 
         renderConfigFormToModal({
-            layout_id: layoutId,
+            layout_id: validNodeUid(layoutId) ? 0 : layoutId,
+            node_uid: validNodeUid(layoutId) || (widgetElement?.dataset?.nodeUid || ''),
             widget_code: widgetCode,
             widget_module: widgetModule,
             widget_type: widgetType,
@@ -13698,7 +15453,7 @@
 
     async function loadWidgetConfigForModal(widgetElement, modalBody) {
         modalBody.setAttribute('data-theme-editor-config-modal', '1');
-        const layoutId = widgetElement.dataset.layoutId;
+        const layoutId = resolveDomWidgetIdentity(widgetElement).layoutId;
         const widgetModule = widgetElement.dataset.widgetModule;
         const widgetCode = widgetElement.dataset.widgetCode;
         const widgetType = widgetElement.dataset.widgetType;
@@ -13764,7 +15519,7 @@
                         const form = modalBody.querySelector('.w-param-form');
                         if (form) {
                             form.id = 'widgetConfigFormModal';
-                            form.setAttribute('data-layout-id', layoutId);
+                            applyWidgetIdentityToElement(form, layoutId);
                             if (widgetElement) form.setAttribute('data-widget-element-id', 'widget_' + layoutId);
                             function scheduleAutoSave() {
                                 scheduleEditorAutoSave(
@@ -13780,7 +15535,8 @@
                         bindParamSearch(modalBody);
                     } else {
                         renderConfigFormToModal({
-                            layout_id: layoutId,
+                            layout_id: validNodeUid(layoutId) ? 0 : layoutId,
+                            node_uid: validNodeUid(layoutId) || (widgetElement?.dataset?.nodeUid || ''),
                             widget_code: widgetCode,
                             widget_module: widgetModule,
                             widget_type: widgetType,
@@ -13802,7 +15558,7 @@
      * 加载部件配置（用于左侧面板，保留兼容性）
      */
     async function loadWidgetConfig(widgetElement) {
-        const layoutId = widgetElement.dataset.layoutId;
+        const layoutId = resolveDomWidgetIdentity(widgetElement).layoutId;
         const widgetModule = widgetElement.dataset.widgetModule;
         const widgetCode = widgetElement.dataset.widgetCode;
         const widgetType = widgetElement.dataset.widgetType;
@@ -13815,13 +15571,19 @@
                 const savedConfig = (savedData.config && typeof savedData.config === 'object') ? savedData.config : {};
                 const meta = getWidgetElementMeta(widgetElement, savedData.widget_code || widgetCode, params);
                 await renderConfigFormWithBackend({
-                    layout_id: layoutId,
+                    layout_id: validNodeUid(layoutId) ? 0 : layoutId,
+                    node_uid: validNodeUid(layoutId) || (widgetElement?.dataset?.nodeUid || ''),
                     widget_code: savedData.widget_code || widgetCode,
                     widget_module: savedData.widget_module || widgetModule,
                     widget_type: savedData.widget_type || widgetType,
                     config: savedConfig,
                     meta,
                 }, params);
+                await ensureSharedChromePanel(
+                    elements.configContent,
+                    widgetElement.dataset.area || inferAreaFromSlotId(widgetElement.dataset.slotId || ''),
+                    widgetElement.dataset.slotId || '',
+                );
                 return;
             } catch (err) {
                 console.warn('[ThemeEditor] saved widget config endpoint failed, try widget library:', err);
@@ -13854,7 +15616,8 @@
 
                 if (widgetMeta) {
                     await renderConfigFormWithBackend({
-                        layout_id: layoutId,
+                        layout_id: validNodeUid(layoutId) ? 0 : layoutId,
+                        node_uid: validNodeUid(layoutId) || (widgetElement?.dataset?.nodeUid || ''),
                         widget_code: widgetCode,
                         widget_module: widgetModule,
                         widget_type: widgetType,
@@ -13879,8 +15642,12 @@
         const widgetName = widget.meta?.name || widget.widget_code;
         const widgetDesc = widget.meta?.description || '';
         const savedConfig = widget.config || {};
-        const safeLayoutId = escapeHtml(widget.layout_id || '');
-        const safeWidgetElementId = widgetElement ? escapeHtml('widget_' + widget.layout_id) : '';
+        const identityFields = buildWidgetIdentityPayloadFields({
+            layoutId: widget.layout_id,
+            nodeUid: widget.node_uid || widgetElement?.dataset?.nodeUid || '',
+        });
+        const identityKey = identityFields.node_uid || widget.layout_id || '';
+        const safeWidgetElementId = widgetElement ? escapeHtml('widget_' + identityKey) : '';
 
         let html = `
             <div class="widget-config-panel">
@@ -13895,7 +15662,7 @@
                         </div>
                     </div>
                 </div>
-                <form class="config-form" id="widgetConfigFormModal" data-layout-id="${safeLayoutId}" data-widget-element-id="${safeWidgetElementId}">
+                <form class="config-form" id="widgetConfigFormModal"${widgetIdentityDataAttrs(identityKey)} data-widget-element-id="${safeWidgetElementId}">
         `;
 
         if (Object.keys(params).length === 0) {
@@ -13989,7 +15756,7 @@
         // 实时保存：任意修改后防抖保存，不关闭模态框
         const form = document.getElementById('widgetConfigFormModal');
         if (form) {
-            const layoutId = form.dataset.layoutId;
+            const layoutId = resolveDomWidgetIdentity(form).layoutId;
             function scheduleAutoSave() {
                 scheduleEditorAutoSave(
                     `widget-config-modal:${layoutId}`,
@@ -14050,7 +15817,7 @@
         const form = elements.configContent.querySelector('.w-param-form, .widget-accordion-config-form');
         if (form) {
             form.id = 'widgetConfigForm';
-            form.setAttribute('data-layout-id', layoutId);
+            applyWidgetIdentityToElement(form, layoutId);
         }
         bindAccordionFormEvents(elements.configContent);
         bindParamSearch(elements.configContent);
@@ -14098,7 +15865,7 @@
                         </select>
                     </div>
                 </div>
-                <form class="config-form" id="widgetConfigForm" data-layout-id="${widget.layout_id}">
+                <form class="config-form" id="widgetConfigForm"${widgetIdentityDataAttrs(widget.layout_id || widget.node_uid || '')}>
         `;
 
         if (Object.keys(params).length === 0) {
@@ -14216,7 +15983,7 @@
 
         html += `
                     <div class="config-actions">
-                        <button type="button" class="w-button w-theme-editor-delete-config" data-tone="danger" data-variant="outline" data-layout-id="${widget.layout_id}" title="删除此部件">
+                        <button type="button" class="w-button w-theme-editor-delete-config" data-tone="danger" data-variant="outline"${widgetIdentityDataAttrs(widget.layout_id || widget.node_uid || '')} title="删除此部件">
                             ${iconSvg('delete')} 删除
                         </button>
                     </div>
@@ -14247,19 +16014,49 @@
     // ─── 统一多语言 i18n 逻辑 ───────────────────────────────────
 
     let _installedLocalesCache = null;
+    let _installedLocalesCacheWebsiteId = null;
+
+    function getScopeWebsiteId() {
+        const identity = state.scopeIdentity || {};
+        const kind = String(identity.scope_kind || '').trim().toLowerCase();
+        if (kind === 'global') {
+            return 0;
+        }
+        if (kind !== '') {
+            const websiteId = Number.parseInt(identity.website_id, 10);
+            return Number.isFinite(websiteId) && websiteId >= 0 ? websiteId : 0;
+        }
+        const fromUrl = getCurrentWindowParam('website_id');
+        if (fromUrl !== null && fromUrl !== '') {
+            const parsed = Number.parseInt(fromUrl, 10);
+            return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
+        }
+        return 0;
+    }
+
+    function invalidateInstalledLocalesCache() {
+        _installedLocalesCache = null;
+        _installedLocalesCacheWebsiteId = null;
+    }
 
     /**
-     * 获取已安装语言列表（缓存结果）
+     * 获取已安装语言列表（缓存结果，按当前 Scope 所属 website_id 过滤）
      * @returns {Promise<Array<{code:string,name:string,flag:string}>>}
      */
     async function fetchInstalledLocales() {
-        if (Array.isArray(_installedLocalesCache) && _installedLocalesCache.length > 0) {
+        const websiteId = getScopeWebsiteId();
+        if (
+            Array.isArray(_installedLocalesCache)
+            && _installedLocalesCache.length > 0
+            && _installedLocalesCacheWebsiteId === websiteId
+        ) {
             return _installedLocalesCache;
         }
         try {
-            const result = await apiJson(`${config.apiBase}/installed-locales`);
+            const result = await apiJson(`${config.apiBase}/installed-locales?website_id=${websiteId}`);
             if (result.success && Array.isArray(result.locales) && result.locales.length > 0) {
                 _installedLocalesCache = result.locales;
+                _installedLocalesCacheWebsiteId = websiteId;
                 return _installedLocalesCache;
             }
         } catch (err) {
@@ -14361,6 +16158,7 @@
         }
         const selected = select.options[select.selectedIndex];
         select.title = selected ? selected.textContent : '默认（全语言）';
+        window.Weline?.Theme?.EditorFitControls?.refresh?.();
     }
 
     function ensureLocaleOption(select, locale) {
@@ -14476,8 +16274,8 @@
 
         try {
             const widgetLayoutId = options.layoutId
-                || document.getElementById('widgetConfigForm')?.dataset?.layoutId
-                || state.selectedWidget?.dataset?.layoutId
+                || resolveDomWidgetIdentity(document.getElementById('widgetConfigForm')).layoutId
+                || resolveDomWidgetIdentity(state.selectedWidget).layoutId
                 || '';
             if (widgetLayoutId && (state.configMode === 'widget' || document.getElementById('widgetConfigForm'))) {
                 await reloadWidgetConfigWithLocale(widgetLayoutId, getActiveConfigLocale(), {
@@ -14648,7 +16446,7 @@
                 if (isLayoutConfigPanel(panel)) {
                     result = await apiJson(buildLayoutConfigUrl(locale));
                 } else {
-                    result = await apiJson(`${config.apiBase}/widget-config?layout_id=${layoutId}&locale=${locale}`);
+                    result = await apiJson(`${config.apiBase}/widget-config?${validNodeUid(layoutId) ? `node_uid=${encodeURIComponent(validNodeUid(layoutId))}` : `layout_id=${encodeURIComponent(layoutId)}`}&locale=${encodeURIComponent(locale)}`);
                 }
                 const data = result.data || {};
                 if (result.success && data.config) {
@@ -14770,7 +16568,7 @@
                     source_locale: sourceLocale,
                     target_locales: targetLocales,
                     field_key: fieldKey,
-                    layout_id: layoutId,
+                    ...buildWidgetIdentityPayloadFields(layoutId),
                     layout_type: state.layoutType || getCurrentPageType() || 'homepage',
                     layout_option: state.layoutOption || 'default',
                     context: isLayoutConfigPanel(panel) ? 'layout_config' : 'widget_config'
@@ -14839,7 +16637,7 @@
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({
-                            layout_id: layoutId,
+                            ...buildWidgetIdentityPayloadFields(layoutId),
                             config: { [fieldKey]: value },
                             locale: locale
                         })
@@ -14983,34 +16781,22 @@
      */
     async function saveWidgetConfigWithLocale(layoutId, configData, locale) {
         try {
-            const result = await apiJson(getWidgetConfigSaveUrl(), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    layout_id: layoutId,
-                    config: configData,
-                    locale: locale
-                })
-            });
+            const result = await requestSaveWidgetConfig({
+                ...buildWidgetIdentityPayloadFields(layoutId),
+                config: configData,
+                locale: locale
+            }, locale || '');
 
-            if (result.success) {
-                const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
-                await queueWidgetConfigOwnership(result.node_uid, normalizedConfig, locale || '');
-                showToast(result.message || '配置已保存', 'success');
-                if (result.preview_html) {
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html);
-                    fetchLayoutSlots();
-                }
-                return true;
-            } else {
-                showToast(result.message || '保存失败', 'error');
-                return false;
+            const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
+            showToast(result.message || '配置已保存', 'success');
+            if (result.preview_html) {
+                updateWidgetPreviewInIframe(layoutId, result.preview_html);
+                fetchLayoutSlots();
             }
+            return true;
         } catch (err) {
             console.error('Save config error:', err);
-            showToast('保存失败', 'error');
+            showToast(err?.message || translateUiText('保存失败'), 'error');
             return false;
         }
     }
@@ -15091,42 +16877,30 @@
      */
     async function saveWidgetConfigFromModal(form, widgetElement, options) {
         const autoSave = options && options.autoSave === true;
-        const layoutId = form.dataset.layoutId;
+        const layoutId = resolveDomWidgetIdentity(form).layoutId;
         if (!layoutId) return;
 
         const configData = collectWidgetConfigData(form);
+        const locale = getActiveConfigLocale() || '';
 
         try {
-            const locale = getActiveConfigLocale();
-            const result = await apiJson(getWidgetConfigSaveUrl(), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    layout_id: layoutId,
-                    config: configData,
-                    locale: locale || null,
-                }),
-            });
+            const result = await requestSaveWidgetConfig({
+                node_uid: layoutId,
+                config: configData,
+                locale: locale || null,
+            }, locale);
 
-            if (result.success) {
-                // 更新部件的 data-config
-                const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
-                await queueWidgetConfigOwnership(result.node_uid, normalizedConfig, locale || '');
-                if (!autoSave) showToast('配置已保存', 'success');
-                if (!locale && widgetElement) {
-                    widgetElement.dataset.config = JSON.stringify(normalizedConfig);
-                }
-                if (!autoSave) {
-                    hideEditorModal(document.getElementById('widgetConfigModal'));
-                }
-                if (result.preview_html) {
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html);
-                    fetchLayoutSlots();
-                }
-            } else {
-                throw new Error(result.message || translateUiText('保存失败'));
+            const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
+            if (!autoSave) showToast('配置已保存', 'success');
+            if (!locale && widgetElement) {
+                widgetElement.dataset.config = JSON.stringify(normalizedConfig);
+            }
+            if (!autoSave) {
+                hideEditorModal(document.getElementById('widgetConfigModal'));
+            }
+            if (result.preview_html) {
+                updateWidgetPreviewInIframe(layoutId, result.preview_html);
+                fetchLayoutSlots();
             }
         } catch (err) {
             console.error('Save config error:', err);
@@ -15141,56 +16915,45 @@
      * @param {boolean} silent - 为 true 时不显示“配置已保存”提示（用于实时保存）
      */
     async function saveWidgetConfig(form, silent) {
-        let layoutId = form.dataset.layoutId;
+        let layoutId = resolveDomWidgetIdentity(form).layoutId;
         const configData = collectWidgetConfigData(form);
-        const locale = getActiveConfigLocale();
+        const locale = getActiveConfigLocale() || '';
 
         if (!layoutId && state.selectedWidget) {
             layoutId = await materializeTemplateWidgetIfNeeded(state.selectedWidget, configData);
             if (layoutId) {
-                form.dataset.layoutId = layoutId;
+                applyWidgetIdentityToElement(form, layoutId);
             }
         }
         if (!layoutId && form.dataset.templateRef && state.selectedWidget) {
             layoutId = await materializeTemplateWidgetIfNeeded(state.selectedWidget, configData);
             if (layoutId) {
-                form.dataset.layoutId = layoutId;
+                applyWidgetIdentityToElement(form, layoutId);
                 delete form.dataset.templateRef;
             }
         }
         if (!layoutId) return;
 
         try {
-            const result = await apiJson(getWidgetConfigSaveUrl(), {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    layout_id: layoutId,
-                    config: Object.assign({}, configData, state.selectedWidget?.dataset?.templateRef
-                        ? { template_ref: state.selectedWidget.dataset.templateRef }
-                        : {}),
-                    locale: locale || null,
-                }),
-            });
+            const result = await requestSaveWidgetConfig({
+                node_uid: layoutId,
+                config: Object.assign({}, configData, state.selectedWidget?.dataset?.templateRef
+                    ? { template_ref: state.selectedWidget.dataset.templateRef }
+                    : {}),
+                locale: locale || null,
+            }, locale);
 
-            if (result.success) {
-                const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
-                await queueWidgetConfigOwnership(result.node_uid, normalizedConfig, locale || '');
-                if (!silent) showToast('配置已保存', 'success');
-                if (!locale && state.selectedWidget) {
-                    state.selectedWidget.dataset.config = JSON.stringify(normalizedConfig);
-                }
-                if (result.preview_html) {
-                    updateWidgetPreviewInIframe(layoutId, result.preview_html);
-                    fetchLayoutSlots();
-                } else if (locale) {
-                    // TE-CAP-017: never full-reload the preview iframe on config save.
-                    console.warn('[ThemeEditor] save-widget-config missing preview_html for locale; skip full preview reload', locale);
-                }
-            } else {
-                throw new Error(result.message || translateUiText('保存失败'));
+            const normalizedConfig = (result && result.config && typeof result.config === 'object') ? result.config : configData;
+            if (!silent) showToast('配置已保存', 'success');
+            if (!locale && state.selectedWidget) {
+                state.selectedWidget.dataset.config = JSON.stringify(normalizedConfig);
+            }
+            if (result.preview_html) {
+                updateWidgetPreviewInIframe(layoutId, result.preview_html);
+                fetchLayoutSlots();
+            } else if (locale) {
+                // TE-CAP-017: never full-reload the preview iframe on config save.
+                console.warn('[ThemeEditor] save-widget-config missing preview_html for locale; skip full preview reload', locale);
             }
         } catch (err) {
             console.error('Save config error:', err);
@@ -15241,7 +17004,7 @@
             return;
         }
 
-        const layoutId = widgetElement.dataset.layoutId;
+        const layoutId = resolveDomWidgetIdentity(widgetElement).layoutId;
         if (!layoutId) return;
 
         // 从 widgetElement 或 iframe 获取 slot_id 和 area
@@ -15301,7 +17064,7 @@
                         widgetEl.remove();
 
                         // 恢复原始内容（不调用 initWidgetHoverActions 避免重复渲染操作按钮）
-                        if (slot && !slot.querySelector('[data-layout-id]')) {
+                        if (slot && !slot.querySelector(WIDGET_IDENTITY_MATCH)) {
                             if (result.has_original && result.original_html) {
                                 // 剥离可能混入的 widget-wrapper
                                 slot.innerHTML = stripWidgetWrappersFromHtml(result.original_html);
@@ -15577,10 +17340,8 @@
     }
 
     /**
-     * 打开新窗口预览（草稿预览）
-     *
-     * 使用 preview_mode=1 参数，让前台以草稿模式渲染
-     * 用户可以在新窗口中预览未发布的更改
+     * #btnPreview — 抛弃编辑器外框的后台预览。
+     * 打开 theme-preview/content 全窗，不启动真实店面预览 Token / Cookie / 浮层。
      */
     async function openPreview() {
         if (!state.themeId) {
@@ -15604,10 +17365,9 @@
     }
 
     /**
-     * 打开前端真实 URL 预览
-     *
-     * 生成预览 Token 并跳转到真实的前端页面
-     * 预览模式下会显示可拖动的退出预览浮窗
+     * #btnFrontendPreview — 真实前端店面预览。
+     * 唯一允许调用 start-preview 的入口：种 Cookie、persist shell=preview、
+     * 打开真实店面 URL，并显示可拖动的「预览模式」退出浮窗。
      */
     async function openFrontendPreview() {
         if (!state.themeId) {
@@ -15627,9 +17387,20 @@
                 body: JSON.stringify(buildLayoutVersionIdentityPayload({
                     frontend_theme_id: getCurrentWindowParam('frontend_theme_id') || state.themeId,
                     backend_theme_id: getCurrentWindowParam('backend_theme_id') || '',
+                    page_type: getEffectiveLayoutType(),
+                    layout_type: getEffectiveLayoutType(),
+                    layout_option: getEffectiveLayoutOption(),
                     editor_area: 'frontend',
+                    preview_mode: 'live',
                     status: state.previewStatus || 'draft',
                     locale: getPreviewLocaleForRequest(),
+                    editor_context: buildTypedEditorContext('layout', {
+                        area: 'frontend',
+                        theme_id: parseInt(getCurrentWindowParam('frontend_theme_id') || String(state.themeId), 10) || state.themeId,
+                        layout_type: getEffectiveLayoutType(),
+                        layout_option: getEffectiveLayoutOption(),
+                        locale: getPreviewLocaleForRequest() || 'default',
+                    }),
                 })),
             });
 
@@ -16110,6 +17881,31 @@
         return { type: 'file-image', usage };
     }
 
+
+    function gcdPositiveInt(a, b) {
+        a = Math.abs(Math.round(Number(a) || 0));
+        b = Math.abs(Math.round(Number(b) || 0));
+        while (b) {
+            const tmp = b;
+            b = a % b;
+            a = tmp;
+        }
+        return a || 1;
+    }
+
+    function resolveMediaAspectRatio(fieldParam = {}) {
+        const mediaOptions = fieldParam?.media_options || {};
+        const explicit = String(mediaOptions.aspect_ratio || fieldParam?.aspect_ratio || '').trim();
+        if (/^\d+(?:\.\d+)?\s*[:xX×\/]\s*\d+(?:\.\d+)?$/.test(explicit)) {
+            return explicit.replace(/\s+/g, '');
+        }
+        const recommendW = parseInt(mediaOptions.recommend_width || fieldParam?.recommend_width || '', 10);
+        const recommendH = parseInt(mediaOptions.recommend_height || fieldParam?.recommend_height || '', 10);
+        if (!(recommendW > 0 && recommendH > 0)) return '';
+        const g = gcdPositiveInt(recommendW, recommendH);
+        return `${recommendW / g}:${recommendH / g}`;
+    }
+
     function renderTypedFileImageControl(fieldId, fieldKey, value, fieldParam = {}, options = {}) {
         const node = normalizeThemeFileImageNode(value);
         const storedValue = node
@@ -16121,6 +17917,7 @@
         const defaultDir = mediaOptions.default_directory || fieldParam?.default_directory || 'banner';
         const recommendW = mediaOptions.recommend_width || fieldParam?.recommend_width || '';
         const recommendH = mediaOptions.recommend_height || fieldParam?.recommend_height || '';
+        const aspectRatio = resolveMediaAspectRatio(fieldParam);
         const placeholder = node
             ? String(node.usage.alt || node.usage.asset_id)
             : translateUiText(hasValue ? '旧图片地址仅兼容显示，请从媒体库重新选择' : '从媒体库选择');
@@ -16128,8 +17925,13 @@
         const safeKey = escapeHtml(fieldKey);
         const inputClass = options.arrayItem ? ' class="w-param-array-item-input"' : '';
         const nameAttr = options.includeName === false ? '' : ` name="${safeKey}"`;
+        const previewStyle = aspectRatio ? ` style="aspect-ratio:${escapeHtml(aspectRatio.replace(':', ' / '))};"` : '';
+        const previewAspectAttr = aspectRatio ? ` data-aspect-ratio="${escapeHtml(aspectRatio)}"` : '';
         let html = '<div class="w-param-media-image">';
-        html += `<div class="w-param-image-preview${hasValue ? ' w-param-has-image' : ''}" id="${safeId}_preview">`;
+        html += `<div class="w-param-image-preview${hasValue ? ' w-param-has-image' : ''}" id="${safeId}_preview"${previewAspectAttr}${previewStyle}>`;
+        if (aspectRatio) {
+            html += `<span class="w-param-image-aspect-badge">${escapeHtml(translateUiText('比例 %{1}', aspectRatio).replace('%{1}', aspectRatio))}</span>`;
+        }
         if (legacyPreviewUrl) {
             html += `<img src="${escapeHtml(legacyPreviewUrl)}" alt="${escapeHtml(translateUiText('预览'))}">`;
         }
@@ -16138,6 +17940,7 @@
         html += `<button type="button" class="w-button w-param-image-select w-param-media-image-select" data-tone="primary" data-variant="outline" data-size="sm" data-target="${safeId}" data-field="${safeKey}" data-default-dir="${escapeHtml(defaultDir)}"`;
         if (recommendW) html += ` data-recommend-w="${escapeHtml(String(recommendW))}"`;
         if (recommendH) html += ` data-recommend-h="${escapeHtml(String(recommendH))}"`;
+        if (aspectRatio) html += ` data-aspect-ratio="${escapeHtml(aspectRatio)}"`;
         html += `>${escapeHtml(translateUiText('选择'))}</button>`;
         if (hasValue) {
             html += `<button type="button" class="w-button w-param-image-clear" data-tone="danger" data-variant="outline" data-size="sm" data-icon-only="true" data-target="${safeId}" aria-label="${escapeHtml(translateUiText('清除图片'))}">×</button>`;
@@ -16328,17 +18131,18 @@
         // 移除所有 widget-hover-actions 操作按钮
         temp.querySelectorAll('.widget-hover-actions').forEach(el => el.remove());
 
-        // 将 widget-wrapper[data-layout-id] 替换为其内部内容（展开子节点）
-        temp.querySelectorAll('.widget-wrapper[data-layout-id]').forEach(wrapper => {
+        // 将 widget-wrapper（含 node_uid / layout_id 身份）替换为其内部内容（展开子节点）
+        temp.querySelectorAll('.widget-wrapper[data-node-uid], .widget-wrapper[data-layout-id]').forEach(wrapper => {
             while (wrapper.firstChild) {
                 wrapper.parentNode.insertBefore(wrapper.firstChild, wrapper);
             }
             wrapper.remove();
         });
 
-        // 移除残留的 data-layout-id 属性（防止 initWidgetHoverActions 误识别）
-        temp.querySelectorAll('[data-layout-id]').forEach(el => {
+        // 移除残留身份属性（防止 initWidgetHoverActions 误识别）
+        temp.querySelectorAll('[data-layout-id], [data-node-uid]').forEach(el => {
             el.removeAttribute('data-layout-id');
+            el.removeAttribute('data-node-uid');
         });
 
         return sanitizeHtmlForEditorPreview(temp.innerHTML);
@@ -16418,6 +18222,37 @@
     }
 
     /**
+     * 清理 Theme 运行时 / 预览缓存（不改布局草稿）。
+     */
+    async function handleClearThemeCache() {
+        if (!state.themeId) {
+            showToast(translateUiText('缺少主题 ID'), 'warning');
+            return;
+        }
+
+        try {
+            showToast(translateUiText('正在清理 Theme 缓存...'), 'info');
+            const result = await apiJson(config.apiClearThemeCache || `${config.apiBase}/clear-theme-cache`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(buildLayoutVersionIdentityPayload()),
+            });
+
+            if (!result?.success) {
+                throw new Error(result?.message || translateUiText('清理 Theme 缓存失败'));
+            }
+
+            showToast(result.message || translateUiText('Theme 缓存已清理'), 'success');
+            refreshPreview();
+        } catch (error) {
+            console.error('[ThemeEditor] Clear theme cache failed:', error);
+            showToast(translateUiText('清理 Theme 缓存失败：') + (error?.message || ''), 'error');
+        }
+    }
+
+    /**
      * 恢复原始布局（带自动备份）
      *
      * 新行为：
@@ -16429,7 +18264,7 @@
         // 显示确认对话框
         const confirmed = await showCustomConfirm(
             '确认恢复原始布局？',
-            '此操作将清空当前布局，恢复到主题模板的原始状态（不包含任何部件）。\n\n系统会自动创建当前状态的备份，您可以随时切换回来。',
+            '此操作将清空当前布局身份的工作区，并重新安装「默认安装」部件（含此前已删除的默认项）。推荐类部件不会自动回来。\n\n系统会自动创建当前状态的备份，您可以随时切换回来。',
             '确认恢复',
             '取消'
         );
@@ -16592,6 +18427,39 @@
         }, 300);
     }
 
+    async function executeFactoryReset() {
+        const input = document.getElementById('themeEditorFactoryResetConfirm');
+        const confirmation = String(input?.value || '').trim();
+        if (confirmation !== 'RESET') {
+            showToast(translateUiText('请输入确认词 RESET'), 'warning');
+            return;
+        }
+
+        const confirmed = await showCustomConfirm(
+            translateUiText('确认完全初始化 Theme？'),
+            translateUiText('将清空 Theme 全部表与 theme meta，并重装默认主题。此操作不可恢复。'),
+            translateUiText('完全初始化'),
+            translateUiText('取消'),
+        );
+        if (!confirmed) {
+            return;
+        }
+
+        showToast(translateUiText('正在完全初始化 Theme...'), 'info');
+        const result = await apiJson(config.apiFactoryReset, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ confirmation }),
+        });
+        if (!result?.success) {
+            showToast(result?.message || translateUiText('完全初始化失败'), 'error');
+            return;
+        }
+        closeResetDraftModal();
+        showToast(result.message || translateUiText('Theme 已完全初始化'), 'success');
+        window.location.reload();
+    }
+
     /**
      * 刷新预览（仅用于手动刷新按钮）
      *
@@ -16644,6 +18512,33 @@
         elements.previewFrame.src = url.toString();
     }
 
+    function isShopperRuntimeEventTarget(target) {
+        // Realm-safe: iframe nodes fail `instanceof Element` from the parent window.
+        if (!target || typeof target.closest !== 'function') {
+            return false;
+        }
+        // Keep native shopper widgets working inside the visual editor.
+        // Do NOT include "view cart" / checkout anchors — those still navigate preview layouts.
+        return !!target.closest([
+            '[data-editor-interactive]',
+            '[data-mini-cart-trigger]',
+            '[data-mini-cart-close]',
+            '[data-mini-cart-overlay]',
+            '[data-qty-decrease]',
+            '[data-qty-increase]',
+            '[data-qty-input]',
+            '[data-remove-item]',
+            '[data-action="add-v2"]',
+            '[data-action="add"]',
+            '[data-action="wishlist-toggle"]',
+            '[data-action="compare-toggle"]',
+            '.weline-cart-product-add-to-cart',
+            '.weline-cart-product-card-add-to-cart',
+            '[data-w-product-purchase-actions]',
+            '[data-purchase-loading]'
+        ].join(', '));
+    }
+
     /**
      * 设置 iframe 内链接拦截
      * 将内部链接转换为预览模式 URL，使点击后仍在编辑器内预览
@@ -16665,12 +18560,12 @@
 
             // iframe 内区域点击事件处理，用于过滤部件面板
             iframeDoc.addEventListener('click', function(e) {
-                // data-editor-interactive 标记的元素保持原生交互，编辑器不拦截
-                if (e.target.closest('[data-editor-interactive]')) return;
+                // Shopper runtime controls keep native behavior inside the editor iframe.
+                if (isShopperRuntimeEventTarget(e.target)) return;
 
                 // 检查是否点击了区域元素
                 const themeArea = e.target.closest('.theme-area[data-area]');
-                if (themeArea && !e.target.closest('[data-layout-id]') && !e.target.closest('a')) {
+                if (themeArea && !e.target.closest(WIDGET_IDENTITY_MATCH) && !e.target.closest('a')) {
                     const areaCode = themeArea.getAttribute('data-area');
                     if (areaCode) {
                         // 调用父窗口的 filterWidgetsByArea 函数
@@ -16690,8 +18585,8 @@
 
             // 拦截所有链接点击
             iframeDoc.addEventListener('click', function(e) {
-                // data-editor-interactive 标记的元素保持原生交互，编辑器不拦截
-                if (e.target.closest('[data-editor-interactive]')) return;
+                // Shopper runtime controls keep native behavior inside the editor iframe.
+                if (isShopperRuntimeEventTarget(e.target)) return;
 
                 const link = e.target.closest('a');
                 if (!link) return;
@@ -16980,7 +18875,7 @@
             && element.closest('#widgetPanel, #widgetList, .editor-widget-panel, .widget-list, .widget-group, .widget-item, .widget-preview')) {
             return false;
         }
-        if (element.matches('.preview-widget-item, .widget-wrapper, .preview-widget, [data-widget-code][data-layout-id]')) {
+        if (element.matches(`.preview-widget-item, .widget-wrapper, .preview-widget, ${PREVIEW_OR_CODE_WIDGET_MATCH}`)) {
             return false;
         }
         if (element.hasAttribute('data-wslot')) {
@@ -16991,6 +18886,7 @@
         }
         return element.hasAttribute('data-slot')
             && !element.hasAttribute('data-layout-id')
+            && !element.hasAttribute('data-node-uid')
             && !element.hasAttribute('data-widget-code');
     }
 
@@ -17202,11 +19098,45 @@
         return Array.from(slotsById.values());
     }
 
+    function resolveAnchorTreeKey(anchor, index = 0) {
+        const key = String(anchor?.node_uid || anchor?.template_ref || anchor?.layout_id || '').trim();
+        if (key) {
+            return key;
+        }
+        const slotId = String(anchor?.slot_id || 'slot').trim();
+        const widgetCode = String(anchor?.widget_code || 'widget').trim();
+        return `${slotId}:${widgetCode}:${index}`;
+    }
+
+    function dedupePlacementInnerSlots(innerSlots) {
+        const seen = new Set();
+        const result = [];
+        (innerSlots || []).forEach((innerSlot) => {
+            const slotId = String(innerSlot?.id || '').trim();
+            if (!slotId || seen.has(slotId)) {
+                return;
+            }
+            seen.add(slotId);
+            result.push(innerSlot);
+        });
+        return result;
+    }
+
+    function isPlacementTreeDescendant(node, target) {
+        if (!node || !target) {
+            return false;
+        }
+        if (node === target) {
+            return true;
+        }
+        return (node.children || []).some((child) => child === target || isPlacementTreeDescendant(child, target));
+    }
+
     function buildWidgetPlacementSlotTree(slots, anchors) {
         const areas = ['header', 'content', 'footer'];
         const innerSlotIds = new Set();
         anchors.forEach(anchor => {
-            (anchor.inner_slots || []).forEach(innerSlot => {
+            dedupePlacementInnerSlots(anchor.inner_slots).forEach(innerSlot => {
                 if (innerSlot?.id) {
                     innerSlotIds.add(innerSlot.id);
                 }
@@ -17248,37 +19178,45 @@
         });
 
         const anchorNodes = new Map();
-        anchors.forEach(anchor => {
+        anchors.forEach((anchor, index) => {
+            const anchorKey = resolveAnchorTreeKey(anchor, index);
             const anchorNode = {
-                id: `widget:${anchor.layout_id}`,
-                label: anchor.widget_name || anchor.widget_code || anchor.layout_id,
+                id: `widget:${anchorKey}`,
+                label: anchor.widget_name || anchor.widget_code || anchorKey,
                 type: 'widget',
                 area: anchor.area,
                 anchor,
                 children: [],
             };
-            (anchor.inner_slots || []).forEach(innerSlot => {
-                const innerSlotNode = {
-                    id: innerSlot.id,
-                    label: innerSlot.name || innerSlot.id,
+            const innerSlotSeen = new Set();
+            dedupePlacementInnerSlots(anchor.inner_slots).forEach(innerSlot => {
+                const innerSlotId = String(innerSlot?.id || '').trim();
+                if (!innerSlotId || innerSlotSeen.has(innerSlotId)) {
+                    return;
+                }
+                innerSlotSeen.add(innerSlotId);
+                anchorNode.children.push({
+                    id: innerSlotId,
+                    label: innerSlot.name || innerSlotId,
                     type: 'slot',
                     area: innerSlot.area || anchor.area,
                     slot: innerSlot,
                     children: [],
-                };
-                anchorNode.children.push(innerSlotNode);
-                slotNodes.set(innerSlot.id, innerSlotNode);
+                });
             });
-            anchorNodes.set(String(anchor.layout_id), anchorNode);
+            anchorNodes.set(anchorKey, anchorNode);
         });
 
-        anchors.forEach(anchor => {
+        anchors.forEach((anchor, index) => {
             const slotNode = slotNodes.get(anchor.slot_id);
-            const anchorNode = anchorNodes.get(String(anchor.layout_id));
+            const anchorNode = anchorNodes.get(resolveAnchorTreeKey(anchor, index));
             if (!slotNode || !anchorNode) {
                 return;
             }
-            if (slotNode.children.some(child => child.id === anchorNode.id)) {
+            if (isPlacementTreeDescendant(anchorNode, slotNode)) {
+                return;
+            }
+            if (slotNode.children.some(child => child === anchorNode || child.id === anchorNode.id)) {
                 return;
             }
             slotNode.children.push(anchorNode);
@@ -17305,12 +19243,17 @@
             const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || slotEl?.getAttribute('data-slot-id') || '';
             const area = slotEl?.getAttribute('data-wslot-position') || slotEl?.getAttribute('data-position') || inferAreaFromSlotId(slotId);
             const innerSlots = [];
+            const innerSlotSeen = new Set();
             element.querySelectorAll?.('[data-wslot], [data-slot], [data-slot-id]')?.forEach(inner => {
                 if (inner === slotEl) {
                     return;
                 }
+                const ownerWidget = inner.closest(WIDGET_WRAPPER_MATCH);
+                if (ownerWidget && ownerWidget !== element) {
+                    return;
+                }
                 const innerSlotId = inner.getAttribute('data-wslot') || inner.getAttribute('data-slot') || inner.getAttribute('data-slot-id') || '';
-                if (isSyntheticContainerSlotId(innerSlotId)) {
+                if (!innerSlotId || isSyntheticContainerSlotId(innerSlotId) || innerSlotSeen.has(innerSlotId)) {
                     return;
                 }
                 const normalized = normalizePlacementSlotInfo({
@@ -17318,11 +19261,17 @@
                     source: 'inner_dom',
                 });
                 if (normalized) {
+                    innerSlotSeen.add(innerSlotId);
                     innerSlots.push(normalized);
                 }
             });
+            const nodeUid = identity.nodeUid || validNodeUid(anchorId) || '';
+            const rawLayoutId = String(identity.layoutId || '').trim();
+            const numericLayoutId = /^\d+$/.test(rawLayoutId) ? rawLayoutId : '';
             anchors.push({
-                layout_id: identity.layoutId || anchorId,
+                // Greenfield: do not put hex node_uid into layout_id; numeric legacy only when no node_uid.
+                layout_id: nodeUid ? '' : (numericLayoutId || rawLayoutId || anchorId || ''),
+                node_uid: nodeUid,
                 template_ref: identity.templateRef || '',
                 is_template: identity.isTemplate,
                 widget_code: identity.widgetCode || element.dataset.widgetCode || element.getAttribute('data-widget-code') || '',
@@ -17338,10 +19287,10 @@
 
         if (iframeDoc) {
             iframeDoc.querySelectorAll(
-                '.widget-wrapper[data-layout-id], .preview-widget[data-layout-id], [data-widget-code][data-layout-id], .weline-template-widget[data-template-ref]'
+                `${WIDGET_WRAPPER_MATCH}, ${PREVIEW_OR_CODE_WIDGET_MATCH}`
             ).forEach(el => collectFromElement(el, 'preview'));
         }
-        document.querySelectorAll('.preview-widget-item[data-layout-id], .preview-widget-item[data-template-ref]').forEach(el => collectFromElement(el, 'structure'));
+        document.querySelectorAll('.preview-widget-item[data-node-uid], .preview-widget-item[data-layout-id], .preview-widget-item[data-template-ref]').forEach(el => collectFromElement(el, 'structure'));
 
         return anchors;
     }
@@ -17369,6 +19318,7 @@
                     area: anchor.area,
                     slot_id: anchor.slot_id,
                     anchor_layout_id: anchor.layout_id,
+                    anchor_node_uid: anchor.node_uid || validNodeUid(anchor.layout_id) || '',
                     insert_mode: 'after',
                     anchor,
                 };
@@ -17480,12 +19430,34 @@
             optional: true,
             getContext: getThemeWidgetAiContext,
         };
-        const widgetAi = Weline.Widget?.AI;
-        if (typeof widgetAi?.registerContextProvider !== 'function') {
-            console.warn('[ThemeEditor] Widget AI context provider API is unavailable.');
+        const register = () => {
+            const widgetAi = Weline.Widget?.AI;
+            if (typeof widgetAi?.registerContextProvider !== 'function') {
+                return false;
+            }
+            widgetAi.registerContextProvider(provider);
+            return true;
+        };
+        if (register()) {
             return;
         }
-        widgetAi.registerContextProvider(provider);
+        let attempts = 0;
+        const retry = () => {
+            if (register()) {
+                cleanup();
+            }
+        };
+        const cleanup = () => {
+            window.removeEventListener('weline-widget-ai-context-api-ready', retry);
+            window.clearInterval(timer);
+        };
+        window.addEventListener('weline-widget-ai-context-api-ready', retry);
+        const timer = window.setInterval(() => {
+            attempts += 1;
+            if (register() || attempts >= 50) {
+                cleanup();
+            }
+        }, 100);
     }
 
     function resolveAnchorPlacementInfo(layoutId) {
@@ -17498,8 +19470,11 @@
         const slotId = slotEl?.getAttribute('data-wslot') || slotEl?.getAttribute('data-slot') || slotEl?.getAttribute('data-slot-id') || '';
         const area = slotEl?.getAttribute('data-wslot-position') || slotEl?.getAttribute('data-position') || inferAreaFromSlotId(slotId);
         const siblingContainer = widgetEl.parentElement;
-        const siblings = siblingContainer ? Array.from(siblingContainer.children).filter(el => el.hasAttribute('data-layout-id')) : [];
-        const index = siblings.findIndex(el => String(el.getAttribute('data-layout-id')) === String(layoutId));
+        const siblings = siblingContainer
+            ? Array.from(siblingContainer.children).filter(el => el.hasAttribute('data-node-uid') || el.hasAttribute('data-layout-id'))
+            : [];
+        const identityKey = String(resolveDomWidgetIdentity(widgetEl).layoutId || layoutId || '');
+        const index = siblings.findIndex(el => resolveDomWidgetIdentity(el).layoutId === identityKey);
         return { widgetEl, slotEl, slotId, area, index: index < 0 ? 0 : index };
     }
 
@@ -17629,6 +19604,10 @@
         placeWidgetFromProvider,
         registerWidgetLibraryItem,
         publishEmbeddedLayout,
+    });
+    Object.defineProperties(EditorApi, {
+        config: { get() { return config; }, configurable: true },
+        state: { get() { return state; }, configurable: true },
     });
     window.addEventListener('message', handleDashboardSaveCloseMessage);
     registerThemeWidgetAiContextProvider();
@@ -17947,6 +19926,31 @@
     /**
      * 格式化日期
      */
+    function isEditorLockHeldByCurrentUser(lockInfo) {
+        const currentUserId = parseInt(state.currentUserId || 0, 10);
+        const lockUserId = parseInt(lockInfo?.user_id || 0, 10);
+        return currentUserId > 0 && lockUserId > 0 && currentUserId === lockUserId;
+    }
+
+    function isEditorLockBlockedByOther(result) {
+        if (result?.data?.is_locked_by_other === true) {
+            return true;
+        }
+        if (result?.data?.is_locked_by_other === false) {
+            return false;
+        }
+        const lockInfo = result?.data?.lock_info;
+        return !!(lockInfo && !isEditorLockHeldByCurrentUser(lockInfo));
+    }
+
+    function applyEditorLockHeldState() {
+        state.lockHeld = true;
+        state.lockConflictInfo = null;
+        clearEditorLockOverlay();
+        startLockHeartbeat();
+        bindLockLifecycle();
+    }
+
     function renderEditorLockOverlay(lockInfo, mode = 'conflict') {
         if (!elements.container) {
             return;
@@ -18029,14 +20033,26 @@
                 },
                 body: JSON.stringify(buildLayoutVersionIdentityPayload()),
             });
-            if (!(result && result.success)) {
-                state.lockHeld = false;
-                stopLockHeartbeat();
-                renderEditorLockOverlay(state.lockConflictInfo);
-                return false;
+            if (result && result.success) {
+                return true;
             }
 
-            return true;
+            const reacquire = await acquireEditorLockPayload(buildLayoutVersionIdentityPayload());
+            if (reacquire && reacquire.success) {
+                applyEditorLockHeldState();
+                return true;
+            }
+
+            state.lockHeld = false;
+            stopLockHeartbeat();
+            const blockedByOther = isEditorLockBlockedByOther(reacquire || result);
+            state.lockConflictInfo = blockedByOther
+                ? ((reacquire && reacquire.data && reacquire.data.lock_info)
+                    ? reacquire.data.lock_info
+                    : (result?.data?.lock_info || null))
+                : null;
+            renderEditorLockOverlay(state.lockConflictInfo, blockedByOther ? 'conflict' : 'unavailable');
+            return false;
         } catch (error) {
             console.warn('[ThemeEditor] Lock heartbeat failed:', error);
             state.lockHeld = false;
@@ -18151,21 +20167,26 @@
                 result = await acquireEditorLockPayload(buildLayoutVersionIdentityPayload());
             }
         }
+        if (!(result && result.success) && isEditorLockHeldByCurrentUser(result?.data?.lock_info)) {
+            await new Promise((resolve) => setTimeout(resolve, 200));
+            result = await acquireEditorLockPayload(buildLayoutVersionIdentityPayload());
+        }
 
         if (result && result.success) {
-            state.lockHeld = true;
-            state.lockConflictInfo = null;
-            clearEditorLockOverlay();
-            startLockHeartbeat();
-            bindLockLifecycle();
+            applyEditorLockHeldState();
             return true;
         }
 
         state.lockHeld = false;
         stopLockHeartbeat();
-        state.lockConflictInfo = (result && result.data && result.data.lock_info) ? result.data.lock_info : null;
-        renderEditorLockOverlay(state.lockConflictInfo, result?.unavailable ? 'unavailable' : 'conflict');
-        showToast(result?.message || '当前页面正被其他用户编辑', 'warning');
+        const blockedByOther = isEditorLockBlockedByOther(result);
+        state.lockConflictInfo = blockedByOther && result?.data?.lock_info ? result.data.lock_info : null;
+        renderEditorLockOverlay(state.lockConflictInfo, result?.unavailable ? 'unavailable' : (blockedByOther ? 'conflict' : 'unavailable'));
+        if (blockedByOther) {
+            showToast(result?.message || '当前页面正被其他用户编辑', 'warning');
+        } else if (result?.message) {
+            showToast(result.message, 'warning');
+        }
         return false;
     }
 
@@ -18249,6 +20270,7 @@
 
     function collectInheritTokens(panel, disk) {
         const tokens = {};
+        const tokenMeta = {};
         const list = Array.isArray(disk && disk.tokens) ? disk.tokens : [];
         list.forEach((token) => {
             if (!token || typeof token !== 'object') return;
@@ -18261,8 +20283,18 @@
                 if (!lateSafe) return;
             }
             tokens[name] = String(token.default_value ?? token.value ?? '');
+            const category = String(token.category || '').trim();
+            if (!category || category === '其他') {
+                return;
+            }
+            const groupId = String(token.category_id || '').trim();
+            const label = String(token.category_label || category).trim() || category;
+            tokenMeta[name] = {
+                groupId: groupId || label,
+                label,
+            };
         });
-        return tokens;
+        return { tokens, tokenMeta };
     }
 
     async function requestJson(url, options = {}) {
@@ -18325,7 +20357,7 @@
 
         let appearanceState = null;
         let scopedWorkspace = null;
-        const draft = { panel: 'color', base_file: '', disk_key: '', tokens: {}, mode: '' };
+        const draft = { panel: 'color', base_file: '', disk_key: '', tokens: {}, tokenMeta: {}, mode: '' };
         let previewTokenTimer = 0;
 
         const getPreviewDocument = () => {
@@ -18437,14 +20469,14 @@
 
         const loadDiskTokens = async (panel, disk) => {
             if (!disk || typeof disk !== 'object') {
-                return {};
+                return { tokens: {}, tokenMeta: {} };
             }
             if (Array.isArray(disk.tokens) && disk.tokens.length > 0) {
                 return collectInheritTokens(panel, disk);
             }
             const ref = String(disk.ref || '').trim();
             if (!ref) {
-                return {};
+                return { tokens: {}, tokenMeta: {} };
             }
             const url = apiUrl('apiThemeDiskTokens', {
                 ...identity(),
@@ -18471,9 +20503,14 @@
         /** Meta 只存 delta：编辑时用「原生可继承基线 + 已存 delta」合成完整可编辑表。 */
         const resolveEditableTokens = async (panel, baseFile, deltaTokens) => {
             const baseDisk = findCatalogDisk(panel, baseFile);
-            const base = baseDisk ? await loadDiskTokens(panel, baseDisk) : {};
+            const base = baseDisk
+                ? await loadDiskTokens(panel, baseDisk)
+                : { tokens: {}, tokenMeta: {} };
             const delta = deltaTokens && typeof deltaTokens === 'object' ? deltaTokens : {};
-            return { ...base, ...delta };
+            return {
+                tokens: { ...base.tokens, ...delta },
+                tokenMeta: base.tokenMeta || {},
+            };
         };
 
         const makeButton = (label, tone = 'neutral', variant = 'outline') => {
@@ -18511,6 +20548,65 @@
                 : `${total} 个变量`;
         };
 
+        /**
+         * Comment-section groups first (category_label from API / Meta i18n),
+         * then universal prefix stem fallback (technical --stem, not translated).
+         */
+        const APPEARANCE_TOKEN_LEAF = /^(xs|sm|md|lg|xl|xxl|2xl|3xl|4xl|2_5xl|0_5|1_5|2_5|3_5|4_5|5_5|7|9|11|13|15|px|none|thin|thick|medium|full|base|normal|tight|relaxed|loose|wide|light|dark|soft|mid|strong|hot|deep|ember|amber|brown|soft-2|soft-3|soft-4|hover|active|visited|focus|disabled|placeholder|inverse|subtle|emphasis|muted|tertiary|secondary|primary|rgb|bg|text|border|on|ink|title|glow|inset)$/i;
+
+        const appearanceTokenPrefix = (name) => {
+            const bare = String(name || '').replace(/^--/, '').trim();
+            if (!bare) return 'other';
+            const parts = bare.split('-').filter(Boolean);
+            if (!parts.length) return 'other';
+            while (parts.length > 1 && APPEARANCE_TOKEN_LEAF.test(parts[parts.length - 1])) {
+                parts.pop();
+            }
+            if (parts.length === 1) return parts[0];
+            if (parts.length === 2) return parts.join('-');
+            // Keep semantic families like backend-color-success / color-primary together.
+            if (/^(backend-color|color|weline-theme|weline-chrome)$/i.test(parts.slice(0, 2).join('-'))) {
+                return parts.slice(0, 3).join('-');
+            }
+            return parts.slice(0, 2).join('-');
+        };
+
+        const resolveAppearanceTokenGroup = (tokenName) => {
+            const meta = draft.tokenMeta && draft.tokenMeta[tokenName];
+            const label = meta && String(meta.label || '').trim();
+            if (label && label !== '其他') {
+                const groupId = String(meta.groupId || label).trim() || label;
+                return {
+                    id: `c:${groupId}`,
+                    label,
+                };
+            }
+            const prefix = appearanceTokenPrefix(tokenName);
+            return {
+                id: `p:${prefix}`,
+                label: `--${prefix}`,
+            };
+        };
+
+        const groupAppearanceTokenEntries = (entries) => {
+            const order = [];
+            const buckets = new Map();
+            const groupMeta = new Map();
+            entries.forEach((entry) => {
+                const group = resolveAppearanceTokenGroup(entry[0]);
+                if (!buckets.has(group.id)) {
+                    buckets.set(group.id, []);
+                    groupMeta.set(group.id, group);
+                    order.push(group.id);
+                }
+                buckets.get(group.id).push(entry);
+            });
+            return order.map((id) => ({
+                group: groupMeta.get(id),
+                entries: buckets.get(id) || [],
+            }));
+        };
+
         const renderTokenEditor = () => {
             if (!(tokensEl instanceof HTMLElement)) return;
             tokensEl.replaceChildren();
@@ -18539,45 +20635,58 @@
                 updateTokenCount(0, entries.length, true);
                 return;
             }
-            matched.forEach(([name, value]) => {
-                const card = document.createElement('div');
-                card.className = 'w-theme-disk-token';
-                card.dataset.tokenName = name;
-                const label = document.createElement('div');
-                label.className = 'w-theme-disk-token__label';
-                label.textContent = name;
-                const controls = document.createElement('div');
-                controls.className = 'w-theme-disk-token__controls';
-                const text = String(value || '');
-                const textInput = document.createElement('input');
-                textInput.className = 'w-input w-theme-disk-token__value';
-                textInput.dataset.size = 'sm';
-                textInput.type = 'text';
-                textInput.value = text;
-                textInput.addEventListener('input', () => {
-                    draft.tokens[name] = textInput.value;
-                    if (colorInput && looksLikeColorValue(textInput.value)) {
-                        colorInput.value = toColorInputValue(textInput.value);
+            const grouped = groupAppearanceTokenEntries(matched);
+            grouped.forEach(({ group, entries: groupEntries }) => {
+                if (group) {
+                    const heading = document.createElement('h6');
+                    heading.className = 'w-theme-disk-token-group';
+                    heading.setAttribute('data-w-appearance-token-group', group.id);
+                    heading.textContent = group.label;
+                    tokensEl.append(heading);
+                }
+                groupEntries.forEach(([name, value]) => {
+                    const card = document.createElement('div');
+                    card.className = 'w-theme-disk-token';
+                    card.dataset.tokenName = name;
+                    if (group) {
+                        card.dataset.tokenGroup = group.id;
                     }
-                    scheduleAppearancePreviewTokens();
-                });
-                let colorInput = null;
-                if (looksLikeColorValue(text) || draft.panel === 'color') {
-                    colorInput = document.createElement('input');
-                    colorInput.className = 'w-theme-disk-token__color';
-                    colorInput.type = 'color';
-                    colorInput.value = toColorInputValue(text);
-                    colorInput.title = name;
-                    colorInput.addEventListener('input', () => {
-                        draft.tokens[name] = colorInput.value;
-                        textInput.value = colorInput.value;
+                    const label = document.createElement('div');
+                    label.className = 'w-theme-disk-token__label';
+                    label.textContent = name;
+                    const controls = document.createElement('div');
+                    controls.className = 'w-theme-disk-token__controls';
+                    const text = String(value || '');
+                    const textInput = document.createElement('input');
+                    textInput.className = 'w-input w-theme-disk-token__value';
+                    textInput.dataset.size = 'sm';
+                    textInput.type = 'text';
+                    textInput.value = text;
+                    textInput.addEventListener('input', () => {
+                        draft.tokens[name] = textInput.value;
+                        if (colorInput && looksLikeColorValue(textInput.value)) {
+                            colorInput.value = toColorInputValue(textInput.value);
+                        }
                         scheduleAppearancePreviewTokens();
                     });
-                    controls.append(colorInput);
-                }
-                controls.append(textInput);
-                card.append(label, controls);
-                tokensEl.append(card);
+                    let colorInput = null;
+                    if (looksLikeColorValue(text) || draft.panel === 'color') {
+                        colorInput = document.createElement('input');
+                        colorInput.className = 'w-theme-disk-token__color';
+                        colorInput.type = 'color';
+                        colorInput.value = toColorInputValue(text);
+                        colorInput.title = name;
+                        colorInput.addEventListener('input', () => {
+                            draft.tokens[name] = colorInput.value;
+                            textInput.value = colorInput.value;
+                            scheduleAppearancePreviewTokens();
+                        });
+                        controls.append(colorInput);
+                    }
+                    controls.append(textInput);
+                    card.append(label, controls);
+                    tokensEl.append(card);
+                });
             });
             updateTokenCount(matched.length, entries.length, !!query);
             scheduleAppearancePreviewTokens();
@@ -18591,7 +20700,9 @@
             draft.mode = 'inherit';
             draft.base_file = String(disk.key || '');
             draft.disk_key = '';
-            draft.tokens = await loadDiskTokens(panel, disk);
+            const loaded = await loadDiskTokens(panel, disk);
+            draft.tokens = loaded.tokens || {};
+            draft.tokenMeta = loaded.tokenMeta || {};
             if (nameInput instanceof HTMLInputElement) {
                 nameInput.value = `${disk.name || disk.key}-自定义`;
             }
@@ -18608,7 +20719,9 @@
             draft.mode = 'custom';
             draft.base_file = String(disk.base_file || '');
             draft.disk_key = String(disk.disk_key || '');
-            draft.tokens = await resolveEditableTokens(panel, draft.base_file, disk.tokens || {});
+            const loaded = await resolveEditableTokens(panel, draft.base_file, disk.tokens || {});
+            draft.tokens = loaded.tokens || {};
+            draft.tokenMeta = loaded.tokenMeta || {};
             if (nameInput instanceof HTMLInputElement) {
                 nameInput.value = String(disk.name || disk.disk_key || '');
             }
@@ -18905,6 +21018,7 @@
             draft.disk_key = '';
             draft.base_file = '';
             draft.tokens = {};
+            draft.tokenMeta = {};
             setEditorVisible(false);
             renderAppearance();
             await openActiveEditor();
@@ -18930,7 +21044,8 @@
             draft.disk_key = String(result?.data?.disk_key || draft.disk_key || '');
             const savedKey = draft.disk_key;
             const baseDisk = draft.base_file ? findCatalogDisk(draft.panel, draft.base_file) : null;
-            const baseTokens = baseDisk ? await loadDiskTokens(draft.panel, baseDisk) : {};
+            const baseLoaded = baseDisk ? await loadDiskTokens(draft.panel, baseDisk) : { tokens: {} };
+            const baseTokens = baseLoaded.tokens || {};
             const deltaTokens = Object.fromEntries(Object.entries(draft.tokens).filter(([token, value]) =>
                 !Object.prototype.hasOwnProperty.call(baseTokens, token)
                     || String(baseTokens[token]) !== String(value)));
@@ -18999,6 +21114,7 @@
                 draft.base_file = '';
                 draft.disk_key = '';
                 draft.tokens = {};
+                draft.tokenMeta = {};
                 draft.mode = '';
                 if (tokenSearchEl instanceof HTMLInputElement) {
                     tokenSearchEl.value = '';
@@ -19015,5 +21131,796 @@
         document.addEventListener('DOMContentLoaded', boot);
     } else {
         boot();
+    }
+})();
+
+/* Weline UI source: js/theme-editor-chrome.js */
+/**
+ * Theme editor chrome collapse / pin — additive overlay.
+ */
+(function () {
+    'use strict';
+
+    const STORAGE_KEY = 'weline.theme.editor.chrome.v1';
+
+    function readState() {
+        try {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return { collapsed: false, pinned: false };
+            const parsed = JSON.parse(raw);
+            return {
+                collapsed: !!parsed.collapsed,
+                pinned: !!parsed.pinned,
+            };
+        } catch (_e) {
+            return { collapsed: false, pinned: false };
+        }
+    }
+
+    function writeState(next) {
+        try {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch (_e) {
+            /* ignore quota */
+        }
+    }
+
+    function scopeLabel() {
+        const scopeSelect = document.getElementById('scopeSelect');
+        const text = String(scopeSelect?.textContent || scopeSelect?.value || '').replace(/\s+/g, ' ').trim();
+        return text || (window.Weline?.Theme?.Editor?.state?.scopeIdentity
+            ? String(window.Weline.Theme.Editor.state.scopeIdentity.website_code || 'default')
+            : '默认');
+    }
+
+    function applyChrome(state) {
+        const root = document.getElementById('themeEditor');
+        const strip = document.getElementById('themeEditorChromeStrip');
+        const pinBtn = document.getElementById('btnThemeChromePin');
+        if (!root) return;
+        const collapsed = !!state.collapsed && !state.pinned;
+        root.classList.toggle('theme-editor-chrome-collapsed', collapsed);
+        if (strip) {
+            strip.hidden = !collapsed;
+        }
+        const label = document.getElementById('themeChromeStripScope');
+        if (label) {
+            label.textContent = scopeLabel();
+        }
+        if (pinBtn) {
+            pinBtn.setAttribute('aria-pressed', state.pinned ? 'true' : 'false');
+            pinBtn.dataset.tone = state.pinned ? 'warning' : 'neutral';
+        }
+    }
+
+    function bind() {
+        const root = document.getElementById('themeEditor');
+        if (!root || root.dataset.chromeBound === '1') return;
+        root.dataset.chromeBound = '1';
+        let state = readState();
+        if (state.pinned) state.collapsed = false;
+        applyChrome(state);
+
+        document.getElementById('btnThemeChromeCollapse')?.addEventListener('click', () => {
+            state = { ...state, collapsed: true };
+            writeState(state);
+            applyChrome(state);
+        });
+        document.getElementById('btnThemeChromeExpand')?.addEventListener('click', () => {
+            state = { ...state, collapsed: false };
+            writeState(state);
+            applyChrome(state);
+        });
+        document.getElementById('btnThemeChromePin')?.addEventListener('click', () => {
+            state = { ...state, pinned: !state.pinned, collapsed: state.pinned ? state.collapsed : false };
+            writeState(state);
+            applyChrome(state);
+        });
+        document.getElementById('btnPublishStrip')?.addEventListener('click', () => {
+            document.getElementById('btnPublish')?.click();
+        });
+        document.getElementById('scopeSelect')?.addEventListener('change', () => applyChrome(state));
+
+        window.Weline = window.Weline || {};
+        window.Weline.Theme = window.Weline.Theme || {};
+        window.Weline.Theme.EditorChrome = {
+            refresh() { applyChrome(readState()); },
+            expand() {
+                state = { ...readState(), collapsed: false };
+                writeState(state);
+                applyChrome(state);
+            },
+        };
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+    } else {
+        bind();
+    }
+})();
+
+/* Weline UI source: js/theme-brand-basics.js */
+/**
+ * Theme brand basics drawer — Scope-owned favicon/logo via appearance /brand/* patches.
+ */
+(function () {
+    'use strict';
+
+    const BRAND_KEYS = ['favicon', 'apple_touch_icon', 'logo_light', 'logo_dark'];
+
+    /** Picker constraints: icon/favicon hard 1:1; logos recommend size only. */
+    const BRAND_PICKER_SPECS = {
+        favicon: {
+            title: '选择 Favicon',
+            ext: 'png,svg,ico',
+            aspectRatio: '1:1',
+            recommendWidth: 128,
+            recommendHeight: 128,
+        },
+        apple_touch_icon: {
+            title: '选择 Apple Touch Icon',
+            ext: 'png',
+            aspectRatio: '1:1',
+            recommendWidth: 180,
+            recommendHeight: 180,
+        },
+        logo_light: {
+            title: '选择 Logo（浅色）',
+            ext: 'png,svg',
+            recommendWidth: 320,
+            recommendHeight: 80,
+        },
+        logo_dark: {
+            title: '选择 Logo（深色）',
+            ext: 'png,svg',
+            recommendWidth: 320,
+            recommendHeight: 80,
+        },
+    };
+
+    function ui() {
+        const current = window.Weline?.UI;
+        if (!current) throw new Error('Weline.UI must be loaded before Theme Brand Basics.');
+        return current;
+    }
+
+    function toast(message, type) {
+        const tone = type === 'error' ? 'danger' : type === 'success' ? 'success' : type === 'warning' ? 'warning' : 'info';
+        return ui().toast.show(String(message ?? ''), { tone, duration: 3000 });
+    }
+
+    function editorApi() {
+        return window.Weline?.Theme?.Editor || null;
+    }
+
+    function drawerEl() {
+        return document.getElementById('themeBrandBasicsDrawer');
+    }
+
+    function openDrawer() {
+        const el = drawerEl();
+        if (!el) return;
+        el.hidden = false;
+        el.dataset.state = 'open';
+        el.setAttribute('data-state', 'open');
+        try {
+            ui().drawer?.open?.(el);
+        } catch (_e) {
+            el.style.display = '';
+        }
+        refreshFromWorkspace().catch((err) => toast(err?.message || String(err), 'error'));
+    }
+
+    function closeDrawer() {
+        const el = drawerEl();
+        if (!el) return;
+        el.dataset.state = 'closed';
+        el.setAttribute('data-state', 'closed');
+        try {
+            ui().drawer?.close?.(el);
+        } catch (_e) {
+            /* ignore */
+        }
+        el.hidden = true;
+    }
+
+    function mediaUrl(path) {
+        const value = String(path || '').trim();
+        if (!value) return '';
+        if (/^(https?:)?\/\//i.test(value) || value.startsWith('/')) return value;
+        return '/pub/media/' + value.replace(/^\/+/, '');
+    }
+
+    function collectDraft() {
+        const out = {};
+        BRAND_KEYS.forEach((key) => {
+            const input = document.querySelector(`[data-w-brand-input="${key}"]`);
+            out[key] = String(input?.value || '').trim();
+        });
+        return out;
+    }
+
+    async function loadAppearanceWorkspace() {
+        const editor = editorApi();
+        if (!editor?.loadScopedWorkspace) {
+            throw new Error('Theme Editor scoped workspace API unavailable');
+        }
+        return editor.loadScopedWorkspace('appearance');
+    }
+
+    function ownershipText(workspace, draft) {
+        const owned = Array.isArray(workspace?.owned_paths)
+            ? workspace.owned_paths.filter((p) => String(p).startsWith('/brand/'))
+            : [];
+        if (owned.length) {
+            return '本级修改';
+        }
+        const source = String(workspace?.parent_source_scope || workspace?.published_source_scope || 'theme-package-default');
+        if (Object.values(draft).some(Boolean)) {
+            return `继承自 ${source}`;
+        }
+        return '继承自主题包默认值';
+    }
+
+    async function refreshFromWorkspace() {
+        const workspace = await loadAppearanceWorkspace();
+        const brand = workspace?.draft_payload?.brand && typeof workspace.draft_payload.brand === 'object'
+            ? workspace.draft_payload.brand
+            : {};
+        const ownedPaths = new Set(Array.isArray(workspace?.owned_paths) ? workspace.owned_paths : []);
+        BRAND_KEYS.forEach((key) => {
+            setField(key, brand[key] || '', ownedPaths.has(`/brand/${key}`));
+        });
+        const scopeLabel = document.querySelector('[data-w-brand-scope-label]');
+        const editor = editorApi();
+        const identity = (typeof editor?.getScopeIdentity === 'function'
+            ? editor.getScopeIdentity()
+            : (editor?.state?.scopeIdentity || {})) || {};
+        if (scopeLabel) {
+            const parts = ['作用范围'];
+            if (identity.website_code) parts.push(`网站:${identity.website_code}`);
+            if (identity.store_code) parts.push(`店铺:${identity.store_code}`);
+            if (identity.channel_code) parts.push(`渠道:${identity.channel_code}`);
+            scopeLabel.textContent = parts.join(' · ');
+        }
+        const ownership = document.querySelector('[data-w-brand-ownership]');
+        if (ownership) ownership.textContent = ownershipText(workspace, brand);
+        window.Weline?.Theme?.EditorChrome?.refresh?.();
+        return workspace;
+    }
+
+    async function saveBrand() {
+        const editor = editorApi();
+        if (!editor?.queueScopedChanges) throw new Error('Theme Editor apply API unavailable');
+        const draft = collectDraft();
+        const workspace = await loadAppearanceWorkspace();
+        const current = workspace?.draft_payload?.brand && typeof workspace.draft_payload.brand === 'object'
+            ? workspace.draft_payload.brand
+            : {};
+        const changes = [];
+        BRAND_KEYS.forEach((key) => {
+            const next = draft[key];
+            const prev = String(current[key] || '').trim();
+            if (next === prev) return;
+            if (next === '') {
+                changes.push({ op: 'inherit', path: `/brand/${key}` });
+            } else {
+                changes.push({ op: 'set', path: `/brand/${key}`, value: next });
+            }
+        });
+        if (!changes.length) {
+            toast('没有需要保存的变更', 'info');
+            return;
+        }
+        await editor.queueScopedChanges('appearance', changes, { summary: 'brand_basics_save' });
+        await refreshFromWorkspace();
+        toast('已保存到当前 Scope 草稿，发布后生效', 'success');
+    }
+
+    async function inheritBrand() {
+        const editor = editorApi();
+        if (!editor?.queueScopedChanges) throw new Error('Theme Editor apply API unavailable');
+        const changes = BRAND_KEYS.map((key) => ({ op: 'inherit', path: `/brand/${key}` }));
+        await editor.queueScopedChanges('appearance', changes, { summary: 'brand_basics_inherit' });
+        await refreshFromWorkspace();
+        toast('已恢复继承', 'success');
+    }
+
+    let activeMediaDialog = null;
+
+    function sanitizeScopeSegment(value) {
+        const raw = String(value ?? '').trim();
+        if (!raw || raw.includes('..') || raw.includes('/') || raw.includes('\\')) return 'default';
+        if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/.test(raw)) return 'default';
+        return raw;
+    }
+
+    function resolveMediaScope(themeEl) {
+        let website = 'default';
+        let store = 'default';
+        let channel = '';
+        const apply = (source) => {
+            if (!source || typeof source !== 'object') return;
+            if (source.website_code) website = String(source.website_code);
+            if (source.store_code) store = String(source.store_code);
+            if (source.channel_code != null && source.channel_code !== '') {
+                channel = String(source.channel_code);
+            }
+        };
+        try {
+            const params = new URLSearchParams(window.location.search);
+            apply({
+                website_code: params.get('website_code') || '',
+                store_code: params.get('store_code') || '',
+                channel_code: params.get('channel_code') || '',
+            });
+        } catch (_e) { /* ignore */ }
+        const editor = editorApi();
+        apply(typeof editor?.getScopeIdentity === 'function' ? editor.getScopeIdentity() : null);
+        if (themeEl) {
+            try { apply(JSON.parse(themeEl.getAttribute('data-scope-identity') || '{}')); } catch (_e2) { /* ignore */ }
+        }
+        website = sanitizeScopeSegment(website);
+        store = sanitizeScopeSegment(store);
+        channel = String(channel || '').trim();
+        if (channel && channel.toLowerCase() !== 'default') {
+            channel = sanitizeScopeSegment(channel);
+        } else {
+            channel = '';
+        }
+        const parts = ['websites', website, store];
+        if (channel) parts.push(channel);
+        return parts.join('/');
+    }
+
+    function connectorBaseUrl() {
+        const editor = editorApi();
+        const themeEl = document.getElementById('themeEditor');
+        return String(
+            editor?.config?.fileManagerConnectorBase
+            || themeEl?.dataset?.fileManagerConnectorBase
+            || themeEl?.getAttribute?.('data-file-manager-connector-base')
+            || ''
+        ).trim();
+    }
+
+    function brandStoredPath(file) {
+        if (!file || typeof file !== 'object') return '';
+        let raw = String(
+            file.path
+            || file.url
+            || file.thumb
+            || file.editor_preview_url
+            || file.preview_url
+            || ''
+        ).trim();
+        if (!raw) return '';
+        if (/^(https?:)?\/\//i.test(raw) || raw.startsWith('/static/') || raw.startsWith('/Weline/')) {
+            return raw;
+        }
+        return raw
+            .replace(/^\/pub\/media\//, '')
+            .replace(/^pub\/media\//, '')
+            .replace(/^\//, '');
+    }
+
+    function brandPreviewFromFile(file, stored) {
+        const preview = String(
+            file?.editor_preview_url
+            || file?.preview_url
+            || file?.thumb
+            || file?.url
+            || ''
+        ).trim();
+        if (preview) return preview;
+        return mediaUrl(stored);
+    }
+
+    function setField(key, path, owned, previewOverride) {
+        const input = document.querySelector(`[data-w-brand-input="${key}"]`);
+        const upload = document.querySelector(`[data-w-brand-preview="${key}"]`);
+        if (input) input.value = String(path || '');
+        if (upload) {
+            const empty = upload.querySelector('.w-theme-brand-upload__empty');
+            const preview = upload.querySelector('.w-theme-brand-upload__preview');
+            const url = String(previewOverride || mediaUrl(path) || '').trim();
+            if (url && preview) {
+                upload.dataset.hasImage = '1';
+                preview.hidden = false;
+                preview.innerHTML = `<img src="${url.replace(/"/g, '&quot;')}" alt="">`;
+                if (empty) empty.hidden = true;
+            } else {
+                upload.dataset.hasImage = '0';
+                if (preview) {
+                    preview.hidden = true;
+                    preview.innerHTML = '';
+                }
+                if (empty) empty.hidden = false;
+            }
+        }
+        const field = document.querySelector(`[data-w-brand-field="${key}"]`);
+        if (field) field.dataset.owned = owned ? '1' : '0';
+    }
+
+    function bindMediaManagerMessages(targetId, frame, onSelect, onCancel) {
+        const handleMessage = (event) => {
+            if (event.origin !== window.location.origin || !frame || event.source !== frame.contentWindow) {
+                return;
+            }
+            const data = event.data;
+            if (!data || typeof data !== 'object' || data.target !== targetId) return;
+            if (data.type === 'weline-media-manager-select') {
+                onSelect(data.files || []);
+                return;
+            }
+            if (data.type === 'weline-media-manager-cancel' && typeof onCancel === 'function') {
+                onCancel();
+            }
+        };
+        window.addEventListener('message', handleMessage);
+        return () => window.removeEventListener('message', handleMessage);
+    }
+
+    function openBrandMediaDialog(options) {
+        const currentUi = ui();
+        if (!options?.targetId || !options?.url) return false;
+        if (activeMediaDialog?.isConnected) {
+            activeMediaDialog.focus({ preventScroll: true });
+            return false;
+        }
+
+        const dialog = document.createElement('dialog');
+        dialog.className = 'w-dialog w-param-media-dialog w-theme-brand-media-dialog';
+        dialog.dataset.wComponent = 'dialog';
+        dialog.dataset.state = 'closed';
+        dialog.dataset.size = 'lg';
+        dialog.dataset.wClosable = 'true';
+        dialog.dataset.wBackdrop = 'dismissible';
+
+        const header = document.createElement('header');
+        header.className = 'w-dialog__header';
+        const title = document.createElement('h2');
+        title.className = 'w-dialog__title';
+        title.id = `w-theme-brand-media-title-${Date.now()}`;
+        title.textContent = options.title || '选择媒体';
+        dialog.setAttribute('aria-labelledby', title.id);
+        const closeBtn = document.createElement('button');
+        closeBtn.type = 'button';
+        if (options.closeId) closeBtn.id = options.closeId;
+        closeBtn.className = 'w-button';
+        closeBtn.dataset.tone = 'quiet';
+        closeBtn.dataset.size = 'sm';
+        closeBtn.textContent = '关闭';
+        header.append(title, closeBtn);
+
+        const body = document.createElement('div');
+        body.className = 'w-dialog__body w-param-media-dialog__body';
+        const iframe = document.createElement('iframe');
+        iframe.className = 'w-param-media-dialog__frame';
+        iframe.src = options.url;
+        iframe.title = options.title || '媒体管理器';
+        body.appendChild(iframe);
+        dialog.append(header, body);
+
+        let closed = false;
+        const removeMessageHandler = bindMediaManagerMessages(
+            options.targetId,
+            iframe,
+            (files) => {
+                if (typeof options.onSelect === 'function') options.onSelect(files || []);
+                currentUi.dialog.close(dialog, 'select');
+            },
+            () => currentUi.dialog.close(dialog, 'cancel'),
+        );
+        const finish = (event) => {
+            if (closed) return;
+            closed = true;
+            removeMessageHandler();
+            if (activeMediaDialog === dialog) activeMediaDialog = null;
+            if (typeof options.onClose === 'function') {
+                options.onClose(event?.detail?.returnValue || 'close');
+            }
+            currentUi.unmount(dialog);
+            dialog.remove();
+        };
+        dialog.addEventListener('weline:ui:dialog:close', finish, { once: true });
+        closeBtn.addEventListener('click', () => currentUi.dialog.close(dialog, 'button'), { once: true });
+        document.body.appendChild(dialog);
+        activeMediaDialog = dialog;
+        currentUi.mount(dialog);
+        if (!currentUi.dialog.open(dialog)) {
+            finish();
+            return false;
+        }
+        return true;
+    }
+
+    function pickMedia(key) {
+        const themeEl = document.getElementById('themeEditor');
+        const base = connectorBaseUrl();
+        const input = document.querySelector(`[data-w-brand-input="${key}"]`);
+        const spec = BRAND_PICKER_SPECS[key] || {
+            title: '选择媒体',
+            ext: 'jpg,jpeg,png,gif,webp,svg,ico',
+        };
+        if (!input) return;
+        if (!base) {
+            const manual = window.prompt('请输入媒体相对路径（pub/media 下）', input.value || '');
+            if (manual !== null) {
+                setField(key, String(manual).trim(), true);
+            }
+            return;
+        }
+
+        const targetId = input.id || `themeBrandInput_${key}`;
+        if (!input.id) input.id = targetId;
+        const closeId = `w-theme-brand-media-close-${key}-${Date.now()}`;
+        const lockRoot = resolveMediaScope(themeEl);
+        const startPath = `${lockRoot}/brand`;
+        const params = new URLSearchParams({
+            target: targetId,
+            close: closeId,
+            multi: '0',
+            ext: spec.ext,
+            path: startPath,
+            lockPath: '1',
+            lockRoot,
+        });
+        if (spec.aspectRatio) {
+            params.set('aspect_ratio', String(spec.aspectRatio));
+        }
+        if (spec.recommendWidth > 0) {
+            params.set('recommend_width', String(spec.recommendWidth));
+        }
+        if (spec.recommendHeight > 0) {
+            params.set('recommend_height', String(spec.recommendHeight));
+        }
+        // Brand stores plain media paths for SiteBrand / maintenance; skip ImageUsage JSON.
+        const url = `${base}${base.includes('?') ? '&' : '?'}${params.toString()}`;
+
+        const opened = openBrandMediaDialog({
+            targetId,
+            closeId,
+            url,
+            title: spec.title,
+            onSelect: (files) => {
+                const file = Array.isArray(files) && files[0] ? files[0] : null;
+                const stored = brandStoredPath(file);
+                if (!stored) {
+                    toast('未拿到可用的媒体路径', 'warning');
+                    return;
+                }
+                setField(key, stored, true, brandPreviewFromFile(file, stored));
+                toast('已选择，记得保存到当前 Scope', 'success');
+            },
+        });
+        if (!opened) {
+            toast('媒体选择器打开失败', 'error');
+        }
+    }
+
+    function bind() {
+        const root = document.getElementById('themeEditor');
+        if (!root || root.dataset.brandBasicsBound === '1') return;
+        root.dataset.brandBasicsBound = '1';
+
+        document.getElementById('btnThemeBrandBasics')?.addEventListener('click', openDrawer);
+        document.getElementById('btnThemeBrandBasicsStrip')?.addEventListener('click', openDrawer);
+        document.getElementById('btnThemeBrandBasicsClose')?.addEventListener('click', closeDrawer);
+        document.querySelector('[data-w-brand-action="save"]')?.addEventListener('click', () => {
+            saveBrand().catch((err) => toast(err?.message || String(err), 'error'));
+        });
+        document.querySelector('[data-w-brand-action="inherit"]')?.addEventListener('click', () => {
+            inheritBrand().catch((err) => toast(err?.message || String(err), 'error'));
+        });
+        document.querySelectorAll('[data-w-brand-pick]').forEach((btn) => {
+            btn.addEventListener('click', () => pickMedia(String(btn.getAttribute('data-w-brand-pick') || '')));
+        });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+    } else {
+        bind();
+    }
+})();
+
+/* Weline UI source: js/theme-editor-fit-controls.js */
+/**
+ * Fit Theme Editor toolbar Scope / language (and sibling selects) to the
+ * currently selected label width so leftover chrome does not reserve empty space.
+ */
+(function () {
+    'use strict';
+
+    const MAX_SELECT_PX = 360;
+    const MAX_SCOPE_PX = 480;
+    const SELECT_EXTRA_FALLBACK_PX = 48;
+    const SCOPE_EXTRA_FALLBACK_PX = 64;
+    const FIT_SAFETY_PX = 20;
+
+    let mirror = null;
+    let scheduled = 0;
+
+    function ensureMirror() {
+        if (mirror && mirror.isConnected) return mirror;
+        mirror = document.createElement('span');
+        mirror.setAttribute('aria-hidden', 'true');
+        mirror.dataset.wThemeEditorFitMirror = '1';
+        mirror.style.cssText = [
+            'position:absolute',
+            'left:-9999px',
+            'top:0',
+            'visibility:hidden',
+            'pointer-events:none',
+            'white-space:nowrap',
+            'display:inline-block',
+        ].join(';');
+        document.body.appendChild(mirror);
+        return mirror;
+    }
+
+    function horizontalChrome(element, fallback) {
+        if (!(element instanceof HTMLElement)) return fallback;
+        const style = window.getComputedStyle(element);
+        const pad = (Number.parseFloat(style.paddingInlineStart || style.paddingLeft) || 0)
+            + (Number.parseFloat(style.paddingInlineEnd || style.paddingRight) || 0);
+        const border = (Number.parseFloat(style.borderInlineStartWidth || style.borderLeftWidth) || 0)
+            + (Number.parseFloat(style.borderInlineEndWidth || style.borderRightWidth) || 0);
+        return Math.ceil(pad + border) || fallback;
+    }
+
+    function measureText(text, source) {
+        const el = ensureMirror();
+        const style = window.getComputedStyle(source);
+        el.style.font = style.font;
+        el.style.fontSize = style.fontSize;
+        el.style.fontWeight = style.fontWeight;
+        el.style.fontFamily = style.fontFamily;
+        el.style.letterSpacing = style.letterSpacing;
+        el.style.textTransform = style.textTransform;
+        el.textContent = String(text || '').replace(/\s+/g, ' ').trim() || '—';
+        return Math.ceil(el.getBoundingClientRect().width || el.offsetWidth || 0);
+    }
+
+    function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+    }
+
+    function fitNativeSelect(select) {
+        if (!(select instanceof HTMLSelectElement) || select.hidden) return;
+        const option = select.options[select.selectedIndex];
+        const label = option ? String(option.text || option.label || '') : '';
+        const textWidth = measureText(label, select);
+        const chrome = horizontalChrome(select, SELECT_EXTRA_FALLBACK_PX);
+        const next = clamp(textWidth + chrome + FIT_SAFETY_PX, 96, MAX_SELECT_PX);
+        select.style.setProperty('inline-size', `${next}px`);
+        select.style.setProperty('width', `${next}px`);
+        select.style.setProperty('max-inline-size', `${MAX_SELECT_PX}px`);
+        select.dataset.wFitWidth = '1';
+    }
+
+    function fitScopeField(field) {
+        if (!(field instanceof HTMLElement)) return;
+        const display = field.querySelector('.w-tree-select-display, .w-scope-select-display, [data-w-scope-display]');
+        const trigger = field.querySelector('.w-tree-select-trigger, .w-scope-select-trigger, [data-w-scope-trigger]');
+        const target = trigger || field.querySelector('.w-tree-select, .w-scope-select') || field;
+        const source = display instanceof HTMLElement ? display : target;
+        const label = String(
+            source?.getAttribute?.('title')
+            || source?.getAttribute?.('aria-label')
+            || source?.textContent
+            || ''
+        ).replace(/\s+/g, ' ').trim();
+        const textWidth = measureText(label || 'Scope', source);
+        const chrome = horizontalChrome(trigger instanceof HTMLElement ? trigger : target, SCOPE_EXTRA_FALLBACK_PX);
+        const next = clamp(textWidth + chrome + FIT_SAFETY_PX, 120, MAX_SCOPE_PX);
+        if (trigger instanceof HTMLElement) {
+            trigger.style.setProperty('inline-size', `${next}px`);
+            trigger.style.setProperty('width', `${next}px`);
+            trigger.style.setProperty('max-inline-size', `${MAX_SCOPE_PX}px`);
+        }
+        const tree = field.querySelector('.w-tree-select, .w-scope-select');
+        if (tree instanceof HTMLElement) {
+            tree.style.setProperty('inline-size', 'auto');
+            tree.style.setProperty('width', 'auto');
+            tree.style.setProperty('max-inline-size', `${MAX_SCOPE_PX}px`);
+        }
+        field.style.setProperty('inline-size', 'auto');
+        field.style.setProperty('width', 'auto');
+        field.style.setProperty('max-inline-size', `min(${MAX_SCOPE_PX}px, 48vw)`);
+        field.dataset.wFitWidth = '1';
+    }
+
+    function relayoutOverflow() {
+        try {
+            const UI = window.Weline?.UI;
+            if (!UI?.get) return;
+            document.querySelectorAll('.theme-editor-container [data-w-component~="toolbar-overflow"]').forEach((root) => {
+                UI.get(root, 'toolbar-overflow')?.layout?.();
+            });
+        } catch (_e) {
+            /* ignore */
+        }
+    }
+
+    function fitAll() {
+        const root = document.getElementById('themeEditor');
+        if (!root) return;
+        fitScopeField(root.querySelector('.toolbar-select-field-scope'));
+        // Fit every toolbar select (including ones currently parked in「更多」) so pack-back
+        // can reclaim them once measured widths shrink.
+        root.querySelectorAll('.toolbar-left select.w-select, .toolbar-left #editorLangSwitcher').forEach((select) => {
+            fitNativeSelect(select);
+        });
+        relayoutOverflow();
+    }
+
+    function scheduleFit() {
+        cancelAnimationFrame(scheduled);
+        scheduled = requestAnimationFrame(() => {
+            fitAll();
+            requestAnimationFrame(() => {
+                fitAll();
+                // Overflow may have skipped while「更多」was open; one more pass after paint.
+                setTimeout(relayoutOverflow, 0);
+            });
+        });
+    }
+
+    function bind() {
+        const root = document.getElementById('themeEditor');
+        if (!root || root.dataset.fitControlsBound === '1') return;
+        root.dataset.fitControlsBound = '1';
+
+        root.addEventListener('change', (event) => {
+            const target = event.target;
+            if (!(target instanceof Element)) return;
+            if (target.matches('#scopeSelect, #editorLangSwitcher, .toolbar-left select.w-select')
+                || target.closest('.toolbar-select-field-scope')) {
+                scheduleFit();
+            }
+        });
+
+        const scopeField = root.querySelector('.toolbar-select-field-scope');
+        if (scopeField && typeof MutationObserver === 'function') {
+            const observer = new MutationObserver(scheduleFit);
+            observer.observe(scopeField, {
+                subtree: true,
+                characterData: true,
+                childList: true,
+                attributes: true,
+                attributeFilter: ['value', 'data-value', 'aria-label', 'title'],
+            });
+        }
+
+        if (typeof ResizeObserver === 'function') {
+            const resizeObserver = new ResizeObserver(scheduleFit);
+            resizeObserver.observe(root);
+            const toolbar = root.querySelector('.editor-toolbar');
+            if (toolbar) resizeObserver.observe(toolbar);
+        }
+
+        window.addEventListener('resize', scheduleFit);
+        document.addEventListener('weline:scope-change', scheduleFit);
+        document.addEventListener('weline:theme-editor:scope-changed', scheduleFit);
+
+        window.Weline = window.Weline || {};
+        window.Weline.Theme = window.Weline.Theme || {};
+        window.Weline.Theme.EditorFitControls = {
+            refresh: scheduleFit,
+        };
+
+        scheduleFit();
+        // Scope label often arrives after async init.
+        setTimeout(scheduleFit, 120);
+        setTimeout(scheduleFit, 480);
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bind);
+    } else {
+        bind();
     }
 })();

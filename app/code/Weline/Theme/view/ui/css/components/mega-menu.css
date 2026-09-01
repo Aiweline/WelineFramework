@@ -1,9 +1,9 @@
 /* Weline.UI mega-menu — storefront chrome split panel (nav secondary + light content). */
 .w-mega-menu,
 .header-category-panel.is-megamenu {
-    --w-surface-fg: var(--weline-theme-body-text, #0f1111);
-    --w-surface-fg-muted: var(--weline-theme-body-text-muted, #666666);
-    --w-surface-fg-subtle: var(--weline-theme-body-text-secondary, #565959);
+    --w-surface-fg: var(--weline-theme-text-on-dark, #ffffff);
+    --w-surface-fg-muted: var(--weline-theme-text-on-dark-muted, #dddddd);
+    --w-surface-fg-subtle: var(--weline-theme-text-on-dark-muted, #dddddd);
     --w-floating-inline-size: min(1100px, calc(100vw - 2rem));
     inline-size: min(1100px, calc(100vw - 2rem));
     min-inline-size: min(680px, calc(100vw - 2rem));
@@ -120,6 +120,22 @@
     outline: none;
 }
 
+/* Beat .w-surface-body a { body-text } on dark chrome sidebar labels. */
+.w-surface-body.is-megamenu a.mega-menu-sidebar-item,
+.w-surface-body.is-megamenu a.w-mega-menu__sidebar-item,
+[data-surface="body"].is-megamenu a.mega-menu-sidebar-item,
+[data-surface="body"].is-megamenu a.w-mega-menu__sidebar-item,
+.w-surface-body.is-megamenu a.mega-menu-sidebar-item:hover,
+.w-surface-body.is-megamenu a.mega-menu-sidebar-item.is-active,
+.w-surface-body.is-megamenu a.w-mega-menu__sidebar-item:hover,
+.w-surface-body.is-megamenu a.w-mega-menu__sidebar-item.is-active,
+[data-surface="body"].is-megamenu a.mega-menu-sidebar-item:hover,
+[data-surface="body"].is-megamenu a.mega-menu-sidebar-item.is-active,
+[data-surface="body"].is-megamenu a.w-mega-menu__sidebar-item:hover,
+[data-surface="body"].is-megamenu a.w-mega-menu__sidebar-item.is-active {
+    color: var(--weline-theme-mega-menu-top-hover-color, var(--weline-chrome-mega-menu-top-hover-color, #ffffff));
+}
+
 .w-mega-menu__panels,
 .mega-menu-panels {
     flex: 1 1 auto;
@@ -166,6 +182,40 @@
 .w-mega-menu__panel-all:hover,
 .mega-menu-panel__all:hover {
     color: var(--weline-theme-body-link-hover, var(--weline-theme-primary, #149a78));
+}
+
+.w-mega-menu__panel-intro,
+.mega-menu-panel__intro {
+    display: grid;
+    gap: 0.75rem;
+    margin: 0 0 1.25rem;
+}
+
+.w-mega-menu__panel-banner,
+.mega-menu-panel__banner {
+    overflow: hidden;
+    border-radius: var(--weline-radius-md, 10px);
+    background: var(--weline-theme-surface-muted, #f4f6f8);
+}
+
+.w-mega-menu__panel-banner img,
+.mega-menu-panel__banner img {
+    display: block;
+    width: 100%;
+    max-height: 9rem;
+    object-fit: cover;
+}
+
+.w-mega-menu__panel-intro-desc,
+.mega-menu-panel__intro-desc {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.5;
+    color: var(--weline-theme-body-text-secondary, #565959);
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .w-mega-menu__subgrid,

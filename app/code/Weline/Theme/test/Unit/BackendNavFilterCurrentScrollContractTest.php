@@ -18,15 +18,33 @@ final class BackendNavFilterCurrentScrollContractTest extends TestCase
         $runtime = $this->read('app/code/Weline/Theme/view/ui/js/weline-ui.js');
         $published = $this->read('app/code/Weline/Theme/view/statics/ui/weline-ui.js');
 
+        $backendCss = $this->read('app/code/Weline/Theme/view/ui/css/backend.css');
+        self::assertStringContainsString('.w-backend-nav__disclosure[open] > summary.w-backend-nav__item', $backendCss);
+        self::assertStringContainsString('position: sticky', $backendCss);
+
         foreach ([$runtime, $published] as $source) {
             self::assertStringContainsString("function registerNavFilter()", $source);
             self::assertStringContainsString('stripLocalizationSegments', $source);
             self::assertStringContainsString('scrollCurrentIntoView', $source);
+            self::assertStringContainsString('clearCurrentRoute', $source);
+            self::assertStringContainsString('matchesSubtree', $source);
+            self::assertStringContainsString('data-w-nav-filtering', $source);
+            self::assertStringContainsString('syncCurrentRouteAndScrollUnlessFiltering', $source);
             self::assertStringContainsString('.w-backend-nav__item[aria-current="page"]', $source);
             self::assertStringContainsString("element.querySelector(':scope > nav')", $source);
             self::assertStringContainsString("element.closest('.w-backend-sidebar')", $source);
             self::assertStringContainsString("weline:ui:drawer:open", $source);
             self::assertStringContainsString('scroller.scrollTop += delta', $source);
+            self::assertStringContainsString('expandSidebarForSearch', $source);
+            self::assertStringContainsString('expandSidebarOverlay', $source);
+            self::assertStringContainsString('expandTopLevelEntry', $source);
+            self::assertStringContainsString('?.expandOverlay?.()', $source);
+            self::assertStringContainsString('maybeDismissSearchOverlay', $source);
+            self::assertStringContainsString('if (currentDisclosures.has(disclosure))', $source);
+            self::assertStringContainsString('suppressSummaryClick', $source);
+            self::assertStringContainsString('pinOpenedDisclosure', $source);
+            self::assertStringContainsString("trigger.tagName === 'SUMMARY'", $source);
+            self::assertStringContainsString('event.isTrusted', $source);
         }
     }
 

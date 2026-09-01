@@ -20,7 +20,8 @@ class ThemeFaqSeoContextService
         'customer_service',
         'contact',
         'contact_page',
-        'order_tracking',
+        'about',
+        'about_page',
     ];
 
     public function __construct(

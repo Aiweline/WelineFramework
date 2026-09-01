@@ -1,0 +1,336 @@
+/**
+ * Amazon-inspired storefront product card surface for homepage widgets.
+ * Scoped under .weline-amz-card-widget to avoid leaking into unrelated cards.
+ */
+.weline-amz-card-widget {
+    --amz-card-bg: var(--weline-chrome-bg-primary, #ffffff);
+    --amz-card-border: var(--weline-theme-border-subtle, #e7e7e7);
+    --amz-card-text: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+    --amz-card-text-muted: var(--weline-theme-body-text-muted, #565959);
+    --amz-card-link: #2162a1;
+    --amz-card-price: #b12704;
+    --amz-card-cta-bg: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
+    --amz-card-cta-bg-hover: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
+    --amz-card-cta-border: #fcd200;
+    --amz-card-cta-text: #0f1111;
+    --amz-card-shadow: 0 1px 2px rgba(15, 17, 17, 0.06), 0 8px 24px rgba(15, 17, 17, 0.04);
+    --amz-card-shadow-hover: 0 12px 32px rgba(15, 17, 17, 0.12);
+    color: var(--amz-card-text);
+}
+
+.weline-amz-card-widget .product-card {
+    display: flex;
+    min-width: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid var(--amz-card-border);
+    border-radius: var(--weline-radius-xl, 1rem);
+    background: var(--amz-card-bg);
+    color: var(--amz-card-text);
+    box-shadow: var(--amz-card-shadow);
+    transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease;
+}
+
+.weline-amz-card-widget .product-card:hover {
+    transform: translateY(-4px);
+    border-color: color-mix(in srgb, var(--weline-theme-primary) 28%, var(--amz-card-border));
+    box-shadow: var(--amz-card-shadow-hover);
+}
+
+.weline-amz-card-widget .product-image-wrapper {
+    position: relative;
+    padding-top: 100%;
+    overflow: hidden;
+    background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+}
+
+.weline-amz-card-widget .product-image-link {
+    position: absolute;
+    inset: 0;
+    display: block;
+}
+
+.weline-amz-card-widget .product-image {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform 0.45s ease;
+}
+
+.weline-amz-card-widget .product-card:hover .product-image {
+    transform: scale(1.06);
+}
+
+.weline-amz-card-widget .product-badges,
+.weline-amz-card-widget .w-product-labels {
+    position: absolute;
+    top: var(--weline-space-3);
+    left: var(--weline-space-3);
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--weline-space-1);
+    max-width: calc(100% - var(--weline-space-6));
+    pointer-events: none;
+}
+
+.weline-amz-card-widget .w-product-label {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-1);
+    padding: var(--weline-space-1) var(--weline-space-2);
+    border-radius: var(--weline-radius-round, 999px);
+    font-size: var(--weline-font-size-xs, 0.75rem);
+    font-weight: var(--weline-font-weight-semibold, 600);
+    line-height: 1.2;
+    white-space: nowrap;
+}
+
+.weline-amz-card-widget .w-product-label[data-kind="new"] {
+    background: var(--w-product-label-new-bg, var(--weline-product-label-new-bg, var(--color-product-label-new-bg, #e6f2e6)));
+    color: var(--w-product-label-new-text, var(--weline-product-label-new-text, var(--color-product-label-new-text, #007600)));
+}
+
+.weline-amz-card-widget .w-product-label[data-kind="sale"] {
+    background: var(--w-product-label-sale-bg, var(--weline-product-label-sale-bg, var(--color-product-label-sale-bg, #fde8ec)));
+    color: var(--w-product-label-sale-text, var(--weline-product-label-sale-text, var(--color-product-label-sale-text, #9f1239)));
+}
+
+.weline-amz-card-widget .w-product-label[data-kind="demo"] {
+    background: var(--w-product-label-demo-bg, var(--weline-product-label-demo-bg, var(--color-product-label-demo-bg, #e8edf2)));
+    color: var(--w-product-label-demo-text, var(--weline-product-label-demo-text, var(--color-product-label-demo-text, #475569)));
+}
+
+.weline-amz-card-widget .product-actions {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    z-index: 3;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.375rem;
+    opacity: 0;
+    pointer-events: none;
+    transform: none;
+    transition: opacity 0.15s ease;
+}
+
+.weline-amz-card-widget .product-card:hover .product-actions,
+.weline-amz-card-widget .product-card:focus-within .product-actions {
+    opacity: 1;
+    pointer-events: auto;
+    transform: none;
+}
+
+.weline-amz-card-widget .action-btn {
+    -webkit-appearance: none;
+    appearance: none;
+    display: inline-flex;
+    width: 2rem;
+    height: 2rem;
+    min-width: 2rem;
+    min-height: 2rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin: 0;
+    border: 0 !important;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.92);
+    color: var(--amz-card-text);
+    line-height: 1;
+    cursor: pointer;
+    box-shadow: 0 1px 2px rgba(15, 17, 17, 0.12), 0 2px 6px rgba(15, 17, 17, 0.08);
+    transition: background 0.15s ease, color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.weline-amz-card-widget .action-btn:hover,
+.weline-amz-card-widget .action-btn:focus-visible {
+    background: #fff;
+    color: #c45500;
+    box-shadow: 0 2px 8px rgba(15, 17, 17, 0.16);
+    transform: translateY(-1px);
+    outline: none;
+}
+
+.weline-amz-card-widget .btn-wishlist.is-active,
+.weline-amz-card-widget .btn-compare.is-active {
+    color: #e47911;
+}
+
+.weline-amz-card-widget .product-info {
+    display: flex;
+    width: auto;
+    min-width: 0;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--weline-space-2);
+    padding: var(--weline-space-4);
+    box-sizing: border-box;
+    background: var(--amz-card-bg);
+}
+
+.weline-amz-card-widget .product-name {
+    margin: 0;
+    min-height: calc(2 * 1.45em);
+    max-height: calc(2 * 1.45em);
+    overflow: hidden;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+    line-height: 1.45;
+}
+
+.weline-amz-card-widget .product-name,
+.weline-amz-card-widget .product-name a {
+    display: -webkit-box;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    word-break: break-word;
+}
+
+.weline-amz-card-widget .product-name a {
+    color: var(--amz-card-link);
+    text-decoration: none;
+}
+
+.weline-amz-card-widget .product-name a:hover {
+    color: #c45500;
+    text-decoration: underline;
+}
+
+.weline-amz-card-widget .product-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-2);
+}
+
+.weline-amz-card-widget .new-date {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-1);
+    color: var(--amz-card-text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.weline-amz-card-widget .product-rating {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-1);
+    color: var(--amz-card-text-muted);
+    font-size: var(--font-size-xs);
+}
+
+.weline-amz-card-widget .stars {
+    display: inline-flex;
+    align-items: center;
+    gap: 1px;
+}
+
+.weline-amz-card-widget .stars :is(i, svg, .w-rating-star[data-state="filled"]) {
+    color: var(--weline-theme-warning, #de7921);
+}
+
+.weline-amz-card-widget .stars .w-rating-star[data-state="empty"] {
+    color: #d5d9d9;
+}
+
+.weline-amz-card-widget .review-count {
+    color: var(--amz-card-link);
+}
+
+.weline-amz-card-widget .product-price {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--weline-space-2);
+    margin-top: auto;
+}
+
+.weline-amz-card-widget .price-current {
+    color: var(--amz-card-price);
+    font-size: var(--font-size-lg);
+    font-weight: 800;
+    letter-spacing: -0.02em;
+}
+
+.weline-amz-card-widget .price-original {
+    color: var(--amz-card-text-muted);
+    font-size: var(--font-size-xs);
+    text-decoration: line-through;
+}
+
+.weline-amz-card-widget .product-cart,
+.weline-amz-card-widget .product-add-to-cart-form {
+    width: 100%;
+    margin: 0;
+}
+
+.weline-amz-card-widget .btn-add-to-cart,
+.weline-amz-card-widget .product-add-to-cart-form .btn-add-to-cart {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-2);
+    width: 100%;
+    min-height: 2.5rem;
+    margin-top: var(--weline-space-1);
+    border: 1px solid var(--amz-card-cta-border);
+    border-radius: var(--weline-radius-lg);
+    background: var(--amz-card-cta-bg);
+    color: var(--amz-card-cta-text);
+    cursor: pointer;
+    font-size: var(--font-size-sm);
+    font-weight: 700;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.weline-amz-card-widget .btn-add-to-cart:hover,
+.weline-amz-card-widget .product-add-to-cart-form .btn-add-to-cart:hover {
+    background: var(--amz-card-cta-bg-hover);
+    border-color: #e7b92e;
+    color: var(--amz-card-cta-text);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.28), 0 1px 3px rgba(15, 17, 17, 0.12);
+}
+
+.weline-amz-card-widget .btn-add-to-cart:active,
+.weline-amz-card-widget .product-add-to-cart-form .btn-add-to-cart:active {
+    transform: translateY(1px);
+}
+
+.weline-amz-card-widget .btn-out-of-stock {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    min-height: 2.5rem;
+    margin-top: var(--weline-space-1);
+    border: 1px solid var(--amz-card-border);
+    border-radius: var(--weline-radius-lg);
+    background: #f7f8f8;
+    color: var(--amz-card-text-muted);
+    cursor: not-allowed;
+    font-size: var(--font-size-sm);
+    font-weight: 600;
+}
+
+@media (max-width: 768px) {
+    .weline-amz-card-widget .product-actions {
+        opacity: 1;
+        pointer-events: auto;
+        transform: none;
+    }
+}
+
+.weline-amz-card-widget .btn-add-to-cart.is-added,
+.weline-amz-card-widget .product-storefront__add.is-added {
+    filter: saturate(1.05);
+}

@@ -17,6 +17,8 @@
  * @param.class {default="",name="额外CSS类",description="额外的CSS类名"}
  */
 
+use Weline\Theme\Helper\ProductCardAddToCartParams;
+
 $metaParams = \Weline\Theme\Helper\ThemeData::getFileParams('partials.product.card');
 foreach ($metaParams as $key => $value) {
     $this->setData("meta.{$key}", $value);
@@ -42,6 +44,7 @@ $productRating = (float)($product['rating'] ?? 0);
 $productReviewCount = (int)($product['review_count'] ?? 0);
 $isNew = (bool)($product['is_new'] ?? false);
 $isSale = (bool)($product['is_sale'] ?? false);
+$isDemo = (bool)($product['is_demo'] ?? false);
 $isInStock = (bool)($product['in_stock'] ?? ((int)($product['stock'] ?? 0) > 0));
 
 $uniqueId = 'product-card-' . uniqid();
@@ -67,15 +70,13 @@ $uniqueId = 'product-card-' . uniqid();
                     </div>
                 <?php endif; ?>
 
-                <?php if ($isNew || $isSale): ?>
-                    <div class="product-card-partial__badges">
-                        <?php if ($isNew): ?>
-                            <span class="product-card-partial__badge product-card-partial__badge--new">@lang{NEW}</span>
-                        <?php endif; ?>
-                        <?php if ($isSale): ?>
-                            <span class="product-card-partial__badge product-card-partial__badge--sale">@lang{SALE}</span>
-                        <?php endif; ?>
-                    </div>
+                <?php if ($isDemo || $isNew || $isSale): ?>
+                    <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/labels.phtml', [
+                        'is_demo' => $isDemo,
+                        'is_new' => $isNew,
+                        'is_sale' => $isSale,
+                        'class' => 'product-card-partial__badges',
+                    ]) ?>
                 <?php endif; ?>
 
                 <?php if (!$isInStock): ?>
@@ -122,16 +123,13 @@ $uniqueId = 'product-card-' . uniqid();
 
             <?php if ($showAddToCart): ?>
                 <div class="product-card-partial__actions">
-                    <?php if ($isInStock): ?>
-                        <button type="button" class="product-card-partial__add-to-cart" data-product-id="<?= $productId ?>">
-                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4zM3 6h18M16 10a4 4 0 01-8 0" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                            <span>@lang{加入购物车}</span>
-                        </button>
-                    <?php else: ?>
-                        <button type="button" class="product-card-partial__out-of-stock-btn" disabled>@lang{暂时缺货}</button>
-                    <?php endif; ?>
+                    <?= $this->fetch(
+                        'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
+                        ProductCardAddToCartParams::fetchDictionary(
+                            array_merge($product, ['id' => $productId, 'product_id' => $productId, 'in_stock' => $isInStock]),
+                            ['enabled' => $isInStock]
+                        )
+                    ) ?>
                 </div>
             <?php endif; ?>
         </div>
@@ -246,34 +244,6 @@ $uniqueId = 'product-card-' . uniqid();
     color: var(--color-text-disabled);
 }
 
-.product-card-partial__badges {
-    position: absolute;
-    top: var(--spacing-2);
-    left: var(--spacing-2);
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-0_5);
-    z-index: 1;
-}
-
-.product-card-partial__badge {
-    padding: var(--spacing-0_5) var(--spacing-1);
-    font-size: var(--spacing-0_65);
-    font-weight: var(--font-weight-semibold);
-    text-transform: uppercase;
-    border-radius: var(--radius-sm);
-    letter-spacing: var(--token-size-0-5px);
-}
-
-.product-card-partial__badge--new {
-    background-color: var(--color-success);
-    color: var(--color-text-light);
-}
-
-.product-card-partial__badge--sale {
-    background-color: var(--color-error);
-    color: var(--color-text-light);
-}
 
 .product-card-partial__out-of-stock {
     position: absolute;
@@ -379,7 +349,8 @@ $uniqueId = 'product-card-' . uniqid();
     margin-top: var(--spacing-2);
 }
 
-.product-card-partial__add-to-cart {
+.product-card-partial__actions .btn-add-to-cart,
+.product-card-partial__actions .product-storefront__add {
     width: 100%;
     display: flex;
     align-items: center;
@@ -396,20 +367,9 @@ $uniqueId = 'product-card-' . uniqid();
     transition: background-color 0.2s ease;
 }
 
-.product-card-partial__add-to-cart:hover {
+.product-card-partial__actions .btn-add-to-cart:hover,
+.product-card-partial__actions .product-storefront__add:hover {
     background-color: var(--color-accent-hover);
-}
-
-.product-card-partial__out-of-stock-btn {
-    width: 100%;
-    padding: var(--spacing-2);
-    background-color: var(--color-bg-tertiary);
-    color: var(--color-text-secondary);
-    border: none;
-    border-radius: var(--radius-md);
-    font-size: var(--font-size-xs);
-    font-weight: var(--font-weight-medium);
-    cursor: not-allowed;
 }
 
 @media (max-width: 480px) {
@@ -419,27 +379,4 @@ $uniqueId = 'product-card-' . uniqid();
     }
 }
 </style>
-
-<script>
-(function() {
-    'use strict';
-    var card = document.getElementById('<?= $uniqueId ?>');
-    if (!card) return;
-
-    var addToCartBtn = card.querySelector('.product-card-partial__add-to-cart');
-    if (addToCartBtn) {
-        addToCartBtn.addEventListener('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            var originalHtml = addToCartBtn.innerHTML;
-            addToCartBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M5 13l4 4L19 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg> <span>@lang{已添加}</span>';
-            addToCartBtn.style.backgroundColor = 'var(--color-success)';
-            setTimeout(function() {
-                addToCartBtn.innerHTML = originalHtml;
-                addToCartBtn.style.backgroundColor = '';
-            }, 2000);
-        });
-    }
-})();
-</script>
 <?php endif; ?>

@@ -2768,13 +2768,98 @@ body:has(.theme-editor-container) .footer {
     gap: 6px;
 }
 
+/* 部件库 header：标题 / 搜索 / 类型筛选纵向分层，避免横向挤叠 */
+.panel-header.widget-library-panel-header {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    gap: 8px;
+    padding: 8px 10px 10px;
+}
+
+.widget-library-panel-header__row {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    min-width: 0;
+}
+
+.widget-library-panel-header__row--title {
+    justify-content: space-between;
+    gap: 8px;
+}
+
+.widget-library-panel-header__actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.widget-library-panel-header__actions .w-ai-widget-btn {
+    white-space: nowrap;
+    min-height: 24px;
+    padding-block: 2px;
+    padding-inline: 8px;
+}
+
+.widget-library-panel-header__row--filters {
+    align-items: flex-start;
+}
+
+.widget-library-type-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+}
+
+.widget-library-type-chip {
+    appearance: none;
+    -webkit-appearance: none;
+    margin: 0;
+    border: 1px solid var(--w-theme-editor-border);
+    background: var(--w-theme-editor-bg-hover);
+    color: var(--w-theme-editor-text-secondary);
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 10px;
+    font-weight: 600;
+    line-height: 1.35;
+    letter-spacing: 0.02em;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.widget-library-type-chip:hover {
+    color: var(--w-theme-editor-text-primary);
+    border-color: var(--w-theme-editor-border-light);
+    background: var(--w-theme-editor-bg-active);
+}
+
+.widget-library-type-chip.is-active {
+    color: var(--w-theme-editor-accent);
+    border-color: var(--w-theme-editor-accent);
+    background: var(--w-theme-editor-accent-light, color-mix(in srgb, var(--w-theme-editor-accent) 16%, transparent));
+    box-shadow: 0 0 0 1px color-mix(in srgb, var(--w-theme-editor-accent) 28%, transparent);
+}
+
+.widget-library-type-chip:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--w-theme-editor-accent-light, color-mix(in srgb, var(--w-theme-editor-accent) 22%, transparent));
+}
+
 #widgetPanel .panel-title {
     flex-shrink: 0;
     margin: 0;
 }
 
 #widgetPanel .panel-search {
-    flex: 1;
+    flex: 1 1 auto;
+    width: 100%;
     min-width: 0;
     margin-top: 0;
 }

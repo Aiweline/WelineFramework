@@ -95,6 +95,16 @@
     --weline-chrome-body-link-hover: var(--color-primary);
     --weline-chrome-menu-panel-text-hover: var(--color-primary);
 
+    /* ========== 商品标签色 ========== */
+    --color-product-label-new-bg: #e6f2e6;
+    --color-product-label-new-text: #007600;
+    --color-product-label-sale-bg: #fde8ec;
+    --color-product-label-sale-text: #9f1239;
+    --weline-product-label-new-bg: var(--color-product-label-new-bg);
+    --weline-product-label-new-text: var(--color-product-label-new-text);
+    --weline-product-label-sale-bg: var(--color-product-label-sale-bg);
+    --weline-product-label-sale-text: var(--color-product-label-sale-text);
+
     /* ========== 滚动条 ========== */
     --scrollbar-width: 4px;
     --scrollbar-thumb: #c1c1c1;

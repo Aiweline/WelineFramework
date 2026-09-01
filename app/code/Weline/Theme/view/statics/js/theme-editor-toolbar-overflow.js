@@ -191,7 +191,24 @@
                         menu.insertBefore(item, menu.firstChild);
                     }
                 }
-                if (menu.childElementCount === 0) more.hidden = true;
+            }
+
+            // Pack back the most recently overflowed items while leftover space remains.
+            // Prevents an empty gap next to「更多」when one large removal frees room for smaller controls.
+            let packGuard = 0;
+            while (menu.childElementCount > 0 && packGuard < 64) {
+                packGuard += 1;
+                const candidate = menu.firstChild;
+                if (!(candidate instanceof HTMLElement)) break;
+                itemsHost.append(candidate);
+                if (usedWidth(element, more) > limit + 1) {
+                    menu.insertBefore(candidate, menu.firstChild);
+                    break;
+                }
+            }
+
+            if (menu.childElementCount === 0) {
+                more.hidden = true;
             }
 
             if (more.hidden) {

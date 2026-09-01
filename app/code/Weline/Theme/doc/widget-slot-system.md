@@ -127,9 +127,9 @@ public function processSlots(string $html, int $themeId, string $pageType): stri
     // 2. 按插槽组织部件
     $slotWidgets = $this->organizeWidgetsBySlot($layoutData);
     
-    // 3. 使用 DOM 解析处理插槽
+    // 3. 边界标记 (@weline-slot) 字符串填充；缺标记 fail-closed
     // 4. 检测孤儿部件（配置了但找不到对应slot的部件）
-    $html = $this->processSlotsWithDom($html, $slotWidgets);
+    $html = $this->processSlotsWithBoundaries($html, $slotWidgets);
     
     return $html;
 }
@@ -218,6 +218,8 @@ foreach ($orphans as $orphan) {
 1. 在后台看到警告提示
 2. 重新配置部件到新的插槽
 3. 或者恢复包含该插槽的布局模板
+
+**作用域排除**：若部件注册了非通配的 `page_layouts`（例如仅 `mini-cart`），且当前预览 `pageType` 不在列表中，则**不计入**孤儿告警。避免布局专有槽（如迷你购物车 `footer-extras`）在首页等预览中被误报。
 
 ## 数据库结构
 

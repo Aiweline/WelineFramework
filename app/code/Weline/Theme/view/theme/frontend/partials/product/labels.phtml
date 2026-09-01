@@ -1,0 +1,75 @@
+<?php
+/**
+ * 片段：商品标签组
+ *
+ * @meta.name {default="商品标签组",name="商品标签组",description="商品卡片角标标签组"}
+ * @meta.description {default="统一渲染 NEW / SALE / DEMO 等商品标签，全局主题色盘 + 部件级覆盖",name="统一商品标签渲染",description="商品标签组片段用途"}
+ * @param is_new {default=false,type=bool,name="显示新品标签",description="是否显示新品标签"}
+ * @param is_sale {default=false,type=bool,name="显示促销标签",description="是否显示促销标签"}
+ * @param is_demo {default=false,type=bool,name="显示演示标签",description="是否显示演示商品标签"}
+ * @param overrides {default=[],name="配色覆盖",description="部件级配色覆盖：new_bg/new_text/sale_bg/sale_text/demo_bg/demo_text"}
+ * @param class {default="product-badges",name="容器类名",description="标签容器额外类名"}
+ * @param placement {default="top-start",name="标签位置",description="top-start 或 bottom-start"}
+ * @param bare {default=false,type=bool,name="仅输出标签",description="为 true 时不包裹 w-product-labels 容器"}
+ * @param new_text {default="",name="新品文案",description="留空使用默认 NEW"}
+ * @param sale_text {default="",name="促销文案",description="留空使用默认 SALE"}
+ * @param demo_text {default="",name="演示文案",description="留空使用默认 DEMO"}
+ */
+
+use Weline\Theme\Helper\ProductLabelStyle;
+
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$isNew = (bool)($this->getData('is_new') ?? $this->getData('meta.is_new') ?? false);
+$isSale = (bool)($this->getData('is_sale') ?? $this->getData('meta.is_sale') ?? false);
+$isDemo = (bool)($this->getData('is_demo') ?? $this->getData('meta.is_demo') ?? false);
+$overrides = $this->getData('overrides') ?? $this->getData('meta.overrides') ?? [];
+if (!is_array($overrides)) {
+    $overrides = [];
+}
+$class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? 'product-badges'));
+$placement = trim((string)($this->getData('placement') ?? $this->getData('meta.placement') ?? 'top-start'));
+$newText = trim((string)($this->getData('new_text') ?? $this->getData('meta.new_text') ?? ''));
+$saleText = trim((string)($this->getData('sale_text') ?? $this->getData('meta.sale_text') ?? ''));
+$demoText = trim((string)($this->getData('demo_text') ?? $this->getData('meta.demo_text') ?? ''));
+$bare = (bool)($this->getData('bare') ?? $this->getData('meta.bare') ?? false);
+
+if (!$isNew && !$isSale && !$isDemo) {
+    return;
+}
+
+$renderLabel = function (string $kind, string $text) {
+    return $this->fetch('Weline_Theme::theme/frontend/components/product-label.phtml', [
+        'kind' => $kind,
+        'text' => $text,
+    ]);
+};
+
+if ($bare) {
+    if ($isDemo) {
+        echo $renderLabel(ProductLabelStyle::KIND_DEMO, $demoText !== '' ? $demoText : (string)__('DEMO'));
+    }
+    if ($isNew) {
+        echo $renderLabel(ProductLabelStyle::KIND_NEW, $newText !== '' ? $newText : (string)__('NEW'));
+    }
+    if ($isSale) {
+        echo $renderLabel(ProductLabelStyle::KIND_SALE, $saleText !== '' ? $saleText : (string)__('SALE'));
+    }
+    return;
+}
+
+$scopeStyle = ProductLabelStyle::scopeStyleAttribute($overrides);
+$placementClass = $placement === 'bottom-start' ? ' w-product-labels--bottom-start' : '';
+$containerClass = trim('w-product-labels ' . $class . $placementClass);
+?>
+<div class="<?= $esc($containerClass) ?>"<?= $scopeStyle !== '' ? ' style="' . $esc($scopeStyle) . '"' : '' ?>>
+    <?php if ($isDemo): ?>
+        <?= $renderLabel(ProductLabelStyle::KIND_DEMO, $demoText !== '' ? $demoText : (string)__('DEMO')) ?>
+    <?php endif; ?>
+    <?php if ($isNew): ?>
+        <?= $renderLabel(ProductLabelStyle::KIND_NEW, $newText !== '' ? $newText : (string)__('NEW')) ?>
+    <?php endif; ?>
+    <?php if ($isSale): ?>
+        <?= $renderLabel(ProductLabelStyle::KIND_SALE, $saleText !== '' ? $saleText : (string)__('SALE')) ?>
+    <?php endif; ?>
+</div>

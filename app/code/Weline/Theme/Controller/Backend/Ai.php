@@ -7,6 +7,7 @@ namespace Weline\Theme\Controller\Backend;
 use Weline\Ai\Api\AiRuntimeInterface;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Env;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Theme\Service\ThemeAiDraftService;
 use Weline\Theme\Service\ThemeAiPayloadValidator;
@@ -31,6 +32,8 @@ class Ai extends BackendController
                     'agents' => $this->aiRuntime->getAgentsForScenario($scenario),
                 ],
             ]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $throwable) {
             return $this->fetchJson([
                 'success' => false,
@@ -59,6 +62,12 @@ class Ai extends BackendController
 
         try {
             $component = $this->themeAiDraftService->publishDraft($draftVersionId);
+            $publishedVersionId = (int)$component->getPublishedVersionId();
+            $definition = $publishedVersionId > 0
+                ? $this->themeAiDraftService->buildDefinitionForVersion($publishedVersionId)
+                : null;
+            $widget = $definition ? $definition->toWidgetArray() : [];
+
             return $this->fetchJson([
                 'success' => true,
                 'message' => __('草稿已发布'),
@@ -66,9 +75,48 @@ class Ai extends BackendController
                     'component_id' => $component->getId(),
                     'theme_id' => $component->getThemeId(),
                     'component_code' => $component->getComponentCode(),
-                    'published_version_id' => $component->getPublishedVersionId(),
+                    'published_version_id' => $publishedVersionId,
+                    'widget' => $widget,
                 ],
             ]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
+        } catch (\Throwable $throwable) {
+            return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
+        }
+    }
+
+    /**
+     * Open a refine draft from a published (or any) theme_component version.
+     * Accepts component_id and/or published_version_id / version_id.
+     */
+    public function postPrepareRefine()
+    {
+        $data = $this->getPayload();
+        $versionId = (int)($data['published_version_id'] ?? $data['version_id'] ?? 0);
+        $componentId = (int)($data['component_id'] ?? 0);
+
+        try {
+            if ($versionId <= 0 && $componentId > 0) {
+                $published = $this->themeAiDraftService->getPublishedVersion($componentId);
+                $versionId = $published ? (int)$published->getId() : 0;
+            }
+            if ($versionId <= 0) {
+                return $this->fetchJson(['success' => false, 'message' => __('缺少 published_version_id 或 component_id')]);
+            }
+
+            $draft = $this->themeAiDraftService->revertVersion($versionId);
+            return $this->fetchJson([
+                'success' => true,
+                'message' => __('已准备精修草稿'),
+                'data' => [
+                    'draft_version_id' => $draft->getId(),
+                    'component_id' => $draft->getComponentId(),
+                    'preview_html' => $this->themeAiDraftService->renderPreview($draft->getId()),
+                ],
+            ]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $throwable) {
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
         }
@@ -92,6 +140,8 @@ class Ai extends BackendController
                     'preview_html' => $this->themeAiDraftService->renderPreview($draft->getId()),
                 ],
             ]);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $throwable) {
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
         }

@@ -4,10 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Scoped;
 
-use Weline\Framework\App\Env;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemePatchCommand;
-use Weline\Theme\Api\Scoped\ThemeScopedResourceAdapterInterface;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
@@ -24,7 +22,6 @@ final class ThemeScopedWorkspaceRequestService
     public function __construct(
         private readonly ThemeEditorContextFactory $contexts,
         private readonly ThemeScopedWorkspaceInterface $workspace,
-        private readonly ThemeScopedResourceAdapterInterface $adapter,
         private readonly WelineTheme $themes,
         private readonly ThemeContextService $themeContext,
         private readonly ThemeRuntimeCacheCleaner $cacheCleaner,
@@ -35,10 +32,7 @@ final class ThemeScopedWorkspaceRequestService
     public function load(array $input): array
     {
         $context = $this->contexts->fromInput($input);
-        $result = $this->workspace->load($context, true);
-        $this->projectEditorDraft($context, $result);
-
-        return $result;
+        return $this->workspace->load($context, true);
     }
 
     /** @param array<string,mixed> $input */
@@ -94,7 +88,6 @@ final class ThemeScopedWorkspaceRequestService
             actorName: $actorName,
             summary: $this->note($input['summary'] ?? '', 'summary'),
         );
-        $this->projectEditorDraft($context, $result);
 
         return $result;
     }
@@ -111,6 +104,11 @@ final class ThemeScopedWorkspaceRequestService
             actorName: $actorName,
             reason: $this->note($input['reason'] ?? '', 'reason'),
         );
+        // Structural conflict commits blocked state; do not treat as publish success
+        // and do not invalidate storefront Theme caches for an unpublished draft.
+        if (!empty($result['blocked'])) {
+            return $result;
+        }
         $publishedThemeId = $context->themeId > 0
             ? $context->themeId
             : (int)($result['payload']['theme_id'] ?? 0);
@@ -143,34 +141,6 @@ final class ThemeScopedWorkspaceRequestService
         }
         if (!$this->themeContext->themeSupportsArea($theme, $context->area)) {
             throw new \InvalidArgumentException('theme_binding_theme_area_unsupported');
-        }
-    }
-
-    /** @param array<string,mixed> $state */
-    private function projectEditorDraft(ThemeEditorContext $context, array &$state): void
-    {
-        if ($context->resourceType !== ThemeEditorContext::RESOURCE_LAYOUT) {
-            return;
-        }
-
-        try {
-            $payload = $state['draft_payload'] ?? null;
-            if (!\is_array($payload)) {
-                throw new \RuntimeException('theme_scope_layout_draft_payload_missing');
-            }
-            $this->adapter->projectDraft($context, $payload);
-        } catch (\Throwable $e) {
-            // The scoped workspace is canonical and has already been loaded or
-            // committed. A rebuildable compatibility projection must never turn
-            // that successful operation into a revision-conflict-producing retry.
-            $state['compatibility_projection'] = [
-                'ok' => false,
-                'code' => 'theme_scope_layout_draft_projection_failed',
-            ];
-            Env::log_error(
-                'theme_scope_projection',
-                'Theme layout draft compatibility projection failed: ' . $e->getMessage(),
-            );
         }
     }
 

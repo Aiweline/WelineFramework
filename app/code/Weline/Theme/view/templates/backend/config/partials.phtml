@@ -12,7 +12,7 @@
         <p class="text-muted"><?= __('主题：%{name}', ['name' => $theme->getName()]) ?></p>
     </div>
 
-    <w:form id="partials-config-form" method="post" action="@var($this->getUrl('theme/backend/config/partials/save'))">
+    <w:form id="partials-config-form" method="post" action="@url{'theme/backend/config/partials/save'}">
         <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>" id="theme-id">
         
         <div class="row">
@@ -75,7 +75,7 @@
 
         <div class="form-actions mt-4">
             <button type="submit" class="btn btn-primary"><?= __('保存配置') ?></button>
-            <a href="<?= $this->getUrl('theme/backend/index') ?>" class="btn btn-secondary"><?= __('返回') ?></a>
+            <a href="@url{'theme/backend/index'}" class="btn btn-secondary"><?= __('返回') ?></a>
         </div>
     </w:form>
 </div>
@@ -126,7 +126,7 @@ document.getElementById('partials-config-form').addEventListener('submit', funct
         backendData.append(`partials[${key}]`, backendPartials[key]);
     });
     
-    var url = '<?= $this->getUrl('theme/backend/config/partials/save') ?>';
+    var url = '@url{'theme/backend/config/partials/save'}';
     var req = WelineThemeBinQuery.request(url, { method: 'POST', body: frontendData });
     req.then(function(res) {
         var data = (res && res.data) || res;

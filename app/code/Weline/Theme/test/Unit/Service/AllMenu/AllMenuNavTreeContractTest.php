@@ -78,12 +78,57 @@ final class AllMenuNavTreeContractTest extends TestCase
         $nav = $normalizer->toNavItems($tree);
         // text stays Chinese source key; Header headerEsc / WidgetI18n translates for current locale.
         self::assertSame('关于我们', $nav[0]['text']);
-        self::assertSame('/c', $nav[0]['url']);
+        // Relative urls are rebuilt via getFrontendUrl (default locale keeps bare path).
+        self::assertNotSame('', $nav[0]['url']);
+        self::assertStringContainsString('c', $nav[0]['url']);
         self::assertArrayNotHasKey('tag', $nav[0]);
         self::assertSame('帮助中心', $nav[0]['children'][0]['text']);
         // Optional visual fields are preserved when present on source nodes.
         self::assertSame('secret', $nav[0]['description']);
         self::assertSame('nope', $nav[0]['children'][0]['description']);
+    }
+
+    public function testNormalizeAndToNavItemsPreserveBannerAndSummary(): void
+    {
+        $normalizer = new MenuTreeNormalizer();
+        $tree = $normalizer->normalize([
+            [
+                'tag' => 'category',
+                'name' => '圆领袍',
+                'url' => '/category/men/yuanlingpao',
+                'banner' => '/media/banner/yuanlingpao.jpg',
+                'summary' => '圆领袍简介',
+                'description' => '圆领袍详细描述',
+                'children' => [
+                    [
+                        'tag' => 'category',
+                        'name' => '夏季款',
+                        'url' => '/category/men/yuanlingpao/summer',
+                        'banner' => 'data:image/png;base64,abc',
+                    ],
+                ],
+            ],
+        ]);
+
+        self::assertSame('/media/banner/yuanlingpao.jpg', $tree[0]['banner'] ?? null);
+        self::assertSame('圆领袍简介', $tree[0]['summary'] ?? null);
+        self::assertSame('圆领袍详细描述', $tree[0]['description'] ?? null);
+        self::assertArrayNotHasKey('banner', $tree[0]['children'][0]);
+
+        $nav = $normalizer->toNavItems($tree);
+        self::assertSame('/media/banner/yuanlingpao.jpg', $nav[0]['banner'] ?? null);
+        self::assertSame('圆领袍简介', $nav[0]['summary'] ?? null);
+        self::assertSame('圆领袍详细描述', $nav[0]['description'] ?? null);
+    }
+
+    public function testToNavItemsLocalizesCategoryUrlsViaFrontendUrlBuilder(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/Service/AllMenu/MenuTreeNormalizer.php',
+        );
+        self::assertStringContainsString('function localizeUrl', $source);
+        self::assertStringContainsString('getFrontendUrl', $source);
+        self::assertStringContainsString('detectCurrency', $source);
     }
 
     public function testPageSeedStoresChineseSourceKeysWithoutLocaleMaps(): void

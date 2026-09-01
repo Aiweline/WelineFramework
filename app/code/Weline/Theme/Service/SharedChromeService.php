@@ -1,0 +1,370 @@
+<?php
+
+declare(strict_types=1);
+
+namespace Weline\Theme\Service;
+
+use Weline\Theme\Api\Scoped\ThemeEditorContext;
+use Weline\Theme\Api\Scoped\ThemePatchCommand;
+use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
+use Weline\Theme\Model\ThemeLayout;
+
+/**
+ * 页头/页脚全局 chrome：默认继承站点一套；本布局显式脱离后才独立。
+ *
+ * 持久化载体仍是 homepage workspace（存储载体，不是归属）。
+ * 语义：本布局 chrome 区无本地节点 = inherit；有本地节点 = local。
+ */
+final class SharedChromeService
+{
+    public const MODE_INHERIT = 'inherit';
+    public const MODE_LOCAL = 'local';
+
+    /** @var list<string> */
+    public const CHROME_AREAS = ['header', 'footer'];
+
+    /** @var list<string> */
+    public const CHROME_SLOTS = ['header', 'footer'];
+
+    public function __construct(
+        private readonly ThemeScopedWorkspaceInterface $workspace,
+    ) {
+    }
+
+    public function isChromeCarrierPageType(string $pageType): bool
+    {
+        return \trim($pageType) === ThemeLayout::PAGE_TYPE_HOME;
+    }
+
+    public function isChromeArea(string $area): bool
+    {
+        return \in_array(\strtolower(\trim($area)), self::CHROME_AREAS, true);
+    }
+
+    public function isChromeSlot(?string $slotId): bool
+    {
+        $slotId = \strtolower(\trim((string)$slotId));
+        if ($slotId === '') {
+            return false;
+        }
+        if (\in_array($slotId, self::CHROME_SLOTS, true)) {
+            return true;
+        }
+
+        // Nested chrome slots stay under the same global chrome ownership model.
+        foreach (self::CHROME_SLOTS as $root) {
+            if ($slotId === $root || \str_starts_with($slotId, $root . '-') || \str_starts_with($slotId, $root . '_')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    public function isChromeTarget(?string $area, ?string $slotId): bool
+    {
+        return $this->isChromeArea((string)$area) || $this->isChromeSlot($slotId);
+    }
+
+    /**
+     * @return array{
+     *   page_type:string,
+     *   is_carrier:bool,
+     *   slots:array<string,array{mode:string,local_node_count:int}>,
+     *   overall_mode:string
+     * }
+     */
+    public function resolveModes(ThemeEditorContext $pageContext): array
+    {
+        $pageContext = $pageContext->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+        $pageType = $pageContext->layoutType;
+        $isCarrier = $this->isChromeCarrierPageType($pageType);
+        $localNodes = $this->chromeNodesFromState($this->workspace->load($pageContext, true));
+
+        $slots = [];
+        $anyLocal = false;
+        foreach (self::CHROME_AREAS as $area) {
+            $count = 0;
+            foreach ($localNodes as $node) {
+                if ($this->nodeBelongsToChromeArea($node, $area)) {
+                    ++$count;
+                }
+            }
+            $mode = ($isCarrier || $count > 0) ? self::MODE_LOCAL : self::MODE_INHERIT;
+            if (!$isCarrier && $count > 0) {
+                $anyLocal = true;
+            }
+            $slots[$area] = [
+                'mode' => $isCarrier ? self::MODE_LOCAL : $mode,
+                'local_node_count' => $count,
+            ];
+            // Carrier itself is the global source; treat as local ownership of the shared set.
+            if ($isCarrier) {
+                $slots[$area]['mode'] = self::MODE_LOCAL;
+            }
+        }
+
+        return [
+            'page_type' => $pageType,
+            'is_carrier' => $isCarrier,
+            'slots' => $slots,
+            'overall_mode' => $isCarrier
+                ? self::MODE_LOCAL
+                : ($anyLocal ? self::MODE_LOCAL : self::MODE_INHERIT),
+            'carrier_page_type' => ThemeLayout::PAGE_TYPE_HOME,
+        ];
+    }
+
+    /**
+     * 继承态 chrome 写操作应落到全局载体（homepage），避免误占业务布局。
+     */
+    public function resolveWriteLayoutType(
+        ThemeEditorContext $pageContext,
+        ?string $area,
+        ?string $slotId,
+    ): string {
+        $pageType = $pageContext->layoutType;
+        if ($this->isChromeCarrierPageType($pageType) || !$this->isChromeTarget($area, $slotId)) {
+            return $pageType;
+        }
+
+        $modes = $this->resolveModes($pageContext);
+        $chromeArea = $this->isChromeArea((string)$area)
+            ? \strtolower(\trim((string)$area))
+            : $this->inferChromeAreaFromSlot($slotId);
+        if ($chromeArea === null) {
+            return $pageType;
+        }
+
+        $slotMode = (string)($modes['slots'][$chromeArea]['mode'] ?? self::MODE_INHERIT);
+        return $slotMode === self::MODE_INHERIT ? ThemeLayout::PAGE_TYPE_HOME : $pageType;
+    }
+
+    /**
+     * 将全局 chrome 复制到本布局，切断继承。
+     *
+     * @param list<string>|null $areas
+     * @return array{copied:int,areas:list<string>,workspace:array<string,mixed>|null}
+     */
+    public function detach(
+        ThemeEditorContext $pageContext,
+        ?array $areas,
+        string $actorId,
+        string $actorName = '',
+    ): array {
+        $pageContext = $pageContext->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+        if ($this->isChromeCarrierPageType($pageContext->layoutType)) {
+            throw new \InvalidArgumentException('shared_chrome_carrier_cannot_detach');
+        }
+
+        $areas = $this->normalizeAreas($areas);
+        $carrierContext = $pageContext->withLayoutType(ThemeLayout::PAGE_TYPE_HOME);
+        $carrierState = $this->workspace->load($carrierContext, true);
+        $pageState = $this->workspace->load($pageContext, true);
+
+        $commands = [];
+        // Clear existing local chrome first so detach is idempotent.
+        foreach ($this->chromeNodesFromState($pageState) as $uid => $node) {
+            if (!$this->nodeBelongsToAreas($node, $areas)) {
+                continue;
+            }
+            $commands[] = ThemePatchCommand::fromArray([
+                'op' => ThemePatchCommand::OP_REMOVE_NODE,
+                'path' => '/nodes/' . $uid,
+                'node_uid' => $uid,
+            ]);
+        }
+
+        $copied = 0;
+        foreach ($this->chromeNodesFromState($carrierState) as $node) {
+            if (!$this->nodeBelongsToAreas($node, $areas)) {
+                continue;
+            }
+            $newUid = \bin2hex(\random_bytes(16));
+            $copy = $node;
+            $copy['node_uid'] = $newUid;
+            $commands[] = ThemePatchCommand::fromArray([
+                'op' => ThemePatchCommand::OP_ADD_NODE,
+                'path' => '/nodes/' . $newUid,
+                'node_uid' => $newUid,
+                'value' => $copy,
+            ]);
+            ++$copied;
+        }
+
+        $workspace = null;
+        if ($commands !== []) {
+            $workspace = $this->workspace->applyChanges(
+                context: $pageContext,
+                expectedRevision: (int)($pageState['revision'] ?? 0),
+                expectedParentReleaseId: $this->nullableReleaseId($pageState['expected_parent_release_id'] ?? null),
+                changes: $commands,
+                actorId: $actorId,
+                actorName: $actorName,
+                summary: 'shared_chrome_detached',
+            );
+        }
+
+        return [
+            'copied' => $copied,
+            'areas' => $areas,
+            'workspace' => $workspace,
+            'mode' => self::MODE_LOCAL,
+        ];
+    }
+
+    /**
+     * 清空本布局 chrome 占用，恢复跟随全局。
+     *
+     * @param list<string>|null $areas
+     * @return array{removed:int,areas:list<string>,workspace:array<string,mixed>|null}
+     */
+    public function restore(
+        ThemeEditorContext $pageContext,
+        ?array $areas,
+        string $actorId,
+        string $actorName = '',
+    ): array {
+        $pageContext = $pageContext->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+        if ($this->isChromeCarrierPageType($pageContext->layoutType)) {
+            throw new \InvalidArgumentException('shared_chrome_carrier_cannot_restore');
+        }
+
+        $areas = $this->normalizeAreas($areas);
+        $pageState = $this->workspace->load($pageContext, true);
+        $commands = [];
+        $removed = 0;
+        foreach ($this->chromeNodesFromState($pageState) as $uid => $node) {
+            if (!$this->nodeBelongsToAreas($node, $areas)) {
+                continue;
+            }
+            $commands[] = ThemePatchCommand::fromArray([
+                'op' => ThemePatchCommand::OP_REMOVE_NODE,
+                'path' => '/nodes/' . $uid,
+                'node_uid' => $uid,
+            ]);
+            ++$removed;
+        }
+
+        $workspace = null;
+        if ($commands !== []) {
+            $workspace = $this->workspace->applyChanges(
+                context: $pageContext,
+                expectedRevision: (int)($pageState['revision'] ?? 0),
+                expectedParentReleaseId: $this->nullableReleaseId($pageState['expected_parent_release_id'] ?? null),
+                changes: $commands,
+                actorId: $actorId,
+                actorName: $actorName,
+                summary: 'shared_chrome_restored',
+            );
+        }
+
+        return [
+            'removed' => $removed,
+            'areas' => $areas,
+            'workspace' => $workspace,
+            'mode' => self::MODE_INHERIT,
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $state
+     * @return array<string,array<string,mixed>>
+     */
+    private function chromeNodesFromState(array $state): array
+    {
+        $nodes = \is_array($state['draft_payload']['nodes'] ?? null) ? $state['draft_payload']['nodes'] : [];
+        $chrome = [];
+        foreach ($nodes as $uid => $node) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            $uid = \strtolower(\trim((string)$uid));
+            if ($uid === '' || \preg_match('/^[a-f0-9]{32}$/D', $uid) !== 1) {
+                continue;
+            }
+            $area = \strtolower(\trim((string)($node['area'] ?? '')));
+            $slotId = isset($node['slot_id']) ? (string)$node['slot_id'] : null;
+            if (!$this->isChromeTarget($area, $slotId)) {
+                continue;
+            }
+            // Skip layout-state markers.
+            if ((string)($node['widget_code'] ?? '') === '__no_widget_placements__') {
+                continue;
+            }
+            $chrome[$uid] = $node;
+        }
+
+        return $chrome;
+    }
+
+    /** @param array<string,mixed> $node */
+    private function nodeBelongsToChromeArea(array $node, string $area): bool
+    {
+        $area = \strtolower(\trim($area));
+        $nodeArea = \strtolower(\trim((string)($node['area'] ?? '')));
+        if ($nodeArea === $area) {
+            return true;
+        }
+        $slotId = \strtolower(\trim((string)($node['slot_id'] ?? '')));
+        return $slotId === $area
+            || \str_starts_with($slotId, $area . '-')
+            || \str_starts_with($slotId, $area . '_');
+    }
+
+    /**
+     * @param array<string,mixed> $node
+     * @param list<string> $areas
+     */
+    private function nodeBelongsToAreas(array $node, array $areas): bool
+    {
+        foreach ($areas as $area) {
+            if ($this->nodeBelongsToChromeArea($node, $area)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /** @param list<string>|null $areas
+     * @return list<string>
+     */
+    private function normalizeAreas(?array $areas): array
+    {
+        if ($areas === null || $areas === []) {
+            return self::CHROME_AREAS;
+        }
+        $normalized = [];
+        foreach ($areas as $area) {
+            $area = \strtolower(\trim((string)$area));
+            if ($this->isChromeArea($area)) {
+                $normalized[] = $area;
+            }
+        }
+        $normalized = \array_values(\array_unique($normalized));
+
+        return $normalized !== [] ? $normalized : self::CHROME_AREAS;
+    }
+
+    private function inferChromeAreaFromSlot(?string $slotId): ?string
+    {
+        $slotId = \strtolower(\trim((string)$slotId));
+        foreach (self::CHROME_AREAS as $area) {
+            if ($slotId === $area || \str_starts_with($slotId, $area . '-') || \str_starts_with($slotId, $area . '_')) {
+                return $area;
+            }
+        }
+
+        return null;
+    }
+
+    private function nullableReleaseId(mixed $value): ?int
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return (int)$value;
+    }
+}

@@ -34,7 +34,7 @@ $extraClasses = array_values(array_filter(
 <body>
     <w:hook>Weline_Theme::backend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::backend::layouts::default::body-start</w:hook>
-    <div class="w-backend-shell">
+    <div class="w-backend-shell" data-w-component="backend-sidebar-collapse">
         <?php if ($showHeader): ?>
             <w:hook>Weline_Theme::backend::layouts::base::topbar-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="backend" type="topbar" default-option="default"/>

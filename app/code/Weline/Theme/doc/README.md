@@ -14,6 +14,7 @@
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
    - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
    - **CSS/PHTML 变量强约束（`REQ-THEME-0007`）**：[`theme-css-variables-only.md`](./theme-css-variables-only.md) — 禁止硬编码颜色/尺寸，须用主题 Token；待改清单见 [`theme-hardcoded-visual-audit.md`](./theme-hardcoded-visual-audit.md)
+   - **语义色重要程度矩阵**：[`theme-semantic-color-matrix.md`](./theme-semantic-color-matrix.md) — 角色×强度、Foundation 桥接、`data-tone` 用法、外观盘分组
    - **Surface / Text 语义（反色顶栏）**：[`theme-surface-text-roles.md`](./theme-surface-text-roles.md) — `data-surface` + `.w-text*`，禁止裸 span 黑底黑字
    - Slot：[`widget-slot-attributes.md`](./widget-slot-attributes.md)
    - Theme.js：[`Theme.js使用指南.md`](./Theme.js使用指南.md)
@@ -92,6 +93,17 @@ Theme 采用“基础 palette → Weline 语义 Token → Bootstrap adapter”�
 
 相对锚点展示的工具条 / 操作条（含主题编辑器预览内 `.widget-hover-actions`）必须使用 `anchored-float` 或 `Weline.UI.floating.attach`，详见 `doc/widgets/anchored-float.md`。
 
+### 可视化编辑器预览状态边界
+
+主题编辑器顶层页面固定使用 `shell=theme-editor`，进入页面时必须把继承自旧 Session 的 `preview_token` 清空。
+
+两条预览入口不得混用：
+
+- `#btnPreview`（后台预览 / 抛弃外框）与编辑器 iframe：只打开 `/theme/frontend/theme-preview/content`（后台登录 + typed `editor_context`）。**禁止**调用 `start-preview`，**禁止**挂载或持久化 `weline_preview_token` / 预览 Cookie / `shell=preview`，因此也不得出现真实店面「预览模式」退出浮窗。
+- `#btnFrontendPreview`（前端预览）：才允许 `postStartPreview` 生成 Token、种 HttpOnly Cookie、`persist shell=preview`，并打开真实店面 URL；此时才注入可拖动的退出/发布浮窗。
+
+退出真实预览必须经过前台 preview gateway 清理服务端上下文、Token 能力与 HttpOnly Cookie；返回后台编辑器的重定向必须是经同源校验后的绝对 HTTPS URL，避免被前台 locale 路由加上语言前缀。
+
 ### 5. 严格边界
 
 不要改：
@@ -123,6 +135,17 @@ Theme 的词典、locale 列表、翻译收集和文案解析只允许使用：
 `weline.modules.js` 的主题读取能力由
 `Weline\Theme\Api\I18n\ThemeJavascriptModuleConfigProvider` 实现 I18n 公共 Provider 契约并通过编译注册表发布；
 I18n 不反向感知 Theme。新增 I18n 集成时必须沿用这个方向，不得重新形成循环。
+
+#### 前端模板文案（强推荐 `@lang` / `<lang>`）
+
+主题 `.phtml`（layout / partial / component / widget）中的用户可见文案，**优先** `<lang>` 与 `@lang()` / `@lang{}`，**不要**在 HTML 正文或属性里写 `<?= __('...') ?>`：
+
+- 无参数时编译期生成**静态译文**，运行时无词典开销，性能远优于 `__()`
+- `@lang` 可用于 `w:*` 标签属性与内联 `<script>`；`__()` 不能用于 Taglib 属性
+- 编译期自动收集词条，便于 i18n 维护
+- **源文含逗号**（如 `支持 .ico, .png`）：必须用 `<lang>…</lang>` 或加引号的 `@lang('…')` / `@lang{"…"}`；禁止裸 `@lang{a, b}`（逗号当参数分隔 → 编译 `ParseError` / 500）
+
+`__()` 仅保留在 PHP 逻辑层（Controller / Block / `<?php ?>` 块）或向外部 `.js` 注入全局翻译变量时使用。详见 [`开发/Theme开发总指南.md`](./开发/Theme开发总指南.md) §4.1 与 [`Framework/doc/4-内置标签/01-lang标签使用指南.md`](../../Framework/doc/4-内置标签/01-lang标签使用指南.md)（摘要硬规则 +「参数分隔」专节）。
 
 ### 7. 跨模块边界
 

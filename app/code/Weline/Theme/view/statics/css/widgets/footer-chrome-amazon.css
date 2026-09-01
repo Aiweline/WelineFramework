@@ -32,9 +32,9 @@
 
 .weline-footer .footer-container {
     width: 100%;
-    max-width: var(--weline-theme-container-max, var(--weline-layout-content-max-width, 1440px));
+    max-width: var(--weline-theme-container-max, var(--weline-layout-content-max-width, var(--layout-max-width, 1440px)));
     margin: 0 auto;
-    padding: 0 var(--weline-layout-content-padding-inline, 1.25rem);
+    padding: 0 var(--weline-layout-content-padding-inline);
     box-sizing: border-box;
 }
 
@@ -51,13 +51,38 @@
     margin: 0 0 var(--spacing-4_5, 1.125rem);
 }
 
-.weline-footer .footer-section__list {
+.weline-footer .footer-section__links {
     display: flex;
     flex-direction: column;
     gap: var(--spacing-3_5, 0.875rem);
 }
 
-.weline-footer .footer-section__list a {
+.weline-footer .footer-section__link {
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.5;
+    color: var(--weline-theme-footer-link, #dddddd);
+}
+
+.weline-footer .footer-section__extras {
+    /* Nested flex with same gap; hard links are sibling bare <a> in .footer-section__links */
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-3_5, 0.875rem);
+    margin-top: 0;
+}
+
+.weline-footer .footer-section__extras:empty {
+    display: none;
+    margin-top: 0;
+}
+
+.weline-footer .footer-section__extras .widget-wrapper {
+    display: block;
+    margin: 0;
+    padding: 0;
+}
+
+.weline-footer .footer-section__extras a {
     font-size: var(--font-size-sm, 0.875rem);
     line-height: 1.5;
     color: var(--weline-theme-footer-link, #dddddd);
