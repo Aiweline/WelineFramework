@@ -38,7 +38,7 @@ $escapeAttr = static function (mixed $value): string {
 <!-- 操作栏 -->
 <div class="w-cluster" data-testid="cdn-domain-management" data-justify="between" data-align="center" style="--w-mb:var(--weline-space-4);">
     <div>
-        <a href="<?= $this->getBackendUrl('*/backend/domain/form') ?>" class="w-button" data-testid="cdn-domain-create" data-tone="primary">
+        <a href="@backend-url{'*/backend/domain/form'}" class="w-button" data-testid="cdn-domain-create" data-tone="primary">
             <w:icon name="plus" size="sm"></w:icon> <?= __('添加域名') ?>
         </a>
         <w:hook>Weline_Cdn::backend::partials::domain::toolbar-after</w:hook>
@@ -62,7 +62,7 @@ $escapeAttr = static function (mixed $value): string {
             <button type="submit" class="w-button" data-tone="primary" data-size="sm">
                 <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
             </button>
-            <a href="<?= $this->getBackendUrl('*/backend/domain/index') ?>" class="w-button" data-tone="neutral" data-size="sm">
+            <a href="@backend-url{'*/backend/domain/index'}" class="w-button" data-tone="neutral" data-size="sm">
                 <w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?>
             </a>
         </w:form>
@@ -116,7 +116,7 @@ $escapeAttr = static function (mixed $value): string {
                                 <td><?= date('Y-m-d H:i:s', $domain->getData('created_at')) ?></td>
                                 <td>
                                     <div class="w-button-group">
-                                        <a href="<?= $this->getBackendUrl('*/backend/domain/form', ['id' => $domain->getData('domain_id')]) ?>" class="w-button" data-tone="primary">
+                                        <a href="@backend-url{'*/backend/domain/form'|['id' => $domain->getData('domain_id')]}" class="w-button" data-tone="primary">
                                             <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
                                         </a>
                                         <button type="button" class="w-button btn-<?= $domain->getData('enabled') ? 'warning' : 'success' ?>" data-cdn-domain-action="toggle-enable" data-domain-id="<?= $escapeAttr($domain->getData('domain_id')) ?>" data-enabled="<?= $domain->getData('enabled') ? '0' : '1' ?>">
@@ -180,8 +180,8 @@ $escapeAttr = static function (mixed $value): string {
 (function() {
     'use strict';
     
-    var toggleEnableUrl = <?= $jsonForScript($this->getBackendUrl('*/backend/domain/toggleEnable')) ?>;
-    var clearCacheUrl = <?= $jsonForScript($this->getBackendUrl('*/backend/domain/clearCache')) ?>;
+    var toggleEnableUrl = "@backend-url{'*/backend/domain/toggleEnable'}";
+    var clearCacheUrl = "@backend-url{'*/backend/domain/clearCache'}";
 
     function confirmAction(message, onConfirm) {
         Weline.UI.dialog.confirm(message).then(function(confirmed) {
