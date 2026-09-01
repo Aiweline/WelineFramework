@@ -53,10 +53,8 @@
     }
 
     /**
-     * Website-scoped cookies use WELINE_USER_LANG_w{id}. Server Cookie::get only
-     * reads the qualified name and expires the bare alias — writing only
-     * WELINE_USER_LANG leaves _w0 stuck on the previous locale, so switching
-     * back to the default language (path "/") appears broken.
+     * Collect bare + website-scoped WELINE_USER_LANG* names so legacy cookies
+     * can be expired. Language identity is path-only; cookies are not written.
      */
     function detectCookieNameSuffix() {
         const match = document.cookie.match(
@@ -97,39 +95,45 @@
         return names;
     }
 
-    function readLanguagePreference() {
+    function expireLanguagePreferenceCookies() {
+        const past = 'Thu, 01 Jan 1970 00:00:00 GMT';
+        const host = String(window.location.hostname || '').trim();
         const names = resolvePreferenceCookieNames('WELINE_USER_LANG');
         for (let i = 0; i < names.length; i++) {
-            const value = readCookieValue(names[i]);
-            if (value) {
-                return value;
+            const key = names[i];
+            document.cookie = key + '=;expires=' + past + ';path=/;SameSite=Lax';
+            if (host) {
+                document.cookie = key + '=;expires=' + past + ';path=/;domain=' + host + ';SameSite=Lax';
+                if (!host.startsWith('.') && host.indexOf('.') > 0) {
+                    document.cookie = key + '=;expires=' + past + ';path=/;domain=.' + host + ';SameSite=Lax';
+                }
             }
         }
-        return '';
     }
 
+    /**
+     * Path-only language: clear legacy cookies/localStorage; do not set preference.
+     */
     function writeLanguagePreference(lang) {
+        void lang;
         try {
             if (window.localStorage) {
-                localStorage.setItem('weline_user_lang', lang);
+                localStorage.removeItem('weline_user_lang');
                 localStorage.removeItem('api_doc_locale');
                 localStorage.removeItem('WELINE_USER_LANG');
             }
         } catch (error) {
             // localStorage can be unavailable in privacy modes.
         }
-        const names = resolvePreferenceCookieNames('WELINE_USER_LANG');
-        for (let i = 0; i < names.length; i++) {
-            writeCookieValue(names[i], lang, 365);
-        }
+        expireLanguagePreferenceCookies();
     }
 
     /**
      * 获取当前语言代码
-     * 优先级：URL 路径段 > document data-lang/lang > query locale/lang > Cookie > 主题配置
+     * 优先级：URL 路径段 > query locale/lang > document data-lang/lang > 主题配置
+     * （不再读取 WELINE_USER_LANG Cookie）
      *
-     * 主题预览 iframe 无路径语言段，但服务端已用请求级 override 写出 data-lang；
-     * 若仍优先 Cookie，updateCurrentLanguageDisplay 会把切换器钉回站外偏好语言。
+     * 主题预览 iframe 无路径语言段，但服务端已用请求级 override 写出 data-lang。
      */
     function normalizeLangCode(value) {
         return String(value || '').trim().replace(/-/g, '_');
@@ -178,19 +182,14 @@
             return pathLang;
         }
 
-        const docLang = readDocumentLanguage();
-        if (docLang && isLanguageOfferedOnPage(docLang)) {
-            return docLang;
-        }
-
         const queryLang = readQueryLanguage();
         if (queryLang && isLanguageOfferedOnPage(queryLang)) {
             return queryLang;
         }
 
-        const cookieLang = readLanguagePreference();
-        if (cookieLang && isLanguageOfferedOnPage(cookieLang)) {
-            return cookieLang;
+        const docLang = readDocumentLanguage();
+        if (docLang && isLanguageOfferedOnPage(docLang)) {
+            return docLang;
         }
 
         const config = window.__WelineThemeConfig || {};

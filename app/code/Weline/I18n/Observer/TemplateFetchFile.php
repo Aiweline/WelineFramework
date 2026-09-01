@@ -34,7 +34,15 @@ class TemplateFetchFile implements ObserverInterface
         }
 
         $content = @file_get_contents($filename);
-        if ($content === false || strpos($content, 'declare') === false) {
+        if ($content === false) {
+            return;
+        }
+        // 与 JsModuleParser 对齐：纯 data-weline-load 模板也要抽词，不能只认 "declare"
+        if (
+            !str_contains($content, 'declare')
+            && !str_contains($content, 'data-weline-load')
+            && !str_contains($content, 'data-weline-declare')
+        ) {
             return;
         }
 

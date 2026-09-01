@@ -113,6 +113,7 @@ final class CountryLocaleLifecycleInstallActivatesContractTest extends TestCase
         self::assertStringContainsString('LanguageSwitcher::clearProcessCaches()', $source);
         self::assertStringContainsString('LanguageSelect::clearProcessCaches()', $source);
         self::assertStringContainsString('Url::bumpWebsiteParserSitesVersion()', $source);
+        self::assertStringContainsString("dispatch('Weline_I18n::locale_catalog_changed')", $source);
 
         self::assertMatchesRegularExpression(
             '/public function activateLocale\(string \$localeCode\): array\s*\{[\s\S]*?syncLocalsStateForLocale\(\$localeCode, true, true\);[\s\S]*?invalidateLocaleCatalogCaches\(\);[\s\S]*?\n    \}/',

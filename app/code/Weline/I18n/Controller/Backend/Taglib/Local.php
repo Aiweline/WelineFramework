@@ -12,115 +12,66 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Controller\Backend\Taglib;
 
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
-use Weline\I18n\Model\I18n;
+use Weline\I18n\Service\TaglibLocalDescriptionNormalizer;
+use Weline\I18n\Service\TaglibLocalFormService;
 
 class Local extends \Weline\Framework\App\Controller\BackendController
 {
-    /** 翻译窗口在 iframe 中打开，使用 blank 布局避免重复套用后台框架 */
+    /** 兼容独立打开翻译页时使用 blank 布局 */
     protected ?string $layoutType = 'default.blank';
 
     public function get()
     {
-        /**@var I18n $i18nModel */
-        $i18nModel = ObjectManager::getInstance(I18n::class);
-        $localsModel = $i18nModel->getActiveLocalsModel(Cookie::getLangLocal());
-        if ($search = $this->request->getGet('search', '')) {
-            $localsModel->where("concat(" . implode(',', $localsModel->getModelFields()) . ")", '%' . $search . '%', 'like');
+        if ($this->request->isIframe()) {
+            $this->suppressEmbedChrome();
         }
-        $localsModel->pagination()->select();
-        $locals = $localsModel->fetchArray();
-        if (empty($locals)) {
-            $url = $this->request->getUrlBuilder()->getUrl('*/backend/countries');
-            $this->getMessageManager()->addError(__('没有找到任何本地化数据！<a target="_blank" href="%{url}">前往I18n安装启用</a>搜索本地语言：%{search} 或者手动刷新页面：<a href="%{refresh}">刷新</a>', [
-                'search'=>$search,
-                'url'=>$url,
-                'refresh'=>$this->request->getUrlBuilder()->getCurrentUrl()
-            ]));
+
+        $modelName = (string)$this->request->getGet('model', '');
+        $value = (string)$this->request->getGet('value', '');
+        $field = (string)$this->request->getGet('field', '');
+        $id = (string)$this->request->getGet('id', '');
+        $search = (string)$this->request->getGet('search', '');
+
+        /** @var TaglibLocalFormService $formService */
+        $formService = ObjectManager::getInstance(TaglibLocalFormService::class);
+        $formPayload = $formService->buildFormPayload($modelName, $field, $id, $value, $search);
+        if (($formPayload['success'] ?? false) !== true) {
+            $this->getMessageManager()->addError((string)($formPayload['message'] ?? __('加载翻译表单失败')));
             $this->redirect(404);
         }
-        $this->assign('local_pagination', $localsModel->getPagination());
-        $modelName = $this->request->getGet('model');
-        if (empty($modelName)) {
-            $this->getMessageManager()->addError(__('请设置local标签model属性！'));
-            $this->redirect(404);
-        }
-        $value = $this->request->getGet('value');
-        if (empty($value)) {
-            $this->getMessageManager()->addError(__('请传输local标签值！'));
-            $this->redirect(404);
-        }
-        $field = $this->request->getGet('field');
-        if (empty($field)) {
-            $this->getMessageManager()->addError(__('请选择一个字段！'));
-            $this->redirect(404);
-        }
-        $id = $this->request->getGet('id');
-        if (empty($id)) {
-            $this->getMessageManager()->addError(__('请设置local标签id属性！'));
-            $this->redirect(404);
-        }
-        
-        // 判断字段是否是 config 嵌套字段（如：config.demo.title）
-        $isConfigField = str_starts_with($field, 'config.');
-        $configPath = $isConfigField ? substr($field, 7) : ''; // 去掉 "config." 前缀
-        
-        /**@var \Weline\I18n\LocalModel $model */
-        $model = ObjectManager::getInstance($modelName);
-    //    $local_codes = [];
-    //    foreach ($locals as $local) {
-    //        $local_codes[] = $local['code'];
-    //        $model->where($model::schema_fields_local_code, $local['code'], '=', 'or');
-    //    }
-        $local_descriptions = $model->reset()
-            ->where($model::schema_fields_ID, $id)
-            ->select()
-            ->fetchArray();
-        
-        // 处理 config 嵌套字段的数据提取
-        if ($isConfigField) {
-            foreach ($local_descriptions as &$local_description) {
-                $configData = isset($local_description['config']) ? json_decode($local_description['config'], true) : [];
-                $local_description[$field] = $this->getNestedValue($configData, $configPath) ?? $value;
+
+        $data = is_array($formPayload['data'] ?? null) ? $formPayload['data'] : [];
+        $localDescriptions = [];
+        foreach ((array)($data['locales'] ?? []) as $localeRow) {
+            if (!is_array($localeRow)) {
+                continue;
             }
-            unset($local_description);
+            $localDescriptions[] = [
+                $data['id_field'] ?? 'id' => $id,
+                'local_code' => (string)($localeRow['local_code'] ?? ''),
+                $field => (string)($localeRow['value'] ?? ''),
+                'local' => is_array($localeRow['local'] ?? null) ? $localeRow['local'] : [],
+            ];
         }
-        
-        foreach ($locals as $local) {
-            $in_ = false;
-            foreach ($local_descriptions as &$local_description) {
-                if ($local_description[$model::schema_fields_local_code] == $local['code']) {
-                    $local_description['local'] = $local;
-                    $in_ = true;
-                    continue;
-                }
-            }
-            if (!$in_) {
-                $local_descriptions[] = [
-                    $model::schema_fields_local_code => $local['code'],
-                    $field => $value,
-                    $model::schema_fields_ID => $id,
-                    'local' => $local
-                ];
-            }else{
-                foreach ($local_descriptions as &$local_description) {
-                    if ($local_description[$model::schema_fields_local_code] == $local['code']) {
-                        if(empty($local_description[$field])) {
-                            $local_description[$field] = $value;
-                        }
-                        break;
-                    }
-                }
-            }
-        }
-        $this->assign('local_descriptions', $local_descriptions);
+
+        $this->assign('local_descriptions', $localDescriptions);
         $this->assign('translate_field', $field);
-        $this->assign('id_field', $model::schema_fields_ID);
+        $this->assign('id_field', (string)($data['id_field'] ?? 'id'));
         $this->assign('value', $value);
         $this->assign('id', $id);
+        $this->assign('model', $modelName);
+        $this->assign('field', $field);
+        $this->assign('is_embed', $this->request->isIframe());
+        $this->assign('req', [
+            'search' => $search,
+            'model' => $modelName,
+            'id' => $id,
+            'value' => $value,
+            'field' => $field,
+        ]);
         $params = $this->request->getGet();
-        $action = $this->request->getUrlBuilder()->getUrl('i18n/backend/taglib/local', $params);
+        $action = $this->request->getUrlBuilder()->getBackendUrl('i18n/backend/taglib/local', $params);
         $this->assign('action', $action);
         return $this->fetch();
     }
@@ -128,23 +79,23 @@ class Local extends \Weline\Framework\App\Controller\BackendController
     public function post()
     {
         $isAsyncRequest = $this->isAsyncRequest();
-        $modelName = $this->request->getGet('model');
-        if (empty($modelName)) {
+        $modelName = $this->resolveTaglibParam('model');
+        if ($modelName === '') {
             $this->getMessageManager()->addError(__('请设置local标签model属性！'));
             $this->redirect(404);
         }
-        $value = $this->request->getGet('value');
-        if (empty($value)) {
+        $value = $this->resolveTaglibParam('value');
+        if ($value === '') {
             $this->getMessageManager()->addError(__('请传输local标签值！'));
             $this->redirect(404);
         }
-        $field = $this->request->getGet('field');
-        if (empty($field)) {
+        $field = $this->resolveTaglibParam('field');
+        if ($field === '') {
             $this->getMessageManager()->addError(__('请选择一个字段！'));
             $this->redirect(404);
         }
-        $id = $this->request->getGet('id');
-        if (empty($id)) {
+        $id = $this->resolveTaglibParam('id');
+        if ($id === '') {
             $this->getMessageManager()->addError(__('请设置local标签id属性！'));
             $this->redirect(404);
         }
@@ -155,10 +106,30 @@ class Local extends \Weline\Framework\App\Controller\BackendController
         
         # 更新翻译
         $descriptions = $this->request->getPost('description');
-        $insertDesriptions = [];
-        
+        if (!is_array($descriptions) || $descriptions === []) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请填写翻译内容'), []);
+            }
+            $this->getMessageManager()->addError(__('请填写翻译内容'));
+            return $this->get();
+        }
         /**@var \Weline\I18n\LocalModel $model */
         $model = ObjectManager::getInstance($modelName);
+        $descriptions = TaglibLocalDescriptionNormalizer::prepareRows(
+            $model,
+            $descriptions,
+            $id,
+            $isConfigField ? [$field] : [],
+        );
+        if ($descriptions === []) {
+            if ($isAsyncRequest) {
+                return $this->asyncJsonResponse(false, (string)__('请填写翻译内容'), []);
+            }
+            $this->getMessageManager()->addError(__('请填写翻译内容'));
+            return $this->get();
+        }
+
+        $insertDesriptions = [];
         
         if ($isConfigField) {
             // 处理 config 嵌套字段：需要更新 JSON 数据
@@ -183,16 +154,23 @@ class Local extends \Weline\Framework\App\Controller\BackendController
                 // 更新描述数据
                 $description['config'] = json_encode($configData, JSON_UNESCAPED_UNICODE);
                 unset($description[$field]); // 移除虚拟字段
-                $insertDesriptions[] = $description;
+                $insertDesriptions[] = TaglibLocalDescriptionNormalizer::prepareRows($model, [$description], $id)[0] ?? [];
+            }
+
+            $insertDesriptions = array_values(array_filter($insertDesriptions));
+            if ($insertDesriptions === []) {
+                if ($isAsyncRequest) {
+                    return $this->asyncJsonResponse(false, (string)__('请填写翻译内容'), []);
+                }
+                $this->getMessageManager()->addError(__('请填写翻译内容'));
+                return $this->get();
             }
             
             // 使用 config 字段更新
             $model->reset()->insert($insertDesriptions, $model::schema_fields_ID . ',local_code', 'config')->fetch();
         } else {
             // 处理普通字段
-            foreach ($descriptions as $description) {
-                $insertDesriptions[] = $description;
-            }
+            $insertDesriptions = $descriptions;
             $model->reset()->insert($insertDesriptions, $model::schema_fields_ID . ',local_code', $field)->fetch();
         }
 
@@ -222,6 +200,47 @@ class Local extends \Weline\Framework\App\Controller\BackendController
             'message' => $message,
             'data' => $data,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
+    private function suppressEmbedChrome(): void
+    {
+        $meta = $this->getTemplate()->getData('meta');
+        $meta = is_array($meta) ? $meta : [];
+        $meta['showPageHeader'] = false;
+        $meta['showMessages'] = false;
+        $meta['class'] = trim(trim((string)($meta['class'] ?? '')) . ' w-local-translation-embed');
+        $this->assign('meta', $meta);
+        $this->assign('layoutShowPageHeader', false);
+        $this->assign('layoutShowMessages', false);
+    }
+
+    private function resolveTaglibParam(string $name): string
+    {
+        $post = $this->request->getPost($name, '');
+        if (is_array($post)) {
+            foreach ($post as $candidate) {
+                if (is_scalar($candidate) && trim((string)$candidate) !== '') {
+                    return trim((string)$candidate);
+                }
+            }
+            return '';
+        }
+        $post = trim((string)$post);
+        if ($post !== '') {
+            return $post;
+        }
+
+        $get = $this->request->getGet($name, '');
+        if (is_array($get)) {
+            foreach ($get as $candidate) {
+                if (is_scalar($candidate) && trim((string)$candidate) !== '') {
+                    return trim((string)$candidate);
+                }
+            }
+            return '';
+        }
+
+        return trim((string)$get);
     }
     
     /**

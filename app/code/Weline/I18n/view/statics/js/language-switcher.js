@@ -32,15 +32,15 @@ function expireCookieVariants(name) {
 
 function writeLanguagePreference(locale, websiteId = '') {
     try {
-        localStorage.setItem('weline_user_lang', locale);
+        localStorage.removeItem('weline_user_lang');
         localStorage.removeItem('api_doc_locale');
         localStorage.removeItem('WELINE_USER_LANG');
     } catch (_error) {
     }
-    const expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
+    // Path-only language: expire legacy cookies; do not write a preference.
+    void locale;
     cookieNames(websiteId).forEach((name) => {
         expireCookieVariants(name);
-        document.cookie = `${name}=${encodeURIComponent(locale)};expires=${expires};path=/;SameSite=Lax`;
     });
 }
 
@@ -574,10 +574,14 @@ export function register(UI) {
                 empty.hidden = term === '' || visibleCount > 0;
             }
             const divider = panel.querySelector('.w-menu__divider');
+            const footer = panel.querySelector('.w-language-switcher__footer');
             if (divider instanceof HTMLElement && requestButton instanceof HTMLElement) {
                 const hideExtras = visibleCount === 0 && term !== '';
                 divider.hidden = hideExtras;
                 requestButton.hidden = hideExtras;
+                if (footer instanceof HTMLElement) {
+                    footer.hidden = hideExtras;
+                }
             }
         };
 

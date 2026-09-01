@@ -45,11 +45,20 @@ class AiTranslationService
         private readonly Dictionary $dictionary,
         private readonly LocaleDictionary $localeDictionary,
         private readonly I18nAiTranslationAdapter $translationAdapter,
-        private readonly AiTranslationPublisher $publisher
+        private readonly AiTranslationPublisher $publisher,
+        private readonly AiTranslationBatchLock $batchLock,
     ) {
     }
 
     /**
+     * @param array{
+     *     word_filter?: list<string>,
+     *     word_prefix?: string,
+     *     allow_key_only_words?: bool,
+     *     owner?: string,
+     *     module_name?: string,
+     *     skip_lock?: bool,
+     * } $scope
      * @return array<string, mixed>
      */
     public function batchTranslateDictionary(
@@ -57,14 +66,16 @@ class AiTranslationService
         string $sourceLocale = AiTranslationConfig::DEFAULT_SOURCE_LOCALE,
         int $batchSize = AiTranslationConfig::DEFAULT_BATCH_SIZE,
         string $strategy = AiTranslationConfig::DEFAULT_STRATEGY,
-        bool $publish = true
+        bool $publish = true,
+        array $scope = [],
     ): array {
         $startTime = microtime(true);
         $targetLocale = $this->normalizeLocaleCode($targetLocale);
         $sourceLocale = $this->normalizeLocaleCode($sourceLocale);
         $batchSize = max(1, min(AiTranslationConfig::MAX_BATCH_SIZE, $batchSize));
+        $scope = $this->normalizeBatchScope($scope);
 
-        if ($targetLocale === '' || $targetLocale === $sourceLocale) {
+        if ($targetLocale === '') {
             return [
                 'success' => true,
                 'translated' => 0,
@@ -74,12 +85,11 @@ class AiTranslationService
                 'remaining' => 0,
                 'duration' => 0,
                 'errors' => [],
-                'message' => (string)__('目标语言为空或等于源语言，已跳过。'),
+                'message' => (string)__('目标语言为空，已跳过。'),
             ];
         }
 
-        $words = $this->getUntranslatedWords($targetLocale, $batchSize, $sourceLocale);
-        if ($words === []) {
+        if ($targetLocale === $sourceLocale && !$scope['allow_key_only_words']) {
             return [
                 'success' => true,
                 'translated' => 0,
@@ -88,6 +98,76 @@ class AiTranslationService
                 'total' => 0,
                 'remaining' => 0,
                 'duration' => 0,
+                'errors' => [],
+                'message' => (string)__('目标语言等于源语言，已跳过。'),
+            ];
+        }
+
+        $lockHandle = null;
+        if (!$scope['skip_lock']) {
+            $lockHandle = $this->batchLock->tryAcquire($targetLocale, (string)$scope['owner']);
+            if ($lockHandle === null) {
+                return [
+                    'success' => true,
+                    'translated' => 0,
+                    'skipped' => 0,
+                    'failed' => 0,
+                    'total' => 0,
+                    'remaining' => $this->countScopedUntranslatedWords($targetLocale, $sourceLocale, $scope),
+                    'duration' => round(microtime(true) - $startTime, 2),
+                    'errors' => [],
+                    'message' => (string)__(
+                        '语言 %{1} 已有翻译批次在运行，本批已跳过以避免重复翻译。',
+                        [$targetLocale],
+                    ),
+                ];
+            }
+        }
+
+        try {
+            return $this->executeBatchTranslateDictionary(
+                $targetLocale,
+                $sourceLocale,
+                $batchSize,
+                $strategy,
+                $publish,
+                $scope,
+                $startTime,
+            );
+        } finally {
+            $this->batchLock->release($lockHandle);
+        }
+    }
+
+    /**
+     * @param array{
+     *     word_filter: list<string>,
+     *     word_prefix: string,
+     *     allow_key_only_words: bool,
+     *     owner: string,
+     *     skip_lock: bool,
+     * } $scope
+     * @return array<string, mixed>
+     */
+    private function executeBatchTranslateDictionary(
+        string $targetLocale,
+        string $sourceLocale,
+        int $batchSize,
+        string $strategy,
+        bool $publish,
+        array $scope,
+        float $startTime,
+    ): array {
+        $words = $this->resolveBatchWords($targetLocale, $sourceLocale, $batchSize, $scope);
+        if ($words === []) {
+            return [
+                'success' => true,
+                'translated' => 0,
+                'skipped' => 0,
+                'failed' => 0,
+                'total' => 0,
+                'remaining' => 0,
+                'duration' => round(microtime(true) - $startTime, 2),
                 'errors' => [],
                 'message' => (string)__('没有待翻译词。'),
             ];
@@ -110,7 +190,7 @@ class AiTranslationService
                     'skipped' => 0,
                     'failed' => count($words),
                     'total' => count($words),
-                    'remaining' => $this->countUntranslatedWords($targetLocale, $sourceLocale),
+                    'remaining' => $this->countScopedUntranslatedWords($targetLocale, $sourceLocale, $scope),
                     'duration' => round(microtime(true) - $startTime, 2),
                     'errors' => $errors,
                     'message' => $message,
@@ -120,6 +200,12 @@ class AiTranslationService
             $translations = $this->normalizeTranslations((array)$response['translations'], $words);
             foreach ($words as $word) {
                 $translation = trim((string)($translations[$word] ?? ''));
+                // 乱码只跳过本条，不把整批标失败，其余词继续保存。
+                if (I18nCsvCodec::isGarbledText($word) || I18nCsvCodec::isGarbledText($translation)) {
+                    $skipped++;
+                    $errors[] = (string)__('译文乱码，已跳过本条（不影响本批其余词）：%{1}', [$word]);
+                    continue;
+                }
                 $validationError = $this->validateTranslation($word, $translation);
                 if ($validationError !== null) {
                     $failed++;
@@ -128,7 +214,11 @@ class AiTranslationService
                 }
 
                 try {
-                    $this->saveTranslation($word, $translation, $targetLocale, true, $this->getCandidateSourceModule($word));
+                    $sourceModule = $this->getCandidateSourceModule($word);
+                    if ($sourceModule === '' && $scope['module_name'] !== '') {
+                        $sourceModule = $scope['module_name'];
+                    }
+                    $this->saveTranslation($word, $translation, $targetLocale, true, $sourceModule);
                     $translated++;
                 } catch (\Throwable $throwable) {
                     $failed++;
@@ -144,18 +234,20 @@ class AiTranslationService
                 }
             }
 
-            $remaining = $this->countUntranslatedWords($targetLocale, $sourceLocale);
+            $remaining = $this->countScopedUntranslatedWords($targetLocale, $sourceLocale, $scope);
             $duration = round(microtime(true) - $startTime, 2);
+            // 乱码计入 skipped，不抬高 failed，避免单条乱码把整批 success 打成 false。
             $success = $translated > 0 || $failed === 0;
 
             $this->sendSystemMessage(
                 $success ? (string)__('I18n AI翻译完成') : (string)__('I18n AI翻译失败'),
                 (string)__(
-                    "目标语言：%{locale}\n本批词数：%{total}\n成功：%{translated}\n失败：%{failed}\n剩余：%{remaining}\n自动发布：%{published}\n耗时：%{duration}s",
+                    "目标语言：%{locale}\n本批词数：%{total}\n成功：%{translated}\n跳过：%{skipped}\n失败：%{failed}\n剩余：%{remaining}\n自动发布：%{published}\n耗时：%{duration}s",
                     [
                         'locale' => $targetLocale,
                         'total' => (string)count($words),
                         'translated' => (string)$translated,
+                        'skipped' => (string)$skipped,
                         'failed' => (string)$failed,
                         'remaining' => (string)$remaining,
                         'published' => $published ? 'yes' : 'no',
@@ -174,7 +266,10 @@ class AiTranslationService
                 'remaining' => $remaining,
                 'duration' => $duration,
                 'errors' => $errors,
-                'message' => (string)__('成功翻译 %{1} 个词，失败 %{2} 个词。', [$translated, $failed]),
+                'message' => (string)__(
+                    '成功翻译 %{1} 个词，跳过 %{2} 个词（含乱码单条），失败 %{3} 个词。',
+                    [$translated, $skipped, $failed]
+                ),
             ];
         } catch (\Throwable $throwable) {
             $message = $throwable->getMessage();
@@ -190,7 +285,7 @@ class AiTranslationService
                 'skipped' => $skipped,
                 'failed' => count($words),
                 'total' => count($words),
-                'remaining' => $this->countUntranslatedWords($targetLocale, $sourceLocale),
+                'remaining' => $this->countScopedUntranslatedWords($targetLocale, $sourceLocale, $scope),
                 'duration' => round(microtime(true) - $startTime, 2),
                 'errors' => [$message],
                 'message' => $message,
@@ -199,22 +294,161 @@ class AiTranslationService
     }
 
     /**
+     * @param array{
+     *     word_filter: list<string>,
+     *     word_prefix: string,
+     *     allow_key_only_words: bool,
+     *     owner: string,
+     *     skip_lock: bool,
+     * } $scope
+     * @return list<string>
+     */
+    private function resolveBatchWords(
+        string $targetLocale,
+        string $sourceLocale,
+        int $batchSize,
+        array $scope,
+    ): array {
+        if ($scope['word_filter'] !== []) {
+            $words = [];
+            foreach ($scope['word_filter'] as $word) {
+                $word = trim((string)$word);
+                if ($word === '') {
+                    continue;
+                }
+                if (!$this->shouldTranslateWord($word, $targetLocale, $scope['allow_key_only_words'])) {
+                    continue;
+                }
+                $words[] = $word;
+                if (count($words) >= $batchSize) {
+                    break;
+                }
+            }
+
+            return $words;
+        }
+
+        return $this->getUntranslatedWords(
+            $targetLocale,
+            $batchSize,
+            $sourceLocale,
+            $scope['word_prefix'],
+            $scope['allow_key_only_words'],
+        );
+    }
+
+    private function isReservedForModuleScopedTranslation(string $word): bool
+    {
+        return str_starts_with($word, '@meta::');
+    }
+
+    /**
+     * @param array{
+     *     word_filter?: list<string>,
+     *     word_prefix?: string,
+     *     allow_key_only_words?: bool,
+     *     owner?: string,
+     *     module_name?: string,
+     *     skip_lock?: bool,
+     * } $scope
+     * @return array{
+     *     word_filter: list<string>,
+     *     word_prefix: string,
+     *     allow_key_only_words: bool,
+     *     owner: string,
+     *     skip_lock: bool,
+     * }
+     */
+    private function normalizeBatchScope(array $scope): array
+    {
+        $wordFilter = [];
+        if (isset($scope['word_filter']) && is_array($scope['word_filter'])) {
+            foreach ($scope['word_filter'] as $word) {
+                $word = trim((string)$word);
+                if ($word !== '') {
+                    $wordFilter[] = $word;
+                }
+            }
+        } elseif (isset($scope['words']) && is_array($scope['words'])) {
+            foreach ($scope['words'] as $word) {
+                $word = trim((string)$word);
+                if ($word !== '') {
+                    $wordFilter[] = $word;
+                }
+            }
+        }
+
+        return [
+            'word_filter' => array_values(array_unique($wordFilter)),
+            'word_prefix' => trim((string)($scope['word_prefix'] ?? '')),
+            'allow_key_only_words' => !empty($scope['allow_key_only_words'])
+                || (string)($scope['domain'] ?? '') === 'google_taxonomy',
+            'owner' => trim((string)($scope['owner'] ?? '')),
+            'module_name' => trim((string)($scope['module_name'] ?? '')),
+            'skip_lock' => !empty($scope['skip_lock']),
+        ];
+    }
+
+    /**
+     * @param array{
+     *     word_filter: list<string>,
+     *     word_prefix: string,
+     *     allow_key_only_words: bool,
+     *     owner: string,
+     *     skip_lock: bool,
+     * } $scope
+     */
+    private function countScopedUntranslatedWords(
+        string $targetLocale,
+        string $sourceLocale,
+        array $scope,
+    ): int {
+        if ($scope['word_filter'] !== []) {
+            $missing = 0;
+            foreach ($scope['word_filter'] as $word) {
+                $word = trim((string)$word);
+                if ($word !== '' && $this->shouldTranslateWord($word, $targetLocale, $scope['allow_key_only_words'])) {
+                    $missing++;
+                }
+            }
+
+            return $missing;
+        }
+
+        return $this->countUntranslatedWords(
+            $targetLocale,
+            $sourceLocale,
+            $scope['word_prefix'],
+            $scope['allow_key_only_words'],
+        );
+    }
+
+    /**
      * @return list<string>
      */
     public function getUntranslatedWords(
         string $targetLocale,
         int $limit,
-        string $sourceLocale = AiTranslationConfig::DEFAULT_SOURCE_LOCALE
+        string $sourceLocale = AiTranslationConfig::DEFAULT_SOURCE_LOCALE,
+        string $wordPrefix = '',
+        bool $allowKeyOnlyWords = false,
     ): array
     {
         $targetLocale = $this->normalizeLocaleCode($targetLocale);
         $sourceLocale = $this->normalizeLocaleCode($sourceLocale);
         $limit = max(1, min(AiTranslationConfig::MAX_BATCH_SIZE, $limit));
+        $wordPrefix = trim($wordPrefix);
         $words = [];
 
         foreach ($this->collectCandidateWords($targetLocale, $sourceLocale) as $word) {
             $word = (string)$word;
-            if (!$this->shouldTranslateWord($word, $targetLocale)) {
+            if ($wordPrefix !== '' && !str_starts_with($word, $wordPrefix)) {
+                continue;
+            }
+            if ($wordPrefix === '' && $this->isReservedForModuleScopedTranslation($word)) {
+                continue;
+            }
+            if (!$this->shouldTranslateWord($word, $targetLocale, $allowKeyOnlyWords)) {
                 continue;
             }
             $words[] = $word;
@@ -228,22 +462,36 @@ class AiTranslationService
 
     public function countUntranslatedWords(
         string $targetLocale,
-        string $sourceLocale = AiTranslationConfig::DEFAULT_SOURCE_LOCALE
+        string $sourceLocale = AiTranslationConfig::DEFAULT_SOURCE_LOCALE,
+        string $wordPrefix = '',
+        bool $allowKeyOnlyWords = false,
     ): int
     {
         $targetLocale = $this->normalizeLocaleCode($targetLocale);
         $sourceLocale = $this->normalizeLocaleCode($sourceLocale);
+        if ($targetLocale === '' || $targetLocale === $sourceLocale) {
+            return 0;
+        }
+
+        $wordPrefix = trim($wordPrefix);
         $missing = 0;
 
         foreach ($this->collectCandidateWords($targetLocale, $sourceLocale) as $word) {
             $word = (string)$word;
-            if ($this->shouldTranslateWord($word, $targetLocale)) {
+            if ($wordPrefix !== '' && !str_starts_with($word, $wordPrefix)) {
+                continue;
+            }
+            if ($wordPrefix === '' && $this->isReservedForModuleScopedTranslation($word)) {
+                continue;
+            }
+            if ($this->shouldTranslateWord($word, $targetLocale, $allowKeyOnlyWords)) {
                 $missing++;
             }
         }
 
         return $missing;
     }
+
 
     /**
      * @return list<string>
@@ -397,24 +645,7 @@ class AiTranslationService
             return $this->csvWordCache[$cacheKey];
         }
 
-        $this->csvWordCache[$cacheKey] = [];
-        if (!is_file($csvFile)) {
-            return [];
-        }
-
-        $handle = @fopen($csvFile, 'r');
-        if ($handle === false) {
-            return [];
-        }
-
-        while (($row = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-            $word = trim((string)($row[0] ?? ''));
-            $translate = trim((string)($row[1] ?? ''));
-            if ($word !== '') {
-                $this->csvWordCache[$cacheKey][$word] = $translate;
-            }
-        }
-        fclose($handle);
+        $this->csvWordCache[$cacheKey] = \Weline\I18n\Service\I18nCsvCodec::readWords($csvFile);
 
         return $this->csvWordCache[$cacheKey];
     }
@@ -561,9 +792,16 @@ class AiTranslationService
         return isset($index[$word]);
     }
 
-    private function shouldTranslateWord(string $word, string $targetLocale): bool
+    private function shouldTranslateWord(
+        string $word,
+        string $targetLocale,
+        bool $allowKeyOnlyWords = false,
+    ): bool
     {
-        return $this->hasTranslatableText($word)
+        $hasTranslatableText = $this->hasTranslatableText($word)
+            || ($allowKeyOnlyWords && str_starts_with($word, 'google_taxonomy.'));
+
+        return $hasTranslatableText
             && !$this->translationExists($word, $targetLocale)
             && !$this->hasGeneratedTranslation($word, $targetLocale)
             && !$this->hasCsvTranslation($word, $targetLocale);
@@ -584,21 +822,39 @@ class AiTranslationService
         }
 
         $this->localeTranslatedWordIndex[$localeCode] = [];
-        $rows = $this->localeDictionary->clear()->reset()
-            ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
-            ->select()
-            ->fetchArray();
+        $page = 1;
+        while (true) {
+            $offset = ($page - 1) * self::DEFAULT_SCAN_PAGE_SIZE;
+            $rows = $this->localeDictionary->clear()->reset()
+                ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localeCode)
+                ->limit(self::DEFAULT_SCAN_PAGE_SIZE, $offset)
+                ->select()
+                ->fetchArray();
 
-        foreach ((array)$rows as $row) {
-            $word = trim((string)($row[LocaleDictionary::schema_fields_WORD] ?? ''));
-            $translate = trim((string)($row[LocaleDictionary::schema_fields_TRANSLATE] ?? ''));
-            if ($word !== '' && $translate !== '' && $translate !== $word) {
-                $this->localeTranslatedWordIndex[$localeCode][$word] = true;
+            if (empty($rows)) {
+                break;
             }
+
+            foreach ((array)$rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $word = trim((string)($row[LocaleDictionary::schema_fields_WORD] ?? ''));
+                $translate = trim((string)($row[LocaleDictionary::schema_fields_TRANSLATE] ?? ''));
+                if ($word !== '' && $translate !== '' && $translate !== $word) {
+                    $this->localeTranslatedWordIndex[$localeCode][$word] = true;
+                }
+            }
+
+            if (count($rows) < self::DEFAULT_SCAN_PAGE_SIZE) {
+                break;
+            }
+            $page++;
         }
 
         return $this->localeTranslatedWordIndex[$localeCode];
     }
+
 
     private function hasGeneratedTranslation(string $word, string $localeCode): bool
     {
@@ -728,6 +984,9 @@ class AiTranslationService
 
     private function validateTranslation(string $word, string $translation): ?string
     {
+        if (I18nCsvCodec::isGarbledText($word) || I18nCsvCodec::isGarbledText($translation)) {
+            return (string)__('译文乱码，已跳过本条：%{1}', [$word]);
+        }
         if ($translation === '') {
             return (string)__('翻译为空，已跳过：%{1}', [$word]);
         }

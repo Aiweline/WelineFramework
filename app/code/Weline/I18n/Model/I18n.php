@@ -10,6 +10,8 @@ use Weline\Framework\App\Env;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Phrase\DictionaryCompiler;
+use Weline\Framework\Phrase\DictionaryWordValidator;
 use Weline\Framework\Registry\Service\RegistryProgress;
 use Weline\Framework\System\File\Data\File;
 use Weline\I18n\Config\Reader;
@@ -709,30 +711,8 @@ class I18n
      */
     private function readModuleLanguageCsvFile(string $filePath): array
     {
-        $translations = [];
-        $handle = @fopen($filePath, 'r');
-        if ($handle === false) {
-            return $translations;
-        }
-
-        $line = 1;
-        while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-            $data = $this->normalizeCsvRow($data, $line);
-            $line += 1;
-
-            if ($this->isEffectivelyEmptyCsvRow($data)) {
-                continue;
-            }
-
-            if (!isset($data[0], $data[1]) || $data[0] === '') {
-                continue;
-            }
-
-            $translations[$data[0]] = $data[1];
-        }
-
-        fclose($handle);
-        return $translations;
+        // Codec drops garbled (BOM/U+FFFD) rows; does not strip-and-keep polluted keys.
+        return \Weline\I18n\Service\I18nCsvCodec::readWords($filePath);
     }
 
     /**
@@ -740,19 +720,11 @@ class I18n
      */
     private function writeModuleLanguageCsvFile(string $filePath, array $translations): void
     {
-        $csvFile = @fopen($filePath, 'w+');
-        if ($csvFile === false) {
-            return;
+        try {
+            \Weline\I18n\Service\I18nCsvCodec::writeWords($filePath, $translations);
+        } catch (\Throwable) {
+            // Keep historical soft-fail behavior for module CSV rewrite.
         }
-
-        if ($translations !== []) {
-            fwrite($csvFile, "\xEF\xBB\xBF");
-            foreach ($translations as $key => $value) {
-                fputcsv($csvFile, [$key, $value], ',', '"', '\\');
-            }
-        }
-
-        fclose($csvFile);
     }
 
     /**
@@ -766,7 +738,7 @@ class I18n
                 continue;
             }
 
-            $data[$index] = $this->normalizeCsvCell($value, $line === 1 && $index === 0);
+            $data[$index] = $this->normalizeCsvCell($value, $index === 0);
         }
 
         return $data;
@@ -802,11 +774,7 @@ class I18n
 
     private function stripUtf8Bom(string $value): string
     {
-        if (strncmp($value, "\xEF\xBB\xBF", 3) === 0) {
-            return substr($value, 3);
-        }
-
-        return preg_replace('/^\x{FEFF}/u', '', $value) ?? $value;
+        return \Weline\I18n\Service\I18nCsvCodec::stripBom($value);
     }
 
     /**
@@ -1054,324 +1022,85 @@ class I18n
         if (!isset($locals_words)) {
             $locals_words = [];
         }
-        $error_count = 0;
-        $first_error = true;
-        
-        $collector = ObjectManager::getInstance(TranslationCollector::class);
-        $words_by_module = [
-            'all_words' => [],
-        ];
-        $all_i18ns = $this->reader->getAllI18ns();
-        RegistryProgress::count('I18n CSV source files', array_sum(array_map('count', $all_i18ns)), 'files');
-        $csv_module_count = count($all_i18ns);
-        $csv_module_index = 0;
-        $csv_word_count = 0;
-        foreach ($all_i18ns as $module_name => $i18n_files) {
-            $csv_module_index++;
-            RegistryProgress::module('I18n CSV read', $csv_module_index, $csv_module_count, (string)$module_name, count($i18n_files) . ' files');
-            $full_module_name = $this->getFullModuleName($module_name);
-            foreach ($i18n_files as $local => $i18n_file) {
-                if (isset($locals_names[$local])) {
-                    $this->ensureLocaleInstalled($local);
-                    
-                    $handle = @fopen($i18n_file, 'r');
-                    if ($handle === false) {
-                        if ($first_error && php_sapi_name() === 'cli') {
-                            echo "\n" . str_repeat("=", 80) . "\n";
-                            echo "i18n 文件格式问题\n";
-                            echo str_repeat("=", 80) . "\n";
-                            $first_error = false;
-                        }
-                        $relative_path = ltrim(str_replace(BP, '', $i18n_file), '/');
-                        if (php_sapi_name() === 'cli') {
-                            echo $relative_path . "  【无法打开文件】\n";
-                        } else {
-                            w_log_warning($relative_path . "  【无法打开文件】", [], 'i18n');
-                        }
-                        $error_count++;
-                        continue;
-                    }
-                    $is_utf8 = false;
-                    $line = 1;
-                    $relative_path = ltrim(str_replace(BP, '', $i18n_file), '/');
-                    
-                    while (($data = fgetcsv($handle, 100000, ',', '"', '\\')) !== false) {
-                        $data = $this->normalizeCsvRow($data, $line);
-                        if ($this->isEffectivelyEmptyCsvRow($data)) {
-                            $line += 1;
-                            continue;
-                        }
 
-                        if (!isset($data[0]) || $data[0] === '') {
-                            if ($first_error && php_sapi_name() === 'cli') {
-                                echo "\n" . str_repeat("=", 80) . "\n";
-                                echo "i18n 文件格式问题\n";
-                                echo str_repeat("=", 80) . "\n";
-                                $first_error = false;
-                            }
-                            if (php_sapi_name() === 'cli') {
-                                echo $relative_path . ":" . $line . "  【没有翻译原文】\n";
-                            } else {
-                                w_log_warning($relative_path . ":" . $line . "  【没有翻译原文】", [], 'i18n');
-                            }
-                            $error_count++;
-                            $line += 1;
-                            continue;
-                        }
-                        if (!isset($data[1])) {
-                            if ($first_error && php_sapi_name() === 'cli') {
-                                echo "\n" . str_repeat("=", 80) . "\n";
-                                echo "i18n 文件格式问题\n";
-                                echo str_repeat("=", 80) . "\n";
-                                $first_error = false;
-                            }
-                            if (php_sapi_name() === 'cli') {
-                                echo $relative_path . ":" . $line . "  【没有翻译内容】\n";
-                            } else {
-                                w_log_warning($relative_path . ":" . $line . "  【没有翻译内容】", [], 'i18n');
-                            }
-                            $error_count++;
-                            $line += 1;
-                            continue;
-                        }
-                        $word_module = isset($data[2]) && !empty(trim($data[2])) ? trim($data[2]) : $full_module_name;
-                        
-                        if (!$is_utf8) {
-                            if (md5(mb_convert_encoding($data[0], 'utf-8', 'utf-8')) === md5($data[0])) {
-                                $is_utf8 = true;
-                            } else {
-                                if ($first_error && php_sapi_name() === 'cli') {
-                                    echo "\n" . str_repeat("=", 80) . "\n";
-                                    echo "i18n 文件格式问题\n";
-                                    echo str_repeat("=", 80) . "\n";
-                                    $first_error = false;
-                                }
-                                if (php_sapi_name() === 'cli') {
-                                    echo $relative_path . ":" . $line . "  【编码不是UTF-8】\n";
-                                } else {
-                                    w_log_warning($relative_path . ":" . $line . "  【编码不是UTF-8】", [], 'i18n');
-                                }
-                                $error_count++;
-                                $line += 1;
-                                continue;
-                            }
-                        }
-                        
-                        if (!isset($locals_words[$local])) {
-                            $locals_words[$local] = [];
-                        }
-                        $locals_words[$local][$data[0]] = $data[1];
-                        $csv_word_count++;
-
-                        if ($collector->isValidTranslationString($data[0])) {
-                            if (!isset($words_by_module[$local])) {
-                                $words_by_module[$local] = [];
-                            }
-                            if (!isset($words_by_module[$local][$word_module])) {
-                                $words_by_module[$local][$word_module] = [];
-                            }
-                            $words_by_module[$local][$word_module][$data[0]] = $data[1];
-                        }
-                        $line += 1;
-                    }
-
-                    fclose($handle);
-                } else {
-                    if ($first_error && php_sapi_name() === 'cli') {
-                        echo "\n" . str_repeat("=", 80) . "\n";
-                        echo "i18n 文件格式问题\n";
-                        echo str_repeat("=", 80) . "\n";
-                        $first_error = false;
-                    }
-                    $relative_path = ltrim(str_replace(BP, '', $i18n_file), '/');
-                    if (php_sapi_name() === 'cli') {
-                        echo $relative_path . "  【语言代码 " . $local . " 无效】\n";
-                    } else {
-                        w_log_warning($relative_path . "  【语言代码 " . $local . " 无效】", [], 'i18n');
-                    }
-                    $error_count++;
-                }
-            }
-        }
-        unset($all_i18ns);
-        RegistryProgress::count('I18n CSV loaded', $csv_word_count, 'entries');
-        
-        if ($error_count > 0 && php_sapi_name() === 'cli') {
-            echo str_repeat("=", 80) . "\n";
-            echo "共发现 " . $error_count . " 个问题\n";
-            echo str_repeat("=", 80) . "\n\n";
-        }
-
-        $directories = $this->getActiveModuleDirectories($moduleName);
-        RegistryProgress::count('I18n source scan', count($directories), 'modules');
-        $translations = $this->collectModuleTranslations($directories, $collector);
-        RegistryProgress::count('I18n source scan', count($translations), 'source words');
-        unset($directories);
-
-        if ($translations or isset($locals_words[Env::default_LANGUAGE_CODE])) {
-            $default_local_words = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE] ?? []);
-            $default_local_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-            
-            $dir = dirname($default_local_file);
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
-            
-            $file = @fopen($default_local_file, 'w+');
-            if ($file === false) {
-                w_log_warning(__("警告：无法创建翻译文件 %{file}", ['file' => $default_local_file]), [], 'i18n');
-            } else {
-                $text = '<?php return ' . var_export($default_local_words, true) . ';';
-                fwrite($file, $text);
-                fclose($file);
-                unset($text);
-            }
-            unset($default_local_words);
-        }
-        if ($translations and isset($locals_words[Env::default_LANGUAGE_CODE])) {
-            $locals_words[Env::default_LANGUAGE_CODE] = array_merge($translations, $locals_words[Env::default_LANGUAGE_CODE]);
-        }
-        foreach ($translations as $word => $translate) {
-            if (
-                $collector->isValidTranslationString((string)$word)
-                && !$this->hasModuleTranslation($words_by_module, Env::default_LANGUAGE_CODE, (string)$word)
-                && !isset($words_by_module['all_words'][$word])
-            ) {
-                $words_by_module['all_words'][(string)$word] = (string)$translate;
-            }
-        }
-        unset($translations); // 释放 $translations，后面不再需要
-        
-        $translate_mode = Env::get('translation.mode', 'default');
-        if ($translate_mode === 'online') {
-            try {
-                $localeDictionary = ObjectManager::getInstance(LocaleDictionary::class);
-                foreach ($locals_names as $local_code => $local_name) {
-                    if (!isset($locals_words[$local_code])) {
-                        $locals_words[$local_code] = [];
-                    }
-                    $db_translations = $localeDictionary->reset()
-                        ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $local_code)
-                        ->select()
-                        ->fetchArray();
-                    foreach ($db_translations as $db_trans) {
-                        $word = $db_trans[LocaleDictionary::schema_fields_WORD] ?? '';
-                        $translate = $db_trans[LocaleDictionary::schema_fields_TRANSLATE] ?? '';
-                        if ($word && $translate) {
-                            $locals_words[$local_code][$word] = $translate;
-                            if (
-                                $collector->isValidTranslationString((string)$word)
-                                && !$this->hasModuleTranslation($words_by_module, (string)$local_code, (string)$word)
-                                && !isset($words_by_module['all_words'][$word])
-                            ) {
-                                $words_by_module['all_words'][(string)$word] = (string)$translate;
-                            }
-                        }
-                    }
-                    unset($db_translations);
-                }
-            } catch (\Exception $e) {
-                w_log_error("在线翻译模式：从数据库读取翻译失败：" . $e->getMessage(), [], 'i18n');
-            }
-        }
-        
-        if ($locals_words) {
-            $words_file = Env::path_TRANSLATE_ALL_COLLECTIONS_WORDS_FILE;
-            $dir = dirname($words_file);
-            if (!is_dir($dir)) {
-                mkdir($dir, 0755, true);
-            }
-            
-            foreach (array_keys($locals_words) as $locale) {
-                if (!isset($words_by_module[$locale])) {
-                    $words_by_module[$locale] = [];
-                }
-            }
-            
-            foreach ($locals_words as $locale => $words) {
-                $words_by_module[$locale] ??= [];
-                foreach ($words as $word => $translate) {
-                    if (!$collector->isValidTranslationString((string)$word)) {
-                        continue;
-                    }
-                    
-                    if (
-                        !$this->hasModuleTranslation($words_by_module, (string)$locale, (string)$word)
-                        && !isset($words_by_module['all_words'][$word])
-                    ) {
-                        $words_by_module['all_words'][(string)$word] = (string)$translate;
-                    }
-                }
-            }
-            
-            
-            // 使用 var_export 替代 w_var_export，避免正则处理导致的额外内存开销
-            $text = '<?php return ' . var_export($words_by_module, true) . ';';
-            $result = @file_put_contents($words_file, $text);
-            unset($text); // 及时释放导出字符串
-            if ($result === false) {
-                w_log_warning(__("警告：无法写入翻译文件 %{file}", ['file' => $words_file]), [], 'i18n');
-            }
-            
-            foreach ($words_by_module as $locale => $module_words_data) {
-                if ($locale === 'all_words') {
-                    continue;
-                }
-                
-                $words_filename = Env::path_TRANSLATE_FILES_PATH . $locale . '.php';
-                $words_dir = dirname($words_filename);
-                if (!is_dir($words_dir)) {
-                    mkdir($words_dir, 0755, true);
-                }
-                $file = new \Weline\Framework\System\File\Io\File();
-                $file->open($words_filename, $file::mode_w);
-                $text = '<?php return ' . var_export($module_words_data, true) . ';?>';
-
-                try {
-                    $file->write($text);
-                } catch (Exception $e) {
-                    w_log_warning(__("警告：无法写入语言文件 %{file}", ['file' => $words_filename]), [], 'i18n');
-                }
-                $file->close();
-                unset($text);
-            }
-            
-            foreach ($words_by_module as $locale => $module_words_data) {
-                if ($locale === 'all_words') {
-                    continue;
-                }
-                
-                $csv_file_path = dirname($words_file) . DS . $locale . '_total.csv';
-                $csv_handle = @fopen($csv_file_path, 'w+');
-                if ($csv_handle !== false) {
-                    if (isset($words_by_module['all_words'])) {
-                        foreach ($words_by_module['all_words'] as $word => $translate) {
-                            fputcsv($csv_handle, [$word, $translate, ''], ',', '"', '\\');
-                        }
-                    }
-                    foreach ($module_words_data as $module_name => $words) {
-                        foreach ($words as $word => $translate) {
-                            fputcsv($csv_handle, [$word, $translate, $module_name], ',', '"', '\\');
-                        }
-                    }
-                    fclose($csv_handle);
-                }
-            }
-            unset($words_by_module);
-        }
+        /** @var DictionaryCompiler $compiler */
+        $compiler = ObjectManager::getInstance(DictionaryCompiler::class);
+        $locals_words = $compiler->compile($moduleName, false);
         self::$local_words = $cache ? $locals_words : [];
-        // 恢复原始内存限制（确保不低于当前内存使用量）
-        $restoreLimit = $_prevMemLimit ?: '128M';
-        $currentUsage = memory_get_usage(true);
-        $restoreLimitBytes = $this->parseMemoryLimit($restoreLimit);
-        if ($restoreLimitBytes > 0 && $restoreLimitBytes < $currentUsage) {
-            // 原始限制低于当前使用量，保持 512M 或设为当前使用量的 1.5 倍
-            $restoreLimit = max($restoreLimitBytes, (int)($currentUsage * 1.5));
-            $restoreLimit = ceil($restoreLimit / 1024 / 1024) . 'M';
-        }
-        @ini_set('memory_limit', $restoreLimit);
+        @ini_set('memory_limit', $_prevMemLimit !== '' ? $_prevMemLimit : '128M');
         return $locals_words;
     }
+
+    /**
+     * dictionary_compile Observer 增强：源码扫描 + online DB 合并。
+     *
+     * @param array<string, array<string, string>> $localsWords
+     * @param array<string, mixed> $wordsByModule
+     * @param array<string, string> $sourceTranslations
+     */
+    public function enrichDictionaryCompile(
+        array &$localsWords,
+        array &$wordsByModule,
+        array &$sourceTranslations,
+        ?string $moduleName = null,
+    ): void {
+        $collector = ObjectManager::getInstance(TranslationCollector::class);
+        $directories = $this->getActiveModuleDirectories($moduleName);
+        RegistryProgress::count('I18n source scan', count($directories), 'modules');
+        $sourceTranslations = $this->collectModuleTranslations($directories, $collector);
+        RegistryProgress::count('I18n source scan', count($sourceTranslations), 'source words');
+
+        $defaultLocale = Env::default_LANGUAGE_CODE;
+        if ($sourceTranslations !== [] && isset($localsWords[$defaultLocale])) {
+            $localsWords[$defaultLocale] = array_merge($sourceTranslations, $localsWords[$defaultLocale]);
+        } elseif ($sourceTranslations !== []) {
+            $localsWords[$defaultLocale] = $sourceTranslations;
+        }
+
+        foreach ($sourceTranslations as $word => $translate) {
+            if (
+                $collector->isValidTranslationString((string)$word)
+                && !$this->hasModuleTranslation($wordsByModule, $defaultLocale, (string)$word)
+                && !isset($wordsByModule['all_words'][$word])
+            ) {
+                $wordsByModule['all_words'][(string)$word] = (string)$translate;
+            }
+        }
+
+        $translateMode = Env::get('translation.mode', 'default');
+        if ($translateMode !== 'online') {
+            return;
+        }
+
+        try {
+            $localeDictionary = ObjectManager::getInstance(LocaleDictionary::class);
+            foreach ($this->getLocaleNames() as $localCode => $localName) {
+                $localsWords[$localCode] ??= [];
+                $dbTranslations = $localeDictionary->reset()
+                    ->where(LocaleDictionary::schema_fields_LOCALE_CODE, $localCode)
+                    ->select()
+                    ->fetchArray();
+                foreach ($dbTranslations as $dbTrans) {
+                    $word = $dbTrans[LocaleDictionary::schema_fields_WORD] ?? '';
+                    $translate = $dbTrans[LocaleDictionary::schema_fields_TRANSLATE] ?? '';
+                    if ($word === '' || $translate === '') {
+                        continue;
+                    }
+                    $localsWords[$localCode][$word] = $translate;
+                    if (
+                        DictionaryWordValidator::isValidTranslationString((string)$word)
+                        && !$this->hasModuleTranslation($wordsByModule, (string)$localCode, (string)$word)
+                        && !isset($wordsByModule['all_words'][$word])
+                    ) {
+                        $wordsByModule['all_words'][(string)$word] = (string)$translate;
+                    }
+                }
+            }
+        } catch (\Exception $exception) {
+            w_log_error('在线翻译模式：从数据库读取翻译失败：' . $exception->getMessage(), [], 'i18n');
+        }
+    }
+
 
     public function getLocalWords(string $local_code = 'zh_Hans_CN'): array
     {

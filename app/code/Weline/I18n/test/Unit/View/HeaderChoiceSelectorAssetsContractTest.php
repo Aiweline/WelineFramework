@@ -14,29 +14,21 @@ final class HeaderChoiceSelectorAssetsContractTest extends TestCase
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
 
-        self::assertStringContainsString('margin-top: 0;', $content);
-        self::assertStringNotContainsString('margin-top: 0.25rem;', $content);
-        self::assertStringContainsString('.weline-choice-switcher::after', $content);
-        self::assertStringContainsString('height: 8px;', $content);
-        self::assertStringContainsString('hoverBridge: true', $content);
+        self::assertStringContainsString('weline-choice-selector.css', $content);
+        self::assertStringContainsString('weline-choice-selector.js', $content);
+        self::assertStringContainsString('Weline_Currency::js/currency.js', $content);
     }
 
-    public function testLanguageOptionClickWritesServerCookieAndReloadsSamePath(): void
+    public function testHeaderChoiceAssetsPreferSharedSwitcherScriptsWithoutLangCookieWrite(): void
     {
         $path = dirname(__DIR__, 3) . '/view/templates/Frontend/header-choice-selector-assets.phtml';
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
 
-        self::assertStringContainsString('writeLanguagePreference', $content);
-        self::assertStringContainsString('WELINE_USER_LANG=', $content);
-        self::assertStringContainsString('SameSite=Lax', $content);
-        self::assertStringContainsString('samePath', $content);
-        self::assertStringContainsString('window.location.reload()', $content);
-        self::assertStringContainsString('z-index: 10050', $content);
-        self::assertStringContainsString('overflow: visible', $content);
-        self::assertStringContainsString('weline-choice-open', $content);
-        self::assertStringContainsString('z-index: 10060', $content);
-        self::assertStringContainsString('[WelineChoice]', $content);
-        self::assertStringContainsString('language-option-click', $content);
+        self::assertStringContainsString('@static(Weline_Theme::ui/components/weline-choice-selector.js)', $content);
+        self::assertStringContainsString('@static(Weline_Currency::js/currency.js)', $content);
+        self::assertStringNotContainsString('WELINE_USER_LANG=', $content);
+        self::assertStringNotContainsString('document.cookie', $content);
+        self::assertStringNotContainsString('writeLanguagePreference', $content);
     }
 }

@@ -7,9 +7,10 @@ namespace Weline\I18n\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Database\Transaction\TransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Service\Query\AdminControllerBridge;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
-use Weline\Framework\Session\SessionFactory;
 use Weline\I18n\Service\I18nResourceChangePublisher;
+use Weline\I18n\Service\TaglibLocalFormService;
 
 /**
  * 后台 I18n 操作的 bin-query 适配层。
@@ -64,15 +65,20 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
         'dictionary-check-auto-register' => 'Weline_I18n::i18n_dictionaries',
         'dictionary-current-translation-mode' => 'Weline_I18n::i18n_dictionaries',
         'dictionary-quick-data' => 'Weline_I18n::i18n_dictionaries',
+        'dictionary-batch-translate' => 'Weline_I18n::i18n_dictionaries',
         'ai-save' => 'Weline_I18n::i18n_ai_translation',
         'ai-enqueue' => 'Weline_I18n::i18n_ai_translation',
         'ai-enqueue-all' => 'Weline_I18n::i18n_ai_translation',
         'ai-export-modules' => 'Weline_I18n::i18n_ai_translation',
+        'ai-module-matrix' => 'Weline_I18n::i18n_ai_translation',
+        'ai-module-translate-writeback' => 'Weline_I18n::i18n_ai_translation',
+        'taglib-local-load' => 'Weline_I18n::i18n_dictionaries',
         'taglib-local-save' => 'Weline_I18n::i18n_dictionaries',
+        'taglib-local-ai' => 'Weline_I18n::i18n_dictionaries',
+        'taglib-local-ai-bulk' => 'Weline_I18n::i18n_dictionaries',
     ];
 
     public function __construct(
-        private readonly SessionFactory $sessionFactory,
         private readonly Request $request,
         private readonly TransactionCoordinatorInterface $transactions,
         private readonly I18nResourceChangePublisher $resourceChanges,
@@ -90,7 +96,9 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
             throw new \InvalidArgumentException((string)__('I18n 后台查询器不支持的操作：%{1}', $operation));
         }
 
-        $this->assertBackendSession();
+        // Backend auth is enforced by FrontendQueryGateway (attestation + ACL)
+        // before this provider runs; do not re-read session here — worker
+        // query-bin requests may not have eager session state at this layer.
 
         $action = trim((string)($params['action'] ?? ''));
         if ($action === '') {
@@ -100,6 +108,18 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
         $payload = $params['payload'] ?? [];
         if (!is_array($payload)) {
             throw new \InvalidArgumentException((string)__('I18n 后台操作参数必须是对象'));
+        }
+
+        if ($action === 'taglib-local-load') {
+            return $this->loadTaglibLocalForm($payload);
+        }
+
+        if ($action === 'taglib-local-ai') {
+            return $this->aiTranslateTaglibLocalForm($payload);
+        }
+
+        if ($action === 'taglib-local-ai-bulk') {
+            return $this->aiTranslateTaglibLocalFormBulk($payload);
         }
 
         [$controllerClass, $method, $requestMethod, $innerAction] = $this->resolveAction($action);
@@ -123,13 +143,115 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
         );
     }
 
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function loadTaglibLocalForm(array $payload): array
+    {
+        /** @var TaglibLocalFormService $service */
+        $service = ObjectManager::getInstance(TaglibLocalFormService::class);
+        $result = $service->buildFormPayload(
+            trim((string)($payload['model'] ?? '')),
+            trim((string)($payload['field'] ?? '')),
+            trim((string)($payload['id'] ?? '')),
+            trim((string)($payload['value'] ?? '')),
+            trim((string)($payload['search'] ?? '')),
+        );
+
+        if (($result['success'] ?? false) !== true) {
+            return $this->normalizeResponse([
+                'success' => false,
+                'message' => (string)($result['message'] ?? __('加载翻译表单失败')),
+                'data' => [],
+            ]);
+        }
+
+        return $this->normalizeResponse([
+            'success' => true,
+            'message' => (string)__('加载成功'),
+            'data' => is_array($result['data'] ?? null) ? $result['data'] : [],
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function aiTranslateTaglibLocalForm(array $payload): array
+    {
+        /** @var TaglibLocalFormService $service */
+        $service = ObjectManager::getInstance(TaglibLocalFormService::class);
+        $result = $service->aiTranslate(
+            trim((string)($payload['model'] ?? '')),
+            trim((string)($payload['field'] ?? '')),
+            trim((string)($payload['id'] ?? '')),
+            trim((string)($payload['value'] ?? '')),
+            ($payload['retranslate_all'] ?? false) === true
+                || ($payload['retranslate_all'] ?? '') === '1'
+                || ($payload['retranslate'] ?? false) === true
+                || ($payload['retranslate'] ?? '') === '1',
+        );
+
+        if (($result['success'] ?? false) !== true) {
+            return $this->normalizeResponse([
+                'success' => false,
+                'message' => (string)($result['message'] ?? __('AI翻译调用失败')),
+                'data' => is_array($result['data'] ?? null) ? $result['data'] : [],
+            ]);
+        }
+
+        return $this->normalizeResponse([
+            'success' => true,
+            'message' => (string)($result['message'] ?? __('AI 翻译完成')),
+            'data' => is_array($result['data'] ?? null) ? $result['data'] : [],
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function aiTranslateTaglibLocalFormBulk(array $payload): array
+    {
+        $fields = $payload['fields'] ?? [];
+        if (!is_array($fields)) {
+            throw new \InvalidArgumentException((string)__('I18n 后台操作参数必须是对象'));
+        }
+
+        /** @var TaglibLocalFormService $service */
+        $service = ObjectManager::getInstance(TaglibLocalFormService::class);
+        $result = $service->aiTranslateFieldsBulk(
+            trim((string)($payload['model'] ?? '')),
+            trim((string)($payload['id'] ?? '')),
+            $fields,
+            ($payload['retranslate_all'] ?? false) === true
+                || ($payload['retranslate_all'] ?? '') === '1'
+                || ($payload['retranslate'] ?? false) === true
+                || ($payload['retranslate'] ?? '') === '1',
+        );
+
+        if (($result['success'] ?? false) !== true) {
+            return $this->normalizeResponse([
+                'success' => false,
+                'message' => (string)($result['message'] ?? __('AI翻译调用失败')),
+                'data' => is_array($result['data'] ?? null) ? $result['data'] : [],
+            ]);
+        }
+
+        return $this->normalizeResponse([
+            'success' => true,
+            'message' => (string)($result['message'] ?? __('AI 批量翻译完成')),
+            'data' => is_array($result['data'] ?? null) ? $result['data'] : [],
+        ]);
+    }
+
     private function isResourceMutation(string $action): bool
     {
         return in_array($action, [
             'dictionary-add',
             'dictionary-edit',
             'dictionary-quick-save',
-            'taglib-local-save',
         ], true);
     }
 
@@ -174,17 +296,6 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
                 ],
             ],
         ];
-    }
-
-    private function assertBackendSession(): void
-    {
-        $session = $this->sessionFactory->createBackendSession();
-        // query-bin 握手请求会跳过全局 eager session start；业务 provider
-        // 在读取后台登录态前必须显式启动当前请求携带的已有会话。
-        $session->start();
-        if (!$session->isLoggedIn() || (int)($session->getUserId() ?? 0) <= 0) {
-            throw new \RuntimeException((string)__('请先登录后台'));
-        }
     }
 
     /**
@@ -273,6 +384,10 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
             'dictionary-check-auto-register' => ['getCheckAutoRegister', 'GET', null],
             'dictionary-current-translation-mode' => ['getCurrentTranslationMode', 'GET', null],
             'dictionary-quick-data' => ['getQuickTranslationData', 'GET', null],
+            'dictionary-batch-translate' => ['postBatchTranslate', 'POST', null],
+            'dictionary-module-catalog' => ['getModuleCatalog', 'GET', null],
+            'dictionary-module-translate' => ['postModuleTranslate', 'POST', null],
+            'dictionary-module-export-csv' => ['postModuleExportCsv', 'POST', null],
         ];
         if (isset($dictionaryActions[$action])) {
             return [
@@ -286,6 +401,8 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
             'ai-enqueue' => ['postEnqueue', 'POST', null],
             'ai-enqueue-all' => ['postEnqueue', 'POST', null],
             'ai-export-modules' => ['postExportModules', 'POST', null],
+            'ai-module-matrix' => ['getModuleLocaleMatrix', 'GET', null],
+            'ai-module-translate-writeback' => ['postModuleTranslateAndWriteback', 'POST', null],
         ];
         if (isset($aiActions[$action])) {
             return [
@@ -308,28 +425,15 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
 
     private function invokeController(string $controllerClass, string $method, array $payload, string $requestMethod): array
     {
-        foreach ($payload as $key => $value) {
-            $key = (string)$key;
-            $this->request->setPost($key, $value);
-            $this->request->setGet($key, $value);
-        }
-        $this->request->setServer('REQUEST_METHOD', $requestMethod);
-        $this->request->setServer('HTTP_ACCEPT', 'application/json');
-        $this->request->setServer('HTTP_X_REQUESTED_WITH', 'XMLHttpRequest');
+        $payload = $this->normalizeScalarPayloadKeys($this->normalizeActionPayload($payload));
+        $response = AdminControllerBridge::invoke(
+            $controllerClass,
+            [$method],
+            $payload,
+            $payload,
+            $requestMethod,
+        );
 
-        $actionRequest = $this->createActionRequest($payload, $requestMethod);
-        $controller = $this->instantiateControllerWithoutInit($controllerClass, $actionRequest);
-        try {
-            $response = $controller->{$method}();
-        } catch (\Weline\Framework\Http\ResponseTerminateException $termination) {
-            // 部分旧 I18n 动作通过 fetchJson() 以 200 ResponseTerminateException
-            // 返回 JSON。bin-query 需要吸收这个内部终止信号，而不是把它当成 500。
-            if ($termination->getStatusCode() < 200 || $termination->getStatusCode() >= 300) {
-                throw $termination;
-            }
-
-            $response = $termination->getBody();
-        }
         if (is_array($response)) {
             return $this->normalizeResponse($response);
         }
@@ -349,9 +453,7 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
     }
 
     /**
-     * 后台 Controller 的 __init() 是页面路由生命周期的一部分，会校验
-     * /jR.../backend/... 页面地址并准备模板。bin-query 只需要动作依赖，
-     * 不能触发这套页面初始化，否则会把 query-bin 地址误判为 404。
+     * @deprecated Use AdminControllerBridge via invokeController().
      */
     private function instantiateControllerWithoutInit(string $controllerClass, Request $actionRequest): object
     {
@@ -386,6 +488,7 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
 
     private function createActionRequest(array $payload, string $requestMethod): Request
     {
+        $payload = $this->normalizeActionPayload($payload);
         $request = new Request();
         $request->setServer('REQUEST_METHOD', $requestMethod);
         $request->setServer('HTTP_ACCEPT', 'application/json');
@@ -424,5 +527,60 @@ final class I18nAdminQueryProvider implements QueryProviderInterface
         }
 
         return $normalized;
+    }
+
+    /**
+     * bin-query payload 常以扁平 bracket key 传输（description[locale][field]），
+     * 需还原为 PHP 表单数组后再交给控制器。
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function normalizeActionPayload(array $payload): array
+    {
+        if ($payload === []) {
+            return [];
+        }
+
+        $needsNormalization = false;
+        foreach (array_keys($payload) as $key) {
+            if (str_contains((string)$key, '[')) {
+                $needsNormalization = true;
+                break;
+            }
+        }
+        if (!$needsNormalization) {
+            return $payload;
+        }
+
+        $normalized = [];
+        parse_str(http_build_query($payload, '', '&', PHP_QUERY_RFC3986), $normalized);
+
+        return is_array($normalized) ? $normalized : $payload;
+    }
+
+    /**
+     * bin-query/JS 可能把 URL 与 hidden 字段重复提交为数组，需还原成标量。
+     *
+     * @param array<string, mixed> $payload
+     * @return array<string, mixed>
+     */
+    private function normalizeScalarPayloadKeys(array $payload): array
+    {
+        foreach (['model', 'field', 'id', 'value', 'isIframe', 'action'] as $key) {
+            if (!array_key_exists($key, $payload) || !is_array($payload[$key])) {
+                continue;
+            }
+
+            $resolved = '';
+            foreach ($payload[$key] as $candidate) {
+                if (is_scalar($candidate) && trim((string)$candidate) !== '') {
+                    $resolved = trim((string)$candidate);
+                }
+            }
+            $payload[$key] = $resolved;
+        }
+
+        return $payload;
     }
 }

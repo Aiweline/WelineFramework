@@ -13,6 +13,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
 <html lang='en' <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
 <head>
     @template(Weline_Admin::common/head.phtml)
+    <link rel="stylesheet" href="@static(Weline_I18n::css/local-translation.css)">
     <title><?= __('I18n翻译') ?></title>
 </head>
 
@@ -56,19 +57,19 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                                 <input type='hidden' name='description[{{v.local_code}}][local_code]'
                                        value='{{v.local_code}}'>
                                 <input type='hidden' name='description[{{v.local_code}}][{{id_field}}]' value='{{id}}'>
-                                <div style="--w-span-lg:12;">
-                                    <div class="w-field__control" style="--w-mb:var(--weline-space-4);">
-                                        <span class="w-field__addon" title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
+                                <div class="w-local-translation__field" style="--w-span-lg:12;">
+                                    <div class="w-field__control w-local-translation__control">
+                                        <span class="w-field__addon w-local-translation__flag" title='{{v.local.name}}' id='{{v.local_code}}-{{field}}-input-addon'>
                                             {{v.local.flag}}
                                         </span>
-                                        <input class="w-input" type='text' id='{{v.local_code}}-{{field}}-input' placeholder='{{v[$field]}}' aria-label='{{v[$field]}}' value='{{v[$field]}}' name='description[{{v.local_code}}][{{field}}]' required='required' aria-describedby='{{v.local_code}}-{{field}}-input-addon'>
-                                        <div class="w-field__hint">
-                                            <lang>填写正确！</lang>
-                                        </div>
-                                        <span class="w-field__addon" title='{{v.local.name}}'>
+                                        <input class="w-input w-local-translation__input" type='text' id='{{v.local_code}}-{{field}}-input' placeholder='{{v[$field]}}' aria-label='{{v[$field]}}' value='{{v[$field]}}' name='description[{{v.local_code}}][{{field}}]' required='required' aria-describedby='{{v.local_code}}-{{field}}-input-addon {{v.local_code}}-{{field}}-locale-label'>
+                                        <span class="w-field__addon w-local-translation__locale" id='{{v.local_code}}-{{field}}-locale-label' title='{{v.local.name}}'>
                                             {{v.local.name}}
                                         </span>
                                     </div>
+                                    <p class="w-field__hint w-local-translation__hint">
+                                        <lang>填写正确！</lang>
+                                    </p>
                                 </div>
                             </foreach>
                         </div>

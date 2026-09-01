@@ -15,7 +15,14 @@ class JsModuleParser
     {
         $modules = [];
 
-        if (empty($content) || strpos($content, 'declare') === false) {
+        if (empty($content)) {
+            return $modules;
+        }
+
+        // 有 declare 调用或 data-weline-* 属性才继续解析（勿只认 "declare" 字符串，否则漏掉纯属性声明）
+        $hasDeclareCall = str_contains($content, 'declare');
+        $hasDataAttr = str_contains($content, 'data-weline-load') || str_contains($content, 'data-weline-declare');
+        if (!$hasDeclareCall && !$hasDataAttr) {
             return $modules;
         }
 
@@ -46,6 +53,18 @@ class JsModuleParser
         // data-weline-load="module1,module2"
         if (preg_match_all('/data-weline-load\s*=\s*["\']([^"\']+)["\']/', $content, $dataMatches)) {
             foreach ($dataMatches[1] as $moduleList) {
+                $moduleArray = array_map('trim', explode(',', $moduleList));
+                foreach ($moduleArray as $moduleName) {
+                    if ($moduleName !== '') {
+                        $modules[] = $moduleName;
+                    }
+                }
+            }
+        }
+
+        // data-weline-declare="module1,module2"
+        if (preg_match_all('/data-weline-declare\s*=\s*["\']([^"\']+)["\']/', $content, $declareAttrMatches)) {
+            foreach ($declareAttrMatches[1] as $moduleList) {
                 $moduleArray = array_map('trim', explode(',', $moduleList));
                 foreach ($moduleArray as $moduleName) {
                     if ($moduleName !== '') {
