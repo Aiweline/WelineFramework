@@ -16,10 +16,9 @@ $defaultBotProfile = (string)($initialGuide['bot_profile'] ?? ($guideConfig['def
 $defaultProjectCount = max(1, (int)($initialGuide['project_count'] ?? 1));
 $maxProjectCount = max(1, (int)($max_project_count ?? ($guideConfig['max_project_count'] ?? 200)));
 
-$listingUrl = $this->getBackendUrl('*/backend/role/listing');
-$addRoleUrl = $this->getBackendUrl('*/backend/role/add');
+$addRolePath = '*/backend/role/add';
 
-$buildAddUrl = static function (string $baseUrl, array $params): string {
+$buildAddParams = static function (array $params): array {
     $filtered = [];
     foreach ($params as $key => $value) {
         $str = trim((string)$value);
@@ -28,12 +27,7 @@ $buildAddUrl = static function (string $baseUrl, array $params): string {
         }
     }
 
-    if (empty($filtered)) {
-        return $baseUrl;
-    }
-
-    $query = http_build_query($filtered);
-    return $baseUrl . (str_contains($baseUrl, '?') ? '&' : '?') . $query;
+    return $filtered;
 };
 
 $profileProjectDefaults = [
@@ -49,7 +43,7 @@ $profileProjectDefaults = [
             <h4 class="mb-sm-0"><?= __('Role Management') ?></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="<?= htmlspecialchars($listingUrl, ENT_QUOTES) ?>"><?= __('Bot') ?></a></li>
+                    <li class="breadcrumb-item"><a href="@backend-url{'*/backend/role/listing'}"><?= __('Bot') ?></a></li>
                     <li class="breadcrumb-item active"><?= __('Role Management') ?></li>
                 </ol>
             </div>
@@ -79,11 +73,11 @@ $profileProjectDefaults = [
                             <?= $guideEnabled ? __('Guide Enabled') : __('Guide Disabled') ?>
                         </span>
                         <a class="btn btn-primary"
-                           href="<?= htmlspecialchars($buildAddUrl($addRoleUrl, [
+                           href="@backend-url{$addRolePath|$buildAddParams([
                                'template_code' => $defaultTemplateCode,
                                'bot_profile' => $defaultBotProfile,
                                'project_count' => $defaultProjectCount,
-                           ]), ENT_QUOTES) ?>">
+                           ])}">
                             <i class="mdi mdi-auto-fix me-1"></i><?= __('Create Guided Role') ?>
                         </a>
                     </div>
@@ -103,11 +97,11 @@ $profileProjectDefaults = [
                             <h6 class="mb-1"><?= htmlspecialchars($profileName) ?></h6>
                             <p class="text-muted mb-3 small"><?= htmlspecialchars($profileDesc) ?></p>
                             <a class="btn btn-sm btn-outline-primary"
-                               href="<?= htmlspecialchars($buildAddUrl($addRoleUrl, [
+                               href="@backend-url{$addRolePath|$buildAddParams([
                                    'template_code' => $defaultTemplateCode,
                                    'bot_profile' => $profileCode,
                                    'project_count' => min($profileProjects, $maxProjectCount),
-                               ]), ENT_QUOTES) ?>">
+                               ])}">
                                 <?= __('Use This Profile') ?>
                             </a>
                         </div>
@@ -149,11 +143,11 @@ $profileProjectDefaults = [
                             <?php endif; ?>
                             <div class="mt-auto">
                                 <a class="btn btn-sm btn-outline-primary"
-                                   href="<?= htmlspecialchars($buildAddUrl($addRoleUrl, [
+                                   href="@backend-url{$addRolePath|$buildAddParams([
                                        'template_code' => $templateCode,
                                        'bot_profile' => $defaultBotProfile,
                                        'project_count' => $defaultProjectCount,
-                                   ]), ENT_QUOTES) ?>">
+                                   ])}">
                                     <?= __('Use Template') ?>
                                 </a>
                             </div>
@@ -172,7 +166,7 @@ $profileProjectDefaults = [
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0"><?= __('Existing Roles') ?></h5>
-                <a href="<?= htmlspecialchars($addRoleUrl, ENT_QUOTES) ?>" class="btn btn-primary">
+                <a href="@backend-url{$addRolePath}" class="btn btn-primary">
                     <i class="mdi mdi-plus me-1"></i><?= __('New Role') ?>
                 </a>
             </div>
@@ -214,7 +208,7 @@ $profileProjectDefaults = [
                                 </td>
                                 <td><?= htmlspecialchars((string)($role['updated_at'] ?? '')) ?></td>
                                 <td>
-                                    <a href="<?= htmlspecialchars($this->getBackendUrl('*/backend/role/edit?id=' . $roleId), ENT_QUOTES) ?>"
+                                    <a href="@backend-url{'*/backend/role/edit'|['id' => $roleId]}"
                                        class="btn btn-sm btn-outline-primary">
                                         <i class="mdi mdi-pencil"></i> <?= __('Edit') ?>
                                     </a>

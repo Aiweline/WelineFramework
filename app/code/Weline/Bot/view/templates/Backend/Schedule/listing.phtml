@@ -5,8 +5,6 @@
  * @var \Weline\Framework\View\Template $this
  */
 $schedules = is_array($schedules ?? null) ? $schedules : [];
-$listingUrl = $this->getBackendUrl('*/backend/schedule/listing');
-$addUrl = $this->getBackendUrl('*/backend/schedule/add');
 
 $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
     if (is_array($item)) {
@@ -29,7 +27,7 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0"><?= __('Schedule Management') ?></h4>
-            <a href="<?= htmlspecialchars($addUrl, ENT_QUOTES) ?>" class="btn btn-primary">
+            <a href="@backend-url{'*/backend/schedule/add'}" class="btn btn-primary">
                 <i class="mdi mdi-plus me-1"></i><?= __('New Schedule') ?>
             </a>
         </div>
@@ -71,7 +69,7 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
                                     <td><span class="badge bg-light text-dark"><?= htmlspecialchars((string) $get($schedule, 'status', '')) ?></span></td>
                                     <td><?= htmlspecialchars((string) $get($schedule, 'next_run_at', '')) ?></td>
                                     <td>
-                                        <a class="btn btn-sm btn-outline-primary" href="<?= htmlspecialchars($this->getBackendUrl('*/backend/schedule/edit?id=' . $id), ENT_QUOTES) ?>">
+                                        <a class="btn btn-sm btn-outline-primary" href="@backend-url{'*/backend/schedule/edit'|['id' => $id]}">
                                             <?= __('Edit') ?>
                                         </a>
                                     </td>
