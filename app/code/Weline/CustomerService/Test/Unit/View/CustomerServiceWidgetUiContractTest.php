@@ -37,6 +37,9 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertFileExists($cssFile);
         $content = (string) file_get_contents($cssFile);
 
+        $this->assertStringContainsString('.customer-service-widget--amazon', $content);
+        $this->assertStringContainsString('--weline-chrome-bg-dark', $content);
+        $this->assertStringContainsString('--weline-chrome-primary', $content);
         $this->assertStringContainsString('.cs-chat-header.w-panel-header', $content);
         $this->assertStringContainsString('.cs-modal.w-modal', $content);
         $this->assertStringContainsString('@media (max-width: 720px)', $content);
@@ -50,6 +53,15 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('.cs-notice-alert.is-open', $content);
     }
 
+    public function testFrontendWidgetUsesAmazonChromeSurface(): void
+    {
+        $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
+        $this->assertFileExists($hookFile);
+        $content = (string) file_get_contents($hookFile);
+
+        $this->assertStringContainsString('customer-service-widget--amazon', $content);
+    }
+
     public function testFrontendStylesPinSurfaceBackgroundForMessageInput(): void
     {
         $cssFile = dirname(__DIR__, 3) . '/view/statics/css/customer-service.css';
@@ -57,8 +69,8 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $content = (string) file_get_contents($cssFile);
 
         $this->assertStringContainsString('@layer page', $content);
-        $this->assertStringContainsString('background: var(--weline-theme-surface)', $content);
-        $this->assertStringContainsString('color: var(--weline-theme-text)', $content);
+        $this->assertStringContainsString('background: var(--cs-surface)', $content);
+        $this->assertStringContainsString('color: var(--cs-text)', $content);
         $this->assertStringContainsString('.cs-message-input', $content);
         $this->assertStringContainsString('color-scheme: inherit', $content);
     }

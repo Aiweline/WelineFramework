@@ -83,7 +83,7 @@ function csAdmin(url, options){
 </script>
 <script>
 const customerServiceConfigText = <?= json_encode($configText, $jsonForScriptFlags) ?>;
-const customerServiceConfigSaveUrl = <?= json_encode($this->getBackendUrl('customerservice/backend/config/save'), $jsonForScriptFlags) ?>;
+const customerServiceConfigSaveUrl = "@backend-url{'customerservice/backend/config/save'}";
 
 function showConfigToast(type, message) {
     const text = String(message || customerServiceConfigText.saveFailed);
