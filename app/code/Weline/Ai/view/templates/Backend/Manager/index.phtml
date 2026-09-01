@@ -5,11 +5,6 @@
  * @var \Weline\Framework\View\Template $this
  */
 $activeTab = $activeTab ?? 'model';
-$modelUrl = $this->getBackendUrl('ai/backend/model') . '?embed=1';
-$adapterUrl = $this->getBackendUrl('ai/backend/adapter') . '?embed=1';
-$skillUrl = $this->getBackendUrl('ai/backend/skill') . '?embed=1';
-$accountUrl = $this->getBackendUrl('ai/backend/provider') . '?embed=1';
-$baseUrl = $this->getBackendUrl('ai/backend/manager');
 ?>
 <style>
 .weline-ai-manager { min-height: calc(100vh - 120px); color: var(--backend-color-text-primary); }
@@ -48,22 +43,22 @@ $baseUrl = $this->getBackendUrl('ai/backend/manager');
 
     <ul class="w-nav w-tabs__list weline-ai-manager-tabs" role="tablist" data-w-component="tabs">
         <li>
-            <a class="<?= $activeTab === 'model' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=model" data-tab="model" data-url="<?= htmlspecialchars($modelUrl) ?>">
+            <a class="<?= $activeTab === 'model' ? 'active' : '' ?>" href="@backend-url{'ai/backend/manager'}?tab=model" data-tab="model" data-url="@backend-url{'ai/backend/model'}">
                 <w:icon name="robot" size="sm"></w:icon><lang>模型</lang>
             </a>
         </li>
         <li>
-            <a class="<?= $activeTab === 'adapter' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=adapter" data-tab="adapter" data-url="<?= htmlspecialchars($adapterUrl) ?>">
+            <a class="<?= $activeTab === 'adapter' ? 'active' : '' ?>" href="@backend-url{'ai/backend/manager'}?tab=adapter" data-tab="adapter" data-url="@backend-url{'ai/backend/adapter'}?embed=1">
                 <w:icon name="puzzle" size="sm"></w:icon><lang>适配器</lang>
             </a>
         </li>
         <li>
-            <a class="<?= $activeTab === 'skill' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=skill" data-tab="skill" data-url="<?= htmlspecialchars($skillUrl) ?>">
+            <a class="<?= $activeTab === 'skill' ? 'active' : '' ?>" href="@backend-url{'ai/backend/manager'}?tab=skill" data-tab="skill" data-url="@backend-url{'ai/backend/skill'}?embed=1">
                 <w:icon name="circle" size="sm"></w:icon><lang>技能</lang>
             </a>
         </li>
         <li>
-            <a class="<?= $activeTab === 'account' ? 'active' : '' ?>" href="<?= $baseUrl ?>?tab=account" data-tab="account" data-url="<?= htmlspecialchars($accountUrl) ?>">
+            <a class="<?= $activeTab === 'account' ? 'active' : '' ?>" href="@backend-url{'ai/backend/manager'}?tab=account" data-tab="account" data-url="@backend-url{'ai/backend/provider'}?embed=1">
                 <w:icon name="user" size="sm"></w:icon><lang>供应商账户</lang>
             </a>
         </li>
@@ -71,7 +66,7 @@ $baseUrl = $this->getBackendUrl('ai/backend/manager');
 
     <div class="w-tabs__content">
         <div class="w-tabs__panel <?= $activeTab === 'model' ? 'active' : '' ?>" id="tab-model" data-tab="model" role="tabpanel" hidden>
-            <iframe src="<?= htmlspecialchars($modelUrl) ?>" title="<lang>模型</lang>"></iframe>
+            <iframe src="@backend-url{'ai/backend/model'}" title="<lang>模型</lang>"></iframe>
         </div>
         <div class="w-tabs__panel <?= $activeTab === 'adapter' ? 'active' : '' ?>" id="tab-adapter" data-tab="adapter" role="tabpanel" hidden>
             <iframe src="<?= $activeTab === 'adapter' ? htmlspecialchars($adapterUrl) : '' ?>" title="<lang>适配器</lang>"></iframe>

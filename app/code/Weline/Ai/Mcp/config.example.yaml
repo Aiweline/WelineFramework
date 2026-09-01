@@ -93,6 +93,9 @@ index:
   # A local PHP Unix-socket sidecar coalesces Hook refreshes and exits after 15 idle minutes.
   # It starts automatically and falls back to the one-shot refresher when unavailable.
   sidecar_enabled: true
+  # Empty keeps CLI/tests unbound. Cursor ensure injects LEARNING_MCP_BOUND_REPOSITORY
+  # to the framework checkout that owns this MCP package so only that project is indexed.
+  bound_repository: ""
   # Codex writes refresh immediately; this is only the fallback for changes made outside Hook/MCP.
   refresh_interval: 60s
   max_file_bytes: 524288
@@ -114,6 +117,8 @@ index:
     quarantine_period: 24h
     sweep_interval: 1h
     max_generations: 100
+    # When bound_repository is set, immediately quarantine other project generations.
+    purge_unbound: true
   allowed_extensions:
     - php
     - phtml

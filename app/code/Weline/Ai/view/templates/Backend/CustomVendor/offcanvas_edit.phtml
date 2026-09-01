@@ -9,8 +9,8 @@ $vendor = $this->getData('vendor');
 $presets = $this->getData('presets') ?? [];
 $vendorModels = $this->getData('vendorModels') ?? [];
 $isEdit = $vendor && $vendor->getId();
-$saveUrl = $this->getBackendUrl('*/backend/customvendor/save');
-$testUrl = $this->getBackendUrl('*/backend/customvendor/testconnection');
+$savePath = '*/backend/customvendor/save';
+$testPath = '*/backend/customvendor/testconnection';
 $codeVal = $isEdit ? (string)$vendor->getData('code') : '';
 $nameVal = $isEdit ? (string)$vendor->getData('name') : '';
 $baseVal = $isEdit ? (string)$vendor->getData('base_url') : '';
@@ -191,8 +191,8 @@ html, body {
 (function () {
     var form = document.getElementById('weline-ai-custom-vendor-form');
     if (!form) return;
-    var saveUrl = <?= json_encode($saveUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    var testUrl = <?= json_encode($testUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
+    var saveUrl = "@backend-url{$savePath}";
+    var testUrl = "@backend-url{$testPath}";
     var initialModels = <?= $modelsJson ?>;
     var models = Array.isArray(initialModels) ? initialModels.slice() : [];
     var removedIds = [];

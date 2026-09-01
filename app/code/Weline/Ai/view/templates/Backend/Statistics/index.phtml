@@ -10,7 +10,6 @@ $summary = $summary ?? ['total_requests' => 0, 'total_tokens' => 0, 'total_cost'
 $modelRanking = $modelRanking ?? [];
 $periodRange = $periodRange ?? ['', ''];
 $period = $period ?? 'day';
-$statsUrl = $this->getBackendUrl('ai/backend/statistics');
 ?>
 <template>Weline_Ai::Backend/Manager/tabs.phtml</template>
 <?php if (empty($embed)): ?>
@@ -46,16 +45,16 @@ $statsUrl = $this->getBackendUrl('ai/backend/statistics');
     <div class="col-12">
         <ul class="nav nav-pills weline-ai-stats-period" role="tablist">
             <li class="nav-item">
-                <a class="nav-link <?= $period === 'day' ? 'active' : '' ?>" href="<?= $statsUrl ?>?period=day<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>今日</lang></a>
+                <a class="nav-link <?= $period === 'day' ? 'active' : '' ?>" href="@backend-url{'ai/backend/statistics'}?period=day<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>今日</lang></a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $period === 'week' ? 'active' : '' ?>" href="<?= $statsUrl ?>?period=week<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本周</lang></a>
+                <a class="nav-link <?= $period === 'week' ? 'active' : '' ?>" href="@backend-url{'ai/backend/statistics'}?period=week<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本周</lang></a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $period === 'month' ? 'active' : '' ?>" href="<?= $statsUrl ?>?period=month<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本月</lang></a>
+                <a class="nav-link <?= $period === 'month' ? 'active' : '' ?>" href="@backend-url{'ai/backend/statistics'}?period=month<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本月</lang></a>
             </li>
             <li class="nav-item">
-                <a class="nav-link <?= $period === 'year' ? 'active' : '' ?>" href="<?= $statsUrl ?>?period=year<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本年</lang></a>
+                <a class="nav-link <?= $period === 'year' ? 'active' : '' ?>" href="@backend-url{'ai/backend/statistics'}?period=year<?= !empty($embed) ? '&embed=1' : '' ?>"><lang>本年</lang></a>
             </li>
         </ul>
         <?php if (!empty($periodRange[0])): ?>

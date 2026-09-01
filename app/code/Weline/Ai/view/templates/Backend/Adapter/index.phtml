@@ -535,7 +535,7 @@ foreach ($adapters as $a) {
     </div>
 </div>
 
-<w:form id="batchModelBindingForm" method="post" action="@var($this->getBackendUrl('*/backend/adapter/batchSaveModelBindings'))" hidden>
+<w:form id="batchModelBindingForm" method="post" action="@backend-url{'*/backend/adapter/batchSaveModelBindings'}" hidden>
     <input type="hidden" name="ids" id="batchModelBindingIds" value="">
     <input type="hidden" name="model_bindings" id="batchModelBindingPayload" value="">
 </w:form>
@@ -552,15 +552,15 @@ foreach ($adapters as $a) {
             return Promise.resolve(window.Weline.Api.resource('ai'));
         },
         urls: {
-            scan: '<?= $this->getBackendUrl('*/backend/adapter/scan') ?>',
-            toggleStatus: '<?= $this->getBackendUrl('*/backend/adapter/toggleStatus') ?>',
-            delete: '<?= $this->getBackendUrl('*/backend/adapter/delete') ?>',
-            batchDelete: '<?= $this->getBackendUrl('*/backend/adapter/batchDelete') ?>',
-            batchToggle: '<?= $this->getBackendUrl('*/backend/adapter/batchToggle') ?>',
-            batchSaveDefaultModel: '<?= $this->getBackendUrl('*/backend/adapter/batchSaveDefaultModel') ?>',
-            batchSaveModelBindings: '<?= $this->getBackendUrl('*/backend/adapter/batchSaveModelBindings') ?>',
-            getModelOptions: '<?= $this->getBackendUrl('*/backend/adapter/getModelOptions') ?>',
-            cleanup: '<?= $this->getBackendUrl('*/backend/adapter/cleanup') ?>'
+            scan: '@backend-url{'*/backend/adapter/scan'}',
+            toggleStatus: '@backend-url{'*/backend/adapter/toggleStatus'}',
+            delete: '@backend-url{'*/backend/adapter/delete'}',
+            batchDelete: '@backend-url{'*/backend/adapter/batchDelete'}',
+            batchToggle: '@backend-url{'*/backend/adapter/batchToggle'}',
+            batchSaveDefaultModel: '@backend-url{'*/backend/adapter/batchSaveDefaultModel'}',
+            batchSaveModelBindings: '@backend-url{'*/backend/adapter/batchSaveModelBindings'}',
+            getModelOptions: '@backend-url{'*/backend/adapter/getModelOptions'}',
+            cleanup: '@backend-url{'*/backend/adapter/cleanup'}'
         },
         modelOptionsByModality: <?= $modelOptionsJson ?>,
 

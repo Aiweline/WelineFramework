@@ -10,7 +10,10 @@ use RuntimeException;
 final class PhpParserResultDecoder
 {
     private const DECODE_MEMORY_MULTIPLIER = 32;
-    private const MINIMUM_DECODE_FREE_BYTES = 64 * 1_024 * 1_024;
+    /** Floor for tiny payloads — enough for json_decode overhead, not a fake "file is huge" gate. */
+    private const MINIMUM_DECODE_FREE_BYTES = 4 * 1_024 * 1_024;
+    /** Cap so adversarial/huge payloads still demand substantial free memory. */
+    private const MAXIMUM_DECODE_FREE_BYTES = 64 * 1_024 * 1_024;
     private const MAX_JSON_CONTAINERS = 25_000;
     private const MAX_JSON_STRINGS = 180_000;
     private const MAX_JSON_DEPTH = 8;
@@ -96,7 +99,7 @@ final class PhpParserResultDecoder
     private function assertDecodeMemoryReserve(int $payloadBytes): void
     {
         if ($payloadBytes < 0 || $payloadBytes > intdiv(PHP_INT_MAX, self::DECODE_MEMORY_MULTIPLIER)) {
-            throw new RuntimeException('PHP parser worker output exceeds the parent decode memory reserve');
+            throw new RuntimeException('PHP parser worker output is too large for bounded decode');
         }
         $configured = ini_get('memory_limit');
         if (!is_string($configured) || $configured === '') {
@@ -106,12 +109,19 @@ final class PhpParserResultDecoder
         if ($limit === -1) {
             return;
         }
-        $required = max(
-            self::MINIMUM_DECODE_FREE_BYTES,
-            $payloadBytes * self::DECODE_MEMORY_MULTIPLIER,
+        $scaled = $payloadBytes * self::DECODE_MEMORY_MULTIPLIER;
+        $required = min(
+            self::MAXIMUM_DECODE_FREE_BYTES,
+            max(self::MINIMUM_DECODE_FREE_BYTES, $scaled),
         );
-        if ($limit <= 0 || $limit - memory_get_usage(true) < $required) {
-            throw new RuntimeException('PHP parser worker output exceeds the parent decode memory reserve');
+        $free = $limit - memory_get_usage(true);
+        if ($limit <= 0 || $free < $required) {
+            throw new RuntimeException(sprintf(
+                'PHP parser worker output exceeds the parent decode memory reserve (payload=%d bytes, need=%d free, have=%d)',
+                $payloadBytes,
+                $required,
+                max(0, $free),
+            ));
         }
     }
 

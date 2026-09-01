@@ -19,6 +19,39 @@ final class Clock
     }
 }
 
+final class HomeDirectory
+{
+    public static function resolve(): string
+    {
+        foreach ([getenv('HOME'), getenv('USERPROFILE')] as $candidate) {
+            if (is_string($candidate) && self::isUsable($candidate)) {
+                return rtrim($candidate, "/\\");
+            }
+        }
+        if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+            $info = posix_getpwuid(posix_geteuid());
+            if (is_array($info) && is_string($info['dir'] ?? null) && self::isUsable($info['dir'])) {
+                return rtrim($info['dir'], "/\\");
+            }
+        }
+
+        throw new RuntimeException('Unable to resolve a filesystem HOME directory');
+    }
+
+    public static function isUsable(string $path): bool
+    {
+        $trimmed = trim($path);
+        if ($trimmed === '') {
+            return false;
+        }
+        if (preg_match('#^https?://#i', $trimmed) === 1 || str_contains($trimmed, '://')) {
+            return false;
+        }
+
+        return true;
+    }
+}
+
 final class Json
 {
     public static function encode(mixed $value, bool $pretty = false): string

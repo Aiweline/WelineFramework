@@ -45,6 +45,15 @@ final class Config
             $values['data_dir'] = $environmentDataDir;
         }
         $values['data_dir'] = self::expandPath((string) $values['data_dir']);
+        if (preg_match('#^https?://#i', $values['data_dir']) === 1 || str_contains($values['data_dir'], '://')) {
+            throw new RuntimeException('data_dir must be a filesystem path, not a URL: ' . $values['data_dir']);
+        }
+        $environmentBoundRepository = getenv('LEARNING_MCP_BOUND_REPOSITORY');
+        if (is_string($environmentBoundRepository) && trim($environmentBoundRepository) !== '') {
+            $values['index']['bound_repository'] = trim($environmentBoundRepository);
+        } else {
+            $values['index']['bound_repository'] = trim((string) ($values['index']['bound_repository'] ?? ''));
+        }
         $environmentSkillOutputDirectory = getenv('LEARNING_MCP_SKILL_OUTPUT_DIR');
         if ((bool) ($values['knowledge']['auto_generate_skills'] ?? false)
             || (bool) ($values['knowledge']['auto_doc_sync'] ?? false)
@@ -140,14 +149,7 @@ final class Config
             throw new RuntimeException('Path cannot be empty');
         }
         if ($path === '~' || str_starts_with($path, '~/') || str_starts_with($path, '~\\')) {
-            $home = getenv('HOME');
-            if (!is_string($home) || $home === '') {
-                $home = getenv('USERPROFILE');
-            }
-            if (!is_string($home) || $home === '') {
-                throw new RuntimeException('HOME and USERPROFILE are unavailable for path expansion');
-            }
-            $path = $home . substr($path, 1);
+            $path = HomeDirectory::resolve() . substr($path, 1);
         }
         $absolute = str_starts_with($path, '/')
             || str_starts_with($path, '\\')
@@ -245,6 +247,8 @@ final class Config
                 'enabled' => true,
                 'auto_refresh' => true,
                 'sidecar_enabled' => true,
+                // Empty = unbound (tests/CLI). Cursor registration injects LEARNING_MCP_BOUND_REPOSITORY.
+                'bound_repository' => '',
                 'refresh_interval' => '60s',
                 'max_file_bytes' => 524_288,
                 'max_chunk_chars' => 6_000,
@@ -261,6 +265,8 @@ final class Config
                     'quarantine_period' => '24h',
                     'sweep_interval' => '1h',
                     'max_generations' => 100,
+                    // When bound_repository is set, quarantine other project generations.
+                    'purge_unbound' => true,
                 ],
                 'allowed_extensions' => [
                     'php', 'phtml', 'md', 'markdown', 'txt', 'json', 'yaml', 'yml', 'xml', 'toml', 'ini',
@@ -390,6 +396,7 @@ final class Config
                 'enabled' => true,
                 'auto_refresh' => true,
                 'sidecar_enabled' => true,
+                'bound_repository' => true,
                 'refresh_interval' => true,
                 'max_file_bytes' => true,
                 'max_chunk_chars' => true,
@@ -406,6 +413,7 @@ final class Config
                     'quarantine_period' => true,
                     'sweep_interval' => true,
                     'max_generations' => true,
+                    'purge_unbound' => true,
                 ],
                 'allowed_extensions' => true,
                 'excluded_paths' => true,
@@ -517,7 +525,7 @@ final class Config
             'retrieval.include_candidates', 'promotion.automatic',
             'privacy.redact_before_model', 'scheduler.auto_process_on_stop',
             'index.enabled', 'index.auto_refresh', 'index.sidecar_enabled', 'index.include_tests',
-            'index.gc.enabled',
+            'index.gc.enabled', 'index.gc.purge_unbound',
             'editing.enabled', 'knowledge.auto_generate_skills', 'knowledge.auto_doc_sync',
             'knowledge.learning_skills.enabled', 'knowledge.learning_skills.inject_on_prompt',
             'knowledge.codex.enabled',
