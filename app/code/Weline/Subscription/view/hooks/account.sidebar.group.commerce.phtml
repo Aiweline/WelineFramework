@@ -1,0 +1,21 @@
+<?php
+/**
+ * Weline_Subscription — account sidebar commerce entry.
+ *
+ * Hook: account.sidebar.group.commerce
+ *
+ * @hook-priority 170
+ * @hook-sort-order 20
+ * @hook-solo false
+ */
+$GLOBALS['__weline_subscription_account_sidebar_rendered'] = true;
+?>
+<a class="account-hook-nav-link" href="@url{'customer/account/index'}#subscriptions" data-section="subscriptions" data-account-nav-link="true" data-account-nav-parent="commerce">
+    <span class="account-hook-nav-link__label">
+        <w:icon name="refresh" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text">
+            <strong><lang>我的订阅</lang></strong>
+            <span><lang>查看订阅周期与账单状态</lang></span>
+        </span>
+    </span>
+</a>
