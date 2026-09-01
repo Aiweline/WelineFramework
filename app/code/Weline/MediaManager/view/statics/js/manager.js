@@ -30,6 +30,16 @@
     var OPEN_REQUEST_SERIAL = 0;
     var STORAGE_CAPABILITIES = {};
     var CURRENT_CAPABILITIES = normalizeCapabilities({});
+    var INSTALLED_LOCALES = [];
+    var AI_AUTO_TRANSLATION = false;
+    var LOCALE_WORKBENCH = {
+        assetId: '',
+        hash: '',
+        activeLocale: '',
+        localesByCode: {},
+        revision: 0,
+        busy: ''
+    };
     var CONTEXT_MENU_BOUND = false;
     var CONTEXT_MENU_RETURN_FOCUS = null;
     var DIALOG_CLEANUP = null;
@@ -44,7 +54,10 @@
     var API_MAX_ASSET_UPLOAD_BYTES = 512 * 1024 * 1024;
     var UPLOAD_CHUNK_BYTES = 4 * 1024 * 1024;
     var API_MAX_UPLOAD_FILES = 100;
-    var DETAILS_RETURN_FOCUS = null;
+    var NAV_PENDING = null;
+    var SEARCH_SERIAL = 0;
+    var SEARCH_DEBOUNCE_TIMER = null;
+    var SEARCH_HIGHLIGHT_TIMER = null;
     var SAFE_UPLOAD_EXTENSIONS = [
         'jpg', 'jpeg', 'png', 'gif', 'webp', 'ico', 'bmp', 'tiff', 'tif', 'avif',
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'txt', 'csv', 'json',
@@ -107,7 +120,89 @@
         return window;
     }
 
+    function connectorNativeRequest(params) {
+        return new Promise(function(resolve, reject) {
+            if (!CONNECTOR) {
+                reject(new Error(t('connectorNotConfigured')));
+                return;
+            }
+            var endpoint;
+            try {
+                endpoint = new URL(CONNECTOR, document.baseURI);
+            } catch (_error) {
+                reject(new Error(t('connectorNotConfigured')));
+                return;
+            }
+            if (endpoint.origin !== window.location.origin) {
+                reject(new Error(t('crossOriginUploadRejected')));
+                return;
+            }
+            if (!CONFIG.connectorFormKey) {
+                reject(new Error(t('uploadSecurityTokenMissing')));
+                return;
+            }
+            var body = new FormData();
+            body.append('form_key', String(CONFIG.connectorFormKey));
+            Object.keys(params || {}).forEach(function(key) {
+                if (Object.prototype.hasOwnProperty.call(params, key)
+                    && params[key] !== undefined
+                    && params[key] !== null) {
+                    body.append(key, String(params[key]));
+                }
+            });
+            var xhr = new XMLHttpRequest();
+            xhr.open('POST', endpoint.href, true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('X-Requested-With', 'XMLHttpRequest');
+            xhr.onload = function() {
+                var response;
+                try {
+                    response = JSON.parse(String(xhr.responseText || ''));
+                } catch (_error) {
+                    reject(new Error(t('invalidJson')));
+                    return;
+                }
+                if (xhr.status < 200 || xhr.status >= 300 || (response && response.error)) {
+                    var message = response && response.error;
+                    if (Array.isArray(message)) {
+                        message = message.join(', ');
+                    }
+                    reject(new Error(String(message || t('networkError'))));
+                    return;
+                }
+                resolve(response);
+            };
+            xhr.onerror = function() {
+                reject(new Error(t('networkError')));
+            };
+            xhr.send(body);
+        });
+    }
+
     function mmResource(op, params) {
+        if (op === 'connector') {
+            if (IFRAME_MODE) {
+                return connectorNativeRequest(params || {});
+            }
+            var runConnector = function(api){
+                if (!api || typeof api.resource !== 'function') {
+                    return connectorNativeRequest(params || {});
+                }
+                return api.resource('media_manager').connector(params || {});
+            };
+            var host = resolveBackendApiHost();
+            if (host.Weline && typeof host.Weline.load === 'function') {
+                return host.Weline.load('api').then(runConnector).catch(function() {
+                    return connectorNativeRequest(params || {});
+                });
+            }
+            if (host.Weline && host.Weline.Api) {
+                return Promise.resolve().then(function() {
+                    return runConnector(host.Weline.Api);
+                });
+            }
+            return connectorNativeRequest(params || {});
+        }
         var run = function(api){
             if (!api || typeof api.resource !== 'function') {
                 throw new Error(t('backendApiUnavailable'));
@@ -137,6 +232,16 @@
             }
             if (payload && payload.cmd !== 'storages' && !payload.locale_code) {
                 payload.locale_code = CONFIG.localeCode || 'zh_Hans_CN';
+            }
+            if (payload && payload.cmd !== 'storages') {
+                if (CONFIG.lockPath) {
+                    payload.lockPath = '1';
+                    if (CONFIG.lockRoot) {
+                        payload.lockRoot = CONFIG.lockRoot;
+                    }
+                } else if (payload.lockPath == null) {
+                    payload.lockPath = '0';
+                }
             }
             return mmResource('connector', payload);
         }).then(function(data){
@@ -279,6 +384,29 @@
                 var urlParams = new URLSearchParams(window.location.search);
                 var fromUrl = urlParams.get('initialValue');
                 if (fromUrl !== null && fromUrl !== '') CONFIG.initialValue = fromUrl;
+                [
+                    ['aspect_ratio', 'aspectRatio'],
+                    ['aspectRatio', 'aspectRatio'],
+                    ['aspect_ratio_tolerance', 'aspectRatioTolerance'],
+                    ['aspectRatioTolerance', 'aspectRatioTolerance'],
+                    ['recommend_width', 'recommendWidth'],
+                    ['recommendWidth', 'recommendWidth'],
+                    ['recommend_height', 'recommendHeight'],
+                    ['recommendHeight', 'recommendHeight'],
+                    ['lockRoot', 'lockRoot'],
+                    ['lock_root', 'lockRoot'],
+                    ['path', 'startPathFromUrl']
+                ].forEach(function (pair) {
+                    var raw = urlParams.get(pair[0]);
+                    if (raw !== null && String(raw).trim() !== '') {
+                        CONFIG[pair[1]] = String(raw).trim();
+                    }
+                });
+                var lockPathRaw = urlParams.get('lockPath');
+                if (lockPathRaw === null) lockPathRaw = urlParams.get('lock_path');
+                if (lockPathRaw !== null && String(lockPathRaw).trim() !== '') {
+                    CONFIG.lockPath = !!(lockPathRaw === '1' || String(lockPathRaw).toLowerCase() === 'true');
+                }
             } catch (e) {}
         }
         if (!CONFIG.initialValue && (options.initialValue || '').trim() !== '') {
@@ -306,6 +434,12 @@
             return;
         }
         START_PATH = (typeof startPath === 'string' ? startPath : '').trim();
+        if (!START_PATH && CONFIG.startPathFromUrl) {
+            START_PATH = String(CONFIG.startPathFromUrl).trim();
+        }
+        CONFIG.lockPath = !!CONFIG.lockPath;
+        CONFIG.lockRoot = normalizeBoundaryPath(CONFIG.lockRoot || '');
+        LOCK_ROOT_PATH = CONFIG.lockRoot;
         CURRENT_CAPABILITIES = normalizeCapabilities({});
         updateStorageKey();
         resetTransientUi();
@@ -321,18 +455,28 @@
         bindToolbar();
         bindDragDrop();
         bindClipboardPaste();
+        bindMediaSearch();
         bindContextMenu();
         bindPreviewPanel();
         bindResponsiveChrome();
         bindDetailsDialog();
+        bindTranslationConfigToggle();
+        bindLocaleWorkbenchActions();
         bindAiDraw();
         updateToolbarCapabilities();
+        updateAspectRatioHint();
+        updatePathLockButton();
         
         // iframe 模式下绑定选择工具栏
         if (IFRAME_MODE) {
             window.addEventListener('message', handleParentMessage);
             bindSelectBar();
             bindIframeLayoutHost();
+            // 多选嵌入选择器：默认进入选择模式，单击切换勾选（无需 Ctrl/右键）
+            if (MULTI_SELECT) {
+                enterSelectionMode();
+                updateSelectBar();
+            }
         }
 
         loadStorages().then(function(ready) {
@@ -551,19 +695,91 @@
     }
 
     function isPathWithinLockedRoot(path) {
-        if (!CONFIG.lockPath || ROOT_HASH === '') return true;
+        if (!CONFIG.lockPath) return true;
         var candidate = normalizeBoundaryPath(path);
         if (LOCK_ROOT_PATH === '') return true;
         return candidate === LOCK_ROOT_PATH || candidate.indexOf(LOCK_ROOT_PATH + '/') === 0;
     }
 
+    function isTreeItemOutsideLock(path) {
+        if (!CONFIG.lockPath || LOCK_ROOT_PATH === '') return false;
+        return !isPathWithinLockedRoot(path);
+    }
+
+    function resolveHashForPath(path) {
+        var normalized = normalizeBoundaryPath(path);
+        if (normalized === '') return '';
+        var collections = [FILES, TREE];
+        for (var i = 0; i < collections.length; i++) {
+            var bag = collections[i];
+            for (var hash in bag) {
+                if (!Object.prototype.hasOwnProperty.call(bag, hash)) continue;
+                if (normalizeBoundaryPath(bag[hash].path) === normalized) {
+                    return hash;
+                }
+            }
+        }
+        return '';
+    }
+
     function canOpenDirectoryHash(hash) {
-        if (!CONFIG.lockPath || ROOT_HASH === '') return true;
-        if (hash === ROOT_HASH) return true;
+        if (!CONFIG.lockPath) return true;
+        if (ROOT_HASH !== '' && hash === ROOT_HASH) return true;
         var directory = FILES[hash] || TREE[hash];
         return !!directory
             && directory.mime === 'directory'
             && isPathWithinLockedRoot(directory.path);
+    }
+
+    function updatePathLockButton() {
+        var btn = qs('#mmf-btn-path-lock');
+        var row = qs('.mmf-path-row');
+        if (row) {
+            row.classList.toggle('mmf-path-row--locked', !!(CONFIG.lockRoot && CONFIG.lockPath));
+        }
+        if (!btn) return;
+        var available = !!CONFIG.lockRoot;
+        btn.classList.toggle('mmf-path-lock--available', available);
+        btn.hidden = !available;
+        if (!available) return;
+        var locked = !!CONFIG.lockPath;
+        btn.setAttribute('aria-pressed', locked ? 'true' : 'false');
+        var label = locked ? t('unlockDirectory') : t('lockDirectory');
+        var icon = locked ? '\uD83D\uDD12' : '\uD83D\uDD13';
+        btn.title = label;
+        var iconEl = qs('.mmf-path-lock-icon', btn);
+        var labelEl = qs('.mmf-path-lock-label', btn);
+        if (iconEl) iconEl.textContent = icon;
+        if (labelEl) labelEl.textContent = label;
+        else btn.textContent = label;
+    }
+
+    function setPathLockEnabled(enabled) {
+        var next = !!enabled;
+        var changed = next !== !!CONFIG.lockPath;
+        CONFIG.lockPath = next;
+        updatePathLockButton();
+        if (next && LOCK_ROOT_PATH) {
+            if (!isPathWithinLockedRoot(CWD_INFO.path || '')) {
+                var hash = resolveHashForPath(LOCK_ROOT_PATH);
+                if (hash) {
+                    openDir(hash);
+                } else {
+                    START_PATH = LOCK_ROOT_PATH;
+                    openDir('', true);
+                }
+            } else {
+                try { renderTree(); } catch (_e) {}
+                try { renderPath(); } catch (_e2) {}
+            }
+        } else {
+            try { renderTree(); } catch (_e3) {}
+            try { renderPath(); } catch (_e4) {}
+        }
+        if (changed) {
+            if (next) showSuccess(t('directoryRelocked'));
+            else showSuccess(t('directoryUnlocked'));
+        }
     }
 
     function openDir(target, isInit) {
@@ -600,9 +816,8 @@
                     CURRENT_CAPABILITIES = normalizeCapabilities(data.capabilities);
                     STORAGE_CAPABILITIES[CURRENT_STORAGE] = CURRENT_CAPABILITIES;
                 }
-                if (isInit && CWD_HASH) {
-                    ROOT_HASH = CWD_HASH;
-                    LOCK_ROOT_PATH = normalizeBoundaryPath(CWD_INFO.path || START_PATH);
+                if (data.translation_config) {
+                    applyTranslationConfig(data.translation_config);
                 }
 
                 FILES = {};
@@ -629,6 +844,20 @@
                     });
                 }
 
+                if (isInit && CWD_HASH) {
+                    if (CONFIG.lockRoot) {
+                        LOCK_ROOT_PATH = normalizeBoundaryPath(CONFIG.lockRoot);
+                        ROOT_HASH = resolveHashForPath(LOCK_ROOT_PATH) || CWD_HASH;
+                    } else {
+                        ROOT_HASH = CWD_HASH;
+                        LOCK_ROOT_PATH = normalizeBoundaryPath(CWD_INFO.path || START_PATH);
+                        if (CONFIG.lockPath && !CONFIG.lockRoot) {
+                            CONFIG.lockRoot = LOCK_ROOT_PATH;
+                        }
+                    }
+                    updatePathLockButton();
+                }
+
                 SELECTED = [];
                 renderTree();
                 renderFiles();
@@ -643,6 +872,10 @@
                     applyInitialSelection();
                 }
                 saveLastPath();
+                if (data.folder_created) {
+                    showSuccess(t('folderCreated'));
+                }
+                applyNavigationPending();
                 if (wrap) wrap.dataset.openState = 'done';
             } catch (e) {
                 if (requestSerial !== OPEN_REQUEST_SERIAL) return;
@@ -684,14 +917,7 @@
         var childMap = {};
         for (var h in TREE) {
             var f = TREE[h];
-            if (CONFIG.lockPath && !isPathWithinLockedRoot(f.path)) {
-                continue;
-            }
-            if (
-                !f.phash
-                || !TREE[f.phash]
-                || (CONFIG.lockPath && !isPathWithinLockedRoot(TREE[f.phash].path))
-            ) {
+            if (!f.phash || !TREE[f.phash]) {
                 roots.push(f);
             } else {
                 if (!childMap[f.phash]) childMap[f.phash] = [];
@@ -700,6 +926,12 @@
         }
 
         expandToPath(CWD_HASH);
+        if (CONFIG.lockPath && ROOT_HASH) {
+            expandToPath(ROOT_HASH);
+            roots.forEach(function (r) {
+                EXPANDED_NODES[r.hash] = true;
+            });
+        }
 
         var el = qs('.mmf-tree');
         if (!el) return;
@@ -718,9 +950,11 @@
             var isActive = n.hash === CWD_HASH;
             var isExpanded = !!EXPANDED_NODES[n.hash];
             var hasPlaceholder = n.dirs && !hasKids;
-            var canManage = itemCapability('rename', n) || itemCapability('delete', n);
+            var canManage = !isTreeItemOutsideLock(n.path)
+                && (itemCapability('rename', n) || itemCapability('delete', n));
+            var outsideLock = isTreeItemOutsideLock(n.path);
             html += '<li>';
-            html += '<div class="mmf-tree-item' + (isActive ? ' active' : '') + '" role="treeitem" tabindex="0"';
+            html += '<div class="mmf-tree-item' + (isActive ? ' active' : '') + (outsideLock ? ' mmf-tree-item--outside-lock' : '') + '" role="treeitem" tabindex="0"';
             html += ' aria-selected="' + (isActive ? 'true' : 'false') + '" data-hash="' + escAttr(n.hash) + '">';
             html += '<span class="mmf-tree-toggle' + (isExpanded ? ' expanded' : '') + '" aria-hidden="true">';
             html += (hasKids || hasPlaceholder) ? (isExpanded ? '\u25BC' : '\u25B6') : '';
@@ -773,6 +1007,10 @@
             bindDirectoryDropTarget(item);
             item.onclick = function (e) {
                 if (e.target.classList.contains('mmf-tree-toggle') || e.target.closest('[data-mmf-tree-menu]')) return;
+                if (item.classList.contains('mmf-tree-item--outside-lock')) {
+                    showError(t('cannotAccessOutsidePath'));
+                    return;
+                }
                 var hash = item.getAttribute('data-hash');
                 openDir(hash);
             };
@@ -799,6 +1037,10 @@
                 }
                 if (e.key === 'Enter') {
                     e.preventDefault();
+                    if (item.classList.contains('mmf-tree-item--outside-lock')) {
+                        showError(t('cannotAccessOutsidePath'));
+                        return;
+                    }
                     openDir(hash);
                 }
             };
@@ -819,6 +1061,10 @@
         var hash = item && item.getAttribute('data-hash');
         var file = hash ? (FILES[hash] || TREE[hash]) : null;
         if (!file) return false;
+        if (item && item.classList.contains('mmf-tree-item--outside-lock')) {
+            showError(t('cannotAccessOutsidePath'));
+            return false;
+        }
         FILES[hash] = file;
         SELECTED = [hash];
         highlightSelected();
@@ -867,6 +1113,204 @@
             }
         }
         return childMap;
+    }
+
+    function bindMediaSearch() {
+        var input = qs('#mmf-search-input');
+        var results = qs('#mmf-search-results');
+        if (!input || !results || input.dataset.mmfSearchBound === '1') return;
+        input.dataset.mmfSearchBound = '1';
+
+        function setResultsVisible(visible) {
+            results.hidden = !visible;
+            input.setAttribute('aria-expanded', visible ? 'true' : 'false');
+        }
+
+        function hideResults() {
+            setResultsVisible(false);
+            results.replaceChildren();
+        }
+
+        function renderSearchState(kind, message) {
+            results.replaceChildren();
+            var el = document.createElement('div');
+            el.className = kind === 'loading' ? 'mmf-search-loading' : 'mmf-search-empty';
+            el.textContent = message;
+            results.appendChild(el);
+            setResultsVisible(true);
+        }
+
+        function isSearchResultAccessible(entry) {
+            if (!entry) return false;
+            if (!CONFIG.lockPath || LOCK_ROOT_PATH === '') return true;
+            return isPathWithinLockedRoot(entry.path || '');
+        }
+
+        function renderSearchResults(items) {
+            results.replaceChildren();
+            if (!items.length) {
+                renderSearchState('empty', t('searchNoResults'));
+                return;
+            }
+            items.forEach(function(entry, index) {
+                var button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'mmf-search-result';
+                button.setAttribute('role', 'option');
+                button.id = 'mmf-search-result-' + index;
+                button.dataset.hash = entry.hash || '';
+                var isDirectory = entry.mime === 'directory';
+                button.innerHTML = ''
+                    + '<span class="mmf-search-result-icon" aria-hidden="true">'
+                    + (isDirectory ? '\uD83D\uDCC1' : '\uD83D\uDCC4')
+                    + '</span>'
+                    + '<span class="mmf-search-result-body">'
+                    + '<span class="mmf-search-result-name">' + escHtml(entry.name || '') + '</span>'
+                    + '<span class="mmf-search-result-path">' + escHtml(formatSearchResultPath(entry.path || '')) + '</span>'
+                    + '</span>';
+                button.addEventListener('click', function() {
+                    hideResults();
+                    input.value = entry.name || '';
+                    navigateToSearchResult(entry);
+                });
+                results.appendChild(button);
+            });
+            setResultsVisible(true);
+        }
+
+        function runSearch() {
+            var query = String(input.value || '').trim();
+            if (!query) {
+                hideResults();
+                return;
+            }
+            var requestSerial = ++SEARCH_SERIAL;
+            renderSearchState('loading', t('searching'));
+            var params = {cmd: 'search', query: query, limit: 50};
+            if (CONFIG.lockPath && LOCK_ROOT_PATH) {
+                params.path = LOCK_ROOT_PATH;
+            } else if (START_PATH) {
+                params.path = START_PATH;
+            }
+            api(params, function(data) {
+                if (requestSerial !== SEARCH_SERIAL) return;
+                var matches = Array.isArray(data && data.results) ? data.results : [];
+                renderSearchResults(matches.filter(isSearchResultAccessible));
+            }, function() {
+                if (requestSerial !== SEARCH_SERIAL) return;
+                renderSearchState('empty', t('searchFailed'));
+            });
+        }
+
+        input.addEventListener('input', function() {
+            if (SEARCH_DEBOUNCE_TIMER) window.clearTimeout(SEARCH_DEBOUNCE_TIMER);
+            var query = String(input.value || '').trim();
+            if (!query) {
+                hideResults();
+                return;
+            }
+            SEARCH_DEBOUNCE_TIMER = window.setTimeout(runSearch, 300);
+        });
+        input.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') {
+                hideResults();
+                return;
+            }
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                if (SEARCH_DEBOUNCE_TIMER) {
+                    window.clearTimeout(SEARCH_DEBOUNCE_TIMER);
+                    SEARCH_DEBOUNCE_TIMER = null;
+                }
+                runSearch();
+            }
+        });
+        input.addEventListener('focus', function() {
+            if (String(input.value || '').trim() && results.childElementCount) {
+                setResultsVisible(true);
+            }
+        });
+        document.addEventListener('pointerdown', function(e) {
+            if (!input.contains(e.target) && !results.contains(e.target)) {
+                hideResults();
+            }
+        });
+    }
+
+    function formatSearchResultPath(path) {
+        var value = String(path || '').replace(/^\/+|\/+$/g, '');
+        return value || '/';
+    }
+
+    function navigateToSearchResult(entry) {
+        if (!entry || !entry.hash) return;
+        var isDirectory = entry.mime === 'directory';
+        var directoryHash = isDirectory ? entry.hash : String(entry.phash || '');
+        if (!directoryHash) {
+            showError(t('searchTargetMissing'));
+            return;
+        }
+        if (!canOpenDirectoryHash(directoryHash)) {
+            showError(t('cannotAccessOutsidePath'));
+            return;
+        }
+        NAV_PENDING = {
+            directoryHash: directoryHash,
+            focusHash: isDirectory ? '' : entry.hash,
+            treeFocusHash: isDirectory ? entry.hash : directoryHash,
+            highlightHash: entry.hash
+        };
+        openDir(directoryHash);
+    }
+
+    function applyNavigationPending() {
+        if (!NAV_PENDING || NAV_PENDING.directoryHash !== CWD_HASH) return;
+        var pending = NAV_PENDING;
+        NAV_PENDING = null;
+        expandToPath(pending.treeFocusHash);
+        renderTree();
+        if (pending.focusHash && FILES[pending.focusHash]) {
+            SELECTED = [pending.focusHash];
+        } else if (pending.focusHash === '' && pending.treeFocusHash) {
+            SELECTED = [pending.treeFocusHash];
+        }
+        highlightSelected();
+        window.requestAnimationFrame(function() {
+            if (pending.focusHash) {
+                scrollMediaItemIntoView(pending.focusHash);
+            }
+            scrollTreeItemIntoView(pending.treeFocusHash);
+            flashSearchHighlight(pending.highlightHash || pending.treeFocusHash);
+        });
+    }
+
+    function scrollMediaItemIntoView(hash) {
+        var item = qs('.mmf-item[data-hash="' + hash + '"]');
+        if (item) item.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    }
+
+    function scrollTreeItemIntoView(hash) {
+        var item = qs('.mmf-tree-item[data-hash="' + hash + '"]');
+        if (item) item.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+    }
+
+    function flashSearchHighlight(hash) {
+        if (!hash) return;
+        qsa('.mmf-item.search-highlight, .mmf-tree-item.search-highlight').forEach(function(el) {
+            el.classList.remove('search-highlight');
+        });
+        qsa('[data-hash="' + hash + '"]').forEach(function(el) {
+            if (el.classList.contains('mmf-item') || el.classList.contains('mmf-tree-item')) {
+                el.classList.add('search-highlight');
+            }
+        });
+        if (SEARCH_HIGHLIGHT_TIMER) window.clearTimeout(SEARCH_HIGHLIGHT_TIMER);
+        SEARCH_HIGHLIGHT_TIMER = window.setTimeout(function() {
+            qsa('.mmf-item.search-highlight, .mmf-tree-item.search-highlight').forEach(function(el) {
+                el.classList.remove('search-highlight');
+            });
+            SEARCH_HIGHLIGHT_TIMER = null;
+        }, 2400);
     }
 
     function renderFiles() {
@@ -969,21 +1413,34 @@
         if (!el) return;
         var parts = [];
         var cur = CWD_HASH;
-        while (cur && FILES[cur]) {
-            parts.unshift(FILES[cur]);
-            if (CONFIG.lockPath && cur === ROOT_HASH) break;
-            cur = FILES[cur].phash;
+        var guard = 0;
+        while (cur && guard < 64) {
+            guard += 1;
+            var node = FILES[cur] || TREE[cur];
+            if (!node) break;
+            parts.unshift(node);
+            if (CONFIG.lockPath && ROOT_HASH && cur === ROOT_HASH) break;
+            if (!node.phash) break;
+            cur = node.phash;
         }
         var html = '';
         parts.forEach(function (p, i) {
             if (i > 0) html += '<span class="mmf-path-sep">/</span>';
             html += '<span class="mmf-path-seg" data-hash="' + escAttr(p.hash) + '">' + escHtml(p.name) + '</span>';
         });
+        if (!html && CONFIG.lockRoot) {
+            html = '<span class="mmf-path-seg" data-hash="' + escAttr(ROOT_HASH || CWD_HASH) + '">'
+                + escHtml(LOCK_ROOT_PATH || CONFIG.lockRoot)
+                + '</span>';
+        }
         el.innerHTML = html;
+        updatePathLockButton();
 
         qsa('.mmf-path-seg', el).forEach(function (seg) {
             seg.addEventListener('click', function () {
-                openDir(seg.dataset.hash);
+                var hash = seg.dataset.hash;
+                if (!hash) return;
+                openDir(hash);
             });
         });
     }
@@ -1046,14 +1503,20 @@
                 if (e.detail >= 2 && openDirectoryFromInteraction(hash, el.dataset.mime)) {
                     return;
                 }
-                
+
+                // selection-error files remain clickable for preview; confirm/dblclick stay blocked.
+                var selectionError = el.getAttribute('data-selection-error');
+                var hasSelectionError = !!(selectionError && FILES[hash] && FILES[hash].mime !== 'directory');
+
                 if (SELECTION_MODE) {
                     toggleSelect(hash);
                     LAST_CLICKED_HASH = hash;
                     updateStatus();
+                    updatePreviewPanel();
+                    if (hasSelectionError) showError(selectionError);
                     return;
                 }
-                
+
                 if (e.shiftKey && LAST_CLICKED_HASH) {
                     var startIdx = -1, endIdx = -1;
                     for (var i = 0; i < itemsArray.length; i++) {
@@ -1083,6 +1546,8 @@
                     highlightSelected();
                 }
                 updateStatus();
+                updatePreviewPanel();
+                if (hasSelectionError) showError(selectionError);
             });
 
             el.addEventListener('dblclick', function () {
@@ -1091,7 +1556,13 @@
                 if (!f) return;
                 if (openDirectoryFromInteraction(hash, el.dataset.mime)) {
                     return;
-                } else if (IFRAME_MODE) {
+                }
+                var selectionError = el.getAttribute('data-selection-error');
+                if (selectionError) {
+                    showError(selectionError);
+                    return;
+                }
+                if (IFRAME_MODE) {
                     confirmSelection();
                 } else if (isImageMime(f.mime)) {
                     openLightbox(hash);
@@ -1265,6 +1736,7 @@
 
     function updateRenderedDimensions(file, width, height) {
         if (!file || width < 1 || height < 1) return;
+        var hadDimensions = Number(file.width || 0) > 0 && Number(file.height || 0) > 0;
         if (!file.width) file.width = width;
         if (!file.height) file.height = height;
         qsa('[data-field="dimensions"] .mmf-metadata-value').forEach(function(value) {
@@ -1272,6 +1744,290 @@
             if (metadataList && metadataList.dataset.fileHash !== String(file.hash || '')) return;
             value.textContent = width + ' × ' + height;
         });
+        if (!hadDimensions && configuredAspectRatio() && IFRAME_MODE) {
+            renderFiles();
+            highlightSelected();
+        }
+    }
+
+    function isTruthyFlag(value) {
+        return value === true || value === 1 || value === '1';
+    }
+
+    function applyTranslationConfig(config) {
+        if (!config || typeof config !== 'object') return;
+        AI_AUTO_TRANSLATION = isTruthyFlag(config.ai_auto_translation);
+        if (Array.isArray(config.installed_locales)) {
+            INSTALLED_LOCALES = config.installed_locales.map(function(code) {
+                return String(code || '').trim();
+            }).filter(Boolean);
+        }
+        var checkbox = qs('[data-mmf-ai-auto-translate]');
+        if (checkbox) checkbox.checked = AI_AUTO_TRANSLATION;
+    }
+
+    function bindTranslationConfigToggle() {
+        var checkbox = qs('[data-mmf-ai-auto-translate]');
+        if (!checkbox || checkbox.dataset.bound === '1') return;
+        checkbox.dataset.bound = '1';
+        checkbox.addEventListener('change', function() {
+            var enabled = !!checkbox.checked;
+            api({
+                cmd: 'translation_config',
+                action: 'set',
+                ai_auto_translation: enabled ? 1 : 0
+            }, function(data) {
+                applyTranslationConfig(data || {ai_auto_translation: enabled});
+                if (enabled) {
+                    var queueId = data && Number(data.queue_id) > 0 ? Number(data.queue_id) : 0;
+                    showSuccess(queueId > 0
+                        ? t('aiAutoTranslationQueued', {id: queueId})
+                        : t('aiAutoTranslationOn'));
+                } else {
+                    showSuccess(t('aiAutoTranslationOff'));
+                }
+            }, function(err) {
+                checkbox.checked = AI_AUTO_TRANSLATION;
+                showError(err || t('aiAutoTranslationSaveFailed'));
+            });
+        });
+    }
+
+    function localeRecordMap(locales) {
+        var map = {};
+        (locales || []).forEach(function(row) {
+            if (!row || !row.locale_code) return;
+            map[String(row.locale_code)] = row;
+        });
+        return map;
+    }
+
+    function renderLocaleWorkbench(file) {
+        var root = qs('[data-mmf-locale-workbench]');
+        if (!root) return;
+        if (!file || file.mime === 'directory' || !file.asset_id) {
+            root.hidden = true;
+            LOCALE_WORKBENCH.assetId = '';
+            return;
+        }
+        root.hidden = false;
+        LOCALE_WORKBENCH.assetId = String(file.asset_id);
+        LOCALE_WORKBENCH.hash = String(file.hash || '');
+        LOCALE_WORKBENCH.revision = Number(file.asset_revision || 0);
+        LOCALE_WORKBENCH.activeLocale = String(
+            LOCALE_WORKBENCH.activeLocale || file.locale_code || CONFIG.localeCode || 'zh_Hans_CN'
+        );
+        api({
+            cmd: 'asset_locales',
+            target: file.hash,
+            asset_id: String(file.asset_id)
+        }, function(data) {
+            if (!data || String(data.asset_id) !== LOCALE_WORKBENCH.assetId) return;
+            if (Array.isArray(data.installed_locales) && data.installed_locales.length) {
+                INSTALLED_LOCALES = data.installed_locales.map(String);
+            }
+            LOCALE_WORKBENCH.localesByCode = localeRecordMap(data.locales || []);
+            paintLocaleWorkbench();
+        });
+    }
+
+    function paintLocaleWorkbench() {
+        var tabs = qs('[data-mmf-locale-tabs]');
+        if (!tabs) return;
+        tabs.replaceChildren();
+        var codes = INSTALLED_LOCALES.slice();
+        if (!codes.length) {
+            codes = Object.keys(LOCALE_WORKBENCH.localesByCode);
+        }
+        if (codes.indexOf(LOCALE_WORKBENCH.activeLocale) < 0 && codes.length) {
+            LOCALE_WORKBENCH.activeLocale = codes[0];
+        }
+        codes.forEach(function(code) {
+            var row = LOCALE_WORKBENCH.localesByCode[code];
+            var btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'mmf-locale-tab' + (code === LOCALE_WORKBENCH.activeLocale ? ' is-active' : '');
+            btn.setAttribute('role', 'tab');
+            btn.setAttribute('aria-selected', code === LOCALE_WORKBENCH.activeLocale ? 'true' : 'false');
+            btn.dataset.locale = code;
+            btn.textContent = code + (row && row.has_content ? '' : ' · ' + t('localeMissing'));
+            btn.addEventListener('click', function() {
+                LOCALE_WORKBENCH.activeLocale = code;
+                paintLocaleWorkbench();
+            });
+            tabs.appendChild(btn);
+        });
+        var active = LOCALE_WORKBENCH.localesByCode[LOCALE_WORKBENCH.activeLocale] || {};
+        var displayName = qs('[data-mmf-locale-display-name]');
+        var defaultAlt = qs('[data-mmf-locale-default-alt]');
+        var description = qs('[data-mmf-locale-description]');
+        var caption = qs('[data-mmf-locale-caption]');
+        var status = qs('[data-mmf-locale-status]');
+        if (displayName) displayName.value = String(active.display_name || '');
+        if (defaultAlt) defaultAlt.value = String(active.default_alt || '');
+        if (description) description.value = String(active.description || '');
+        if (caption) caption.value = String(active.default_caption || '');
+        if (status) {
+            status.classList.toggle('is-loading', LOCALE_WORKBENCH.busy === 'translate');
+            if (LOCALE_WORKBENCH.busy === 'translate') {
+                status.textContent = t('localeTranslatingHint');
+            } else {
+                status.textContent = [
+                    t('metadataTranslationState') + ': ' + (active.translation_state || '—'),
+                    t('metadataTranslationOrigin') + ': ' + (active.translation_origin || '—')
+                ].join(' · ');
+            }
+        }
+    }
+
+    function rememberLocaleButtonLabel(btn) {
+        if (!btn || btn.dataset.defaultLabel) return;
+        btn.dataset.defaultLabel = String(btn.textContent || '').trim();
+    }
+
+    function setLocaleActionButtonBusy(btn, busy, loadingText) {
+        if (!btn) return;
+        rememberLocaleButtonLabel(btn);
+        btn.disabled = !!busy;
+        btn.classList.toggle('is-loading', !!busy);
+        btn.setAttribute('aria-busy', busy ? 'true' : 'false');
+        if (busy) {
+            btn.innerHTML = '<span class="mmf-spinner" aria-hidden="true"></span><span>'
+                + escHtml(String(loadingText || ''))
+                + '</span>';
+            return;
+        }
+        btn.textContent = btn.dataset.defaultLabel || btn.textContent || '';
+    }
+
+    function ensureLocaleWorkbenchLoadingOverlay(root) {
+        if (!root) return null;
+        var overlay = qs('[data-mmf-locale-loading-overlay]', root);
+        if (overlay) return overlay;
+        overlay = document.createElement('div');
+        overlay.className = 'mmf-locale-loading-overlay';
+        overlay.setAttribute('data-mmf-locale-loading-overlay', '');
+        overlay.hidden = true;
+        overlay.innerHTML = '<span class="mmf-spinner" aria-hidden="true"></span><span data-mmf-locale-loading-text></span>';
+        root.appendChild(overlay);
+        return overlay;
+    }
+
+    function setLocaleWorkbenchBusy(busy, mode) {
+        LOCALE_WORKBENCH.busy = busy ? String(mode || 'translate') : '';
+        var root = qs('[data-mmf-locale-workbench]');
+        var saveBtn = qs('[data-mmf-locale-save]');
+        var translateBtn = qs('[data-mmf-locale-translate]');
+        var editor = qs('[data-mmf-locale-editor]');
+        var status = qs('[data-mmf-locale-status]');
+        var overlay = ensureLocaleWorkbenchLoadingOverlay(root);
+        var overlayText = overlay ? qs('[data-mmf-locale-loading-text]', overlay) : null;
+        var loadingText = mode === 'save' ? t('localeSaving') : t('localeTranslatingHint');
+        if (root) {
+            root.classList.toggle('is-busy', !!busy);
+            root.setAttribute('aria-busy', busy ? 'true' : 'false');
+        }
+        setLocaleActionButtonBusy(saveBtn, !!busy && mode === 'save', t('localeSaving'));
+        setLocaleActionButtonBusy(translateBtn, !!busy && mode === 'translate', t('localeTranslating'));
+        if (editor) {
+            editor.classList.toggle('is-busy', !!busy);
+            qsa('input, textarea', editor).forEach(function(el) {
+                el.disabled = !!busy;
+            });
+        }
+        var tabs = qs('[data-mmf-locale-tabs]');
+        if (tabs) {
+            qsa('button', tabs).forEach(function(tab) {
+                tab.disabled = !!busy;
+            });
+        }
+        if (overlay) {
+            overlay.hidden = !busy;
+            if (overlayText) overlayText.textContent = busy ? loadingText : '';
+        }
+        if (status && busy) {
+            status.classList.add('is-loading');
+            status.textContent = loadingText;
+        } else if (status && !busy) {
+            status.classList.remove('is-loading');
+        }
+    }
+
+    function bindLocaleWorkbenchActions() {
+        var saveBtn = qs('[data-mmf-locale-save]');
+        var translateBtn = qs('[data-mmf-locale-translate]');
+        if (saveBtn && saveBtn.dataset.bound !== '1') {
+            saveBtn.dataset.bound = '1';
+            saveBtn.addEventListener('click', function() {
+                if (!LOCALE_WORKBENCH.assetId || !LOCALE_WORKBENCH.hash || LOCALE_WORKBENCH.busy) return;
+                setLocaleWorkbenchBusy(true, 'save');
+                api({
+                    cmd: 'asset_metadata',
+                    target: LOCALE_WORKBENCH.hash,
+                    asset_id: LOCALE_WORKBENCH.assetId,
+                    asset_revision: LOCALE_WORKBENCH.revision || 1,
+                    locale_code: LOCALE_WORKBENCH.activeLocale,
+                    display_name: String((qs('[data-mmf-locale-display-name]') || {}).value || '').trim(),
+                    default_alt: String((qs('[data-mmf-locale-default-alt]') || {}).value || '').trim(),
+                    description: String((qs('[data-mmf-locale-description]') || {}).value || '').trim(),
+                    default_caption: String((qs('[data-mmf-locale-caption]') || {}).value || '').trim()
+                }, function(data) {
+                    setLocaleWorkbenchBusy(false);
+                    var changed = data && data.changed && data.changed[LOCALE_WORKBENCH.hash];
+                    if (changed) {
+                        FILES[LOCALE_WORKBENCH.hash] = Object.assign({}, FILES[LOCALE_WORKBENCH.hash] || {}, changed);
+                        LOCALE_WORKBENCH.revision = Number(changed.asset_revision || LOCALE_WORKBENCH.revision || 0);
+                    }
+                    showSuccess(t('localeSaveSuccess'));
+                    renderLocaleWorkbench(FILES[LOCALE_WORKBENCH.hash]);
+                    updatePreviewPanel();
+                }, function(err) {
+                    setLocaleWorkbenchBusy(false);
+                    showError(err || t('localeSaveFailed'));
+                });
+            });
+        }
+        if (translateBtn && translateBtn.dataset.bound !== '1') {
+            translateBtn.dataset.bound = '1';
+            translateBtn.addEventListener('click', function() {
+                if (!LOCALE_WORKBENCH.assetId || !LOCALE_WORKBENCH.hash || LOCALE_WORKBENCH.busy) return;
+                setLocaleWorkbenchBusy(true, 'translate');
+                var startTranslate = function() {
+                    api({
+                        cmd: 'asset_translate_missing',
+                        target: LOCALE_WORKBENCH.hash,
+                        asset_id: LOCALE_WORKBENCH.assetId,
+                        locale_code: String(
+                            (FILES[LOCALE_WORKBENCH.hash] && FILES[LOCALE_WORKBENCH.hash].locale_code)
+                            || CONFIG.localeCode
+                            || 'zh_Hans_CN'
+                        )
+                    }, function(data) {
+                    setLocaleWorkbenchBusy(false);
+                    if (data && data.errors && data.errors.length) {
+                        showError(data.errors.join('; '));
+                    } else {
+                        showSuccess(t('oneClickTranslateDone', {
+                            filled: (data && data.filled && data.filled.length) || 0,
+                            skipped: (data && data.skipped && data.skipped.length) || 0
+                        }));
+                    }
+                    LOCALE_WORKBENCH.localesByCode = localeRecordMap((data && data.locales) || []);
+                    paintLocaleWorkbench();
+                }, function(err) {
+                    setLocaleWorkbenchBusy(false);
+                    showError(err || t('oneClickTranslateFailed'));
+                });
+                };
+                if (typeof window.requestAnimationFrame === 'function') {
+                    window.requestAnimationFrame(function() {
+                        window.requestAnimationFrame(startTranslate);
+                    });
+                } else {
+                    startTranslate();
+                }
+            });
+        }
     }
 
     function clearPreviewImage() {
@@ -1326,25 +2082,21 @@
 
     function syncIframeLayoutHeight() {
         if (!IFRAME_MODE) return;
-        var viewportHeight = window.innerHeight
-            || document.documentElement.clientHeight
-            || document.body.clientHeight
-            || 0;
-        if (viewportHeight <= 0) return;
-        var heightPx = Math.floor(viewportHeight) + 'px';
-        document.documentElement.style.height = heightPx;
-        document.documentElement.style.maxHeight = heightPx;
+        document.documentElement.style.removeProperty('height');
+        document.documentElement.style.removeProperty('max-height');
+        document.documentElement.style.minHeight = '0';
         document.documentElement.style.overflow = 'hidden';
         if (document.body) {
-            document.body.style.height = heightPx;
-            document.body.style.maxHeight = heightPx;
+            document.body.style.removeProperty('height');
+            document.body.style.removeProperty('max-height');
+            document.body.style.minHeight = '0';
             document.body.style.overflow = 'hidden';
             document.body.style.margin = '0';
         }
         var main = qs('main.w-backend-page') || qs('#main-content');
         if (main) {
-            main.style.height = heightPx;
-            main.style.maxHeight = heightPx;
+            main.style.removeProperty('height');
+            main.style.removeProperty('max-height');
             main.style.minHeight = '0';
             main.style.flex = '1 1 auto';
             main.style.display = 'flex';
@@ -1355,8 +2107,8 @@
         }
         var wrap = qs('.mmf-wrap');
         if (wrap) {
-            wrap.style.height = heightPx;
-            wrap.style.maxHeight = heightPx;
+            wrap.style.removeProperty('height');
+            wrap.style.removeProperty('max-height');
             wrap.style.minHeight = '0';
         }
         schedulePreviewDetailScrollSync();
@@ -1381,35 +2133,46 @@
     }
 
     function updatePreviewPanel() {
+        var previewRoot = qs('[data-mmf-preview]') || qs('.mmf-preview');
         var emptyEl = qs('.mmf-preview-empty');
         var imageEl = qs('.mmf-preview-image');
         var infoEl = qs('.mmf-preview-info');
 
         if (!emptyEl || !imageEl || !infoEl) return;
 
-        if (SELECTED.length !== 1) {
-            clearPreviewImage();
+        function showEmptyPreview() {
+            if (previewRoot) {
+                previewRoot.classList.remove('mmf-preview--active');
+                previewRoot.removeAttribute('data-mmf-preview-hash');
+            }
+            emptyEl.hidden = false;
             emptyEl.style.display = '';
+            clearPreviewImage();
             imageEl.style.display = 'none';
             infoEl.style.display = 'none';
+            var workbench = qs('[data-mmf-locale-workbench]');
+            if (workbench) workbench.hidden = true;
             var contentElReset = qs('.mmf-preview-content');
             if (contentElReset) contentElReset.classList.remove('mmf-preview-content--with-image');
             resetPreviewDetailScroll();
+        }
+
+        if (SELECTED.length !== 1) {
+            showEmptyPreview();
             return;
         }
 
         var f = FILES[SELECTED[0]];
         if (!f) {
-            clearPreviewImage();
-            emptyEl.style.display = '';
-            imageEl.style.display = 'none';
-            infoEl.style.display = 'none';
-            var contentElMissing = qs('.mmf-preview-content');
-            if (contentElMissing) contentElMissing.classList.remove('mmf-preview-content--with-image');
-            resetPreviewDetailScroll();
+            showEmptyPreview();
             return;
         }
 
+        if (previewRoot) {
+            previewRoot.classList.add('mmf-preview--active');
+            previewRoot.setAttribute('data-mmf-preview-hash', String(f.hash || SELECTED[0] || ''));
+        }
+        emptyEl.hidden = true;
         emptyEl.style.display = 'none';
         infoEl.style.display = 'grid';
 
@@ -1421,6 +2184,7 @@
 
         if (nameEl) nameEl.textContent = f.name || '';
         renderMetadataList(metadataEl, f, true);
+        renderLocaleWorkbench(f);
 
         if (isImageMime(f.mime) && hasCapability('preview')) {
             imageEl.style.display = 'flex';
@@ -1807,6 +2571,11 @@
         if (btnAiDraw) btnAiDraw.addEventListener('click', function () {
             openAiDrawModal(getAiDrawLaunchOptions());
         });
+        var btnPathLock = qs('#mmf-btn-path-lock');
+        if (btnPathLock) btnPathLock.addEventListener('click', function () {
+            if (!CONFIG.lockRoot) return;
+            setPathLockEnabled(!CONFIG.lockPath);
+        });
 
     }
 
@@ -2171,6 +2940,87 @@
         });
     }
 
+    function gcdInt(a, b) {
+        a = Math.abs(Math.round(Number(a) || 0));
+        b = Math.abs(Math.round(Number(b) || 0));
+        while (b) {
+            var tmp = b;
+            b = a % b;
+            a = tmp;
+        }
+        return a || 1;
+    }
+
+    function parseAspectRatio(raw) {
+        var match = String(raw || '').trim().match(/^(\d+(?:\.\d+)?)\s*[:xX×\/]\s*(\d+(?:\.\d+)?)$/);
+        if (!match) return null;
+        var width = Math.round(Number(match[1]));
+        var height = Math.round(Number(match[2]));
+        if (!(width > 0 && height > 0)) return null;
+        var g = gcdInt(width, height);
+        return {
+            w: width / g,
+            h: height / g,
+            label: String(width / g) + ':' + String(height / g)
+        };
+    }
+
+    function configuredAspectRatio() {
+        var explicit = parseAspectRatio(CONFIG.aspectRatio || CONFIG.aspect_ratio || '');
+        if (explicit) return explicit;
+        var recommendW = parseInt(CONFIG.recommendWidth || CONFIG.recommend_width || '', 10);
+        var recommendH = parseInt(CONFIG.recommendHeight || CONFIG.recommend_height || '', 10);
+        if (!(recommendW > 0 && recommendH > 0)) return null;
+        var g = gcdInt(recommendW, recommendH);
+        return {
+            w: recommendW / g,
+            h: recommendH / g,
+            label: String(recommendW / g) + ':' + String(recommendH / g)
+        };
+    }
+
+    function aspectRatioTolerance() {
+        var raw = CONFIG.aspectRatioTolerance || CONFIG.aspect_ratio_tolerance || '0.02';
+        var value = Number(raw);
+        if (!Number.isFinite(value) || value < 0) return 0.02;
+        return value;
+    }
+
+    function matchesAspectRatio(fileWidth, fileHeight, ratioWidth, ratioHeight, tolerance) {
+        if (!(fileWidth > 0 && fileHeight > 0 && ratioWidth > 0 && ratioHeight > 0)) return false;
+        return Math.abs((fileWidth / fileHeight) - (ratioWidth / ratioHeight)) <= tolerance;
+    }
+
+    function formatFileAspectLabel(width, height) {
+        var w = Math.round(Number(width) || 0);
+        var h = Math.round(Number(height) || 0);
+        if (!(w > 0 && h > 0)) return '';
+        var g = gcdInt(w, h);
+        return String(w / g) + ':' + String(h / g);
+    }
+
+    function updateAspectRatioHint() {
+        var hint = qs('#mmf-aspect-hint');
+        if (!hint) return;
+        var ratio = configuredAspectRatio();
+        if (!ratio || !IFRAME_MODE) {
+            hint.hidden = true;
+            hint.textContent = '';
+            return;
+        }
+        var text = t('aspectRatioRequired', { ratio: ratio.label });
+        var recommendW = parseInt(CONFIG.recommendWidth || CONFIG.recommend_width || '', 10);
+        var recommendH = parseInt(CONFIG.recommendHeight || CONFIG.recommend_height || '', 10);
+        if (recommendW > 0 && recommendH > 0) {
+            text += ' · ' + t('aspectRatioRecommendHint', {
+                width: String(recommendW),
+                height: String(recommendH)
+            });
+        }
+        hint.textContent = text;
+        hint.hidden = false;
+    }
+
     function fileSelectionIssue(file) {
         if (!IFRAME_MODE || !file || file.mime === 'directory') return null;
         if (Number(file.size || 0) > uploadLimitBytes()) {
@@ -2203,6 +3053,26 @@
                     allowed: ALLOWED_MIMES.join(', ')
                 })
             };
+        }
+        var ratio = configuredAspectRatio();
+        if (ratio && isImageMime(file.mime)) {
+            var width = Number(file.width || 0);
+            var height = Number(file.height || 0);
+            if (!(width > 0 && height > 0)) {
+                return {
+                    kind: 'aspect_ratio',
+                    message: t('aspectRatioDimensionsMissing')
+                };
+            }
+            if (!matchesAspectRatio(width, height, ratio.w, ratio.h, aspectRatioTolerance())) {
+                return {
+                    kind: 'aspect_ratio',
+                    message: t('aspectRatioMismatch', {
+                        ratio: ratio.label,
+                        actual: formatFileAspectLabel(width, height) || (width + '×' + height)
+                    })
+                };
+            }
         }
         return null;
     }
@@ -2263,6 +3133,128 @@
         });
     }
 
+    function splitUploadFileName(name) {
+        var value = String(name || '');
+        var dot = value.lastIndexOf('.');
+        if (dot <= 0) return {base: value, ext: ''};
+        return {base: value.slice(0, dot), ext: value.slice(dot)};
+    }
+
+    function suggestUniqueUploadFileName(name, reservedNames) {
+        var normalized = String(name || '');
+        var lower = normalized.toLowerCase();
+        if (!reservedNames[lower]) return normalized;
+        var parts = splitUploadFileName(normalized);
+        var index = 1;
+        var candidate = '';
+        do {
+            candidate = parts.base + ' (' + index + ')' + parts.ext;
+            index++;
+        } while (reservedNames[candidate.toLowerCase()]);
+        return candidate;
+    }
+
+    function renameUploadFile(file, newName) {
+        if (!file || typeof File !== 'function') return file;
+        if (String(file.name || '') === newName) return file;
+        return new File(
+            [file],
+            newName,
+            {type: file.type || '', lastModified: file.lastModified || Date.now()}
+        );
+    }
+
+    function directoryChildNameSet(targetHash) {
+        var names = {};
+        targetHash = String(targetHash || '');
+        for (var h in FILES) {
+            var file = FILES[h];
+            if (file && file.phash === targetHash && file.mime !== 'directory' && file.name) {
+                names[String(file.name).toLowerCase()] = true;
+            }
+        }
+        return names;
+    }
+
+    function fetchDirectoryChildNames(targetHash) {
+        targetHash = String(targetHash || CWD_HASH || '');
+        if (targetHash === String(CWD_HASH || '')) {
+            return Promise.resolve(directoryChildNameSet(targetHash));
+        }
+        return api({cmd: 'open', target: targetHash}).then(function(data) {
+            var names = {};
+            if (!data || !Array.isArray(data.files)) return names;
+            data.files.forEach(function(file) {
+                if (file && file.mime !== 'directory' && file.name) {
+                    names[String(file.name).toLowerCase()] = true;
+                }
+            });
+            return names;
+        });
+    }
+
+    function promptUploadRename(originalName, suggestedName) {
+        return new Promise(function(resolve) {
+            var settled = false;
+            function finish(value) {
+                if (settled) return;
+                settled = true;
+                resolve(value);
+            }
+            openManagerDialog({
+                title: t('uploadNameConflictTitle'),
+                message: t('uploadNameConflictMessage', {name: originalName}),
+                label: t('newName'),
+                value: suggestedName,
+                input: true,
+                onOk: function(value) {
+                    var trimmed = String(value || '').trim();
+                    finish(trimmed || null);
+                },
+                onCancel: function() { finish(null); }
+            });
+        });
+    }
+
+    function confirmUploadName(originalName, reservedNames) {
+        var suggestedName = suggestUniqueUploadFileName(originalName, reservedNames);
+        return promptUploadRename(originalName, suggestedName).then(function(confirmedName) {
+            if (!confirmedName) return null;
+            if (reservedNames[confirmedName.toLowerCase()]) {
+                showError(t('uploadNameStillExists', {name: confirmedName}));
+                return confirmUploadName(confirmedName, reservedNames);
+            }
+            return confirmedName;
+        });
+    }
+
+    function resolveUploadNameConflicts(fileList, targetHash) {
+        var files = Array.prototype.slice.call(fileList || []);
+        return fetchDirectoryChildNames(targetHash).then(function(reservedNames) {
+            var chain = Promise.resolve(files);
+            files.forEach(function(file, index) {
+                chain = chain.then(function(currentFiles) {
+                    if (!currentFiles) return null;
+                    var currentName = String(currentFiles[index].name || '');
+                    var lowerName = currentName.toLowerCase();
+                    if (!reservedNames[lowerName]) {
+                        reservedNames[lowerName] = true;
+                        return currentFiles;
+                    }
+                    return confirmUploadName(currentName, reservedNames).then(function(confirmedName) {
+                        if (!confirmedName) return null;
+                        if (confirmedName !== currentName) {
+                            currentFiles[index] = renameUploadFile(currentFiles[index], confirmedName);
+                        }
+                        reservedNames[confirmedName.toLowerCase()] = true;
+                        return currentFiles;
+                    });
+                });
+            });
+            return chain;
+        });
+    }
+
     function uploadMultipart(fileList, metadataList, targetHash) {
         var files = Array.prototype.slice.call(fileList || []);
         return new Promise(function(resolve, reject) {
@@ -2288,6 +3280,10 @@
             body.append('ext', CONFIG.ext || '*');
             body.append('size', String(uploadLimitBytes()));
             body.append('locale_code', CONFIG.localeCode || 'zh_Hans_CN');
+            body.append('lockPath', CONFIG.lockPath ? '1' : '0');
+            if (CONFIG.lockPath && CONFIG.lockRoot) {
+                body.append('lockRoot', String(CONFIG.lockRoot));
+            }
             body.append('upload_metadata', JSON.stringify(metadataList || []));
             body.append('form_key', String(CONFIG.connectorFormKey));
             files.forEach(function(file) {
@@ -2660,7 +3656,62 @@
                 });
             });
         });
-        return chain.then(function(confirmed) { return confirmed ? metadata : null; });
+        return chain.then(function(confirmed) {
+            if (!confirmed) return null;
+            return ui.dialog.prompt(t('uploadModePrompt'), {
+                title: t('uploadModeTitle'),
+                confirmLabel: t('confirm'),
+                field: {
+                    type: 'select',
+                    required: true,
+                    value: 'upload',
+                    choices: {
+                        upload: t('confirmUploadOnly'),
+                        translate: t('uploadWithOneClickTranslate')
+                    }
+                }
+            }).then(function(modeResult) {
+                if (!modeResult || !modeResult.confirmed) return null;
+                return {
+                    metadata: metadata,
+                    mode: String(modeResult.value || 'upload') === 'translate' ? 'translate' : 'upload'
+                };
+            });
+        });
+    }
+
+    function translateUploadedAssets(addedFiles) {
+        var files = Array.prototype.slice.call(addedFiles || []).filter(function(file) {
+            return file && file.asset_id;
+        });
+        if (!files.length) return Promise.resolve();
+        var chain = Promise.resolve(true);
+        files.forEach(function(file) {
+            chain = chain.then(function() {
+                return new Promise(function(resolve) {
+                    api({
+                        cmd: 'asset_translate_missing',
+                        target: file.hash,
+                        asset_id: String(file.asset_id),
+                        locale_code: String(file.locale_code || CONFIG.localeCode || 'zh_Hans_CN')
+                    }, function(data) {
+                        if (data && data.errors && data.errors.length) {
+                            showError(data.errors.join('; '));
+                        } else {
+                            showSuccess(t('oneClickTranslateDone', {
+                                filled: (data && data.filled && data.filled.length) || 0,
+                                skipped: (data && data.skipped && data.skipped.length) || 0
+                            }));
+                        }
+                        resolve(true);
+                    }, function(err) {
+                        showError(err || t('oneClickTranslateFailed'));
+                        resolve(false);
+                    });
+                });
+            });
+        });
+        return chain;
     }
 
     function uploadFiles(fileList, source, targetHash) {
@@ -2705,20 +3756,29 @@
         }
 
         UPLOAD_PENDING = true;
-        requestUploadMetadata(files).then(function(metadataList) {
-            if (!metadataList) return null;
-            announceInteraction(t(source === 'paste' ? 'pasteUploadStarted' : 'uploadStarted', {
-                count: files.length
-            }));
-            showUploadProgress(true);
-            updateUploadProgress(0);
-            var upload = canUseSingleMultipartRequest(files)
-                ? uploadMultipart(files, metadataList, targetHash)
-                : uploadResumable(files, metadataList, targetHash);
-            return upload.then(function() {
-                updateUploadProgress(100);
-                showSuccess(t('uploadComplete'));
-                openDir(CWD_HASH);
+        resolveUploadNameConflicts(files, targetHash).then(function(resolvedFiles) {
+            if (!resolvedFiles) return null;
+            return requestUploadMetadata(resolvedFiles).then(function(uploadPlan) {
+                if (!uploadPlan || !uploadPlan.metadata) return null;
+                announceInteraction(t(source === 'paste' ? 'pasteUploadStarted' : 'uploadStarted', {
+                    count: resolvedFiles.length
+                }));
+                showUploadProgress(true);
+                updateUploadProgress(0);
+                var upload = canUseSingleMultipartRequest(resolvedFiles)
+                    ? uploadMultipart(resolvedFiles, uploadPlan.metadata, targetHash)
+                    : uploadResumable(resolvedFiles, uploadPlan.metadata, targetHash);
+                return upload.then(function(response) {
+                    updateUploadProgress(100);
+                    showSuccess(t('uploadComplete'));
+                    var added = response && Array.isArray(response.added) ? response.added : [];
+                    var after = uploadPlan.mode === 'translate'
+                        ? translateUploadedAssets(added)
+                        : Promise.resolve();
+                    return after.then(function() {
+                        openDir(CWD_HASH);
+                    });
+                });
             });
         }).catch(function(error) {
             showError((error && error.message) || t('uploadMetadataRequired'));
@@ -2976,7 +4036,9 @@
         menu.replaceChildren();
         
         if (SELECTION_MODE) {
-            addContextItem(menu, 'exit-selection', t('exitSelectionMode'), 'active');
+            if (!(IFRAME_MODE && MULTI_SELECT)) {
+                addContextItem(menu, 'exit-selection', t('exitSelectionMode'), 'active');
+            }
             if (SELECTED.length > 0) {
                 addContextItem(menu, 'clear-selection', t('clearSelection') + ' (' + SELECTED.length + ')');
             }
@@ -3180,6 +4242,11 @@
     }
 
     function exitSelectionMode() {
+        // iframe 多选选择器必须保持选择模式，否则单击会变成单选覆盖
+        if (IFRAME_MODE && MULTI_SELECT) {
+            enterSelectionMode();
+            return;
+        }
         SELECTION_MODE = false;
         var wrap = qs('.mmf-wrap');
         if (wrap) wrap.classList.remove('mmf-selection-mode');
@@ -3190,8 +4257,11 @@
         SELECTED = [];
         highlightSelected();
         updateStatus();
-        if (SELECTED.length === 0) {
+        if (SELECTED.length === 0 && !(IFRAME_MODE && MULTI_SELECT)) {
             exitSelectionMode();
+        }
+        if (IFRAME_MODE) {
+            updateSelectBar();
         }
     }
 
@@ -3507,8 +4577,12 @@
         
         var wrap = qs('.mmf-wrap');
         if (wrap) wrap.classList.add('mmf-iframe-mode');
+        if (MULTI_SELECT) {
+            enterSelectionMode();
+        }
         if (CWD_HASH) renderFiles();
         updateToolbarCapabilities();
+        updateSelectBar();
         scheduleIframeLayoutHeightSync();
     }
 
@@ -3779,7 +4853,10 @@
             close(true);
             if (typeof options.onOk === 'function') options.onOk(value);
         }
-        function handleCancel() { close(true); }
+        function handleCancel() {
+            close(true);
+            if (typeof options.onCancel === 'function') options.onCancel();
+        }
         function handleOverlay(e) {
             if (e.target === overlay) handleCancel();
         }

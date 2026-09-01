@@ -7,6 +7,7 @@ namespace Weline\MediaManager\Service;
 use Weline\FileManager\Api\Data\FileAccessContext;
 use Weline\FileManager\Api\Exception\FileAccessDeniedException;
 use Weline\FileManager\Api\FileAssetLibraryInterface;
+use Weline\FileManager\Api\FileAssetLocaleTranslationInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -31,6 +32,7 @@ final class ConnectorService
     private ?MediaAssetCatalogService $assetCatalogService = null;
     private ?MediaAssetMetadataService $assetMetadataService = null;
     private ?FileAssetLibraryInterface $assetLibrary = null;
+    private ?FileAssetLocaleTranslationInterface $localeTranslations = null;
 
     private function getStorageCatalog(): ?StorageCatalogInterface
     {
@@ -84,6 +86,11 @@ final class ConnectorService
     private function getAssetLibrary(): FileAssetLibraryInterface
     {
         return $this->assetLibrary ??= ObjectManager::getInstance(FileAssetLibraryInterface::class);
+    }
+
+    private function getLocaleTranslations(): FileAssetLocaleTranslationInterface
+    {
+        return $this->localeTranslations ??= ObjectManager::getInstance(FileAssetLocaleTranslationInterface::class);
     }
 
     /**
@@ -212,8 +219,12 @@ final class ConnectorService
                 'rm' => $this->handleStorageRemove($storage, $src, $manager, $actorId),
                 'upload' => $this->handleStorageUpload($storage, $src, $uploadedFiles, $opts, $manager, $actorId),
                 'asset_metadata' => $this->handleStorageAssetMetadata($storage, $src, $actorId, $manager),
+                'asset_locales' => $this->handleStorageAssetLocales($storage, $src, $actorId, $manager),
+                'asset_translate_missing' => $this->handleStorageAssetTranslateMissing($storage, $src, $actorId, $manager),
+                'translation_config' => $this->handleTranslationConfig($src),
                 'file' => $this->handleStorageResource($storage, $src, false, $actorId, $manager),
                 'tmb' => $this->handleStorageResource($storage, $src, true, $actorId, $manager),
+                'search' => $this->handleStorageSearch($storage, $src, $manager),
                 default => ['error' => (string)__('当前存储提供者暂不支持此操作')],
             };
         } catch (\InvalidArgumentException | \RuntimeException $exception) {
@@ -238,7 +249,8 @@ final class ConnectorService
         $this->assertStorageCapability($storage, 'browse', $manager);
         $this->assertStorageCapability($storage, 'upload', $manager);
         $directory = $this->decodeStorageTarget($src, true);
-        $this->assertStorageDirectoryExists($storage, $directory, $manager);
+        $this->assertLockedRelativePath($src, $directory);
+        $this->ensureStorageDirectoryExists($storage, $directory, $manager);
         $this->assertUploadDestinationsAvailable($storage, $directory, $files, $manager);
         $locale = $this->requiredLocale($src);
         // Resolve the frozen request/access context before writing anything so
@@ -390,7 +402,8 @@ final class ConnectorService
     ): array {
         $this->assertStorageCapability($storage, 'browse', $manager);
         $relative = $this->decodeStorageTarget($src, true);
-        $this->assertStorageDirectoryExists($storage, $relative, $manager);
+        $this->assertLockedRelativePath($src, $relative);
+        $folderCreated = $this->ensureStorageDirectoryExists($storage, $relative, $manager);
         $entries = $manager->list($storage, $relative, false);
         $locale = $this->requiredLocale($src);
         $access = $this->fileAccessContext($locale, $actorId);
@@ -424,7 +437,141 @@ final class ConnectorService
             'tree' => $this->buildStorageTree($storage, $relative, $manager, $entries),
             'root' => $this->encodeHash(''),
             'capabilities' => $this->normalizeStorageCapabilities($manager->capabilities($storage), $storage),
+            'folder_created' => $folderCreated,
+            'translation_config' => [
+                'ai_auto_translation' => $this->getLocaleTranslations()->isAutoTranslationEnabled(),
+                'installed_locales' => $this->getLocaleTranslations()->listInstalledLocaleCodes(),
+            ],
         ];
+    }
+
+    /** @return array<string,mixed> */
+    private function handleStorageAssetLocales(
+        string $storage,
+        array $src,
+        ?int $actorId,
+        StorageDirectoryManagerInterface $manager,
+    ): array {
+        $this->assertStorageCapability($storage, 'browse', $manager);
+        $assetId = trim((string)($src['asset_id'] ?? ''));
+        if (!preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i', $assetId)) {
+            return ['error' => (string)__('文件资源标识无效')];
+        }
+        $locale = $this->requiredLocale($src);
+        $access = $this->fileAccessContext($locale, $actorId);
+        $locales = $this->getLocaleTranslations()->listLocales($assetId, $access);
+        return [
+            'asset_id' => $assetId,
+            'locales' => $locales,
+            'installed_locales' => $this->getLocaleTranslations()->listInstalledLocaleCodes(),
+            'working_locale' => $locale,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function handleStorageAssetTranslateMissing(
+        string $storage,
+        array $src,
+        ?int $actorId,
+        StorageDirectoryManagerInterface $manager,
+    ): array {
+        $this->assertStorageCapability($storage, 'browse', $manager);
+        $assetId = trim((string)($src['asset_id'] ?? ''));
+        if (!preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-4[a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/i', $assetId)) {
+            return ['error' => (string)__('文件资源标识无效')];
+        }
+        $sourceLocale = $this->requiredLocale($src);
+        $access = $this->fileAccessContext($sourceLocale, $actorId);
+        $result = $this->getLocaleTranslations()->translateMissing($assetId, $sourceLocale, $access, null);
+        $path = $this->decodeStorageTarget($src, false);
+        $description = null;
+        try {
+            $description = $this->getAssetCatalogService()->describe($storage, $path, $sourceLocale, $access);
+        } catch (\Throwable) {
+        }
+        return [
+            'asset_id' => $assetId,
+            'filled' => $result['filled'],
+            'skipped' => $result['skipped'],
+            'errors' => $result['errors'],
+            'locales' => $this->getLocaleTranslations()->listLocales($assetId, $access),
+            'changed' => $description !== null ? [$this->encodeHash($path) => $description] : [],
+        ];
+    }
+
+    /** @param array<string,mixed> $src @return array<string,mixed> */
+    private function handleTranslationConfig(array $src): array
+    {
+        $action = trim((string)($src['action'] ?? 'get'));
+        $queueId = 0;
+        if ($action === 'set') {
+            $enabled = filter_var($src['ai_auto_translation'] ?? false, FILTER_VALIDATE_BOOLEAN);
+            $this->getLocaleTranslations()->setAutoTranslationEnabled($enabled);
+            if ($enabled) {
+                $queueId = $this->getLocaleTranslations()->enqueueAutoFill('media_manager_toggle');
+            }
+        }
+
+        return [
+            'ai_auto_translation' => $this->getLocaleTranslations()->isAutoTranslationEnabled(),
+            'installed_locales' => $this->getLocaleTranslations()->listInstalledLocaleCodes(),
+            'queue_id' => $queueId,
+        ];
+    }
+
+    /** @return array<string,mixed> */
+    private function handleStorageSearch(
+        string $storage,
+        array $src,
+        StorageDirectoryManagerInterface $manager,
+    ): array {
+        $this->assertStorageCapability($storage, 'browse', $manager);
+        $query = mb_strtolower(trim((string)($src['query'] ?? '')));
+        if ($query === '') {
+            return ['results' => []];
+        }
+        $limit = filter_var(
+            $src['limit'] ?? 50,
+            FILTER_VALIDATE_INT,
+            ['options' => ['min_range' => 1, 'max_range' => 100]],
+        );
+        if ($limit === false) {
+            $limit = 50;
+        }
+        $root = $this->normalizeRelativePath((string)($src['path'] ?? ''));
+        $this->assertLockedRelativePath($src, $root);
+        $entries = $manager->list($storage, $root, true);
+        $matches = [];
+        foreach ($entries as $entry) {
+            $name = (string)($entry['name'] ?? '');
+            $lower = mb_strtolower($name);
+            if ($lower === '' || !str_contains($lower, $query)) {
+                continue;
+            }
+            $score = match (true) {
+                $lower === $query => 300,
+                str_starts_with($lower, $query) => 200,
+                default => 100,
+            };
+            $matches[] = [
+                'score' => $score,
+                'info' => $this->buildStorageFileInfo($entry),
+            ];
+        }
+        usort(
+            $matches,
+            static fn(array $left, array $right): int => $right['score'] <=> $left['score']
+                ?: strcmp((string)($left['info']['name'] ?? ''), (string)($right['info']['name'] ?? '')),
+        );
+        $results = [];
+        foreach ($matches as $match) {
+            $results[] = $match['info'];
+            if (count($results) >= $limit) {
+                break;
+            }
+        }
+
+        return ['results' => $results];
     }
 
     /** @return array<string,mixed> */
@@ -517,7 +664,7 @@ final class ConnectorService
     ): array {
         $this->assertStorageCapability($storage, 'browse', $manager);
         $relative = $this->decodeStorageTarget($src, true);
-        $this->assertStorageDirectoryExists($storage, $relative, $manager);
+        $this->ensureStorageDirectoryExists($storage, $relative, $manager);
         $tree = [];
         foreach ($manager->list($storage, $relative, false) as $entry) {
             if (($entry['type'] ?? '') !== 'directory') {
@@ -536,15 +683,16 @@ final class ConnectorService
         array $src,
         StorageDirectoryManagerInterface $manager,
     ): array {
-        $this->assertStorageCapability($storage, 'browse', $manager);
         $this->assertStorageCapability($storage, 'create_directory', $manager);
         $parent = $this->decodeStorageTarget($src, true);
-        $this->assertStorageDirectoryExists($storage, $parent, $manager);
+        $this->assertLockedRelativePath($src, $parent);
+        $this->ensureStorageDirectoryExists($storage, $parent, $manager);
         $name = $this->sanitizeLeafName((string)($src['name'] ?? ''));
         if ($name === null) {
             return ['error' => (string)__('文件夹名称不能为空')];
         }
         $path = $this->normalizeRelativePath(($parent === '' ? '' : $parent . '/') . $name);
+        $this->assertLockedRelativePath($src, $path);
         if (!$manager->makeDirectory($storage, $path)) {
             return ['error' => (string)__('文件夹创建失败或已存在')];
         }
@@ -566,6 +714,7 @@ final class ConnectorService
     ): array {
         $this->assertStorageCapability($storage, 'browse', $manager);
         $from = $this->decodeStorageTarget($src, false);
+        $this->assertLockedRelativePath($src, $from);
         $name = $this->sanitizeLeafName((string)($src['name'] ?? ''));
         if ($name === null) {
             return ['error' => (string)__('新名称不能为空')];
@@ -576,6 +725,7 @@ final class ConnectorService
         }
         $parent = trim(dirname($from), '/.');
         $to = $this->normalizeRelativePath(($parent === '' ? '' : $parent . '/') . $name);
+        $this->assertLockedRelativePath($src, $to);
         if ($this->findStorageEntry($storage, $to, $manager) !== null) {
             return ['error' => (string)__('目标名称已存在')];
         }
@@ -603,7 +753,8 @@ final class ConnectorService
         $this->assertStorageCapability($storage, 'move_file', $manager);
         $targets = $this->requiredTargetHashes($src['targets'] ?? [], (string)__('未选择移动文件'));
         $destination = $this->decodeStorageTarget($src, true);
-        $this->assertStorageDirectoryExists($storage, $destination, $manager);
+        $this->assertLockedRelativePath($src, $destination);
+        $this->ensureStorageDirectoryExists($storage, $destination, $manager);
         $access = $this->fileAccessContext($this->requiredLocale($src), $actorId);
 
         $plan = [];
@@ -613,6 +764,7 @@ final class ConnectorService
                 return ['error' => (string)__('目标路径无效')];
             }
             $from = $this->decodeStorageHash($hash, false);
+            $this->assertLockedRelativePath($src, $from);
             $entry = $this->findStorageEntry($storage, $from, $manager);
             if ($entry === null || ($entry['type'] ?? '') === 'directory') {
                 return ['error' => (string)__('只能移动普通文件')];
@@ -676,6 +828,7 @@ final class ConnectorService
         $requiresFileDelete = false;
         foreach ($targets as $hash) {
             $path = $this->decodeStorageHash($hash, false);
+            $this->assertLockedRelativePath($src, $path);
             $entry = $this->findStorageEntry($storage, $path, $manager);
             if ($entry === null) {
                 return ['error' => (string)__('部分项目不存在，请刷新后重试')];
@@ -846,18 +999,48 @@ final class ConnectorService
         return null;
     }
 
-    private function assertStorageDirectoryExists(
+    private function ensureStorageDirectoryExists(
         string $storage,
         string $path,
         StorageDirectoryManagerInterface $manager,
-    ): void {
+    ): bool {
         if ($path === '') {
-            return;
+            return false;
         }
+
         $entry = $this->findStorageEntry($storage, $path, $manager);
-        if ($entry === null || ($entry['type'] ?? '') !== 'directory') {
-            throw new \InvalidArgumentException((string)__('目标文件夹不存在'));
+        if ($entry !== null && ($entry['type'] ?? '') === 'directory') {
+            return false;
         }
+        if ($entry !== null) {
+            throw new \InvalidArgumentException((string)__('目标路径已被文件占用'));
+        }
+
+        $this->assertStorageCapability($storage, 'create_directory', $manager);
+
+        $normalized = $this->normalizeRelativePath($path);
+        $segments = explode('/', $normalized);
+        $built = '';
+        $created = false;
+        foreach ($segments as $segment) {
+            if ($segment === '') {
+                continue;
+            }
+            $built = $built === '' ? $segment : $built . '/' . $segment;
+            $existing = $this->findStorageEntry($storage, $built, $manager);
+            if ($existing === null) {
+                if (!$manager->makeDirectory($storage, $built)) {
+                    throw new \InvalidArgumentException((string)__('文件夹创建失败或已存在'));
+                }
+                $created = true;
+                continue;
+            }
+            if (($existing['type'] ?? '') !== 'directory') {
+                throw new \InvalidArgumentException((string)__('目标路径已被文件占用'));
+            }
+        }
+
+        return $created;
     }
 
     /** @param list<array<string,mixed>> $entries */
@@ -959,6 +1142,30 @@ final class ConnectorService
             }
         }
         return implode('/', $segments);
+    }
+
+    /**
+     * When lockPath=1 and lockRoot is set, reject relative paths outside the lock root.
+     *
+     * @param array<string,mixed> $src
+     */
+    private function assertLockedRelativePath(array $src, string $relativePath): void
+    {
+        $lockEnabled = filter_var(
+            $src['lockPath'] ?? $src['lock_path'] ?? false,
+            FILTER_VALIDATE_BOOL,
+        );
+        if (!$lockEnabled) {
+            return;
+        }
+        $lockRoot = $this->normalizeRelativePath(trim((string)($src['lockRoot'] ?? $src['lock_root'] ?? ''), '/'));
+        if ($lockRoot === '') {
+            return;
+        }
+        $path = $this->normalizeRelativePath($relativePath);
+        if ($path !== $lockRoot && !str_starts_with($path, $lockRoot . '/')) {
+            throw new \InvalidArgumentException((string)__('不能访问指定路径以外的目录'));
+        }
     }
 
     private function sanitizeLeafName(string $name): ?string
