@@ -49,6 +49,7 @@ spl_autoload_register(static function (string $class) use ($codeRoot): void {
         'Weline\\Inventory\\' => $codeRoot . '/Inventory/',
         'Weline\\Framework\\' => $codeRoot . '/Framework/',
         'Weline\\SystemConfig\\' => $codeRoot . '/SystemConfig/',
+        'Weline\\I18n\\' => $codeRoot . '/I18n/',
     ];
     foreach ($map as $prefix => $base) {
         if (!str_starts_with($class, $prefix)) {

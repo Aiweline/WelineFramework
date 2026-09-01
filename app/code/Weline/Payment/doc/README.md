@@ -1,8 +1,8 @@
 # Weline_Payment
 
-`Weline_Payment` 是统一支付抽象层。业务模块通过 Payable 接入可支付对象，支付模块通过 Provider 接入支付能力，核心层负责配置、可用性判断、支付请求、退款请求、回调校验和结果归一化。
+`Weline_Payment` 是**万能支付壳**：业务通过 Payable 接入；支付能力通过 Provider 按 `method_code` 接入。壳负责统一 URL、编排、状态机、配置托管、结账 NextAction 与幂等；第三方只交 Provider + checkout/config phtml（可选 Connect）。
 
-Marketing 是可选折扣动作目录：存在时提供动作元数据，不存在时支付核心返回空动作目录并继续工作。
+权威壳边界与第三方摘要见 [`payment-shell.md`](payment-shell.md)。Marketing 是可选折扣动作目录：存在时提供动作元数据，不存在时支付核心返回空动作目录并继续工作。
 
 ## 核心接口
 
@@ -15,7 +15,7 @@ Marketing 是可选折扣动作目录：存在时提供动作元数据，不存�
 - `getCode()` / `getProviderCode()`：支付方式 code 与 Provider code。
 - `getProviderApiVersion()` / `getWebhookSchemaVersion()`：接口与回调版本。
 - `getCapabilities()`：货币、国家、退款、授权、捕获、void、动态表单等能力声明。
-- `getDisplayMetadata()`：后台和 checkout 展示元数据。
+- `getDisplayMetadata()`：后台和 checkout 展示元数据（**必须**含非空 `icon_url`/`icon`；`checkout_mode`：`shell` / `template` / `hybrid`）。配置项 `payment/method/{code}/icon` 可覆盖图标。
 - `getConfigSchema()`：运行时配置校验或 Provider 元数据；后台配置 UI 由 `Weline_SystemConfig` 的 config phtml 提供。
 - `checkAvailability()`：按 Payable、scope、货币、国家、金额和配置判断是否可用。
 - `createPayment()` / `resumePayment()` / `authorize()` / `capture()` / `void()`：支付生命周期动作。
@@ -99,7 +99,7 @@ Provider 模块的最小交付物是：
 - checkout phtml：由该 Provider 模块负责前台特殊展示或输入字段。
 - config phtml：放在 `extends/module/Weline_SystemConfig/Config/{area}/{code}.phtml`。
 
-特殊授权页、回调辅助页、Provider SDK 封装或外部 API 差异由 Provider 模块自己的 controller 或 adapter 承担，最终支付状态仍回写 `Weline_Payment`。
+浏览器 OAuth / 支付回跳只登记壳统一 `payment/frontend/callback/return`，并用 query `target_scope={三段 storage_scope}` 标明写入范围（Global/Website/Store/Channel）；一键授权走 `payment/backend/connect/authorize?method_code=`。可选实现 `ProviderConnectInterface`。Provider 模板/SDK/iframe 只渲染与收集，最终支付状态仍回写壳。禁止实现已废弃的 `PaymentProviderInterface`。缺显式范围时授权 fail-closed，禁止静默写 Global。
 
 ## Fake Provider
 

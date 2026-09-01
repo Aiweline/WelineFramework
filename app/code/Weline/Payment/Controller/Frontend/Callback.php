@@ -14,20 +14,61 @@ namespace Weline\Payment\Controller\Frontend;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Api\Webhook\WebhookReceiveResult;
+use Weline\Payment\Service\PaymentBrowserReturnDispatcher;
 use Weline\Payment\Service\PaymentCallbackReceiver;
 
 /**
- * 支付回调通知（MOD-P2F-003）：endpoint → raw verify → pure parse →
- * immutable inbox → commit 后 2xx。这里不直接修改支付状态。
+ * 支付统一回调入口：
+ * - return：浏览器 OAuth / Provider 回跳（Developer Return URL 只登记一条）
+ * - notify：服务端 Webhook Inbox（MOD-P2F-003）
  */
 class Callback extends FrontendController
 {
     private PaymentCallbackReceiver $receiver;
+    private PaymentBrowserReturnDispatcher $browserReturn;
 
     public function __construct(
         ObjectManager $objectManager
     ) {
         $this->receiver = $objectManager->getInstance(PaymentCallbackReceiver::class);
+        $this->browserReturn = $objectManager->getInstance(PaymentBrowserReturnDispatcher::class);
+    }
+
+    /**
+     * 统一浏览器回跳（OAuth code/state 或 Provider token）。
+     *
+     * @Cdn cache=false description="支付浏览器回跳入口禁止全页缓存"
+     */
+    public function return(): string
+    {
+        $params = $this->request->getParams();
+        if (!\is_array($params)) {
+            $params = [];
+        }
+
+        $dispatched = $this->browserReturn->dispatch($params);
+        if (!empty($dispatched['render'])) {
+            // 统一 Return URL 探活页：独立文档，避免商城 default/checkout 壳把状态卡淹没。
+            $this->layoutType = null;
+            $title = (string) ($dispatched['title'] ?? __('支付浏览器回跳入口'));
+            $this->assign('page_title', $title);
+            $this->assign('browser_return_status', (string) ($dispatched['status'] ?? 'ready'));
+            $this->assign('browser_return_title', $title);
+            $this->assign('browser_return_message', (string) ($dispatched['message'] ?? ''));
+
+            return $this->fetch((string) ($dispatched['template'] ?? 'browser-return'));
+        }
+
+        $path = (string) ($dispatched['redirect_path'] ?? 'payment/frontend/checkout/return');
+        $redirectParams = \is_array($dispatched['redirect_params'] ?? null)
+            ? $dispatched['redirect_params']
+            : [];
+
+        if (!empty($dispatched['absolute']) && (str_starts_with($path, 'http://') || str_starts_with($path, 'https://'))) {
+            return $this->redirect($path);
+        }
+
+        return $this->redirect($this->getUrl($path, $redirectParams));
     }
 
     /**
@@ -114,5 +155,4 @@ class Callback extends FrontendController
 
         return \is_array($headers) ? $headers : [];
     }
-
 }

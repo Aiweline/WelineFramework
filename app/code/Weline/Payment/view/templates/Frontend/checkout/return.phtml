@@ -1,41 +1,144 @@
 <?php
 /**
- * 支付返回页面
+ * 支付返回页面（自包含样式，配合 checkout 主题布局）。
  */
+$transaction = $transaction ?? null;
+$paymentReturnEmpty = !empty($payment_return_empty);
+$isSuccess = $transaction && method_exists($transaction, 'isSuccess') && $transaction->isSuccess();
 ?>
-<div class="payment-return">
-    <div class="w-container">
-        <div class="w-grid" data-justify="center">
-            <div style="--w-span-md:6;">
-                <div class="w-card" style="--w-mt:var(--weline-space-12);">
-                    <div class="w-card__body w-text" data-align="center">
-                        <?php if ($transaction && $transaction->isSuccess()): ?>
-                            <div style="--w-mb:var(--weline-space-4);">
-                                <w:icon name="check" size="sm"></w:icon>
-                            </div>
-                            <h3 class="w-text" data-tone="success"><?= __('支付成功') ?></h3>
-                            <p class="w-text" data-tone="muted"><?= __('您的订单已支付成功') ?></p>
-                            <div style="--w-mt:var(--weline-space-6);">
-                                <p><strong><?= __('交易号') ?>:</strong> <?= htmlspecialchars($transaction->getData('transaction_no')) ?></p>
-                                <p><strong><?= __('支付金额') ?>:</strong> <?= htmlspecialchars($transaction->getData('amount')) ?> <?= htmlspecialchars($transaction->getData('currency')) ?></p>
-                            </div>
-                        <?php else: ?>
-                            <div style="--w-mb:var(--weline-space-4);">
-                                <w:icon name="close" size="sm"></w:icon>
-                            </div>
-                            <h3 class="w-text" data-tone="danger"><?= __('支付失败') ?></h3>
-                            <p class="w-text" data-tone="muted"><?= __('支付未完成，请重试') ?></p>
-                        <?php endif; ?>
-                        
-                        <w:hook>Weline_Payment::frontend::checkout::payment-result</w:hook>
-                        
-                        <div style="--w-mt:var(--weline-space-6);">
-                            <a href="/" class="w-button" data-tone="primary"><?= __('返回首页') ?></a>
-                        </div>
-                    </div>
+<main class="weline-payment-return" weline-code="payment.checkout_return">
+    <section class="weline-payment-return__panel" weline-code="payment.checkout_return.panel">
+        <?php if ($paymentReturnEmpty): ?>
+            <div class="weline-payment-return__badge weline-payment-return__badge--info" aria-hidden="true">
+                <w:icon name="info" size="md"></w:icon>
+            </div>
+            <h1 class="weline-payment-return__title"><?= htmlspecialchars((string) __('支付结果'), ENT_QUOTES, 'UTF-8') ?></h1>
+            <p class="weline-payment-return__lead">
+                <?= htmlspecialchars((string) __('当前没有可查询的支付交易号。若刚从网关返回，请确认回跳参数完整。'), ENT_QUOTES, 'UTF-8') ?>
+            </p>
+        <?php elseif ($isSuccess): ?>
+            <div class="weline-payment-return__badge" aria-hidden="true">
+                <w:icon name="check" size="md"></w:icon>
+            </div>
+            <h1 class="weline-payment-return__title"><?= htmlspecialchars((string) __('支付成功'), ENT_QUOTES, 'UTF-8') ?></h1>
+            <p class="weline-payment-return__lead"><?= htmlspecialchars((string) __('您的订单已支付成功'), ENT_QUOTES, 'UTF-8') ?></p>
+            <div class="weline-payment-return__facts">
+                <div>
+                    <span class="weline-payment-return__fact-label"><?= htmlspecialchars((string) __('交易号'), ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="weline-payment-return__fact-value"><?= htmlspecialchars((string) $transaction->getData('transaction_no'), ENT_QUOTES, 'UTF-8') ?></span>
+                </div>
+                <div>
+                    <span class="weline-payment-return__fact-label"><?= htmlspecialchars((string) __('支付金额'), ENT_QUOTES, 'UTF-8') ?></span>
+                    <span class="weline-payment-return__fact-value">
+                        <?= htmlspecialchars((string) $transaction->getData('amount'), ENT_QUOTES, 'UTF-8') ?>
+                        <?= htmlspecialchars((string) $transaction->getData('currency'), ENT_QUOTES, 'UTF-8') ?>
+                    </span>
                 </div>
             </div>
-        </div>
-    </div>
-</div>
+        <?php else: ?>
+            <div class="weline-payment-return__badge weline-payment-return__badge--danger" aria-hidden="true">
+                <w:icon name="close" size="md"></w:icon>
+            </div>
+            <h1 class="weline-payment-return__title"><?= htmlspecialchars((string) __('支付失败'), ENT_QUOTES, 'UTF-8') ?></h1>
+            <p class="weline-payment-return__lead"><?= htmlspecialchars((string) __('支付未完成，请重试'), ENT_QUOTES, 'UTF-8') ?></p>
+        <?php endif; ?>
 
+        <w:hook>Weline_Payment::frontend::checkout::payment-result</w:hook>
+
+        <div class="weline-payment-return__actions">
+            <a class="weline-payment-return__btn" href="@url{'/'}"><?= htmlspecialchars((string) __('返回首页'), ENT_QUOTES, 'UTF-8') ?></a>
+        </div>
+    </section>
+</main>
+
+<style>
+.weline-payment-return {
+    box-sizing: border-box;
+    background: #f3f4f6;
+    border-radius: 16px;
+    margin: 0 auto;
+    max-width: 720px;
+    padding: 40px 16px 56px;
+    width: 100%;
+}
+.weline-payment-return__panel {
+    background: #fff;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    box-shadow: 0 10px 28px rgba(17, 24, 39, 0.06);
+    display: grid;
+    gap: 14px;
+    justify-items: center;
+    padding: 36px 28px;
+    text-align: center;
+}
+.weline-payment-return__badge {
+    align-items: center;
+    background: #ecfdf5;
+    border-radius: 999px;
+    color: #047857;
+    display: inline-flex;
+    height: 48px;
+    justify-content: center;
+    width: 48px;
+}
+.weline-payment-return__badge--info {
+    background: #eff6ff;
+    color: #1d4ed8;
+}
+.weline-payment-return__badge--danger {
+    background: #fef2f2;
+    color: #b91c1c;
+}
+.weline-payment-return__title {
+    color: #111827;
+    font-size: 1.5rem;
+    font-weight: 650;
+    line-height: 1.3;
+    margin: 0;
+}
+.weline-payment-return__lead {
+    color: #4b5563;
+    font-size: 0.95rem;
+    line-height: 1.6;
+    margin: 0;
+    max-width: 36rem;
+}
+.weline-payment-return__facts {
+    display: grid;
+    gap: 10px;
+    margin: 4px 0 0;
+    text-align: left;
+    width: min(100%, 20rem);
+}
+.weline-payment-return__facts > div {
+    display: grid;
+    gap: 2px;
+}
+.weline-payment-return__fact-label {
+    color: #6b7280;
+    font-size: 0.8rem;
+}
+.weline-payment-return__fact-value {
+    color: #111827;
+    font-size: 0.95rem;
+    word-break: break-all;
+}
+.weline-payment-return__actions {
+    margin-top: 8px;
+}
+.weline-payment-return__btn {
+    background: #111827;
+    border-radius: 8px;
+    color: #fff;
+    display: inline-block;
+    font-size: 0.95rem;
+    font-weight: 600;
+    padding: 10px 18px;
+    text-decoration: none;
+}
+.weline-payment-return__btn:hover {
+    background: #1f2937;
+    color: #fff;
+}
+</style>

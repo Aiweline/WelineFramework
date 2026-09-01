@@ -1,0 +1,70 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$entries = is_array($this->getData('payment_guide_entries') ?? null) ? $this->getData('payment_guide_entries') : [];
+$activeEntry = is_array($this->getData('payment_guide_entry') ?? null) ? $this->getData('payment_guide_entry') : [];
+$activeMethodCode = strtolower(trim((string) ($activeEntry['method_code'] ?? '')));
+$pageType = (string) ($this->getData('payment_guide_page_type') ?? '');
+$escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+?>
+<aside class="amazon-payment-guide-layout__sidebar" aria-label="@lang(支付供应商导航)" weline-code="payment.guide.sidebar">
+    <h2 class="amazon-payment-guide-layout__sidebar-title"><lang>支付方式</lang></h2>
+    <ul class="amazon-payment-guide-layout__nav">
+        <li>
+            <a class="amazon-payment-guide-layout__nav-link<?= $activeMethodCode === '' ? ' is-active' : '' ?>"
+               href="@url{'guide/payment'}"
+               <?= $activeMethodCode === '' ? 'aria-current="page"' : '' ?>>
+                <lang>全部支付方式</lang>
+            </a>
+        </li>
+        <?php foreach ($entries as $entry): ?>
+            <?php
+            if (!is_array($entry)) {
+                continue;
+            }
+            $methodCode = strtolower(trim((string) ($entry['method_code'] ?? '')));
+            $providerTitle = (string) ($entry['title'] ?? '');
+            $guideTitle = (string) ($entry['guide_title'] ?? '');
+            $policyTitle = (string) ($entry['policy_title'] ?? '');
+            $agreementTitle = (string) ($entry['agreement_title'] ?? '');
+            $guideRoute = (string) ($entry['guide_route'] ?? '');
+            $policyRoute = (string) ($entry['policy_route'] ?? '');
+            $agreementRoute = (string) ($entry['agreement_route'] ?? '');
+            $isExpanded = $methodCode !== '' && $methodCode === $activeMethodCode;
+            ?>
+            <li class="amazon-payment-guide-layout__nav-group<?= $isExpanded ? ' is-expanded' : '' ?>">
+                <?php if ($isExpanded): ?>
+                    <span class="amazon-payment-guide-layout__nav-group-label"><?= $escape($providerTitle) ?></span>
+                    <ul class="amazon-payment-guide-layout__nav-group-children">
+                        <li>
+                            <a class="amazon-payment-guide-layout__nav-article<?= $pageType === 'guide' ? ' is-active' : '' ?>"
+                               href="@url{$guideRoute}"
+                               <?= $pageType === 'guide' ? 'aria-current="page"' : '' ?>>
+                                <?= $escape($guideTitle) ?>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="amazon-payment-guide-layout__nav-article<?= $pageType === 'policy' ? ' is-active' : '' ?>"
+                               href="@url{$policyRoute}"
+                               <?= $pageType === 'policy' ? 'aria-current="page"' : '' ?>>
+                                <?= $escape($policyTitle) ?>
+                            </a>
+                        </li>
+                        <li>
+                            <a class="amazon-payment-guide-layout__nav-article<?= $pageType === 'agreement' ? ' is-active' : '' ?>"
+                               href="@url{$agreementRoute}"
+                               <?= $pageType === 'agreement' ? 'aria-current="page"' : '' ?>>
+                                <?= $escape($agreementTitle) ?>
+                            </a>
+                        </li>
+                    </ul>
+                <?php else: ?>
+                    <a class="amazon-payment-guide-layout__nav-link"
+                       href="@url{$guideRoute}">
+                        <?= $escape($providerTitle) ?>
+                    </a>
+                <?php endif; ?>
+            </li>
+        <?php endforeach; ?>
+    </ul>
+</aside>

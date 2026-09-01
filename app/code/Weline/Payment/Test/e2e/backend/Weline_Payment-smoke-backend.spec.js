@@ -76,7 +76,7 @@ moduleDescribe(test, MODULE, 'Weline_Payment 后台流程', () => {
     '支付方式页：点击查看配置或确认空列表文案',
     async ({ page }) => {
       await loginAsAdmin(page);
-      // 菜单深链携带显式 target_scope（Payment 对象授权硬前置）；不带则 403「操作授权条件不满足」。
+      // 菜单深链携带显式 target_scope；裸链会 302 补齐 default.default.default，再走对象 Scope ACL。
       const methodRoutes = [
         `${buildModuleBackendRoute(MODULE, 'method')}?target_scope=default.default.default`,
         `${buildModuleBackendRoute(MODULE, 'method/index')}?target_scope=default.default.default`,

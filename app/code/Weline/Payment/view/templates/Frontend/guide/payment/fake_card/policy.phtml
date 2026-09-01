@@ -1,0 +1,35 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$entry = (array) ($this->getData('payment_guide_entry') ?? []);
+$policyRoute = (string) ($entry['policy_route'] ?? '');
+?>
+
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+
+<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-policy-fake-card">
+    <?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+
+    <header class="amazon-payment-guide-article__header">
+        <p class="amazon-payment-guide-article__badge"><lang>政策</lang></p>
+        <h1 class="amazon-payment-guide-article__title"><lang>本地测试支付政策</lang></h1>
+        <p class="amazon-payment-guide-article__lead"><lang>本政策说明本地测试支付的使用边界，不适用于生产收款。</lang></p>
+    </header>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.policy.fake_card.funds">
+        <h2><lang>资金与扣款</lang></h2>
+        <p><lang>本地测试支付不会连接真实支付网关，也不会产生真实扣款、结算或对账记录。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.policy.fake_card.privacy">
+        <h2><lang>数据与隐私</lang></h2>
+        <p><lang>测试过程中输入的卡号、姓名等信息仅用于界面联调，请使用测试数据，勿输入真实敏感信息。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.policy.fake_card.golive">
+        <h2><lang>上线要求</lang></h2>
+        <p><lang>生产环境必须启用真实支付供应商，并下线或禁用本地测试支付方式。</lang></p>
+    </section>
+</article>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>

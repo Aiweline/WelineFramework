@@ -13,6 +13,10 @@ Controller 或 Provider 仍不得直接推进支付、库存或后续业务状�
 
 成功 Attempt 的确定性 effect：`invoice:create:v1`、`fulfillment:action:v1`、`notification:paid:v1`（见 Order [`invoice-fulfillment-tombstone.md`](../../Order/doc/invoice-fulfillment-tombstone.md)）。
 
+## Dev Webhook Relay（开发/staging）
+
+本地联调 Provider Webhook 时，见 [`dev-webhook-relay.md`](dev-webhook-relay.md)：线上固定收 hook，SSE 推送至本地浏览器并重放 inbox。
+
 ## Connector 硬门禁
 
 `PaymentConnectorGuard`：Payment/Order/Inventory 指纹必须全部等于
@@ -93,7 +97,10 @@ Controller 必须从 Request/ParameterBag 读取真实 raw body，禁止把已�
 `PaymentInboxConsumer::setEnabled(false)`；已入箱保留并可前向重放，
 已提交 ledger/effect 不逆向删除，也不恢复 Controller/Provider 直接写状态。
 
-## 验证
+## 幂等与万能壳
+
+Webhook Inbox 幂等（同 `endpoint_code` + `provider_event_id` 重放不双入箱、冲突 409、缺 event_id 400）已满足。
+浏览器 return、乱序、结账 idempotency key 等边界见壳架构文档 [`payment-shell.md`](payment-shell.md) §5，勿在本文件重复矛盾表述。
 
 ```bash
 php vendor/bin/phpunit --bootstrap app/code/Weline/Payment/Test/Unit/bootstrap.php \

@@ -13,6 +13,7 @@ use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Service\Query\FrontendQueryException;
 use Weline\Payment\Extends\Module\Weline_Framework\Query\PaymentQueryProvider;
 use Weline\Payment\Model\PaymentTransaction;
+use Weline\Payment\Service\PaymentGuideI18nService;
 use Weline\Payment\Service\PaymentMethodManager;
 use Weline\Payment\Service\PaymentObjectScopeService;
 use Weline\Payment\Service\PaymentTransactionAccessService;
@@ -83,6 +84,41 @@ final class PaymentQueryProviderAuthorizationTest extends TestCase
         self::assertSame(3, $result['providers_registered']);
     }
 
+    public function testReorderPaymentMethodsRequiresExplicitUpdateGrant(): void
+    {
+        $scope = ScopeIdentity::website(17, 'shop');
+        $manager = $this->createMock(PaymentMethodManager::class);
+        $manager->expects(self::once())
+            ->method('reorderMethodsForScope')
+            ->with(
+                ['fake_card', 'paypal'],
+                self::callback(static function (array $context): bool {
+                    return ($context['scope'] ?? '') === 'shop.default.default';
+                }),
+            )
+            ->willReturn([
+                'success' => true,
+                'sort_orders' => ['fake_card' => 0, 'paypal' => 10],
+                'message' => 'ok',
+            ]);
+        $access = $this->createMock(PaymentTransactionAccessService::class);
+        $guard = $this->createMock(BackendObjectAuthorizationGuardInterface::class);
+        $guard->expects(self::once())
+            ->method('requireSubmitForQuery')
+            ->with(ObjectAction::UPDATE, $scope, 11)
+            ->willReturn(ObjectAuthorizationResult::allow('granted', 11));
+
+        $result = $this->provider($guard, $access, $manager)->execute('reorderPaymentMethods', [
+            'target_scope' => 'shop.default.default',
+            'expected_grant_version' => 11,
+            'ordered_codes' => ['fake_card', 'paypal'],
+        ]);
+
+        self::assertTrue($result['success']);
+        self::assertSame(['fake_card' => 0, 'paypal' => 10], $result['sort_orders']);
+        self::assertSame('shop.default.default', $result['target_scope']);
+    }
+
     private function provider(
         BackendObjectAuthorizationGuardInterface $guard,
         PaymentTransactionAccessService $access,
@@ -96,6 +132,7 @@ final class PaymentQueryProviderAuthorizationTest extends TestCase
             ),
             $access,
             $guard,
+            $this->createMock(PaymentGuideI18nService::class),
         );
     }
 }

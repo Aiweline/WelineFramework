@@ -8,15 +8,19 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Interface\ProviderInterface;
 use Weline\Payment\Model\PaymentMethod;
 use Weline\Payment\Model\PaymentMethodConfig;
+use Weline\SystemConfig\Api\ConfigStore;
 
 class PaymentMethodManager
 {
     private const INTERNAL_PROVIDER_CONFIG_KEY = '_provider';
+    private const SORT_STEP = 10;
 
     public function __construct(
         private readonly PaymentProviderScanner $providerScanner,
         private readonly ObjectManager $objectManager,
-        private ?PaymentScopeConfigService $scopeConfigService = null
+        private ?PaymentScopeConfigService $scopeConfigService = null,
+        private ?PaymentMethodIconResolver $iconResolver = null,
+        private ?ConfigStore $configStore = null,
     ) {
     }
 
@@ -119,6 +123,118 @@ class PaymentMethodManager
         });
 
         return $methods;
+    }
+
+    /**
+     * Admin method list for the current scope (includes disabled), ordered by scoped sort_order.
+     *
+     * @return PaymentMethod[]
+     */
+    public function listMethodsForAdmin(array $context = []): array
+    {
+        /** @var PaymentMethod $paymentMethod */
+        $paymentMethod = $this->objectManager->getInstance(PaymentMethod::class, [], false);
+        $methods = $paymentMethod
+            ->order(PaymentMethod::schema_fields_SORT_ORDER, 'ASC')
+            ->select()
+            ->fetch();
+
+        if (\is_object($methods) && method_exists($methods, 'getItems')) {
+            $methods = $methods->getItems();
+        }
+        if (!\is_array($methods)) {
+            return [];
+        }
+
+        $methods = array_values(array_filter(
+            $methods,
+            static fn(mixed $method): bool => $method instanceof PaymentMethod
+        ));
+        $methods = $this->uniqueMethodsByCode($methods);
+
+        return $this->sortMethodsByScopedOrder($methods, $context);
+    }
+
+    /**
+     * Persist drag order as payment/method/{code}/sort_order at the exact target scope.
+     *
+     * @param list<string> $orderedCodes
+     * @return array{success:bool,sort_orders:array<string,int>,message:string}
+     */
+    public function reorderMethodsForScope(array $orderedCodes, array $context = []): array
+    {
+        $codes = [];
+        foreach ($orderedCodes as $code) {
+            $normalized = $this->normalizeCode((string)$code);
+            if ($normalized === '' || isset($codes[$normalized])) {
+                continue;
+            }
+            $codes[$normalized] = $normalized;
+        }
+        $ordered = array_values($codes);
+        if ($ordered === []) {
+            return [
+                'success' => false,
+                'sort_orders' => [],
+                'message' => (string)__('支付方式排序列表不能为空'),
+            ];
+        }
+
+        $scope = $this->getScopeConfigService()->resolveScope($context);
+        $storageScope = (string)$scope['scope'];
+        $sortOrders = [];
+        $index = 0;
+        foreach ($ordered as $code) {
+            $method = $this->getMethodByCode($code);
+            if (!$method instanceof PaymentMethod) {
+                return [
+                    'success' => false,
+                    'sort_orders' => [],
+                    'message' => (string)__('支付方式不存在: %{1}', [$code]),
+                ];
+            }
+
+            $weight = $index * self::SORT_STEP;
+            $module = trim((string)$method->getData(PaymentMethod::schema_fields_PROVIDER_MODULE));
+            if ($module === '') {
+                $module = PaymentScopeConfigService::MODULE_WELINE_PAYMENT;
+            }
+
+            $ok = $this->getConfigStore()->setScopedConfig(
+                key: 'payment/method/' . $code . '/sort_order',
+                value: $weight,
+                module: $module,
+                area: ConfigStore::area_BACKEND,
+                scope: $storageScope,
+                locale: ConfigStore::LOCALE_DEFAULT,
+            );
+            if (!$ok) {
+                return [
+                    'success' => false,
+                    'sort_orders' => $sortOrders,
+                    'message' => (string)__('保存支付方式排序失败: %{1}', [$code]),
+                ];
+            }
+
+            $sortOrders[$code] = $weight;
+            $index++;
+        }
+
+        return [
+            'success' => true,
+            'sort_orders' => $sortOrders,
+            'message' => (string)__('支付方式排序已保存'),
+        ];
+    }
+
+    /**
+     * Scoped sort_order for display (falls back to method row).
+     */
+    public function getScopedSortOrder(PaymentMethod $method, array $context = []): int
+    {
+        $runtime = $this->getRuntimeConfig($method, $context);
+
+        return (int)($runtime['sort_order'] ?? $method->getData(PaymentMethod::schema_fields_SORT_ORDER) ?? 0);
     }
 
     public function getMethodByCode(string $code): ?PaymentMethod
@@ -256,11 +372,32 @@ class PaymentMethodManager
         $metadata['ui_template_code'] = $this->normalizeCode((string) ($metadata['ui_template_code'] ?? $methodCode));
         $metadata['checkout_template_code'] = $this->normalizeCode((string) ($metadata['checkout_template_code'] ?? $metadata['ui_template_code']));
         $metadata['config_template_code'] = $this->normalizeCode((string) ($metadata['config_template_code'] ?? $methodCode));
+        $checkoutMode = strtolower(trim((string) ($metadata['checkout_mode'] ?? '')));
+        if (!\in_array($checkoutMode, ['shell', 'template', 'hybrid'], true)) {
+            $checkoutMode = $metadata['checkout_template_code'] !== '' ? 'template' : 'shell';
+        }
+        $metadata['checkout_mode'] = $checkoutMode;
         $metadata['provider_api_version'] = (string) ($metadata['provider_api_version'] ?? '1.0');
         $metadata['webhook_schema_version'] = (string) ($metadata['webhook_schema_version'] ?? '1.0');
         $metadata['capabilities'] = \is_array($metadata['capabilities'] ?? null) ? $metadata['capabilities'] : [];
 
         return $metadata;
+    }
+
+    /**
+     * Effective checkout/admin display metadata with config icon override applied.
+     *
+     * @param array<string, mixed> $context
+     * @return array<string, mixed>
+     */
+    public function getEffectiveDisplayMetadata(PaymentMethod $paymentMethod, array $context = [], ?ProviderInterface $provider = null): array
+    {
+        $provider ??= $this->getProviderInstance($paymentMethod, $context);
+        $metadata = $this->getProviderMetadata($paymentMethod, $provider);
+        $display = \is_array($metadata['display_metadata'] ?? null) ? $metadata['display_metadata'] : [];
+        $runtime = $this->getRuntimeConfig($paymentMethod, $context);
+
+        return $this->getIconResolver()->apply($display, $runtime);
     }
 
     /**
@@ -329,6 +466,45 @@ class PaymentMethodManager
         return $this->scopeConfigService;
     }
 
+    private function getIconResolver(): PaymentMethodIconResolver
+    {
+        if ($this->iconResolver === null) {
+            $this->iconResolver = new PaymentMethodIconResolver();
+        }
+
+        return $this->iconResolver;
+    }
+
+    private function getConfigStore(): ConfigStore
+    {
+        if ($this->configStore === null) {
+            $this->configStore = $this->objectManager->getInstance(ConfigStore::class);
+        }
+
+        return $this->configStore;
+    }
+
+    /**
+     * @param PaymentMethod[] $methods
+     * @return PaymentMethod[]
+     */
+    private function sortMethodsByScopedOrder(array $methods, array $context): array
+    {
+        usort($methods, function (PaymentMethod $left, PaymentMethod $right) use ($context): int {
+            $sort = $this->getScopedSortOrder($left, $context)
+                <=> $this->getScopedSortOrder($right, $context);
+
+            return $sort !== 0
+                ? $sort
+                : strcmp(
+                    (string)$left->getData(PaymentMethod::schema_fields_CODE),
+                    (string)$right->getData(PaymentMethod::schema_fields_CODE)
+                );
+        });
+
+        return $methods;
+    }
+
     /**
      * @param array<string, mixed> $definition
      * @return array<string, mixed>
@@ -339,11 +515,22 @@ class PaymentMethodManager
         $displayMetadata = $this->providerArray($provider, 'getDisplayMetadata');
         $capabilities = $this->providerArray($provider, 'getCapabilities');
         $configSchema = $this->providerArray($provider, 'getConfigSchema');
+        $providerIcon = $this->getIconResolver()->extractProviderIcon($displayMetadata);
+        if ($providerIcon === '') {
+            throw new \InvalidArgumentException((string) __(
+                '支付提供商 %{1} 必须在 getDisplayMetadata() 中提供非空 icon_url（或 icon）。',
+                [$methodCode !== '' ? $methodCode : $provider->getCode()]
+            ));
+        }
 
         $providerCode = $this->normalizeCode($this->providerString($provider, 'getProviderCode', $methodCode));
         $uiTemplateCode = $this->normalizeCode((string) ($displayMetadata['ui_template_code'] ?? $methodCode));
         $checkoutTemplateCode = $this->normalizeCode((string) ($displayMetadata['checkout_template_code'] ?? $uiTemplateCode));
         $configTemplateCode = $this->normalizeCode((string) ($displayMetadata['config_template_code'] ?? $methodCode));
+        $checkoutMode = strtolower(trim((string) ($displayMetadata['checkout_mode'] ?? '')));
+        if (!\in_array($checkoutMode, ['shell', 'template', 'hybrid'], true)) {
+            $checkoutMode = $checkoutTemplateCode !== '' ? 'template' : 'shell';
+        }
 
         return [
             'method_code' => $methodCode,
@@ -352,6 +539,7 @@ class PaymentMethodManager
             'provider_api_version' => $this->providerString($provider, 'getProviderApiVersion', (string) ($capabilities['provider_api_version'] ?? '1.0')),
             'webhook_schema_version' => $this->providerString($provider, 'getWebhookSchemaVersion', (string) ($capabilities['webhook_schema_version'] ?? '1.0')),
             'ui_template_code' => $uiTemplateCode,
+            'checkout_mode' => $checkoutMode,
             'checkout_template_code' => $checkoutTemplateCode,
             'config_template_code' => $configTemplateCode,
             'capabilities' => $capabilities,
