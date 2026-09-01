@@ -5,9 +5,27 @@
 保存分类,"Save category"
 删除分类,"Delete category"
 拖拽排序分类,"Reorder categories by drag and drop"
+保存展示选择,保存展示选择
 万能分类,"Universal Catalog"
 "Catalog hub facade for multi-space category trees.","Catalog hub facade for multi-space category trees."
+id属性不能为空,id属性不能为空
+未找到匹配分类,"No matching categories"
+移除,移除
+展开,展开
+折叠,折叠
+快速新建分类,快速新建分类
+新分类名称,新分类名称
+作为顶级分类,作为顶级分类
+新建并选中,新建并选中
+请输入分类名称,请输入分类名称
+"缺少 Website，无法新建分类","缺少 Website，无法新建分类"
+分类新建失败,分类新建失败
+分类已创建,分类已创建
+未选择分类,未选择分类
+搜索分类名称或路径,搜索分类名称或路径
 分类读取失败：%{1},"Failed to load categories: %{1}"
+展示选择保存失败,展示选择保存失败
+展示选择已保存,展示选择已保存
 分类保存失败,"Failed to save category"
 分类已保存,"Category saved"
 分类已删除,"Category deleted"
@@ -17,15 +35,58 @@
 tree,tree
 维护多空间分类树,维护多空间分类树
 save,save
+"保存 Store/Channel 分类展示选择","保存 Store/Channel 分类展示选择"
 保存分类结构,保存分类结构
 trash,trash
 删除分类结构,删除分类结构
 分类排序,分类排序
 查看分类,查看分类
 查看分类详情,查看分类详情
+"Google 产品分类","Google Product Taxonomy"
+"已入队 AI 翻译","AI translation enqueued"
+"已入队 AI 翻译（队列 #%{1}）","AI translation enqueued (queue #%{1})"
+"只读 Google 分类参照与 AI 译名","Read-only Google taxonomy reference and AI labels"
+"Google 分类 AI 翻译","Google taxonomy AI translation"
+language,language
+"入队 Google 分类 AI 翻译","Enqueue Google taxonomy AI translation"
+调整分类,调整分类
+批量调整分类,批量调整分类
+操作方式,操作方式
+追加分类,追加分类
+替换全部分类,替换全部分类
+移除所选分类,移除所选分类
+选择分类,选择分类
+正在加载分类…,正在加载分类…
+取消,Cancel
+应用,应用
+"只读参照树；不可删改结构。可对译名发起 AI 批量翻译。","Read-only reference tree; structure cannot be edited. AI batch translation is available for labels."
+"共 %{1} 条","%{1} categories"
+"版本 %{1}","Version %{1}"
+"Google 分类操作","Google 分类操作"
+"搜索 Google ID / 英文名","Search Google ID / English name"
+搜索,Search
+返回万能分类,"Back to Universal Catalog"
+搜索结果,"Search results"
+只读树,"Read-only tree"
+分类路径,分类路径
+全部分类,"All categories"
+"暂无 Google 分类数据","No Google taxonomy data yet"
+展开子分类,"Expand children"
+"译名与 AI","Labels and AI"
+"请从左侧选择一条 Google 分类","Select a Google category from the list"
+"深度 %{1}","Depth %{1}"
+"将入队词典键 google_taxonomy.{id} 的 AI 翻译任务。","Will enqueue dictionary keys google_taxonomy.{id} for AI translation."
+目标语言,"Target locale"
+"一键 AI 翻译","One-click AI Translation"
+"确认入队 Google 分类 AI 翻译？任务可在离开页面后继续。","Enqueue Google taxonomy AI translation? The job continues after you leave this page."
+"AI 翻译","AI translation"
 空间,空间
+范围,范围
 Website,Website
+Store,Store
+Channel,Channel
 切换,切换
+选择分类图片,选择分类图片
 添加子分类,添加子分类
 删除分类会同时删除其子分类与关联，且无法恢复。确定继续吗？,删除分类会同时删除其子分类与关联，且无法恢复。确定继续吗？
 分类删除失败,"Failed to delete category"
@@ -33,9 +94,13 @@ Website,Website
 挂靠为子分类,挂靠为子分类
 插入到上方,插入到上方
 插入到下方,插入到下方
+"分类图标过大（上限 %{1} KB）","分类图标过大（上限 %{1} KB）"
+"分类 Banner 过大（上限 %{1} KB）","分类 Banner 过大（上限 %{1} KB）"
 "Website 范围维护分类结构；左侧树形列表支持拖拽排序与挂靠","Website 范围维护分类结构；左侧树形列表支持拖拽排序与挂靠"
-分类管理操作,分类管理操作
+"Store/Channel 范围配置展示选择；结构仅在 Website 维护","Store/Channel 范围配置展示选择；结构仅在 Website 维护"
+分类筛选,分类筛选
 产品分类,"Product Categories"
+分类管理操作,分类管理操作
 添加顶级分类,添加顶级分类
 返回商品,返回商品
 分类树,分类树
@@ -43,21 +108,92 @@ Website,Website
 添加分类,添加分类
 编辑分类,编辑分类
 分类信息,分类信息
+展示配置,展示配置
+"结构仅在 Website 维护。此处勾选本 Store/Channel 要展示的分类。","结构仅在 Website 维护。此处勾选本 Store/Channel 要展示的分类。"
+暂无可配置分类,暂无可配置分类
+保存展示,保存展示
 请从左侧选择分类，或添加一个新分类,请从左侧选择分类，或添加一个新分类
+多语言,Multilingual
 分类名称,分类名称
+保存后可翻译多语言,"Save first to translate other locales"
 "分类 Code","分类 Code"
 "URL 路径片段，仅小写字母、数字和连字符；保存后路径会随之更新","URL 路径片段，仅小写字母、数字和连字符；保存后路径会随之更新"
-分类路径,分类路径
 "根据父分类与 Code 自动生成；子分类路径会随父级变化","根据父分类与 Code 自动生成；子分类路径会随父级变化"
 父分类,父分类
 顶级分类,顶级分类
 启用分类,启用分类
+分类图标,分类图标
+选择图标,选择图标
+清除,清除
+"用于前台分类列表/网格；建议 %{1}×%{2}，尽量数 KB 内，上限 %{3} KB","用于前台分类列表/网格；建议 %{1}×%{2}，尽量数 KB 内，上限 %{3} KB"
+"分类 Banner","分类 Banner"
+"选择 Banner","选择 Banner"
+"分类详情页横幅（亚马逊风格）；建议 %{1}×%{2}，上限 %{3} KB","分类详情页横幅（亚马逊风格）；建议 %{1}×%{2}，上限 %{3} KB"
+分类摘要,分类摘要
+一句话介绍，用于列表或详情简介,一句话介绍，用于列表或详情简介
+分类描述,分类描述
+详情页完整描述,详情页完整描述
+"Google Taxonomy ID","Google Taxonomy ID"
+查阅参照树,"Browse reference tree"
+"Website 结构映射；填写官方 Google 分类 ID（只读参照，不可在此改结构）。","Website structure mapping; enter an official Google taxonomy ID (read-only reference)."
 删除,删除
-取消,取消
-保存,保存
+保存,Save
+媒体库,媒体库
+"未找到 Google 官方分类文件：%{1}","Official Google taxonomy file not found: %{1}"
+"Google 分类文件读取失败","Failed to read Google taxonomy file"
+"Google 分类文件为空或格式无效","Google taxonomy file is empty or invalid"
 未注册的分类空间：%{1},"Unregistered catalog space: %{1}"
 "分类空间 space 不能为空","Catalog space cannot be empty"
 分类接口不支持该操作：%{1},"Catalog operation not supported: %{1}"
+分类图标地址过长,分类图标地址过长
+"分类 Banner 地址过长","分类 Banner 地址过长"
+"分类摘要过长（最多 %{1} 字）","分类摘要过长（最多 %{1} 字）"
+分类描述过长,分类描述过长
+"%{1}文件过大（上限 %{2} KB）","%{1}文件过大（上限 %{2} KB）"
 "分类结构只能在 Website 范围维护","Category structure can only be maintained at website scope"
 "展示选择只能在 Store/Channel 范围配置","Display selection can only be configured at store/channel scope"
+目标语言不能为空,"Target locale cannot be empty"
+"Google 分类 AI 翻译 %{1}","Google taxonomy AI translation %{1}"
 """万能分类后台 Resource 不支持操作：%{1}""","Catalog admin resource does not support operation: %{1}"
+多语言翻译,"Multilingual Translation"
+"无效的 Google Taxonomy ID：%{1}","Invalid Google Taxonomy ID: %{1}"
+google_taxonomy.1,"Animals & Pet Supplies"
+google_taxonomy.2,"Pet Supplies"
+google_taxonomy.3,"Dog Supplies"
+google_taxonomy.8,"Arts & Entertainment"
+google_taxonomy.166,"Apparel & Accessories"
+google_taxonomy.1604,Clothing
+google_taxonomy.187,Dresses
+google_taxonomy.212,Electronics
+google_taxonomy.222,Communications
+google_taxonomy.267,"Mobile Phones"
+google_taxonomy.269,"Phone Cards"
+google_taxonomy.270,Telephony
+google_taxonomy.469,"Home & Garden"
+google_taxonomy.536,"Kitchen & Dining"
+google_taxonomy.783,Media
+google_taxonomy.784,Books
+"请执行 php bin/w setup:upgrade 导入官方分类库。","Run php bin/w setup:upgrade to import the official taxonomy."
+原文,"Source Text"
+译文,"Translated Text"
+刷新,Refresh
+AI翻译,"AI Translation"
+已填写,Filled
+待填写,Pending
+搜索语言、语言码或翻译,"Search language, language code, or translation"
+"已译 %{filled} / 共 %{total} 种语言","Translated %{filled} / %{total} languages"
+"已填写 %{filled} / %{total} 种语言","Filled %{filled} / %{total} languages"
+没有找到已启用的语言,"No enabled languages found"
+没有匹配的语言,"No matching languages"
+"AI 翻译完成","AI translation completed"
+已有翻译内容，是否重新翻译？,"Translations already exist. Retranslate?"
+重新翻译,Retranslate
+正在加载语言…,"Loading languages…"
+语言,Language
+状态,Status
+关闭,Close
+"一键 AI 批量翻译","One-click AI Batch Translation"
+请先保存后再翻译,"Please save before translating"
+准备开始…,"Getting ready…"
+翻译进行中,"Translation in progress"
+没有可翻译的字段，请先填写文案,"No translatable fields. Add copy first."

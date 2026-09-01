@@ -3,6 +3,9 @@
        xs:noNamespaceSchemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd"
        xs:schemaLocation="urn:weline:module:Weline_Backend::etc/xsd/menu.xsd">
     <menu source="Weline_Catalog::commerce:universal-catalog:categories" name="commerce_universal_catalog_categories"
-          title="万能分类" action="weline_catalog/backend/category/index?space=product&amp;scope_level=website"
-          parent="Weline_Backend::commerce:catalog:group" icon="tree" order="35"/>
+          title="万能分类" action="weline_catalog/backend/category/index?space=product&amp;scope_level=website&amp;website_id=0"
+          parent="Weline_Backend::commerce:catalog:taxonomy-group" icon="tree" order="10"/>
+    <menu source="Weline_Catalog::commerce:universal-catalog:google-taxonomy" name="commerce_universal_catalog_google"
+          title="Google 产品分类" action="weline_catalog/backend/google-taxonomy/index"
+          parent="Weline_Backend::commerce:catalog:taxonomy-group" icon="globe" order="20"/>
 </menus>

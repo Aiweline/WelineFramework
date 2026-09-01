@@ -9,3 +9,10 @@
 - 长期事实写入本模块 `doc/`。
 - 不在本文复制全局规则或客户端规则。
 - 无法由当前证据确认的行为必须标记待确认。
+
+## 专题文档
+
+- [catalog-category-select 标签使用指南](./catalog-category-select标签使用指南.md)
+- [ARCHITECTURE.md](./ARCHITECTURE.md)
+- [开发日志.md](./开发日志.md)
+- [需求.md](./需求.md)

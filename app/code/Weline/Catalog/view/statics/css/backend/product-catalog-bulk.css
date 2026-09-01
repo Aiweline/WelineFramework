@@ -1,0 +1,59 @@
+.w-catalog-bulk-categories {
+    padding: 0;
+    border: none;
+    max-width: min(36rem, calc(100vw - 2rem));
+    width: 100%;
+    background: transparent;
+}
+
+.w-catalog-bulk-categories::backdrop {
+    background: color-mix(in srgb, var(--weline-theme-text, #111) 35%, transparent);
+}
+
+.w-catalog-bulk-categories__panel {
+    display: grid;
+    gap: var(--weline-space-4, 1rem);
+    margin: 0;
+    padding: var(--weline-space-4, 1rem);
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg, 0.75rem);
+    background: var(--weline-theme-surface-raised, #fff);
+    box-shadow: var(--weline-shadow-lg, 0 1rem 2rem rgba(0, 0, 0, 0.12));
+}
+
+.w-catalog-bulk-categories__header {
+    display: grid;
+    gap: var(--weline-space-1, 0.25rem);
+}
+
+.w-catalog-bulk-categories__title {
+    margin: 0;
+    font-size: 1.1rem;
+}
+
+.w-catalog-bulk-categories__list {
+    display: grid;
+    gap: var(--weline-space-2, 0.5rem);
+    max-height: min(18rem, 45vh);
+    overflow: auto;
+    padding: var(--weline-space-2, 0.5rem);
+    border: 1px solid var(--weline-theme-border);
+    border-radius: var(--weline-radius-md, 0.5rem);
+    background: var(--weline-theme-surface-muted);
+}
+
+.w-catalog-bulk-categories__row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--weline-space-2, 0.5rem);
+}
+
+.w-catalog-bulk-categories__row small {
+    display: block;
+    color: var(--weline-theme-text-muted);
+}
+
+.w-catalog-bulk-categories__footer {
+    padding-top: var(--weline-space-2, 0.5rem);
+    border-top: 1px solid var(--weline-theme-border);
+}

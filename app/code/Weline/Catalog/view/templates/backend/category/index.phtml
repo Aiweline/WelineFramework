@@ -3,11 +3,25 @@
 $catalogs = is_array($this->getData('categories_tree')) ? $this->getData('categories_tree') : [];
 $category = $this->getData('category');
 $websiteId = max(0, (int)($this->getData('website_id') ?? 0));
+$storeId = max(0, (int)($this->getData('store_id') ?? 0));
+$channelId = max(0, (int)($this->getData('channel_id') ?? 0));
 $space = trim((string)($this->getData('space') ?? 'product'));
 $scopeLevel = trim((string)($this->getData('scope_level') ?? 'website'));
+$isStructureMode = (bool)($this->getData('is_structure_mode') ?? ($scopeLevel === 'website'));
 $spaces = is_array($this->getData('spaces')) ? $this->getData('spaces') : [];
+$displaySelection = is_array($this->getData('display_selection')) ? $this->getData('display_selection') : [];
 $error = (string)($this->getData('error') ?? '');
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$enabledMap = [];
+foreach ($displaySelection as $row) {
+    if (!is_array($row)) {
+        continue;
+    }
+    $cid = max(0, (int)($row['category_id'] ?? 0));
+    if ($cid > 0) {
+        $enabledMap[$cid] = (int)($row['enabled'] ?? 0) === 1;
+    }
+}
 $catalogValue = static function (mixed $row, string $key, mixed $default = ''): mixed {
     if (is_array($row)) {
         return $row[$key] ?? $default;
@@ -29,6 +43,17 @@ $parentId = $isNew
 $isActive = $isNew || (int)$catalogValue($category, 'is_active', 1) === 1;
 $categoryCode = $isNew ? '' : (string)$catalogValue($category, 'code', '');
 $categoryPath = $isNew ? '' : (string)$catalogValue($category, 'path', '');
+$googleTaxonomyId = $isNew ? '' : (string)$catalogValue($category, 'google_taxonomy_id', '');
+$categoryImage = $isNew ? '' : (string)$catalogValue($category, 'image', '');
+$categoryBanner = $isNew ? '' : (string)$catalogValue($category, 'banner', '');
+$categorySummary = $isNew ? '' : (string)$catalogValue($category, 'summary', '');
+$categoryDescription = $isNew ? '' : (string)$catalogValue($category, 'description', '');
+$imageMaxBytes = \Weline\Catalog\Service\CategoryMediaConstraints::IMAGE_MAX_BYTES;
+$bannerMaxBytes = \Weline\Catalog\Service\CategoryMediaConstraints::BANNER_MAX_BYTES;
+$imageRecW = \Weline\Catalog\Service\CategoryMediaConstraints::IMAGE_RECOMMEND_WIDTH;
+$imageRecH = \Weline\Catalog\Service\CategoryMediaConstraints::IMAGE_RECOMMEND_HEIGHT;
+$bannerRecW = \Weline\Catalog\Service\CategoryMediaConstraints::BANNER_RECOMMEND_WIDTH;
+$bannerRecH = \Weline\Catalog\Service\CategoryMediaConstraints::BANNER_RECOMMEND_HEIGHT;
 $flatCatalogs = [];
 $flatten = function (array $nodes, int $depth = 0, array $ancestors = []) use (&$flatten, &$flatCatalogs): void {
     foreach ($nodes as $node) {
@@ -54,22 +79,26 @@ $flatten = function (array $nodes, int $depth = 0, array $ancestors = []) use (&
     }
 };
 $flatten($catalogs);
-$catalogPageUrl = function (array $params = []) use ($websiteId, $space, $scopeLevel): string {
-    $params = [
+$catalogPath = 'weline_catalog/backend/category/index';
+$catalogPageParams = function (array $params = []) use ($websiteId, $storeId, $channelId, $space, $scopeLevel): array {
+    return [
         'space' => $space,
         'scope_level' => $scopeLevel,
         'website_id' => $websiteId,
+        'store_id' => $storeId,
+        'channel_id' => $channelId,
         ...$params,
     ];
-
-    return (string)$this->getBackendUrl('weline_catalog/backend/category/index', $params);
 };
-$renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $catalogPageUrl): void {
+// PHP echo 树链接仍需绝对 URL
+$catalogPageUrl = function (array $params = []) use ($catalogPath, $catalogPageParams): string {
+    return (string)$this->getBackendUrl($catalogPath, $catalogPageParams($params));
+};
+$renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $catalogPageUrl, $isStructureMode): void {
     if ($nodes === []) {
         return;
     }
     echo '<ul class="w-tree" data-category-tree-list>';
-    $count = count($nodes);
     foreach (array_values($nodes) as $index => $node) {
         if (!is_array($node)) {
             continue;
@@ -82,32 +111,53 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
         $pid = max(0, (int)($node['parent_id'] ?? $node['pid'] ?? 0));
         $level = max(1, (int)($node['level'] ?? 1));
         $path = (string)($node['path'] ?? '');
+        $nodeImage = trim((string)($node['image'] ?? ''));
         $children = is_array($node['nodes'] ?? null) ? $node['nodes'] : [];
         $rowState = $selectedId === $id ? 'selected' : 'idle';
+        $rowClass = $isStructureMode
+            ? 'w-tree__row w-catalog-tree__row w-catalog-tree__row--draggable'
+            : 'w-tree__row w-catalog-tree__row';
         echo '<li class="w-catalog-tree__item" data-category-node data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '">';
-        echo '<div class="w-drop-indicator w-drop-indicator--before" data-drop-zone="before" hidden aria-hidden="true"></div>';
-        echo '<div class="w-tree__row w-catalog-tree__row w-catalog-tree__row--draggable" draggable="true" data-state="' . $rowState . '" data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '" data-position="' . max(1, $index + 1) . '">';
-        echo '<button class="w-catalog-tree__handle" type="button" tabindex="-1" aria-hidden="true" data-drag-handle><w-icon name="menu" size="sm"></w-icon></button>';
-        echo '<a class="w-catalog-tree__link" href="' . $escape($catalogPageUrl(['id' => $id])) . '"' . ($selectedId === $id ? ' aria-current="page"' : '') . '>';
-        echo '<w-icon name="folder" size="sm"></w-icon><span>' . $escape($name) . '</span>';
+        if ($isStructureMode) {
+            echo '<div class="w-drop-indicator w-drop-indicator--before" data-drop-zone="before" hidden aria-hidden="true"></div>';
+        }
+        echo '<div class="' . $rowClass . '"' . ($isStructureMode ? ' draggable="true"' : '') . ' data-state="' . $rowState . '" data-id="' . $id . '" data-pid="' . $pid . '" data-level="' . $level . '" data-position="' . max(1, $index + 1) . '">';
+        if ($isStructureMode) {
+            echo '<button class="w-catalog-tree__handle" type="button" tabindex="-1" aria-hidden="true" data-drag-handle><w-icon name="menu" size="sm"></w-icon></button>';
+        }
+        if ($isStructureMode) {
+            echo '<a class="w-catalog-tree__link" href="' . $escape($catalogPageUrl(['id' => $id])) . '"' . ($selectedId === $id ? ' aria-current="page"' : '') . '>';
+        } else {
+            echo '<span class="w-catalog-tree__link">';
+        }
+        if ($nodeImage !== '') {
+            echo '<img class="w-catalog-tree__thumb" src="' . $escape($nodeImage) . '" alt="" width="20" height="20" loading="lazy">';
+        } else {
+            echo '<w-icon name="folder" size="sm"></w-icon>';
+        }
+        echo '<span>' . $escape($name) . '</span>';
         if ($path !== '') {
             echo '<span class="w-badge" data-tone="neutral">' . $escape($path) . '</span>';
         }
-        echo '</a>';
+        echo $isStructureMode ? '</a>' : '</span>';
         echo '</div>';
-        echo '<div class="w-drop-indicator w-drop-indicator--inside" data-drop-zone="inside" hidden aria-hidden="true"></div>';
+        if ($isStructureMode) {
+            echo '<div class="w-drop-indicator w-drop-indicator--inside" data-drop-zone="inside" hidden aria-hidden="true"></div>';
+        }
         if ($children !== []) {
             $renderTree($children);
         }
-        echo '<div class="w-drop-indicator w-drop-indicator--after" data-drop-zone="after" hidden aria-hidden="true"></div>';
-        echo '<a class="w-catalog-tree__add" href="' . $escape($catalogPageUrl(['new' => 1, 'pid' => $id])) . '"><w-icon name="plus" size="sm"></w-icon>' . $escape(__('添加子分类')) . '</a>';
+        if ($isStructureMode) {
+            echo '<div class="w-drop-indicator w-drop-indicator--after" data-drop-zone="after" hidden aria-hidden="true"></div>';
+            echo '<a class="w-catalog-tree__add" href="' . $escape($catalogPageUrl(['new' => 1, 'pid' => $id])) . '"><w-icon name="plus" size="sm"></w-icon>' . $escape(__('添加子分类')) . '</a>';
+        }
         echo '</li>';
     }
     echo '</ul>';
 };
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-catalogs.css)">
-<link rel="stylesheet" href="@static(Weline_Catalog::css/backend/category-admin.css)?v=20260826-v1">
+<link rel="stylesheet" href="@static(Weline_Catalog::css/backend/category-admin.css)?v=20260328-media1">
 
 <section
     class="w-backend-page w-catalog-admin w-product-category-admin"
@@ -116,7 +166,12 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
     data-space="<?= $escape($space) ?>"
     data-scope-level="<?= $escape($scopeLevel) ?>"
     data-website-id="<?= $escape($websiteId) ?>"
+    data-store-id="<?= $escape($storeId) ?>"
+    data-channel-id="<?= $escape($channelId) ?>"
+    data-structure-mode="<?= $isStructureMode ? '1' : '0' ?>"
     data-text-save-success="<?= $escape(__('分类已保存')) ?>"
+    data-text-display-save-success="<?= $escape(__('展示选择已保存')) ?>"
+    data-text-display-save-failed="<?= $escape(__('展示选择保存失败')) ?>"
     data-text-save-failed="<?= $escape(__('分类保存失败')) ?>"
     data-text-delete-title="<?= $escape(__('删除分类')) ?>"
     data-text-delete-message="<?= $escape(__('删除分类会同时删除其子分类与关联，且无法恢复。确定继续吗？')) ?>"
@@ -127,15 +182,17 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
     data-text-drop-child="<?= $escape(__('挂靠为子分类')) ?>"
     data-text-drop-before="<?= $escape(__('插入到上方')) ?>"
     data-text-drop-after="<?= $escape(__('插入到下方')) ?>"
+    data-image-max-bytes="<?= $escape($imageMaxBytes) ?>"
+    data-banner-max-bytes="<?= $escape($bannerMaxBytes) ?>"
+    data-text-image-too-large="<?= $escape(__('分类图标过大（上限 %{1} KB）', [(string)(int)floor($imageMaxBytes / 1024)])) ?>"
+    data-text-banner-too-large="<?= $escape(__('分类 Banner 过大（上限 %{1} KB）', [(string)(int)floor($bannerMaxBytes / 1024)])) ?>"
 >
-    <header class="w-backend-page__heading">
-        <div class="w-stack">
-            <h1><w-icon name="tree" size="md"></w-icon><?= $escape(__('万能分类')) ?></h1>
-            <p class="w-text" data-tone="muted"><?= $escape(__('Website 范围维护分类结构；左侧树形列表支持拖拽排序与挂靠')) ?></p>
-        </div>
-        <nav class="w-cluster" aria-label="<?= $escape(__('分类管理操作')) ?>" data-testid="catalog-category-toolbar">
-            <form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);" action="@backend-url('weline_catalog/backend/category/index')">
-                <input type="hidden" name="scope_level" value="<?= $escape($scopeLevel) ?>">
+    <div class="w-catalog-admin__toolbar" data-testid="catalog-category-toolbar">
+        <p class="w-catalog-admin__hint w-text" data-tone="muted"><?= $escape($isStructureMode
+            ? __('Website 范围维护分类结构；左侧树形列表支持拖拽排序与挂靠')
+            : __('Store/Channel 范围配置展示选择；结构仅在 Website 维护')) ?></p>
+        <div class="w-catalog-admin__toolbar-row">
+            <form method="get" class="w-catalog-admin__filters" action="@backend-url('weline_catalog/backend/category/index')" aria-label="<?= $escape(__('分类筛选')) ?>">
                 <label class="w-field w-field--inline">
                     <span class="w-field__label"><lang>空间</lang></span>
                     <select class="w-select" name="space" data-testid="catalog-space-select">
@@ -151,27 +208,71 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                         <?php endif; ?>
                     </select>
                 </label>
-                <span class="w-badge" data-tone="neutral" data-testid="catalog-scope-badge">Website</span>
-                <label class="w-visually-hidden" for="catalog-website-id"><lang>Website</lang></label>
-                <div class="w-product-admin__website-select" style="min-inline-size:12rem;">
-                    <w:websites:website:select
-                        id="catalog-website-id"
-                        name="website_id"
-                        value="productWebsiteSelectValue"
-                        display="productWebsiteSelectDisplay"
-                        options="websiteOptionsJson"
-                        multiple="false"
-                        allow-empty="false"
-                        clearable="false"
-                        placeholder="@lang(选择 Website)"
-                    />
+                <label class="w-field w-field--inline">
+                    <span class="w-field__label"><lang>范围</lang></span>
+                    <select class="w-select" name="scope_level" data-testid="catalog-scope-select">
+                        <option value="website" <?= $scopeLevel === 'website' ? 'selected' : '' ?>>Website</option>
+                        <option value="store" <?= $scopeLevel === 'store' ? 'selected' : '' ?>>Store</option>
+                        <option value="channel" <?= $scopeLevel === 'channel' ? 'selected' : '' ?>>Channel</option>
+                    </select>
+                </label>
+                <span class="w-badge w-catalog-admin__scope-badge" data-tone="neutral" data-testid="catalog-scope-badge"><?= $escape(ucfirst($scopeLevel)) ?></span>
+                <div class="w-catalog-admin__scope-targets">
+                    <label class="w-visually-hidden" for="catalog-website-id"><lang>Website</lang></label>
+                    <div class="w-product-admin__website-select">
+                        <w:websites:website:select
+                            id="catalog-website-id"
+                            name="website_id"
+                            value="productWebsiteSelectValue"
+                            display="productWebsiteSelectDisplay"
+                            options="websiteOptionsJson"
+                            multiple="false"
+                            allow-empty="false"
+                            clearable="false"
+                            placeholder="@lang(选择 Website)"
+                        />
+                    </div>
+                    <?php if ($scopeLevel === 'store' || $scopeLevel === 'channel'): ?>
+                        <label class="w-visually-hidden" for="catalog-store-id"><lang>Store</lang></label>
+                        <div class="w-catalog-admin__store-select">
+                            <w:websites:store:select
+                                id="catalog-store-id"
+                                name="store_id"
+                                value="catalogStoreSelectValue"
+                                display="catalogStoreSelectDisplay"
+                                options="storeOptionsJson"
+                                allow-empty="false"
+                                clearable="false"
+                                placeholder="@lang(选择 Store)"
+                            />
+                        </div>
+                    <?php endif; ?>
+                    <?php if ($scopeLevel === 'channel'): ?>
+                        <label class="w-visually-hidden" for="catalog-channel-id"><lang>Channel</lang></label>
+                        <div class="w-catalog-admin__channel-select">
+                            <w:websites:channel:select
+                                id="catalog-channel-id"
+                                name="channel_id"
+                                value="catalogChannelSelectValue"
+                                display="catalogChannelSelectDisplay"
+                                options="channelOptionsJson"
+                                allow-empty="false"
+                                clearable="false"
+                                placeholder="@lang(选择 Channel)"
+                            />
+                        </div>
+                    <?php endif; ?>
                 </div>
-                <button class="w-button" type="submit" data-tone="neutral"><lang>切换</lang></button>
+                <button class="w-button w-catalog-admin__switch" type="submit" data-tone="neutral"><lang>切换</lang></button>
             </form>
-            <a class="w-button" data-tone="primary" href="<?= $escape($catalogPageUrl(['new' => 1])) ?>"><w-icon name="plus" size="sm"></w-icon><?= $escape(__('添加顶级分类')) ?></a>
-            <a class="w-button" data-tone="neutral" href="@admin-url('*/backend/catalog/products')"><w-icon name="arrow-left" size="sm"></w-icon><?= $escape(__('返回商品')) ?></a>
-        </nav>
-    </header>
+            <div class="w-catalog-admin__actions" aria-label="<?= $escape(__('分类管理操作')) ?>">
+                <?php if ($isStructureMode): ?>
+                    <a class="w-button" data-tone="primary" href="@backend-url{$catalogPath|$catalogPageParams(['new' => 1])}"><w-icon name="plus" size="sm"></w-icon><?= $escape(__('添加顶级分类')) ?></a>
+                <?php endif; ?>
+                <a class="w-button" data-tone="neutral" href="@admin-url('*/backend/catalog/products')"><w-icon name="arrow-left" size="sm"></w-icon><?= $escape(__('返回商品')) ?></a>
+            </div>
+        </div>
+    </div>
 
     <?php if ($error !== ''): ?>
         <div class="w-alert" data-tone="danger" role="alert"><?= $escape($error) ?></div>
@@ -184,11 +285,15 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
             <header class="w-card__header"><h2 class="w-card__title" id="catalog-tree-heading"><w-icon name="folder" size="sm"></w-icon><?= $escape(__('分类树')) ?></h2></header>
             <div class="w-card__body">
                 <?php if ($catalogs !== []): ?>
-                    <nav class="w-catalog-tree w-product-category-dnd-tree" aria-label="<?= $escape(__('分类树')) ?>" data-category-dnd-tree data-testid="catalog-category-tree">
+                    <nav class="w-catalog-tree<?= $isStructureMode ? ' w-product-category-dnd-tree' : '' ?>" aria-label="<?= $escape(__('分类树')) ?>" <?= $isStructureMode ? 'data-category-dnd-tree' : 'data-category-readonly-tree' ?> data-testid="catalog-category-tree">
                         <?php $renderTree($catalogs); ?>
                     </nav>
                 <?php else: ?>
-                    <div class="w-empty" data-testid="catalog-category-empty"><w-icon name="folder" size="lg"></w-icon><p><?= $escape(__('暂无分类')) ?></p><a class="w-button" data-tone="primary" href="<?= $escape($catalogPageUrl(['new' => 1])) ?>"><?= $escape(__('添加分类')) ?></a></div>
+                    <div class="w-empty" data-testid="catalog-category-empty"><w-icon name="folder" size="lg"></w-icon><p><?= $escape(__('暂无分类')) ?></p>
+                        <?php if ($isStructureMode): ?>
+                            <a class="w-button" data-tone="primary" href="@backend-url{$catalogPath|$catalogPageParams(['new' => 1])}"><?= $escape(__('添加分类')) ?></a>
+                        <?php endif; ?>
+                    </div>
                 <?php endif; ?>
             </div>
         </aside>
@@ -196,12 +301,44 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
         <main class="w-card w-catalog-admin__editor" aria-labelledby="catalog-editor-heading">
             <header class="w-card__header">
                 <h2 class="w-card__title" id="catalog-editor-heading">
-                    <w-icon name="<?= $isNew ? 'plus' : 'edit' ?>" size="sm"></w-icon>
-                    <?= $escape($isNew ? __('添加分类') : ($selectedId > 0 ? __('编辑分类') : __('分类信息'))) ?>
+                    <w-icon name="<?= $isStructureMode ? ($isNew ? 'plus' : 'edit') : 'eye' ?>" size="sm"></w-icon>
+                    <?= $escape($isStructureMode
+                        ? ($isNew ? __('添加分类') : ($selectedId > 0 ? __('编辑分类') : __('分类信息')))
+                        : __('展示配置')) ?>
                 </h2>
             </header>
             <div class="w-card__body">
-                <?php if (!$editing): ?>
+                <?php if (!$isStructureMode): ?>
+                    <p class="w-text" data-tone="muted" data-testid="catalog-display-hint"><?= $escape(__('结构仅在 Website 维护。此处勾选本 Store/Channel 要展示的分类。')) ?></p>
+                    <form class="w-form w-catalog-form" method="post" action="@backend-url('weline_catalog/backend/category/display-save')" data-catalog-display-form data-testid="catalog-display-form">
+                        <input type="hidden" name="space" value="<?= $escape($space) ?>">
+                        <input type="hidden" name="scope_level" value="<?= $escape($scopeLevel) ?>">
+                        <input type="hidden" name="website_id" value="<?= $escape($websiteId) ?>">
+                        <input type="hidden" name="store_id" value="<?= $escape($storeId) ?>">
+                        <input type="hidden" name="channel_id" value="<?= $escape($channelId) ?>">
+                        <?php if ($flatCatalogs === []): ?>
+                            <div class="w-empty"><w-icon name="folder" size="lg"></w-icon><p><?= $escape(__('暂无可配置分类')) ?></p></div>
+                        <?php else: ?>
+                            <div class="w-stack" style="--w-gap:var(--weline-space-2);">
+                                <?php foreach ($flatCatalogs as $index => $option): ?>
+                                    <?php $optionId = (int)$option['id']; ?>
+                                    <label class="w-switch" data-display-row data-category-id="<?= $optionId ?>">
+                                        <input type="checkbox"
+                                               name="enabled_<?= $optionId ?>"
+                                               value="1"
+                                               data-display-enabled
+                                               <?= !empty($enabledMap[$optionId]) ? 'checked' : '' ?>>
+                                        <span><?= $escape(str_repeat('— ', (int)$option['depth']) . $option['name']) ?></span>
+                                        <input type="hidden" name="position_<?= $optionId ?>" value="<?= (int)$index + 1 ?>">
+                                    </label>
+                                <?php endforeach; ?>
+                            </div>
+                            <footer class="w-catalog-form__actions w-cluster" data-justify="end" style="margin-block-start:var(--weline-space-4);">
+                                <button class="w-button" type="submit" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= $escape(__('保存展示')) ?></button>
+                            </footer>
+                        <?php endif; ?>
+                    </form>
+                <?php elseif (!$editing): ?>
                     <div class="w-empty"><w-icon name="folder" size="lg"></w-icon><p><?= $escape(__('请从左侧选择分类，或添加一个新分类')) ?></p></div>
                 <?php else: ?>
                     <form class="w-form w-catalog-form" method="post" action="@backend-url('weline_catalog/backend/category/category-post')" data-catalog-form data-testid="catalog-category-form">
@@ -209,10 +346,24 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                         <input type="hidden" name="scope_level" value="<?= $escape($scopeLevel) ?>">
                         <input type="hidden" name="website_id" value="<?= $escape($websiteId) ?>">
                         <input type="hidden" name="id" value="<?= $selectedId ?>">
-                        <label class="w-field">
-                            <span class="w-field__label"><?= $escape(__('分类名称')) ?></span>
-                            <input class="w-input" type="text" name="name" maxlength="120" required value="<?= $escape($isNew ? '' : $catalogValue($category, 'name', '')) ?>" data-category-name-input>
-                        </label>
+                        <?php
+                        $categoryNameValue = $isNew ? '' : (string)$catalogValue($category, 'name', '');
+                        $showCategoryNameLocal = $space === 'product' && !$isNew && $selectedId > 0;
+                        $localTriggerLabelEsc = $escape((string)__('多语言'));
+                        ?>
+                        <div class="w-field">
+                            <div class="w-field__label-row w-catalog-local-label" data-align="center" data-justify="between" data-gap="sm">
+                                <label class="w-field__label" for="catalog-category-name"><?= $escape(__('分类名称')) ?></label>
+                                <?php if ($showCategoryNameLocal): ?>
+                                    <span class="w-catalog-local-label__trigger" style="--catalog-local-label: '<?= $localTriggerLabelEsc ?>'" data-testid="catalog-category-name-local">
+                                        <local model="Weline\Product\Model\Category\LocalDescription" field="name" id="selected_category_id"><?= $escape($categoryNameValue) ?></local>
+                                    </span>
+                                <?php elseif ($space === 'product'): ?>
+                                    <span class="w-field__hint" data-size="sm"><?= $escape(__('保存后可翻译多语言')) ?></span>
+                                <?php endif; ?>
+                            </div>
+                            <input id="catalog-category-name" class="w-input" type="text" name="name" maxlength="120" required value="<?= $escape($categoryNameValue) ?>" data-category-name-input>
+                        </div>
 
                         <label class="w-field">
                             <span class="w-field__label"><?= $escape(__('分类 Code')) ?></span>
@@ -256,6 +407,62 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                             <span><?= $escape(__('启用分类')) ?></span>
                         </label>
 
+                        <div class="w-field" data-testid="catalog-category-image">
+                            <span class="w-field__label"><?= $escape(__('分类图标')) ?></span>
+                            <div class="w-catalog-media" data-catalog-media="image">
+                                <input type="hidden" name="image" value="<?= $escape($categoryImage) ?>" data-catalog-media-input>
+                                <div class="w-catalog-media__preview" data-catalog-media-preview<?= $categoryImage === '' ? ' hidden' : '' ?>>
+                                    <img src="<?= $escape($categoryImage) ?>" alt="" data-catalog-media-img<?= $categoryImage === '' ? ' hidden' : '' ?>>
+                                </div>
+                                <div class="w-cluster">
+                                    <button class="w-button" type="button" data-tone="neutral" data-catalog-media-pick><?= $escape(__('选择图标')) ?></button>
+                                    <button class="w-button" type="button" data-tone="danger" data-variant="outline" data-catalog-media-clear<?= $categoryImage === '' ? ' hidden' : '' ?>><?= $escape(__('清除')) ?></button>
+                                </div>
+                            </div>
+                            <span class="w-field__hint"><?= $escape(__('用于前台分类列表/网格；建议 %{1}×%{2}，尽量数 KB 内，上限 %{3} KB', [$imageRecW, $imageRecH, (string)(int)floor($imageMaxBytes / 1024)])) ?></span>
+                        </div>
+
+                        <div class="w-field" data-testid="catalog-category-banner">
+                            <span class="w-field__label"><?= $escape(__('分类 Banner')) ?></span>
+                            <div class="w-catalog-media w-catalog-media--banner" data-catalog-media="banner">
+                                <input type="hidden" name="banner" value="<?= $escape($categoryBanner) ?>" data-catalog-media-input>
+                                <div class="w-catalog-media__preview" data-catalog-media-preview<?= $categoryBanner === '' ? ' hidden' : '' ?>>
+                                    <img src="<?= $escape($categoryBanner) ?>" alt="" data-catalog-media-img<?= $categoryBanner === '' ? ' hidden' : '' ?>>
+                                </div>
+                                <div class="w-cluster">
+                                    <button class="w-button" type="button" data-tone="neutral" data-catalog-media-pick><?= $escape(__('选择 Banner')) ?></button>
+                                    <button class="w-button" type="button" data-tone="danger" data-variant="outline" data-catalog-media-clear<?= $categoryBanner === '' ? ' hidden' : '' ?>><?= $escape(__('清除')) ?></button>
+                                </div>
+                            </div>
+                            <span class="w-field__hint"><?= $escape(__('分类详情页横幅（亚马逊风格）；建议 %{1}×%{2}，上限 %{3} KB', [$bannerRecW, $bannerRecH, (string)(int)floor($bannerMaxBytes / 1024)])) ?></span>
+                        </div>
+
+                        <label class="w-field" data-testid="catalog-category-summary">
+                            <span class="w-field__label"><?= $escape(__('分类摘要')) ?></span>
+                            <textarea class="w-input" name="summary" rows="2" maxlength="500"
+                                      placeholder="<?= $escape(__('一句话介绍，用于列表或详情简介')) ?>"><?= $escape($categorySummary) ?></textarea>
+                        </label>
+
+                        <label class="w-field" data-testid="catalog-category-description">
+                            <span class="w-field__label"><?= $escape(__('分类描述')) ?></span>
+                            <textarea class="w-input" name="description" rows="5"
+                                      placeholder="<?= $escape(__('详情页完整描述')) ?>"><?= $escape($categoryDescription) ?></textarea>
+                        </label>
+
+                        <label class="w-field" data-testid="catalog-google-mapping">
+                            <span class="w-field__label"><?= $escape(__('Google Taxonomy ID')) ?></span>
+                            <div class="w-cluster">
+                                <input class="w-input" type="text" name="google_taxonomy_id" maxlength="32"
+                                       value="<?= $escape($googleTaxonomyId) ?>"
+                                       placeholder="269"
+                                       data-google-taxonomy-id
+                                       list="catalog-google-taxonomy-suggestions">
+                                <a class="w-button" data-tone="neutral" target="_blank" rel="noopener"
+                                   href="@backend-url('weline_catalog/backend/google-taxonomy/index')"><?= $escape(__('查阅参照树')) ?></a>
+                            </div>
+                            <span class="w-field__hint"><?= $escape(__('Website 结构映射；填写官方 Google 分类 ID（只读参照，不可在此改结构）。')) ?></span>
+                        </label>
+
                         <footer class="w-catalog-form__actions w-cluster" data-justify="between">
                             <div>
                                 <?php if (!$isNew && $selectedId > 0): ?>
@@ -263,7 +470,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                                 <?php endif; ?>
                             </div>
                             <div class="w-cluster">
-                                <a class="w-button" data-tone="neutral" href="<?= $escape($catalogPageUrl()) ?>"><?= $escape(__('取消')) ?></a>
+                                <a class="w-button" data-tone="neutral" href="@backend-url{$catalogPath|$catalogPageParams()}"><?= $escape(__('取消')) ?></a>
                                 <button class="w-button" type="submit" data-tone="primary"><w:icon name="save" size="sm"></w:icon><?= $escape(__('保存')) ?></button>
                             </div>
                         </footer>
@@ -274,4 +481,22 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
     </div>
 </section>
 
-<script type="module" src="@static(Weline_Catalog::js/backend/category-admin.js)?v=20260826-v1"></script>
+<dialog class="w-product-media-picker" data-w-component="dialog" data-catalog-media-dialog aria-labelledby="catalog-media-picker-title">
+    <div class="w-product-media-picker__surface">
+        <header class="w-product-media-picker__header w-cluster" data-align="center" data-justify="between">
+            <div>
+                <h2 id="catalog-media-picker-title"><lang>选择分类图片</lang></h2>
+            </div>
+            <button class="w-button" type="button" data-catalog-media-close aria-label="@lang(关闭)">
+                <w-icon name="x" size="sm"></w-icon>
+            </button>
+        </header>
+        <iframe class="w-product-media-picker__frame"
+                title="<?= $escape(__('媒体库')) ?>"
+                data-catalog-media-frame
+                data-src-image="@backend-url('media/backend/manager/iframe')?target=catalog-category-image&multi=0&usage=1&ext=jpg,png,gif,webp&size=<?= (int)$imageMaxBytes ?>&recommend_width=<?= (int)$imageRecW ?>&recommend_height=<?= (int)$imageRecH ?>&aspect_ratio=1"
+                data-src-banner="@backend-url('media/backend/manager/iframe')?target=catalog-category-banner&multi=0&usage=1&ext=jpg,png,gif,webp&size=<?= (int)$bannerMaxBytes ?>&recommend_width=<?= (int)$bannerRecW ?>&recommend_height=<?= (int)$bannerRecH ?>"></iframe>
+    </div>
+</dialog>
+
+<script type="module" src="@static(Weline_Catalog::js/backend/category-admin.js)?v=20260328-media1"></script>

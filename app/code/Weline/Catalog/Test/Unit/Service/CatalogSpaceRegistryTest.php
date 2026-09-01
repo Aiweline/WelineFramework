@@ -24,4 +24,21 @@ final class CatalogSpaceRegistryTest extends TestCase
         self::assertSame([], $registry->listSpaces());
         self::assertNull($registry->get('product'));
     }
+
+    public function testSpacePathSegmentMapsToCatalogSpaceExtendName(): void
+    {
+        $registry = new CatalogSpaceRegistry($this->createMock(ObjectManager::class));
+        $method = new \ReflectionMethod(CatalogSpaceRegistry::class, 'extensionName');
+
+        self::assertSame('CatalogSpace', $method->invoke($registry, [
+            'file_path' => 'Space/ProductCatalogSpaceProvider.php',
+        ]));
+        self::assertSame('CatalogSpace', $method->invoke($registry, [
+            'extend_name' => 'CatalogSpace',
+            'file_path' => 'Space/ProductCatalogSpaceProvider.php',
+        ]));
+        self::assertSame('Searcher', $method->invoke($registry, [
+            'file_path' => 'Searcher/ProductSearchProvider.php',
+        ]));
+    }
 }
