@@ -21,7 +21,7 @@ final class DeviceManagerSurfaceContractTest extends TestCase
     public function testAllDeviceTemplatesFollowPhtmlAndEscapingContracts(): void
     {
         foreach ([
-            'view/hooks/account.sidebar.phtml',
+            'view/hooks/account.sidebar.group.security.phtml',
             'view/hooks/account.sidebar.content.phtml',
             'view/templates/Backend/Device/index.phtml',
             'view/templates/device/manager.phtml',

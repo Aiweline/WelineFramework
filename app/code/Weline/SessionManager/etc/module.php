@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_SessionManager',
-    "version" => '1.1.0',
+    "version" => '1.2.0',
     "requires" => [
         'Weline_Framework' => '^2.4',
         'Weline_Backend' => '*',
@@ -19,5 +19,7 @@ return [
             => \Weline\SessionManager\Service\Persistence\OrmDeviceRepository::class,
         \Weline\SessionManager\Api\DeviceMetadataProviderInterface::class
             => \Weline\SessionManager\Service\RequestDeviceMetadataProvider::class,
+        \Weline\SessionManager\Api\DeviceInstallKeyProviderInterface::class
+            => \Weline\SessionManager\Service\DeviceInstallKeyCookieService::class,
     ],
 ];

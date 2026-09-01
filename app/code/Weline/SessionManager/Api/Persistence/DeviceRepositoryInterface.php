@@ -17,6 +17,18 @@ interface DeviceRepositoryInterface
     /** @return array<string,mixed>|null */
     public function findDeviceById(int $deviceId): ?array;
 
+    /**
+     * Active (non-revoked) devices for an owner sharing the same install key digest,
+     * newest last_seen first.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function findActiveDevicesByInstallKey(
+        string $area,
+        string $principalId,
+        string $installKeyDigest,
+    ): array;
+
     /** @param array<string,mixed> $record @return array<string,mixed> */
     public function insertDevice(array $record): array;
 
