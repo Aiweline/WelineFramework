@@ -1,0 +1,18 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Inquiry\Api\InquiryRendererInterface;
+use Weline\Inquiry\Service\InquiryFormBootstrap;
+
+$formHtml = ObjectManager::getInstance(InquiryRendererInterface::class)->render(
+    InquiryFormBootstrap::CODE_SUPPLIER_APPLICATION,
+    ['mode' => 'inline', 'skin' => 'amazon']
+);
+?>
+<css>Weline_Inquiry::css/supplier-application-amazon.css</css>
+<section class="w-inquiry-suppliers w-inquiry-suppliers--amazon" data-testid="inquiry-supplier-application" weline-code="inquiry.frontend.suppliers">
+    <div class="w-inquiry-suppliers__card">
+        <?= $formHtml ?>
+    </div>
+</section>
