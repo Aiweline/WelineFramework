@@ -1,6 +1,6 @@
 # Weline_SessionManager 模块文档
 
-`Weline_SessionManager` 是 Weline 的存储无关 Session 管理模块。`1.1.0` 起，它统一实现前台 Customer 与后台管理员的认证设备登记、验证、单设备撤销及每设备记住登录，不枚举 File、Redis 或 WLS 的底层 Session。
+`Weline_SessionManager` 是 Weline 的存储无关 Session 管理模块。`1.1.0` 起统一认证设备登记与每设备记住登录；`1.2.0` 起用长期 Cookie 设备密钥合并同一浏览器配置下的设备行。
 
 ## 当前入口
 

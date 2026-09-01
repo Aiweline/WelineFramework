@@ -96,6 +96,7 @@ final class SessionManagerQueryProviderDescriptorTest extends TestCase
         $devices = new AuthenticatedDeviceRegistry(
             $repository,
             $this->createMock(DeviceMetadataProviderInterface::class),
+            $this->createMock(\Weline\SessionManager\Api\DeviceInstallKeyProviderInterface::class),
         );
         $session = $this->createMock(AuthenticatedSessionInterface::class);
         $session->method('isLoggedIn')->willReturn(true);
@@ -128,6 +129,7 @@ final class SessionManagerQueryProviderDescriptorTest extends TestCase
         $devices = new AuthenticatedDeviceRegistry(
             $repository,
             $this->createMock(DeviceMetadataProviderInterface::class),
+            $this->createMock(\Weline\SessionManager\Api\DeviceInstallKeyProviderInterface::class),
         );
 
         $backendSession = $this->createMock(AuthenticatedSessionInterface::class);

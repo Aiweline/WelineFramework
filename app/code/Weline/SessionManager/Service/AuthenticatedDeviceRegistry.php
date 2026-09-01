@@ -11,6 +11,7 @@ use Weline\Framework\Session\Auth\Device\AuthenticatedLoginContext;
 use Weline\Framework\Session\Auth\Device\IssuedRememberedDeviceCredential;
 use Weline\Framework\Session\Auth\Device\RememberedDeviceCredentialProviderInterface;
 use Weline\Framework\Session\Auth\Device\RememberedDeviceCredentialValidation;
+use Weline\SessionManager\Api\DeviceInstallKeyProviderInterface;
 use Weline\SessionManager\Api\DeviceMetadataProviderInterface;
 use Weline\SessionManager\Api\Persistence\DeviceRepositoryInterface;
 
@@ -21,9 +22,16 @@ final class AuthenticatedDeviceRegistry implements
     private const TOUCH_INTERVAL_SECONDS = 60;
     private const RETENTION_SECONDS = 30 * 86400;
 
+    /** Reasons that only retire the remember credential, keeping the browser device row. */
+    private const CREDENTIAL_ONLY_REVOKE_REASONS = [
+        'password_login_replaced',
+        'password_login_without_remember',
+    ];
+
     public function __construct(
         private readonly DeviceRepositoryInterface $repository,
         private readonly DeviceMetadataProviderInterface $metadataProvider,
+        private readonly DeviceInstallKeyProviderInterface $installKeys,
     ) {
     }
 
@@ -72,7 +80,7 @@ final class AuthenticatedDeviceRegistry implements
         $now = time();
         if ((int)($device['last_seen_at'] ?? 0) <= $now - self::TOUCH_INTERVAL_SECONDS) {
             $metadata = $this->metadataProvider->current();
-            $device = $this->repository->updateDevice((int)$device['id'], [
+            $changes = [
                 'device_name' => $metadata->deviceName,
                 'browser' => $metadata->browser,
                 'operating_system' => $metadata->operatingSystem,
@@ -80,7 +88,12 @@ final class AuthenticatedDeviceRegistry implements
                 'last_seen_at' => $now,
                 'session_expires_at' => max($now + 1, $context->sessionExpiresAt),
                 'updated_at' => $now,
-            ]);
+            ];
+            $installDigest = $this->currentInstallKeyDigest($area);
+            if ($installDigest !== '' && trim((string)($device['install_key_digest'] ?? '')) === '') {
+                $changes['install_key_digest'] = $installDigest;
+            }
+            $device = $this->repository->updateDevice((int)$device['id'], $changes);
         }
         return AuthenticatedDeviceValidation::valid((string)$device['public_id']);
     }
@@ -96,6 +109,14 @@ final class AuthenticatedDeviceRegistry implements
             return;
         }
         if (!hash_equals((string)$device['session_digest'], $digest)) {
+            return;
+        }
+        if ($reason === 'relogin') {
+            $now = time();
+            $this->repository->updateDevice((int)$device['id'], [
+                'session_expires_at' => $now,
+                'updated_at' => $now,
+            ]);
             return;
         }
         $this->revokeDevice($device, $reason);
@@ -215,6 +236,27 @@ final class AuthenticatedDeviceRegistry implements
         if ($device === null || (string)$device['auth_area'] !== $normalizedArea) {
             return;
         }
+
+        $bounded = $this->boundedReason($reason);
+        if (in_array($bounded, self::CREDENTIAL_ONLY_REVOKE_REASONS, true)
+            || in_array($reason, self::CREDENTIAL_ONLY_REVOKE_REASONS, true)) {
+            $now = time();
+            if ((int)($credential['revoked_at'] ?? 0) === 0) {
+                $this->repository->updateCredential((int)$credential['id'], [
+                    'revoked_at' => $now,
+                    'revoke_reason' => $bounded,
+                    'updated_at' => $now,
+                ]);
+            }
+            if (!$this->isRevoked($device)) {
+                $this->repository->updateDevice((int)$device['id'], [
+                    'remembered_until' => 0,
+                    'updated_at' => $now,
+                ]);
+            }
+            return;
+        }
+
         if (!$this->isRevoked($device)) {
             // A remembered credential represents the same browser-profile
             // device. Revoking it must retire the device binding as well;
@@ -227,7 +269,7 @@ final class AuthenticatedDeviceRegistry implements
             $now = time();
             $this->repository->updateCredential((int)$credential['id'], [
                 'revoked_at' => $now,
-                'revoke_reason' => $this->boundedReason($reason),
+                'revoke_reason' => $bounded,
                 'updated_at' => $now,
             ]);
         }
@@ -347,7 +389,27 @@ final class AuthenticatedDeviceRegistry implements
             if (!$this->sameOwner($existing, $context->principalId) || $this->isRevoked($existing)) {
                 return AuthenticatedDeviceValidation::invalid('session_binding_conflict');
             }
-            return AuthenticatedDeviceValidation::valid((string)$existing['public_id']);
+            return AuthenticatedDeviceValidation::valid(
+                (string)$this->ensureInstallKeyOnDevice($area, $existing)['public_id'],
+            );
+        }
+
+        $installDigest = $this->currentInstallKeyDigest($area);
+        if ($installDigest !== '') {
+            $byInstall = $this->repository->findActiveDevicesByInstallKey(
+                $area,
+                (string)$context->principalId,
+                $installDigest,
+            );
+            if ($byInstall !== []) {
+                $primary = $byInstall[0];
+                foreach (array_slice($byInstall, 1) as $duplicate) {
+                    $this->revokeDevice($duplicate, 'install_key_dedupe');
+                }
+                return AuthenticatedDeviceValidation::valid(
+                    (string)$this->rebindDevice($area, $context, $primary, $installDigest)['public_id'],
+                );
+            }
         }
 
         $now = time();
@@ -357,6 +419,7 @@ final class AuthenticatedDeviceRegistry implements
             'auth_area' => $area,
             'principal_id' => (string)$context->principalId,
             'session_digest' => $digest,
+            'install_key_digest' => $installDigest !== '' ? $installDigest : null,
             'device_name' => $metadata->deviceName,
             'browser' => $metadata->browser,
             'operating_system' => $metadata->operatingSystem,
@@ -374,8 +437,19 @@ final class AuthenticatedDeviceRegistry implements
             $device = $this->repository->insertDevice($record);
         } catch (\Throwable $exception) {
             $device = $this->repository->findDeviceBySessionDigest($area, $digest);
+            if ($device === null && $installDigest !== '') {
+                $race = $this->repository->findActiveDevicesByInstallKey(
+                    $area,
+                    (string)$context->principalId,
+                    $installDigest,
+                );
+                $device = $race[0] ?? null;
+            }
             if ($device === null) {
                 throw $exception;
+            }
+            if ($installDigest !== '' && (string)($device['session_digest'] ?? '') !== $digest) {
+                $device = $this->rebindDevice($area, $context, $device, $installDigest);
             }
         }
         if (!$this->sameOwner($device, $context->principalId) || $this->isRevoked($device)) {
@@ -393,9 +467,21 @@ final class AuthenticatedDeviceRegistry implements
         if ($device === null || !$this->sameOwner($device, $context->principalId) || $this->isRevoked($device)) {
             return AuthenticatedDeviceValidation::invalid('remembered_device_unavailable');
         }
+        $installDigest = $this->currentInstallKeyDigest($area);
+        $device = $this->rebindDevice($area, $context, $device, $installDigest);
+        return AuthenticatedDeviceValidation::valid((string)$device['public_id']);
+    }
+
+    /** @param array<string,mixed> $device @return array<string,mixed> */
+    private function rebindDevice(
+        string $area,
+        AuthenticatedDeviceContext $context,
+        array $device,
+        string $installDigest,
+    ): array {
         $now = time();
         $metadata = $this->metadataProvider->current();
-        $device = $this->repository->updateDevice((int)$device['id'], [
+        $changes = [
             'session_digest' => $this->digest($context->sessionId),
             'device_name' => $metadata->deviceName,
             'browser' => $metadata->browser,
@@ -404,8 +490,40 @@ final class AuthenticatedDeviceRegistry implements
             'last_seen_at' => $now,
             'session_expires_at' => max($now + 1, $context->sessionExpiresAt),
             'updated_at' => $now,
+        ];
+        if ($installDigest !== ''
+            && (trim((string)($device['install_key_digest'] ?? '')) === ''
+                || !hash_equals((string)$device['install_key_digest'], $installDigest))) {
+            $changes['install_key_digest'] = $installDigest;
+        }
+        return $this->repository->updateDevice((int)$device['id'], $changes);
+    }
+
+    /** @param array<string,mixed> $device @return array<string,mixed> */
+    private function ensureInstallKeyOnDevice(string $area, array $device): array
+    {
+        if (trim((string)($device['install_key_digest'] ?? '')) !== '') {
+            return $device;
+        }
+        $installDigest = $this->currentInstallKeyDigest($area);
+        if ($installDigest === '') {
+            return $device;
+        }
+        return $this->repository->updateDevice((int)$device['id'], [
+            'install_key_digest' => $installDigest,
+            'updated_at' => time(),
         ]);
-        return AuthenticatedDeviceValidation::valid((string)$device['public_id']);
+    }
+
+    private function currentInstallKeyDigest(string $area): string
+    {
+        try {
+            $ensured = $this->installKeys->ensure($area);
+            $digest = trim((string)($ensured['digest'] ?? ''));
+            return preg_match('/^[a-f0-9]{64}$/D', $digest) === 1 ? $digest : '';
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /** @param array<string,mixed> $device */
