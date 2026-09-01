@@ -25,8 +25,8 @@ $sourceFilePath = $this->getData('source_file_path') ?: '';
                             </h4>
                             <div class="w-cluster">
                                 <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                                    <li class="w-breadcrumb__item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
-                                    <li class="w-breadcrumb__item"><a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>"><?= __('Sticker管理') ?></a></li>
+                                    <li class="w-breadcrumb__item"><a href="@backend-url{'admin'}"><?= __('首页') ?></a></li>
+                                    <li class="w-breadcrumb__item"><a href="@backend-url{'*/backend/sticker/index'}"><?= __('Sticker管理') ?></a></li>
                                     <li class="w-breadcrumb__item" data-state="active"><?= __('详情') ?></li>
                                 </ol>
                             </div>
@@ -42,7 +42,7 @@ $sourceFilePath = $this->getData('source_file_path') ?: '';
                 <!-- 返回按钮 -->
                 <div class="w-grid" style="--w-mb:var(--weline-space-4);">
                     <div style="--w-span:12;">
-                        <a href="<?= $this->getBackendUrl('*/backend/sticker/index') ?>" class="w-button" data-tone="neutral">
+                        <a href="@backend-url{'*/backend/sticker/index'}" class="w-button" data-tone="neutral">
                             <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
                         </a>
                     </div>
