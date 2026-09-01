@@ -35,6 +35,7 @@ class Group extends \Weline\Framework\Database\Model
     public const schema_fields_code = 'code';
     public const schema_fields_set_id = 'set_id';
     public const schema_fields_eav_entity_id = 'eav_entity_id';
+    public const schema_fields_scope_product_id = 'scope_product_id';
 
     public array $_unit_primary_keys = ['code', 'eav_entity_id'];
     public array $_index_sort_keys = ['group_id', 'eav_entity_id', 'set_id', 'code'];

@@ -20,6 +20,12 @@ class LocalDescription extends LocalModel
 {
     public const fields_ID = EavEntity::schema_fields_ID;
 
+    #[Col(type: 'integer', nullable: false, primaryKey: true, comment: 'EAV entity ID')]
+    public const schema_fields_ID = 'id';
+
+    #[Col(type: 'varchar', length: 20, nullable: false, primaryKey: true, comment: '语言代码')]
+    public const schema_fields_local_code = 'local_code';
+
     #[Col('varchar', 255, nullable: true, comment: 'Localized name')]
     public const schema_fields_name = self::fields_name;
 }

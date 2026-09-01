@@ -44,6 +44,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
     public const schema_fields_set_id = 'set_id';
     public const schema_fields_group_id = 'group_id';
     public const schema_fields_eav_entity_id = 'eav_entity_id';
+    public const schema_fields_scope_product_id = 'scope_product_id';
     public const schema_fields_is_system = 'is_system';
     public const schema_fields_model_class = 'model_class';
     public const schema_fields_default_value = 'default_value';
