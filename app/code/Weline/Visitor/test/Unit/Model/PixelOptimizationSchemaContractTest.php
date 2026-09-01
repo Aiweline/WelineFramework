@@ -61,16 +61,16 @@ final class PixelOptimizationSchemaContractTest extends TestCase
         $registerSource = \file_get_contents($moduleRoot . '/register.php');
 
         self::assertSame('Weline_Visitor', $module['name']);
-        self::assertSame('1.0.5', (string)$module['version']);
+        self::assertSame('1.0.6', (string)$module['version']);
         self::assertIsString($registerSource);
         self::assertMatchesRegularExpression(
-            "/'Weline_Visitor'\\s*,\\s*__DIR__\\s*,\\s*'1\\.0\\.5'/s",
+            "/'Weline_Visitor'\\s*,\\s*__DIR__\\s*,\\s*'1\\.0\\.6'/s",
             $registerSource,
             'Register and module metadata must expose the same upgrade version so setup:upgrade cannot stop at 1.0.4.',
         );
         self::assertTrue(
-            \version_compare((string)$module['version'], '1.0.4', '>'),
-            'Pixel optimization attribution schema must advance the module version beyond the existing 1.0.4 checkpoint.',
+            \version_compare((string)$module['version'], '1.0.5', '>'),
+            'Pixel optimization attribution schema must advance the module version beyond the existing 1.0.5 checkpoint.',
         );
     }
 

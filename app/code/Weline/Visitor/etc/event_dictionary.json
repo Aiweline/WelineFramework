@@ -196,6 +196,20 @@
         "attrs": ["data-pixel-event=register"]
       },
       "page_scopes": ["account"]
+    },
+    {
+      "weline_event": "site_error",
+      "ga4_event": "exception",
+      "google_recommended": false,
+      "event_family": "error",
+      "require_exact_marker": false,
+      "skip_gtm_push": true,
+      "required_params": ["error_message"],
+      "markers": {
+        "classes": ["weline-pixel::site_error"],
+        "attrs": ["data-pixel-event=site_error"]
+      },
+      "page_scopes": ["*"]
     }
   ]
 }
