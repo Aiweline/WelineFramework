@@ -2,11 +2,14 @@
 const root = document.querySelector('[data-catalog-admin]');
 
 if (root) {
-    const form = root.querySelector('[data-catalog-form]');
-    const treeRoot = root.querySelector('[data-category-dnd-tree]');
     const websiteId = Number(root.dataset.websiteId || 0);
+    const storeId = Number(root.dataset.storeId || 0);
+    const channelId = Number(root.dataset.channelId || 0);
     const space = String(root.dataset.space || 'product');
     const scopeLevel = String(root.dataset.scopeLevel || 'website');
+    const displayForm = root.querySelector('[data-catalog-display-form]');
+    const form = root.querySelector('[data-catalog-form]');
+    const treeRoot = root.querySelector('[data-category-dnd-tree]');
     const text = Object.fromEntries(
         Object.entries(root.dataset)
             .filter(([key]) => key.startsWith('text'))
@@ -33,6 +36,8 @@ if (root) {
             space,
             scope_level: scopeLevel,
             website_id: websiteId,
+            store_id: storeId,
+            channel_id: channelId,
             ...params,
         }, { keepBusinessResult: true, silent: true });
         if (result?.success === false || Number(result?.code || 200) >= 400) {
@@ -40,6 +45,25 @@ if (root) {
         }
         return result;
     }
+
+    displayForm?.addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const submit = displayForm.querySelector('button[type="submit"]');
+        const rows = [...displayForm.querySelectorAll('[data-display-row]')].map((row, index) => {
+            const categoryId = Number(row.dataset.categoryId || 0);
+            const enabled = row.querySelector('[data-display-enabled]')?.checked ? 1 : 0;
+            return { category_id: categoryId, enabled, position: index + 1 };
+        }).filter((row) => row.category_id > 0);
+        if (submit instanceof HTMLButtonElement) submit.disabled = true;
+        try {
+            const result = await call('categoryAdminSaveDisplay', { rows });
+            window.Weline?.UI?.toast?.success(resultMessage(result, text.displaySaveSuccess || text.saveSuccess));
+            window.location.reload();
+        } catch (error) {
+            if (submit instanceof HTMLButtonElement) submit.disabled = false;
+            window.Weline?.UI?.toast?.error(error instanceof Error ? error.message : (text.displaySaveFailed || text.saveFailed));
+        }
+    });
 
     function catalogUrl(id = 0) {
         const url = new URL(window.location.href);
@@ -105,6 +129,140 @@ if (root) {
 
     bindPathPreview();
 
+    (function bindCategoryMediaPickers() {
+        const dialog = document.querySelector('[data-catalog-media-dialog]');
+        const frame = dialog?.querySelector('[data-catalog-media-frame]');
+        const closeBtn = dialog?.querySelector('[data-catalog-media-close]');
+        if (!(dialog instanceof HTMLDialogElement) || !(frame instanceof HTMLIFrameElement)) {
+            return;
+        }
+
+        const imageMax = Number(root.dataset.imageMaxBytes || 32768);
+        const bannerMax = Number(root.dataset.bannerMaxBytes || 102400);
+        let activeKind = '';
+
+        const resolvePickerUrl = (file) => {
+            const candidates = [
+                file?.url,
+                file?.path,
+                file?.display_url,
+                file?.editor_preview_url,
+                file?.preview_url,
+            ];
+            for (const candidate of candidates) {
+                const value = String(candidate || '').trim();
+                if (value !== '') {
+                    return value;
+                }
+            }
+            return '';
+        };
+
+        const setMediaValue = (kind, url) => {
+            const block = root.querySelector(`[data-catalog-media="${kind}"]`);
+            if (!(block instanceof HTMLElement)) {
+                return;
+            }
+            const input = block.querySelector('[data-catalog-media-input]');
+            const preview = block.querySelector('[data-catalog-media-preview]');
+            const img = block.querySelector('[data-catalog-media-img]');
+            const clear = block.querySelector('[data-catalog-media-clear]');
+            if (input instanceof HTMLInputElement) {
+                input.value = url;
+            }
+            if (preview instanceof HTMLElement) {
+                preview.hidden = url === '';
+            }
+            if (img instanceof HTMLImageElement) {
+                if (url === '') {
+                    img.removeAttribute('src');
+                    img.hidden = true;
+                } else {
+                    img.src = url;
+                    img.hidden = false;
+                }
+            }
+            if (clear instanceof HTMLElement) {
+                clear.hidden = url === '';
+            }
+        };
+
+        const openPicker = (kind) => {
+            activeKind = kind;
+            const srcAttr = kind === 'banner' ? 'srcBanner' : 'srcImage';
+            const src = String(frame.dataset[srcAttr] || '').trim();
+            if (src === '') {
+                return;
+            }
+            frame.src = src;
+            if (typeof dialog.showModal === 'function') {
+                dialog.showModal();
+            } else {
+                dialog.setAttribute('open', '');
+            }
+        };
+
+        const closePicker = () => {
+            activeKind = '';
+            frame.removeAttribute('src');
+            if (typeof dialog.close === 'function') {
+                dialog.close();
+            } else {
+                dialog.removeAttribute('open');
+            }
+        };
+
+        root.querySelectorAll('[data-catalog-media]').forEach((block) => {
+            if (!(block instanceof HTMLElement)) {
+                return;
+            }
+            const kind = String(block.dataset.catalogMedia || '');
+            block.querySelector('[data-catalog-media-pick]')?.addEventListener('click', () => openPicker(kind));
+            block.querySelector('[data-catalog-media-clear]')?.addEventListener('click', () => setMediaValue(kind, ''));
+        });
+
+        closeBtn?.addEventListener('click', closePicker);
+        dialog.addEventListener('cancel', (event) => {
+            event.preventDefault();
+            closePicker();
+        });
+
+        window.addEventListener('message', (event) => {
+            if (!event?.data || typeof event.data !== 'object') {
+                return;
+            }
+            const target = String(event.data.target || '');
+            const kind = target === 'catalog-category-banner'
+                ? 'banner'
+                : (target === 'catalog-category-image' ? 'image' : '');
+            if (kind === '' || (activeKind !== '' && activeKind !== kind)) {
+                return;
+            }
+            const files = Array.isArray(event.data.files)
+                ? event.data.files
+                : (event.data.file ? [event.data.file] : []);
+            const file = files[0];
+            if (!file || typeof file !== 'object') {
+                return;
+            }
+            const bytes = Number(file.file_size ?? file.size ?? file.bytes ?? NaN);
+            const maxBytes = kind === 'banner' ? bannerMax : imageMax;
+            if (Number.isFinite(bytes) && bytes > maxBytes) {
+                const message = kind === 'banner'
+                    ? (root.dataset.textBannerTooLarge || 'Banner too large')
+                    : (root.dataset.textImageTooLarge || 'Image too large');
+                window.Weline?.UI?.toast?.error(message);
+                return;
+            }
+            const url = resolvePickerUrl(file);
+            if (url === '') {
+                return;
+            }
+            setMediaValue(kind, url);
+            closePicker();
+        });
+    })();
+
     form?.addEventListener('submit', async (event) => {
         event.preventDefault();
         if (!form.reportValidity()) return;
@@ -116,6 +274,11 @@ if (root) {
             pid: Number(fields.get('pid') || 0),
             name: String(fields.get('name') || '').trim(),
             code: String(fields.get('code') || '').trim(),
+            google_taxonomy_id: String(fields.get('google_taxonomy_id') || '').trim(),
+            image: String(fields.get('image') || '').trim(),
+            banner: String(fields.get('banner') || '').trim(),
+            summary: String(fields.get('summary') || '').trim(),
+            description: String(fields.get('description') || '').trim(),
             is_active: active?.checked ? 1 : 0,
         };
         if (submit instanceof HTMLButtonElement) submit.disabled = true;

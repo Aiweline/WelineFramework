@@ -125,7 +125,8 @@ flowchart LR
 |---|---|
 | **API 参数** | `space=product`（`domain=` 仅兼容别名，一版后废弃） |
 | **注册** | `extends.php` → `CatalogSpace` → `{Module}/extends/module/Weline_Catalog/Space/*CatalogSpaceProvider.php` |
-| **发现** | `CatalogSpaceRegistry::all()` → 后台空间切换器动态列表 |
+| **发现** | `CatalogSpaceRegistry::all()`：`file_path` 首段 `Space` 映射为扩展点名 `CatalogSpace`，再按 `code()` 注册 → 后台空间切换器 |
+| **名称多语言** | product 空间：官方 `<local model="Weline\Product\Model\Category\LocalDescription">`；Local ↔ EAV `name` 同步 |
 | **S1** | 仅 `product`；`blog` 等为后续空间 |
 
 每个 space 有 **独立分类树**（不同 Provider 背后不同存储）；**不是**同一棵树上的标签。
@@ -171,7 +172,7 @@ flowchart TB
 | 层 | 存储 | 示例 | Eav |
 |---|---|---|---|
 | **节点结构** | Product shard `Category` | `parent_id`, `path`, `position`, `status`, `code`（slug） | 否 |
-| **可扩展属性** | Eav 元数据 + 值（S1：shard AttributeValue） | `name`, `description`, `google_taxonomy_id` | 是 |
+| **可扩展属性** | Eav 元数据 + 值（S1：shard AttributeValue） | `name`, `image`, `banner`, `summary`, `description`, `google_taxonomy_id` | 是 |
 
 - **product 空间**：`eavEntityCode() = category`，`entity_id = category_id`。
 - **其他空间**：各自 `eavEntityCode()`（如 `blog_category`），由归属模块在 `Model/` 声明 `EntityDefinitionInterface`。
@@ -268,6 +269,7 @@ flowchart TB
 | **模式 Tab** | 网站管理 \| 店铺展示 \| 渠道展示 |
 | `<w:websites:store:select>` | 店铺展示模式 |
 | `<w:websites:channel:select>` | 渠道展示模式 |
+| `<w:catalog:category:select>` | 分类多选标签（树形勾选 + 芯片回填 + 快速新建 + scope 静默回填）；见 [使用指南](./catalog-category-select标签使用指南.md) |
 
 ### 5.2 URL 形状
 

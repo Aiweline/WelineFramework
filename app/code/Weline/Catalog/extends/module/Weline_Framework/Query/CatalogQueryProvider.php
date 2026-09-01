@@ -54,6 +54,29 @@ final class CatalogQueryProvider implements QueryProviderInterface
                     ['name' => 'scope_level', 'type' => 'string', 'required' => true],
                     ['name' => 'website_id', 'type' => 'int', 'required' => true],
                 ]],
+                ['name' => 'readDisplaySelection', 'frontend' => false, 'mode' => 'read', 'params' => [
+                    ['name' => 'space', 'type' => 'string', 'required' => true],
+                    ['name' => 'scope_level', 'type' => 'string', 'required' => true],
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                    ['name' => 'store_id', 'type' => 'int', 'required' => false],
+                    ['name' => 'channel_id', 'type' => 'int', 'required' => false],
+                ]],
+                ['name' => 'saveDisplaySelection', 'frontend' => false, 'mode' => 'write', 'params' => [
+                    ['name' => 'space', 'type' => 'string', 'required' => true],
+                    ['name' => 'scope_level', 'type' => 'string', 'required' => true],
+                    ['name' => 'website_id', 'type' => 'int', 'required' => true],
+                    ['name' => 'store_id', 'type' => 'int', 'required' => false],
+                    ['name' => 'channel_id', 'type' => 'int', 'required' => false],
+                ]],
+                ['name' => 'googleTaxonomyTree', 'frontend' => false, 'mode' => 'read', 'params' => []],
+                ['name' => 'googleTaxonomySearch', 'frontend' => false, 'mode' => 'read', 'params' => [
+                    ['name' => 'q', 'type' => 'string', 'required' => false],
+                    ['name' => 'limit', 'type' => 'int', 'required' => false],
+                ]],
+                ['name' => 'enqueueGoogleTaxonomyAiTranslation', 'frontend' => false, 'mode' => 'write', 'params' => [
+                    ['name' => 'locale', 'type' => 'string', 'required' => true],
+                    ['name' => 'google_ids', 'type' => 'array', 'required' => false],
+                ]],
             ],
         ];
     }
