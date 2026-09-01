@@ -8,6 +8,7 @@ use Weline\Framework\Database\Connection\ConnectionInterface;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\Pool\ConnectionPool;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RequestResetException;
@@ -202,22 +203,14 @@ class TransactionManager
 
     public static function executeInTransaction(callable $callback, string $name = '')
     {
-        if (!self::beginTransaction($name)) {
-            throw new \RuntimeException('Failed to begin transaction');
+        /** @var ConnectionFactory $connectionFactory */
+        $connectionFactory = ObjectManager::getInstance(ConnectionFactory::class);
+        $transactions = ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        if (!$transactions instanceof WriteIntentTransactionCoordinatorInterface) {
+            throw new \LogicException('WriteIntentTransactionCoordinatorInterface is unavailable');
         }
 
-        try {
-            $result = $callback();
-
-            if (!self::commit($name)) {
-                throw new \RuntimeException('Failed to commit transaction');
-            }
-
-            return $result;
-        } catch (\Throwable $throwable) {
-            self::rollback($name);
-            throw $throwable;
-        }
+        return $transactions->runWrite($connectionFactory, $callback);
     }
 
     public static function getTransactionLevel(): int

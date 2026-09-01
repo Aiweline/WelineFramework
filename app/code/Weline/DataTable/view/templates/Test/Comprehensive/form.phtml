@@ -99,7 +99,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
                             <div class='page-title-right'>
                                 <ol class='breadcrumb m-0'>
                                     <li class='breadcrumb-item'><span>DataTable</span></li>
-                                    <li class='breadcrumb-item'><a href="<?= $this->getUrl('datatable/backend/test/comprehensive/index') ?>">综合测试</a></li>
+                                    <li class='breadcrumb-item'><a href="@url{'datatable/backend/test/comprehensive/index'}">综合测试</a></li>
                                     <li class='breadcrumb-item active'>表单功能</li>
                                 </ol>
                             </div>
@@ -205,7 +205,7 @@ $themeConfig = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Back
         <div class="row">
             <div class="col-12">
                 <div class="text-center">
-                    <a href="<?= $this->getUrl('datatable/backend/test/comprehensive/index') ?>" class="btn btn-primary">
+                    <a href="@url{'datatable/backend/test/comprehensive/index'}" class="btn btn-primary">
                         <i class="mdi mdi-arrow-left me-2"></i>返回综合测试首页
                     </a>
                 </div>

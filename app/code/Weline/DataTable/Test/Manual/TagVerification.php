@@ -19,7 +19,7 @@ use Weline\DataTable\Taglib\Field;
 use Weline\DataTable\Taglib\Form;
 use Weline\DataTable\Helper\TableContext;
 
-class TagVerificationTest
+class TagVerification
 {
     /**
      * 运行所有测试
@@ -411,5 +411,5 @@ class TagVerificationTest
 
 // 如果直接运行此文件，执行测试
 if (basename(__FILE__) === basename($_SERVER['PHP_SELF'])) {
-    TagVerificationTest::runAllTests();
+    TagVerification::runAllTests();
 }

@@ -107,6 +107,7 @@ final class Field implements TaglibInterface
             'text', 'search', 'email', 'tel', 'url', 'password', 'number', 'date', 'datetime',
             'time', 'textarea', 'select', 'checkbox', 'radio', 'switch', 'range', 'color',
             'file', 'image', 'hidden',
+            'language-select', 'module-select', 'website-select',
         ];
         if (!in_array($type, $allowedTypes, true)) {
             $type = 'text';
@@ -179,6 +180,13 @@ final class Field implements TaglibInterface
         $config = self::jsonAttribute($field);
         $class = trim('w-datatable__filter-field ' . (string)$field['class']);
         $common = ' id="' . $idHtml . '" name="filter[' . $nameHtml . ']" data-field="' . $nameHtml . '"';
+
+        if (in_array($field['type'], ['language-select', 'module-select', 'website-select'], true)
+            && self::containsTrustedMarkup((string)$field['content'])) {
+            return '<div class="' . self::escape($class) . '" data-field="' . $nameHtml . '" data-type="'
+                . self::escape((string)$field['type']) . '" data-w-field="' . $config . '">'
+                . (string)$field['content'] . '</div>';
+        }
 
         if ($field['type'] === 'select') {
             $control = '<select class="w-select"' . $common . '><option value="">' . self::escape((string)__('全部')) . '</option>';
@@ -311,10 +319,10 @@ final class Field implements TaglibInterface
                 if (is_array($label)) {
                     $result[] = [
                         'value' => (string)($label['value'] ?? $key),
-                        'label' => (string)($label['label'] ?? $label['value'] ?? $key),
+                        'label' => (string)__((string)($label['label'] ?? $label['value'] ?? $key)),
                     ];
                 } else {
-                    $result[] = ['value' => (string)$key, 'label' => (string)$label];
+                    $result[] = ['value' => (string)$key, 'label' => (string)__((string)$label)];
                 }
             }
             return $result;
@@ -326,7 +334,7 @@ final class Field implements TaglibInterface
         $result = [];
         foreach (explode(',', $raw) as $pair) {
             $parts = array_map('trim', explode(':', $pair, 2));
-            $result[] = ['value' => $parts[0], 'label' => $parts[1] ?? $parts[0]];
+            $result[] = ['value' => $parts[0], 'label' => (string)__($parts[1] ?? $parts[0])];
         }
         return $result;
     }

@@ -7,6 +7,7 @@ namespace Weline\DataTable\Taglib;
 use Weline\DataTable\Helper\FrontendAccess;
 use Weline\DataTable\Helper\TableContext;
 use Weline\DataTable\Helper\UiAssets;
+use Weline\DataTable\Service\DataTableResourceRegistry;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\OwnsChildCompilationInterface;
@@ -41,8 +42,12 @@ final class Form implements TaglibInterface, OwnsChildCompilationInterface
             'button-icon' => false,
             'allow-frontend' => false,
             'api-provider' => false,
+            'resource' => false,
             'dependencies' => false,
             'transaction' => false,
+            'write-order' => false,
+            'composite-write' => false,
+            'confirm-write' => false,
             'for' => false,
             'class' => false,
             'layout' => false,
@@ -140,7 +145,40 @@ final class Form implements TaglibInterface, OwnsChildCompilationInterface
         $includeFields = self::fieldList($attributes['include_fields'] ?? '');
         $excludeFields = self::fieldList($attributes['exclude_fields'] ?? '');
         $modelConfig = self::parseModelConfig($model);
+        $modelClasses = array_values($modelConfig['models']);
+        $resource = trim((string)($attributes['resource'] ?? ''));
+        if ($apiProvider === 'datatable') {
+            foreach ($modelClasses as $modelClass) {
+                DataTableResourceRegistry::assertRegisteredModel((string)$modelClass);
+            }
+            $resource = $resource ?: implode(',', array_values(array_filter(array_map(
+                static fn (string $modelClass): ?string => DataTableResourceRegistry::resourceForModel($modelClass),
+                $modelClasses
+            ))));
+            $baseCapabilities = DataTableResourceRegistry::capabilitiesForModels($modelClasses);
+        } else {
+            $baseCapabilities = [
+                'create' => true,
+                'update' => true,
+                'composite_write' => count($modelClasses) > 1,
+            ];
+        }
+        $capabilities = is_array($attributes['capabilities'] ?? null)
+            ? $attributes['capabilities']
+            : [
+                'create' => FrontendAccess::isBackendRequest() && (bool)($baseCapabilities['create'] ?? false),
+                'update' => FrontendAccess::isBackendRequest() && (bool)($baseCapabilities['update'] ?? false),
+                'composite_write' => FrontendAccess::isBackendRequest() && (bool)($baseCapabilities['composite_write'] ?? false),
+            ];
+        $canWrite = (bool)($capabilities[$mode === 'edit' ? 'update' : 'create'] ?? false);
+        $compositeWrite = self::toBool($attributes['composite-write'] ?? ($capabilities['composite_write'] ?? false));
+        $confirmWrite = self::toBool($attributes['confirm-write'] ?? $compositeWrite);
+        $requiresWritePlan = $canWrite && ($confirmWrite || $compositeWrite || count($modelClasses) > 1);
+        $transaction = array_key_exists('transaction', $attributes)
+            ? self::toBool($attributes['transaction'])
+            : count($modelClasses) > 1;
         $dialogId = 'w-form-dialog-' . $id;
+        $planDialogId = 'w-datatable-write-plan-' . $id;
         $config = [
             'id' => $id,
             'dialogId' => $dialogId,
@@ -153,16 +191,28 @@ final class Form implements TaglibInterface, OwnsChildCompilationInterface
             'excludeFields' => $excludeFields,
             'includeFields' => $includeFields,
             'apiProvider' => $apiProvider,
+            'resource' => $resource,
             'operations' => [
                 'formFields' => 'formFields',
+                'metadata' => 'metadata',
                 'formRecord' => 'formRecord',
                 'create' => 'create',
                 'update' => 'update',
                 'saveData' => 'saveData',
+                'previewWrite' => 'previewWrite',
+                'executeWrite' => 'executeWrite',
             ],
             'dependencies' => trim((string)($attributes['dependencies'] ?? '')),
-            'transaction' => self::toBool($attributes['transaction'] ?? false),
+            'transaction' => $transaction,
+            'writeOrder' => trim((string)($attributes['write-order'] ?? '')),
+            'compositeWrite' => $compositeWrite,
             'modelConfig' => $modelConfig,
+            'capabilities' => $capabilities,
+            'readOnly' => !$canWrite,
+            'confirmWrite' => $confirmWrite,
+            'requiresWritePlan' => $requiresWritePlan,
+            'planDialogId' => $planDialogId,
+            'hasExplicitSubmit' => preg_match('/\btype\s*=\s*["\']submit["\']/i', $content) === 1,
         ];
 
         $markup = self::renderMarkup(
@@ -177,7 +227,11 @@ final class Form implements TaglibInterface, OwnsChildCompilationInterface
             $config
         );
 
-        if ($showTrigger) {
+        if ($requiresWritePlan) {
+            $markup .= self::renderWritePlanDialog($planDialogId, $id);
+        }
+
+        if ($showTrigger && $canWrite) {
             $buttonText = self::escape((string)($attributes['button-text'] ?? __('新增')));
             $buttonIcon = self::normalizeIcon((string)($attributes['button-icon'] ?? 'plus'));
             $markup .= '<button type="button" class="w-button" data-w-action="dialog.open" data-w-target="#'
@@ -210,11 +264,19 @@ final class Form implements TaglibInterface, OwnsChildCompilationInterface
         $reset = self::escape((string)__('重置'));
         $save = self::escape((string)__('保存'));
         $close = self::escape((string)__('关闭'));
+        $readOnly = !empty($config['readOnly']);
+        $submitButton = !empty($config['hasExplicitSubmit'])
+            ? ''
+            : '<button type="submit" class="w-button" form="' . $idHtml . '"' . ($readOnly ? ' disabled aria-disabled="true"' : '') . '>' . $save . '</button>';
+        $readOnlyNotice = $readOnly
+            ? '<p class="w-datatable-form__readonly" role="note">' . self::escape((string)__('当前上下文仅允许查看，不能提交数据。')) . '</p>'
+            : '';
         $autoFieldsHtml = $autoFields
             ? '<div class="w-datatable-form__auto-fields" data-w-datatable-form-auto><div class="w-skeleton" role="status">' . $loading . '</div></div>'
             : '';
         $form = <<<HTML
 <form id="{$idHtml}" class="{$classHtml}" data-layout="{$layoutHtml}" autocomplete="off">
+    {$readOnlyNotice}
     <div class="w-datatable-form__fields" data-w-datatable-form-fields>{$content}{$autoFieldsHtml}</div>
     <div class="w-datatable-form__message" data-w-datatable-form-message role="status" aria-live="polite" hidden></div>
 </form>
@@ -227,7 +289,7 @@ HTML;
     <div class="w-card__body">{$form}</div>
     <footer class="w-card__footer w-cluster" data-justify="end">
         <button type="reset" class="w-button" data-tone="neutral" form="{$idHtml}">{$reset}</button>
-        <button type="submit" class="w-button" form="{$idHtml}">{$save}</button>
+        {$submitButton}
     </footer>
 </section>
 HTML;
@@ -243,7 +305,37 @@ HTML;
     <footer class="w-dialog__footer">
         <button type="button" class="w-button" data-tone="neutral" data-w-action="dialog.close" data-w-target="#{$dialogIdHtml}">{$cancel}</button>
         <button type="reset" class="w-button" data-tone="quiet" form="{$idHtml}">{$reset}</button>
-        <button type="submit" class="w-button" form="{$idHtml}">{$save}</button>
+        {$submitButton}
+    </footer>
+</dialog>
+HTML;
+    }
+
+    private static function renderWritePlanDialog(string $dialogId, string $formId): string
+    {
+        $dialogIdHtml = self::escape($dialogId);
+        $formIdHtml = self::escape($formId);
+        $title = self::escape((string)__('确认写入计划'));
+        $description = self::escape((string)__('请核对写入顺序、目标资源与事务范围。确认后计划只能使用一次。'));
+        $cancel = self::escape((string)__('取消'));
+        $confirm = self::escape((string)__('确认并执行'));
+        $close = self::escape((string)__('关闭'));
+
+        return <<<HTML
+<dialog id="{$dialogIdHtml}" class="w-dialog w-datatable-write-plan" data-size="md" data-w-component="dialog" aria-labelledby="{$dialogIdHtml}-title">
+    <header class="w-dialog__header">
+        <h2 id="{$dialogIdHtml}-title">{$title}</h2>
+        <button type="button" class="w-button" data-tone="quiet" data-size="sm" data-w-action="dialog.close" data-w-target="#{$dialogIdHtml}" aria-label="{$close}">×</button>
+    </header>
+    <div class="w-dialog__body">
+        <p>{$description}</p>
+        <div class="w-datatable-write-plan__warning" data-w-datatable-write-plan-warning role="alert" hidden></div>
+        <ol class="w-datatable-write-plan__targets" data-w-datatable-write-plan-targets></ol>
+        <dl class="w-datatable-write-plan__meta" data-w-datatable-write-plan-meta></dl>
+    </div>
+    <footer class="w-dialog__footer">
+        <button type="button" class="w-button" data-tone="neutral" data-w-action="dialog.close" data-w-target="#{$dialogIdHtml}">{$cancel}</button>
+        <button type="button" class="w-button" data-w-datatable-write-plan-confirm data-w-form-id="{$formIdHtml}">{$confirm}</button>
     </footer>
 </dialog>
 HTML;
@@ -256,8 +348,12 @@ HTML;
             'model',
             'scope',
             'api-provider',
+            'resource',
             'dependencies',
             'transaction',
+            'write-order',
+            'composite-write',
+            'confirm-write',
             'allow-frontend',
         ] as $name) {
             if ((!isset($attributes[$name]) || $attributes[$name] === '') && isset($tableContext[$name])) {

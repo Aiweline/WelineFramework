@@ -508,9 +508,7 @@ class Form extends BackendRestController
                 return $this->error(__('缺少必需参数: model 或 record_id'));
             }
 
-            if (!class_exists($model)) {
-                return $this->error(__('模型类不存在: %{1}', [$model]));
-            }
+            ErrorHandler::validateModel((string)$model);
 
             $modelInstance = w_obj($model);
             $modelInstance->load($recordId);
@@ -529,4 +527,3 @@ class Form extends BackendRestController
         }
     }
 }
-

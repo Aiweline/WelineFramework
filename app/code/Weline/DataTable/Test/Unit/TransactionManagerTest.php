@@ -14,6 +14,7 @@ use Weline\DataTable\Helper\TransactionManager;
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\Connection\ConnectionInterface;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Context;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestResetException;
@@ -27,23 +28,55 @@ class TransactionManagerTest extends TestCore
         parent::tearDown();
     }
 
-    public function testExecuteInTransactionCommitsRootTransaction(): void
+    public function testExecuteInTransactionUsesFrameworkWriteCoordinator(): void
     {
-        $connection = new FakeConnection();
-        $this->injectConnection($connection);
+        $factory = $this->getMockBuilder(ConnectionFactory::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+        $transactions = $this->createMock(WriteIntentTransactionCoordinatorInterface::class);
+        $transactions->expects(self::once())
+            ->method('runWrite')
+            ->with($factory, self::isType('callable'))
+            ->willReturnCallback(static fn (ConnectionFactory $unused, callable $callback): mixed => $callback());
 
-        $result = TransactionManager::executeInTransaction(
-            static fn (): string => 'done',
-            'datatable_demo_form'
-        );
+        $this->withFrameworkTransactionInstances($factory, $transactions, function (): void {
+            $result = TransactionManager::executeInTransaction(
+                static fn (): string => 'done',
+                'datatable_demo_form'
+            );
 
-        $this->assertSame('done', $result);
-        $this->assertSame(1, $connection->beginCount);
-        $this->assertSame(1, $connection->commitCount);
-        $this->assertSame(0, $connection->rollbackCount);
-        $this->assertSame([], $connection->executedSql);
-        $this->assertSame(0, TransactionManager::getTransactionLevel());
-        $this->assertFalse(TransactionManager::inTransaction());
+            self::assertSame('done', $result);
+            self::assertSame(0, TransactionManager::getTransactionLevel());
+            self::assertFalse(TransactionManager::inTransaction());
+        });
+    }
+
+    public function testExecuteInTransactionPropagatesWriteCoordinatorFailure(): void
+    {
+        $factory = $this->getMockBuilder(ConnectionFactory::class)
+            ->disableOriginalConstructor()
+            ->getMock();
+        $transactions = $this->createMock(WriteIntentTransactionCoordinatorInterface::class);
+        $transactions->expects(self::once())
+            ->method('runWrite')
+            ->with($factory, self::isType('callable'))
+            ->willReturnCallback(static fn (ConnectionFactory $unused, callable $callback): mixed => $callback());
+
+        $this->withFrameworkTransactionInstances($factory, $transactions, function (): void {
+            try {
+                TransactionManager::executeInTransaction(
+                    static function (): never {
+                        throw new \RuntimeException('second write step failed');
+                    },
+                    'datatable_composite_write'
+                );
+                self::fail('Expected the composite write failure to escape.');
+            } catch (\RuntimeException $exception) {
+                self::assertSame('second write step failed', $exception->getMessage());
+            }
+
+            self::assertSame(0, TransactionManager::getTransactionLevel());
+        });
     }
 
     public function testNestedTransactionsUseSavepointsAndRollbackInnerScope(): void
@@ -394,6 +427,29 @@ class TransactionManagerTest extends TestCore
             'savepoints' => [],
             'transaction_level' => 0,
         ]);
+    }
+
+    private function withFrameworkTransactionInstances(
+        ConnectionFactory $factory,
+        WriteIntentTransactionCoordinatorInterface $transactions,
+        callable $assertions,
+    ): void {
+        $originalFactory = ObjectManager::_getInstance(ConnectionFactory::class);
+        $originalTransactions = ObjectManager::_getInstance(WriteIntentTransactionCoordinatorInterface::class);
+        ObjectManager::setInstance(ConnectionFactory::class, $factory);
+        ObjectManager::setInstance(WriteIntentTransactionCoordinatorInterface::class, $transactions);
+        try {
+            $assertions();
+        } finally {
+            ObjectManager::removeInstance(ConnectionFactory::class);
+            ObjectManager::removeInstance(WriteIntentTransactionCoordinatorInterface::class);
+            if ($originalFactory !== null) {
+                ObjectManager::setInstance(ConnectionFactory::class, $originalFactory);
+            }
+            if ($originalTransactions !== null) {
+                ObjectManager::setInstance(WriteIntentTransactionCoordinatorInterface::class, $originalTransactions);
+            }
+        }
     }
 }
 
