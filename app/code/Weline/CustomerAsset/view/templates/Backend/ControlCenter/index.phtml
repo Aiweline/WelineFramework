@@ -5,7 +5,7 @@ $status = (array)($this->getData('workspace_status') ?? []);
 $datasets = (array)($this->getData('workspace_datasets') ?? []);
 $form = (array)($this->getData('workspace_form') ?? []);
 $kind = (string)($form['kind'] ?? '');
-$formActionUrl = $form === [] ? '' : $this->getBackendUrl((string)($form['action'] ?? ''));
+$formActionPath = $form === [] ? '' : trim((string)($form['action'] ?? ''));
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $display = static function (mixed $value) use ($escape): string {
     if (is_bool($value)) return $value ? (string)__('是') : (string)__('否');
@@ -42,7 +42,7 @@ $websiteSelectOptionsJson = \json_encode($websiteSelectOptions, JSON_UNESCAPED_U
     <div class="w-alert" role="status" data-tone="info"><?= $form === [] ? __('此页面复用真实资产账本事实和迁移一致性算法；生产迁移不在后台触发。') : __('写操作复用 CustomerAsset 的事务、幂等和追加账本服务；测试验收使用 sandbox 命名空间。') ?></div>
     <?php if ($form !== []): ?>
         <div class="w-card" data-testid="customer-asset-<?= $escape($code) ?>-write-form" style="--w-mb:var(--weline-space-4);"><div class="w-card__header"><h5 style="--w-mb:0;"><?= __('资产操作') ?></h5></div><div class="w-card__body">
-            <w:form method="post" action="@var($formActionUrl)"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
+            <w:form method="post" action="@backend-url{$formActionPath}"><div class="w-grid" style="--w-gap:var(--weline-space-4);">
                 <?php if ($kind === 'credit' || $kind === 'reserve'): ?>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('客户 ID') ?></label><input class="w-input" name="customer_id" maxlength="64" required></div>
                     <div style="--w-span-md:3;"><label class="w-field__label"><?= __('网站') ?></label>
