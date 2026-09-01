@@ -7,8 +7,6 @@ $hosts = $this->getData('hosts') ?? [];
 $projectConfig = $this->getData('projectConfig');
 $projectStatus = $this->getData('projectStatus');
 
-$backendBase = $this->getBackendUrl('async/backend/host');
-$createUrl = $this->getBackendUrl('async/backend/host/form');
 ?>
                 <div class="row">
                     <div class="col-12">
@@ -283,7 +281,7 @@ window.loadHostForm = function(hostId) {
     
     container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden"><?= __('加载中...') ?></span></div></div>';
     
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/host/form') ?>';
+    const baseUrl = '@backend-url{'async/backend/host/form'}';
     const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'isAjax=1' + 
                 (hostId ? '&id=' + hostId : '');
     
@@ -338,7 +336,7 @@ window.saveHostForm = function(event) {
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span><?= __('保存中...') ?>';
     
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/host/save') ?>';
+    const baseUrl = '@backend-url{'async/backend/host/save'}';
     
     fetch(baseUrl, {
         method: 'POST',
@@ -389,7 +387,7 @@ window.deleteHost = function(hostId) {
         return;
     }
     
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/host/delete') ?>';
+    const baseUrl = '@backend-url{'async/backend/host/delete'}';
     const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'id=' + hostId + '&isAjax=1';
     
     fetch(url, {
@@ -437,7 +435,7 @@ window.loadMappingList = function(hostId) {
     container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden"><?= __('加载中...') ?></span></div></div>';
     
     // 使用已注册的后端控制器路由
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/mapping/getList') ?>';
+    const baseUrl = '@backend-url{'async/backend/mapping/getList'}';
     
     // 使用 URL 对象或手动构建查询字符串，确保参数正确编码
     const separator = baseUrl.includes('?') ? '&' : '?';
@@ -566,7 +564,7 @@ window.loadMappingForm = function(hostId, mappingId) {
     const container = document.getElementById('mappingFormContainer');
     container.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary" role="status"><span class="visually-hidden"><?= __('加载中...') ?></span></div></div>';
     
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/mapping/form') ?>';
+    const baseUrl = '@backend-url{'async/backend/mapping/form'}';
     // 添加 isAjax 参数确保后端识别为 AJAX 请求
     const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'host_id=' + hostId + 
                 (mappingId ? '&id=' + mappingId : '') + '&isAjax=1';
@@ -667,7 +665,7 @@ window.saveMappingForm = function(event) {
     submitBtn.disabled = true;
     submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> <?= __('保存中...') ?>';
     
-    const url = '<?= $this->getBackendUrl('async/backend/mapping/save') ?>';
+    const url = '@backend-url{'async/backend/mapping/save'}';
     
     fetch(url, {
         method: 'POST',
@@ -708,7 +706,7 @@ window.deleteMapping = function(mappingId, hostId) {
         return;
     }
     
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/mapping/delete') ?>';
+    const baseUrl = '@backend-url{'async/backend/mapping/delete'}';
     const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'id=' + mappingId + '&host_id=' + hostId;
     
     fetch(url, {
@@ -734,7 +732,7 @@ window.deleteMapping = function(mappingId, hostId) {
 
 // 切换映射状态
 window.toggleMapping = function(mappingId, hostId) {
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/mapping/toggle') ?>';
+    const baseUrl = '@backend-url{'async/backend/mapping/toggle'}';
     const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'id=' + mappingId + '&host_id=' + hostId;
     
     fetch(url, {
@@ -883,7 +881,7 @@ window.loadBrowserDirectoryTree = function() {
     container.innerHTML = '<div class="text-center py-2"><div class="spinner-border spinner-border-sm"></div> <small class="text-muted"><?= __('加载中...') ?></small></div>';
     
     // 使用现有的 getDirectoryTree API
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/mapping/getDirectoryTree') ?>';
+    const baseUrl = '@backend-url{'async/backend/mapping/getDirectoryTree'}';
     const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 'path=' + encodeURIComponent(path) + '&type=local';
     
     fetch(url, {
@@ -1032,7 +1030,7 @@ window.loadRemoteDirectoryTree = function(remotePath, hostId) {
         navUpBtn.style.display = remotePath !== '/' ? 'inline-block' : 'none';
     }
     
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/mapping/getDirectoryTree') ?>';
+    const baseUrl = '@backend-url{'async/backend/mapping/getDirectoryTree'}';
     const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 
                 'path=' + encodeURIComponent(remotePath) + 
                 '&type=remote' + 
@@ -1146,7 +1144,7 @@ window.navigateLocalDirectory = function(direction) {
 }
 
 window.loadDirectoryTree = function(type, path) {
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/mapping/getDirectoryTree') ?>';
+    const baseUrl = '@backend-url{'async/backend/mapping/getDirectoryTree'}';
     const url = baseUrl + (baseUrl.includes('?') ? '&' : '?') + 
                 'path=' + encodeURIComponent(path) + 
                 '&type=' + type + 
@@ -1472,7 +1470,7 @@ window.asyncControl = function(action, mappingId, confirmMsg) {
     }
     
     // 使用 Mapping 控制器的路由，已添加 start/stop/restart 方法
-    const baseUrl = '<?= $this->getBackendUrl('async/backend/mapping/') ?>';
+    const baseUrl = '@backend-url{'async/backend/mapping/'}';
     const url = baseUrl + action + (baseUrl.includes('?') ? '&' : '?') + 'mapping_id=' + mappingId;
     
     fetch(url, {
