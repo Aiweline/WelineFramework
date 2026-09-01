@@ -1,0 +1,32 @@
+<?php
+/**
+ * @hook-priority 50
+ * @hook-sort-order 0
+ * @hook-solo false
+ */
+/** @var \Weline\Framework\View\Template $this */
+
+$user = $this->getData('user');
+if (!$user) {
+    return;
+}
+
+?>
+<a class="account-hook-nav-link" href="@url{'customer/account/index'}#shipping-address" data-section="shipping-address" data-account-nav-link="true" data-account-nav-parent="addresses">
+    <span class="account-hook-nav-link__label">
+        <w:icon name="truck" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text">
+            <strong><lang>发货地址</lang></strong>
+            <span><lang>管理发货地址</lang></span>
+        </span>
+    </span>
+</a>
+<a class="account-hook-nav-link" href="@url{'customer/account/index'}#delivery-address" data-section="delivery-address" data-account-nav-link="true" data-account-nav-parent="addresses">
+    <span class="account-hook-nav-link__label">
+        <w:icon name="pin" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text">
+            <strong><lang>收货地址</lang></strong>
+            <span><lang>管理配送收货地址</lang></span>
+        </span>
+    </span>
+</a>

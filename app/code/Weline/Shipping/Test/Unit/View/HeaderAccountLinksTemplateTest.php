@@ -22,5 +22,7 @@ final class HeaderAccountLinksTemplateTest extends TestCase
         $this->assertStringNotContainsString("\$this->getFrontendUrl('shipping/", $content);
         $this->assertStringContainsString("@url{'customer/account/index'}#shipping-address", $content);
         $this->assertStringContainsString("@url{'customer/account/index'}#delivery-address", $content);
+        $this->assertStringContainsString('data-account-menu-auth="signed-in"', $content);
+        $this->assertStringNotContainsString('if ($isLoggedIn)', $content);
     }
 }

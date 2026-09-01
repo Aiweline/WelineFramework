@@ -5,6 +5,8 @@
 参数错误,"Invalid parameter"
 删除成功,"Deleted successfully"
 设置成功,"Set successfully"
+退换政策,"Returns & Exchanges"
+配送说明,"Shipping Information"
 国家代码不能为空,"Country code cannot be empty"
 配送服务ID不能为空,"Shipping service ID cannot be empty"
 "Get regions success","Get regions success"
@@ -122,9 +124,7 @@ grid,grid
 到达,Arrival
 派送,Delivery
 发货地址,"Shipping Address"
-管理发货地址,"Manage shipping addresses"
 收货地址,"Delivery Address"
-管理配送收货地址,"Manage delivery addresses"
 默认,Default
 邮编：,"Postal code:"
 编辑,Edit
@@ -165,6 +165,24 @@ grid,grid
 快速添加地址,快速添加地址
 电话,Phone
 保存并使用,保存并使用
+管理发货地址,"Manage shipping addresses"
+管理配送收货地址,"Manage delivery addresses"
+了解发货时效、配送范围与签收注意事项。,"Learn about shipping times, coverage, and delivery tips."
+发货时效,"Shipping timeline"
+"订单支付成功后，我们将在 1–3 个工作日内完成拣货并发出（节假日顺延）。部分预售或定制商品以商品页标注为准。","After payment, we usually pick and ship within 1–3 business days (holidays excluded). Pre-order or custom items follow the product page."
+配送范围与运费,"Coverage and shipping fees"
+我们支持国内多数省市配送。运费按收货地址、重量与所选配送服务在结账页实时计算；满足活动门槛时可能享受包邮。,"We ship to most domestic regions. Fees are calculated at checkout by address, weight, and service; free shipping may apply for promotions."
+物流跟踪与签收,"Tracking and delivery"
+发货后可在「我的订单」查看物流单号与节点。请使用下单时填写的联系方式核验包裹；若长时间无物流更新，可先确认是否周末/节假日，或联系客服协助查询。,"Track shipments in My Orders. Use the contact details from checkout to verify packages; if tracking stalls, check holidays or contact support."
+查看退换政策,"View returns policy"
+了解退换货条件、办理流程与注意事项。,"Learn return eligibility, process, and tips."
+适用条件,Eligibility
+"自签收之日起 7 日内，未使用、不影响二次销售的商品可申请退换（法规另有规定的除外）。食品、贴身衣物、定制商品等特殊品类以商品页说明为准。","Unused items eligible for resale may be returned within 7 days of delivery unless otherwise required by law. Special categories follow the product page."
+办理流程,"How to return"
+登录「我的订单」选择对应订单提交售后申请，按提示填写原因并上传凭证。审核通过后按指引寄回商品；我们确认收货后将尽快完成退款或换货发货。,"Submit a return from My Orders, follow the instructions, and we will refund or reship after receiving the item."
+运费说明,"Shipping cost notes"
+因质量问题产生的退换，往返运费由我们承担。因个人原因退换，寄回运费由买家承担；换货的二次发出运费视活动与商品政策而定。,"We cover return shipping for quality issues. Buyer-paid return shipping applies for change-of-mind; reship fees depend on policy."
+查看配送说明,"View shipping information"
 确认操作,"Confirm action"
 确定,Confirm
 操作失败,"Operation failed"
@@ -192,6 +210,9 @@ grid,grid
 编辑收货地址,"Edit shipping address"
 例如：家、公司、学校等,"e.g., Home, Company, School, etc."
 收货人姓名,"Recipient Name"
+China,China
+选择已存地址,选择已存地址
+邮箱,邮箱
 确定要删除这个地址吗？,"Are you sure you want to delete this address?"
 系统,System
 运送地址列表,"Shipping address list"
@@ -357,3 +378,9 @@ API配置信息，JSON格式,"API configuration information, JSON format"
 配送金额加法溢出,"Delivery amount addition overflows"
 配送金额乘法溢出,"Shipping amount multiplication overflows"
 运送地址,"Shipping addresses"
+页脚配送说明链接,"Footer shipping info link"
+页脚退换政策链接,"Footer returns policy link"
+"页脚帮助中心扩展槽：配送说明入口；默认注入 footer-help-links。","Footer help extras: shipping guide; default inject footer-help-links."
+"页脚帮助中心扩展槽：退换货政策入口；默认注入 footer-help-links。","Footer help extras: returns policy; default inject footer-help-links."
+页脚帮助中心默认展示配送说明,"Footer help center defaults to shipping info"
+页脚帮助中心默认展示退换政策,"Footer help center defaults to returns policy"

@@ -177,7 +177,7 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
     <?php
 };
 ?>
-<section class="account-hook-section account-index__section motor-account-section" id="shipping-address-section" data-account-section="shipping-address" hidden weline-code="shipping.account_sidebar_content.shipping_address_section">
+<section class="account-hook-section account-index__section motor-account-section" id="shipping-address-section" data-account-section="shipping-address" data-weline-load="shippingAccountAddress" hidden weline-code="shipping.account_sidebar_content.shipping_address_section">
     <div class="account-card account-address-panel" data-address-panel="shipping" data-id-field="shipping_address_id">
         <textarea hidden readonly data-address-seed><?= $json($shippingPayloads) ?></textarea>
         <header class="account-card__header account-address-panel__header">
@@ -236,4 +236,4 @@ $renderAddressForm = function (string $idField, string $typeLabel, string $conta
 </section>
 
 <css>Weline_Shipping::frontend/css/account-address.css</css>
-<js>Weline_Shipping::frontend/js/account-address-v3.js</js>
+<?php // shippingAccountAddress：由发货地址区 data-weline-load 声明，禁止裸 <js> ?>

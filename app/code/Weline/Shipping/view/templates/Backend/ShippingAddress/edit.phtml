@@ -2,15 +2,12 @@
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
 
-
 use Weline\Shipping\Model\ShippingAddress;
 
 $address = $this->getData('address');
 $isEdit = !empty($address);
 $id = $address[ShippingAddress::schema_fields_ID] ?? null;
 
-$backendBase = $this->getBackendUrl('shipping/backend/shippingaddress');
-$saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
 ?>
 <div class="w-grid">
                     <div style="--w-span:12;">
@@ -19,7 +16,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                             <div class="w-cluster">
                                 <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
                                     <li class="w-breadcrumb__item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
-                                    <li class="w-breadcrumb__item"><a href="<?= $backendBase ?>"><?= __('发货地址管理') ?></a></li>
+                                    <li class="w-breadcrumb__item"><a href="@backend-url{'shipping/backend/shippingaddress'}"><?= __('发货地址管理') ?></a></li>
                                     <li class="w-breadcrumb__item" data-state="active"><?= $isEdit ? __('编辑') : __('新增') ?></li>
                                 </ol>
                             </div>
@@ -34,7 +31,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                 <h5 class="w-card__title" style="--w-mb:0;"><?= $isEdit ? __('编辑发货地址') : __('新增发货地址') ?></h5>
                             </div>
                             <div class="w-card__body">
-                                <w:form method="post" action="@var($saveUrl)" data-testid="shipping-address-editor-form">
+                                <w:form method="post" action="@backend-url{'shipping/backend/shippingaddress/save'}" data-testid="shipping-address-editor-form">
                                     <?php if ($id): ?>
                                         <input type="hidden" name="shipping_address_id" value="<?= $id ?>">
                                     <?php endif; ?>
@@ -125,7 +122,7 @@ $saveUrl = $this->getBackendUrl('shipping/backend/shippingaddress/save');
                                             <button type="submit" class="w-button" data-testid="shipping-address-editor-submit" data-tone="primary">
                                                 <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
                                             </button>
-                                            <a href="<?= $backendBase ?>" class="w-button" data-tone="neutral">
+                                            <a href="@backend-url{'shipping/backend/shippingaddress'}" class="w-button" data-tone="neutral">
                                                 <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回') ?>
                                             </a>
                                         </div>
