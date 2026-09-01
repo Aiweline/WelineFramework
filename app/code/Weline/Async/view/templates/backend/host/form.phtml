@@ -6,8 +6,6 @@ use Weline\Async\Model\SyncHost;
 $host = $this->getData('host');
 $isEdit = $host && $host->getId();
 
-$backendBase = $this->getBackendUrl('async/backend/host');
-$saveUrl = $this->getBackendUrl('async/backend/host/save');
 ?>
 <div class="row">
     <div class="col-12">
@@ -19,7 +17,7 @@ $saveUrl = $this->getBackendUrl('async/backend/host/save');
                         <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
                     </li>
                     <li class="breadcrumb-item">
-                        <a href="<?= $backendBase ?>"><?= __('同步主机管理') ?></a>
+                        <a href="@backend-url{'async/backend/host'}"><?= __('同步主机管理') ?></a>
                     </li>
                     <li class="breadcrumb-item active"><?= $isEdit ? __('编辑') : __('新增') ?></li>
                 </ol>
@@ -35,7 +33,7 @@ $saveUrl = $this->getBackendUrl('async/backend/host/save');
                 <h5 class="card-title mb-0"><?= $isEdit ? __('编辑主机') : __('新增主机') ?></h5>
             </div>
             <div class="card-body">
-                <form method="post" action="<?= $saveUrl ?>">
+                <form method="post" action="@backend-url{'async/backend/host/save'}">
                     <?php if ($isEdit): ?>
                         <input type="hidden" name="id" value="<?= $host->getId() ?>">
                     <?php endif; ?>
@@ -95,7 +93,7 @@ $saveUrl = $this->getBackendUrl('async/backend/host/save');
                     </div>
 
                     <div class="text-end">
-                        <a href="<?= $backendBase ?>" class="btn btn-secondary"><?= __('取消') ?></a>
+                        <a href="@backend-url{'async/backend/host'}" class="btn btn-secondary"><?= __('取消') ?></a>
                         <button type="submit" class="btn btn-primary"><?= __('保存') ?></button>
                     </div>
                 </form>
