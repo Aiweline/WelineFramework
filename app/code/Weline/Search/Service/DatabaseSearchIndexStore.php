@@ -294,7 +294,7 @@ final class DatabaseSearchIndexStore implements SearchIndexStorageInterface
         string $locale = '',
         string $currency = '',
     ): array {
-        if ($storeId <= 0 || $channelId <= 0) {
+        if ($storeId < 0 || $channelId < 0) {
             throw new \InvalidArgumentException('search_scope_identity_invalid');
         }
         $generation = (int)$this->watermark($websiteId)[

@@ -18,8 +18,13 @@ final class SearchIndexTemplateContractTest extends TestCase
         self::assertStringContainsString("setGet('page_type', 'search')", $controller);
         self::assertStringContainsString("setGet('theme_public_route', 'search')", $controller);
         self::assertStringContainsString('getParam(\'q\'', $controller);
-        self::assertStringContainsString('RequestContext::scopeMetadata()', $controller);
+        self::assertStringContainsString('SearchParamGuard', $controller);
         self::assertStringNotContainsString('website_id\' => $this->request', $controller);
+
+        $guard = (string)file_get_contents(
+            BP . 'app/code/Weline/Search/Service/SearchParamGuard.php',
+        );
+        self::assertStringContainsString('RequestContext::scopeMetadata()', $guard);
     }
 
     public function testSearchTemplateRendersQueryHitsAndLocaleAwareProductLinks(): void
@@ -27,13 +32,22 @@ final class SearchIndexTemplateContractTest extends TestCase
         $template = (string)file_get_contents(
             BP . 'app/code/Weline/Search/view/templates/frontend/index.phtml',
         );
+        $controller = (string)file_get_contents(
+            BP . 'app/code/Weline/Search/Controller/Frontend/Index.php',
+        );
 
         self::assertStringContainsString('data-testid="storefront-search"', $template);
         self::assertStringContainsString('data-testid="storefront-search-empty"', $template);
         self::assertStringContainsString('storefront-search__results', $template);
         self::assertStringNotContainsString('search-layout__grid', $template);
-        self::assertStringContainsString('$this->getUrl($productPath)', $template);
-        self::assertStringNotContainsString('href="/product/', $template);
+        self::assertStringContainsString('search_hit_templates', $template);
+        self::assertStringContainsString('hit-card.phtml', $template);
+        self::assertStringContainsString('$this->fetch(', $template);
+        self::assertStringContainsString('storefront-search__grid--product', $template);
+        self::assertStringContainsString('storefront-search__grid--blog', $template);
+        self::assertStringNotContainsString("include __DIR__ . '/partials/hit-card.phtml'", $template);
         self::assertStringNotContainsString('website_id', $template);
+        self::assertStringContainsString('search_hit_templates', $controller);
+        self::assertStringContainsString('hitTemplateMap()', $controller);
     }
 }

@@ -74,7 +74,7 @@ chart,chart
 "近 24h","近 24h"
 "近 7 天","近 7 天"
 "近 30 天","近 30 天"
-刷新,刷新
+刷新,Refresh
 慢请求数,慢请求数
 "最慢 ms","最慢 ms"
 耗时分布,耗时分布
@@ -133,6 +133,9 @@ chart,chart
 "Search 查询参数超过允许长度","A Search request parameter exceeds the allowed length"
 "Search 禁止无来源的成功响应","Search cannot return a successful response without a source"
 "未知 search shard 实体：%{1}","Unknown search shard entity: %{1}"
+"Search Provider 索引重建","Search Provider index rebuild"
+"定时重建 Blog 等 Provider 搜索索引，保证前台只读索引","Periodically rebuild Blog and other Provider search indexes so storefront reads index only"
+"Provider 索引定时重建完成：站点 %{1} 个，文档 %{2} 条","Provider index cron rebuild done: %{1} websites, %{2} documents"
 "MIG-P3C：Search full clone shadow 到持久 alias CAS allowlist","MIG-P3C: Search full clone shadow to persistent alias CAS allowlist"
 打印帮助,"Print help"
 "在登记 full clone 只读清点 Product/Search/alias/rollout 证据","Register full clone read-only inventory Product/Search/alias/rollout evidence"
@@ -148,6 +151,14 @@ chart,chart
 "shadow 观察窗 locale（preflight/apply 必需）","shadow observation window locale (required for preflight/apply)"
 "shadow 观察窗 currency（preflight/apply 必需）","shadow observation window currency (required for preflight/apply)"
 显示本帮助,"Show this help"
+"Provider 索引已重建：%{1}（website_id=%{2}，文档 %{3} 条）","Provider 索引已重建：%{1}（website_id=%{2}，文档 %{3} 条）"
+"全部 Provider 索引已重建（website_id=%{1}，文档 %{2} 条）","全部 Provider 索引已重建（website_id=%{1}，文档 %{2} 条）"
+"重建 Search Provider 内容索引（Blog 等非 Product 类型）","重建 Search Provider 内容索引（Blog 等非 Product 类型）"
+"仅重建指定 provider code（如 blog）","仅重建指定 provider code（如 blog）"
+"Website 维度，默认 0","Website 维度，默认 0"
+显示帮助,显示帮助
+"重建全部 Provider 索引","重建全部 Provider 索引"
+"仅重建 Blog 索引","仅重建 Blog 索引"
 """Search shard 重复声明表 %{1}""","""Search shard duplicate declaration table %{1}"""
 当前类型,"Current type"
 全部%{1},"All %{1}"

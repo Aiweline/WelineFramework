@@ -253,13 +253,21 @@ final class SearchIndexBuilder
             $document['entity_type'] = (string)($document['entity_type'] ?? 'product');
             $document['website_code'] = \trim((string)($document['website_code'] ?? ''))
                 ?: ($websiteId === 0 ? 'default' : 'website-' . $websiteId);
-            if ((int)($document['store_id'] ?? 0) <= 0) {
-                $document['store_id'] = 1;
+            if (!\array_key_exists('store_id', $document) || $document['store_id'] === null || $document['store_id'] === '') {
+                $document['store_id'] = 0;
+            } elseif ((int)$document['store_id'] < 0) {
+                throw new \InvalidArgumentException('search_legacy_document_store_invalid');
+            } else {
+                $document['store_id'] = (int)$document['store_id'];
             }
             $document['store_code'] = \trim((string)($document['store_code'] ?? ''))
                 ?: 'default';
-            if ((int)($document['channel_id'] ?? 0) <= 0) {
-                $document['channel_id'] = 1;
+            if (!\array_key_exists('channel_id', $document) || $document['channel_id'] === null || $document['channel_id'] === '') {
+                $document['channel_id'] = 0;
+            } elseif ((int)$document['channel_id'] < 0) {
+                throw new \InvalidArgumentException('search_legacy_document_channel_invalid');
+            } else {
+                $document['channel_id'] = (int)$document['channel_id'];
             }
             $document['channel_code'] = \trim((string)($document['channel_code'] ?? ''))
                 ?: 'default';
