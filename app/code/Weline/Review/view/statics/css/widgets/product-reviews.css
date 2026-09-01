@@ -46,7 +46,7 @@
 }
 
 .weline-review__heading h2,
-.weline-review__form h3 {
+.weline-review__form-head h3 {
     margin: var(--spacing-2, 0.5rem) 0 0;
     color: var(--wr-ink);
     font-size: clamp(1.35rem, 2.4vw, 1.85rem);
@@ -115,9 +115,83 @@
 
 .weline-review__layout {
     display: grid;
-    grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
     gap: var(--spacing-6, 1.5rem);
     margin-top: var(--spacing-5, 1.25rem);
+}
+
+.weline-review--layout-stack .weline-review__layout {
+    grid-template-columns: minmax(0, 1fr);
+}
+
+.weline-review--layout-split .weline-review__layout {
+    grid-template-columns: minmax(0, 1.15fr) minmax(18rem, 0.85fr);
+}
+
+.weline-review--layout-split.weline-review--form-left .weline-review__listing {
+    order: 2;
+}
+
+.weline-review--layout-split.weline-review--form-left .weline-review__form {
+    order: 1;
+}
+
+.weline-review__listing {
+    display: grid;
+    gap: var(--spacing-4, 1rem);
+    align-content: start;
+}
+
+.weline-review__write-toggle {
+    justify-self: start;
+    min-height: 2.85rem;
+    padding: 0 var(--spacing-5, 1.25rem);
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-accent);
+    border-radius: var(--wr-radius);
+    background: var(--wr-bg);
+    color: var(--wr-accent);
+    font: inherit;
+    font-weight: var(--font-weight-semibold, 600);
+    cursor: pointer;
+}
+
+.weline-review__write-toggle:hover {
+    background: var(--wr-accent-soft);
+}
+
+.weline-review--form-collapsed:not(.is-form-open) .weline-review__form {
+    display: none;
+}
+
+.weline-review--form-collapsed.is-form-open .weline-review__write-toggle {
+    display: none;
+}
+
+.weline-review__form-collapse {
+    justify-self: start;
+    min-height: 2rem;
+    margin: 0;
+    padding: 0.15rem 0;
+    border: 0;
+    background: transparent;
+    color: var(--wr-muted);
+    font: inherit;
+    font-size: var(--font-size-sm, 0.875rem);
+    line-height: 1.5;
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+    cursor: pointer;
+}
+
+.weline-review__form-collapse:hover {
+    color: var(--wr-accent);
+}
+
+.weline-review__form-head {
+    display: grid;
+    gap: var(--spacing-3, 0.75rem);
+    margin-top: var(--spacing-1, 0.25rem);
+    padding-bottom: var(--spacing-4, 1rem);
+    border-bottom: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
 }
 
 .weline-review__items {
@@ -168,44 +242,141 @@
 
 .weline-review__media {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(5.5rem, 6.5rem));
     gap: var(--spacing-2, 0.5rem);
-    margin-top: var(--spacing-4, 1rem);
+    margin-top: var(--spacing-3, 0.75rem);
+    max-width: 100%;
 }
 
-.weline-review__media figure {
+.weline-review__media figure,
+.weline-review__media-thumb {
     position: relative;
     margin: 0;
     overflow: hidden;
     border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
-    border-radius: var(--wr-radius);
+    border-radius: var(--radius-sm, 0.25rem);
     background: var(--color-bg-tertiary, #f3f4f6);
-    aspect-ratio: 4 / 3;
+    aspect-ratio: 1;
+}
+
+.weline-review__media-thumb {
+    display: block;
+    width: 100%;
+    padding: 0;
+    cursor: pointer;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.weline-review__media-thumb:hover {
+    border-color: var(--wr-accent);
+    box-shadow: 0 0 0 2px var(--wr-accent-soft);
+}
+
+.weline-review__media-thumb:focus-visible {
+    outline: 2px solid var(--wr-accent);
+    outline-offset: 2px;
 }
 
 .weline-review__media img,
-.weline-review__media video {
+.weline-review__media video,
+.weline-review__media-thumb img,
+.weline-review__media-thumb video {
     display: block;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    pointer-events: none;
 }
 
-.weline-review__media video {
+.weline-review__media video,
+.weline-review__media-thumb video {
     background: #000;
+}
+
+.weline-review__media-play {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: rgba(17, 24, 39, 0.28);
+    color: #fff;
+    font-size: 1.35rem;
+    line-height: 1;
+    pointer-events: none;
+}
+
+.weline-review .w-review-media__dialog.w-dialog {
+    inline-size: fit-content;
+    width: fit-content;
+    max-inline-size: calc(100dvw - 2rem);
+    max-block-size: calc(100dvh - 2rem);
+    overflow: hidden;
+}
+
+.weline-review .w-review-media__dialog .w-dialog__surface {
+    inline-size: fit-content;
+    width: fit-content;
+    max-inline-size: calc(100dvw - 2rem);
+    max-block-size: calc(100dvh - 2rem);
+    overflow: hidden;
+}
+
+.weline-review .w-review-media__dialog .w-dialog__header {
+    padding-block: var(--spacing-3, 0.75rem);
+    padding-inline: var(--spacing-4, 1rem);
+}
+
+.weline-review .w-review-media__dialog .w-dialog__body {
+    max-height: none;
+    overflow: hidden;
+    padding: var(--spacing-3, 0.75rem);
+}
+
+.w-review-media__dialog-body {
+    display: grid;
+    place-items: center;
+    min-block-size: 0;
+}
+
+.w-review-media__dialog-body img,
+.w-review-media__dialog-body video {
+    display: block;
+    width: auto;
+    height: auto;
+    max-inline-size: min(calc(100dvw - 4rem), 100%);
+    max-block-size: min(calc(100dvh - 9rem), 85dvh);
+    object-fit: contain;
+}
+
+.w-review-media__dialog-body video {
+    background: #000;
+}
+
+@media (max-width: 47.99rem) {
+    .weline-review .w-review-media__dialog.w-dialog,
+    .weline-review .w-review-media__dialog .w-dialog__surface {
+        max-inline-size: calc(100dvw - 1rem);
+        max-block-size: calc(100dvh - 1rem);
+    }
+
+    .w-review-media__dialog-body img,
+    .w-review-media__dialog-body video {
+        max-inline-size: calc(100dvw - 2.5rem);
+        max-block-size: calc(100dvh - 8rem);
+    }
 }
 
 .weline-review__media-label {
     position: absolute;
-    top: 0.5rem;
-    left: 0.5rem;
-    padding: 0.25rem 0.4rem;
+    top: 0.25rem;
+    left: 0.25rem;
+    padding: 0.15rem 0.3rem;
     border-radius: var(--radius-sm, 0.25rem);
     background: rgba(17, 24, 39, 0.78);
     color: #fff;
-    font-size: 0.625rem;
+    font-size: 0.5rem;
     font-weight: var(--font-weight-bold, 700);
-    letter-spacing: 0.06em;
+    letter-spacing: 0.04em;
 }
 
 .weline-review__score-list {
@@ -239,26 +410,27 @@
 .weline-review__form {
     display: grid;
     align-content: start;
-    gap: var(--spacing-3, 0.75rem);
-    padding: var(--spacing-5, 1.25rem);
+    gap: var(--spacing-4, 1rem);
+    padding: var(--spacing-6, 1.5rem);
     border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
     border-top: 3px solid var(--wr-accent);
     border-radius: var(--wr-radius);
     background: var(--wr-bg-soft);
 }
 
-.weline-review__form h3 {
-    margin-bottom: var(--spacing-1, 0.25rem);
+.weline-review__form-head h3 {
+    margin: 0;
 }
 
 .weline-review__dynamic-fields {
     display: grid;
-    gap: var(--spacing-3, 0.75rem);
+    gap: var(--spacing-4, 1rem);
+    margin-top: var(--spacing-1, 0.25rem);
 }
 
 .weline-review__field {
     display: grid;
-    gap: var(--spacing-2, 0.5rem);
+    gap: var(--spacing-3, 0.75rem);
 }
 
 .weline-review__field > label {
@@ -317,8 +489,10 @@
 .weline-review__rating-stars {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
-    min-height: 2.75rem;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    min-height: 2.5rem;
+    padding-top: var(--spacing-1, 0.25rem);
 }
 
 .weline-review__rating-choice {
@@ -429,11 +603,17 @@
 
 .weline-review__preview-item {
     position: relative;
+    display: block;
+    width: 100%;
+    padding: 0;
     overflow: hidden;
     border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
     border-radius: var(--wr-radius);
     background: var(--wr-ink);
     aspect-ratio: 1;
+    cursor: pointer;
+    font: inherit;
+    color: inherit;
 }
 
 .weline-review__preview-item img,
@@ -441,6 +621,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    pointer-events: none;
 }
 
 .weline-review__preview-kind {
@@ -505,8 +686,13 @@
 }
 
 @media (max-width: 1024px) {
-    .weline-review__layout {
-        grid-template-columns: 1fr;
+    .weline-review--layout-split .weline-review__layout {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .weline-review--layout-split.weline-review--form-left .weline-review__listing,
+    .weline-review--layout-split.weline-review--form-left .weline-review__form {
+        order: initial;
     }
 }
 
@@ -535,8 +721,11 @@
     }
 
     .weline-review__media,
-    .weline-review__score-list,
     .weline-review__preview {
+        grid-template-columns: repeat(auto-fill, minmax(5rem, 6rem));
+    }
+
+    .weline-review__score-list {
         grid-template-columns: 1fr;
     }
 

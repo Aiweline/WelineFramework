@@ -6,7 +6,7 @@
           name="commerce_catalog_reviews"
           title="评论管理"
           action="weline_review/backend/review"
-          parent="Weline_Backend::commerce:catalog:group"
-          icon="mdi mdi-comment-text-multiple-outline"
-          order="80"/>
+          parent="Weline_Backend::commerce:catalog:product-group"
+          icon="message"
+          order="40"/>
 </menus>

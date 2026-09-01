@@ -1,11 +1,171 @@
 (function () {
   'use strict';
 
+  var uiPromise = null;
+
+  function dom(tag, className, text) {
+    var node = document.createElement(tag);
+    if (className) {
+      node.className = className;
+    }
+    if (typeof text === 'string') {
+      node.textContent = text;
+    }
+    return node;
+  }
+
+  function wait(ms) {
+    return new Promise(function (resolve) {
+      setTimeout(resolve, ms);
+    });
+  }
+
+  async function resolveUi() {
+    for (var attempt = 0; attempt < 60; attempt += 1) {
+      if (window.Weline && window.Weline.UI && window.Weline.UI.dialog) {
+        return window.Weline.UI;
+      }
+      await wait(100);
+    }
+    return null;
+  }
+
+  function ui() {
+    return uiPromise || (uiPromise = resolveUi());
+  }
+
+  function cleanupMediaDialog(dialog) {
+    if (!dialog) {
+      return;
+    }
+    var stage = dialog.querySelector('[data-review-lightbox-stage]');
+    if (!stage) {
+      return;
+    }
+    var activeVideo = stage.querySelector('video');
+    if (activeVideo) {
+      activeVideo.pause();
+    }
+    stage.replaceChildren();
+  }
+
+  function bindMediaDialogLifecycle(dialog) {
+    if (!dialog || dialog.dataset.reviewMediaDialogBound === '1') {
+      return;
+    }
+    dialog.dataset.reviewMediaDialogBound = '1';
+    dialog.addEventListener('weline:ui:dialog:close', function () {
+      cleanupMediaDialog(dialog);
+    });
+    dialog.addEventListener('close', function () {
+      cleanupMediaDialog(dialog);
+    });
+  }
+
+  async function openReviewLightbox(kind, url, alt, messages, root) {
+    if (!url || !root) {
+      return;
+    }
+    var dialog = root.querySelector('[data-review-media-dialog]');
+    var stage = dialog ? dialog.querySelector('[data-review-lightbox-stage]') : null;
+    if (!dialog || !stage) {
+      return;
+    }
+    var UI = await ui();
+    if (!UI || !UI.dialog || typeof UI.dialog.open !== 'function') {
+      return;
+    }
+
+    bindMediaDialogLifecycle(dialog);
+    cleanupMediaDialog(dialog);
+
+    var isVideo = kind === 'video';
+    var media = dom(isVideo ? 'video' : 'img');
+    media.src = url;
+    if (isVideo) {
+      media.controls = true;
+      media.autoplay = true;
+      media.playsInline = true;
+      media.preload = 'auto';
+    } else {
+      media.alt = alt || String(messages.photo || '');
+      media.loading = 'eager';
+    }
+    stage.appendChild(media);
+
+    var title = dialog.querySelector('[data-review-media-dialog-title]');
+    if (title) {
+      title.textContent = isVideo
+        ? String(messages.playVideo || messages.video || messages.lightboxLabel || '')
+        : String(messages.viewPhoto || messages.photo || messages.lightboxLabel || '');
+    }
+
+    if (typeof UI.mount === 'function') {
+      UI.mount(dialog);
+    }
+    UI.dialog.open(dialog, { trigger: 'review-media' });
+
+    if (isVideo && typeof media.play === 'function') {
+      media.play().catch(function () {
+        /* autoplay may be blocked until user interacts */
+      });
+    }
+  }
+
+  function bindReviewMediaTrigger(root, messages) {
+    root.addEventListener('click', function (event) {
+      var trigger = event.target.closest('[data-review-media-open]');
+      if (!trigger || !root.contains(trigger)) {
+        return;
+      }
+      event.preventDefault();
+      openReviewLightbox(
+        trigger.dataset.mediaKind || 'image',
+        trigger.dataset.mediaUrl || '',
+        trigger.dataset.mediaAlt || '',
+        messages,
+        root
+      );
+    });
+  }
+
+  function createReviewMediaThumb(item, messages) {
+    var kind = item.kind === 'video' ? 'video' : 'image';
+    var url = String(item.url || '');
+    var thumb = dom('button', 'weline-review__media-thumb' + (kind === 'video' ? ' is-video' : ''));
+    thumb.type = 'button';
+    thumb.dataset.reviewMediaOpen = '1';
+    thumb.dataset.mediaKind = kind;
+    thumb.dataset.mediaUrl = url;
+    thumb.dataset.mediaAlt = String(item.name || messages.photo || '');
+    thumb.setAttribute('aria-label', kind === 'video'
+      ? String(messages.playVideo || messages.video || '')
+      : String(messages.viewPhoto || messages.photo || ''));
+
+    var media = dom(kind === 'video' ? 'video' : 'img');
+    media.src = url;
+    if (kind === 'video') {
+      media.muted = true;
+      media.preload = 'metadata';
+      media.playsInline = true;
+      media.setAttribute('aria-hidden', 'true');
+      thumb.append(media, dom('span', 'weline-review__media-play', '▶'));
+    } else {
+      media.loading = 'lazy';
+      media.alt = '';
+      media.setAttribute('aria-hidden', 'true');
+      thumb.appendChild(media);
+    }
+    thumb.appendChild(dom('span', 'weline-review__media-label', kind === 'video' ? 'VIDEO' : 'PHOTO'));
+    return thumb;
+  }
+
   function bootRoot(root, messages) {
     if (!root || root.dataset.reviewBound === '1') {
       return;
     }
     root.dataset.reviewBound = '1';
+    bindReviewMediaTrigger(root, messages);
 
     var typeCode = root.dataset.typeCode || 'product';
     var entityUuid = root.dataset.entityUuid || '';
@@ -18,8 +178,16 @@
     var feedback = root.querySelector('[data-review-message]');
     var average = root.querySelector('[data-review-average]');
     var count = root.querySelector('[data-review-count]');
-    if (!fieldsRoot || !itemsRoot || !previewRoot || !form || !submit || !feedback || !average || !count) {
+    var writeToggle = root.querySelector('[data-review-write-toggle]');
+    var formCollapsed = root.dataset.formCollapsed === '1';
+    if (!fieldsRoot || !itemsRoot || !previewRoot || !form || !submit || !feedback || !count) {
       return;
+    }
+
+    function setAverageText(value) {
+      if (average) {
+        average.textContent = value;
+      }
     }
 
     var apiPromise = null;
@@ -40,6 +208,52 @@
         node.textContent = text;
       }
       return node;
+    }
+
+    function setFormOpen(open, focusField) {
+      if (!formCollapsed) {
+        return;
+      }
+      root.classList.toggle('is-form-open', open);
+      form.hidden = !open;
+      if (writeToggle) {
+        writeToggle.hidden = open;
+        writeToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      }
+      if (open && focusField) {
+        var focusTarget = form.querySelector('input:not([type=file]):not([type=radio]), textarea, select, .weline-review__rating-choice');
+        if (focusTarget) {
+          focusTarget.focus();
+        }
+      }
+    }
+
+    function bindFormCollapseControl() {
+      if (!formCollapsed) {
+        return;
+      }
+      var collapse = form.querySelector('[data-review-form-collapse]');
+      if (!collapse || collapse.dataset.reviewCollapseBound === '1') {
+        return;
+      }
+      collapse.dataset.reviewCollapseBound = '1';
+      collapse.addEventListener('click', function () {
+        setFormOpen(false, false);
+        if (writeToggle) {
+          writeToggle.hidden = false;
+          writeToggle.focus();
+        }
+      });
+    }
+
+    if (formCollapsed) {
+      bindFormCollapseControl();
+      setFormOpen(false, false);
+      if (writeToggle) {
+        writeToggle.addEventListener('click', function () {
+          setFormOpen(true, true);
+        });
+      }
     }
 
     function wait(ms) {
@@ -280,7 +494,7 @@
         previewNotice: messages.previewOnly || messages.empty,
       });
       itemsRoot.replaceChildren(make('p', 'weline-review__empty', messages.empty));
-      average.textContent = '—';
+      setAverageText('—');
       count.textContent = messages.empty;
       return true;
     }
@@ -289,18 +503,31 @@
       previewRoot.replaceChildren();
       form.querySelectorAll('input[type=file]').forEach(function (input) {
         Array.from(input.files || []).forEach(function (file) {
-          var item = make('div', 'weline-review__preview-item');
+          var item = dom('button', 'weline-review__preview-item');
+          item.type = 'button';
           var kind = input.dataset.kind || 'image';
-          var media = make(kind === 'video' ? 'video' : 'img');
-          media.src = URL.createObjectURL(file);
+          var objectUrl = URL.createObjectURL(file);
+          item.dataset.reviewMediaOpen = '1';
+          item.dataset.mediaKind = kind;
+          item.dataset.mediaUrl = objectUrl;
+          item.dataset.mediaAlt = file.name;
+          item.setAttribute('aria-label', kind === 'video'
+            ? String(messages.playVideo || messages.video || '')
+            : String(messages.viewPhoto || messages.photo || ''));
+          var media = dom(kind === 'video' ? 'video' : 'img');
+          media.src = objectUrl;
           if (kind === 'video') {
             media.muted = true;
-            media.controls = true;
             media.preload = 'metadata';
+            media.playsInline = true;
+            media.setAttribute('aria-hidden', 'true');
+            item.append(media, dom('span', 'weline-review__media-play', '▶'));
           } else {
-            media.alt = file.name;
+            media.alt = '';
+            media.setAttribute('aria-hidden', 'true');
+            item.appendChild(media);
           }
-          item.append(media, make('span', 'weline-review__preview-kind', kind === 'video' ? messages.video : messages.photo));
+          item.appendChild(dom('span', 'weline-review__preview-kind', kind === 'video' ? messages.video : messages.photo));
           previewRoot.appendChild(item);
         });
       });
@@ -324,7 +551,7 @@
     function renderReviews(data) {
       var reviews = Array.isArray(data.items) ? data.items : [];
       itemsRoot.replaceChildren();
-      average.textContent = reviews.length ? Number(data.average_rating || 0).toFixed(1) + ' / 5' : '—';
+      setAverageText(reviews.length ? Number(data.average_rating || 0).toFixed(1) + ' / 5' : '—');
       count.textContent = String(Number(data.total || 0)) + ' ' + String(messages.countSuffix);
       if (!reviews.length) {
         itemsRoot.appendChild(make('p', 'weline-review__empty', messages.empty));
@@ -363,18 +590,7 @@
         if (mediaItems.length) {
           var gallery = make('div', 'weline-review__media');
           mediaItems.forEach(function (item) {
-            var figure = make('figure');
-            var media = make(item.kind === 'video' ? 'video' : 'img');
-            media.src = String(item.url || '');
-            if (item.kind === 'video') {
-              media.controls = true;
-              media.preload = 'metadata';
-            } else {
-              media.loading = 'lazy';
-              media.alt = String(item.name || messages.photo);
-            }
-            figure.append(media, make('span', 'weline-review__media-label', item.kind === 'video' ? 'VIDEO' : 'PHOTO'));
-            gallery.appendChild(figure);
+            gallery.appendChild(createReviewMediaThumb(item, messages));
           });
           article.appendChild(gallery);
         }
