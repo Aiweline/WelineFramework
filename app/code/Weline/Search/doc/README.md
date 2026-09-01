@@ -13,3 +13,19 @@
 
 历史 P3C 投影索引能力仍保留，详见 [`search-index.md`](search-index.md)。
 
+## Provider 内容索引（Blog 等）
+
+非 Product 类型通过 `Searcher` 的 `documentsForIndex()` 写入 `search_provider_document` 表。**前台查询只读索引，禁止回退源表 SQL。**
+
+索引维护：
+
+1. **增量**：业务保存/删除事件（如 `Weline_Blog::post_search_index_changed`）
+2. **定时**：Cron `search_provider_index_rebuild`（`*/15 * * * *`）对 `website_id=0` 及全部站点 `rebuildAll`
+3. **升级**：`setup:upgrade` 后空索引 warmup
+4. **手动**：
+
+```bash
+php bin/w search:provider-index:rebuild          # 全量重建
+php bin/w search:provider-index:rebuild -i blog  # 仅 Blog
+```
+

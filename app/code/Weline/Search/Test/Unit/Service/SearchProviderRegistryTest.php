@@ -108,4 +108,36 @@ final class SearchProviderRegistryTest extends TestCase
         self::assertSame('Smartphones', $crumbs[3]['label']);
         self::assertSame(7, $crumbs[3]['category_id']);
     }
+
+    public function testHitTemplateMapCollectsProviderTemplates(): void
+    {
+        $product = new class implements \Weline\Search\Api\SearchProviderInterface {
+            public function code(): string { return 'product'; }
+            public function label(): string { return '商品'; }
+            public function sortOrder(): int { return 10; }
+            public function expression(\Weline\Search\Dto\SearchRequest $request): \Weline\Search\Service\SearchExpression {
+                return \Weline\Search\Service\SearchExpression::of($request);
+            }
+            public function allowedClientParams(): array { return []; }
+            public function hitTemplate(): string {
+                return 'Weline_Product::templates/frontend/search/hit.phtml';
+            }
+            public function execute(\Weline\Search\Dto\SearchRequest $request, \Weline\Search\Service\SearchExpression $expression): \Weline\Search\Dto\SearchResult {
+                return new \Weline\Search\Dto\SearchResult(ok: true, type: 'product', hits: [], hitCount: 0);
+            }
+            public function documentsForIndex(\Weline\Search\Dto\SearchRequest $request): array { return []; }
+        };
+
+        $objectManager = $this->createMock(ObjectManager::class);
+        $registry = new SearchProviderRegistry($objectManager);
+        $reflection = new \ReflectionClass($registry);
+        $property = $reflection->getProperty('providers');
+        $property->setAccessible(true);
+        $property->setValue($registry, ['product' => $product]);
+
+        self::assertSame(
+            ['product' => 'Weline_Product::templates/frontend/search/hit.phtml'],
+            $registry->hitTemplateMap(),
+        );
+    }
 }

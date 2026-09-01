@@ -101,6 +101,24 @@ class SearchProviderRegistry
     }
 
     /**
+     * @return array<string, string> provider code => hit template path
+     */
+    public function hitTemplateMap(): array
+    {
+        $map = [];
+        foreach ($this->all() as $provider) {
+            $code = trim($provider->code());
+            $template = trim($provider->hitTemplate());
+            if ($code === '' || $code === 'all' || $template === '') {
+                continue;
+            }
+            $map[$code] = $template;
+        }
+
+        return $map;
+    }
+
+    /**
      * @param list<array<string,mixed>>|null $types
      * @return array<string, string>
      */

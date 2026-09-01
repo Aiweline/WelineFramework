@@ -298,11 +298,7 @@ final class SearchQueryService
                 continue;
             }
             if ($needle !== '') {
-                $haystack = \mb_strtolower(
-                    (string)($document['title'] ?? '')
-                    . ' '
-                    . (string)($document['sku'] ?? ''),
-                );
+                $haystack = self::documentHaystack($document);
                 if (!\str_contains($haystack, $needle)) {
                     continue;
                 }
@@ -544,5 +540,19 @@ final class SearchQueryService
         }
 
         return $type . ':' . $id;
+    }
+
+    /**
+     * @param array<string,mixed> $document
+     */
+    private static function documentHaystack(array $document): string
+    {
+        return \mb_strtolower(\trim(
+            (string)($document['title'] ?? '')
+            . ' '
+            . (string)($document['sku'] ?? '')
+            . ' '
+            . (string)($document['keywords'] ?? ''),
+        ));
     }
 }

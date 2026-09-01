@@ -23,4 +23,11 @@
                   shared="true"
                   sort="100"/>
     </event>
+    <event name="Weline_Framework_Setup::upgrade_after">
+        <observer name="search_provider_index_warmup"
+                  instance="Weline\Search\Observer\SetupProviderIndexWarmupObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="320"/>
+    </event>
 </config>
