@@ -4,16 +4,6 @@ $activeTab = $activeTab ?? 'account';
 $providerAdd = ['id' => 0];
 $this->assign('providerAdd', $providerAdd);
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT;
-$providerAccountEndpoints = [
-    'listAccounts' => ['url' => $this->getBackendUrl('*/backend/provider/list'), 'method' => 'GET'],
-    'getAccount' => ['url' => $this->getBackendUrl('*/backend/provider/account'), 'method' => 'GET'],
-    'saveAccount' => ['url' => $this->getBackendUrl('*/backend/provider/save'), 'method' => 'POST'],
-    'testConnection' => ['url' => $this->getBackendUrl('*/backend/provider/test-connection'), 'method' => 'POST'],
-    'remoteModelsForSelect' => ['url' => $this->getBackendUrl('*/backend/provider/remote-models-for-select'), 'method' => 'GET'],
-    'getUsageList' => ['url' => $this->getBackendUrl('*/backend/provider/usage-list'), 'method' => 'GET'],
-    'toggleActive' => ['url' => $this->getBackendUrl('*/backend/provider/toggle-active'), 'method' => 'POST'],
-    'deleteAccount' => ['url' => $this->getBackendUrl('*/backend/provider/delete'), 'method' => 'POST'],
-];
 ?>
 <template>Weline_Ai::Backend/Manager/tabs.phtml</template>
 <?php if (empty($embed)): ?>
@@ -360,7 +350,16 @@ $providerAccountEndpoints = [
     var currentProvider = '';
     var currentAccounts = [];
     var providerAccountApiPromise = null;
-    var providerAccountEndpoints = <?= json_encode($providerAccountEndpoints, $jsonFlags) ?>;
+    var providerAccountEndpoints = {
+        listAccounts: {url: "@backend-url{'*/backend/provider/list'}", method: "GET"},
+        getAccount: {url: "@backend-url{'*/backend/provider/account'}", method: "GET"},
+        saveAccount: {url: "@backend-url{'*/backend/provider/save'}", method: "POST"},
+        testConnection: {url: "@backend-url{'*/backend/provider/test-connection'}", method: "POST"},
+        remoteModelsForSelect: {url: "@backend-url{'*/backend/provider/remote-models-for-select'}", method: "GET"},
+        getUsageList: {url: "@backend-url{'*/backend/provider/usage-list'}", method: "GET"},
+        toggleActive: {url: "@backend-url{'*/backend/provider/toggle-active'}", method: "POST"},
+        deleteAccount: {url: "@backend-url{'*/backend/provider/delete'}", method: "POST"}
+    };
 
     function getProviderAccountApi() {
         if (providerAccountApiPromise) {

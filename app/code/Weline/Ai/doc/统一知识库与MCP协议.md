@@ -84,8 +84,8 @@ DROP TABLE ai_knowledge_call_history;
 
 ## 客户端支持边界
 
-- Codex：项目 `.codex/config.toml` 注册本地 STDIO MCP，并以 `required=true` 优先保证标准项目智能流程。若完成 `ensure-project-guidance.php` 自动修复并至少重试一次后，当前会话仍无工具或持续 `Transport closed`，记录 `HOST_MCP_NOT_ATTACHED`；若工具已附加但有界上下文批次后仍明确无法物化本次精确目标，记录 `MCP_TARGET_UNAVAILABLE`。这两种情况允许受限原生回退，无需仅为重新附加而新开会话。
+- Codex：项目 `.codex/config.toml` 注册本地 STDIO MCP，并以 `required=true` 优先保证标准项目智能流程。若完成 `ensure-project-guidance.php` 自动修复并至少重试一次后，当前会话仍无工具或持续 `Transport closed`，记录 `HOST_MCP_NOT_ATTACHED`；若工具已附加但有界上下文批次或密封编辑因容量门槛后仍明确无法物化本次精确目标（含 `decode memory reserve` / worker OOM / 修复后仍 `MCP_RUNTIME_STALE`），记录 `MCP_TARGET_UNAVAILABLE`。这两种情况允许受限原生回退（仅精确已知路径），无需仅为重新附加而新开会话。
 - Cursor：第一步运行 `php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php` 自检并自动修复宿主环境；通过后调用 `prepare_project`。`ensure-cursor-mcp.php` 仅作为其子步骤，不单独要求用户手工配置。
 - 其他 AI：仅当支持本地 STDIO MCP、能稳定传递会话 ID 并遵守 readiness 状态机时受支持。
 
-客户端启动 MCP 不等于项目已经 ready；标准路径只有 `prepare_project.status=ready` 才允许进入开发。受限原生回退不是 readiness 替代品：只允许精确已知路径读取、`apply_patch` 与定向验证，必须记录失败证据，禁止仓库级索引替代品、宽泛递归扫描、`generated/` 修改和验收降级；`blocked` 状态不可回退，MCP 恢复后必须重新进入标准路径。
+客户端启动 MCP 不等于项目已经 ready；标准路径只有 `prepare_project.status=ready` 才允许进入开发。框架硬约束由 MCP 编译为 `hard-constraints.v1`（`agent_guidance.hard_constraints` + server `instructions`），权威文档为 `AI硬规则索引.md`；宿主引导与 `session_startup_notices` 只指路。受限原生回退不是 readiness 替代品：条件与范围见 `hard_constraints.mcp_operational`；`blocked` 状态不可回退，MCP 恢复后必须重新进入标准路径。

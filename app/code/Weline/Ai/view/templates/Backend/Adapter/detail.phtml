@@ -50,7 +50,7 @@
             </h4>
             <div class="w-cluster">
                 <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><a href='<?= $this->_url->getBackendUrl('*/backend/adapter') ?>'><lang>场景适配器</lang></a></li>
+                    <li class="w-breadcrumb__item"><a href='@backend-url{'*/backend/adapter'}'><lang>场景适配器</lang></a></li>
                     <li class="w-breadcrumb__item" data-state="active"><lang>详情</lang></li>
                 </ol>
             </div>
@@ -189,7 +189,7 @@
 
     <!-- 操作按钮 -->
     <div style="--w-mb:var(--weline-space-4);">
-        <a href="<?= $this->_url->getBackendUrl('*/backend/adapter') ?>" class="w-button" data-tone="neutral">
+        <a href="@backend-url{'*/backend/adapter'}" class="w-button" data-tone="neutral">
             <w:icon name="arrow-left" size="sm"></w:icon>
             <lang>返回列表</lang>
         </a>

@@ -37,6 +37,11 @@ final class IndexSidecar
         if ($request === null) {
             return null;
         }
+        if (!RepositoryScope::isAllowed($config, (string) $request['repository'])) {
+            self::appendLog($config, 'Skipping out-of-scope index refresh for ' . (string) $request['repository']);
+
+            return 0;
+        }
         if (self::send($config, $request)) {
             return 0;
         }
@@ -247,8 +252,15 @@ final class IndexSidecar
                         fclose($connection);
                         $request = self::decodeRequest(is_string($line) ? $line : '');
                         if ($request !== null) {
-                            self::mergePending($pending, $request, $requestCount);
-                            $lastActivity = microtime(true);
+                            if (!RepositoryScope::isAllowed($config, (string) $request['repository'])) {
+                                self::appendLog(
+                                    $config,
+                                    'Ignoring out-of-scope sidecar refresh for ' . (string) $request['repository']
+                                );
+                            } else {
+                                self::mergePending($pending, $request, $requestCount);
+                                $lastActivity = microtime(true);
+                            }
                         }
                     }
                 }
@@ -313,6 +325,7 @@ final class IndexSidecar
      */
     private static function mergePending(array &$pending, array $request, int &$requestCount): void
     {
+        // Caller must already filter by RepositoryScope; double-check before queueing.
         $repository = (string) $request['repository'];
         $paths = is_array($request['paths'] ?? null) ? $request['paths'] : [];
         $full = $paths === [];
@@ -364,6 +377,11 @@ final class IndexSidecar
     /** @param array<string, mixed> $request */
     private static function processOne(Config $config, array $request): void
     {
+        if (!RepositoryScope::isAllowed($config, (string) $request['repository'])) {
+            self::appendLog($config, 'Refusing out-of-scope index_project for ' . (string) $request['repository']);
+
+            return;
+        }
         try {
             $store = new Store($config);
             try {

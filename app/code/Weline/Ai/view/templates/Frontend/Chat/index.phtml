@@ -165,7 +165,7 @@ $is_logged_in = $this->is_logged_in ?? false;
 <!-- 导航栏 -->
 <nav class="navbar navbar-expand-lg">
     <div class="w-container">
-        <a class="navbar-brand" href="<?= $this->getUrl('*/frontend/index') ?>">
+        <a class="navbar-brand" href="@url{'*/frontend/index'}">
             <w:icon name="robot" size="sm"></w:icon> AI助手平台
         </a>
         <button class="navbar-toggler" type="button" data-w-target="#navbarNav" data-w-action="disclosure.toggle">
@@ -174,17 +174,17 @@ $is_logged_in = $this->is_logged_in ?? false;
         <div class="w-disclosure__panel navbar-collapse" id="navbarNav" data-w-disclosure-panel hidden>
             <ul class="navbar-nav ms-auto">
                 <li>
-                    <a href="<?= $this->getUrl('*/frontend/index') ?>">
+                    <a href="@url{'*/frontend/index'}">
                         <w:icon name="home" size="sm"></w:icon> <?= __('首页') ?>
                     </a>
                 </li>
                 <li>
-                    <a href="<?= $this->getUrl('*/frontend/chat') ?>" data-state="active">
+                    <a href="@url{'*/frontend/chat'}" data-state="active">
                         <w:icon name="circle" size="sm"></w:icon> <?= __('聊天') ?>
                     </a>
                 </li>
                 <li>
-                    <a href="<?= $this->getUrl('*/frontend/center') ?>">
+                    <a href="@url{'*/frontend/center'}">
                         <w:icon name="user" size="sm"></w:icon> <?= __('个人中心') ?>
                     </a>
                 </li>

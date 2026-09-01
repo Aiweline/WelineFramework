@@ -122,14 +122,20 @@ try {
         "SELECT content_hash FROM indexed_files WHERE path = 'src/Large.php'"
     )->fetchColumn();
 
-    if (($result['freshness'] ?? null) !== 'partial') {
-        throw new RuntimeException('Parser resource failure did not return partial freshness');
+    if (($result['freshness'] ?? null) !== 'current') {
+        throw new RuntimeException('Parser resource capacity failure unexpectedly blocked freshness');
     }
     if (($state['phase'] ?? null) !== 'idle') {
         throw new RuntimeException('Parser resource failure stranded the index outside idle');
     }
-    if (!str_contains(implode("\n", $result['errors'] ?? []), 'src/Large.php')) {
-        throw new RuntimeException('Parser resource failure omitted the affected path');
+    if (($result['errors'] ?? []) !== []) {
+        throw new RuntimeException('Parser capacity failure must not become blocking index errors');
+    }
+    if (!str_contains(implode("\n", $result['warnings'] ?? []), 'src/Large.php')) {
+        throw new RuntimeException('Parser capacity failure omitted the affected path from warnings');
+    }
+    if ((int) (($result['skipped']['parser_capacity'] ?? 0)) < 1) {
+        throw new RuntimeException('Parser capacity failure was not counted in skipped.parser_capacity');
     }
     if (!hash_equals($before, (string) $after)) {
         throw new RuntimeException('Parser resource failure replaced the last valid indexed revision');
@@ -144,11 +150,13 @@ try {
     $largeOutputAfter = $index->pdo()->query(
         "SELECT content_hash FROM indexed_files WHERE path = 'src/Large.php'"
     )->fetchColumn();
-    if (($largeOutput['freshness'] ?? null) !== 'partial'
+    if (($largeOutput['freshness'] ?? null) !== 'current'
         || ($largeOutputState['phase'] ?? null) !== 'idle'
-        || !str_contains(implode("\n", $largeOutput['errors'] ?? []), 'bounded')
+        || ($largeOutput['errors'] ?? []) !== []
+        || !str_contains(implode("\n", $largeOutput['warnings'] ?? []), 'bounded')
+        || (int) (($largeOutput['skipped']['parser_capacity'] ?? 0)) < 1
         || !hash_equals($before, (string) $largeOutputAfter)) {
-        throw new RuntimeException('Truncated parser output was not rejected before parent JSON decoding');
+        throw new RuntimeException('Truncated parser output was not degraded before parent JSON decoding');
     }
 
     file_put_contents($sourcePath, $resourceBomb);

@@ -1182,6 +1182,7 @@ final class ProjectRetriever
                 '部件开发指南',
                 'frontend-section-weline-code',
                 'theme-css-variables-only',
+                'theme-layout-content-width',
                 'widgets/',
                 '.phtml',
                 '/theme/doc/',
