@@ -1,0 +1,34 @@
+<?php
+/**
+ * 前台配送说明页。
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+?>
+<section class="shipping-guide" data-testid="shipping-guide" weline-code="shipping.guide">
+    <header class="shipping-guide__header">
+        <h1 class="shipping-guide__title"><lang>配送说明</lang></h1>
+        <p class="shipping-guide__subtitle">
+            <lang>了解发货时效、配送范围与签收注意事项。</lang>
+        </p>
+    </header>
+
+    <article class="shipping-guide__section">
+        <h2><lang>发货时效</lang></h2>
+        <p><lang>订单支付成功后，我们将在 1–3 个工作日内完成拣货并发出（节假日顺延）。部分预售或定制商品以商品页标注为准。</lang></p>
+    </article>
+
+    <article class="shipping-guide__section">
+        <h2><lang>配送范围与运费</lang></h2>
+        <p><lang>我们支持国内多数省市配送。运费按收货地址、重量与所选配送服务在结账页实时计算；满足活动门槛时可能享受包邮。</lang></p>
+    </article>
+
+    <article class="shipping-guide__section">
+        <h2><lang>物流跟踪与签收</lang></h2>
+        <p><lang>发货后可在「我的订单」查看物流单号与节点。请使用下单时填写的联系方式核验包裹；若长时间无物流更新，可先确认是否周末/节假日，或联系客服协助查询。</lang></p>
+    </article>
+
+    <p class="shipping-guide__related">
+        <a href="@url{'guide/returns'}"><lang>查看退换政策</lang></a>
+    </p>
+</section>

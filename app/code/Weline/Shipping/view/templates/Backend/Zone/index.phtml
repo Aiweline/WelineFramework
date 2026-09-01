@@ -2,11 +2,9 @@
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
 
-
 use Weline\Shipping\Model\Zone;
 
 $zones = $this->getData('zones') ?? [];
-$backendBase = $this->getBackendUrl('shipping/backend/zone');
 $embed = $this->getData('embed') ?? false;
 ?>
 <?php if (empty($embed)): ?>
