@@ -107,11 +107,8 @@ $navClass = static fn (string $key): string => $key === $pageKey ? 'is-active' :
 $projectId = trim((string)($context['project_id'] ?? ''));
 $domain = trim((string)($context['domain'] ?? ''));
 $projectType = trim((string)($context['project_type'] ?? ''));
-$panelUrl = $this->getBackendUrl('server/backend/wls-panel');
-$marketplaceUrl = $this->getBackendUrl('server/backend/wls-panel/marketplace');
-$projectAdminUrl = $this->getBackendUrl('admin');
-$browseBaseUrl = $this->getBackendUrl('weline_dbmanager/backend/wls-db-manager');
-$dbPageUrl = static fn (string $key): string => (string)($pageUrls[$key] ?? $browseBaseUrl);
+$browseBasePath = 'weline_dbmanager/backend/wls-db-manager';
+$dbPageUrl = static fn (string $key): string => (string)($pageUrls[$key] ?? '');
 $escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $profileValue = static fn (string $key, mixed $default = ''): string => htmlspecialchars((string)($projectProfile[$key] ?? $default), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $profileChecked = static fn (string $key): string => !empty($projectProfile[$key]) ? 'checked' : '';
@@ -943,7 +940,7 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
             <a href="<?= $escapeHtml($dbPageUrl('env-apply')) ?>" class="<?= $escapeHtml($navClass('env-apply')) ?>"<?= $pageKey === 'env-apply' ? ' aria-current="page"' : '' ?>><w:icon name="settings" size="sm"></w:icon><?= $escapeHtml(__('Env Apply')) ?></a>
             <a href="<?= $escapeHtml($dbPageUrl('slaves')) ?>" class="<?= $escapeHtml($navClass('slaves')) ?>"<?= $pageKey === 'slaves' ? ' aria-current="page"' : '' ?>><w:icon name="settings" size="sm"></w:icon><?= $escapeHtml(__('Slaves')) ?></a>
             <a href="<?= $escapeHtml($dbPageUrl('test')) ?>" class="<?= $escapeHtml($navClass('test')) ?>"<?= $pageKey === 'test' ? ' aria-current="page"' : '' ?>><w:icon name="check" size="sm"></w:icon><?= $escapeHtml(__('Test')) ?></a>
-            <a href="<?= $escapeHtml($marketplaceUrl) ?>"><w:icon name="puzzle" size="sm"></w:icon><?= $escapeHtml(__('Marketplace')) ?></a>
+            <a href="@backend-url{'server/backend/wls-panel/marketplace'}"><w:icon name="puzzle" size="sm"></w:icon><?= $escapeHtml(__('Marketplace')) ?></a>
         </nav>
         <div class="wdb-sidebar-spacer"></div>
         <button type="button"
@@ -966,8 +963,8 @@ $healthProbePhrase = \Weline\DbManager\Service\WlsDatabaseConnectionProbeService
                 <p class="wdb-subtitle"><?= $escapeHtml(__('Database profile readout and guarded connection checks for the selected WLS project context.')) ?></p>
             </div>
             <div class="wdb-actions">
-                <a class="wdb-action is-primary" href="<?= $escapeHtml($panelUrl) ?>"><w:icon name="server" size="sm"></w:icon><?= $escapeHtml(__('WLS Panel')) ?></a>
-                <a class="wdb-action" href="<?= $escapeHtml($projectAdminUrl) ?>"><w:icon name="circle" size="sm"></w:icon><?= $escapeHtml(__('Project Admin')) ?></a>
+                <a class="wdb-action is-primary" href="@backend-url{'server/backend/wls-panel'}"><w:icon name="server" size="sm"></w:icon><?= $escapeHtml(__('WLS Panel')) ?></a>
+                <a class="wdb-action" href="@backend-url{'admin'}"><w:icon name="circle" size="sm"></w:icon><?= $escapeHtml(__('Project Admin')) ?></a>
             </div>
         </section>
 
