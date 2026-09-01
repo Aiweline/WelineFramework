@@ -11,7 +11,7 @@ final class AccountSidebarHookTemplateTest extends TestCase
     public function testHooksUseOfficialProjectionAndReadOnlyAccountContract(): void
     {
         $moduleRoot = dirname(__DIR__, 3);
-        $sidebarPath = $moduleRoot . '/view/hooks/account.sidebar.phtml';
+        $sidebarPath = $moduleRoot . '/view/hooks/account.sidebar.group.commerce.phtml';
         $contentPath = $moduleRoot . '/view/hooks/account.sidebar.content.phtml';
 
         self::assertFileExists($sidebarPath);
@@ -20,6 +20,7 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $content = (string)file_get_contents($contentPath);
 
         self::assertStringContainsString('data-section="assets"', $sidebar);
+        self::assertStringContainsString('data-account-nav-parent="commerce"', $sidebar);
         self::assertStringContainsString('#assets', $sidebar);
         self::assertStringContainsString('data-account-nav-link="true"', $sidebar);
         self::assertStringContainsString(
