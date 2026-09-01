@@ -17,13 +17,13 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
           <tr><td colspan="6" class="w-text" data-align="center" data-tone="muted"><?= __('暂无可发货履约单元') ?></td></tr>
         <?php else: foreach ($candidates as $row): ?>
           <tr data-testid="shipment-candidate" data-unit-uuid="<?= $escape($row['fulfillment_unit_uuid'] ?? '') ?>">
-            <td><a href="<?= $this->getBackendUrl('weline_order/backend/order/view?id=' . (int)($row['order_id'] ?? 0)) ?>"><?= $escape($row['order_number'] ?? '') ?></a></td>
+            <td><a href="@backend-url{'weline_order/backend/order/view'|['id' => (int)($row['order_id'] ?? 0)]}"><?= $escape($row['order_number'] ?? '') ?></a></td>
             <td><code><?= $escape($row['fulfillment_unit_uuid'] ?? '') ?></code></td>
             <td><?= (int)($row['warehouse_id'] ?? 0) ?></td>
             <td><?= (int)($row['fulfilled_qty_minor'] ?? 0) ?> / <?= (int)($row['qty_minor'] ?? 0) ?></td>
             <td><?= (int)($row['fulfillment_version'] ?? 0) ?></td>
             <td>
-              <w:form method="post" action="@var($this->getBackendUrl('weline_order/backend/shipment/execute'))" class="w-grid" data-testid="shipment-command-form" style="--w-gap:var(--weline-space-2);">
+              <w:form method="post" action="@backend-url{'weline_order/backend/shipment/execute'}" class="w-grid" data-testid="shipment-command-form" style="--w-gap:var(--weline-space-2);">
                 <input type="hidden" name="fulfillment_unit_uuid" value="<?= $escape($row['fulfillment_unit_uuid'] ?? '') ?>">
                 <input type="hidden" name="expected_version" value="<?= (int)($row['fulfillment_version'] ?? 0) ?>">
                 <input type="hidden" name="expected_grant_version" value="<?= (int)($row['expected_grant_version'] ?? 0) ?>">

@@ -76,6 +76,7 @@ final class AccountCheckoutGroupPresenter
             'refund_semantics' => array_values(array_unique($refundLabels)),
             'invoice_semantics' => array_values(array_unique($invoiceLabels)),
             'fulfillment_semantics' => array_values(array_unique($fulfillmentLabels)),
+            'tracking_summary' => $this->trackingSummaryForGroup($orders),
             'orders' => $partial
                 ? array_map(fn (array $order): array => $this->mapOrder($order, $currency), $orders)
                 : [],
@@ -161,6 +162,7 @@ final class AccountCheckoutGroupPresenter
             'refund_label' => $this->customerRefundLabel((string) ($order['refund_status'] ?? 'none')),
             'invoice_label' => $this->customerInvoiceLabel((string) ($order['invoice_status'] ?? 'none')),
             'fulfillment_label' => $this->customerFulfillmentLabel((string) ($order['fulfillment_status'] ?? 'none')),
+            'tracking_summary' => $this->trackingSummaryForFulfillment((string) ($order['fulfillment_status'] ?? ''), $status),
         ];
     }
 
@@ -238,5 +240,50 @@ final class AccountCheckoutGroupPresenter
             'none', '' => \__('履约未开始'),
             default => \__('履约状态待确认'),
         };
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orders
+     */
+    private function trackingSummaryForGroup(array $orders): string
+    {
+        $summaries = [];
+        foreach ($orders as $order) {
+            $summary = $this->trackingSummaryForFulfillment(
+                (string) ($order['fulfillment_status'] ?? ''),
+                (string) ($order['status'] ?? ''),
+            );
+            if ($summary !== '') {
+                $summaries[$summary] = true;
+            }
+        }
+        if ($summaries === []) {
+            return '';
+        }
+        if (count($summaries) === 1) {
+            return (string) array_key_first($summaries);
+        }
+
+        return (string) \__('物流状态不一致');
+    }
+
+    private function trackingSummaryForFulfillment(string $fulfillmentStatus, string $orderStatus = ''): string
+    {
+        $fulfillmentStatus = strtolower(trim($fulfillmentStatus));
+        $orderStatus = strtolower(trim($orderStatus));
+
+        if (in_array($fulfillmentStatus, ['delivered'], true)
+            || in_array($orderStatus, ['completed', 'delivered'], true)) {
+            return (string) \__('已送达');
+        }
+        if (in_array($fulfillmentStatus, ['shipped', 'partial'], true)
+            || in_array($orderStatus, ['fulfilled', 'shipped'], true)) {
+            return (string) \__('已发货，发往目的地');
+        }
+        if ($fulfillmentStatus === 'pending' || $orderStatus === 'paid') {
+            return (string) \__('待发货');
+        }
+
+        return '';
     }
 }

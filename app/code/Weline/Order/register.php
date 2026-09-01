@@ -13,8 +13,8 @@ Register::register(
     Register::MODULE,
     'Weline_Order',
     __DIR__,
-    '2.12.3',
-    '订单管理模块 - 提供完整的订单生命周期管理功能，符合国际电商标准',
+    '2.13.1',
+    '订单管理模块 - 提供完整的订单生命周期管理与 TrackingProvider 跟踪壳',
     [
         'Weline_Acl',
         'Weline_Backend',
