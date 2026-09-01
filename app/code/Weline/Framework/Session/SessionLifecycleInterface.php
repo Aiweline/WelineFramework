@@ -44,4 +44,13 @@ interface SessionLifecycleInterface
      * @return bool 是否已启动
      */
     public function isStarted(): bool;
+
+    /**
+     * Re-emit the Session cookie under the active CookieScope wire name.
+     *
+     * Document navigations may start Session before (or after) website cookies
+     * flip CookieScope on; callers reassert once the scope is known so login
+     * does not stick on an expired unscoped alias.
+     */
+    public function reassertCookieWire(): void;
 }

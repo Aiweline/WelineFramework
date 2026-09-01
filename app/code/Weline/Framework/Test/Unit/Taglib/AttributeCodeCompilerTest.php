@@ -33,4 +33,22 @@ class AttributeCodeCompilerTest extends TestCase
 
         self::assertStringContainsString("Weline_Taglib_resolve('circle', get_defined_vars())", $code);
     }
+
+    public function testClearsLeakedTaglibVariablesFromPreviousTag(): void
+    {
+        $attributes = [
+            'id' => 'website-default-language',
+            'name' => 'default_language',
+        ];
+
+        $code = AttributeCodeCompiler::attributes($attributes);
+
+        self::assertStringContainsString(
+            'str_starts_with($__weline_taglib_attr, \'Taglib__\')',
+            $code,
+        );
+        self::assertStringContainsString('unset($$__weline_taglib_attr);', $code);
+        self::assertStringContainsString("Weline_Taglib_resolve('default_language', get_defined_vars())", $code);
+        self::assertStringContainsString("Weline_Taglib_resolve('website-default-language', get_defined_vars())", $code);
+    }
 }

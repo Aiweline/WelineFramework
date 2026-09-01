@@ -6,6 +6,8 @@ namespace Weline\Framework\Test\Unit\Service\Query;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\FrameworkQueryService;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\Framework\Service\Query\QueryProviderRegistry;
@@ -14,6 +16,9 @@ final class FrameworkQueryServiceTestProvider implements QueryProviderInterface
 {
     /** @var array<int, array{operation:string, params:array}> */
     public array $calls = [];
+
+    /** @var array<int, list<string>> */
+    public array $modulesDuringExecute = [];
 
     public function __construct(private readonly string $providerName)
     {
@@ -26,6 +31,8 @@ final class FrameworkQueryServiceTestProvider implements QueryProviderInterface
 
     public function execute(string $operation, array $params = []): mixed
     {
+        $request = ObjectManager::getInstance(Request::class);
+        $this->modulesDuringExecute[] = $request->getModules();
         $this->calls[] = [
             'operation' => $operation,
             'params' => $params,
@@ -110,6 +117,19 @@ final class FrameworkQueryServiceTestRegistry extends QueryProviderRegistry
         return $this->providers[$providerName] ?? null;
     }
 
+    public function getProviderDescriptor(string $providerName): ?array
+    {
+        foreach ($this->descriptors as $descriptor) {
+            if (\is_array($descriptor) && (string)($descriptor['provider'] ?? '') === $providerName) {
+                return $descriptor;
+            }
+        }
+
+        $provider = $this->providers[$providerName] ?? null;
+
+        return $provider?->getDescriptor();
+    }
+
     public function getAllDescriptors(): array
     {
         return $this->descriptors;
@@ -118,6 +138,27 @@ final class FrameworkQueryServiceTestRegistry extends QueryProviderRegistry
 
 final class FrameworkQueryServiceTest extends TestCase
 {
+    public function testExecuteAttachesProviderModuleToRequestAndRestoresAfterwards(): void
+    {
+        $provider = new FrameworkQueryServiceTestProvider('demo');
+        $registry = new FrameworkQueryServiceTestRegistry([
+            'demo' => $provider,
+        ], [[
+            'provider' => 'demo',
+            'module' => 'Test_Module',
+            'operations' => [['name' => 'load']],
+        ]]);
+        $eventsManager = new FrameworkQueryServiceTestEventsManager();
+        $request = ObjectManager::getInstance(Request::class);
+        $request->setModules(['Weline_Framework']);
+
+        $service = new FrameworkQueryService($eventsManager, $registry);
+        $service->execute('demo', 'load', []);
+
+        self::assertSame([['Weline_Framework', 'Test_Module']], $provider->modulesDuringExecute);
+        self::assertSame(['Weline_Framework'], $request->getModules());
+    }
+
     public function testExecuteDelegatesToRequestedProviderAndRunsBeforeAfterEvents(): void
     {
         $provider = new FrameworkQueryServiceTestProvider('demo');

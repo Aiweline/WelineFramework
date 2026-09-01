@@ -6,6 +6,7 @@ namespace Weline\Framework\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FrontendWorkerBackendAuthorizationException;
 use Weline\Framework\Runtime\Resumable\ResumableTaskAccessDeniedException;
 use Weline\Framework\Runtime\Resumable\ResumableTaskEventStreamInterface;
 use Weline\Framework\Runtime\Resumable\ResumableTaskRuntimeInterface;
@@ -157,7 +158,7 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
         try {
             return $this->starter->startForOwner($typeCode, $input, $owner)->toArray();
         } catch (ResumableTaskAccessDeniedException $exception) {
-            throw new FrontendQueryException('not_found', 'Runtime task was not found.', 404, $exception);
+            throw $this->mapAccessDenied($exception);
         } catch (ResumableTaskStoreException|\InvalidArgumentException $exception) {
             throw new FrontendQueryException('validation_error', 'Invalid runtime task start request.', 422, $exception);
         } catch (ResumableTaskRuntimeUnavailableException $exception) {
@@ -411,10 +412,40 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
         try {
             return $this->ownerResolver->resolve();
         } catch (ResumableTaskAccessDeniedException $exception) {
-            throw new FrontendQueryException('not_found', 'Runtime task was not found.', 404, $exception);
+            throw $this->mapAccessDenied($exception);
         } catch (\Throwable $exception) {
             throw new FrontendQueryException('runtime_unavailable', 'Resumable task runtime is unavailable.', 503, $exception);
         }
+    }
+
+    private function mapAccessDenied(ResumableTaskAccessDeniedException $exception): FrontendQueryException
+    {
+        $previous = $exception->getPrevious();
+        if ($previous instanceof FrontendWorkerBackendAuthorizationException) {
+            return new FrontendQueryException(
+                $previous->reason !== '' ? $previous->reason : 'backend_acl_denied',
+                $previous->getMessage() !== ''
+                    ? $previous->getMessage()
+                    : (string)__('当前后台账号无权执行该操作。'),
+                $previous->httpStatus > 0 ? $previous->httpStatus : 403,
+                $exception,
+            );
+        }
+
+        $message = $exception->getMessage();
+        if (\str_contains($message, 'backend authority is unavailable')
+            || \str_contains($message, 'no longer matches the Session')
+            || \str_contains($message, 'Worker authority is invalid')
+            || \str_contains($message, 'access policy denied')) {
+            return new FrontendQueryException(
+                'backend_attestation_invalid',
+                (string)__('后台 Worker 授权已失效，请刷新页面后重试。'),
+                401,
+                $exception,
+            );
+        }
+
+        return new FrontendQueryException('not_found', 'Runtime task was not found.', 404, $exception);
     }
 
     private function runtimeCall(callable $callback): mixed
@@ -422,7 +453,7 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
         try {
             return $callback();
         } catch (ResumableTaskAccessDeniedException $exception) {
-            throw new FrontendQueryException('not_found', 'Runtime task was not found.', 404, $exception);
+            throw $this->mapAccessDenied($exception);
         } catch (ResumableTaskRuntimeUnavailableException $exception) {
             throw new FrontendQueryException('runtime_unavailable', 'Resumable task runtime is unavailable.', 503, $exception);
         } catch (\Throwable $exception) {
@@ -440,12 +471,7 @@ final class ResumableTaskQueryProvider implements QueryProviderInterface
             ($this->accessPolicy ?? ObjectManager::getInstance(ResumableTaskAccessPolicy::class))
                 ->assertAllowed($owner, $typeCode, $operation);
         } catch (ResumableTaskAccessDeniedException $exception) {
-            throw new FrontendQueryException(
-                'not_found',
-                'Runtime task was not found.',
-                404,
-                $exception,
-            );
+            throw $this->mapAccessDenied($exception);
         } catch (\Throwable $exception) {
             throw new FrontendQueryException(
                 'runtime_unavailable',

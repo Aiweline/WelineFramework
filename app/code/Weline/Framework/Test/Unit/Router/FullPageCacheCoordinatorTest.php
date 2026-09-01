@@ -241,7 +241,8 @@ final class FullPageCacheCoordinatorTest extends TestCase
             'WELINE_SESSID_9502=' . $sid,
             'https://127.0.0.1:9502/',
         ));
-        self::assertFalse($method->invoke(
+        // Legacy unscoped name remains a Session reader candidate (cookie-name split).
+        self::assertTrue($method->invoke(
             $coordinator,
             'WELINE_SESSID=' . $sid,
             'https://127.0.0.1:9502/',
@@ -250,6 +251,33 @@ final class FullPageCacheCoordinatorTest extends TestCase
             $coordinator,
             'WELINE_SESSID_9502=invalid',
             'https://127.0.0.1:9502/',
+        ));
+    }
+
+    public function testScopedWebsiteSessionCookieAliasBypassesGuestFpc(): void
+    {
+        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $method = new \ReflectionMethod($coordinator, 'cookieHeaderHasLoggedInFrontendSession');
+        $method->setAccessible(true);
+        $sid = str_repeat('d', 32);
+        $this->setKnownLoggedInSession($sid);
+
+        // Document login often lands on WELINE_SESSID_{port}; CookieScope later uses _{port}_w0.
+        // resolve() alone would miss the alias and keep serving guest FPC HTML.
+        self::assertTrue($method->invoke(
+            $coordinator,
+            'WELINE_SESSID_9555_w0=' . $sid,
+            'https://p05113ef3.weline.test:9555/',
+        ));
+        self::assertTrue($method->invoke(
+            $coordinator,
+            'WELINE_SESSID_9555=' . $sid . '; WELINE_SESSID_9555_w0=' . str_repeat('e', 32),
+            'https://p05113ef3.weline.test:9555/',
+        ));
+        self::assertFalse($method->invoke(
+            $coordinator,
+            'weline_cart_item_count_w0=2',
+            'https://p05113ef3.weline.test:9555/',
         ));
     }
 

@@ -277,10 +277,10 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
 
 
 <script>
-const envManagerUrls = <?= json_encode([
-    'retryInstall' => $this->getBackendUrl('weline_framework/backend/env-manager/retry-install'),
-    'resetAll' => $this->getBackendUrl('weline_framework/backend/env-manager/reset-all'),
-], $jsonForScriptFlags) ?>;
+const envManagerUrls = {
+    retryInstall: "@backend-url{'weline_framework/backend/env-manager/retry-install'}",
+    resetAll: "@backend-url{'weline_framework/backend/env-manager/reset-all'}",
+};
 const envManagerMessages = <?= json_encode([
     'installing' => (string)__('安装中...'),
     'retryInstall' => (string)__('尝试安装'),

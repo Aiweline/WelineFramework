@@ -8,21 +8,22 @@ HTML 的 JavaScript 才保留最终 `<form>` 字符串，并必须声明 `data-w
 
 - 表单标准属性：`id`、`method`、`action`、`class`、`enctype`、`autocomplete`、`name`、
   `target`、`rel`、`accept-charset`、`role`、`style`、`novalidate`。
-- 框架属性：`intent`、`csrf="auto|on|off"`、`captcha="off|auto|required"`。
+- 框架属性：`intent`、`csrf="auto|on|off"`、`captcha="off|auto|required|lazy"`。
 - 扩展属性：规范命名的 `data-*` 与 `aria-*`；事件处理器属性不会透传。
 - 批量属性：`attributes="变量名"`，变量值必须是属性数组；标签上显式属性覆盖数组同名项。
 
 未写 `method` 时保持 HTML 原生默认 `get`。`csrf` 默认使用 `auto`，POST 表单自动注入
 CSRF，GET 不注入。`captcha` 默认使用 `off`，普通 GET/POST 表单都不注入挑战；需要验证码的
-入口必须显式设置 `captcha="auto"` 或 `captcha="required"`。`auto` 仅在 POST 表单注入，
-`required` 声明该入口必须验证。启用后，Google Enterprise 可用时注入 Google 挑战，否则
+入口必须显式设置 `captcha="auto"`、`captcha="required"` 或 `captcha="lazy"`。`auto` 仅在 POST 表单注入，
+`required` 声明该入口必须验证并 SSR 挑战（forbid 共享 FPC），`lazy` 由 Captcha 模块客户端运行时拉取挑战（FPC 友好）。
+启用后，Google Enterprise 可用时注入 Google 挑战，否则
 注入框架本地图形挑战，不能因 Google 未配置而静默跳过。`action` 仅接受相对地址或
 `http/https` 地址，全部输出属性会再次转义。
 
 ```html
 <w:form id="language-request" method="post"
         intent="i18n.language_support_request"
-        csrf="auto" captcha="required">
+        csrf="auto" captcha="lazy">
     ...
 </w:form>
 ```
@@ -39,7 +40,7 @@ CSRF，GET 不注入。`captcha` 默认使用 `off`，普通 GET/POST 表单都�
 
 业务表单通常不应显式填写 `csrf`，让框架采用 `auto`。普通业务表单也不必填写 `captcha`，
 默认即为 `off`；登录、注册、找回密码、公开写入等经风险评审需要验证码的入口，才显式选择
-`auto` 或 `required` 并声明稳定的 `intent`。已有人工 CSRF 字段且暂时不能迁移的表单可设置
+`auto`、`required` 或（可 FPC 缓存的匿名页优先）`lazy` 并声明稳定的 `intent`。已有人工 CSRF 字段且暂时不能迁移的表单可设置
 `csrf="off"` 防止重复。
 
 `captcha` 属性只控制挑战渲染，不替代服务端授权与验证。启用验证码的提交入口必须使用同一个

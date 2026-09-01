@@ -28,6 +28,59 @@ class CompileTest extends TestCase
     }
 
     /**
+     * url 内联管道参数必须编译为 getUrl(path, params)，不能留下按位或。
+     */
+    public function testUrlInlinePipeParamsCompileToGetUrlArgs(): void
+    {
+        $content = "<a href=\"@url{'customer/account/login'|['redirect_url' => \$redirectUrl]}\">Login</a>";
+        $result = $this->taglib->compile($this->template, $content, 'url-pipe.phtml');
+
+        self::assertStringContainsString(
+            "\$this->getUrl('customer/account/login',['redirect_url'=>\$redirectUrl])",
+            str_replace(' ', '', $result)
+        );
+        self::assertStringNotContainsString(
+            "getUrl('customer/account/login'|['redirect_url'",
+            $result
+        );
+        self::assertStringNotContainsString(
+            "getUrl('customer/account/login'|",
+            $result
+        );
+    }
+
+    /**
+     * backend-url / admin-url / backend-api 管道参数同样必须变成逗号参数，不能按位或。
+     */
+    public function testBackendUrlFamilyInlinePipeParamsCompileToCommaArgs(): void
+    {
+        $cases = [
+            [
+                'src' => "<a href=\"@backend-url{'weline_dashboard/backend/dashboard/index'|\$viewParams}\">Dash</a>",
+                'ok' => "\$this->getBackendUrl('weline_dashboard/backend/dashboard/index',\$viewParams)",
+                'bad' => "getBackendUrl('weline_dashboard/backend/dashboard/index'|",
+            ],
+            [
+                'src' => "<a href=\"@admin-url{'system/backend/notification/detail'|['id' => \$notificationId]}\">N</a>",
+                'ok' => "\$this->getBackendUrl('system/backend/notification/detail',['id'=>\$notificationId])",
+                'bad' => "getBackendUrl('system/backend/notification/detail'|",
+            ],
+            [
+                'src' => "<script>const api=\"@backend-api{'admin/api/backend/user/list'|['page' => 1]}\";</script>",
+                'ok' => "\$this->getBackendApi('admin/api/backend/user/list',['page'=>1])",
+                'bad' => "getBackendApi('admin/api/backend/user/list'|",
+            ],
+        ];
+
+        foreach ($cases as $case) {
+            $result = $this->taglib->compile($this->template, $case['src'], 'backend-url-pipe.phtml');
+            $compact = str_replace(' ', '', $result);
+            self::assertStringContainsString($case['ok'], $compact);
+            self::assertStringNotContainsString($case['bad'], $result);
+        }
+    }
+
+    /**
      * 测试 block 成对标签编译
      */
     public function testBlockPairedTagCompile(): void

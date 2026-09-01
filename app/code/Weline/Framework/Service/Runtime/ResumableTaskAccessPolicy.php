@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Framework\Service\Runtime;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\FrontendWorkerBackendAuthorizationException;
 use Weline\Framework\Runtime\FrontendWorkerBackendAttestationProviderInterface;
 use Weline\Framework\Runtime\FrontendWorkerBackendAuthorizationProviderInterface;
 use Weline\Framework\Runtime\RequestAuthority;
@@ -93,6 +94,12 @@ final class ResumableTaskAccessPolicy
             );
         } catch (ResumableTaskAccessDeniedException $exception) {
             throw $exception;
+        } catch (FrontendWorkerBackendAuthorizationException $exception) {
+            throw new ResumableTaskAccessDeniedException(
+                $exception->getMessage(),
+                0,
+                $exception,
+            );
         } catch (\Throwable $exception) {
             throw $this->denied($exception);
         }

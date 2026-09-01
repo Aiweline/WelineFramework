@@ -44,6 +44,13 @@ final class ErrorPageRenderer
             return self::renderJson($statusCode, $statusText, $message, $context);
         }
 
+        if ($statusCode === 404) {
+            $staticHtml = self::loadStorefrontNotFoundStaticHtml($context);
+            if ($staticHtml !== null) {
+                return $staticHtml;
+            }
+        }
+
         $vars = [
             'statusCode' => $statusCode,
             'statusText' => $statusText,
@@ -115,9 +122,9 @@ final class ErrorPageRenderer
             ],
             404 => [
                 'status_text' => 'Not Found',
-                'title' => '页面不存在',
-                'lead' => '找不到你请求的页面或资源。',
-                'hint' => '链接可能已失效，或地址输入有误。',
+                'title' => '抱歉，找不到您要的页面',
+                'lead' => '您访问的链接可能已失效，或该页面已被移除。',
+                'hint' => '请检查网址是否输入正确，或返回首页继续购物。',
                 'accent' => 'neutral',
             ],
             405 => [
@@ -483,5 +490,38 @@ HTML;
         }
 
         return false;
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     */
+    private static function loadStorefrontNotFoundStaticHtml(array $context): ?string
+    {
+        if (!\class_exists(StorefrontNotFoundStaticPage::class, false)
+            && !\class_exists(StorefrontNotFoundStaticPage::class)) {
+            return null;
+        }
+
+        try {
+            $path = (string)($context['request_path'] ?? '');
+            $query = (string)($context['request_query'] ?? '');
+            $cookie = (string)($context['cookie_header'] ?? '');
+
+            if ($path === '' && \function_exists('w_env')) {
+                $path = (string)\w_env('request.path', '/');
+            }
+            if ($query === '' && \function_exists('w_env')) {
+                $query = (string)\w_env('request.query', '');
+            }
+            if ($cookie === '' && \class_exists(WelineEnv::class, false)) {
+                $cookie = (string)WelineEnv::server('HTTP_COOKIE', '');
+            }
+
+            $html = StorefrontNotFoundStaticPage::loadHtml(null, $path !== '' ? $path : '/', $query, $cookie);
+
+            return $html !== null && $html !== '' ? $html : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }

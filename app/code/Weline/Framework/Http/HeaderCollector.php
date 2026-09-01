@@ -275,6 +275,55 @@ class HeaderCollector implements HeaderCollectorInterface
         return $this->cookies;
     }
 
+    /**
+     * Format pending cookies as raw Set-Cookie header lines (no "Set-Cookie:" prefix).
+     *
+     * Used by SSE writers that emit HTTP headers directly on the WLS socket and
+     * therefore cannot rely on the Worker merging HeaderCollector cookies after
+     * the response has already started.
+     *
+     * @return list<string>
+     */
+    public function formatSetCookieHeaderLines(): array
+    {
+        $lines = [];
+        foreach ($this->cookies as $cookie) {
+            if (!\is_array($cookie)) {
+                continue;
+            }
+            $name = \trim((string)($cookie['name'] ?? ''));
+            if ($name === '') {
+                continue;
+            }
+            [$sameSite, $partitioned] = $this->normalizeSameSiteAttributes($cookie);
+            $parts = [\rawurlencode($name) . '=' . \rawurlencode((string)($cookie['value'] ?? ''))];
+            if (($cookie['expire'] ?? 0) !== 0) {
+                $parts[] = 'Expires=' . \gmdate('D, d M Y H:i:s T', (int)$cookie['expire']);
+            }
+            if (($cookie['path'] ?? '') !== '') {
+                $parts[] = 'Path=' . $cookie['path'];
+            }
+            if (($cookie['domain'] ?? '') !== '') {
+                $parts[] = 'Domain=' . $cookie['domain'];
+            }
+            if (!empty($cookie['secure'])) {
+                $parts[] = 'Secure';
+            }
+            if (!empty($cookie['httpOnly'])) {
+                $parts[] = 'HttpOnly';
+            }
+            if ($sameSite !== '') {
+                $parts[] = 'SameSite=' . $sameSite;
+            }
+            if ($partitioned) {
+                $parts[] = 'Partitioned';
+            }
+            $lines[] = \implode('; ', $parts);
+        }
+
+        return $lines;
+    }
+
     public function captureState(): array
     {
         return [

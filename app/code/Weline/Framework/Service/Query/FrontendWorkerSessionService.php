@@ -386,6 +386,64 @@ final class FrontendWorkerSessionService
      *
      * @return array{worker_session_token:string,signing_secret:string,expires_at:int,deploy_version:string,worker_build_id:string,scope_bound:bool,attested_area:string}
      */
+    /**
+     * Issue a fresh backend-authoritative Worker session from a live PHP Session.
+     *
+     * Used when the one-time page bootstrap was already consumed but the
+     * backend login Session is still valid (WLS reload, deploy rotation, etc.).
+     *
+     * @return array{worker_session_token:string,signing_secret:string,expires_at:int,deploy_version:string,worker_build_id:string,scope_bound:bool,attested_area:string}
+     */
+    public function createSessionFromBackendBinding(
+        string $deployVersion,
+        string $workerBuildId,
+        FrontendWorkerBackendBinding $binding,
+    ): array {
+        $this->assertRuntimeIdentifier($deployVersion, 'deploy version');
+        $this->assertRuntimeIdentifier($workerBuildId, 'worker build ID');
+        $token = $this->randomToken(32);
+        $secret = $this->randomToken(32);
+
+        return $this->withCredentialTransaction(function (FrontendWorkerCredentialTransactionInterface $store) use (
+            $deployVersion,
+            $workerBuildId,
+            $binding,
+            $token,
+            $secret,
+        ): array {
+            $now = $store->now();
+            $this->assertBackendBindingUsable($binding, $now);
+            $this->assertCredentialCapacity(
+                $store,
+                FrontendWorkerCredentialType::SESSION,
+                null,
+                $now,
+                self::MAX_ACTIVE_SESSIONS,
+                'Worker session capacity is exhausted.',
+            );
+            $store->deleteExpired($now, FrontendWorkerCredentialType::SESSION);
+            $session = $this->buildSession(
+                $token,
+                $secret,
+                $deployVersion,
+                $workerBuildId,
+                null,
+                $binding,
+                $now,
+            );
+            $store->insert(
+                FrontendWorkerCredentialType::SESSION,
+                $token,
+                null,
+                $session['stored'],
+                $now,
+                $session['stored']['expires_at'],
+            );
+
+            return $session['public'];
+        });
+    }
+
     public function createSessionFromBackendBootstrap(
         string $deployVersion,
         string $workerBuildId,

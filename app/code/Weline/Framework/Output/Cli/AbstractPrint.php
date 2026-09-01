@@ -1484,6 +1484,11 @@ COMMAND_LIST;
                 $coloredDescription = $description ? $this->colorize(' - ' . $description, $color) : '';
                 
                 $this->printing($prefix . $connector . $coloredCommand . $coloredDescription . PHP_EOL);
+
+                // 节点本身是可执行命令，且还有更长的子命令时，继续展示子命令
+                if ($node['children'] !== []) {
+                    $this->printColonTree($node['children'], $newPrefix, $isLastNode, $color, $key, false);
+                }
             } else {
                 // 只有当有多个子节点时才显示分支节点，否则直接显示叶子节点
                 if (count($node['children']) > 1) {

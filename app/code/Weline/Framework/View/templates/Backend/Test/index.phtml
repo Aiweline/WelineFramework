@@ -13,9 +13,9 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
      data-module="<?= $escape($moduleName) ?>"
      data-run-id="<?= $escape((string)$runId) ?>"
      data-ui-enabled="<?= $uiEnabled ? '1' : '0' ?>"
-     data-url-index="<?= $escape($this->getUrl('*/backend/test')) ?>"
-     data-url-module="<?= $escape($this->getUrl('*/backend/test/module')) ?>"
-     data-url-run="<?= $escape($this->getUrl('*/backend/test/run')) ?>"
+     data-url-index="@url{'*/backend/test'}"
+     data-url-module="@url{'*/backend/test/module'}"
+     data-url-run="@url{'*/backend/test/run'}"
      data-text-loading="<?= $escape(__('加载中…')) ?>"
      data-text-empty="<?= $escape(__('暂无测试用例')) ?>"
      data-text-api-unavailable="<?= $escape(__('Weline.Api 不可用')) ?>"
@@ -45,7 +45,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                 <button type="button" class="btn btn-outline-secondary btn-sm" id="ft-refresh">
                     <i class="mdi mdi-refresh me-1" aria-hidden="true"></i><lang>刷新目录</lang>
                 </button>
-                <a class="btn btn-outline-primary btn-sm" href="<?= $escape($this->getUrl('*/backend/test')) ?>">
+                <a class="btn btn-outline-primary btn-sm" href="@url{'*/backend/test'}">
                     <i class="mdi mdi-view-list me-1" aria-hidden="true"></i><lang>模块总览</lang>
                 </a>
             </div>

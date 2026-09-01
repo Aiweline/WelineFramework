@@ -40,10 +40,11 @@ final class ControllerAnnotationRulesCollector
         }
         $rules = array_merge($rules, $this->collectBinQueryRules());
 
-        $this->eventsManager->dispatch(self::EVENT, [
+        $eventData = [
             'schema_version' => self::SCHEMA,
             'rules' => $rules,
-        ]);
+        ];
+        $this->eventsManager->dispatch(self::EVENT, $eventData);
 
         return $rules;
     }

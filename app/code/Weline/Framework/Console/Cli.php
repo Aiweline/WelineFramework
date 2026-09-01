@@ -41,6 +41,20 @@ class Cli extends CliAbstract
         // 有命令时，需要接受用户检查 和 参数检查 但是在检测到env环境为空时，允许执行，方便安装
         $env_user = Env::get('user');
         if (isset($args['command']) && $env_user) {
+            // Windows：管理员提升或非部署用户时，仅把本次 CLI 降到部署用户再继续（不中断安装器类入口）
+            if (\defined('IS_WIN') && IS_WIN && \getenv('WELINE_CLI_AS_DEPLOY_USER') !== '1') {
+                $runner = BP . 'setup' . DIRECTORY_SEPARATOR . 'server_installer'
+                    . DIRECTORY_SEPARATOR . 'DeployUserCommandRunner.php';
+                if (\is_file($runner)) {
+                    require_once $runner;
+                    if (\DeployUserCommandRunner::shouldDropWindowsPrivileges(BP)) {
+                        $cliArgv = isset($GLOBALS['argv']) && \is_array($GLOBALS['argv'])
+                            ? \array_values(\array_map('strval', $GLOBALS['argv']))
+                            : [];
+                        exit(\DeployUserCommandRunner::reexecWindowsCliAsDeployUser(BP, $cliArgv));
+                    }
+                }
+            }
             # 检测用户
             \Weline\Framework\App\Env::check_user();
             // 没有任何参数
@@ -171,6 +185,11 @@ class Cli extends CliAbstract
         return $canonical;
     }
     
+    private function isListCommand(array $args): bool
+    {
+        return isset($args['list']) || isset($args['-list']) || isset($args['--list']);
+    }
+
     /**
      * @DESC         |检查是否是查找命令
      *
@@ -541,6 +560,7 @@ class Cli extends CliAbstract
     private function checkCommand(array $args): array
     {
         $command = strtolower(trim($args['command'] ?? ''));
+        $forceList = $this->isListCommand($args);
         
         // 空命令：显示所有命令列表
         if ($command === '') {
@@ -627,60 +647,81 @@ class Cli extends CliAbstract
             // 取优先级最高的
             $allUniqueCommands[$cmdList[0]['class']] = $cmdList[0];
         }
+
+        // 仅一个命令名（含 vendor 重复注册）时，按优先级选一个直接执行
+        if (!$forceList && count($commandsByName) === 1) {
+            $cmdList = reset($commandsByName);
+            if (count($cmdList) === 1) {
+                return $cmdList[0];
+            }
+
+            return $this->selectPreferredCommand($cmdList);
+        }
         
         // 如果只有一个唯一命令类，直接执行
-        if (count($allUniqueCommands) === 1) {
+        if (!$forceList && count($allUniqueCommands) === 1) {
             return reset($allUniqueCommands);
         }
         
-        if (count($commands) === 1 && $singleCmd = $commands[0]) {
+        if (!$forceList && count($commands) === 1 && $singleCmd = $commands[0]) {
             foreach ($singleCmd as $c => $data) {
                 if (is_array($data) && isset($data['class'])) {
                     return ['class' => $data['class'], 'command' => $c, 'data' => $data];
                 }
             }
         }
-        
-        // 当有多个匹配时，检查是否有且仅有一个命令的段数与用户输入段数相同（精确段数匹配）
-        $inputSegCount = count(explode(':', $command));
-        $exactSegMatches = [];
-        foreach ($commands as $cmdItem) {
-            if (!is_array($cmdItem)) {
-                continue;
-            }
-            foreach ($cmdItem as $c => $data) {
-                if (is_array($data) && isset($data['class'])) {
-                    $cmdSegCount = count(explode(':', $c));
-                    if ($cmdSegCount === $inputSegCount) {
-                        $exactSegMatches[] = ['class' => $data['class'], 'command' => $c, 'data' => $data];
+
+        // 与输入段数相同且仅一个命令名时直接执行（更长子命令可通过 -list 查看）
+        if (!$forceList) {
+            $inputSegCount = count(explode(':', $command));
+            $exactSegMatches = [];
+            foreach ($commands as $cmdItem) {
+                if (!is_array($cmdItem)) {
+                    continue;
+                }
+                foreach ($cmdItem as $c => $data) {
+                    if (is_array($data) && isset($data['class'])) {
+                        $cmdSegCount = count(explode(':', $c));
+                        if ($cmdSegCount === $inputSegCount) {
+                            $exactSegMatches[] = ['class' => $data['class'], 'command' => $c, 'data' => $data];
+                        }
                     }
                 }
             }
-        }
-        if (count($exactSegMatches) === 1) {
-            return $exactSegMatches[0];
+            if ($exactSegMatches !== []) {
+                $exactSegNames = [];
+                foreach ($exactSegMatches as $match) {
+                    $exactSegNames[$match['command']] = true;
+                }
+                if (count($exactSegNames) === 1) {
+                    return count($exactSegMatches) === 1
+                        ? $exactSegMatches[0]
+                        : $this->selectPreferredCommand($exactSegMatches);
+                }
+            }
         }
         
         // 多个匹配但都指向同一命令类（主命令+别名）时，直接执行
-        $uniqueClasses = [];
-        $classToCommand = [];
-        foreach ($commands as $cmdItem) {
-            if (!is_array($cmdItem)) {
-                continue;
-            }
-            foreach ($cmdItem as $c => $data) {
-                if (is_array($data) && isset($data['class'])) {
-                    $cls = $data['class'];
-                    $uniqueClasses[$cls] = true;
-                    if (!isset($classToCommand[$cls]) || strlen($c) > strlen($classToCommand[$cls]['command'])) {
-                        $classToCommand[$cls] = ['class' => $cls, 'command' => $c, 'data' => $data];
+        if (!$forceList) {
+            $uniqueClasses = [];
+            $classToCommand = [];
+            foreach ($commands as $cmdItem) {
+                if (!is_array($cmdItem)) {
+                    continue;
+                }
+                foreach ($cmdItem as $c => $data) {
+                    if (is_array($data) && isset($data['class'])) {
+                        $cls = $data['class'];
+                        $uniqueClasses[$cls] = true;
+                        if (!isset($classToCommand[$cls]) || strlen($c) > strlen($classToCommand[$cls]['command'])) {
+                            $classToCommand[$cls] = ['class' => $cls, 'command' => $c, 'data' => $data];
+                        }
                     }
                 }
             }
-        }
-        if (count($uniqueClasses) === 1 && !empty($classToCommand)) {
-            $single = reset($classToCommand);
-            return $single;
+            if (count($uniqueClasses) === 1 && !empty($classToCommand)) {
+                return reset($classToCommand);
+            }
         }
         
         // 如果没有找到唯一匹配，返回推荐列表
@@ -755,7 +796,7 @@ class Cli extends CliAbstract
         
         // 添加底部装饰
         $this->printer->separator('═', 0, 'SUCCESS');
-        $this->printer->note(__('💡 提示：可以使用短命令形式，如 u:r 匹配 user:reset:password'));
+        $this->printer->note(__('💡 提示：可以使用短命令形式，如 u:r 匹配 user:reset:password；加 -list 可查看全部匹配（含更长子命令）'));
     }
 
     /**

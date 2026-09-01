@@ -23,10 +23,10 @@
     'use strict';
 
     // 防止重复初始化（版本号升级时可覆盖旧脚本导出）
-    if (window.__WelineUrlFrontendInitialized === 2) {
+    if (window.__WelineUrlFrontendInitialized === 3) {
         return;
     }
-    window.__WelineUrlFrontendInitialized = 2;
+    window.__WelineUrlFrontendInitialized = 3;
 
     function isIgnorableSwitchQueryParam(key) {
         key = String(key || '').toLowerCase().trim();
@@ -176,16 +176,31 @@
     }
 
     function persistLangPreference(lang) {
-        writeCanonicalLocalStorage('weline_user_lang', ['weline_user_lang', 'api_doc_locale', 'WELINE_USER_LANG'], lang);
+        // Path-only language: clear legacy preference storage/cookies; do not rewrite.
+        void lang;
+        try {
+            localStorage.removeItem('weline_user_lang');
+            localStorage.removeItem('api_doc_locale');
+            localStorage.removeItem('WELINE_USER_LANG');
+        } catch (_error) {
+        }
+        const past = 'Thu, 01 Jan 1970 00:00:00 GMT';
         preferenceCookieNames('WELINE_USER_LANG').forEach((name) => {
-            setCookie(name, lang, 7, { path: '/' });
+            document.cookie = name + '=;expires=' + past + ';path=/;SameSite=Lax';
         });
     }
 
     function persistCurrencyPreference(currencyCode) {
-        writeCanonicalLocalStorage('weline_user_currency', ['weline_user_currency', 'api_doc_currency', 'WELINE_USER_CURRENCY'], currencyCode);
+        void currencyCode;
+        try {
+            localStorage.removeItem('weline_user_currency');
+            localStorage.removeItem('api_doc_currency');
+            localStorage.removeItem('WELINE_USER_CURRENCY');
+        } catch (_error) {
+        }
+        const past = 'Thu, 01 Jan 1970 00:00:00 GMT';
         preferenceCookieNames('WELINE_USER_CURRENCY').forEach((name) => {
-            setCookie(name, currencyCode, 7, { path: '/' });
+            document.cookie = name + '=;expires=' + past + ';path=/;SameSite=Lax';
         });
     }
 
@@ -241,6 +256,87 @@
 
     function normalizeLangCode(value) {
         return String(value || '').trim().replace(/-/g, '_');
+    }
+
+    const LOCALE_PATH_PATTERN = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
+
+    function isLocalePathSegment(value) {
+        return LOCALE_PATH_PATTERN.test(String(value || '').trim());
+    }
+
+    function detectPathLanguage(pathname) {
+        const parts = String(pathname || '/').split('/').filter(Boolean);
+        for (let i = 0; i < parts.length; i += 1) {
+            if (isLocalePathSegment(parts[i])) {
+                return normalizeLangCode(parts[i]);
+            }
+        }
+        return '';
+    }
+
+    function readDocumentLanguage() {
+        try {
+            const el = document.documentElement;
+            if (!el) {
+                return '';
+            }
+            const raw = (typeof el.getAttribute === 'function')
+                ? (el.getAttribute('data-lang') || el.getAttribute('lang') || '')
+                : '';
+            return normalizeLangCode(raw || el.lang || '');
+        } catch (_error) {
+            return '';
+        }
+    }
+
+    function resolveCurrentLanguage(config) {
+        return detectPathLanguage(window.location.pathname)
+            || readQueryLanguage()
+            || readDocumentLanguage()
+            || normalizeLangCode((config && config.currentLang) || '')
+            || '';
+    }
+
+    function readQueryLanguage() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search || '');
+            const candidates = [urlParams.get('locale'), urlParams.get('locale_code'), urlParams.get('lang')];
+            for (let i = 0; i < candidates.length; i += 1) {
+                const raw = String(candidates[i] || '').trim();
+                if (!raw || raw.toLowerCase() === 'default') {
+                    continue;
+                }
+                return normalizeLangCode(raw);
+            }
+        } catch (_error) {
+        }
+        return '';
+    }
+
+    function detectPathCurrency(pathname, config) {
+        const parts = String(pathname || '/').split('/').filter(Boolean);
+        for (let i = 0; i < parts.length; i += 1) {
+            if (isCurrencySegment(parts[i], config || {})) {
+                return normalizeCurrencyCode(parts[i]);
+            }
+        }
+        return '';
+    }
+
+    function readQueryCurrency(config) {
+        try {
+            const code = normalizeCurrencyCode(new URLSearchParams(window.location.search || '').get('currency'));
+            return isCurrencySegment(code, config || {}) ? code : '';
+        } catch (_error) {
+            return '';
+        }
+    }
+
+    function resolveCurrentCurrency(config) {
+        return detectPathCurrency(window.location.pathname, config)
+            || readQueryCurrency(config)
+            || normalizeCurrencyCode((config && config.currentCurrency) || '')
+            || '';
     }
 
     function sameLang(a, b) {
@@ -431,8 +527,8 @@
                         host1s1 = host1s[0];
                     }
 
-                    // 移除 lang
-                    if (getCookie('WELINE_USER_LANG') === host1s1) {
+                    // 移除 lang（路径段形态，不再依赖 Cookie）
+                    if (isLocalePathSegment(host1s1)) {
                         host1s.shift();
                     }
                 }
@@ -541,8 +637,8 @@
 
         const config = getConfig();
         let prePath = resolveWebsiteMountPath(config);
-        const currentLang = normalizeLangCode(getCookie('WELINE_USER_LANG') || config.currentLang || '');
-        const rawCurrentCurrency = getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '';
+        const currentLang = resolveCurrentLanguage(config);
+        const rawCurrentCurrency = resolveCurrentCurrency(config);
         const currentCurrency = isCurrencySegment(rawCurrentCurrency, config) ? normalizeCurrencyCode(rawCurrentCurrency) : '';
 
         // 固定挂载 base：只处理匹配站点后的相对 path
@@ -750,18 +846,41 @@
      * 切换语言（参考 Frontend 模块的 select_language）
      */
     window.select_language = function (lang) {
-        // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
+        // Path-first: clear legacy cookies, then navigate (reload if same path).
         persistLangPreference(lang);
-        window.location.assign(inject_path(window.location.pathname, lang, 'lang') + sanitizeSwitchSearch(window.location.search || ''));
+        const target = inject_path(window.location.pathname, lang, 'lang') + sanitizeSwitchSearch(window.location.search || '');
+        try {
+            const next = new URL(target, window.location.origin);
+            const same = next.pathname === (window.location.pathname || '/')
+                && next.search === (window.location.search || '');
+            if (same) {
+                window.location.reload();
+                return;
+            }
+            window.location.assign(next.href);
+        } catch (_error) {
+            window.location.assign(target);
+        }
     };
 
     /**
      * 切换货币（参考 Frontend 模块的 select_currency）
      */
     window.select_currency = function (currencyCode) {
-        // URL结构 [website_url]/[area]/[currency]/[lang]/[path]
         persistCurrencyPreference(currencyCode);
-        window.location.assign(inject_path(window.location.pathname, currencyCode, 'currency') + sanitizeSwitchSearch(window.location.search || ''));
+        const target = inject_path(window.location.pathname, currencyCode, 'currency') + sanitizeSwitchSearch(window.location.search || '');
+        try {
+            const next = new URL(target, window.location.origin);
+            const same = next.pathname === (window.location.pathname || '/')
+                && next.search === (window.location.search || '');
+            if (same) {
+                window.location.reload();
+                return;
+            }
+            window.location.assign(next.href);
+        } catch (_error) {
+            window.location.assign(target);
+        }
     };
 
     /**

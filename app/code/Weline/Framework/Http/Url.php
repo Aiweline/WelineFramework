@@ -727,7 +727,19 @@ class Url implements UrlInterface
                 }
                 // 挂载 path 已在 getBaseHost() 中；入参若仍带 mount，先剥掉再拼 currency/lang/站内路由
                 $path = self::peelWebsiteMountPathFromRelativePath($path);
-                $url = $this->getRequest()->getBaseHost() . self::getPrefix() . '/' . ltrim($path, '/');
+                $relative = self::getPrefix() . '/' . ltrim($path, '/');
+                $relative = self::removeExtraDoubleSlashes($relative);
+                if ($relative === '' || !str_starts_with($relative, '/')) {
+                    $relative = '/' . ltrim($relative, '/');
+                }
+                $baseHost = rtrim((string)$this->getRequest()->getBaseHost(), '/');
+                $hostName = (string)(\parse_url($baseHost . '/', PHP_URL_HOST) ?? '');
+                // CLI / static snapshot: empty host must not become http://product/...
+                if ($baseHost === '' || $hostName === '') {
+                    $url = $relative;
+                } else {
+                    $url = $baseHost . $relative;
+                }
             } else {
                 $url = $path;
             }
@@ -1001,6 +1013,8 @@ class Url implements UrlInterface
                 } else {
                     $params = $url_params;
                 }
+            } elseif ($params) {
+                $params = array_merge($url_params, $params);
             } else {
                 $params = $url_params;
             }
@@ -1354,8 +1368,11 @@ class Url implements UrlInterface
 
             self::$parserServer['WELINE_AREA_ROUTE'] = '';
             self::$parserServer['WELINE_AREA'] = 'frontend';
-            self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
-            self::$parserServer['WELINE_USER_LANG'] = State::getLang();
+            // Do not seed USER_LANG/CURRENCY from State before website match.
+            // Without WebsiteData, State falls back to preferredLanguageCodes()[0]
+            // (often en_US) and then blocks overwriting with website.default_language.
+            self::$parserServer['WELINE_USER_CURRENCY'] = '';
+            self::$parserServer['WELINE_USER_LANG'] = '';
             self::$parserServer['WELINE_WEBSITE_ID'] = self::$parserServer['WELINE_WEBSITE_ID'] ?? '';
             self::$parserServer['WELINE_WEBSITE_CODE'] = self::$parserServer['WELINE_WEBSITE_CODE'] ?? '';
             self::$parserServer['WELINE_WEBSITE_URL'] = self::$parserServer['WELINE_WEBSITE_URL'] ?? '';
@@ -1465,11 +1482,18 @@ class Url implements UrlInterface
             self::$parserServer['WELINE_WEBSITE_URL'] = $matchedWebsiteUrl;
             self::$parserServer['WELINE_WEBSITE_CURRENCY'] = $site['default_currency'];
             self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = $site['default_language'];
-            if (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                self::$parserServer['WELINE_USER_LANG'] = State::getLang() ?: $site['default_language'];
+            // Prefer website defaults for bare-path; path locale detection overwrites later.
+            $defaultLang = trim((string)($site['default_language'] ?? ''));
+            if ($defaultLang !== '') {
+                self::$parserServer['WELINE_USER_LANG'] = $defaultLang;
+            } elseif (empty(self::$parserServer['WELINE_USER_LANG'])) {
+                self::$parserServer['WELINE_USER_LANG'] = State::getLang();
             }
-            if (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
-                self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency() ?: $site['default_currency'];
+            $defaultCurrency = trim((string)($site['default_currency'] ?? ''));
+            if ($defaultCurrency !== '') {
+                self::$parserServer['WELINE_USER_CURRENCY'] = $defaultCurrency;
+            } elseif (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
+                self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
             }
             # 如果URI是空的，后边就不用判断了，直接返回环境包含的参数
             if (empty($uri)) {
@@ -1511,11 +1535,18 @@ class Url implements UrlInterface
                 self::$parserServer['WELINE_WEBSITE_URL'] = $matchedWebsiteUrl;
                 self::$parserServer['WELINE_WEBSITE_CURRENCY'] = $site['default_currency'];
                 self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = $site['default_language'];
-                if (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                    self::$parserServer['WELINE_USER_LANG'] = State::getLang() ?: $site['default_language'];
+                // Prefer website defaults for bare-path; path locale detection overwrites later.
+                $defaultLang = trim((string)($site['default_language'] ?? ''));
+                if ($defaultLang !== '') {
+                    self::$parserServer['WELINE_USER_LANG'] = $defaultLang;
+                } elseif (empty(self::$parserServer['WELINE_USER_LANG'])) {
+                    self::$parserServer['WELINE_USER_LANG'] = State::getLang();
                 }
-                if (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
-                    self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency() ?: $site['default_currency'];
+                $defaultCurrency = trim((string)($site['default_currency'] ?? ''));
+                if ($defaultCurrency !== '') {
+                    self::$parserServer['WELINE_USER_CURRENCY'] = $defaultCurrency;
+                } elseif (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
+                    self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
                 }
                 if (empty($uri)) {
                     $query_part = self::parse_url($url, 'query') ?: '';
@@ -1561,11 +1592,17 @@ class Url implements UrlInterface
                     self::$parserServer['WELINE_WEBSITE_URL'] = $data['website_url'];
                     self::$parserServer['WELINE_WEBSITE_CURRENCY'] = $directSite['default_currency'] ?? '';
                     self::$parserServer['WELINE_WEBSITE_LANGUAGE'] = $directSite['default_language'] ?? '';
-                    if (empty(self::$parserServer['WELINE_USER_LANG'])) {
-                        self::$parserServer['WELINE_USER_LANG'] = State::getLang() ?: ($directSite['default_language'] ?? '');
+                    $defaultLang = trim((string)($directSite['default_language'] ?? ''));
+                    if ($defaultLang !== '') {
+                        self::$parserServer['WELINE_USER_LANG'] = $defaultLang;
+                    } elseif (empty(self::$parserServer['WELINE_USER_LANG'])) {
+                        self::$parserServer['WELINE_USER_LANG'] = State::getLang();
                     }
-                    if (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
-                        self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency() ?: ($directSite['default_currency'] ?? '');
+                    $defaultCurrency = trim((string)($directSite['default_currency'] ?? ''));
+                    if ($defaultCurrency !== '') {
+                        self::$parserServer['WELINE_USER_CURRENCY'] = $defaultCurrency;
+                    } elseif (empty(self::$parserServer['WELINE_USER_CURRENCY'])) {
+                        self::$parserServer['WELINE_USER_CURRENCY'] = State::getCurrency();
                     }
                 }
             }
@@ -1827,8 +1864,7 @@ class Url implements UrlInterface
                 }
             }
         }
-        // 优先级：Path Level > URL Parameters > Cookie/Default values
-        // 如果路径级别没有找到，尝试从URL查询参数获取
+        // 优先级：Path > Query > 网站默认 / 硬默认（不读偏好 Cookie）
         $data['all_match'] = !empty($data['currency']) && !empty($data['language']);
         $perfMark('currency_language');
         if (empty($data['currency']) || empty($data['language'])) {
@@ -1837,33 +1873,42 @@ class Url implements UrlInterface
             if (isset($parsed_url['query'])) {
                 parse_str($parsed_url['query'], $query_params);
             }
-            
-            // 从URL参数获取currency（如果路径级别没有）
+
             if (empty($data['currency']) && isset($query_params['currency'])) {
                 $currency = strtoupper(trim((string)($query_params['currency'] ?? '')));
                 if ($currency !== '' && State::isAllowedCurrencyCode($currency)) {
                     $data['currency'] = $currency;
                 }
             }
-            
-            // 从URL参数获取locale（如果路径级别没有）
-            if (empty($data['language']) && isset($query_params['locale'])) {
-                $locale = trim($query_params['locale'] ?? '');
-                if (!empty($locale) && strlen($locale) >= 5 && strlen($locale) <= 10) {
-                    // 验证是否为有效的locale格式（如：zh_Hans_CN）
-                    if (preg_match('/^[a-z]{2}_[A-Z][a-z]+_[A-Z]{2}$/', $locale)) {
+
+            if (empty($data['language'])) {
+                foreach (['locale', 'locale_code', 'lang'] as $langKey) {
+                    $locale = trim((string)($query_params[$langKey] ?? ''));
+                    if ($locale === '' || strtolower($locale) === 'default') {
+                        continue;
+                    }
+                    $locale = str_replace('-', '_', $locale);
+                    if (preg_match('/^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/', $locale) === 1
+                        && State::isAllowedLanguageCode($locale)
+                    ) {
                         $data['language'] = $locale;
+                        break;
                     }
                 }
             }
         }
-        
-        // 如果还是没有找到，使用Cookie或默认值
+
         if (empty($data['currency'])) {
-            $data['currency'] = self::$parserServer['WELINE_USER_CURRENCY'] ?? (($data['website'] ?? [])['default_currency'] ?? null) ?? 'CNY';
+            $websiteCurrency = trim((string)(($data['website'] ?? [])['default_currency'] ?? ''));
+            $data['currency'] = $websiteCurrency !== '' && State::isAllowedCurrencyCode($websiteCurrency)
+                ? strtoupper($websiteCurrency)
+                : 'CNY';
         }
         if (empty($data['language'])) {
-            $data['language'] = self::$parserServer['WELINE_USER_LANG'] ?? (($data['website'] ?? [])['default_language'] ?? null) ?? 'zh_Hans_CN';
+            $websiteLang = trim((string)(($data['website'] ?? [])['default_language'] ?? ''));
+            $data['language'] = $websiteLang !== ''
+                ? str_replace('-', '_', $websiteLang)
+                : 'zh_Hans_CN';
         }
         // 重写路由解码前，把已解析的网站信息写入 $_SERVER，供 seo_decode 观察者（如 RouterRewrite）getCurrentWebsiteId() 使用
         if (isset(self::$parserServer['WELINE_WEBSITE_ID'])) {
