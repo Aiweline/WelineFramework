@@ -55,7 +55,7 @@ $domains = $this->getData('domains') ?: [];
                                     <?php endif; ?>
                                 </td>
                                 <td>
-                                    <a href="<?= $this->getBackendUrl('*/backend/domain/form', ['id' => $domain->getData('domain_id')]) ?>" class="w-button" data-tone="primary" data-size="sm">
+                                    <a href="@backend-url{'*/backend/domain/form'|['id' => $domain->getData('domain_id')]}" class="w-button" data-tone="primary" data-size="sm">
                                         <w:icon name="edit" size="sm"></w:icon> <?= __('编辑') ?>
                                     </a>
                                 </td>
@@ -67,7 +67,7 @@ $domains = $this->getData('domains') ?: [];
         <?php endif; ?>
 
         <div style="--w-mt:var(--weline-space-4);">
-            <a href="<?= $this->getBackendUrl('*/backend/account/index') ?>" class="w-button" data-tone="neutral">
+            <a href="@backend-url{'*/backend/account/index'}" class="w-button" data-tone="neutral">
                 <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回') ?>
             </a>
         </div>
