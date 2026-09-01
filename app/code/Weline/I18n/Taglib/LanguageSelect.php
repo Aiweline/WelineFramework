@@ -88,6 +88,10 @@ class LanguageSelect implements TaglibInterface
                     . var_export(trim((string)$attributes['name']), true)
                     . ';';
             }
+            // Omitted multiple must stay single-select even if a prior tag leaked Taglib__multiple.
+            if (!\array_key_exists('multiple', $attributes)) {
+                $attributeCode .= "\n\$Taglib__multiple = false;";
+            }
             $html = ['<?php ' . $attributeCode . ' ?>'];
             $html[] = <<<'PHP'
 <?php

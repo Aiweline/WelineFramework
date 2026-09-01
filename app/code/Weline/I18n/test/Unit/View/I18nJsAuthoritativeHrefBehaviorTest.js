@@ -169,7 +169,8 @@ test('switchLang navigates the server-rendered authoritative href without rebuil
         runtime.location.href,
         `https://p05113ef3.weline.test:9976${authoritativeHref}`
     );
-    assert.equal(runtime.storage.get('weline_user_lang'), 'en_US');
+    // Path-only language: preference storage is cleared, not rewritten.
+    assert.equal(runtime.storage.get('weline_user_lang'), undefined);
     assert.equal(runtime.getReloadCount(), 0);
 });
 
@@ -183,10 +184,10 @@ test('switchLang reloads when the authoritative href is the current URL', async 
     await runtime.api.switchLang('en_US', authoritativeHref);
 
     assert.equal(runtime.getReloadCount(), 1);
-    assert.equal(runtime.storage.get('weline_user_lang'), 'en_US');
+    assert.equal(runtime.storage.get('weline_user_lang'), undefined);
 });
 
-test('getCurrentLang prefers document data-lang over Cookie (theme preview)', () => {
+test('getCurrentLang prefers document data-lang over legacy Cookie (theme preview)', () => {
     const runtime = bootI18n({
         pathname: '/theme/frontend/theme-preview/content',
         search: '?locale=en_US&editor_mode=1',
@@ -210,7 +211,7 @@ test('getCurrentLang prefers query locale when document lang is absent', () => {
     assert.equal(runtime.api.getCurrentLang(), 'en_US');
 });
 
-test('getCurrentLang still prefers path language over Cookie and document', () => {
+test('getCurrentLang ignores Cookie and prefers path language over document', () => {
     const runtime = bootI18n({
         pathname: '/zh_Hans_CN/products',
         search: '?locale=en_US',

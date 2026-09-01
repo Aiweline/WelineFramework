@@ -29,7 +29,10 @@ class LocalModel extends Model implements \Weline\I18n\LocalModelInterface
     public function __init()
     {
         parent::__init();
-        array_unshift($this->_unit_primary_keys, $this::schema_fields_ID);
-        array_unshift($this->_index_sort_keys, $this::schema_fields_ID);
+        $idField = $this::schema_fields_ID;
+        if (!\in_array($idField, $this->_unit_primary_keys, true)) {
+            \array_unshift($this->_unit_primary_keys, $idField);
+            \array_unshift($this->_index_sort_keys, $idField);
+        }
     }
 }

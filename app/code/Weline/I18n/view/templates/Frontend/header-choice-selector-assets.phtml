@@ -1,3 +1,4 @@
 <link rel="stylesheet" href="@static(Weline_Theme::ui/components/weline-choice-selector.css)">
 <script type="module" src="@static(Weline_Theme::ui/components/weline-choice-selector.js)"></script>
-<script src="@static(Weline_Currency::js/currency.js)?v=20260822-portal-fix3"></script>
+<div hidden data-weline-load="currency" aria-hidden="true"></div>
+<?php // currency：经 modules + data-weline-load；choice-selector 为 ES module 组件入口，保留 type=module ?>
