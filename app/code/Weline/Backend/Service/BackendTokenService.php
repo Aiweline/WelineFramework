@@ -34,10 +34,10 @@ class BackendTokenService
             /** @var BackendUserToken $tokenModel */
             $tokenModel = ObjectManager::getInstance(BackendUserToken::class);
             $tokenModel->clear()
-                ->setUserId($user->getId())
-                ->setToken($token)
-                ->setExpireTime($expireTime)
-                ->setCreatedAt(date('Y-m-d H:i:s'))
+                ->setData(BackendUserToken::schema_fields_ID, $user->getId())
+                ->setData(BackendUserToken::schema_fields_token, $token)
+                ->setData(BackendUserToken::schema_fields_type, 'api')
+                ->setData(BackendUserToken::schema_fields_token_expire_time, (string) $expireTime)
                 ->save();
 
             return $token;
@@ -59,8 +59,8 @@ class BackendTokenService
         try {
             /** @var BackendUserToken $tokenModel */
             $tokenModel = ObjectManager::getInstance(BackendUserToken::class);
-            $tokenModel->where('token', $token)
-                ->where('expire_time', '>', time())
+            $tokenModel->where(BackendUserToken::schema_fields_token, $token)
+                ->where(BackendUserToken::schema_fields_token_expire_time, (string) time(), '>')
                 ->find()
                 ->fetch();
 
@@ -112,8 +112,8 @@ class BackendTokenService
         try {
             /** @var BackendUserToken $tokenModel */
             $tokenModel = ObjectManager::getInstance(BackendUserToken::class);
-            $tokenModel->where('token', $token)
-                ->where('expire_time', '>', time())
+            $tokenModel->where(BackendUserToken::schema_fields_token, $token)
+                ->where(BackendUserToken::schema_fields_token_expire_time, (string) time(), '>')
                 ->find()
                 ->fetch();
 

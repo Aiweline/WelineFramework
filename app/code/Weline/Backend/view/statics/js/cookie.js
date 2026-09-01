@@ -153,20 +153,8 @@ function removeCookie(key) {
     }
 
     function writeBackendLanguagePreference(lang, link) {
-        if (!lang) {
-            return;
-        }
-        try {
-            if (window.localStorage) {
-                localStorage.setItem('weline_user_lang', lang);
-                localStorage.removeItem('api_doc_locale');
-                localStorage.removeItem('WELINE_USER_LANG');
-            }
-        } catch (e) {
-        }
-
-        var value = encodeURIComponent(lang);
-        var expires = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toUTCString();
+        // Path-only language: expire legacy WELINE_USER_LANG; do not rewrite it.
+        void lang;
         var expired = 'Thu, 01 Jan 1970 00:00:00 GMT';
         var host = window.location.hostname || '';
         var domains = [''];
@@ -174,10 +162,18 @@ function removeCookie(key) {
             domains.push(';domain=' + host);
         }
 
+        try {
+            if (window.localStorage) {
+                localStorage.removeItem('weline_user_lang');
+                localStorage.removeItem('api_doc_locale');
+                localStorage.removeItem('WELINE_USER_LANG');
+            }
+        } catch (e) {
+        }
+
         collectLangCookiePaths(link).forEach(function (path) {
             domains.forEach(function (domain) {
                 document.cookie = 'WELINE_USER_LANG=;expires=' + expired + ';path=' + path + domain + ';SameSite=Lax';
-                document.cookie = 'WELINE_USER_LANG=' + value + ';expires=' + expires + ';path=' + path + domain + ';SameSite=Lax';
             });
         });
     }

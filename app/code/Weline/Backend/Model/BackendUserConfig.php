@@ -278,7 +278,7 @@ class BackendUserConfig extends Model
             // 仅 user_id + key 是真实唯一键；module/name 只是普通更新字段，不能参与 PG 的 ON CONFLICT
             ->setData(self::schema_fields_module, $module)
             ->setData(self::schema_fields_name, $name)
-            ->save();
+            ->save(true);
     }
     public function save(string|array|bool|AbstractModel $data = [], string|array|null $sequence = ''): bool|int
     {

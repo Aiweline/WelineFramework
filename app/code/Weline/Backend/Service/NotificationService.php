@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Backend\Service;
 
+use Weline\Backend\Block\System\Notification as NotificationBlock;
 use Weline\Backend\Enum\NotificationType;
 use Weline\Backend\Model\NotificationTopic;
 use Weline\Backend\Model\SystemNotification;
 use Weline\Backend\Model\UserNotificationStatus;
 use Weline\Backend\Model\UserNotificationSubscription;
 use Weline\Backend\Model\NotificationChannel;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Theme\Block\Partials;
 
 class NotificationService
 {
@@ -157,6 +160,7 @@ class NotificationService
         }
 
         $status->markAsRead()->save();
+        $this->invalidateInboxPresentation($userId);
         return true;
     }
 
@@ -180,6 +184,10 @@ class NotificationService
                 $count++;
             }
         }
+
+        // Always bump presentation even when already clean, so chrome topbar
+        // can miss stale unread badges after an explicit mark-all-read click.
+        $this->invalidateInboxPresentation($userId);
 
         return $count;
     }
@@ -222,7 +230,37 @@ class NotificationService
             }
         }
 
+        if ($count > 0) {
+            $this->invalidateInboxPresentation($userId);
+        }
+
         return $count;
+    }
+
+    /**
+     * Drop process-local notification snapshots and bump a session revision so
+     * chrome topbar partial cache keys miss across WLS workers after mark-as-read.
+     */
+    private function invalidateInboxPresentation(int $userId): void
+    {
+        NotificationBlock::clearCache($userId > 0 ? $userId : null);
+        try {
+            Partials::clearOutputCache();
+        } catch (\Throwable) {
+            // Theme partial cache is best-effort for the current worker.
+        }
+
+        try {
+            $session = SessionFactory::getInstance()->createBackendSession();
+            $revision = (string) \microtime(true);
+            if (\method_exists($session, 'setData')) {
+                $session->setData(NotificationBlock::INBOX_REVISION_SESSION_KEY, $revision);
+            } elseif (\method_exists($session, 'set')) {
+                $session->set(NotificationBlock::INBOX_REVISION_SESSION_KEY, $revision);
+            }
+        } catch (\Throwable) {
+            // Session may be unavailable in CLI / warmup contexts.
+        }
     }
 
     /**

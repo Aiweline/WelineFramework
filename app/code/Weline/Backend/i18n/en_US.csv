@@ -38,7 +38,6 @@
 "图标迁移目标不是 ORM Model：%{1}","Icon migration target is not ORM Model: %{1}"
 请先登录,"Please login first"
 用户已被禁用,"User has been disabled"
-后台安全凭证暂不可用，请稍后刷新页面。,"The background security credentials are temporarily unavailable, please refresh the page later."
 Telegram,Telegram
 "Telegram 渠道测试","Telegram channel test"
 "这是一条测试消息，如果您收到了它，说明 Telegram 渠道配置是可用的。","This is a test message. If you receive it, the Telegram channel configuration is available."
@@ -74,6 +73,7 @@ Webhook,Webhook
 自定义请求头（可选）,"Custom Request Headers (Optional)"
 加载维护模式失败：%{1},"Failed to load maintenance mode: %{1}"
 无效的请求方法,"Invalid request method"
+开发者联系邮箱格式不正确,开发者联系邮箱格式不正确
 维护模式状态已更新,"Maintenance mode status updated"
 更新失败：%{1},"Update failed: %{1}"
 IP白名单格式错误：%{1},"IP whitelist format error: %{1}"
@@ -82,6 +82,7 @@ IP白名单格式错误：%{1},"IP whitelist format error: %{1}"
 系统维护中，请稍后再试,"System is under maintenance. Please try again later."
 "维护操作 Provider 不可用","Maintenance operation Provider is unavailable"
 自动备份失败：%{1}，维护模式已开启,"Auto Backup Failed: %{1}, Maintenance Mode Enabled"
+维护静态页刷新失败：%{1},维护静态页刷新失败：%{1}
 系统维护模式,"System Maintenance Mode"
 settings,settings
 查看系统维护模式,"View system maintenance mode"
@@ -473,6 +474,9 @@ URL,URL
 启用维护模式,"Enable maintenance mode"
 维护消息,"Maintenance message"
 此消息将显示给访问前台的用户,"This message will be displayed to users visiting the frontend"
+开发者联系邮箱,开发者联系邮箱
+维护页「需要帮助吗？」卡片中展示的联系邮箱。留空时回退到站点联系邮箱。,维护页「需要帮助吗？」卡片中展示的联系邮箱。留空时回退到站点联系邮箱。
+在统一配置中心管理,在统一配置中心管理
 当前状态,"Current status"
 系统当前处于维护模式,"The system is currently in maintenance mode"
 系统当前正常运行,"The system is currently running normally"
@@ -495,6 +499,7 @@ URL,URL
 用户不存在！,"User does not exist!"
 "框架约定错误：菜单 ACL 断层。菜单 %{1}（模块 %{2}）声明了不存在的父级 %{3}。请修复 menu.xml 的 parent/source 链。","Framework Convention Error: Menu ACL discontinuity. Menu %{1} (Module %{2}) declares a non-existent parent %{3}. Please fix the parent/source chain in menu.xml."
 模块不存在：%{1},"Module does not exist: %{1}"
+后台安全凭证暂不可用，请稍后刷新页面。,"The background security credentials are temporarily unavailable, please refresh the page later."
 其他,Other
 后端主题配置字段无效。,"The backend theme configuration field is invalid."
 "请指定 --username=、--user_id= 或 --email= 之一","Please specify one of --username=, --user_id=, or --email="
@@ -573,6 +578,9 @@ ri-file-text-line,ri-file-text-line
 合作伙伴,Partners
 后端模板库,"Backend template library"
 商品与目录,"Products & catalog"
+商品运营,"Product operations"
+分类体系,Taxonomy
+高级维护,"Advanced maintenance"
 商城管理,"Store management"
 国际化,internationalization
 媒体管理,"Media management"
