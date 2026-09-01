@@ -1,0 +1,20 @@
+<?php
+/**
+ * Weline_Multipass — developer group entry.
+ *
+ * Hook: account.sidebar.group.developer
+ *
+ * @hook-priority 40
+ * @hook-sort-order 99
+ * @hook-solo false
+ */
+?>
+<a class="account-hook-nav-link" href="@url{'customer/account/index'}#multipass-developer-apps" data-section="multipass-developer-apps" data-account-nav-parent="developer" data-account-nav-link="true">
+    <span class="account-hook-nav-link__label">
+        <w:icon name="box" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text">
+            <strong><?= __('Multipass 管理申请') ?></strong>
+            <span><?= __('申请接入网站授权登录') ?></span>
+        </span>
+    </span>
+</a>
