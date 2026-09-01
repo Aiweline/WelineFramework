@@ -1098,7 +1098,7 @@ class DashboardViewService
         throw new \RuntimeException('dashboard_layout_identity_website_missing:' . $websiteId);
     }
 
-    private function scopedLayoutContext(DashboardView $view, int $themeId): ThemeEditorContext
+    public function scopedLayoutContext(DashboardView $view, int $themeId): ThemeEditorContext
     {
         return new ThemeEditorContext(
             scope: $this->scopeHierarchy->contextFromIdentity($this->websiteIdentity($view->getWebsiteId())),
@@ -1114,8 +1114,8 @@ class DashboardViewService
     }
 
     /**
-     * Import an exact legacy Dashboard snapshot once, then keep the scoped
-     * workspace authoritative. Legacy rows remain a compatibility projection.
+     * Ensure scoped workspace has a usable release for this Dashboard view.
+     * Layout authority is theme_scope_* only — no theme_layout projection.
      */
     private function synchronizeLegacyPublishedLayout(DashboardView $view, int $themeId): bool
     {
@@ -1139,23 +1139,23 @@ class DashboardViewService
                     is_array($state['published_payload'] ?? null) ? $state['published_payload'] : [],
                     max(0, (int)($state['effective_release_id'] ?? 0)),
                 );
-                if ((int)($state['draft_revision_id'] ?? 0) > 0
-                    && is_array($state['draft_payload'] ?? null)
-                ) {
-                    $this->scopedResources->projectDraft($context, $state['draft_payload']);
-                }
 
                 return true;
             }
 
+            $emptyPayload = [
+                'theme_id' => $themeId,
+                'nodes' => [],
+                'selection' => ['layout_option' => DashboardView::LAYOUT_OPTION],
+            ];
             $updated = $this->scopedWorkspace->replaceEffectivePayload(
                 $context,
                 0,
                 $this->nullablePositiveInt($state['expected_parent_release_id'] ?? null),
-                $this->scopedResources->loadLegacyPublished($context),
+                $emptyPayload,
                 $this->dashboardActorId($view),
                 'Dashboard',
-                'dashboard_legacy_layout_import',
+                'dashboard_scoped_layout_seed',
             );
             $published = $this->scopedWorkspace->publish(
                 $context,
@@ -1163,7 +1163,7 @@ class DashboardViewService
                 $this->nullablePositiveInt($updated['expected_parent_release_id'] ?? null),
                 $this->dashboardActorId($view),
                 'Dashboard',
-                'dashboard_legacy_layout_import',
+                'dashboard_scoped_layout_seed',
             );
 
             return empty($published['blocked']) && (int)($published['release_id'] ?? 0) > 0;

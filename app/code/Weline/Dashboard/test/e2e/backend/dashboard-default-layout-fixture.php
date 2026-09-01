@@ -6,6 +6,7 @@ require dirname(__DIR__, 7) . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR 
 
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Dashboard\Service\DashboardViewService;
+use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
@@ -21,6 +22,92 @@ function fixture_fail(string $message): void
 {
     fwrite(STDERR, $message . PHP_EOL);
     exit(1);
+}
+
+function fixture_require_legacy_theme_layout_table(): void
+{
+    // Theme 2.2+ greenfield: theme_layout dropped. Fixtures use scoped workspace only.
+}
+
+/**
+ * @return array{theme_id:int,website_id:int,view_id:int,identity:array<string,mixed>}
+ */
+function fixture_scoped_layout_handles(int $themeId, int $websiteId, int $viewId): array
+{
+    $identity = fixture_identity($viewId, $websiteId);
+    return [
+        'theme_id' => $themeId,
+        'website_id' => $websiteId,
+        'view_id' => $viewId,
+        'identity' => $identity,
+    ];
+}
+
+function fixture_scoped_layout_context(int $themeId, int $websiteId, int $viewId): \Weline\Theme\Api\Scoped\ThemeEditorContext
+{
+    /** @var \Weline\Dashboard\Model\DashboardView $view */
+    $view = clone \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Dashboard\Model\DashboardView::class);
+    $view->clearData()->clearQuery()->load($viewId);
+    if ($view->getViewId() !== $viewId || $view->getWebsiteId() !== $websiteId) {
+        fixture_fail('Dashboard scoped layout context cannot resolve view.');
+    }
+    /** @var \Weline\Dashboard\Service\DashboardViewService $dashboardViews */
+    $dashboardViews = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Dashboard\Service\DashboardViewService::class);
+    return $dashboardViews->scopedLayoutContext($view, $themeId);
+}
+
+function fixture_clear_scoped_layout(int $themeId, int $websiteId, int $viewId, bool $publish = true): void
+{
+    if ($themeId <= 0 || $websiteId < 0 || $viewId <= 0) {
+        return;
+    }
+    $context = fixture_scoped_layout_context($themeId, $websiteId, $viewId);
+    /** @var \Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService $writer */
+    $writer = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService::class);
+    /** @var \Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface $workspace */
+    $workspace = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface::class);
+    $cleared = $writer->clearDraftNodes($context, 'e2e-fixture', 'E2E Fixture');
+    if (!$publish) {
+        return;
+    }
+    $parent = $cleared['expected_parent_release_id'] ?? null;
+    $parent = ($parent === null || $parent === '') ? null : (int)$parent;
+    $workspace->publish(
+        $context,
+        (int)($cleared['revision'] ?? 0),
+        $parent,
+        'e2e-fixture',
+        'E2E Fixture',
+        'e2e_fixture_clear_layout',
+    );
+}
+
+function fixture_scoped_snapshot_rows(int $themeId, int $websiteId, int $viewId): array
+{
+    $context = fixture_scoped_layout_context($themeId, $websiteId, $viewId);
+    /** @var \Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface $workspace */
+    $workspace = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface::class);
+    $state = $workspace->load($context, true);
+    $payload = is_array($state['effective_payload'] ?? null)
+        ? $state['effective_payload']
+        : (is_array($state['published_payload'] ?? null) ? $state['published_payload'] : []);
+    $nodes = is_array($payload['nodes'] ?? null) ? $payload['nodes'] : [];
+    $rows = [];
+    foreach ($nodes as $uid => $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        $rows[] = array_merge($node, [
+            'node_uid' => (string)($node['node_uid'] ?? $uid),
+            'theme_id' => $themeId,
+            'page_type' => \Weline\Dashboard\Model\DashboardView::PAGE_TYPE,
+        ]);
+    }
+    usort($rows, static function (array $a, array $b): int {
+        return [(string)($a['area'] ?? ''), (string)($a['slot_id'] ?? ''), (int)($a['sort_order'] ?? 0)]
+            <=> [(string)($b['area'] ?? ''), (string)($b['slot_id'] ?? ''), (int)($b['sort_order'] ?? 0)];
+    });
+    return $rows;
 }
 
 function fixture_payload(): array
@@ -72,20 +159,7 @@ function fixture_cleanup_layout(int $themeId, int $websiteId, int $viewId): void
     }
 
     $identity = fixture_identity($viewId, $websiteId);
-    /** @var ThemeLayout $layout */
-    $layout = clone ObjectManager::getInstance(ThemeLayout::class);
-    /** @var ThemeLayoutVersion $version */
-    $version = clone ObjectManager::getInstance(ThemeLayoutVersion::class);
-
-    $layoutQuery = $layout->clearQuery()
-        ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-        ->where(ThemeLayout::schema_fields_PAGE_TYPE, DashboardView::PAGE_TYPE);
-    fixture_apply_identity($layoutQuery, $identity, ThemeLayout::class)->delete()->fetch();
-
-    $versionQuery = $version->clearQuery()
-        ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
-        ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, DashboardView::PAGE_TYPE);
-    fixture_apply_identity($versionQuery, $identity, ThemeLayoutVersion::class)->delete()->fetch();
+    fixture_clear_scoped_layout($themeId, $websiteId, $viewId, true);
 
     try {
         /** @var ThemeWidgetDefaultInjection $record */
@@ -234,22 +308,7 @@ function fixture_load_selected_view(array $payload, string $code, DashboardViewS
 
 function fixture_snapshot(int $themeId, DashboardView $view): array
 {
-    /** @var ThemeLayout $layout */
-    $layout = clone ObjectManager::getInstance(ThemeLayout::class);
-    $identity = fixture_identity($view->getViewId(), $view->getWebsiteId());
-    $rows = $layout->clearQuery()->clearData()
-        ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-        ->where(ThemeLayout::schema_fields_PAGE_TYPE, DashboardView::PAGE_TYPE);
-    $rows = fixture_apply_identity($rows, $identity, ThemeLayout::class)
-        ->order(ThemeLayout::schema_fields_STATUS, 'ASC')
-        ->order(ThemeLayout::schema_fields_AREA, 'ASC')
-        ->order(ThemeLayout::schema_fields_SLOT_ID, 'ASC')
-        ->order(ThemeLayout::schema_fields_SORT_ORDER, 'ASC')
-        ->order(ThemeLayout::schema_fields_ID, 'ASC')
-        ->select()
-        ->fetchArray();
-
-    return is_array($rows) ? array_values($rows) : [];
+    return fixture_scoped_snapshot_rows($themeId, $view->getWebsiteId(), $view->getViewId());
 }
 
 function fixture_modules(array $payload): array
@@ -291,17 +350,14 @@ function fixture_reset_widget_registry_entries(array $modules): void
 
 function fixture_clear_layout(int $themeId, DashboardView $view): void
 {
-    /** @var ThemeLayoutService $layoutService */
-    $layoutService = ObjectManager::getInstance(ThemeLayoutService::class);
-    $identity = fixture_identity($view->getViewId(), $view->getWebsiteId());
-    $layoutService->saveLayout($themeId, DashboardView::PAGE_TYPE, [], ThemeLayout::STATUS_DRAFT, $identity);
-    $layoutService->publishLayout($themeId, DashboardView::PAGE_TYPE, $identity, true);
+    fixture_clear_scoped_layout($themeId, $view->getWebsiteId(), $view->getViewId(), true);
 }
 
 $payload = fixture_payload();
 $action = trim((string)($payload['action'] ?? ''));
 $token = fixture_token($payload);
 $code = 'e2e-dashboard-' . $token;
+fixture_require_legacy_theme_layout_table();
 
 /** @var DashboardViewService $dashboardService */
 $dashboardService = ObjectManager::getInstance(DashboardViewService::class);

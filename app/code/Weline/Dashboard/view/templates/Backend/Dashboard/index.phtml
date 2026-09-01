@@ -97,14 +97,14 @@ $dashboardWebsiteSelectOptionsJson = json_encode($dashboardWebsiteSelectOptions,
                         <?php foreach ($group['items'] as $view): ?>
                             <?php
                             $viewId = (int)($view['view_id'] ?? 0);
-                            $url = $this->getBackendUrl('weline_dashboard/backend/dashboard/index', [
+                            $viewParams = [
                                 'website_id' => (int)($view['website_id'] ?? $websiteId),
                                 'view_id' => $viewId,
-                            ]);
+                            ];
                             ?>
                             <a class="w-dashboard-view-link <?= $viewId === $activeViewId ? 'active' : '' ?>"
                                title="<?= htmlspecialchars((string)$group['title']) ?>"
-                               href="<?= htmlspecialchars($url) ?>">
+                               href="@backend-url{'weline_dashboard/backend/dashboard/index'|$viewParams}">
                                 <span><?= htmlspecialchars((string)($view['name'] ?? ('#' . $viewId))) ?></span>
                             </a>
                         <?php endforeach; ?>
@@ -477,13 +477,13 @@ body.w-dashboard-editor-open {
 
 <script>
 (function () {
-    var state = <?= json_encode([
-        'websiteId' => $websiteId,
-        'viewId' => $activeViewId,
-        'viewCode' => (string)($activeView['code'] ?? ''),
-        'baseUrl' => $this->getBackendUrl('weline_dashboard/backend/dashboard/index'),
-        'editorUrl' => $editorUrl,
-    ], $jsonFlags) ?>;
+    var state = {
+        websiteId: <?= (int)$websiteId ?>,
+        viewId: <?= (int)$activeViewId ?>,
+        viewCode: <?= json_encode((string)($activeView['code'] ?? ''), $jsonFlags) ?>,
+        baseUrl: "@backend-url{'weline_dashboard/backend/dashboard/index'}",
+        editorUrl: <?= json_encode($editorUrl, $jsonFlags) ?>
+    };
     var messages = <?= $messagesJson ?>;
     var editorDirty = false;
     var editorSaving = false;
