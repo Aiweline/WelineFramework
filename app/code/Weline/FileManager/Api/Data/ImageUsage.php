@@ -27,6 +27,7 @@ final readonly class ImageUsage
         public array $widths = [480, 768, 1280],
         public string $sizes = '100vw',
         public int $version = self::VERSION,
+        public bool $complement = true,
     ) {
         if (
             $version !== self::VERSION
@@ -89,6 +90,7 @@ final readonly class ImageUsage
             array_values($normalizedWidths),
             (string)($data['sizes'] ?? '100vw'),
             (int)($data['version'] ?? self::VERSION),
+            self::boolean($data['complement'] ?? true, 'complement'),
         );
     }
 
@@ -107,6 +109,7 @@ final readonly class ImageUsage
             'priority' => $this->priority,
             'widths' => $this->widths,
             'sizes' => $this->sizes,
+            'complement' => $this->complement,
         ];
     }
 

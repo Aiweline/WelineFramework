@@ -57,7 +57,7 @@ final class FileImageLayoutValueHydrator implements LayoutValueHydratorInterface
         return new HydratedLayoutValue($resolved->src, [
             'file_usage' => $usage->toArray(),
             'file_html' => $resolved->html,
-            'file_alt' => $usage->decorative ? '' : $usage->alt,
+            'file_alt' => $usage->decorative ? '' : $resolved->alt,
             'file_asset_id' => $usage->assetId,
         ]);
     }

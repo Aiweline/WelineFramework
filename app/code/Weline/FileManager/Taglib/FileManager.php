@@ -40,6 +40,7 @@ class FileManager implements TaglibInterface
             'target' => true,
             'path' => true,
             'lockPath' => false,
+            'lockRoot' => false,
             'preview' => false,
             'setAttr' => false,
             'value' => true,
@@ -154,6 +155,7 @@ class FileManager implements TaglibInterface
                 ->setTarget(trim($attributes['target'], '#'))
                 ->setPath($attributes['path'] ?? '')
                 ->setLockPath($booleanAttribute($attributes['lockPath'] ?? null, false))
+                ->setLockRoot(trim(str_replace('\\', '/', (string)($attributes['lockRoot'] ?? '')), '/'))
                 ->setPreview($booleanAttribute($attributes['preview'] ?? null, true))
                 ->setValue($attributes['value'] ?? '')
                 ->setTitle($attributes['title'] ?? '')
@@ -232,6 +234,7 @@ size：可选。允许的文件大小（字节），默认 102400（100KB），�
 title：可选。文件管理器标题
 path：可选。默认打开的文件路径，例如：store/logo
 lockPath：可选。是否锁定路径（不能返回上级目录），默认：0
+lockRoot：可选。锁定根相对路径（如 websites/default/default）；与 lockPath=1 联用
 vars：当前变量
 value：默认当前的文件路径
 multi：可选。是否多选，默认单选

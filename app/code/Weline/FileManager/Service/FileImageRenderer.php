@@ -22,6 +22,7 @@ final class FileImageRenderer
         bool $decorative = false,
         string $locale = '',
         string $class = '',
+        ?bool $complement = null,
     ): string {
         if (is_string($usage) && trim($usage) !== '') {
             try {
@@ -41,7 +42,14 @@ final class FileImageRenderer
                 throw new \RuntimeException((string)__('图片语境语言与当前请求语言不一致。'));
             }
         } else {
-            $imageUsage = new ImageUsage(trim($assetId), $locale, $decorative ? '' : trim($alt), ImageUsage::ALT_CONFIRMED, $decorative);
+            $imageUsage = new ImageUsage(
+                trim($assetId),
+                $locale,
+                $decorative ? '' : trim($alt),
+                ImageUsage::ALT_CONFIRMED,
+                $decorative,
+                complement: $complement ?? true,
+            );
         }
         $scope = RequestContext::scopeIdentity();
         if ($scope === null) {

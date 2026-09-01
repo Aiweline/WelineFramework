@@ -33,9 +33,14 @@ class FileManager extends Block
             'close' => $this->getData('close'),
             'startPath' => $this->getData('path'),
             'lockPath' => $this->getData('lockPath'),
+            'lockRoot' => $this->getData('lockRoot'),
             'multi' => $this->getData('multi'),
             'ext' => $this->getData('ext'),
             'size' => $this->getData('size'),
+            'aspect_ratio' => $this->getData('aspect_ratio'),
+            'aspect_ratio_tolerance' => $this->getData('aspect_ratio_tolerance'),
+            'recommend_width' => $this->getData('recommend_width'),
+            'recommend_height' => $this->getData('recommend_height'),
         ];
     }
 
