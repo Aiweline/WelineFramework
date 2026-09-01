@@ -42,6 +42,58 @@
         return {};
     };
 
+    const LOCALE_PATH_PATTERN = /^[a-z]{2}_[A-Za-z]{2,8}(?:_[A-Z]{2})?$/i;
+
+    const normalizeLangCode = (value) => String(value || '').trim().replace(/-/g, '_');
+
+    const detectPathLanguage = (pathname) => {
+        const parts = String(pathname || '/').split('/').filter(Boolean);
+        for (let i = 0; i < parts.length; i += 1) {
+            if (LOCALE_PATH_PATTERN.test(parts[i])) {
+                return normalizeLangCode(parts[i]);
+            }
+        }
+        return '';
+    };
+
+    const readDocumentLanguage = () => {
+        try {
+            const el = document.documentElement;
+            if (!el) {
+                return '';
+            }
+            const raw = (typeof el.getAttribute === 'function')
+                ? (el.getAttribute('data-lang') || el.getAttribute('lang') || '')
+                : '';
+            return normalizeLangCode(raw || el.lang || '');
+        } catch (_error) {
+            return '';
+        }
+    };
+
+    const readQueryLanguage = () => {
+        try {
+            const urlParams = new URLSearchParams((window.location && window.location.search) || '');
+            const candidates = [urlParams.get('locale'), urlParams.get('locale_code'), urlParams.get('lang')];
+            for (let i = 0; i < candidates.length; i += 1) {
+                const raw = String(candidates[i] || '').trim();
+                if (!raw || raw.toLowerCase() === 'default') {
+                    continue;
+                }
+                return normalizeLangCode(raw);
+            }
+        } catch (_error) {
+        }
+        return '';
+    };
+
+    // Path/query language: never read WELINE_USER_LANG cookie for QueryBin workers.
+    const resolveCurrentLanguage = (fallback) => detectPathLanguage(window.location && window.location.pathname)
+        || readQueryLanguage()
+        || readDocumentLanguage()
+        || normalizeLangCode(fallback || '')
+        || '';
+
     const readScopeBootstrapId = () => {
         const nodes = document.querySelectorAll('meta[name="weline-worker-scope-bootstrap"]');
         if (nodes.length === 0) {
@@ -73,6 +125,65 @@
 
     const isCurrencyCodeShape = (value) => {
         return /^[A-Z]{3}$/.test(normalizeCurrencyCode(value));
+    };
+
+    const normalizeCurrencyList = (values) => {
+        const codes = [];
+        const seen = {};
+        if (!Array.isArray(values)) {
+            values = [values];
+        }
+        values.forEach((value) => {
+            if (value && typeof value === 'object') {
+                value = value.code || value.currency || value.currency_code || value.value || '';
+            }
+            const code = normalizeCurrencyCode(value);
+            if (!isCurrencyCodeShape(code) || seen[code]) {
+                return;
+            }
+            seen[code] = true;
+            codes.push(code);
+        });
+        return codes;
+    };
+
+    const detectPathCurrency = (pathname, available) => {
+        const parts = String(pathname || '/').split('/').filter(Boolean);
+        const supported = {};
+        (available || []).forEach((code) => {
+            const normalized = normalizeCurrencyCode(code);
+            if (isCurrencyCodeShape(normalized)) {
+                supported[normalized] = true;
+            }
+        });
+        for (let i = 0; i < parts.length; i += 1) {
+            const code = normalizeCurrencyCode(parts[i]);
+            if (isCurrencyCodeShape(code) && (Object.keys(supported).length === 0 || supported[code])) {
+                return code;
+            }
+        }
+        return '';
+    };
+
+    const readQueryCurrency = (available) => {
+        try {
+            const code = normalizeCurrencyCode(new URLSearchParams((window.location && window.location.search) || '').get('currency'));
+            if (!isCurrencyCodeShape(code)) {
+                return '';
+            }
+            const supported = {};
+            (available || []).forEach((entry) => {
+                const normalized = normalizeCurrencyCode(entry);
+                if (isCurrencyCodeShape(normalized)) {
+                    supported[normalized] = true;
+                }
+            });
+            if (Object.keys(supported).length === 0 || supported[code]) {
+                return code;
+            }
+        } catch (_error) {
+        }
+        return '';
     };
 
     const addSupportedCurrencyCode = (codes, value) => {
@@ -417,8 +528,22 @@
         );
         config.availableCurrencies = apiConfig.availableCurrencies || apiConfig.supportedCurrencies || apiConfig.currencyCodes || apiConfig.currencies
             || runtimeConfig.availableCurrencies || runtimeConfig.supportedCurrencies || runtimeConfig.currencyCodes || runtimeConfig.currencies || [];
-        config.locale = normalizeLocale(apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || config.locale);
-        config.currency = normalizeCurrency(apiConfig.currency || apiConfig.currentCurrency || runtimeConfig.currentCurrency || config.currency, config);
+        config.locale = normalizeLocale(resolveCurrentLanguage(
+            apiConfig.locale || apiConfig.currentLang || runtimeConfig.currentLang || config.locale
+        ));
+        config.pathname = String((window.location && window.location.pathname) || '/');
+        const available = normalizeCurrencyList(config.availableCurrencies);
+        config.availableCurrencies = available;
+        config.currency = normalizeCurrency(
+            detectPathCurrency(config.pathname, available)
+            || readQueryCurrency(available)
+            || apiConfig.currency
+            || apiConfig.currentCurrency
+            || runtimeConfig.currentCurrency
+            || config.currency
+            || config.defaultCurrency,
+            config
+        );
         // This value is intentionally sourced only from the server-injected
         // non-executable marker. Runtime/global JavaScript config is not a
         // trusted Scope authority.
@@ -438,6 +563,7 @@
         client.config.deployVersion = freshConfig.deployVersion;
         client.config.workerBuildId = freshConfig.workerBuildId;
         client.config.locale = freshConfig.locale;
+        client.config.pathname = freshConfig.pathname;
         client.config.currency = freshConfig.currency;
         client.config.defaultCurrency = freshConfig.defaultCurrency;
         client.config.availableCurrencies = freshConfig.availableCurrencies;
@@ -1165,7 +1291,11 @@
                     maintenance: false,
                 };
                 this.reportDevError(error, { type: 'upload', provider, operation, options, skipConsole: true });
-                this.handleHttpError(error.status, error, options && options.silent, options);
+                this.handleHttpError(error.status, error, options && options.silent, options, {
+                    type: 'upload',
+                    provider,
+                    operation,
+                });
                 throw error;
             }
 
@@ -1236,10 +1366,32 @@
         }
 
         send(payload) {
+            return this.dispatchToWorker(payload).catch((error) => {
+                if (!error || error.code !== 'worker_timeout' || (payload && payload.__workerRetry)) {
+                    throw error;
+                }
+                this.resetWorker();
+                const retryPayload = Object.assign({}, payload, { __workerRetry: true });
+                return this.dispatchToWorker(retryPayload);
+            });
+        }
+
+        dispatchToWorker(payload) {
             if (payload && payload.type !== 'scope-bootstrap' && this.config.scopeBootstrapId) {
                 return this.warmup().then(() => this.sendToWorker(payload));
             }
             return this.sendToWorker(payload);
+        }
+
+        resetWorker() {
+            if (this.worker && typeof this.worker.terminate === 'function') {
+                try {
+                    this.worker.terminate();
+                } catch (error) {
+                    /* worker may already be gone */
+                }
+            }
+            this.worker = null;
         }
 
         sendToWorker(payload) {
@@ -1259,11 +1411,17 @@
                     this.pending.delete(messageId);
                     const error = new Error('[Weline.Api] worker request timed out.');
                     error.code = 'worker_timeout';
+                    this.resetWorker();
                     this.finishDevTrace(messageId, {
                         ok: false,
                         error: { code: error.code, message: error.message },
                     });
                     this.reportDevError(error, { type: 'timeout', request: pending && pending.payload, skipConsole: true });
+                    this.notifyApiFailure(error, {
+                        status: 0,
+                        silent: !!(pending && pending.payload && pending.payload.options && pending.payload.options.silent),
+                        request: (pending && pending.payload) || {},
+                    });
                     reject(error);
                 }, timeoutMs);
                 this.pending.set(messageId, { resolve, reject, payload, timeoutId });
@@ -1276,6 +1434,7 @@
                         deployVersion: this.config.deployVersion,
                         workerBuildId: this.config.workerBuildId,
                         locale: this.config.locale,
+                        pathname: this.config.pathname || (window.location && window.location.pathname) || '/',
                         currency: this.config.currency,
                         defaultCurrency: this.config.defaultCurrency,
                         availableCurrencies: this.config.availableCurrencies,
@@ -1352,7 +1511,7 @@
                         workerMessage: data,
                         skipConsole: true,
                     });
-                    this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions);
+                    this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions, pending.payload);
                     pending.reject(error);
                     return;
                 }
@@ -1397,7 +1556,7 @@
                 workerMessage: data,
                 skipConsole: true,
             });
-            this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions);
+            this.handleHttpError(error.status, error, requestOptions && requestOptions.silent, requestOptions, pending.payload);
             pending.reject(error);
         }
 
@@ -1410,6 +1569,7 @@
                 colno: event && event.colno,
                 error: event && event.error,
             };
+            this.resetWorker();
             for (const [id, pending] of this.pending.entries()) {
                 this.pending.delete(id);
                 if (pending.timeoutId) {
@@ -1428,11 +1588,42 @@
                     request: pending.payload,
                     skipConsole: true,
                 }, workerDetail));
+                this.notifyApiFailure(error, {
+                    status: 0,
+                    silent: !!(pending.payload && pending.payload.options && pending.payload.options.silent),
+                    request: pending.payload || {},
+                });
                 pending.reject(error);
             }
         }
 
-        handleHttpError(status, error, silent, requestOptions) {
+        handleHttpError(status, error, silent, requestOptions, requestPayload) {
+            this.notifyApiFailure(error, {
+                status,
+                silent: !!silent,
+                request: requestPayload && typeof requestPayload === 'object' ? requestPayload : {},
+            });
+            const isMaintenance = !!(error && error.response && error.response.maintenance)
+                || Number(status) === 503
+                || String((error && error.code) || '').toLowerCase() === 'maintenance';
+            if (isMaintenance) {
+                const handler = (this.config && this.config.maintenanceHandler)
+                    || (window.Weline && window.Weline.config && window.Weline.config.api && window.Weline.config.api.maintenanceHandler);
+                if (typeof handler === 'function') {
+                    try {
+                        handler({
+                            status,
+                            error,
+                            silent: !!silent,
+                            request: requestPayload,
+                            payload: (error && error.response && error.response.data) || null,
+                        });
+                    } catch (handlerError) {
+                        console.error('[Weline.Api] maintenanceHandler failed:', handlerError);
+                    }
+                    return;
+                }
+            }
             if (silent) return;
             const requestCb = requestOptions && (requestOptions.onError || requestOptions.onHttpError);
             if (typeof requestCb === 'function') {
@@ -1452,6 +1643,69 @@
                 }
             }
             this.showDefaultError(error);
+        }
+
+        /**
+         * Always bridge QueryBin / worker failures to pixel (and other listeners).
+         * Independent of toast UI; skips visitor.trackPixel to avoid recursion.
+         */
+        notifyApiFailure(error, meta = {}) {
+            try {
+                if (!error) {
+                    return;
+                }
+                const request = (meta && meta.request) || {};
+                const provider = String(request.provider || '').trim();
+                const operation = String(request.operation || '').trim();
+                if (provider === 'visitor' && /^trackPixel$/i.test(operation)) {
+                    return;
+                }
+                const message = error && error.message ? String(error.message) : 'Request failed';
+                const code = error && error.code ? String(error.code) : '';
+                if (code === 'auth_error' && /nonce has already been used/i.test(message)) {
+                    return;
+                }
+                if (/signing_secret/i.test(message) && /null/i.test(message)) {
+                    return;
+                }
+                if (code === 'auth_error' && /worker session is unavailable/i.test(message)) {
+                    return;
+                }
+                if (typeof window.dispatchEvent !== 'function' || typeof window.CustomEvent !== 'function') {
+                    return;
+                }
+                const status = parseInt(
+                    (meta && meta.status) || (error && error.status) || 0,
+                    10
+                ) || 0;
+                const responseData = error && error.response && error.response.data
+                    ? error.response.data
+                    : null;
+                const nested = responseData && responseData.data && typeof responseData.data === 'object'
+                    ? responseData.data
+                    : (responseData || {});
+                const errorCode = String(
+                    (nested && (nested.error_code || (nested.error && nested.error.code)))
+                    || code
+                    || ''
+                ).trim();
+                window.dispatchEvent(new CustomEvent('weline:api:error', {
+                    detail: {
+                        message,
+                        msg: message,
+                        code,
+                        error_code: errorCode,
+                        status,
+                        http_status: status,
+                        provider,
+                        operation,
+                        silent: !!(meta && meta.silent),
+                        error,
+                    },
+                }));
+            } catch (notifyError) {
+                console.debug('[Weline.Api] notifyApiFailure skipped:', notifyError);
+            }
         }
 
         reportDevError(error, detail) {
@@ -1515,6 +1769,16 @@
 
         showDefaultError(error) {
             const message = error && error.message ? error.message : 'Request failed';
+            const code = error && error.code ? String(error.code) : '';
+            if (code === 'auth_error' && /nonce has already been used/i.test(message)) {
+                return;
+            }
+            if (/signing_secret/i.test(message) && /null/i.test(message)) {
+                return;
+            }
+            if (code === 'auth_error' && /worker session is unavailable/i.test(message)) {
+                return;
+            }
             try {
                 const Toast = this.resolveToastComponent();
                 if (Toast) {
@@ -1526,12 +1790,6 @@
                         Toast.show(message, 'error');
                         return;
                     }
-                }
-
-                if (typeof window.dispatchEvent === 'function' && typeof window.CustomEvent === 'function') {
-                    window.dispatchEvent(new CustomEvent('weline:api:error', {
-                        detail: { message, error },
-                    }));
                 }
 
                 this.renderFallbackToast(message);
@@ -1557,6 +1815,7 @@
                 window.Toast,
             ];
             const frontendCandidates = [
+                window.Weline?.UI?.toast,
                 window.FrontendToast,
                 window.WelineFrontendToast,
                 window.Weline?.FrontendToast,

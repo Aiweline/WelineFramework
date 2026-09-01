@@ -32,23 +32,42 @@ if (class_exists(\Weline\I18n\Helper\JsWordsRegistry::class)) {
 $deployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
 $deployVersion = is_array($deployMeta) ? (string)($deployMeta['deploy_version'] ?? 'dev') : 'dev';
 $workerBuildId = is_array($deployMeta) ? (string)($deployMeta['worker_build_id'] ?? 'dev') : 'dev';
+$themePublishedVersionId = '';
+$themePublishedVersion = '';
+try {
+    if (class_exists(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class)) {
+        /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $themeVersionResolver */
+        $themeVersionResolver = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class
+        );
+        $themeVersions = $themeVersionResolver->resolve();
+        $themePublishedVersionId = (string)($themeVersions['themePublishedVersionId'] ?? '');
+        $themePublishedVersion = (string)($themeVersions['themePublishedVersion'] ?? '');
+    }
+} catch (\Throwable) {
+}
 $workerUrl = DEV
     ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
     : '/static/Weline/Frontend/js/weline-api-worker.js';
 $workerUrl .= '?v=' . rawurlencode($deployVersion . '-' . $workerBuildId);
+// Bust lazy-loaded Weline.Api when source changes (local deploy_version is often sticky "dev").
+$apiJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api.js');
+$frontendAssetVersion = $deployVersion . ($apiJsMtime ? ('-' . (string)$apiJsMtime) : '');
 $runtime = [
     'env' => ['WELINE_ENV' => DEV ? 'DEV' : 'PROD', 'DEV' => DEV, 'PROD' => !DEV],
     'area' => 'frontend',
-    'baseUrl' => (string)$this->request->getBaseUrl(),
+    // baseUrl：在下方 JSON 用 url 标签注入根路径（禁止 PHP 赋 url 标签字符串 / getBaseUrl）
     'modulesConfigUrl' => DEV
         ? '/Weline/Frontend/view/statics/base/weline.modules.js'
         : '/static/Weline/Frontend/base/weline.modules.js',
     'modulesBaseUrl' => DEV
         ? '/Weline/Frontend/view/statics/js/weline-api'
         : '/static/Weline/Frontend/js/weline-api',
-    'assetVersion' => $deployVersion,
+    'assetVersion' => $frontendAssetVersion,
     'deployVersion' => $deployVersion,
     'workerBuildId' => $workerBuildId,
+    'themePublishedVersionId' => $themePublishedVersionId,
+    'themePublishedVersion' => $themePublishedVersion,
     'currentLang' => $currentLang,
     'currentCurrency' => $currentCurrency,
     'defaultLang' => $defaultLang,
@@ -93,8 +112,13 @@ $runtime = [
 ];
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP
     | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
+$runtimeJson = json_encode($runtime, $jsonFlags);
+if (!is_string($runtimeJson) || $runtimeJson === '' || $runtimeJson[0] !== '{') {
+    $runtimeJson = '{}';
+}
+$runtimeJsonTailBody = substr($runtimeJson, 1); // drop leading "{"
 ?>
-<script type="application/json" id="weline-frontend-runtime-config" data-weline-runtime-config><?= json_encode($runtime, $jsonFlags) ?: '{}' ?></script>
+<script type="application/json" id="weline-frontend-runtime-config" data-weline-runtime-config>{"baseUrl":"@url{'/'}",<?= $runtimeJsonTailBody ?></script>
 <js>Weline_Frontend::js/runtime.js</js>
 <js>Weline_Frontend::js/weline-api-business.js</js>
 <js>Weline_Frontend::js/weline.js</js>

@@ -12,6 +12,36 @@
             globalVar: "WelineI18n",
             description: "国际化（i18n）语言切换器模块"
         },
+        miniCartExtras: {
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js"],
+            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js"],
+            globalVar: "WelineMiniCartExtras",
+            description: "迷你购物车 extras 页签交互"
+        },
+        miniCartIcon: {
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js"],
+            paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js"],
+            globalVar: "WelineMiniCartIcon",
+            description: "迷你购物车图标与抽屉"
+        },
+        headerSearch: {
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/header-search.js"],
+            paths: ["/Weline/Theme/view/statics/js/widgets/header-search.js"],
+            globalVar: null,
+            description: "页头搜索框与分类子菜单"
+        },
+        storefrontImageFallback: {
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/storefront-image-fallback.js"],
+            paths: ["/Weline/Theme/view/statics/js/storefront-image-fallback.js"],
+            globalVar: null,
+            description: "店面图片占位回退"
+        },
+        storefrontShopperToast: {
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/storefront-shopper-toast.js"],
+            paths: ["/Weline/Theme/view/statics/js/storefront-shopper-toast.js"],
+            globalVar: null,
+            description: "店面购物者 Toast 区域"
+        },
         currency: {
             origin_paths: ["app/code/Weline/Currency/view/statics/js/currency.js"],
             paths: ["/Weline/Currency/view/statics/js/currency.js"],
@@ -24,6 +54,42 @@
             globalVar: "Weline",
             description: "Weline前端框架主入口"
         },
+        welineApi: {
+            origin_paths: ["app/code/Weline/Frontend/view/statics/js/weline-api.js"],
+            paths: ["/Weline/Frontend/view/statics/js/weline-api.js"],
+            globalVar: "WelineApiModule",
+            description: "Weline API模块"
+        },
+        welineApiAccount: {
+            origin_paths: ["app/code/Weline/Frontend/view/statics/js/weline-api-account.js"],
+            paths: ["/Weline/Frontend/view/statics/js/weline-api-account.js"],
+            globalVar: "WelineAccountModule",
+            description: "Weline API账户模块"
+        },
+        welineApiTokenStorage: {
+            origin_paths: ["app/code/Weline/Frontend/view/statics/js/weline-api-token-storage.js"],
+            paths: ["/Weline/Frontend/view/statics/js/weline-api-token-storage.js"],
+            globalVar: "WelineTokenStorage",
+            description: "Weline API Token存储模块"
+        },
+        welineApiWorker: {
+            origin_paths: ["app/code/Weline/Frontend/view/statics/js/weline-api-worker.js"],
+            paths: ["/Weline/Frontend/view/statics/js/weline-api-worker.js"],
+            globalVar: null,
+            description: "Weline API Worker（Web Worker，无全局变量）"
+        },
+        welineDom: {
+            origin_paths: ["app/code/Weline/Frontend/view/statics/js/weline-api-dom.js"],
+            paths: ["/Weline/Frontend/view/statics/js/weline-api-dom.js"],
+            globalVar: "WelineDomModule",
+            description: "按需 DOM 微核：委托/出现即回调/声明式 data-weline-when|on"
+        },
+        welineSwitcher: {
+            origin_paths: ["app/code/Weline/Frontend/view/statics/js/weline-switcher.js"],
+            paths: ["/Weline/Frontend/view/statics/js/weline-switcher.js"],
+            globalVar: "WelineSwitcher",
+            description: "Weline切换器组件（语言、货币等）"
+        },
         cookie: {
             origin_paths: ["app/code/Weline/Frontend/view/statics/js/cookie.js"],
             paths: ["/Weline/Frontend/view/statics/js/cookie.js"],
@@ -35,6 +101,114 @@
             paths: ["/Weline/Location/view/statics/statics/frontend/js/location.js"],
             globalVar: "WelineLocation",
             description: "Location定位模块（浏览器定位和IP定位）"
+        },
+        customerAccount: {
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js"],
+            paths: ["/Weline/Customer/view/statics/js/account-index.js"],
+            globalVar: "WelineCustomerAccount",
+            description: "前台用户中心账户页交互"
+        },
+        customerLogout: {
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-logout.js"],
+            paths: ["/Weline/Customer/view/statics/js/account-logout.js"],
+            globalVar: "WelineCustomerLogout",
+            description: "前台账户退出确认"
+        },
+        accountTwoFactor: {
+            origin_paths: ["app/code/Weline/TwoFactorAuth/view/statics/frontend/js/account-two-factor-inline-v2.js"],
+            paths: ["/Weline/TwoFactorAuth/view/statics/frontend/js/account-two-factor-inline-v2.js"],
+            globalVar: null,
+            description: "账户中心两步验证面板"
+        },
+        orderNotice: {
+            origin_paths: ["app/code/Weline/Order/view/statics/js/widgets/order-notice.js"],
+            paths: ["/Weline/Order/view/statics/js/widgets/order-notice.js"],
+            globalVar: null,
+            description: "迷你购物车订单留言"
+        },
+        customerService: {
+            origin_paths: ["app/code/Weline/CustomerService/view/statics/js/customer-service.js"],
+            paths: ["/Weline/CustomerService/view/statics/js/customer-service.js"],
+            globalVar: "CustomerServiceWidget",
+            description: "前台客服聊天部件"
+        },
+        shippingCheckoutAddress: {
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js"],
+            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js"],
+            globalVar: null,
+            description: "结账收货地址部件"
+        },
+        shippingAccountAddress: {
+            origin_paths: ["app/code/Weline/Shipping/view/statics/frontend/js/account-address-v3.js"],
+            paths: ["/Weline/Shipping/view/statics/frontend/js/account-address-v3.js"],
+            globalVar: null,
+            description: "账户中心发货/收货地址维护"
+        },
+        captchaLazy: {
+            origin_paths: ["app/code/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260831-layout-fix1"],
+            paths: ["/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260831-layout-fix1"],
+            globalVar: null,
+            description: "FPC-safe lazy captcha client runtime (Weline.Captcha)"
+        },
+        checkoutCoupon: {
+            origin_paths: ["app/code/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js"],
+            paths: ["/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js"],
+            globalVar: null,
+            description: "结账/迷你购物车优惠券部件"
+        },
+        cart: {
+            origin_paths: ["app/code/Weline/Cart/view/statics/js/cart.js", "app/code/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js"],
+            paths: ["/Weline/Cart/view/statics/js/cart.js", "/Weline/Cart/view/statics/js/widgets/product-purchase-actions.js"],
+            globalVar: "WelineCartPurchaseActions",
+            description: "万能购物车：优惠券事件 / 游客续期 / 加购交互"
+        },
+        relatedProducts: {
+            origin_paths: ["app/code/Weline/Product/view/statics/js/widgets/related-products.js"],
+            paths: ["/Weline/Product/view/statics/js/widgets/related-products.js"],
+            globalVar: null,
+            description: "相关商品轮播/网格"
+        },
+        recommendedProducts: {
+            origin_paths: ["app/code/Weline/Product/view/statics/js/widgets/recommended-products.js"],
+            paths: ["/Weline/Product/view/statics/js/widgets/recommended-products.js"],
+            globalVar: null,
+            description: "推荐商品轮播/网格"
+        },
+        crossSell: {
+            origin_paths: ["app/code/Weline/Product/view/statics/js/widgets/cross-sell.js"],
+            paths: ["/Weline/Product/view/statics/js/widgets/cross-sell.js"],
+            globalVar: null,
+            description: "经常一起购买（FBT）"
+        },
+        productReviews: {
+            origin_paths: ["app/code/Weline/Review/view/statics/js/widgets/product-reviews.js"],
+            paths: ["/Weline/Review/view/statics/js/widgets/product-reviews.js"],
+            globalVar: "WelineReviewProductWidget",
+            description: "万能评论部件（商品/博客共用）"
+        },
+        comparePage: {
+            origin_paths: ["app/code/Weline/Compare/view/statics/js/compare-page.js"],
+            paths: ["/Weline/Compare/view/statics/js/compare-page.js"],
+            globalVar: "WelineComparePage",
+            description: "商品对比页"
+        },
+        compareShopper: {
+            origin_paths: ["app/code/Weline/Compare/view/statics/js/product-card-actions.js"],
+            paths: ["/Weline/Compare/view/statics/js/product-card-actions.js"],
+            globalVar: "WelineCompareShopper",
+            description: "商品卡对比/快速查看/对比栏"
+        },
+        wishlist: {
+            origin_paths: ["app/code/Weline/Wishlist/view/statics/js/wishlist-page.js"],
+            paths: ["/Weline/Wishlist/view/statics/js/wishlist-page.js"],
+            globalVar: "WelineWishlistModule",
+            description: "心愿单列表页交互"
+        },
+        affiliateAccount: {
+            origin_paths: ["app/code/Weline/Affiliate/view/statics/js/affiliate-account.js"],
+            paths: ["/Weline/Affiliate/view/statics/js/affiliate-account.js"],
+            globalVar: null,
+            description: "账户中心分销工作台"
         }
     });
 
@@ -43,11 +217,13 @@
         language: "i18n",
         lang: "i18n",
         money: "currency",
-        api: "weline-api",
-        account: "weline-api-account",
-        tokenStorage: "weline-api-token-storage",
-        worker: "weline-api-worker",
-        switcher: "weline-switcher",
-        geolocation: "location"
+        api: "welineApi",
+        account: "welineApiAccount",
+        tokenStorage: "welineApiTokenStorage",
+        worker: "welineApiWorker",
+        dom: "welineDom",
+        switcher: "welineSwitcher",
+        geolocation: "location",
+        captcha: "captchaLazy"
     });
 })();
