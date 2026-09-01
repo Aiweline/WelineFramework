@@ -17,17 +17,8 @@ $mailboxError = $mailbox_error ?? null;
 $domainLookup = $domain_lookup ?? [];
 $websiteOptions = $website_domain_options ?? [];
 $managementReady = (bool)($management_ready ?? false);
-$baseUrl = $this->getBackendUrl('weline_mail/backend');
-$createAccountUrl = $this->getBackendUrl('weline_mail/backend/index/create-account');
-$statusUrl = $this->getBackendUrl('weline_mail/backend/index/set-account-status');
-$passwordUrl = $this->getBackendUrl('weline_mail/backend/index/reset-account-password');
-$sendUrl = $this->getBackendUrl('weline_mail/backend/index/send-as');
-$createDomainUrl = $this->getBackendUrl('weline_mail/backend/index/create-domain');
-$domainStatusUrl = $this->getBackendUrl('weline_mail/backend/index/set-domain-status');
-$cloudflareUrl = $this->getBackendUrl('weline_mail/backend/index/configure-cloudflare-dns');
-$cloudflareConnectUrl = $this->getBackendUrl('cdn/backend/oauth/connect') . '?' . http_build_query([
-    'return_route' => 'weline_mail/backend',
-]);
+$basePath = 'weline_mail/backend';
+$cloudflareConnectParams = ['return_route' => 'weline_mail/backend'];
 ?>
 <style data-no-extract="true">
 .mail-enterprise{display:grid;gap:var(--weline-space-5);max-width:1440px;margin:0 auto;font-family:Inter,var(--weline-font-family)}
@@ -64,25 +55,25 @@ $cloudflareConnectUrl = $this->getBackendUrl('cdn/backend/oauth/connect') . '?' 
     </header>
     <nav class="mail-enterprise__tabs" aria-label="<?= $escape(__('企业邮箱管理导航')) ?>">
         <?php foreach (['mailbox' => __('邮箱'), 'accounts' => __('用户与账号'), 'domains' => __('域名与 DNS')] as $key => $label): ?>
-            <a href="<?= $escape($baseUrl . '?view=' . $key) ?>" aria-current="<?= $view === $key ? 'true' : 'false' ?>"><?= $label ?></a>
+            <a href="@backend-url{$basePath|['view' => $key]}" aria-current="<?= $view === $key ? 'true' : 'false' ?>"><?= $label ?></a>
         <?php endforeach; ?>
     </nav>
 
     <?php if ($view === 'mailbox'): ?>
         <div class="mail-enterprise__toolbar">
-            <form method="get" action="<?= $escape($baseUrl) ?>">
+            <form method="get" action="@backend-url{$basePath}">
                 <input type="hidden" name="view" value="mailbox">
                 <input type="hidden" name="folder" value="<?= $escape($folder) ?>">
                 <label class="w-field"><span class="w-field__label"><?= __('当前邮箱') ?></span><select class="w-select" name="account" onchange="this.form.submit()"><?php foreach ($mailboxAccounts as $account): ?><option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $selectedAccountId ? 'selected' : '' ?>><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?> · 用户 #<?= (int)$account->getData(MailAccount::schema_fields_CUSTOMER_ID) ?></option><?php endforeach; ?></select></label>
             </form>
-            <div class="mail-enterprise__tabs"><?php foreach (['inbox' => __('收件箱'), 'sent' => __('已发送')] as $key => $label): ?><a href="<?= $escape($baseUrl . '?' . http_build_query(['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $key])) ?>" aria-current="<?= $folder === $key ? 'true' : 'false' ?>"><?= $label ?></a><?php endforeach; ?></div>
+            <div class="mail-enterprise__tabs"><?php foreach (['inbox' => __('收件箱'), 'sent' => __('已发送')] as $key => $label): ?><a href="@backend-url{$basePath|['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $key]}" aria-current="<?= $folder === $key ? 'true' : 'false' ?>"><?= $label ?></a><?php endforeach; ?></div>
         </div>
 
         <div class="mail-enterprise__card">
             <details>
                 <summary class="mail-enterprise__card-head"><?= __('使用当前邮箱发送邮件') ?></summary>
                 <div class="mail-enterprise__card-body">
-                    <w:form method="post" action="@var($escape($sendUrl))">
+                    <w:form method="post" action="@backend-url{'weline_mail/backend/index/send-as'}">
                         <input type="hidden" name="return_view" value="mailbox"><input type="hidden" name="folder" value="sent">
                         <div class="mail-enterprise__form-grid">
                             <label class="w-field"><span class="w-field__label"><?= __('发件账号') ?></span><select class="w-select" name="account_id" required><?php foreach ($mailboxAccounts as $account): ?><option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $selectedAccountId ? 'selected' : '' ?>><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?></option><?php endforeach; ?></select></label>
@@ -101,8 +92,8 @@ $cloudflareConnectUrl = $this->getBackendUrl('cdn/backend/oauth/connect') . '?' 
             <div class="mail-enterprise__card">
                 <div class="mail-enterprise__card-head"><strong><?= $escape($selectedMailbox) ?></strong></div>
                 <?php if ($messages === []): ?><div class="mail-enterprise__empty"><?= __('这个邮件夹暂无邮件。') ?></div><?php else: foreach ($messages as $message): ?>
-                    <?php $url = $baseUrl . '?' . http_build_query(['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $folder, 'message' => (string)($message['id'] ?? '')]); $active = is_array($selectedMessage) && (string)($selectedMessage['id'] ?? '') === (string)($message['id'] ?? ''); ?>
-                    <a class="mail-enterprise__row <?= $active ? 'is-active' : '' ?>" href="<?= $escape($url) ?>"><div class="mail-enterprise__meta"><span><?= $escape($folder === 'sent' ? ($message['to'] ?? '') : ($message['from'] ?? '')) ?></span><time><?= $escape($message['received_at'] ?? '') ?></time></div><div class="mail-enterprise__subject"><?= $escape($message['subject'] ?? __('（无主题）')) ?></div><p class="mail-enterprise__preview"><?= $escape($message['preview'] ?? '') ?></p></a>
+                    <?php $mailMsgParams = ['view' => 'mailbox', 'account' => $selectedAccountId, 'folder' => $folder, 'message' => (string)($message['id'] ?? '')]; $active = is_array($selectedMessage) && (string)($selectedMessage['id'] ?? '') === (string)($message['id'] ?? ''); ?>
+                    <a class="mail-enterprise__row <?= $active ? 'is-active' : '' ?>" href="@backend-url{$basePath|$mailMsgParams}"><div class="mail-enterprise__meta"><span><?= $escape($folder === 'sent' ? ($message['to'] ?? '') : ($message['from'] ?? '')) ?></span><time><?= $escape($message['received_at'] ?? '') ?></time></div><div class="mail-enterprise__subject"><?= $escape($message['subject'] ?? __('（无主题）')) ?></div><p class="mail-enterprise__preview"><?= $escape($message['preview'] ?? '') ?></p></a>
                 <?php endforeach; endif; ?>
             </div>
             <article class="mail-enterprise__card">
@@ -115,7 +106,7 @@ $cloudflareConnectUrl = $this->getBackendUrl('cdn/backend/oauth/connect') . '?' 
             <details open>
                 <summary class="mail-enterprise__card-head"><?= __('开通企业邮箱账号') ?></summary>
                 <div class="mail-enterprise__card-body">
-                    <w:form method="post" action="@var($escape($createAccountUrl))">
+                    <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-account'}">
                         <input type="hidden" name="return_view" value="accounts">
                         <div class="mail-enterprise__form-grid">
                             <label class="w-field"><span class="w-field__label"><?= __('邮箱域名') ?></span><select class="w-select" name="domain_id" required><?php foreach ($domains as $domain): ?><option value="<?= (int)$domain->getId() ?>"><?= $escape($domain->getData(MailDomain::schema_fields_DOMAIN_NAME)) ?> · <?= $escape($domain->getData(MailDomain::schema_fields_ENGINE)) ?></option><?php endforeach; ?></select></label>
@@ -141,10 +132,10 @@ $cloudflareConnectUrl = $this->getBackendUrl('cdn/backend/oauth/connect') . '?' 
                         <td><?= (int)$account->getData(MailAccount::schema_fields_QUOTA_MB) ?> MB</td>
                         <td>
                             <div class="mail-enterprise__actions">
-                                <a class="w-button" data-variant="outline" href="<?= $escape($baseUrl . '?' . http_build_query(['view' => 'mailbox', 'account' => (int)$account->getId()])) ?>"><?= __('查看邮件') ?></a>
-                                <w:form method="post" action="@var($escape($statusUrl))"><input type="hidden" name="return_view" value="accounts"><input type="hidden" name="account_id" value="<?= (int)$account->getId() ?>"><input type="hidden" name="status" value="<?= (string)$account->getData(MailAccount::schema_fields_STATUS) === 'suspended' ? 'active' : 'suspended' ?>"><button class="w-button" data-variant="outline" type="submit"><?= (string)$account->getData(MailAccount::schema_fields_STATUS) === 'suspended' ? __('恢复') : __('暂停') ?></button></w:form>
+                                <a class="w-button" data-variant="outline" href="@backend-url{$basePath|['view' => 'mailbox', 'account' => (int)$account->getId()]}"><?= __('查看邮件') ?></a>
+                                <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-account-status'}"><input type="hidden" name="return_view" value="accounts"><input type="hidden" name="account_id" value="<?= (int)$account->getId() ?>"><input type="hidden" name="status" value="<?= (string)$account->getData(MailAccount::schema_fields_STATUS) === 'suspended' ? 'active' : 'suspended' ?>"><button class="w-button" data-variant="outline" type="submit"><?= (string)$account->getData(MailAccount::schema_fields_STATUS) === 'suspended' ? __('恢复') : __('暂停') ?></button></w:form>
                             </div>
-                            <details><summary><?= __('开通/重置密码') ?></summary><w:form method="post" action="@var($escape($passwordUrl))"><input type="hidden" name="return_view" value="accounts"><input type="hidden" name="account_id" value="<?= (int)$account->getId() ?>"><label class="w-field"><span class="w-field__label"><?= __('新密码') ?></span><input class="w-input" type="password" name="password" minlength="12" required autocomplete="new-password"></label><button class="w-button" data-tone="primary" type="submit"><?= __('确认更新') ?></button></w:form></details>
+                            <details><summary><?= __('开通/重置密码') ?></summary><w:form method="post" action="@backend-url{'weline_mail/backend/index/reset-account-password'}"><input type="hidden" name="return_view" value="accounts"><input type="hidden" name="account_id" value="<?= (int)$account->getId() ?>"><label class="w-field"><span class="w-field__label"><?= __('新密码') ?></span><input class="w-input" type="password" name="password" minlength="12" required autocomplete="new-password"></label><button class="w-button" data-tone="primary" type="submit"><?= __('确认更新') ?></button></w:form></details>
                         </td>
                     </tr>
                 <?php endforeach; ?></tbody>
@@ -157,7 +148,7 @@ $cloudflareConnectUrl = $this->getBackendUrl('cdn/backend/oauth/connect') . '?' 
             <details>
                 <summary class="mail-enterprise__card-head"><?= __('新增邮箱域名') ?></summary>
                 <div class="mail-enterprise__card-body">
-                    <w:form method="post" action="@var($escape($createDomainUrl))">
+                    <w:form method="post" action="@backend-url{'weline_mail/backend/index/create-domain'}">
                         <input type="hidden" name="return_view" value="domains">
                         <div class="mail-enterprise__form-grid">
                             <label class="w-field"><span class="w-field__label"><?= __('网站域名') ?></span><select class="w-select" name="website_domain" required><?php foreach ($websiteOptions as $option): if (!empty($option['is_created'])) { continue; } ?><option value="<?= $escape($option['domain'] ?? '') ?>"><?= $escape($option['domain'] ?? '') ?></option><?php endforeach; ?></select></label>
@@ -189,10 +180,10 @@ $cloudflareConnectUrl = $this->getBackendUrl('cdn/backend/oauth/connect') . '?' 
                             <li><strong><?= __('可选') ?></strong> · smtp.<?= $escape($domainName) ?> CNAME <?= $escape($host) ?> · DNS-only</li>
                         </ul>
                         <p><?= __('TLS 证书必须有效，但不要求购买商业证书：可由 Stalwart/ACME 自动申请 Let’s Encrypt，也可使用自有证书。') ?></p>
-                        <a class="w-button" data-variant="outline" href="<?= $escape($cloudflareConnectUrl) ?>"><?= __('连接或重新授权 Cloudflare') ?></a>
+                        <a class="w-button" data-variant="outline" href="@backend-url{'cdn/backend/oauth/connect'|$cloudflareConnectParams}"><?= __('连接或重新授权 Cloudflare') ?></a>
                         <details>
                             <summary><?= __('Cloudflare 一键 DNS 配置') ?></summary>
-                            <w:form method="post" action="@var($escape($cloudflareUrl))">
+                            <w:form method="post" action="@backend-url{'weline_mail/backend/index/configure-cloudflare-dns'}">
                                 <input type="hidden" name="return_view" value="domains"><input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>">
                                 <label class="w-field"><span class="w-field__label"><?= __('源站公网 IP') ?></span><input class="w-input" type="text" name="origin_ip" value="<?= $escape($originIp) ?>"></label>
                                 <label class="w-field"><span class="w-field__label"><?= __('DKIM 选择器') ?></span><input class="w-input" type="text" name="dkim_selector" value="<?= $escape($selector) ?>"></label>
@@ -201,7 +192,7 @@ $cloudflareConnectUrl = $this->getBackendUrl('cdn/backend/oauth/connect') . '?' 
                                 <div class="mail-enterprise__actions"><button class="w-button" data-variant="outline" type="submit" name="apply" value="0"><?= __('预览变更') ?></button><button class="w-button" data-tone="primary" type="submit" name="apply" value="1"><?= __('应用 DNS') ?></button></div>
                             </w:form>
                         </details>
-                        <w:form method="post" action="@var($escape($domainStatusUrl))"><input type="hidden" name="return_view" value="domains"><input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>"><input type="hidden" name="status" value="<?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? 'suspended' : 'active' ?>"><button class="w-button" data-variant="outline" type="submit"><?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? __('暂停域名') : __('启用域名') ?></button></w:form>
+                        <w:form method="post" action="@backend-url{'weline_mail/backend/index/set-domain-status'}"><input type="hidden" name="return_view" value="domains"><input type="hidden" name="domain_id" value="<?= (int)$domain->getId() ?>"><input type="hidden" name="status" value="<?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? 'suspended' : 'active' ?>"><button class="w-button" data-variant="outline" type="submit"><?= (string)$domain->getData(MailDomain::schema_fields_STATUS) === 'active' ? __('暂停域名') : __('启用域名') ?></button></w:form>
                     </div>
                 </article>
             <?php endforeach; ?>
