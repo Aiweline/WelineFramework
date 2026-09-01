@@ -1,0 +1,20 @@
+<?php
+/**
+ * Weline_CustomerAsset — commerce group entry.
+ *
+ * Hook: account.sidebar.group.commerce
+ *
+ * @hook-priority 165
+ * @hook-sort-order 11
+ * @hook-solo false
+ */
+?>
+<a class="account-hook-nav-link" href="@url{'customer/account/index'}#assets" data-section="assets" data-account-nav-link="true" data-account-nav-parent="commerce">
+    <span class="account-hook-nav-link__label">
+        <w:icon name="box" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text">
+            <strong><lang>我的资产</lang></strong>
+            <span><lang>查看余额与最近变动</lang></span>
+        </span>
+    </span>
+</a>
