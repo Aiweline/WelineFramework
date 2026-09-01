@@ -1,0 +1,447 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array $incidents
+ * @var array $filters
+ * @var array $error_types
+ * @var string $load_error
+ * @var string $page_title
+ * @var int $open_incident_id
+ */
+$incidents = $incidents ?? [];
+$filters = $filters ?? [];
+$errorTypes = $error_types ?? [];
+$loadError = (string)($load_error ?? '');
+$openIncidentId = (int)($open_incident_id ?? 0);
+$h = static fn($v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+$indexUrl = $this->getBackendUrlPath('visitor/backend/pixel-error-monitor/index');
+$detailUrl = $this->getBackendUrlPath('visitor/backend/pixel-error-monitor/detail');
+$disposeUrl = $this->getBackendUrlPath('visitor/backend/pixel-error-monitor/postDispose');
+$jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP;
+?>
+<div class="weline-pixel-error-monitor" style="--w-p:var(--weline-space-4);">
+    <?php if ($loadError !== ''): ?>
+        <div class="w-alert" data-tone="warning" style="--w-mb:var(--weline-space-4);">
+            <lang>错误表尚未就绪或查询失败；完成 setup:upgrade 后刷新。</lang>
+        </div>
+    <?php endif; ?>
+
+    <form method="get" action="<?= $h($indexUrl) ?>" class="w-card" style="--w-mb:var(--weline-space-4);">
+        <div class="w-card__body">
+            <div class="w-cluster" data-wrap="wrap" style="--w-gap:var(--weline-space-3);">
+                <label>
+                    <span class="w-text" data-size="sm"><lang>站点ID</lang></span>
+                    <input class="w-input" type="number" name="website_id" value="<?= $h((string)($filters['website_id'] ?? 0)) ?>" min="0">
+                </label>
+                <label>
+                    <span class="w-text" data-size="sm"><lang>错误类型</lang></span>
+                    <select class="w-select" name="error_type">
+                        <option value=""><lang>全部类型</lang></option>
+                        <?php foreach ($errorTypes as $type): ?>
+                            <option value="<?= $h($type) ?>" <?= (($filters['error_type'] ?? '') === $type) ? 'selected' : '' ?>><?= $h($type) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </label>
+                <label>
+                    <span class="w-text" data-size="sm"><lang>处置</lang></span>
+                    <select class="w-select" name="disposition">
+                        <option value="open" <?= (($filters['disposition'] ?? '') === 'open') ? 'selected' : '' ?>><lang>待处理</lang></option>
+                        <option value="ignored_stale" <?= (($filters['disposition'] ?? '') === 'ignored_stale') ? 'selected' : '' ?>><lang>不予理会(版本过期)</lang></option>
+                        <option value="resolved" <?= (($filters['disposition'] ?? '') === 'resolved') ? 'selected' : '' ?>><lang>已解决</lang></option>
+                        <option value="" <?= (($filters['disposition'] ?? '') === '') ? 'selected' : '' ?>><lang>全部处置</lang></option>
+                    </select>
+                </label>
+                <label>
+                    <span class="w-text" data-size="sm"><lang>Stale</lang></span>
+                    <select class="w-select" name="stale">
+                        <option value=""><lang>全部</lang></option>
+                        <option value="1" <?= (($filters['stale'] ?? '') === '1') ? 'selected' : '' ?>><lang>仅过期客户端</lang></option>
+                        <option value="0" <?= (($filters['stale'] ?? '') === '0') ? 'selected' : '' ?>><lang>非过期</lang></option>
+                    </select>
+                </label>
+                <label>
+                    <span class="w-text" data-size="sm"><lang>邮箱</lang></span>
+                    <select class="w-select" name="has_email">
+                        <option value=""><lang>全部</lang></option>
+                        <option value="1" <?= (($filters['has_email'] ?? '') === '1') ? 'selected' : '' ?>><lang>有邮箱</lang></option>
+                        <option value="0" <?= (($filters['has_email'] ?? '') === '0') ? 'selected' : '' ?>><lang>访客</lang></option>
+                    </select>
+                </label>
+                <label>
+                    <span class="w-text" data-size="sm"><lang>主题版本</lang></span>
+                    <select class="w-select" name="theme_empty">
+                        <option value=""><lang>全部</lang></option>
+                        <option value="1" <?= (($filters['theme_empty'] ?? '') === '1') ? 'selected' : '' ?>><lang>主题版本为空</lang></option>
+                    </select>
+                </label>
+                <button type="submit" class="w-button" data-tone="primary"><lang>筛选</lang></button>
+            </div>
+        </div>
+    </form>
+
+    <div class="w-card">
+        <div class="w-card__body" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;overflow:auto;">
+            <table class="w-table" style="--w-mb:0;">
+                <thead>
+                <tr>
+                    <th><lang>时间</lang></th>
+                    <th><lang>重要程度</lang></th>
+                    <th><lang>类型</lang></th>
+                    <th><lang>消息</lang></th>
+                    <th><lang>身份</lang></th>
+                    <th><lang>框架版本</lang></th>
+                    <th><lang>主题版本</lang></th>
+                    <th><lang>Stale</lang></th>
+                    <th><lang>操作</lang></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php if (!$incidents): ?>
+                    <tr>
+                        <td colspan="9" class="w-text" data-align="center" data-tone="muted" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);">
+                            <lang>暂无错误事故。</lang>
+                        </td>
+                    </tr>
+                <?php else: ?>
+                    <?php
+                    $severityClassifier = new \Weline\Visitor\Service\PixelErrorIncidentClassifier();
+                    foreach ($incidents as $row): ?>
+                        <?php
+                        $data = \is_object($row) && \method_exists($row, 'getData') ? $row->getData() : (array)$row;
+                        $id = (int)($data['incident_id'] ?? 0);
+                        $identity = (string)($data['identity_kind'] ?? 'visitor');
+                        if (!empty($data['identity_email'])) {
+                            $identityLabel = (string)$data['identity_email'];
+                        } elseif ($identity === 'user') {
+                            $identityLabel = 'user#' . (int)($data['user_id'] ?? 0);
+                        } else {
+                            $identityLabel = (string)__('访客');
+                        }
+                        $themeVer = (string)($data['theme_published_version'] ?? $data['theme_published_version_id'] ?? '');
+                        $severity = \strtolower(\trim((string)($data['severity'] ?? '')));
+                        if ($severity === '') {
+                            $severity = $severityClassifier->severityForType((string)($data['error_type'] ?? ''));
+                        }
+                        $severityTone = $severityClassifier->severityBadgeTone($severity);
+                        $severityLabel = $severityClassifier->severityLabel($severity);
+                        $accent = match ($severityTone) {
+                            'info' => 'var(--weline-theme-info)',
+                            'warning' => 'var(--weline-theme-warning)',
+                            default => 'var(--weline-theme-danger)',
+                        };
+                        ?>
+                        <tr style="box-shadow: inset 3px 0 0 <?= $h($accent) ?>;">
+                            <td><?= $h((string)($data['created_at'] ?? '')) ?></td>
+                            <td>
+                                <span class="w-badge" data-tone="<?= $h($severityTone) ?>" data-size="sm">
+                                    <?= $h(__($severityLabel)) ?>
+                                </span>
+                            </td>
+                            <td><code><?= $h((string)($data['error_type'] ?? '')) ?></code></td>
+                            <td><?= $h(\mb_substr((string)($data['error_message'] ?? ''), 0, 80)) ?></td>
+                            <td><?= $h($identityLabel) ?></td>
+                            <td><?= $h((string)($data['client_deploy_version'] ?? '')) ?></td>
+                            <td><?= $themeVer !== '' ? $h($themeVer) : '—' ?></td>
+                            <td>
+                                <?php if (!empty($data['stale_client'])): ?>
+                                    <span class="w-badge" data-tone="info" data-size="sm">Y</span>
+                                <?php else: ?>
+                                    <span class="w-text" data-tone="muted">N</span>
+                                <?php endif; ?>
+                            </td>
+                            <td>
+                                <button type="button"
+                                        class="w-button"
+                                        data-size="sm"
+                                        data-pixel-error-open="<?= $h((string)$id) ?>">
+                                    <lang>查看</lang>
+                                </button>
+                            </td>
+                        </tr>
+                    <?php endforeach; ?>
+                <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<div class="w-dialog" id="pixel-error-detail-dialog" tabindex="-1" data-w-component="dialog" data-state="closed" hidden aria-hidden="true">
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <div class="w-dialog__header">
+                <h5 class="w-dialog__title">
+                    <lang>错误详情</lang>
+                    <span id="pixel-error-detail-id" class="w-text" data-tone="muted" data-size="sm"></span>
+                </h5>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm" aria-label="<?= $h((string)__('关闭')) ?>"></button>
+            </div>
+            <div class="w-dialog__body" id="pixel-error-detail-body">
+                <p class="w-text" data-tone="muted"><lang>加载中…</lang></p>
+            </div>
+            <div class="w-dialog__footer w-cluster" data-wrap="wrap" style="--w-gap:var(--weline-space-2);">
+                <button type="button" class="w-button" data-size="sm" data-pixel-error-dispose="ignored_stale"><lang>标记不予理会(版本过期)</lang></button>
+                <button type="button" class="w-button" data-tone="primary" data-size="sm" data-pixel-error-dispose="resolved"><lang>标记已解决</lang></button>
+                <button type="button" class="w-button" data-size="sm" data-pixel-error-dispose="open"><lang>重新打开</lang></button>
+                <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral"><lang>关闭</lang></button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    'use strict';
+    var detailUrl = <?= json_encode((string)$detailUrl, $jsonFlags) ?>;
+    var disposeUrl = <?= json_encode((string)$disposeUrl, $jsonFlags) ?>;
+    var openIncidentId = <?= (int)$openIncidentId ?>;
+    var i18n = {
+        loading: <?= json_encode((string)__('加载中…'), $jsonFlags) ?>,
+        loadFailed: <?= json_encode((string)__('加载详情失败'), $jsonFlags) ?>,
+        disposeFailed: <?= json_encode((string)__('处置失败'), $jsonFlags) ?>,
+        none: <?= json_encode((string)__('无'), $jsonFlags) ?>,
+        who: <?= json_encode((string)__('谁'), $jsonFlags) ?>,
+        when: <?= json_encode((string)__('何时'), $jsonFlags) ?>,
+        where: <?= json_encode((string)__('在哪'), $jsonFlags) ?>,
+        versionStatus: <?= json_encode((string)__('版本状态'), $jsonFlags) ?>,
+        staleYes: <?= json_encode((string)__('版本过期'), $jsonFlags) ?>,
+        staleNo: <?= json_encode((string)__('版本正常'), $jsonFlags) ?>,
+        steps: <?= json_encode((string)__('用户轨迹'), $jsonFlags) ?>,
+        form: <?= json_encode((string)__('表单快照(脱敏)'), $jsonFlags) ?>,
+        stack: <?= json_encode((string)__('堆栈摘要'), $jsonFlags) ?>,
+        tech: <?= json_encode((string)__('技术细节'), $jsonFlags) ?>,
+        code: <?= json_encode((string)__('错误码'), $jsonFlags) ?>,
+        session: <?= json_encode((string)__('会话'), $jsonFlags) ?>,
+        pixelId: <?= json_encode((string)__('像素ID'), $jsonFlags) ?>,
+        clientVer: <?= json_encode((string)__('客户端框架'), $jsonFlags) ?>,
+        serverVer: <?= json_encode((string)__('服务端框架'), $jsonFlags) ?>,
+        worker: 'Worker',
+        themeVer: <?= json_encode((string)__('主题发布版本'), $jsonFlags) ?>,
+        pixelScript: <?= json_encode((string)__('Pixel 脚本'), $jsonFlags) ?>,
+        rawType: <?= json_encode((string)__('原始类型'), $jsonFlags) ?>
+    };
+    var dialog = document.getElementById('pixel-error-detail-dialog');
+    var bodyEl = document.getElementById('pixel-error-detail-body');
+    var idEl = document.getElementById('pixel-error-detail-id');
+    var currentId = 0;
+
+    function escapeHtml(value) {
+        var div = document.createElement('div');
+        div.textContent = value == null ? '' : String(value);
+        return div.innerHTML;
+    }
+
+    function unwrap(res) {
+        if (!res || typeof res !== 'object') {
+            return res;
+        }
+        if (res.data && typeof res.data === 'object' && ('success' in res.data || (res.data.data && typeof res.data.data === 'object'))) {
+            return res.data;
+        }
+        return res;
+    }
+
+    function requestJson(url, options) {
+        var opts = Object.assign({
+            credentials: 'same-origin',
+            headers: {
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        }, options || {});
+        opts.headers = Object.assign({
+            'Accept': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest'
+        }, (options && options.headers) || {});
+        return fetch(url, opts).then(function (response) {
+            return response.text().then(function (text) {
+                var parsed = null;
+                try {
+                    parsed = text ? JSON.parse(text) : null;
+                } catch (e) {
+                    parsed = null;
+                }
+                if (!response.ok) {
+                    var msg = (parsed && (parsed.message || parsed.msg)) || (i18n.loadFailed + ' (' + response.status + ')');
+                    throw new Error(msg);
+                }
+                if (parsed == null) {
+                    throw new Error(i18n.loadFailed);
+                }
+                return parsed;
+            });
+        });
+    }
+
+    function glanceCell(label, valueHtml) {
+        return '<div class="w-stack" style="--w-gap:var(--weline-space-1);">'
+            + '<span class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(label) + '</span>'
+            + '<div class="w-text" data-size="sm">' + valueHtml + '</div>'
+            + '</div>';
+    }
+
+    function shortPath(url) {
+        if (!url) {
+            return '';
+        }
+        try {
+            var parsed = new URL(String(url), window.location.origin);
+            return parsed.pathname + parsed.search;
+        } catch (e) {
+            return String(url);
+        }
+    }
+
+    function renderIncident(data) {
+        currentId = parseInt(data.incident_id, 10) || 0;
+        if (idEl) {
+            idEl.textContent = currentId ? ('#' + currentId) : '';
+        }
+        var tone = escapeHtml(data.severity_tone || 'danger');
+        var badge = '<span class="w-badge" data-tone="' + tone + '" data-size="sm">' + escapeHtml(data.severity_label || data.severity || '') + '</span>';
+        var disp = '<span class="w-badge" data-tone="neutral" data-size="sm">' + escapeHtml(data.disposition_label || data.disposition || '') + '</span>';
+        var typeTitle = escapeHtml(data.error_type_label || data.error_type || '');
+        var steps = Array.isArray(data.step_path) ? data.step_path : [];
+        var form = data.form_snapshot && typeof data.form_snapshot === 'object' ? data.form_snapshot : {};
+        var stepsHtml = steps.length
+            ? '<div class="w-cluster" data-wrap="wrap" style="--w-gap:var(--weline-space-2);">' + steps.map(function (step, idx) {
+                var chip = '<span class="w-badge" data-tone="neutral" data-size="sm">'
+                    + escapeHtml((step && (step.name || step.path || step.detail)) || ('#' + (idx + 1)))
+                    + '</span>';
+                return (idx ? '<span class="w-text" data-tone="muted">→</span>' : '') + chip;
+            }).join('') + '</div>'
+            : '<p class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(i18n.none) + '</p>';
+        var formHtml = Object.keys(form).length
+            ? '<pre class="w-text" data-size="sm" style="white-space:pre-wrap;margin:0;">' + escapeHtml(JSON.stringify(form, null, 2)) + '</pre>'
+            : '<p class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(i18n.none) + '</p>';
+        var stackHtml = data.error_stack
+            ? '<pre class="w-text" data-size="sm" style="white-space:pre-wrap;overflow:auto;max-height:240px;margin:0;">' + escapeHtml(data.error_stack) + '</pre>'
+            : '<p class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(i18n.none) + '</p>';
+        var pageShort = shortPath(data.page_url);
+        var pageHtml = data.page_url
+            ? '<a class="w-text" data-size="sm" href="' + escapeHtml(data.page_url) + '" target="_blank" rel="noopener">' + escapeHtml(pageShort) + '</a>'
+            : escapeHtml(i18n.none);
+        var staleHtml = data.stale_client
+            ? '<span class="w-badge" data-tone="warning" data-size="sm">' + escapeHtml(i18n.staleYes) + '</span>'
+            : '<span class="w-badge" data-tone="success" data-size="sm">' + escapeHtml(i18n.staleNo) + '</span>';
+        if (data.client_deploy_version) {
+            staleHtml += ' <span class="w-text" data-tone="muted" data-size="sm">' + escapeHtml(data.client_deploy_version) + '</span>';
+        }
+
+        bodyEl.innerHTML =
+            '<div class="weline-pixel-error-glance w-stack" style="--w-gap:var(--weline-space-4);">'
+            + '<div class="w-stack" style="--w-gap:var(--weline-space-2);">'
+            + '<div class="w-cluster" data-wrap="wrap" style="--w-gap:var(--weline-space-2);">' + badge + disp + '</div>'
+            + '<h6 class="w-text" style="margin:0;">' + typeTitle + '</h6>'
+            + '<p class="w-text" style="margin:0;">' + escapeHtml(data.error_message || '') + '</p>'
+            + '</div>'
+            + '<div class="w-grid" data-cols="2" style="--w-gap:var(--weline-space-3);">'
+            + glanceCell(i18n.who, escapeHtml(data.identity_label || i18n.none))
+            + glanceCell(i18n.when, escapeHtml(data.created_at || '—'))
+            + glanceCell(i18n.where, pageHtml)
+            + glanceCell(i18n.versionStatus, staleHtml)
+            + '</div>'
+            + '<div class="w-stack" style="--w-gap:var(--weline-space-2);">'
+            + '<strong class="w-text" data-size="sm">' + escapeHtml(i18n.steps) + '</strong>'
+            + stepsHtml
+            + '</div>'
+            + '<details class="w-stack" style="--w-gap:var(--weline-space-2);"><summary class="w-text" data-size="sm">' + escapeHtml(i18n.form) + '</summary>' + formHtml + '</details>'
+            + '<details class="w-stack" style="--w-gap:var(--weline-space-2);"><summary class="w-text" data-size="sm">' + escapeHtml(i18n.stack) + '</summary>' + stackHtml + '</details>'
+            + '<details class="w-stack" style="--w-gap:var(--weline-space-2);"><summary class="w-text" data-size="sm">' + escapeHtml(i18n.tech) + '</summary>'
+            + '<div class="w-stack w-text" data-size="sm" style="--w-gap:var(--weline-space-1);">'
+            + '<div>' + escapeHtml(i18n.rawType) + ': <code>' + escapeHtml(data.error_type || '') + '</code></div>'
+            + '<div>' + escapeHtml(i18n.code) + ': ' + escapeHtml(data.error_code || '—') + '</div>'
+            + '<div>' + escapeHtml(i18n.session) + ': <code>' + escapeHtml(data.session_id || '') + '</code></div>'
+            + '<div>' + escapeHtml(i18n.pixelId) + ': ' + escapeHtml(data.pixel_id || 0) + '</div>'
+            + '<div>' + escapeHtml(i18n.clientVer) + ': ' + escapeHtml(data.client_deploy_version || '') + '</div>'
+            + '<div>' + escapeHtml(i18n.serverVer) + ': ' + escapeHtml(data.server_deploy_version || '') + '</div>'
+            + '<div>' + escapeHtml(i18n.worker) + ': ' + escapeHtml(data.worker_build_id || '') + '</div>'
+            + '<div>' + escapeHtml(i18n.themeVer) + ': ' + escapeHtml(data.theme_published_version || '—') + '</div>'
+            + '<div>' + escapeHtml(i18n.pixelScript) + ': ' + escapeHtml(data.pixel_script_version || '') + '</div>'
+            + '</div></details>'
+            + '</div>';
+    }
+
+    function openDialog() {
+        if (!dialog || !window.Weline || !Weline.UI || !Weline.UI.dialog) {
+            return;
+        }
+        Weline.UI.dialog.open(dialog);
+    }
+
+    function loadIncident(id) {
+        currentId = parseInt(id, 10) || 0;
+        if (!currentId || !bodyEl) {
+            return;
+        }
+        bodyEl.innerHTML = '<p class="w-text" data-tone="muted">' + escapeHtml(i18n.loading) + '</p>';
+        if (idEl) {
+            idEl.textContent = '#' + currentId;
+        }
+        openDialog();
+        var url = detailUrl + (detailUrl.indexOf('?') === -1 ? '?' : '&') + 'id=' + encodeURIComponent(String(currentId)) + '&format=json';
+        requestJson(url, { method: 'GET' }).then(function (res) {
+            var data = unwrap(res);
+            if (!data || data.success === false) {
+                throw new Error((data && data.message) || i18n.loadFailed);
+            }
+            renderIncident(data.data || data);
+        }).catch(function (err) {
+            bodyEl.innerHTML = '<p class="w-text" data-tone="danger">' + escapeHtml((err && err.message) || i18n.loadFailed) + '</p>';
+            if (window.Weline && Weline.UI && Weline.UI.toast) {
+                Weline.UI.toast.error((err && err.message) || i18n.loadFailed);
+            }
+        });
+    }
+
+    function dispose(disposition) {
+        if (!currentId) {
+            return;
+        }
+        var body = new URLSearchParams();
+        body.set('id', String(currentId));
+        body.set('disposition', disposition);
+        body.set('format', 'json');
+        requestJson(disposeUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest'
+            },
+            body: body.toString()
+        }).then(function (res) {
+            var data = unwrap(res);
+            if (!data || data.success === false) {
+                throw new Error((data && data.message) || i18n.disposeFailed);
+            }
+            if (window.Weline && Weline.UI && Weline.UI.toast) {
+                Weline.UI.toast.success(data.message || 'OK');
+            }
+            window.setTimeout(function () { window.location.reload(); }, 600);
+        }).catch(function (err) {
+            if (window.Weline && Weline.UI && Weline.UI.toast) {
+                Weline.UI.toast.error((err && err.message) || i18n.disposeFailed);
+            }
+        });
+    }
+
+    document.addEventListener('click', function (event) {
+        var openBtn = event.target && event.target.closest ? event.target.closest('[data-pixel-error-open]') : null;
+        if (openBtn) {
+            event.preventDefault();
+            loadIncident(openBtn.getAttribute('data-pixel-error-open'));
+            return;
+        }
+        var disposeBtn = event.target && event.target.closest ? event.target.closest('[data-pixel-error-dispose]') : null;
+        if (disposeBtn) {
+            event.preventDefault();
+            dispose(disposeBtn.getAttribute('data-pixel-error-dispose'));
+        }
+    });
+
+    if (openIncidentId > 0) {
+        loadIncident(openIncidentId);
+    }
+})();
+</script>

@@ -13,6 +13,29 @@
 "Create visitor A/B test config.","Create visitor A/B test config."
 "Seed or clean auditable AI/SEO acceptance pixel events.","Seed or clean auditable AI/SEO acceptance pixel events."
 "Export visitor analytics data.","Export visitor analytics data."
+站点错误监控,站点错误监控
+"前端 JS 异常","前端 JS 异常"
+"window.onerror / ErrorEvent 运行时错误","window.onerror / ErrorEvent 运行时错误"
+"未处理 Promise","未处理 Promise"
+unhandledrejection,unhandledrejection
+接口技术失败,接口技术失败
+网络中断、超时、5xx、协议失败,网络中断、超时、5xx、协议失败
+静态资源失败,静态资源失败
+"关键 script/css 加载失败","关键 script/css 加载失败"
+客户端版本过期,"Stale client version"
+缓存旧包与当前发布不一致,缓存旧包与当前发布不一致
+未分类技术错误,未分类技术错误
+未能归类的技术错误,未能归类的技术错误
+库存不足,"Out of stock"
+库存不足或不可售,库存不足或不可售
+结账业务失败,结账业务失败
+"结账 freeze/submit 等业务失败","结账 freeze/submit 等业务失败"
+支付失败,"Payment failed"
+支付或支付恢复失败,支付或支付恢复失败
+登录鉴权失败,登录鉴权失败
+登录或鉴权失败,登录或鉴权失败
+其他业务拒绝,其他业务拒绝
+优惠码、限购、风控等业务拒绝,优惠码、限购、风控等业务拒绝
 加载流量渠道列表失败：%{1},"Failed to load traffic channels: %{1}"
 流量渠道,"Traffic channels"
 新建投放渠道,"Create Campaign Channel"
@@ -44,6 +67,22 @@ chart,chart
 停用或启用流量渠道,"Disable or Enable Traffic Channel"
 switch,switch
 停用或启用投放渠道,"Disable or Enable Campaign Channel"
+加载错误监控失败：%{1},加载错误监控失败：%{1}
+错误监控,"Error Monitor"
+"缺少事故 ID","缺少事故 ID"
+事故不存在,事故不存在
+处置参数无效,处置参数无效
+已更新处置状态,已更新处置状态
+访客,Visitor
+warning,warning
+像素错误监控,像素错误监控
+查看错误监控列表,查看错误监控列表
+查看错误详情,查看错误详情
+eye,eye
+查看错误监控详情,查看错误监控详情
+处置错误事故,处置错误事故
+check,check
+标记错误事故处置状态,标记错误事故处置状态
 加载像素统计失败：%{1},"Failed to load pixel statistics: %{1}"
 请选择站点后再查看详情报表,"Please select the site before viewing the detailed report"
 加载站点详情失败：%{1},"Failed to load site details: %{1}"
@@ -167,6 +206,56 @@ download,download
 "%{1} 个会话 / %{2} 条事件","%{1} sessions / %{2} events"
 "（无 session_id）","(no session_id)"
 "%{1} 事件","%{1} event"
+"错误表尚未就绪或查询失败；完成 setup:upgrade 后刷新。","错误表尚未就绪或查询失败；完成 setup:upgrade 后刷新。"
+站点ID,"Website ID"
+错误类型,错误类型
+全部类型,"All types"
+处置,处置
+待处理,Open
+不予理会(版本过期),"Ignore (stale)"
+已解决,Resolved
+全部处置,全部处置
+Stale,Stale
+仅过期客户端,"Stale client only"
+非过期,非过期
+邮箱,邮箱
+有邮箱,有邮箱
+主题版本,主题版本
+主题版本为空,"Theme version empty"
+筛选,筛选
+时间,time
+重要程度,Severity
+消息,消息
+身份,身份
+框架版本,框架版本
+暂无错误事故。,"No error incidents."
+查看,View
+错误详情,"Error Detail"
+加载中…,Loading…
+标记不予理会(版本过期),"Mark ignored (stale)"
+标记已解决,"Mark resolved"
+重新打开,Reopen
+关闭,Close
+加载详情失败,"Failed to load detail"
+处置失败,"Dispose failed"
+无,None
+谁,Who
+何时,When
+在哪,Where
+版本状态,"Version status"
+版本过期,"Stale client"
+版本正常,"Up to date"
+用户轨迹,"User trail"
+表单快照(脱敏),"Form snapshot (redacted)"
+堆栈摘要,"Stack summary"
+技术细节,"Technical details"
+错误码,错误码
+像素ID,像素ID
+客户端框架,客户端框架
+服务端框架,服务端框架
+主题发布版本,主题发布版本
+"Pixel 脚本","Pixel 脚本"
+原始类型,"Raw type"
 冷归档明细,"Cold archive details"
 返回看板,"Return to Kanban"
 热表明细,"Hot table details"
@@ -178,12 +267,10 @@ download,download
 时间范围,"Time Range"
 开始日期,"start date"
 结束日期,"end date"
-全部类型,"All types"
 每页条数,"Number of items per page"
 应用筛选,"Apply filters"
 重置,reset
 "冷归档查询被拒绝或暂不可用（无站 / 超窗 / 数据库异常）。","Cold archive query rejected or unavailable (missing site / oversize window / database error)."
-时间,time
 URL,URL
 归档时间,"Archived at"
 列表未就绪。,"The list is not ready."
@@ -225,7 +312,6 @@ URL,URL
 最近触发,"Last Triggered"
 暂无事件排行数据。,"No event ranking data."
 站点对比,"Site Comparison"
-查看,Check
 暂无站点对比数据。,"No site comparison data."
 下钻,"Drill down"
 "暂无流量渠道数据（需扁平列就绪且存在 channel_code）。","No traffic channel data yet (requires flat columns and channel_code)."
@@ -261,7 +347,6 @@ Events,Events
 页面表现,"Page performance"
 "暂无页面数据。产生 page_view / page_exit 后会出现路径、停留。","There is no page data yet. After generating page_view / page_exit, the path and stay will appear."
 路径,path
-访客,visitor
 暂无事件排行。,"There is no event ranking yet."
 电商漏斗,"Ecommerce funnel"
 "字典四步：view_item → add_to_cart → begin_checkout → checkout_success","Dictionary 4 steps: view_item → add_to_cart → begin_checkout → checkout_success"
@@ -465,6 +550,8 @@ Events,Events
 相对落地,"Relatively grounded"
 落地,landing
 互动,interactive
+站点错误：%{1},站点错误：%{1}
+"页面 %{1} · %{2} · 身份 %{3} · 框架 %{4}%{5}","页面 %{1} · %{2} · 身份 %{3} · 框架 %{4}%{5}"
 "未找到版本号 %{1} 对应的加密token","Encryption token for version number %{1} not found"
 "版本号 %{1} 的加密token为空","Encryption token for version %{1} is empty"
 无效的加密数据格式,"Invalid Encrypted Data Format"
@@ -481,6 +568,22 @@ Events,Events
 "rule 匹配模式无效：%{1}","Invalid rule match mode: %{1}"
 "rule 匹配值必填","Rule match value is required"
 "campaign 渠道不接受匹配模式/匹配值","Campaign channels do not accept match mode/value"
+页面,页面
+步骤路径,"Step path"
+概要,概要
+版本,版本
+页面脚本异常,"Page script error"
+未处理的异步失败,"Unhandled async failure"
+网络/接口失败,"Network / API failure"
+资源加载失败,"Resource load failure"
+结账失败,"Checkout failed"
+登录/鉴权失败,"Auth failure"
+业务规则拦截,"Business rule blocked"
+未分类错误,"Unclassified error"
+已忽略（版本过期）,"Ignored (stale)"
+Worker,Worker
+无步骤记录,"No steps"
+无表单快照,"No form snapshot"
 加载失败,"Loading failed"
 请先选择测试,"Please select a test first"
 请填写测试ID和测试名称,"Fill in the test ID and test name."
@@ -490,10 +593,13 @@ Events,Events
 创建成功,"Created successfully"
 创建失败,"Creation failed"
 导出失败,"Pan-fried braised pork belly"
-站点ID,"Website ID"
 "0 表示全局渠道。","0 means a global channel."
 "站点 ID（必填）","Site ID (required)"
 "站点 ID","Site ID"
 事件看板,"Event board"
 像素分析,"Pixel analysis"
 访问信息,"Visitor insights"
+信息,Info
+警告,Warning
+错误,Error
+紧急,Urgent
