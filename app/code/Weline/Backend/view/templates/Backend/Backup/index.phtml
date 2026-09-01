@@ -141,7 +141,7 @@ $jsonJsLiteral = static function (mixed $value): string {
             event.preventDefault();
             var formData = new FormData(event.target);
             
-            var url = '<?= $this->getBackendUrl('*/backup/create') ?>';
+            var url = '@backend-url{'*/backup/create'}';
             var opts = { method: 'POST', body: formData };
             Weline.adminRequest('backend_admin', url, opts)
             .then(function(res) {

@@ -15,7 +15,7 @@ $adapter_map = $adapter_map ?? [];
         <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
             <h4 class="w-text" style="--w-mb-sm:0;--w-font-size:1.125rem;"><lang>渠道配置</lang></h4>
             <div>
-                <a href="<?= $this->getBackendUrl('*/backend/notificationchannel/form') ?>" class="w-button" data-tone="primary">
+                <a href="@backend-url{'*/backend/notificationchannel/form'}" class="w-button" data-tone="primary">
                     <w:icon name="plus" size="sm"></w:icon><lang>新建渠道</lang>
                 </a>
             </div>
@@ -37,7 +37,7 @@ $adapter_map = $adapter_map ?? [];
                 <div class="weline-channel-empty w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);">
                     <w:icon name="settings" size="sm"></w:icon>
                     <p style="--w-mt:var(--weline-space-4);"><lang>暂无渠道配置</lang></p>
-                    <a href="<?= $this->getBackendUrl('*/backend/notificationchannel/form') ?>" class="w-button" data-tone="primary" style="--w-mt:var(--weline-space-2);">
+                    <a href="@backend-url{'*/backend/notificationchannel/form'}" class="w-button" data-tone="primary" style="--w-mt:var(--weline-space-2);">
                         <w:icon name="plus" size="sm"></w:icon><lang>创建第一个渠道</lang>
                     </a>
                 </div>
@@ -87,7 +87,7 @@ $adapter_map = $adapter_map ?? [];
                                     <?php endif; ?>
                                 </td>
                                 <td class="w-text" data-align="center">
-                                    <a href="<?= $this->getBackendUrl('*/backend/notificationchannel/form', ['id' => $channel['channel_id']]) ?>" class="w-button" title="<?= __('编辑') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                    <a href="@backend-url{'*/backend/notificationchannel/form'|['id' => $channel['channel_id']]}" class="w-button" title="<?= __('编辑') ?>" data-tone="primary" data-variant="outline" data-size="sm">
                                         <w:icon name="edit" size="sm"></w:icon>
                                     </a>
                                     <button type="button" class="w-button" data-channel-action="delete" data-channel-id="<?= (int)($channel['channel_id'] ?? 0) ?>" title="<?= __('删除') ?>" data-tone="danger" data-variant="outline" data-size="sm">
@@ -130,7 +130,7 @@ $adapter_map = $adapter_map ?? [];
             Weline.UI.dialog.confirm('<?= __('确定要删除此渠道吗？删除后将停止向该渠道发送通知。') ?>').then(function(confirmed) {
                 if (!confirmed) return;
 
-                var url = '<?= $this->getBackendUrl('*/backend/notificationchannel/delete') ?>';
+                var url = '@backend-url{'*/backend/notificationchannel/delete'}';
                 var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'channel_id=' + channelId };
                 var req = Weline.adminRequest('backend_admin', url, opts);
                 req.then(function(res) {

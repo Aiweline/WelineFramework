@@ -26,6 +26,7 @@ final class FrontendWorkerBackendAttestationProvider implements FrontendWorkerBa
 
     public function __construct(
         private readonly BackendAttestedSessionCookieResolver $sessionCookieResolver,
+        private readonly SessionFactory $sessionFactory,
     ) {
     }
 
@@ -91,7 +92,12 @@ final class FrontendWorkerBackendAttestationProvider implements FrontendWorkerBa
     private function currentIdentity(?string $expectedSessionFingerprint = null): ?array
     {
         if ($expectedSessionFingerprint === null) {
-            $session = SessionFactory::getInstance()->createBackendSession();
+            // Must use the same request-scoped SessionFactory instance as
+            // FrontendQueryGateway. The static SessionFactory singleton is a
+            // separate object from ObjectManager's shared factory; restoring
+            // onto that singleton leaves Gateway's principal check empty and
+            // surfaces as auth_error (e.g. eav_admin.adminRequest 403).
+            $session = $this->sessionFactory->createBackendSession();
         } else {
             $sessionId = $this->sessionCookieResolver->resolve($expectedSessionFingerprint);
             if ($sessionId === null) {
@@ -100,7 +106,7 @@ final class FrontendWorkerBackendAttestationProvider implements FrontendWorkerBa
             // The Query endpoint may already be inside a storefront Website
             // cookie scope. Install the exact attested backend Session into the
             // request factory so authorization and the provider share identity.
-            $session = SessionFactory::getInstance()->restoreAuthenticatedSession(
+            $session = $this->sessionFactory->restoreAuthenticatedSession(
                 'backend',
                 $sessionId,
             );

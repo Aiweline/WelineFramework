@@ -80,7 +80,7 @@ final class BackendWorkerAttestationResponse implements ObserverInterface
             ] as $header) {
                 $headers->removeHeader($header);
             }
-            $response->setBody((string)__('后台安全凭证暂不可用，请稍后刷新页面。'));
+            $response->setBody($exception->responseBody());
             return $response;
         }
     }

@@ -21,11 +21,11 @@
     'use strict';
 
     // 防止重复初始化；版本 bump 用于覆盖「误把首段当 admin 前缀」的旧缓存脚本。
-    if (window.__WelineUrlBackendInitialized && window.__WelineUrlBackendRebuildVersion === 3) {
+    if (window.__WelineUrlBackendInitialized && window.__WelineUrlBackendRebuildVersion === 4) {
         return;
     }
     window.__WelineUrlBackendInitialized = true;
-    window.__WelineUrlBackendRebuildVersion = 3; // prefix only when first segment === adminArea
+    window.__WelineUrlBackendRebuildVersion = 4; // path-only language (no WELINE_USER_LANG cookie)
 
     /**
      * Cookie 操作函数（如果不存在则定义）
@@ -98,6 +98,136 @@
             availableCurrencies: config.availableCurrencies || config.supportedCurrencies || config.currencyCodes || config.currencies
                 || site.availableCurrencies || site.supportedCurrencies || site.currencyCodes || site.currencies || [],
         };
+    }
+
+    const LOCALE_PATH_PATTERN = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
+
+    function normalizeLangCode(value) {
+        return String(value || '').trim().replace(/-/g, '_');
+    }
+
+    function isLocalePathSegment(value) {
+        return LOCALE_PATH_PATTERN.test(String(value || '').trim());
+    }
+
+    function detectPathLanguage(pathname) {
+        const parts = String(pathname || '/').split('/').filter(Boolean);
+        for (let i = 0; i < parts.length; i += 1) {
+            if (isLocalePathSegment(parts[i])) {
+                return normalizeLangCode(parts[i]);
+            }
+        }
+        return '';
+    }
+
+    function readDocumentLanguage() {
+        try {
+            const el = document.documentElement;
+            if (!el) {
+                return '';
+            }
+            const raw = (typeof el.getAttribute === 'function')
+                ? (el.getAttribute('data-lang') || el.getAttribute('lang') || '')
+                : '';
+            return normalizeLangCode(raw || el.lang || '');
+        } catch (_error) {
+            return '';
+        }
+    }
+
+    function resolveCurrentLanguage(config) {
+        return detectPathLanguage(window.location.pathname)
+            || readQueryLanguage()
+            || readDocumentLanguage()
+            || normalizeLangCode((config && config.currentLang) || '')
+            || '';
+    }
+
+    function readQueryLanguage() {
+        try {
+            const urlParams = new URLSearchParams(window.location.search || '');
+            const candidates = [urlParams.get('locale'), urlParams.get('locale_code'), urlParams.get('lang')];
+            for (let i = 0; i < candidates.length; i += 1) {
+                const raw = String(candidates[i] || '').trim();
+                if (!raw || raw.toLowerCase() === 'default') {
+                    continue;
+                }
+                return normalizeLangCode(raw);
+            }
+        } catch (_error) {
+        }
+        return '';
+    }
+
+    function detectPathCurrency(pathname, config) {
+        const parts = String(pathname || '/').split('/').filter(Boolean);
+        for (let i = 0; i < parts.length; i += 1) {
+            if (isSupportedCurrencyCode(parts[i], config || {})) {
+                return normalizeCurrencyCode(parts[i]);
+            }
+        }
+        return '';
+    }
+
+    function readQueryCurrency(config) {
+        try {
+            const code = normalizeCurrencyCode(new URLSearchParams(window.location.search || '').get('currency'));
+            return isSupportedCurrencyCode(code, config || {}) ? code : '';
+        } catch (_error) {
+            return '';
+        }
+    }
+
+    function expireCurrencyPreferenceCookies() {
+        const past = 'Thu, 01 Jan 1970 00:00:00 GMT';
+        const host = String(window.location.hostname || '').trim();
+        const names = ['WELINE_USER_CURRENCY'];
+        String(document.cookie || '').split(';').forEach((part) => {
+            const key = String(part.split('=')[0] || '').trim();
+            if (key === 'WELINE_USER_CURRENCY' || /^WELINE_USER_CURRENCY_w\d+$/.test(key)) {
+                if (!names.includes(key)) {
+                    names.push(key);
+                }
+            }
+        });
+        names.forEach((key) => {
+            document.cookie = key + '=;expires=' + past + ';path=/;SameSite=Lax';
+            if (host) {
+                document.cookie = key + '=;expires=' + past + ';path=/;domain=' + host + ';SameSite=Lax';
+            }
+        });
+        try {
+            localStorage.removeItem('weline_user_currency');
+            localStorage.removeItem('api_doc_currency');
+            localStorage.removeItem('WELINE_USER_CURRENCY');
+        } catch (_error) {
+        }
+    }
+
+    function expireLanguagePreferenceCookies() {
+        const past = 'Thu, 01 Jan 1970 00:00:00 GMT';
+        const host = String(window.location.hostname || '').trim();
+        const names = ['WELINE_USER_LANG'];
+        String(document.cookie || '').split(';').forEach((part) => {
+            const key = String(part.split('=')[0] || '').trim();
+            if (key === 'WELINE_USER_LANG' || /^WELINE_USER_LANG_w\d+$/.test(key)) {
+                if (!names.includes(key)) {
+                    names.push(key);
+                }
+            }
+        });
+        names.forEach((key) => {
+            document.cookie = key + '=;expires=' + past + ';path=/;SameSite=Lax';
+            if (host) {
+                document.cookie = key + '=;expires=' + past + ';path=/;domain=' + host + ';SameSite=Lax';
+            }
+        });
+        try {
+            localStorage.removeItem('weline_user_lang');
+            localStorage.removeItem('api_doc_locale');
+            localStorage.removeItem('WELINE_USER_LANG');
+        } catch (_error) {
+        }
     }
 
     function normalizeCurrencyCode(value) {
@@ -254,7 +384,8 @@
                         host1s.shift();
                         host1s1 = host1s[0];
                     }
-                    if (getCookie('WELINE_USER_LANG') === host1s1) {
+                    // 移除 lang（路径段形态，不再依赖 Cookie）
+                    if (isLocalePathSegment(host1s1)) {
                         host1s.shift();
                     }
                 }
@@ -276,8 +407,10 @@
         }
         let prePath = getCookie('WELINE_WEBSITE_URL') || '';
         const config = getConfig();
-        const currentLang = getCookie('WELINE_USER_LANG') || config.currentLang || '';
-        const rawCurrentCurrency = getCookie('WELINE_USER_CURRENCY') || config.currentCurrency || '';
+        const currentLang = resolveCurrentLanguage(config);
+        const rawCurrentCurrency = detectPathCurrency(window.location.pathname, config)
+            || readQueryCurrency(config)
+            || normalizeCurrencyCode(config.currentCurrency || '');
         const currentCurrency = isSupportedCurrencyCode(rawCurrentCurrency, config) ? normalizeCurrencyCode(rawCurrentCurrency) : '';
 
         if (WelineString.startsWith(path, getCookie('WELINE_WEBSITE_URL') || '')) {
@@ -490,13 +623,13 @@
     window.urlWithCurrency = buildUrlWithCurrency;
 
     window.select_language = function (lang) {
-        // Cookie 必须 path=/，否则前台文档页（无 admin 前缀）读不到，表现为「语言切不过去」。
-        setCookie('WELINE_USER_LANG', lang, 7, { path: '/', domain: window.location.host });
+        // Path-only language: expire legacy cookies, then navigate by path.
+        expireLanguagePreferenceCookies();
         window.location.href = buildUrlWithLang(window.location.pathname + window.location.search, lang);
     };
 
     window.select_currency = function (currencyCode) {
-        setCookie('WELINE_USER_CURRENCY', currencyCode, 7, { path: '/', domain: window.location.host });
+        expireCurrencyPreferenceCookies();
         window.location.href = buildUrlWithCurrency(window.location.pathname + window.location.search, currencyCode);
     };
 
