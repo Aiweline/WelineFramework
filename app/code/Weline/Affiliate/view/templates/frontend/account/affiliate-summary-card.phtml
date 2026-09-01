@@ -1,0 +1,232 @@
+<?php
+/**
+ * Shared account-center affiliate summary card.
+ *
+ * This template is rendered only from customer account hooks. The standalone
+ * /affiliate route redirects back to the account center for theme consistency.
+ */
+/** @var \Weline\Framework\View\Template $this */
+$affiliateResponse = [];
+try {
+    $affiliateResponse = w_query('affiliate', 'getMySummary', [], 'frontend');
+} catch (\Throwable) {
+    return;
+}
+
+if (!is_array($affiliateResponse) || empty($affiliateResponse['success'])) {
+    return;
+}
+
+$affiliate = is_array($affiliateResponse['data'] ?? null) ? $affiliateResponse['data'] : [];
+$referralCode = trim((string) ($affiliate['referral_code'] ?? ''));
+$referralLink = trim((string) ($affiliate['referral_link'] ?? ''));
+$defaultShareLink = is_array($affiliate['default_share_link'] ?? null) ? $affiliate['default_share_link'] : [];
+$defaultTrackingUrl = trim((string) ($defaultShareLink['tracking_url'] ?? ''));
+$shareLinks = is_array($affiliate['share_links'] ?? null) ? $affiliate['share_links'] : [];
+$referredCustomers = is_array($affiliate['referred_customers'] ?? null) ? $affiliate['referred_customers'] : [];
+$promotedProducts = is_array($affiliate['promoted_products'] ?? null) ? $affiliate['promoted_products'] : [];
+$affiliateOrders = is_array($affiliate['affiliate_orders'] ?? null) ? $affiliate['affiliate_orders'] : [];
+$commissionLedger = is_array($affiliate['commission_ledger'] ?? null) ? $affiliate['commission_ledger'] : [];
+$withdrawalSummary = is_array($affiliate['withdrawal_summary'] ?? null) ? $affiliate['withdrawal_summary'] : [];
+$withdrawalRecords = is_array($affiliate['withdrawal_records'] ?? null) ? $affiliate['withdrawal_records'] : [];
+$summaryCurrency = strtoupper(trim((string) ($affiliate['currency_code'] ?? 'USD')));
+$catalogUrl = $this->getUrl('products');
+$homeUrl = $this->getUrl('');
+$formatAmount = function (mixed $amount, mixed $currency = '') {
+    $value = (float) $amount;
+    if (method_exists($this, 'formatPrice')) {
+        $formatted = $this->formatPrice($value);
+    } else {
+        $formatted = number_format($value, 2);
+    }
+
+    $currency = strtoupper(trim((string) $currency));
+    return $currency !== '' ? htmlspecialchars($currency . ' ', ENT_QUOTES) . $formatted : $formatted;
+};
+$formatPercent = static function (mixed $rate): string {
+    return number_format(((float) $rate) * 100, 2) . '%';
+};
+$formatDate = static function (mixed $date): string {
+    $value = trim((string) $date);
+    if ($value === '') {
+        return '-';
+    }
+    $timestamp = strtotime($value);
+    return $timestamp ? date('Y-m-d H:i', $timestamp) : $value;
+};
+$statusLabel = static function (mixed $status): string {
+    $status = trim((string) $status);
+    $withdrawalLabels = [
+        'requested' => (string) __('已申请'),
+        'processing' => (string) __('处理中'),
+        'rejected' => (string) __('已驳回'),
+    ];
+    if (isset($withdrawalLabels[$status])) {
+        return $withdrawalLabels[$status];
+    }
+    return match ($status) {
+        'pending' => (string) __('待结算'),
+        'approved' => (string) __('已确认'),
+        'paid' => (string) __('已打款'),
+        'cancelled' => (string) __('已取消'),
+        'reversed' => (string) __('已冲销'),
+        'active' => (string) __('启用中'),
+        'disabled' => (string) __('已停用'),
+        'paid,pending' => (string) __('部分确认'),
+        default => $status !== '' ? $status : '-',
+    };
+};
+$emptyText = (string) __('暂无数据');
+$scopeLabel = trim((string) ($affiliate['scope_label'] ?? ''));
+$currentScope = is_array($affiliate['current_scope'] ?? null) ? $affiliate['current_scope'] : [];
+$currentScopeLabel = trim((string) ($currentScope['scope_label'] ?? ''));
+$platformFunnel = is_array($affiliate['platform_funnel'] ?? null) ? $affiliate['platform_funnel'] : [];
+$stats = [
+    ['label' => __('分享'), 'value' => (int) ($affiliate['share_count'] ?? 0)],
+    ['label' => __('点击'), 'value' => (int) ($affiliate['click_count'] ?? 0)],
+    ['label' => __('收藏'), 'value' => (int) ($affiliate['wishlist_count'] ?? 0)],
+    ['label' => __('加购'), 'value' => (int) ($affiliate['add_to_cart_count'] ?? 0)],
+    ['label' => __('下单'), 'value' => (int) ($affiliate['order_count'] ?? 0)],
+    ['label' => __('支付'), 'value' => (int) ($affiliate['paid_count'] ?? 0)],
+];
+$rootId = 'weline-affiliate-account-' . substr(sha1($referralCode !== '' ? $referralCode : (string) ($affiliate['affiliate_id'] ?? '0')), 0, 10);
+$affiliateAccountI18n = [
+    'copied' => (string) __('已复制'),
+    'nothingToCopy' => (string) __('暂无可复制链接'),
+    'generating' => (string) __('生成中'),
+    'apiNotReady' => (string) __('分销 API 未初始化'),
+    'shareUnsupported' => (string) __('分销 API 不支持自定义链接'),
+    'generateFailed' => (string) __('生成失败'),
+    'generateDone' => (string) __('推广链接已生成，刷新后可在链接维度表查看'),
+    'invalidWithdrawAmount' => (string) __('请输入有效提现金额。'),
+    'withdrawSubmitting' => (string) __('提现申请提交中...'),
+    'withdrawUnsupported' => (string) __('分销 API 不支持提现申请'),
+    'withdrawFailed' => (string) __('提现申请失败'),
+    'withdrawDone' => (string) __('提现申请已提交，正在刷新记录。'),
+    'search' => (string) __('搜索'),
+    'searchPlaceholder' => (string) __('搜索当前报表'),
+    'perPage' => (string) __('每页'),
+    'showing' => (string) __('显示'),
+    'rows' => (string) __('条'),
+    'previous' => (string) __('上一页'),
+    'next' => (string) __('下一页'),
+    'noMatch' => (string) __('没有匹配记录'),
+];
+$affiliateAccountI18nJson = json_encode($affiliateAccountI18n, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
+if (!is_string($affiliateAccountI18nJson)) {
+    $affiliateAccountI18nJson = '{}';
+}
+?>
+<article id="affiliate"
+         class="weline-affiliate-account-card"
+         data-affiliate-account-panel="true"
+         data-account-section-anchor="affiliate"
+         data-weline-load="affiliateAccount"
+         data-affiliate-i18n="<?= htmlspecialchars($affiliateAccountI18nJson, ENT_QUOTES) ?>">
+<css>Weline_Affiliate::css/affiliate-account.css</css>
+<div class="weline-affiliate-account-card__header">
+        <div>
+            <p class="weline-affiliate-account-card__eyebrow"><?= __('Affiliate') ?></p>
+            <h2 class="weline-affiliate-account-card__title"><?= __('分销中心') ?></h2>
+        </div>
+        <span class="weline-affiliate-account-card__status"><?= htmlspecialchars((string) ($affiliate['status'] ?? 'active'), ENT_QUOTES) ?></span>
+    </div>
+
+    <?php if ($currentScopeLabel !== ''): ?>
+        <p class="weline-affiliate-account-card__section-note" style="margin:0 0 12px;">
+            <?= __('Current scope') ?>: <strong><?= htmlspecialchars($currentScopeLabel, ENT_QUOTES) ?></strong>
+            <?php if ($scopeLabel !== '' && $scopeLabel !== $currentScopeLabel): ?>
+                · <?= __('Account scope') ?>: <?= htmlspecialchars($scopeLabel, ENT_QUOTES) ?>
+            <?php endif; ?>
+        </p>
+    <?php endif; ?>
+
+    <div class="weline-affiliate-account-card__body" id="<?= htmlspecialchars($rootId, ENT_QUOTES) ?>">
+        <div class="weline-affiliate-account-card__money">
+            <div class="weline-affiliate-account-card__metric">
+                <span class="weline-affiliate-account-card__metric-label"><?= __('待结算') ?></span>
+                <strong class="weline-affiliate-account-card__metric-value"><?= $formatAmount($affiliate['pending_commission'] ?? 0, $summaryCurrency) ?></strong>
+            </div>
+            <div class="weline-affiliate-account-card__metric">
+                <span class="weline-affiliate-account-card__metric-label"><?= __('已确认') ?></span>
+                <strong class="weline-affiliate-account-card__metric-value"><?= $formatAmount($affiliate['approved_commission'] ?? 0, $summaryCurrency) ?></strong>
+            </div>
+            <div class="weline-affiliate-account-card__metric">
+                <span class="weline-affiliate-account-card__metric-label"><?= __('累计佣金') ?></span>
+                <strong class="weline-affiliate-account-card__metric-value"><?= $formatAmount($affiliate['total_commission'] ?? 0, $summaryCurrency) ?></strong>
+            </div>
+        </div>
+
+        <div class="weline-affiliate-account-card__funnel" aria-label="<?= htmlspecialchars((string) __('分销转化漏斗'), ENT_QUOTES) ?>">
+            <?php foreach ($stats as $stat): ?>
+                <div class="weline-affiliate-account-card__funnel-item">
+                    <span class="weline-affiliate-account-card__funnel-value"><?= (int) $stat['value'] ?></span>
+                    <span class="weline-affiliate-account-card__funnel-label"><?= $stat['label'] ?></span>
+                </div>
+            <?php endforeach; ?>
+        </div>
+
+        <?php if ($platformFunnel !== []): ?>
+            <div class="weline-affiliate-account-card__subsection">
+                <div class="weline-affiliate-account-card__section-head">
+                    <div>
+                        <h3 class="weline-affiliate-account-card__section-title"><?= __('平台流量与成交') ?></h3>
+                        <p class="weline-affiliate-account-card__section-note"><?= __('按分享平台汇总发出、点击、注册、订单与佣金，仅统计当前范围账户。') ?></p>
+                    </div>
+                </div>
+                <div class="weline-affiliate-account-card__table-wrap">
+                    <table class="weline-affiliate-account-card__table" data-affiliate-platform-funnel-table>
+                        <thead>
+                        <tr>
+                            <th><?= __('平台') ?></th>
+                            <th><?= __('发出') ?></th>
+                            <th><?= __('点击') ?></th>
+                            <th><?= __('注册') ?></th>
+                            <th><?= __('订单') ?></th>
+                            <th><?= __('支付') ?></th>
+                            <th><?= __('佣金') ?></th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        <?php foreach ($platformFunnel as $platformRow): ?>
+                            <tr>
+                                <td><?= htmlspecialchars((string) ($platformRow['platform_label'] ?? ''), ENT_QUOTES) ?></td>
+                                <td><?= (int) ($platformRow['outbound_count'] ?? 0) ?></td>
+                                <td><?= (int) ($platformRow['click_count'] ?? 0) ?></td>
+                                <td><?= (int) ($platformRow['registered_count'] ?? 0) ?></td>
+                                <td><?= (int) ($platformRow['order_count'] ?? 0) ?></td>
+                                <td><?= (int) ($platformRow['paid_count'] ?? 0) ?></td>
+                                <td><?= $formatAmount($platformRow['commission_amount'] ?? 0, $summaryCurrency) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <div class="weline-affiliate-account-card__link-row">
+            <input class="weline-affiliate-account-card__link"
+                   data-affiliate-referral-link
+                   type="text"
+                   readonly
+                   value="<?= htmlspecialchars($referralLink, ENT_QUOTES) ?>"
+                   aria-label="<?= htmlspecialchars((string) __('分销邀请链接'), ENT_QUOTES) ?>">
+            <button type="button"
+                    class="weline-affiliate-account-card__button"
+                    data-affiliate-copy-link>
+                <?= __('复制链接') ?>
+            </button>
+        </div>
+        <div class="weline-affiliate-account-card__notice" data-affiliate-copy-status aria-live="polite"></div>
+
+        <div class="weline-affiliate-account-card__actions">
+            <a class="weline-affiliate-account-card__button weline-affiliate-account-card__button--primary"
+               href="<?= htmlspecialchars($catalogUrl, ENT_QUOTES) ?>">
+                <?= __('去分享商品') ?>
+            </a>
+        </div>
+
+        <?php include BP . '/app/code/Weline/Affiliate/view/templates/frontend/account/affiliate-workbench-body.phtml'; ?>
+    </div>
+</article>
