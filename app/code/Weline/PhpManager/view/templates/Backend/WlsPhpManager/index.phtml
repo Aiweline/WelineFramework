@@ -57,11 +57,9 @@ $navClass = static fn (string $key): string => $key === $pageKey ? 'is-active' :
 $projectId = trim((string)($context['project_id'] ?? ''));
 $domain = trim((string)($context['domain'] ?? ''));
 $projectType = trim((string)($context['project_type'] ?? ''));
-$panelUrl = $this->getBackendUrl('server/backend/wls-panel');
-$marketplaceUrl = $this->getBackendUrl('server/backend/wls-panel/marketplace');
-$projectAdminUrl = $this->getBackendUrl('admin');
-$extensionPlanUrl = $this->getBackendUrl('weline_phpmanager/backend/wls-php-manager');
-$phpPageUrl = static fn (string $key): string => (string)($pageUrls[$key] ?? $extensionPlanUrl);
+$marketplacePath = 'server/backend/wls-panel/marketplace';
+$extensionPlanPath = 'weline_phpmanager/backend/wls-php-manager';
+$phpPageUrl = static fn (string $key): string => (string)($pageUrls[$key] ?? '');
 $escapeHtml = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $profileValue = static fn (string $key, mixed $default = ''): string => htmlspecialchars((string)($projectProfile[$key] ?? $default), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 $profileChecked = static fn (string $key): string => !empty($projectProfile[$key]) ? 'checked' : '';
@@ -661,10 +659,10 @@ $themeLabels = json_encode(
                 </p>
             </div>
             <div class="wpm-actions">
-                <a class="wpm-action is-primary" href="<?= $escapeHtml($panelUrl) ?>">
+                <a class="wpm-action is-primary" href="@backend-url{'server/backend/wls-panel'}">
                     <w:icon name="server" size="sm"></w:icon><?= $escapeHtml(__('WLS Panel')) ?>
                 </a>
-                <a class="wpm-action" href="<?= $escapeHtml($projectAdminUrl) ?>">
+                <a class="wpm-action" href="@backend-url{'admin'}">
                     <w:icon name="circle" size="sm"></w:icon><?= $escapeHtml(__('Project Admin')) ?>
                 </a>
             </div>
@@ -1249,7 +1247,7 @@ $themeLabels = json_encode(
             <p class="wpm-section-note">
                 <?= $escapeHtml(__('This plugin is installed through typed WLS tags. Additional PHP adapters can use the same module tag path.')) ?>
             </p>
-            <a class="wpm-action" href="<?= $escapeHtml($marketplaceUrl . '?tag=module%3Awls&surface=backend&q=wls-php-manager') ?>">
+            <a class="wpm-action" href="@backend-url{$marketplacePath|['tag' => 'module:wls', 'surface' => 'backend', 'q' => 'wls-php-manager']}">
                 <w:icon name="search" size="sm"></w:icon><?= $escapeHtml(__('Open WLS Marketplace')) ?>
             </a>
         </section>
