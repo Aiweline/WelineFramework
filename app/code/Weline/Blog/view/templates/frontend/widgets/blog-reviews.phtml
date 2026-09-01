@@ -1,0 +1,276 @@
+<?php
+/**
+ * Blog-owned reviews widget for the blog detail reviews slot.
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {blog-reviews}
+ * @widget.name {博客评论}
+ * @widget.description {万能评论大部件：博客文章评论列表与图文提交}
+ * @widget.type {comment}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["blog"]}
+ * @widget.supports {["layout-blog-reviews","blog-reviews","review","reviews"]}
+ * @widget.default_injections {[{ "layout_type":"blog", "layout_option":"default", "slot":"blog-reviews", "area":"content", "sort_order":0, "required":true, "reason":"博客详情默认评论容器", "config":{"title":"博客评论","intro":"支持文字、图片与视频，内容审核后公开。","page_size":10,"layout_mode":"stack","form_position":"right","form_collapsed":"1"} }]}
+ */
+
+use Weline\Framework\Env\WelineEnv;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('blog-reviews');
+$wc = $scope->cssClass;
+$esc = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$json = static fn(mixed $value): string => (string)json_encode(
+    $value,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+);
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
+    || (bool)($this->getData('editor_mode') ?? false)
+    || (string)($this->getData('editor_mode') ?? '') === '1';
+try {
+    $request = $this->getRequest();
+    if ((string)$request->getParam('editor_mode', '') === '1'
+        || (string)$request->getParam('preview_mode', '') === 'live'
+        || (string)$request->getParam('interaction_mode', '') === 'edit'
+    ) {
+        $isPreviewMode = true;
+    }
+} catch (\Throwable) {
+    // Template may not expose Request in all render paths.
+}
+
+$titleSource = trim((string)($this->getData('title') ?? '')) ?: '博客评论';
+if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $titleSource)) {
+    $titleSource = '博客评论';
+}
+$widgetTitle = WidgetI18n::label($titleSource, '博客评论');
+
+$introSource = trim((string)($this->getData('intro') ?? '')) ?: '支持文字、图片与视频，内容审核后公开。';
+if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $introSource)) {
+    $introSource = '支持文字、图片与视频，内容审核后公开。';
+}
+$widgetIntro = WidgetI18n::label($introSource, '支持文字、图片与视频，内容审核后公开。');
+$pageSize = max(1, min(50, (int)($this->getData('page_size') ?? 10)));
+$layoutMode = strtolower(trim((string)($this->getData('layout_mode') ?? 'stack')));
+if (!in_array($layoutMode, ['stack', 'split'], true)) {
+    $layoutMode = 'stack';
+}
+$formPosition = strtolower(trim((string)($this->getData('form_position') ?? 'right')));
+if (!in_array($formPosition, ['left', 'right'], true)) {
+    $formPosition = 'right';
+}
+$formCollapsedRaw = $this->getData('form_collapsed');
+$formCollapsed = $formCollapsedRaw === null || $formCollapsedRaw === ''
+    ? true
+    : !in_array(strtolower(trim((string)$formCollapsedRaw)), ['0', 'false', 'no', 'off'], true);
+
+$entityUuid = trim((string)($this->getData('blog_entity_uuid') ?? ''));
+$article = $this->getData('blog_article');
+$article = is_array($article) ? $article : [];
+if ($entityUuid === '') {
+    $postId = (int)(is_array($article['source_ref'] ?? null) ? ($article['source_ref']['post_id'] ?? 0) : 0);
+    if ($postId > 0) {
+        $entityUuid = 'blog:post:' . $postId;
+    }
+}
+
+if ($entityUuid === '' && class_exists(\Weline\Blog\Service\BlogContentResolver::class)) {
+    try {
+        $slug = '';
+        try {
+            $request = $this->getRequest();
+            $slug = strtolower(trim((string)$request->getParam('slug', '')));
+        } catch (\Throwable) {
+            $slug = '';
+        }
+        if ($slug === '') {
+            $requestUri = (string)(WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+            $requestPath = (string)(parse_url($requestUri, PHP_URL_PATH) ?: '');
+            $pathParts = array_values(array_filter(
+                explode('/', trim($requestPath, '/')),
+                static fn(string $part): bool => $part !== '',
+            ));
+            $blogPartIndex = array_search('blog', $pathParts, true);
+            if ($blogPartIndex !== false && isset($pathParts[$blogPartIndex + 1])) {
+                $next = strtolower(rawurldecode((string)$pathParts[$blogPartIndex + 1]));
+                if ($next !== '' && $next !== 'category') {
+                    $slug = $next;
+                }
+            }
+        }
+        if ($slug !== '') {
+            /** @var \Weline\Blog\Service\BlogContentResolver $resolver */
+            $resolver = ObjectManager::getInstance(\Weline\Blog\Service\BlogContentResolver::class);
+            /** @var \Weline\Blog\Service\BlogScopeResolver $blogScope */
+            $blogScope = ObjectManager::getInstance(\Weline\Blog\Service\BlogScopeResolver::class);
+            $resolved = $resolver->resolveBySlug(
+                $blogScope->websiteId(),
+                $blogScope->locale(),
+                $slug,
+                $blogScope->baseUrl(),
+            );
+            if ($resolved !== null && $resolved->entityId() > 0) {
+                $entityUuid = 'blog:post:' . $resolved->entityId();
+            }
+        }
+    } catch (\Throwable) {
+        // Optional Blog dependency; keep empty when resolver is unavailable.
+    }
+}
+
+if ($entityUuid === '' && !$isPreviewMode) {
+    return;
+}
+
+$reviewRootClasses = trim(implode(' ', array_filter([
+    $wc,
+    'weline-review',
+    $isPreviewMode ? 'is-preview' : '',
+    'weline-review--layout-' . $layoutMode,
+    $layoutMode === 'split' && $formPosition === 'left' ? 'weline-review--form-left' : '',
+    $formCollapsed ? 'weline-review--form-collapsed' : '',
+])));
+
+$previewSchema = [];
+if ($entityUuid === '' || $isPreviewMode) {
+    try {
+        /** @var \Weline\Review\Service\ReviewTypeRegistry $types */
+        $types = ObjectManager::getInstance(\Weline\Review\Service\ReviewTypeRegistry::class);
+        $fields = $types->get('blog')->fields();
+        $previewSchema = is_array($fields) ? $fields : [];
+    } catch (\Throwable) {
+        $previewSchema = [];
+    }
+}
+
+$messages = [
+    'loading' => __('正在加载评论...'),
+    'loadFailed' => __('评论加载失败，请稍后重试。'),
+    'empty' => __('暂时还没有已审核的评论，欢迎分享第一条真实体验。'),
+    'countSuffix' => __('条评论'),
+    'submitting' => __('正在上传媒体并提交评论...'),
+    'submitFailed' => __('评论暂时无法提交，请稍后再试。'),
+    'schemaFailed' => __('评论表单加载失败，请刷新页面重试。'),
+    'previewOnly' => __('预览模式：表单仅供排版查看，请到真实博客页提交。'),
+    'imageLimit' => __('最多选择 6 张图片，单张不超过 10 MB。'),
+    'videoLimit' => __('最多选择 2 个视频，单个不超过 50 MB。'),
+    'mediaInvalid' => __('所选媒体文件数量或大小超过限制。'),
+    'photo' => __('评论图片'),
+    'video' => __('视频'),
+    'remove' => __('移除'),
+    'submit' => __('提交评论'),
+    'ratingRequired' => __('请填写评论内容。'),
+    'writeReview' => __('写评论'),
+    'hideReviewForm' => __('收起评论表单'),
+    'viewPhoto' => __('查看图片'),
+    'playVideo' => __('播放视频'),
+    'closeLightbox' => __('关闭预览'),
+    'lightboxLabel' => __('评论媒体预览'),
+];
+?>
+<link rel="stylesheet"
+      href="@static(Weline_Review::css/widgets/product-reviews.css)&v=20260826-review-dialog2"
+      data-no-extract="true">
+
+<section class="<?= $esc($reviewRootClasses) ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-testid="storefront-blog-reviews"
+         data-review-root
+         data-weline-load="productReviews"
+         data-type-code="blog"
+         data-entity-uuid="<?= $esc($entityUuid) ?>"
+         data-page-size="<?= $esc((string)$pageSize) ?>"
+         data-layout-mode="<?= $esc($layoutMode) ?>"
+         data-form-collapsed="<?= $formCollapsed ? '1' : '0' ?>"
+         data-preview-schema="<?= $esc($json($previewSchema)) ?>"
+         data-review-messages="<?= $esc($json($messages)) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <div class="weline-review__heading">
+        <div>
+            <p class="weline-review__kicker"><?= __('博客评论') ?></p>
+            <h2><?= $esc($widgetTitle) ?></h2>
+            <p class="weline-review__intro"><?= $esc($widgetIntro) ?></p>
+        </div>
+        <div class="weline-review__summary" aria-live="polite">
+            <span data-review-count><?= __('正在加载评论...') ?></span>
+        </div>
+    </div>
+
+    <div class="weline-review__media-capabilities" aria-label="<?= $esc(__('支持的评论媒体')) ?>">
+        <span><b>IMG</b><?= __('最多 6 张图片') ?></span>
+        <span><b>VID</b><?= __('最多 2 个视频') ?></span>
+        <span><b>TXT</b><?= __('文字评论') ?></span>
+    </div>
+
+    <div class="weline-review__layout">
+        <div class="weline-review__listing">
+            <div class="weline-review__items" data-review-items aria-live="polite">
+                <p class="weline-review__empty"><?= __('正在加载评论...') ?></p>
+            </div>
+            <?php if ($formCollapsed): ?>
+                <button type="button"
+                        class="weline-review__write-toggle"
+                        data-review-write-toggle
+                        aria-expanded="false"
+                        aria-controls="weline-review-form-<?= $esc($scope->uid) ?>">
+                    <?= __('写评论') ?>
+                </button>
+            <?php endif; ?>
+        </div>
+        <form class="weline-review__form"
+              id="weline-review-form-<?= $esc($scope->uid) ?>"
+              data-review-form
+              novalidate
+              <?= $formCollapsed ? 'hidden' : '' ?>>
+            <p class="weline-review__form-kicker"><?= __('分享您的阅读感受') ?></p>
+            <div class="weline-review__form-head">
+                <h3><?= __('撰写图文 / 视频评论') ?></h3>
+                <?php if ($formCollapsed): ?>
+                    <button type="button"
+                            class="weline-review__form-collapse"
+                            data-review-form-collapse
+                            aria-controls="weline-review-form-<?= $esc($scope->uid) ?>">
+                        <?= __('收起评论表单') ?>
+                    </button>
+                <?php endif; ?>
+            </div>
+            <div class="weline-review__dynamic-fields" data-review-fields aria-live="polite">
+                <p class="weline-review__form-loading"><?= __('正在加载评论表单...') ?></p>
+            </div>
+            <div class="weline-review__preview" data-review-preview aria-live="polite"></div>
+            <button type="submit" disabled data-review-submit><?= __('提交评论') ?></button>
+            <p class="weline-review__notice"><?= __('支持匿名或登录评论；媒体与扩展字段会和评论一起进入审核。') ?></p>
+            <p class="weline-review__message" data-review-message aria-live="polite"></p>
+        </form>
+    </div>
+
+    <dialog class="w-dialog w-review-media__dialog"
+            id="weline-review-media-<?= $esc($scope->uid) ?>"
+            data-w-component="dialog"
+            data-review-media-dialog
+            data-state="closed"
+            aria-labelledby="weline-review-media-title-<?= $esc($scope->uid) ?>">
+        <div class="w-dialog__surface">
+            <header class="w-dialog__header">
+                <h2 class="w-dialog__title"
+                    id="weline-review-media-title-<?= $esc($scope->uid) ?>"
+                    data-review-media-dialog-title><?= __('评论媒体预览') ?></h2>
+                <button type="button"
+                        class="w-button"
+                        data-w-action="dialog.close"
+                        data-tone="quiet"
+                        data-size="sm"
+                        aria-label="<?= $esc(__('关闭预览')) ?>">×</button>
+            </header>
+            <div class="w-dialog__body w-review-media__dialog-body"
+                 data-review-lightbox-stage
+                 aria-live="polite"></div>
+        </div>
+    </dialog>
+</section>
+
+<?php // productReviews：由部件根 data-weline-load 声明（复用 Review 模块），禁止 @static 直引 ?>

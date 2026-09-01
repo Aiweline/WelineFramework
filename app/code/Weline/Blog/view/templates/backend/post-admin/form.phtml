@@ -1,0 +1,336 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var array<string,mixed> $postRow
+ * @var int $post_id
+ * @var string $postLocale
+ * @var string $coverImageValue
+ * @var list<string> $statuses
+ * @var array<string,string> $status_labels
+ * @var list<array<string,mixed>> $categories
+ * @var string $websiteSelectValue
+ * @var string $websiteSelectDisplay
+ * @var string $websiteSelectOptionsJson
+ * @var bool $cms_available
+ * @var int $cms_page_id
+ * @var string $theme_editor_url
+ * @var string $preview_url
+ * @var string $list_url
+ * @var string $suggest_slug_url
+ */
+$postRow = is_array($this->getData('post') ?? null) ? $this->getData('post') : [];
+$postId = (int)($post_id ?? (int)($postRow['post_id'] ?? 0));
+$statuses = is_array($this->getData('statuses') ?? null) ? $this->getData('statuses') : [];
+$categories = is_array($this->getData('categories') ?? null) ? $this->getData('categories') : [];
+$statusLabels = is_array($status_labels ?? null) ? $status_labels : [];
+$currentLocale = (string)($postLocale ?? 'zh_Hans_CN');
+$coverImageValue = (string)($coverImageValue ?? '');
+$themeEditorUrl = (string)($theme_editor_url ?? '');
+$previewUrl = (string)($preview_url ?? '');
+$listUrl = (string)($list_url ?? '');
+$suggestSlugUrl = (string)($suggest_slug_url ?? '');
+$cmsAvailable = (bool)($cms_available ?? false);
+$hasEditor = $themeEditorUrl !== '';
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    is_scalar($value) || $value === null ? (string)$value : (string)json_encode($value, JSON_UNESCAPED_UNICODE),
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8',
+);
+$slugMode = trim((string)($postRow['slug_mode'] ?? ''));
+if ($slugMode === '') {
+    $slugMode = 'auto';
+}
+$formTitle = $postId > 0 ? (string)__('编辑文章') : (string)__('新建文章');
+$formSubtitle = $postId > 0
+    ? (string)__('调整元信息、封面与发布状态，正文在下方 Theme 编辑器中维护')
+    : (string)__('先保存文章设置，再进入 Theme 可视化编辑正文');
+$currentStatus = (string)($postRow['status'] ?? '');
+$currentStatusLabel = $statusLabels[$currentStatus] ?? $currentStatus;
+$coverPanelClass = $coverImageValue !== '' ? 'has-cover' : 'is-empty';
+$hasTitle = trim((string)($postRow['title'] ?? '')) !== '';
+$coverPreviewUrl = '';
+if ($coverImageValue !== '') {
+  $lower = strtolower($coverImageValue);
+  if (str_starts_with($lower, 'https://') || str_starts_with($lower, 'http://') || str_starts_with($lower, 'data:image/')) {
+      $coverPreviewUrl = $coverImageValue;
+  } elseif (!str_contains($coverImageValue, '..') && !str_contains($coverImageValue, '\\') && !str_contains($coverImageValue, '://')) {
+      $resolved = \Weline\FileManager\Api\Image::pathToMediaUrl($coverImageValue, 240, 240);
+      $coverPreviewUrl = is_string($resolved) ? $resolved : '';
+  }
+}
+?>
+<link rel="stylesheet" href="@static(Weline_Blog::css/backend/blog-post-admin.css)?v=20260827-cover-picker-v1">
+<div class="w-blog-post-form" data-testid="blog-admin-form">
+    <div class="w-card w-blog-post-form__hero">
+        <div class="w-blog-post-form__hero-main">
+            <div class="w-blog-post-form__title-row">
+                <h4><?= $escape($formTitle) ?></h4>
+                <?php if ($postId > 0): ?>
+                    <span class="w-blog-post-form__badge">#<?= $postId ?></span>
+                <?php endif; ?>
+                <?php if ($currentStatus !== ''): ?>
+                    <span class="w-blog-post-form__status" data-status="<?= $escape($currentStatus) ?>">
+                        <?= $escape($currentStatusLabel) ?>
+                    </span>
+                <?php endif; ?>
+            </div>
+            <p class="w-blog-post-form__subtitle"><?= $escape($formSubtitle) ?></p>
+        </div>
+        <div class="w-blog-post-form__hero-actions">
+            <a class="w-button" href="<?= $escape($listUrl) ?>" data-tone="neutral" data-variant="outline">
+                <w:icon name="arrow-left" size="sm"></w:icon>
+                <lang>返回列表</lang>
+            </a>
+            <?php if ($previewUrl !== ''): ?>
+                <a class="w-button" href="<?= $escape($previewUrl) ?>" target="_blank" rel="noopener" data-tone="primary" data-variant="outline">
+                    <w:icon name="eye" size="sm"></w:icon>
+                    <lang>预览</lang>
+                </a>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <div class="blog-post-workbench">
+        <w:form
+            class="w-card blog-post-settings-card blog-post-settings-bar"
+            method="post"
+            action=""
+            data-suggest-slug-url="<?= $escape($suggestSlugUrl) ?>"
+        >
+            <input type="hidden" name="post_id" value="<?= $postId ?>">
+            <div class="w-card__body blog-post-settings-body">
+                <div class="blog-post-settings-head">
+                    <div>
+                        <h5 class="blog-post-settings-title"><lang>文章设置</lang></h5>
+                        <p class="blog-post-settings-desc"><lang>站点、语言与 slug 决定前台访问路径；保存后可在下方编辑正文。</lang></p>
+                    </div>
+                </div>
+
+                <div class="blog-post-settings-grid">
+                    <div class="blog-post-context-band">
+                        <div class="blog-post-field blog-post-field-website">
+                            <label class="w-field__label" for="blog-post-website_trigger"><lang>站点</lang></label>
+                            <w:websites:website:select
+                                id="blog-post-website"
+                                name="website_id"
+                                value="websiteSelectValue"
+                                display="websiteSelectDisplay"
+                                options="websiteSelectOptionsJson"
+                                multiple="false"
+                                allow-empty="false"
+                                empty-label="@lang(请选择站点)"
+                                placeholder="@lang(搜索站点名称或编码)"
+                            />
+                        </div>
+                        <div class="blog-post-field blog-post-field-locale">
+                            <label class="w-field__label" for="blog-post-locale"><lang>语言</lang></label>
+                            <w:i18n:language:select
+                                id="blog-post-locale-selector"
+                                name="locale"
+                                input-id="blog-post-locale"
+                                value="postLocale"
+                                allow-empty="false"
+                                required="true"
+                            />
+                        </div>
+                    </div>
+
+                    <div class="blog-post-field blog-post-field-title">
+                        <label class="w-field__label" for="blog-post-title"><lang>标题</lang></label>
+                        <input
+                            class="w-input blog-post-title-input"
+                            id="blog-post-title"
+                            type="text"
+                            name="title"
+                            placeholder="<?= $escape(__('输入文章标题')) ?>"
+                            value="<?= $escape($postRow['title'] ?? '') ?>"
+                            required
+                        >
+                    </div>
+
+                    <div class="blog-post-field blog-post-field-slug">
+                        <div class="blog-post-slug-toolbar">
+                            <label class="w-field__label blog-post-slug-label"><lang>Slug</lang></label>
+                            <div class="blog-post-slug-actions">
+                                <button class="w-button" type="button" data-blog-slug-auto data-tone="quiet" data-size="sm">
+                                    <lang>恢复标题自动联动</lang>
+                                </button>
+                                <button
+                                    class="w-button<?= $hasTitle ? '' : ' is-disabled' ?>"
+                                    type="button"
+                                    data-blog-slug-ai
+                                    data-tone="primary"
+                                    data-variant="outline"
+                                    data-size="sm"
+                                    <?= $hasTitle ? '' : 'disabled aria-disabled="true"' ?>
+                                >
+                                    <w:icon name="language" size="sm"></w:icon>
+                                    <lang>AI 处理</lang>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="blog-post-slug-input">
+                            <span class="blog-post-slug-prefix">/blog/</span>
+                            <input
+                                class="w-input blog-post-slug-field"
+                                type="text"
+                                name="slug"
+                                placeholder="<?= $escape(__('例如 hello-world')) ?>"
+                                value="<?= $escape($postRow['slug'] ?? '') ?>"
+                                required
+                            >
+                        </div>
+                        <p class="blog-post-field-hint w-text" data-tone="muted" data-size="sm">
+                            <lang>前台路径为 /blog/{slug}；标题自动联动为音译 slug（非 AI）；需翻译优化时点 AI 处理。</lang>
+                        </p>
+                        <input type="hidden" name="slug_mode" value="<?= $escape($slugMode) ?>">
+                    </div>
+
+                    <div class="blog-post-split-row">
+                        <div class="blog-post-field blog-post-field-excerpt">
+                            <label class="w-field__label" for="blog-post-excerpt"><lang>摘要</lang></label>
+                            <textarea
+                                class="w-input blog-post-excerpt-input"
+                                id="blog-post-excerpt"
+                                name="excerpt"
+                                rows="5"
+                                placeholder="<?= $escape(__('一句话概括文章要点，用于列表与 SEO')) ?>"
+                            ><?= $escape($postRow['excerpt'] ?? '') ?></textarea>
+                        </div>
+                        <div class="blog-post-field blog-post-field-cover">
+                            <label class="w-field__label"><lang>封面</lang></label>
+                            <div class="blog-post-cover-panel <?= $escape($coverPanelClass) ?>" data-blog-cover-panel>
+                                <?php if ($coverPreviewUrl !== ''): ?>
+                                    <img
+                                        class="blog-post-cover-preview"
+                                        src="<?= $escape($coverPreviewUrl) ?>"
+                                        alt="<?= $escape(__('封面预览')) ?>"
+                                        data-blog-cover-preview
+                                    >
+                                <?php endif; ?>
+                                <div class="blog-post-cover-empty" data-blog-cover-empty>
+                                    <w:icon name="image" size="lg"></w:icon>
+                                    <span><lang>点击选择封面</lang></span>
+                                </div>
+                                <input type="hidden" id="blog-cover" name="cover_image" value="<?= $escape($coverImageValue) ?>">
+                                <div class="blog-post-cover-picker">
+                                    <file-manager
+                                        target="#blog-cover"
+                                        title="@lang(选择封面)"
+                                        preview="0"
+                                        path="media/blog/"
+                                        lockPath="1"
+                                        value="coverImageValue"
+                                        multi="0"
+                                        ext="jpg,jpeg,png,gif,webp"
+                                        size="2048000"
+                                        w="140"
+                                        h="140"
+                                    />
+                                </div>
+                            </div>
+                            <p class="blog-post-field-hint w-text" data-tone="muted" data-size="sm">
+                                <lang>建议 1200×630，支持 jpg / png / webp，单张不超过 2 MB。</lang>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="blog-post-meta-band">
+                        <div class="blog-post-field blog-post-field-author">
+                            <label class="w-field__label" for="blog-post-author"><lang>作者</lang></label>
+                            <input class="w-input" id="blog-post-author" type="text" name="author" value="<?= $escape($postRow['author'] ?? '') ?>">
+                        </div>
+                        <div class="blog-post-field blog-post-field-keywords">
+                            <label class="w-field__label" for="blog-post-keywords"><lang>关键词</lang></label>
+                            <input
+                                class="w-input"
+                                id="blog-post-keywords"
+                                type="text"
+                                name="keywords"
+                                placeholder="<?= $escape(__('逗号分隔')) ?>"
+                                value="<?= $escape($postRow['keywords'] ?? '') ?>"
+                            >
+                        </div>
+                        <div class="blog-post-field blog-post-field-category">
+                            <label class="w-field__label" for="blog-post-category"><lang>分类</lang></label>
+                            <select class="w-select" id="blog-post-category" name="category_id">
+                                <option value="0"><lang>无分类</lang></option>
+                                <?php foreach ($categories as $category): ?>
+                                    <?php if (!is_array($category)) { continue; } ?>
+                                    <option
+                                        value="<?= (int)($category['category_id'] ?? 0) ?>"
+                                        <?= (int)($postRow['category_id'] ?? 0) === (int)($category['category_id'] ?? 0) ? 'selected' : '' ?>
+                                    >
+                                        <?= $escape($category['name'] ?? '') ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="blog-post-field blog-post-field-status">
+                            <label class="w-field__label" for="blog-post-status"><lang>状态</lang></label>
+                            <select class="w-select" id="blog-post-status" name="status">
+                                <?php foreach ($statuses as $status): ?>
+                                    <option
+                                        value="<?= $escape($status) ?>"
+                                        <?= (string)($postRow['status'] ?? '') === (string)$status ? 'selected' : '' ?>
+                                    >
+                                        <?= $escape($statusLabels[$status] ?? $status) ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="blog-post-form-actions">
+                        <button class="w-button" type="submit" data-tone="primary" data-testid="blog-post-save-button">
+                            <w:icon name="save" size="sm"></w:icon>
+                            <lang>保存文章设置</lang>
+                        </button>
+                        <?php if ($hasEditor): ?>
+                            <a class="w-button" href="<?= $escape($themeEditorUrl) ?>" target="_blank" rel="noopener" data-tone="primary" data-variant="outline">
+                                <w:icon name="circle" size="sm"></w:icon>
+                                <lang>新窗口打开编辑器</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </w:form>
+
+        <div class="w-card blog-post-editor-card">
+            <div class="blog-post-editor-head">
+                <div>
+                    <h5 class="blog-post-editor-title"><lang>正文编辑</lang></h5>
+                    <p class="blog-post-editor-desc"><lang>使用 Theme 可视化编辑器排版正文内容与区块。</lang></p>
+                </div>
+                <?php if ($hasEditor): ?>
+                    <span class="w-blog-post-form__badge is-live"><lang>编辑器已就绪</lang></span>
+                <?php endif; ?>
+            </div>
+            <div class="cms-theme-editor-workspace <?= $hasEditor ? 'is-ready' : 'is-empty' ?>">
+                <?php if (!$cmsAvailable): ?>
+                    <div class="w-alert" data-tone="warning" style="--w-mb:0;">
+                        <lang>未安装 CMS 模块，正文请在结构化字段中维护。</lang>
+                    </div>
+                <?php elseif (!$hasEditor): ?>
+                    <div class="blog-post-editor-empty">
+                        <w:icon name="layout" size="lg"></w:icon>
+                        <p><lang>先保存文章设置，然后直接在这里进行 Theme 可视化编辑。</lang></p>
+                    </div>
+                <?php else: ?>
+                    <iframe
+                        class="cms-theme-editor-frame"
+                        src="<?= $escape($themeEditorUrl) ?>"
+                        data-editor-url="<?= $escape($themeEditorUrl) ?>"
+                        title="<?= $escape(__('Theme 可视化编辑')) ?>"
+                    ></iframe>
+                <?php endif; ?>
+            </div>
+        </div>
+    </div>
+</div>
+<?php if ($cmsAvailable): ?>
+<script src="@static(Weline_Theme::js/cms-preview-bridge.js)"></script>
+<script src="@static(Weline_Cms::js/cms-page-editor.js)"></script>
+<?php endif; ?>
+<script src="@static(Weline_Blog::js/blog-post-admin-form.js)?v=20260827-cover-picker-v1"></script>

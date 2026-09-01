@@ -1,0 +1,101 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
+
+$articles = is_array($this->getData('blog_articles') ?? null) ? $this->getData('blog_articles') : [];
+$heading = trim((string)($this->getData('blog_page_heading') ?? ''));
+$subtitle = trim((string)($this->getData('blog_page_subtitle') ?? ''));
+$activeCategoryId = (int)($this->getData('blog_active_category_id') ?? 0);
+$escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$count = count($articles);
+?>
+<section class="amazon-blog-listing" data-testid="blog-list" data-active-category="<?= $activeCategoryId ?>" weline-code="blog.listing.section">
+    <header class="amazon-blog-listing__header">
+        <h1 class="amazon-blog-listing__title"><?= $escape($heading !== '' ? $heading : (string)__('博客')) ?></h1>
+        <?php if ($subtitle !== ''): ?>
+            <p class="amazon-blog-listing__subtitle"><?= $escape($subtitle) ?></p>
+        <?php endif; ?>
+        <p class="amazon-blog-listing__meta"><?= $escape((string)__('共 %{1} 条', [(string)$count])) ?></p>
+    </header>
+
+    <?php if ($articles === []): ?>
+        <div class="amazon-blog-listing__empty" data-testid="blog-list-empty">
+            <p><lang>暂无文章</lang></p>
+            <a class="amazon-blog-listing__back" href="@url{'blog'}"><lang>返回博客</lang></a>
+        </div>
+    <?php else: ?>
+        <div class="amazon-blog-listing__grid" data-testid="blog-list-grid">
+            <?php foreach ($articles as $article): ?>
+                <?php
+                if (!is_array($article)) {
+                    continue;
+                }
+                $title = trim((string)($article['title'] ?? ''));
+                $url = trim((string)($article['public_url'] ?? ''));
+                $excerpt = trim((string)($article['excerpt'] ?? ''));
+                $publishedAt = trim((string)($article['published_at'] ?? ''));
+                $author = trim((string)($article['author'] ?? ''));
+                $categories = is_array($article['categories'] ?? null) ? $article['categories'] : [];
+                $categoryLabel = '';
+                foreach ($categories as $name) {
+                    $name = trim((string)$name);
+                    if ($name !== '') {
+                        $categoryLabel = $name;
+                        break;
+                    }
+                }
+                $sourceRef = is_array($article['source_ref'] ?? null) ? $article['source_ref'] : [];
+                $categoryUrl = trim((string)($sourceRef['category_url'] ?? ''));
+                $imageResolved = StorefrontImagePlaceholder::resolve(
+                    (string)($article['cover_image'] ?? ''),
+                    (int)($sourceRef['post_id'] ?? $sourceRef['cms_page_id'] ?? 0),
+                );
+                ?>
+                <article class="blog-storefront__card is-clickable" data-testid="storefront-blog-card">
+                    <?php if ($url !== ''): ?>
+                        <a class="blog-storefront__card-hit"
+                           href="<?= $escape($url) ?>"
+                           aria-label="<?= $escape($title !== '' ? $title : (string)__('博客文章')) ?>"></a>
+                    <?php endif; ?>
+                    <div class="blog-storefront__media">
+                        <img src="<?= $escape($imageResolved['src']) ?>"
+                             alt=""
+                             data-storefront-img="1"
+                             data-fallback="<?= $escape($imageResolved['fallback']) ?>"
+                             loading="lazy"
+                             decoding="async">
+                    </div>
+                    <div class="blog-storefront__body">
+                        <h2><?= $escape($title !== '' ? $title : (string)__('未命名文章')) ?></h2>
+                        <?php if ($categoryLabel !== '' || $publishedAt !== '' || $author !== ''): ?>
+                            <p class="blog-storefront__meta">
+                                <?php if ($author !== ''): ?>
+                                    <span><?= $escape($author) ?></span>
+                                <?php endif; ?>
+                                <?php if ($author !== '' && ($categoryLabel !== '' || $publishedAt !== '')): ?>
+                                    <span aria-hidden="true">·</span>
+                                <?php endif; ?>
+                                <?php if ($categoryLabel !== ''): ?>
+                                    <?php if ($categoryUrl !== ''): ?>
+                                        <a class="blog-storefront__category" href="<?= $escape($categoryUrl) ?>"><?= $escape($categoryLabel) ?></a>
+                                    <?php else: ?>
+                                        <span class="blog-storefront__category"><?= $escape($categoryLabel) ?></span>
+                                    <?php endif; ?>
+                                <?php endif; ?>
+                                <?php if ($categoryLabel !== '' && $publishedAt !== ''): ?>
+                                    <span aria-hidden="true">·</span>
+                                <?php endif; ?>
+                                <?php if ($publishedAt !== ''): ?>
+                                    <time datetime="<?= $escape($publishedAt) ?>"><?= $escape($publishedAt) ?></time>
+                                <?php endif; ?>
+                            </p>
+                        <?php endif; ?>
+                        <?php if ($excerpt !== ''): ?>
+                            <p class="blog-storefront__excerpt"><?= $escape($excerpt) ?></p>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</section>
