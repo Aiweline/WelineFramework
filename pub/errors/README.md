@@ -4,10 +4,11 @@
 
 ## 解析顺序
 
-1. 事件 `Weline_Framework_Http::error_page_render`（观察者写入 `html` 可整页覆盖）
-2. `pub/errors/{code}.php`（如 `404.php`）
-3. `pub/errors/default.php`
-4. `ErrorPageRenderer` 内置 HTML
+1. 前台 404（`area=frontend`）：优先读取 `pub/errors/storefront-not-found/{locale}.html` 静态快照（零 DB，由 Theme 在 `setup:upgrade` 时生成）
+2. 事件 `Weline_Framework_Http::error_page_render`（观察者写入 `html` 可整页覆盖）
+3. `pub/errors/{code}.php`（如 `404.php`）
+4. `pub/errors/default.php`
+5. `ErrorPageRenderer` 内置 HTML
 
 JSON 客户端（`Accept: application/json` 优先）返回 JSON，不走 HTML 模板。
 

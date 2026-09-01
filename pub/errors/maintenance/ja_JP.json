@@ -4,7 +4,7 @@
     "message": "非常抱歉，网站正在升级维护。若您耐心等待升级完成，我们将发放补偿礼金。",
     "data": {
         "retry_after": 60,
-        "lang": "zh_Hans_CN",
+        "lang": "ja_JP",
         "wait_gift_enabled": true,
         "wave_id": "422178fff3fc6e16cf9a6bf5ba248d1b14c08c986111fee95db2005b83eab6c3",
         "system_version": "2.5.2",
