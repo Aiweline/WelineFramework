@@ -14,6 +14,7 @@ edit,edit
 询盘可信自定义脚本,"Trusted custom scripts for inquiry"
 code,code
 编辑已受系统开关控制的可信脚本,"Edit trusted scripts that are already controlled by system switches"
+供应商申请,"Supplier application"
 新建表单,新建表单
 名称,名称
 状态,状态
@@ -31,6 +32,7 @@ code,code
 已发布,已发布
 草稿已保存,草稿已保存
 保存失败,保存失败
+人机验证失败或已过期，请重试,"Human verification failed or expired. Please try again."
 无效的幂等提交键,无效的幂等提交键
 提交成功，我们会尽快联系您。,提交成功，我们会尽快联系您。
 请填写：%{1},请填写：%{1}
@@ -46,9 +48,12 @@ code,code
 表单加载失败，请稍后重试。,表单加载失败，请稍后重试。
 提交成功,提交成功
 提交失败，请稍后重试。,提交失败，请稍后重试。
+人机验证加载失败，请稍后重试,"Failed to load human verification. Please try again later."
+"请选择国家 / 地区","请选择国家 / 地区"
 "表单名称和 code 不合法","表单名称和 code 不合法"
 表单不存在,表单不存在
 "表单首次发布后 code 不可修改","表单首次发布后 code 不可修改"
 没有可发布的草稿,没有可发布的草稿
 默认语言必须填写表单标题和提交按钮文案,默认语言必须填写表单标题和提交按钮文案
+欢迎成为平台供应商。请填写以下申请信息，我们会尽快评估并与您联系。,"Become a supplier. Complete the application below and our team will follow up."
 """Inquiry 查询器不支持：%{1}""","Inquiry 查询器不支持：%{1}"

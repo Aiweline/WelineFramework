@@ -1,6 +1,6 @@
 # Weline_Inquiry
 
-`Weline_Inquiry` 提供独立的多语言询盘表单能力，当前模块版本为 `1.0.0`。
+`Weline_Inquiry` 提供独立的多语言询盘表单能力，当前模块版本为 `1.0.1`。
 
 ## 主要能力
 
@@ -9,6 +9,7 @@
 - `SubmissionService` 处理询盘提交及附件归档。
 - `InquiryFormCatalogInterface`、`InquiryRendererInterface` 是跨模块公开契约。
 - `Taglib/Inquiry.php`、Widget 扩展及后台 Controller 提供前台嵌入和后台管理入口。
+- 内置 `supplier-application`（供应商申请）与前台路由 `inquiry/suppliers`（默认 Amazon 表单皮肤）。
 
 ## 依赖与边界
 

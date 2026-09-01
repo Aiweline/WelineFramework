@@ -31,7 +31,15 @@ final class InquiryQueryProvider implements QueryProviderInterface
         return ['provider' => 'inquiry', 'name' => __('询盘表单'), 'description' => __('已发布表单查询、公共提交和受 ACL 保护的后台编辑'), 'module' => 'Weline_Inquiry', 'operations' => [
             ['name' => 'searchPublished', 'frontend' => true, 'mode' => 'read', 'params' => [['name' => 'search', 'type' => 'string', 'required' => false]]],
             ['name' => 'schema', 'frontend' => true, 'mode' => 'read', 'params' => [['name' => 'code', 'type' => 'string', 'required' => true], ['name' => 'locale', 'type' => 'string', 'required' => false]]],
-            ['name' => 'submit', 'frontend' => true, 'mode' => 'write', 'params' => [['name' => 'code', 'type' => 'string', 'required' => true], ['name' => 'values', 'type' => 'array', 'required' => true], ['name' => 'idempotency_key', 'type' => 'string', 'required' => true]]],
+            ['name' => 'submit', 'frontend' => true, 'mode' => 'write', 'params' => [
+                ['name' => 'code', 'type' => 'string', 'required' => true],
+                ['name' => 'values', 'type' => 'array', 'required' => true],
+                ['name' => 'idempotency_key', 'type' => 'string', 'required' => true],
+                ['name' => 'captcha_provider', 'type' => 'string', 'required' => false, 'max_length' => 64],
+                ['name' => 'captcha_token', 'type' => 'string', 'required' => false, 'max_length' => 128],
+                ['name' => 'captcha_response', 'type' => 'string', 'required' => false, 'max_length' => 4096],
+                ['name' => 'captcha_action', 'type' => 'string', 'required' => false, 'max_length' => 128],
+            ]],
             ['name' => 'adminDraft', 'auth' => 'backend', 'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Inquiry::manage'], 'mode' => 'read'],
             ['name' => 'adminSaveDraft', 'auth' => 'backend', 'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Inquiry::manage'], 'mode' => 'write'],
             ['name' => 'adminPublish', 'auth' => 'backend', 'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Inquiry::publish'], 'mode' => 'write'],

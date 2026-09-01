@@ -9,13 +9,21 @@ use Weline\Inquiry\Model\Submission;
 
 final class SubmissionService
 {
-    public function __construct(private readonly LocalizedFormResolver $resolver, private readonly Submission $submission, private readonly Attachment $attachment) {}
+    public function __construct(
+        private readonly LocalizedFormResolver $resolver,
+        private readonly Submission $submission,
+        private readonly Attachment $attachment,
+        private readonly InquirySubmissionCaptchaGuard $captchaGuard,
+    ) {}
 
     /** @param array<string,mixed> $params @return array<string,mixed> */
     public function submit(array $params): array
     {
         $code = trim((string)($params['code'] ?? '')); $locale = trim((string)($params['locale'] ?? '')); $values = is_array($params['values'] ?? null) ? $params['values'] : [];
         if (trim((string)($values['company_website'] ?? '')) !== '') { return ['accepted' => true, 'duplicate' => false]; }
+        if (!$this->captchaGuard->verify($params)) {
+            throw new \InvalidArgumentException((string)__('人机验证失败或已过期，请重试'));
+        }
         $resolved = $this->resolver->published($code, $locale); $form = $resolved['form']; $version = $resolved['version'];
         $idempotencyKey = trim((string)($params['idempotency_key'] ?? ''));
         if (preg_match('/^[A-Za-z0-9._-]{16,128}$/', $idempotencyKey) !== 1) { throw new \InvalidArgumentException((string)__('无效的幂等提交键')); }
