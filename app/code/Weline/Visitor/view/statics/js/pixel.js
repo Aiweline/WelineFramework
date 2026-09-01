@@ -933,19 +933,8 @@
         } catch (e) {
             // keep raw value
         }
-        var pathLocale = '';
-        try {
-            var segments = String(window.location.pathname || '').split('/').filter(Boolean);
-            var langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
-            for (var i = 0; i < Math.min(segments.length, 3); i++) {
-                if (langPattern.test(segments[i])) {
-                    pathLocale = segments[i];
-                    break;
-                }
-            }
-        } catch (e2) {
-        }
-        var language = __getPixelSiteEnvValue('language', 'WELINE_USER_LANG') || pathLocale || '';
+        var pathLocale = __resolvePixelPathLocale();
+        var language = __resolvePixelLanguage('');
         var pageId = '';
         try {
             pageId = (typeof __pixelPageId === 'string' && __pixelPageId) ? __pixelPageId : '';
@@ -971,10 +960,7 @@
             website_code: String(__getPixelSiteEnvValue('website_code', 'WELINE_WEBSITE_CODE') || ''),
             website_url: websiteUrl,
             language: language,
-            currency: (function () {
-                var c = String(__getPixelSiteEnvValue('currency', 'WELINE_USER_CURRENCY') || 'CNY');
-                return c === 'RMB' ? 'CNY' : c;
-            })(),
+            currency: __resolvePixelCurrency('CNY'),
             content_locale: pathLocale || language,
             session_id: sessionId,
             page_id: pageId,
@@ -1101,9 +1087,11 @@
     }
 
     /**
-     * Prefer server-injected __WelinePixelEnv (HttpOnly cookies are not readable in JS).
+     * Prefer server-injected __WelinePixelEnv.
+     * Website cookies (WELINE_WEBSITE_*) remain readable; language/currency
+     * preference cookies (WELINE_USER_LANG / WELINE_USER_CURRENCY) are never used.
      */
-    function __getPixelSiteEnvValue(key, cookieName) {
+    function __getPixelInjectedEnvValue(key) {
         try {
             var injected = window.__WelinePixelEnv;
             if (injected && typeof injected === 'object' && injected[key] !== undefined && injected[key] !== null && injected[key] !== '') {
@@ -1111,7 +1099,127 @@
             }
         } catch (e) {
         }
-        return __getPixelCookie(cookieName || '') || '';
+        return '';
+    }
+
+    function __getPixelSiteEnvValue(key, cookieName) {
+        var injected = __getPixelInjectedEnvValue(key);
+        if (injected) {
+            return injected;
+        }
+        var name = String(cookieName || '');
+        if (name.indexOf('WELINE_WEBSITE_') === 0) {
+            return __getPixelCookie(name) || '';
+        }
+        return '';
+    }
+
+    function __resolvePixelPathLocale() {
+        try {
+            var segments = String(window.location.pathname || '').split('/').filter(Boolean);
+            var langPattern = /^[a-z]{2}_[A-Za-z]{2,}(?:_[A-Z]{2})?$/i;
+            for (var i = 0; i < Math.min(segments.length, 3); i++) {
+                if (langPattern.test(segments[i])) {
+                    return segments[i];
+                }
+            }
+        } catch (e) {
+        }
+        return '';
+    }
+
+    function __resolvePixelQueryLanguage() {
+        try {
+            var urlParams = new URLSearchParams((window.location && window.location.search) || '');
+            var candidates = [urlParams.get('locale'), urlParams.get('locale_code'), urlParams.get('lang')];
+            for (var i = 0; i < candidates.length; i++) {
+                var raw = String(candidates[i] || '').trim();
+                if (!raw || raw.toLowerCase() === 'default') {
+                    continue;
+                }
+                return raw.replace(/-/g, '_');
+            }
+        } catch (e) {
+        }
+        return '';
+    }
+
+    function __resolvePixelDocumentLanguage() {
+        try {
+            var el = document.documentElement;
+            if (!el) {
+                return '';
+            }
+            var attr = (typeof el.getAttribute === 'function')
+                ? (el.getAttribute('data-lang') || el.getAttribute('lang') || '')
+                : '';
+            return String(attr || el.lang || '').trim().replace(/-/g, '_');
+        } catch (e) {
+        }
+        return '';
+    }
+
+    function __resolvePixelPathCurrency() {
+        try {
+            var segments = String(window.location.pathname || '').split('/').filter(Boolean);
+            for (var i = 0; i < Math.min(segments.length, 4); i++) {
+                if (__isPixelSupportedCurrencySegment(segments[i])) {
+                    return String(segments[i]).toUpperCase();
+                }
+            }
+        } catch (e) {
+        }
+        return '';
+    }
+
+    function __resolvePixelQueryCurrency() {
+        try {
+            var code = String(new URLSearchParams((window.location && window.location.search) || '').get('currency') || '')
+                .trim()
+                .toUpperCase();
+            if (__isPixelSupportedCurrencySegment(code) || /^[A-Z]{3}$/.test(code)) {
+                return code === 'RMB' ? 'CNY' : code;
+            }
+        } catch (e) {
+        }
+        return '';
+    }
+
+    function __resolvePixelDocumentCurrency() {
+        try {
+            var el = document.documentElement;
+            if (!el || typeof el.getAttribute !== 'function') {
+                return '';
+            }
+            var code = String(el.getAttribute('data-currency') || '').trim().toUpperCase();
+            if (/^[A-Z]{3}$/.test(code)) {
+                return code === 'RMB' ? 'CNY' : code;
+            }
+        } catch (e) {
+        }
+        return '';
+    }
+
+    /** inject → path → query/data-* → hard default; never preference cookies. */
+    function __resolvePixelLanguage(fallback) {
+        var resolved = __getPixelInjectedEnvValue('language')
+            || __resolvePixelPathLocale()
+            || __resolvePixelQueryLanguage()
+            || __resolvePixelDocumentLanguage()
+            || String(fallback || '').trim()
+            || 'zh_Hans_CN';
+        return resolved === 'RMB' ? 'CNY' : resolved;
+    }
+
+    function __resolvePixelCurrency(fallback) {
+        var resolved = __getPixelInjectedEnvValue('currency')
+            || __resolvePixelPathCurrency()
+            || __resolvePixelQueryCurrency()
+            || __resolvePixelDocumentCurrency()
+            || String(fallback || '').trim()
+            || 'CNY';
+        resolved = String(resolved).toUpperCase();
+        return resolved === 'RMB' ? 'CNY' : resolved;
     }
 
     function __isPixelSupportedCurrencySegment(segment) {
@@ -2666,6 +2774,9 @@
                 transaction_id: __pixelTruncate(compact.transaction_id || (additionalInfo.ecommerce && additionalInfo.ecommerce.transaction_id) || '', 120)
             }
         };
+        if (additionalInfo.incident && typeof additionalInfo.incident === 'object') {
+            compact.additionalInfo.incident = additionalInfo.incident;
+        }
 
         return compact;
     }
@@ -2719,9 +2830,252 @@
             });
     }
 
+    var __incidentStepRing = [];
+    var __incidentThrottleMap = {};
+    var __INCIDENT_RING_MAX = 30;
+    var __INCIDENT_THROTTLE_MS = 8000;
+
+    function __pushIncidentStep(step) {
+        if (!step || typeof step !== 'object') {
+            return;
+        }
+        __incidentStepRing.push({
+            at: Date.now(),
+            name: String(step.name || step.event || '').slice(0, 64),
+            path: String(step.path || (window.location && window.location.pathname) || '').slice(0, 160),
+            detail: String(step.detail || '').slice(0, 120)
+        });
+        if (__incidentStepRing.length > __INCIDENT_RING_MAX) {
+            __incidentStepRing = __incidentStepRing.slice(-__INCIDENT_RING_MAX);
+        }
+    }
+
+    function __readRuntimeVersions() {
+        var cfg = {};
+        try {
+            var node = document.getElementById('weline-frontend-runtime-config')
+                || document.querySelector('[data-weline-runtime-config]');
+            if (node && node.textContent) {
+                cfg = JSON.parse(node.textContent) || {};
+            }
+        } catch (eCfg) {
+            cfg = {};
+        }
+        cfg = cfg || {};
+        return {
+            deployVersion: String(cfg.deployVersion || cfg.deploy_version || '').trim(),
+            workerBuildId: String(cfg.workerBuildId || cfg.worker_build_id || '').trim(),
+            themePublishedVersionId: String(cfg.themePublishedVersionId || cfg.theme_published_version_id || '').trim(),
+            themePublishedVersion: String(cfg.themePublishedVersion || cfg.theme_published_version || '').trim()
+        };
+    }
+
+    function __captureRedactedFormSnapshot() {
+        var blocked = /password|pass|pwd|card|cvv|cvc|pan|otp|token|secret|ssn/i;
+        var out = {};
+        var nodes = document.querySelectorAll('input, select, textarea');
+        var i;
+        for (i = 0; i < nodes.length && Object.keys(out).length < 40; i++) {
+            var el = nodes[i];
+            if (!el || el.disabled) {
+                continue;
+            }
+            var type = String(el.type || '').toLowerCase();
+            if (type === 'password' || type === 'file') {
+                continue;
+            }
+            var key = String(el.name || el.id || '').trim();
+            if (!key || blocked.test(key)) {
+                continue;
+            }
+            if (type === 'checkbox' || type === 'radio') {
+                if (!el.checked) {
+                    continue;
+                }
+            }
+            var value = String(el.value == null ? '' : el.value).slice(0, 500);
+            if (value === '') {
+                continue;
+            }
+            out[key.slice(0, 64)] = value;
+        }
+        return out;
+    }
+
+    function __resolveIncidentEmail(formSnapshot) {
+        formSnapshot = formSnapshot || {};
+        var keys = Object.keys(formSnapshot);
+        var i;
+        for (i = 0; i < keys.length; i++) {
+            if (/email/i.test(keys[i]) && /@/.test(String(formSnapshot[keys[i]] || ''))) {
+                return String(formSnapshot[keys[i]]).trim().slice(0, 255);
+            }
+        }
+        try {
+            var hint = document.querySelector('input[type="email"], input[name*="email" i]');
+            if (hint && hint.value && /@/.test(hint.value)) {
+                return String(hint.value).trim().slice(0, 255);
+            }
+        } catch (eEmail) {
+        }
+        return '';
+    }
+
+    function __incidentShouldThrottle(fingerprint) {
+        var now = Date.now();
+        var last = __incidentThrottleMap[fingerprint] || 0;
+        if (now - last < __INCIDENT_THROTTLE_MS) {
+            return true;
+        }
+        __incidentThrottleMap[fingerprint] = now;
+        return false;
+    }
+
+    function __reportSiteIncident(raw) {
+        raw = raw || {};
+        if (!__visitorPixelEnabled()) {
+            return;
+        }
+        var message = String(raw.message || raw.error_message || 'site_error').slice(0, 1024);
+        var errorType = String(raw.type || raw.error_type || '').trim();
+        var errorCode = String(raw.error_code || '').trim();
+        var captureSource = String(raw.capture_source || raw.source || 'manual').trim();
+        var path = String((window.location && window.location.pathname) || '/');
+        var fingerprint = [errorType, errorCode, message.slice(0, 200), path].join('|');
+        if (String(raw.filename || raw.source_url || '').indexOf('chrome-extension://') === 0) {
+            return;
+        }
+        if (captureSource === 'js' && !message && !raw.stack) {
+            return;
+        }
+        if (__incidentShouldThrottle(fingerprint)) {
+            return;
+        }
+
+        var versions = __readRuntimeVersions();
+        var formSnapshot = __captureRedactedFormSnapshot();
+        var identityEmail = String(raw.identity_email || __resolveIncidentEmail(formSnapshot) || '').trim();
+        var incident = {
+            error_type: errorType,
+            type: errorType,
+            error_code: errorCode,
+            error_message: message,
+            message: message,
+            error_stack: String(raw.stack || raw.error_stack || '').slice(0, 8000),
+            capture_source: captureSource,
+            http_status: parseInt(raw.http_status || raw.status || 0, 10) || 0,
+            page_url: String(window.location && window.location.href || '').slice(0, 512),
+            step_path: __incidentStepRing.slice(-__INCIDENT_RING_MAX),
+            form_snapshot: formSnapshot,
+            identity_email: identityEmail,
+            deploy_version: versions.deployVersion,
+            deployVersion: versions.deployVersion,
+            worker_build_id: versions.workerBuildId,
+            workerBuildId: versions.workerBuildId,
+            theme_published_version_id: versions.themePublishedVersionId,
+            themePublishedVersionId: versions.themePublishedVersionId,
+            theme_published_version: versions.themePublishedVersion,
+            themePublishedVersion: versions.themePublishedVersion,
+            pixel_script_version: PIXEL_SCRIPT_VERSION,
+            dict_version: String((__visitorTrackingConfig && __visitorTrackingConfig.dict && __visitorTrackingConfig.dict.version) || '')
+        };
+
+        __pushIncidentStep({ name: 'site_error', detail: errorType || captureSource || message.slice(0, 40) });
+
+        if (window.WelinePixel && typeof window.WelinePixel.track === 'function') {
+            window.WelinePixel.track('site_error', {
+                name: message.slice(0, 120),
+                incident: incident,
+                value: 0
+            }, { keepalive: true });
+        }
+    }
+
+    function __installSiteErrorMonitors() {
+        window.addEventListener('error', function (event) {
+            try {
+                if (event && event.target && event.target !== window && event.target.tagName) {
+                    var tag = String(event.target.tagName || '').toLowerCase();
+                    if (tag === 'script' || tag === 'link') {
+                        __reportSiteIncident({
+                            capture_source: 'resource',
+                            type: 'pixel_incident_resource',
+                            message: 'resource_load_failed:' + tag,
+                            source_url: event.target.src || event.target.href || ''
+                        });
+                        return;
+                    }
+                }
+                __reportSiteIncident({
+                    capture_source: 'js',
+                    type: 'pixel_incident_js',
+                    message: (event && event.message) || 'js_error',
+                    stack: event && event.error && event.error.stack ? event.error.stack : '',
+                    filename: event && event.filename ? event.filename : ''
+                });
+            } catch (e1) {
+            }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function (event) {
+            try {
+                var reason = event && event.reason;
+                var message = '';
+                var stack = '';
+                if (reason && typeof reason === 'object') {
+                    message = String(reason.message || reason);
+                    stack = String(reason.stack || '');
+                } else {
+                    message = String(reason || 'unhandledrejection');
+                }
+                __reportSiteIncident({
+                    capture_source: 'promise',
+                    type: 'pixel_incident_promise',
+                    message: message,
+                    stack: stack
+                });
+            } catch (e2) {
+            }
+        });
+
+        document.addEventListener('weline:api:error', __onWelineApiError);
+        window.addEventListener('weline:api:error', __onWelineApiError);
+
+        function __onWelineApiError(event) {
+            try {
+                var detail = (event && event.detail) || {};
+                var nestedError = detail.error && typeof detail.error === 'object' ? detail.error : {};
+                var status = parseInt(detail.status || detail.http_status || nestedError.status || 0, 10) || 0;
+                var errorCode = String(
+                    detail.error_code
+                    || detail.code
+                    || nestedError.code
+                    || ''
+                ).trim();
+                var typeHint = '';
+                if (status >= 500 || errorCode === 'worker_timeout' || errorCode === 'worker_error' || errorCode === 'protocol_error') {
+                    typeHint = 'pixel_incident_network';
+                }
+                __reportSiteIncident({
+                    capture_source: 'api',
+                    type: typeHint,
+                    error_code: errorCode,
+                    message: String(detail.message || detail.msg || nestedError.message || 'api_error'),
+                    http_status: status,
+                    status: status,
+                    stack: String((detail.provider || '') + '/' + (detail.operation || '')).slice(0, 200)
+                });
+            } catch (e3) {
+            }
+        }
+    }
+
     window.WelinePixel = {
         endpoint: 'worker:visitor.trackPixel',
         script_version: PIXEL_SCRIPT_VERSION,
+        reportIncident: function (options) {
+            __reportSiteIncident(options || {});
+        },
         getStickyUtm: __getStickyUtmPack,
         stickyLinkerEnabled: __stickyLinkerEnabled,
         marketingConsentAllowsStorage: __visitorMarketingConsentAllowsStorage,
@@ -2737,13 +3091,10 @@
             eventName: 'click',
             name: window.__WelinePixelName || '{:name}',
             value: 0,
-            currency: (function () {
-                var c = String(__getPixelSiteEnvValue('currency', 'WELINE_USER_CURRENCY') || 'CNY');
-                return c === 'RMB' ? 'CNY' : c;
-            })(),
+            currency: __resolvePixelCurrency('CNY'),
             websiteUrl: __getPixelSiteEnvValue('website_url', 'WELINE_WEBSITE_URL') || '',
             websiteId: __getPixelSiteEnvValue('website_id', 'WELINE_WEBSITE_ID') || '',
-            userLang: __getPixelSiteEnvValue('language', 'WELINE_USER_LANG') || 'zh-CN',
+            userLang: __resolvePixelLanguage('zh_Hans_CN'),
             elementInfo: null,
             additionalInfo: null
         },
@@ -2755,13 +3106,10 @@
             eventName: 'click',
             name: window.__WelinePixelName || '{:name}',
             value: 0,
-            currency: (function () {
-                var c = String(__getPixelSiteEnvValue('currency', 'WELINE_USER_CURRENCY') || 'CNY');
-                return c === 'RMB' ? 'CNY' : c;
-            })(),
+            currency: __resolvePixelCurrency('CNY'),
             websiteUrl: __getPixelSiteEnvValue('website_url', 'WELINE_WEBSITE_URL') || '',
             websiteId: __getPixelSiteEnvValue('website_id', 'WELINE_WEBSITE_ID') || '',
-            userLang: __getPixelSiteEnvValue('language', 'WELINE_USER_LANG') || 'zh-CN',
+            userLang: __resolvePixelLanguage('zh_Hans_CN'),
             elementInfo: null,
             additionalInfo: null
         },
@@ -2836,11 +3184,18 @@
             payload.websiteId = __getPixelSiteEnvValue('website_id', 'WELINE_WEBSITE_ID') || payload.websiteId || '';
             payload.websiteUrl = __getPixelSiteEnvValue('website_url', 'WELINE_WEBSITE_URL') || payload.websiteUrl || '';
             payload.websiteCode = __getPixelSiteEnvValue('website_code', 'WELINE_WEBSITE_CODE') || '';
-            payload.userLang = __getPixelSiteEnvValue('language', 'WELINE_USER_LANG') || payload.userLang || '';
-            payload.currency = __getPixelSiteEnvValue('currency', 'WELINE_USER_CURRENCY') || payload.currency || '';
+            payload.userLang = __resolvePixelLanguage(payload.userLang || '');
+            payload.currency = __resolvePixelCurrency(payload.currency || '');
             payload.elementInfo = mergedMeta.element ? mergedMeta.element : null;
             __applyEventMetaToPayload(payload, mergedMeta);
             payload.additionalInfo = __buildPixelBehaviorInfo(normalizedEventName, Object.assign({}, mergedMeta, { domElement: domElement }), options.startedAt);
+            if (normalizedEventName === 'site_error' && mergedMeta.incident && typeof mergedMeta.incident === 'object') {
+                payload.additionalInfo = payload.additionalInfo || {};
+                payload.additionalInfo.incident = mergedMeta.incident;
+                payload.name = payload.name || String(mergedMeta.incident.error_message || mergedMeta.incident.message || 'site_error').slice(0, 120);
+            } else if (normalizedEventName && normalizedEventName !== 'site_error') {
+                __pushIncidentStep({ name: normalizedEventName, detail: String((mergedMeta && (mergedMeta.name || mergedMeta.link_text)) || '').slice(0, 80) });
+            }
             var pageBuilderAttribution = __buildPageBuilderAttribution(domElement, normalizedEventName);
             if (pageBuilderAttribution) {
                 payload.additionalInfo.pagebuilder_attribution = pageBuilderAttribution;
@@ -3419,4 +3774,9 @@
         } catch (e2) {
         }
     };
+
+    try {
+        __installSiteErrorMonitors();
+    } catch (eInstall) {
+    }
 })();

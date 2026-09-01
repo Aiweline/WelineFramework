@@ -442,6 +442,10 @@ class PixelEcommercePurchaseRevenueService
 
     private function quoteIdentifier(string $identifier): string
     {
+        if (str_contains($identifier, '"') || str_contains($identifier, '`')) {
+            return $identifier;
+        }
+
         $quote = $this->getPdoDriver() === 'mysql' ? '`' : '"';
         $escaped = $quote . $quote;
         $parts = explode('.', $identifier);
