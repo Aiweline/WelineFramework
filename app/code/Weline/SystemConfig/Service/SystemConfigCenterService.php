@@ -82,6 +82,22 @@ class SystemConfigCenterService
 
                         $tree['modules'][$moduleIndex]['areas'][$areaIndex]['templates'][$templateIndex]['fields'][$fieldIndex] = $field;
                     }
+
+                    $enrichedFields = $tree['modules'][$moduleIndex]['areas'][$areaIndex]['templates'][$templateIndex]['fields'] ?? [];
+                    foreach (($template['adapters'] ?? []) as $adapterIndex => $adapter) {
+                        if (!is_array($adapter)) {
+                            continue;
+                        }
+                        $tree['modules'][$moduleIndex]['areas'][$areaIndex]['templates'][$templateIndex]['adapters'][$adapterIndex]
+                            = $this->enrichAdapterConnectedState(
+                                $adapter,
+                                is_array($enrichedFields) ? $enrichedFields : [],
+                                $moduleName,
+                                $area,
+                                $scope,
+                                $locale
+                            );
+                    }
                 }
 
                 if ($moduleName !== '') {
@@ -682,6 +698,68 @@ class SystemConfigCenterService
             'number', 'int', 'integer' => SystemConfig::VALUE_TYPE_INT,
             default => SystemConfig::VALUE_TYPE_STRING,
         };
+    }
+
+    /**
+     * When adapter declares connected-key, swap action-label (and optional label) if that config is non-empty.
+     *
+     * @param array<string, mixed> $adapter
+     * @param list<array<string, mixed>> $fields
+     * @return array<string, mixed>
+     */
+    private function enrichAdapterConnectedState(
+        array $adapter,
+        array $fields,
+        string $moduleName,
+        string $area,
+        string $scope,
+        string $locale
+    ): array {
+        $connectedKey = trim((string)($adapter['connected-key'] ?? ''));
+        if ($connectedKey === '') {
+            return $adapter;
+        }
+
+        $connectedValue = '';
+        foreach ($fields as $field) {
+            if (!is_array($field) || (string)($field['key'] ?? '') !== $connectedKey) {
+                continue;
+            }
+            $connectedValue = trim((string)($field['effective_value'] ?? ''));
+            break;
+        }
+
+        if ($connectedValue === '' && $moduleName !== '') {
+            $resolved = $this->systemConfig->resolveConfig(
+                key: $connectedKey,
+                module: $moduleName,
+                area: $area,
+                scope: $scope,
+                locale: $locale,
+                default: null
+            );
+            $connectedValue = trim($this->stringifyValue($resolved['value'] ?? ''));
+        }
+
+        $connected = $connectedValue !== ''
+            && $connectedValue !== '0'
+            && $connectedValue !== '***'
+            && strcasecmp($connectedValue, 'false') !== 0;
+        $adapter['connected'] = $connected;
+        if (!$connected) {
+            return $adapter;
+        }
+
+        $connectedActionLabel = trim((string)($adapter['action-label-connected'] ?? ''));
+        if ($connectedActionLabel !== '') {
+            $adapter['action-label'] = $connectedActionLabel;
+        }
+        $connectedLabel = trim((string)($adapter['label-connected'] ?? ''));
+        if ($connectedLabel !== '') {
+            $adapter['label'] = $connectedLabel;
+        }
+
+        return $adapter;
     }
 
     private function isSensitiveField(array $field): bool
