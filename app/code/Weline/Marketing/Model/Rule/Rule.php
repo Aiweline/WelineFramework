@@ -11,6 +11,8 @@ use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Marketing\Service\ExternalManagedRuleOwnership;
 /** 营销规则模型 @package Weline_Marketing */
 #[Table(comment: '营销规则表')]
 #[Index(name: 'idx_status', columns: ['status', 'start_date', 'end_date'])]
@@ -150,5 +152,16 @@ class Rule extends Model
             return false;
         }
         return true;
+    }
+
+    public function delete(): static
+    {
+        /** @var ExternalManagedRuleOwnership $ownership */
+        $ownership = ObjectManager::getInstance(ExternalManagedRuleOwnership::class);
+        if ($ownership->isExternallyManaged($this)) {
+            throw new \RuntimeException($ownership->deletionDeniedMessage($this));
+        }
+
+        return parent::delete();
     }
 }

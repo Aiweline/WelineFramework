@@ -6,14 +6,14 @@ $rules = $rules ?? [];
     <div style="--w-span:12;">
         <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
             <h4 class="w-backend-page__title"><?= __('新建促销活动') ?></h4>
-            <a class="w-button" href="<?= $this->getBackendUrl('marketing/backend/campaign/index') ?>" data-tone="neutral">
+            <a class="w-button" href="@backend-url{'marketing/backend/campaign/index'}" data-tone="neutral">
                 <?= __('返回列表') ?>
             </a>
         </div>
         <template>Weline_Component::message.phtml</template>
         <div class="w-card">
             <div class="w-card__body">
-                <w:form method="post" action="@var($this->getBackendUrl('marketing/backend/campaign/save'))">
+                <w:form method="post" action="@backend-url{'marketing/backend/campaign/save'}">
                     <div style="--w-mb:var(--weline-space-4);">
                         <label class="w-field__label" for="marketing-campaign-name"><?= __('活动名称') ?></label>
                         <input id="marketing-campaign-name" data-testid="marketing-campaign-name" class="w-input" type="text" name="name" required maxlength="255">
