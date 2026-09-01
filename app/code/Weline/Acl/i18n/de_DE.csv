@@ -1,0 +1,354 @@
+﻿无权限访问重定向前,"Keine Berechtigung zum Zugriff vor der Umleitung."
+在用户无权限访问时，执行重定向操作前触发。允许其他模块在重定向前执行自定义操作，如记录日志、发送通知等。,"Vor der Ausführung einer Weiterleitung, wenn der Benutzer keine Berechtigung zum Zugriff hat, wird ein Ereignis ausgelöst. Andere Module können benutzerdefinierte Aktionen vor der Weiterleitung ausführen, z. B. das Protokollieren von Ereignissen oder das Senden von Benachrichtigungen."
+角色检查,Rollenprüfung
+在检查用户角色权限时触发，允许其他模块自定义角色检查逻辑。,"Wird beim Prüfen der Benutzerrollenberechtigungen ausgelöst und ermöglicht anderen Modulen, die Logik zur Rollenprüfung anzupassen."
+"角色 ACL 条目加载后","Nach dem Laden der ACL-Einträge."
+"角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。","Die Gültigkeit von Rollen-basierten Zugriffskontrollregeln (RBAC) wird nach dem Laden aus der Datenbank überprüft.  Beobachter können Einträge zurückschreiben (z.B. zur Anpassung von Berechtigungen auf Stufe der Standorte).  Das Acl-System ist nicht mit der Website verbunden."
+"超管 ACL 旁路检查","ACL-Umgehungsprüfung für Super-Administrator."
+"role_id=1 短路放行前触发；观察者可将 allow_bypass 置为 false 以关闭旁路。","role_id=1: Wird vor der Kurzschlussfreigabe ausgelöst; Beobachter können den Parameter ""allow_bypass"" auf ""false"" setzen, um die Umgehung zu deaktivieren."
+角色权限保存前,"Vor dem Speichern der Benutzerrechte."
+"角色 ACL 分配保存前触发；观察者可拒绝越权 source_ids（allowed/message）。","Rollenbasierte Zugriffskontrolle (ACL) wird vor der Zuweisung ausgelöst; Beobachter können den Zugriff auf nicht autorisierte Ressourcen (source_ids) (erlaubt/Nachricht) verweigern."
+角色列表过滤,"Filter für die Charakterliste."
+"角色列表/创建前触发；观察者可按 website_id 约束可管理角色集合。","Charakterliste/Wird vor der Erstellung ausgelöst; Beobachter können eine verwaltbare Menge von Charakteren anhand der website_id einschränken."
+"ACL 分配树行加载后","Nach dem Laden der ACL-Zuordnungstabelle."
+"权限分配树/标签行加载后触发；观察者可写回 rows 以裁剪可分配资源。","Die Berechtigungszuweisung wird ausgelöst, nachdem der Berechtigungsbaum/die Tag-Zeile geladen wurde. Der Beobachter kann die Zeilen modifizieren, um die verfügbaren Ressourcen zu filtern."
+所有标签,"Alle Labels."
+搜索标签,Suchbegriffe
+id属性不能为空,"Das Attribut ""id"" darf nicht leer sein."
+未找到匹配标签,"Keine passenden Tags gefunden."
+移除,Entfernen.
+acl标签缺少source属性,"Das `acl`-Tag fehlt das `source`-Attribut."
+"该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！","Einige Ressourcen auf dieser Seite erfordern Berechtigungen, die Sie derzeit nicht besitzen: Zugriff auf die Ressource ""%{1}"" ist nicht möglich. Bitte kontaktieren Sie den Administrator, wenn Sie diese benötigen."
+使用示例：,Verwendungsbeispiele:
+"资源ID和父级资源ID不能相同，请检查! 资源ID: %{1}, 父级资源ID: %{2}","Die Ressourcen-ID und die ID des übergeordneten Elements dürfen nicht identisch sein. Bitte überprüfen Sie dies! Ressourcen-ID: %{1}, ID des übergeordneten Elements: %{2}"
+"框架约定错误：类级 ACL %{1} 未依附菜单 ACL。请确保 source_id 对应 menu.xml 节点，或 parent_source 指向 type=menus 的菜单节点。当前 parent_source=%{2}","Framework-Konfigurationsfehler: Die ACL auf Klassen-Ebene %{1} ist nicht an eine Menü-ACL gebunden. Stellen Sie sicher, dass source_id mit einem Knoten in menu.xml übereinstimmt oder dass parent_source auf einen Menüknoten mit dem Typ ""menus"" verweist. Derzeit ist parent_source=%{2}."
+(空),(Leer)
+"【ACL 重复检测】模块: %{1}","【ACL-Doppelprüfungsmodul】: %{1}"
+"发现以下重复的 source_id：","Folgende doppelte source_id-Werte wurden gefunden:"
+"... 已省略更多重复（共 %{1} 个 source_id）","... Weitere Wiederholungen wurden ausgelassen (insgesamt %{1} source_id-Einträge)."
+"重复的 source_id: %{1}","Doppelte source_id: %{1}"
+首次出现:,"Erste Erwähnung:"
+"- 类: %{1}","- Klasse: %{1}"
+"- 方法: %{1}","Methode: %{1}"
+"- 路由: %{1}","- Route: %{1}"
+"- 路由器: %{1}","Router: %{1}"
+"重复出现 (%{1} 次):","Wiederholt (%{1} Mal):"
+"- 索引 #%{1}:","Index #%{1}:"
+"类: %{1}","Klasse: %{1}"
+"方法: %{1}","Methode: %{1}"
+"路由: %{1}","Route: %{1}"
+"路由器: %{1}","Router: %{1}"
+"... 已省略 %{1} 条","... %{1} Einträge wurden ausgelassen."
+"路由系统会为同一 action 生成多个 URL 变体，属正常现象，ACL 已自动去重。","Das Routing-System generiert aus einem einzigen Action-Aufruf mehrere URL-Varianten, was normal ist. Die ACL (Access Control List) hat die doppelten Einträge automatisch entfernt."
+"【ACL 重复检测】模块: %{1} (方法级别权限)","【ACL-Doppelüberprüfung】Modul: %{1} (Berechtigungen auf Methodenebene)"
+"ACL catalog: framework Query compile refreshed before resource collection.",ACL目录：资源收集前刷新的框架查询编译。
+请先登录,"Bitte melden Sie sich an."
+用户已被禁用,"Der Benutzer wurde gesperrt."
+"应用没有任何授权 scope","Die Anwendung hat keine Berechtigungen."
+应用无权进行该操作,"Die Anwendung hat keine Berechtigung, diese Aktion durchzuführen."
+用户不存在或已被删除,"Der Benutzer existiert nicht oder wurde gelöscht."
+用户没有分配角色,"Dem Benutzer wurde keine Rolle zugewiesen."
+你没有任何权限！请联系管理员！,"Sie haben keine Berechtigung! Bitte kontaktieren Sie den Administrator!"
+"你无权进行该操作！你不具备：%{1} 操作权限！","Sie haben nicht die Berechtigung, diese Aktion durchzuführen! Sie verfügen nicht über: %{1} Berechtigungen!"
+你无权进行该操作,"Sie haben keine Berechtigung, diese Aktion durchzuführen."
+"你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！","Sie haben keine Berechtigung für diese Aktion! Sie verfügen nicht über: %{1} Routing: %{2} Berechtigungen! Sie wurden zu einer Seite weitergeleitet, auf die Sie Zugriff haben!"
+你无权进行该操作！已将你带到你可访问的后台页面：%{1},"Sie haben keine Berechtigung, diese Aktion durchzuführen! Sie wurden zu einer Backend-Seite weitergeleitet, auf die Sie Zugriff haben: %{1}"
+"超级管理员已拥有对象 Scope 授权，无需追加。","Der Superadministrator verfügt bereits über die Objektbereichsberechtigung, keine weitere Berechtigung erforderlich."
+"已为超级管理员（role_id=1）追加 %{1} 条对象 Scope 授权。","Es wurden %{1} Objektbereichsberechtigungen für den Superadministrator (role_id=1) hinzugefügt."
+"为超级管理员授予对象 Scope 授权时出错：%{1}","Fehler beim Gewähren der Objektbereichsberechtigung für den Superadministrator: %{1}"
+"超级管理员已拥有全部 ACL 权限，无需追加。","Der Superadministrator verfügt bereits über alle ACL-Berechtigungen und benötigt keine zusätzlichen Berechtigungen."
+"已为超级管理员（role_id=1）授予 %{1} 条新权限。","Dem Superadministrator (role_id=1) wurden %{1} neue Berechtigungen erteilt."
+为超级管理员授予权限时出错：%{1},"Fehler beim Vergeben von Berechtigungen an den Superadministrator: %{1}"
+管理权限,Administrationsrechte
+shield,盾
+模块资源,Modulressourcen
+puzzle,谜
+标签资源,Ressourcen-Tags
+search,搜索
+加载IP白名单失败：%{1},"Fehler beim Laden der IP-Whitelist: %{1}"
+IP地址不能为空,"Die IP-Adresse darf nicht leer sein."
+IP地址格式不正确,"Die IP-Adresse hat ein falsches Format."
+该IP地址已存在,"Diese IP-Adresse ist bereits vergeben."
+添加成功,"Erfolgreich hinzugefügt."
+添加失败,"Hinzufügen fehlgeschlagen."
+添加失败：%{1},"Fehler beim Hinzufügen: %{1}"
+记录不存在,"Der Datensatz existiert nicht."
+该IP地址已被其他记录使用,"Diese IP-Adresse wird bereits von einem anderen Eintrag verwendet."
+更新成功,"Aktualisierung erfolgreich."
+更新失败,"Update fehlgeschlagen."
+更新失败：%{1},"Update fehlgeschlagen: %{1}"
+无效的请求方法,无效的请求方法
+无效的ID,"Ungültige ID."
+删除成功,删除成功
+删除失败,删除失败
+删除失败：%{1},删除失败：%{1}
+状态更新成功,"Status erfolgreich aktualisiert."
+状态更新失败,"Fehler beim Aktualisieren des Status."
+状态更新失败：%{1},"Fehler beim Aktualisieren des Status: %{1}"
+IP白名单,IP-Whitelist
+check,查看
+查看IP白名单,"Überprüfen der IP-Whitelist."
+添加IP白名单,"Fügen Sie eine IP-Whitelist hinzu."
+plus,加
+编辑IP白名单,"Bearbeiten der IP-Zulassungsliste."
+edit,编辑
+删除IP白名单,"IP-Whitelist entfernen."
+trash,trash
+切换IP白名单状态,"Ändern des Status der IP-Whitelist."
+switch,转变
+登录失败,"Anmeldung fehlgeschlagen."
+登录成功,"Anmeldung erfolgreich."
+权限拒绝,"Zugriff verweigert."
+ACL违规,"Verstoß gegen die Nutzungsbedingungen."
+可疑活动,"Verdächtige Aktivitäten."
+加载安全日志失败：%{1},"Fehler beim Laden des Sicherheitsprotokolls: %{1}"
+安全日志,Sicherheits-Protokolle
+warning,警告
+查看安全日志,"Überprüfen Sie die Sicherheits-Protokolle."
+标签词非法,"Illegale Schlüsselwörter."
+标签元数据已保存,"Die Metadaten der Tags wurden gespeichert."
+标签仍被资源或角色订阅引用，不能删除元数据,"Die Tags werden weiterhin von Ressourcen oder Rollen referenziert und können nicht gelöscht werden. Metadaten können nicht gelöscht werden."
+标签元数据已删除,"Die Metadaten der Tags wurden gelöscht."
+ACL标签管理,ACL-Tag-Verwaltung
+tag,标签
+"管理 ACL source_id 标签元数据","Verwaltung von ACL-Quell-IDs und zugehörigen Metadaten."
+标签列表,"Liste der Tags"
+保存标签元数据,"Speichern der Metadaten der Tags."
+删除标签元数据,"Löschen von Metadaten von Tags."
+角色名不能为空！,"Der Rollenname darf nicht leer sein!"
+角色已存在！,"Die Figur existiert bereits!"
+角色创建成功！,"Die Figur wurde erfolgreich erstellt!"
+角色创建失败！,"Fehler beim Erstellen des Charakters!"
+角色已不存在！,"Die Figur existiert nicht mehr!"
+删除成功！,删除成功！
+仅允许超管分配权限！,"Nur Superadministratoren dürfen Berechtigungen vergeben!"
+角色ID不存在！,"Die angegebene Rollen-ID existiert nicht!"
+权限分配被站级授权包拒绝,"Die Berechtigungszuweisung wurde von einem Paket auf Stufe des Servers abgelehnt."
+权限分配失败！,"Berechtigungsvergabe fehlgeschlagen!"
+权限分配成功，所有缓存已刷新！,"Die Berechtigungen wurden erfolgreich zugewiesen. Alle Caches wurden aktualisiert!"
+权限已保存，但所有缓存刷新失败：%{1},"Die Berechtigungen wurden gespeichert, aber alle Cache-Aktualisierungen sind fehlgeschlagen: %{1}"
+搜索成功,Sucherfolg.
+访问控制权限管理,"Zugriffskontroll- und Berechtigungsmanagement."
+角色列表,Charakterliste
+角色添加,"Charakter hinzufügen"
+角色编辑,Charakterbearbeitung
+角色删除,"Charakter löschen"
+权限分配,Berechtigungsvergabe
+角色权限分配,"Rollenbasierte Zugriffskontrolle / Rechtevergabe"
+角色搜索,Charakter-Suche
+搜索角色列表,"Suche nach Charakterlisten."
+不能删除超级管理员！,"Superadministratoren können nicht gelöscht werden!"
+添加IP,"IP-Adresse hinzufügen."
+关键词,Schlüsselwörter
+搜索,Suche
+重置,Zurücksetzen
+IP白名单列表,IP-Whitelist-Liste
+ID,ID
+IP地址,IP-Adresse
+描述,Beschreibung
+状态,状态
+创建时间,创建时间
+操作,操作
+编辑,编辑
+删除,删除
+显示,显示
+到,Zu.
+共,Gemeinsam.
+条记录,Datensatz
+上一页,"Vorherige Seite"
+下一页,下一页
+暂无IP白名单记录,"Es sind keine IP-Adressen in der Whitelist hinterlegt."
+支持单个IP或CIDR格式的IP范围,"Unterstützung für einzelne IP-Adressen oder IP-Adressbereiche im CIDR-Format."
+启用,Aktivieren
+取消,取消
+保存,保存
+搜索IP地址或描述,"Suche nach einer IP-Adresse oder einer Beschreibung."
+禁用,禁用
+"例如：192.168.1.1 或 192.168.1.0/24","Beispiele: 192.168.1.1 oder 192.168.1.0/24"
+编辑ID：,Bearbeitungs-ID:
+操作失败,"Operation fehlgeschlagen."
+确定要切换状态吗？,"Möchten Sie den Status ändern?"
+确定要删除这条记录吗？,"Möchten Sie diesen Eintrag wirklich löschen?"
+事件类型,Ereignistyp
+全部,全部
+日志列表,Protokoll-Liste
+用户ID,Benutzer-ID
+消息,Nachricht
+查看详情,查看详情
+暂无安全日志记录,"Keine Sicherheitsmeldungen verfügbar."
+搜索消息或IP地址,"Suche nach Nachrichten oder IP-Adressen."
+查看日志ID：,"Anzeigen der Log-ID:"
+删除角色,"Charakter löschen."
+确定删除角色“%{1}”吗？此操作无法撤销。,"Möchten Sie den Benutzer „%{1}“ wirklich löschen? Dieser Vorgang kann nicht rückgängig gemacht werden."
+权限角色,Berechtigungsrollen
+建立角色并按实际职责分配权限。,"Erstellen Sie Rollen und weisen Sie Berechtigungen entsprechend den tatsächlichen Verantwortlichkeiten zu."
+面包屑,Brotkrümel
+"ACL 权限管理",ACL-Berechtigungsverwaltung
+角色,角色
+搜索角色,"Charakter suchen"
+搜索名称或描述,"Suche nach Namen oder Beschreibungen."
+清除,Löschen
+添加角色,"Charakter hinzufügen."
+创建于,"Erstellt am"
+更新于,"Aktualisiert am"
+权限管理,Berechtigungsverwaltung
+系统角色,Systemrollen
+暂无角色,"Keine Charaktere verfügbar."
+角色分页,Charakter-Paginierung
+关闭,关闭
+角色名,Rollenname
+请输入角色名称,"Bitte geben Sie den Namen der Figur ein."
+角色描述,Charakterbeschreibung
+请输入角色描述,"Bitte geben Sie eine Charakterbeschreibung ein."
+角色权限配置,Rollenberechtigungs-Konfiguration
+使用原生权限树控制菜单、接口、任务和运维能力,"Steuern Sie Menüs, Schnittstellen, Aufgaben und Wartungsfunktionen mithilfe einer nativen Berechtigungsstruktur."
+返回列表,返回列表
+配置角色,Rollenkonfiguration
+操作者,Bediener
+未知,未知
+标签包,Tag-Paket
+"已选择 %{1} 项权限","%{1} Berechtigungen wurden ausgewählt."
+没有匹配的权限,"Keine passenden Berechtigungen gefunden."
+保存权限配置,"Berechtigungen speichern/Konfiguration der Berechtigungen."
+保存中…,Speichern...
+权限配置操作,Berechtigungsverwaltung/Konfigurationsoperationen.
+当前角色,"Aktuelle Rolle."
+权限统计,Berechtigungsstatistik
+已授权权限,"Berechtigung erteilt."
+权限总数,"Gesamtzahl der Berechtigungen"
+权限分组,Berechtigungs-Gruppen
+授权进度,"Autorisierungsstatus / Genehmigungsfortschritt"
+权限树工具,Berechtigungshierarchie-Tool
+搜索权限,Suchberechtigungen
+"搜索权限名称、ID 或描述…","Suche nach Berechtigungsnamen, IDs oder Beschreibungen..."
+模块,Modul
+所有模块,"Alle Module."
+类型,类型
+所有类型,"Alle Arten."
+权限视图,Berechtigungsansicht
+菜单维度,Menüdimensionen
+标签维度,Labeldimensionen
+展开,展开
+折叠,Falten
+全选,"Alles auswählen."
+清空,清空
+菜单与功能权限,"Menü und Funktionsberechtigungen"
+勾选父节点会授予整个子树；取消父节点会收回整个子树。,"Das Aktivieren eines Elternknotens gewährt den gesamten Unterbaum; das Deaktivieren eines Elternknotens entzieht den gesamten Unterbaum die Berechtigung."
+标签权限包,"Berechtigungs-Paket für Tags"
+标签包适合批量授权；取消包内单项时会自动取消覆盖它的标签包。,"Die Paketlizenz eignet sich für die Massenzuweisung; beim Entfernen eines einzelnen Elements innerhalb eines Pakets wird automatisch das übergeordnete Paket entfernt."
+编辑角色,Redaktionsrolle
+角色只描述职责，具体能力在权限配置页中授予。,"Die Rollen beschreiben lediglich die Verantwortlichkeiten; die konkreten Berechtigungen werden auf der Berechtigungs-Konfigurationsseite vergeben."
+保存角色,"Charakter speichern."
+标签维度资源,"Etiketten-Dimensionen, Ressourcen."
+模块维度资源,Modul-Dimension-Ressourcen
+"按标签浏览与搜索 ACL 资源；可切换到模块维度继续筛选","Durchsuchen und filtern Sie ACL-Ressourcen nach Schlagwörtern; Sie können auch zu einer modularen Ansicht wechseln, um die Filterung weiter zu verfeinern."
+"按模块浏览与搜索 ACL 资源；可切换到标签维度继续筛选","Durchsuchen und filtern Sie ACL-Ressourcen nach Modulen; wechseln Sie zur Ansicht ""Tags"", um die Filterung weiter zu verfeinern."
+模块维度,Moduldimension
+角色管理,Rollenverwaltung
+标签元数据,Metadaten-Tags
+涉及模块,"Betreffende Module"
+资源类型数,"Anzahl der Ressourcentypen."
+权限列表,Berechtigungsliste
+暂无权限数据,"Keine Berechtigungsdaten verfügbar."
+资源标识,Ressourcenidentifikation
+资源名称,Ressourcenname
+标签,Etiketten
+请求方法,Anfrage-Methode
+路由,Routing
+所属模块,"Zugehöriges Modul"
+更新时间,更新时间
+搜索权限名称、ID、标签...,"Suchberechtigungsname, ID, Tags..."
+搜索权限名称、ID、路由...,"Suchberechtigungsname, ID, Routing..."
+搜索模块名称,Suchmodulname
+在标签维度查看,"Ansicht nach Dimensionen (oder: Ansicht nach Kennzeichnung)."
+在模块维度查看,"Ansehen nach Modulen."
+Acl权限管理,ACL-Berechtigungsverwaltung
+系统配置,Systemkonfiguration
+支持角色权限管理,"Unterstützung für die Rollen- und Berechtigungsverwaltung."
+权限标签,Berechtigungs-Label
+"ACL 标签管理",ACL-Labelverwaltung
+"标签从 source_id 自动发现；可编辑元数据名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。","Die Tags werden automatisch anhand der `source_id` ermittelt; Metadaten-Namen, Beschreibungen, Farben und Sortierreihenfolge sind editierbar. Das Löschen ist nur für manuelle Metadaten möglich, die keine Ressourcen referenzieren und keine Benutzer-Abonnements haben."
+发现标签,"Gefundene Tags."
+已配置元数据,"Metadaten konfiguriert."
+关联资源数,"Anzahl der zugehörigen Ressourcen."
+标签元数据列表,"Liste der Metadaten-Tags."
+个标签,"Ein Etikett."
+暂无发现的标签,"Bisher keine gefundenen Tags."
+资源数,"Anzahl der Ressourcen"
+元数据名,Metadatenname
+颜色,颜色
+排序,Sortierung
+说明,说明
+已配置,Konfiguriert.
+选择颜色,"Farbe auswählen."
+仍有资源引用，无法删除,"Es gibt noch Referenzen, die nicht entfernt werden können."
+删除元数据,"Metadaten löschen."
+"资源不能以自己为父级： %{1}","Ressourcen dürfen nicht ihre eigene Eltern-Ressource sein: %{1}"
+"检测到循环引用： %{1} -> %{2}","Erkennung einer zyklischen Referenz: %{1} -> %{2}"
+"设置此父级会形成循环引用： %{1} -> %{2}","Das Setzen dieses übergeordneten Elements würde zu einer Zirkelreferenz führen: %{1} -> %{2}."
+"非标准父子类型组合： %{1} -> %{2}","Nicht-standardmäßige Eltern-Kind-Beziehung: %{1} -> %{2}"
+"资源 ID 不能为空","Die Ressourcen-ID darf nicht leer sein."
+"资源 ID 已存在： %{1}","Die Ressource mit der ID ""%{1}"" existiert bereits."
+"该菜单下有 %{1} 个子菜单，请先删除子菜单","Unter diesem Menüpunkt befinden sich %{1} Untermenüs. Bitte löschen Sie zuerst die Untermenüs."
+操作授权条件不满足,"Die Bedingungen für die Berechtigung zur Ausführung sind nicht erfüllt."
+菜单,Speisekarte
+"HTTP 接口",HTTP-Schnittstelle
+"REST API",休息API
+"bin-query 接口",bin-query-Schnittstelle
+后台任务,Hintergrundaufgaben
+运维操作,Betriebsführungsaufgaben
+其他,Andere.
+系统菜单,Systemmenü
+用户菜单,Benutzermenü
+安全设置,Sicherheitseinstellungen
+Acl角色管理,ACL-Rollenverwaltung
+暂无记录,"Keine Einträge vorhanden."
+请输入角色名,"Bitte geben Sie den Namen der Figur ein."
+为角色分配系统访问权限，控制菜单和功能的可见性,"Vergabe von Systemzugriffsberechtigungen für Benutzer, Steuerung der Sichtbarkeit von Menüs und Funktionen."
+取消标签会收回该路径下全部叶子权限；保存使用页面级共享权限集合，避免切换视图丢权。,"Das Entfernen eines Tags widerruft alle Berechtigungen für alle Unterordner und Dateien unter diesem Pfad. Das Speichern verwendet eine Sammlung von Seitenebene-Berechtigungen, um den Verlust von Berechtigungen beim Wechsel zwischen Ansichten zu vermeiden."
+标签权限树,"Berechtigungsbaum für Tags"
+勾选标签可整包授权；叶子也可单独勾选或取消,"Das Aktivieren von Labels ermöglicht eine Lizenzierung für das gesamte Paket; einzelne Elemente (Blätter) können ebenfalls separat ausgewählt oder abgewählt werden."
+勾选需要授予的权限，子权限会自动关联父权限,"Wählen Sie die Berechtigungen aus, die Sie erteilen möchten. Untergeordnete Berechtigungen werden automatisch mit den übergeordneten Berechtigungen verknüpft."
+"搜索权限名称、ID 或描述...","Suchen Sie nach Berechtigungsnamen, IDs oder Beschreibungen..."
+按类型筛选,"Nach Typ filtern."
+展开所有,"Alle erweitern."
+折叠所有,"Alle zusammenklappen."
+任务,Aufgabe
+运维,"Betrieb und Wartung"
+菜单权限,Menüberechtigungen
+接口权限,Schnittstellenzugriffsberechtigungen
+访问权限,Zugriffsrechte
+保存中...,"Wird gespeichert..."
+找到,gefunden
+个匹配权限,"Eine passende Berechtigung."
+未找到匹配的权限，请尝试其他关键词,"Keine passenden Berechtigungen gefunden. Bitte versuchen Sie andere Suchbegriffe."
+已全选所有权限,"Alle Berechtigungen wurden ausgewählt."
+已清空所有选择,"Alle Auswahlen wurden aufgehoben."
+筛选结果,Filterergebnisse
+个分组,"Eine Gruppe."
+项权限,"Berechtigungen für Elemente"
+Acl角色添加,"Hinzufügen einer Acl-Rolle."
+角色名称验证成功,"Die Validierung des Rollennamens war erfolgreich."
+角色描述验证成功,"Charakterbeschreibung erfolgreich validiert."
+权限分配成功，权限缓存已清理。,"Die Berechtigungen wurden erfolgreich zugewiesen, der Berechtigungs-Cache wurde geleert."
+正在创建...,"Wird erstellt..."
+正在创建角色...,"Erstellung des Charakters läuft..."
+角色创建失败，请检查输入后重试,"Die Erstellung des Charakters ist fehlgeschlagen. Bitte überprüfen Sie die Eingaben und versuchen Sie es erneut."
+权限分配成功！,"Die Berechtigungen wurden erfolgreich zugewiesen!"
+权限缓存清理成功！,"Bereinigung des Berechtigungs-Caches erfolgreich abgeschlossen!"
+"标签从 source_id 自动发现；可编辑显示名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。","Die Labels werden automatisch anhand der `source_id` erkannt; die Anzeigebezeichnung, Beschreibung, Farbe und Sortierreihenfolge sind bearbeitbar. Das Löschen ist nur für manuell erstellte Metadaten zulässig, die keine Ressourcen referenzieren und von keinem Benutzer abonniert werden."
+元数据,Metadaten
+删元数据,"Löschen von Metadaten."
+显示名,Anzeigename
+按模块筛选,"Nach Modulen filtern."
+管理系统中所有的访问控制权限，包括菜单、接口等资源,"Alle Zugriffsrechte im Managementsystem, einschließlich Ressourcen wie Menüs und Schnittstellen."
+接口,Schnittstelle
+"对象 Scope 写入授权通过","Objektbereich, Schreibberechtigung erteilt."
+"对象 Scope 授权拒绝","Objekt, Umfang, Autorisierung, Ablehnung."
+添加,添加
+提交,Absenden
+"mdi mdi-security","MDI MDI 安全"
+"mdi mdi-puzzle-outline","MDI MDI-拼图大纲"
+"mdi mdi-tag-search-outline","mdi mdi 标签搜索大纲"
+"mdi mdi-tag-multiple","mdi mdi 标签多个"
+确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试

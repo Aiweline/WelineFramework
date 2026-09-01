@@ -1,78 +1,78 @@
 ﻿无权限访问重定向前,无权限访问重定向前
 在用户无权限访问时，执行重定向操作前触发。允许其他模块在重定向前执行自定义操作，如记录日志、发送通知等。,在用户无权限访问时，执行重定向操作前触发。允许其他模块在重定向前执行自定义操作，如记录日志、发送通知等。
-角色检查,角色检查
-在检查用户角色权限时触发，允许其他模块自定义角色检查逻辑。,在检查用户角色权限时触发，允许其他模块自定义角色检查逻辑。
-"角色 ACL 条目加载后","角色 ACL 条目加载后"
-"角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。","角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。"
-"超管 ACL 旁路检查","超管 ACL 旁路检查"
-"role_id=1 短路放行前触发；观察者可将 allow_bypass 置为 false 以关闭旁路。","role_id=1 短路放行前触发；观察者可将 allow_bypass 置为 false 以关闭旁路。"
+角色检查,"Kiểm tra nhân vật."
+在检查用户角色权限时触发，允许其他模块自定义角色检查逻辑。,"Khi kiểm tra quyền của người dùng, chức năng này kích hoạt và cho phép các mô-đun khác tùy chỉnh logic kiểm tra quyền."
+"角色 ACL 条目加载后","Sau khi tải các mục ACL của vai trò."
+"角色有效 ACL 行从库加载后触发，观察者可写回 entries（如按站级授权包求交）。Acl 不感知 Website。","Khi một quy tắc ACL hợp lệ được tải từ cơ sở dữ liệu, một trình theo dõi (observer) có thể ghi lại thông tin (entries), ví dụ như để thực hiện việc phân quyền dựa trên cấp độ trạm. Hệ thống ACL không nhận biết đến các trang web."
+"超管 ACL 旁路检查","Kiểm tra bỏ qua ACL của siêu quản trị viên."
+"role_id=1 短路放行前触发；观察者可将 allow_bypass 置为 false 以关闭旁路。","`role_id=1`: kích hoạt trước khi bỏ qua quy trình; người quan sát có thể đặt `allow_bypass` thành `false` để tắt tính năng bỏ qua."
 角色权限保存前,角色权限保存前
-"角色 ACL 分配保存前触发；观察者可拒绝越权 source_ids（allowed/message）。","角色 ACL 分配保存前触发；观察者可拒绝越权 source_ids（allowed/message）。"
-角色列表过滤,角色列表过滤
+"角色 ACL 分配保存前触发；观察者可拒绝越权 source_ids（allowed/message）。","Trước khi lưu phân quyền ACL, hệ thống sẽ kích hoạt; người quan sát có thể từ chối các `source_ids` không hợp lệ (không được phép/tin nhắn)."
+角色列表过滤,"Lọc danh sách nhân vật."
 "角色列表/创建前触发；观察者可按 website_id 约束可管理角色集合。","角色列表/创建前触发；观察者可按 website_id 约束可管理角色集合。"
 "ACL 分配树行加载后","ACL 分配树行加载后"
-"权限分配树/标签行加载后触发；观察者可写回 rows 以裁剪可分配资源。","权限分配树/标签行加载后触发；观察者可写回 rows 以裁剪可分配资源。"
+"权限分配树/标签行加载后触发；观察者可写回 rows 以裁剪可分配资源。","Khi cây phân quyền/danh sách được tải, một sự kiện kích hoạt. Người quan sát có thể sửa đổi danh sách để giới hạn các tài nguyên có thể được phân phối."
 所有标签,所有标签
-搜索标签,搜索标签
-id属性不能为空,id属性不能为空
-未找到匹配标签,未找到匹配标签
+搜索标签,"Tìm kiếm theo nhãn."
+id属性不能为空,"Thuộc tính id không được để trống."
+未找到匹配标签,"Không tìm thấy nhãn phù hợp."
 移除,移除
-acl标签缺少source属性,acl标签缺少source属性
+acl标签缺少source属性,"Thiếu thuộc tính ""source"" trong thẻ ACL."
 "该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！","该页面部分资源引用了权限设置，但是您当前没有权限:无法访问 %{1} 资源,如有需求请联系管理员！"
-使用示例：,使用示例：
-"资源ID和父级资源ID不能相同，请检查! 资源ID: %{1}, 父级资源ID: %{2}","资源ID和父级资源ID不能相同，请检查! 资源ID: %{1}, 父级资源ID: %{2}"
-"框架约定错误：类级 ACL %{1} 未依附菜单 ACL。请确保 source_id 对应 menu.xml 节点，或 parent_source 指向 type=menus 的菜单节点。当前 parent_source=%{2}","框架约定错误：类级 ACL %{1} 未依附菜单 ACL。请确保 source_id 对应 menu.xml 节点，或 parent_source 指向 type=menus 的菜单节点。当前 parent_source=%{2}"
-(空),(空)
-"【ACL 重复检测】模块: %{1}","【ACL 重复检测】模块: %{1}"
+使用示例：,"Ví dụ sử dụng:"
+"资源ID和父级资源ID不能相同，请检查! 资源ID: %{1}, 父级资源ID: %{2}","ID tài nguyên và ID tài nguyên cha không được giống nhau, vui lòng kiểm tra! ID tài nguyên: %{1}, ID tài nguyên cha: %{2}"
+"框架约定错误：类级 ACL %{1} 未依附菜单 ACL。请确保 source_id 对应 menu.xml 节点，或 parent_source 指向 type=menus 的菜单节点。当前 parent_source=%{2}","Lỗi cấu hình: ACL cấp lớp %{1} không liên kết với ACL của menu. Vui lòng đảm bảo rằng `source_id` tương ứng với một nút trong file `menu.xml` hoặc `parent_source` trỏ đến một nút menu có thuộc tính `type=""menus""`. Giá trị hiện tại của `parent_source` là: %{2}."
+(空),(Trống)
+"【ACL 重复检测】模块: %{1}","[Phát hiện trùng lặp ACL] Mô-đun: %{1}"
 "发现以下重复的 source_id：","发现以下重复的 source_id："
 "... 已省略更多重复（共 %{1} 个 source_id）","... 已省略更多重复（共 %{1} 个 source_id）"
 "重复的 source_id: %{1}","重复的 source_id: %{1}"
-首次出现:,首次出现:
-"- 类: %{1}","- 类: %{1}"
+首次出现:,"Lần xuất hiện đầu tiên:"
+"- 类: %{1}","- Loại: %{1}"
 "- 方法: %{1}","- 方法: %{1}"
-"- 路由: %{1}","- 路由: %{1}"
-"- 路由器: %{1}","- 路由器: %{1}"
+"- 路由: %{1}","- Đường dẫn: %{1}"
+"- 路由器: %{1}","- Router: %{1}"
 "重复出现 (%{1} 次):","重复出现 (%{1} 次):"
 "- 索引 #%{1}:","- 索引 #%{1}:"
 "类: %{1}","类: %{1}"
-"方法: %{1}","方法: %{1}"
-"路由: %{1}","路由: %{1}"
-"路由器: %{1}","路由器: %{1}"
-"... 已省略 %{1} 条","... 已省略 %{1} 条"
+"方法: %{1}","Phương pháp: %{1}"
+"路由: %{1}","Định tuyến: %{1}"
+"路由器: %{1}","Bộ định tuyến: %{1}"
+"... 已省略 %{1} 条","... Đã bỏ qua %{1} mục."
 "路由系统会为同一 action 生成多个 URL 变体，属正常现象，ACL 已自动去重。","路由系统会为同一 action 生成多个 URL 变体，属正常现象，ACL 已自动去重。"
-"【ACL 重复检测】模块: %{1} (方法级别权限)","【ACL 重复检测】模块: %{1} (方法级别权限)"
-"ACL catalog: framework Query compile refreshed before resource collection.",ACL目录：资源收集前刷新的框架查询编译。
-请先登录,请先登录
-用户已被禁用,用户已被禁用
-"应用没有任何授权 scope","应用没有任何授权 scope"
-应用无权进行该操作,应用无权进行该操作
+"【ACL 重复检测】模块: %{1} (方法级别权限)","【Phát hiện trùng lặp ACL】Mô-đun: %{1} (Quyền truy cập cấp phương thức)."
+"ACL catalog: framework Query compile refreshed before resource collection.","ACL catalog: framework Query compile refreshed before resource collection."
+请先登录,"Vui lòng đăng nhập trước."
+用户已被禁用,"Người dùng đã bị vô hiệu hóa."
+"应用没有任何授权 scope","Ứng dụng này không có bất kỳ quyền truy cập nào."
+应用无权进行该操作,"Ứng dụng không có quyền thực hiện thao tác này."
 用户不存在或已被删除,用户不存在或已被删除
 用户没有分配角色,用户没有分配角色
-你没有任何权限！请联系管理员！,你没有任何权限！请联系管理员！
+你没有任何权限！请联系管理员！,"Bạn không có quyền truy cập! Vui lòng liên hệ với quản trị viên!"
 "你无权进行该操作！你不具备：%{1} 操作权限！","你无权进行该操作！你不具备：%{1} 操作权限！"
-你无权进行该操作,你无权进行该操作
-"你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！","你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！"
-你无权进行该操作！已将你带到你可访问的后台页面：%{1},你无权进行该操作！已将你带到你可访问的后台页面：%{1}
+你无权进行该操作,"Bạn không có quyền thực hiện thao tác này."
+"你无权进行该操作！你不具备：%{1} 路由：%{2} 操作权限！已将你带到你可访问的页面！","Bạn không có quyền thực hiện thao tác này! Bạn không có: %{1} Quyền truy cập định tuyến: %{2}. Bạn đã được chuyển đến trang mà bạn có quyền truy cập."
+你无权进行该操作！已将你带到你可访问的后台页面：%{1},"Bạn không có quyền thực hiện thao tác này! Bạn đã được chuyển đến trang quản trị mà bạn có quyền truy cập: %{1}"
 "超级管理员已拥有对象 Scope 授权，无需追加。","超级管理员已拥有对象 Scope 授权，无需追加。"
 "已为超级管理员（role_id=1）追加 %{1} 条对象 Scope 授权。","已为超级管理员（role_id=1）追加 %{1} 条对象 Scope 授权。"
 "为超级管理员授予对象 Scope 授权时出错：%{1}","为超级管理员授予对象 Scope 授权时出错：%{1}"
 "超级管理员已拥有全部 ACL 权限，无需追加。","超级管理员已拥有全部 ACL 权限，无需追加。"
 "已为超级管理员（role_id=1）授予 %{1} 条新权限。","已为超级管理员（role_id=1）授予 %{1} 条新权限。"
 为超级管理员授予权限时出错：%{1},为超级管理员授予权限时出错：%{1}
-管理权限,管理权限
-shield,盾
-模块资源,模块资源
-puzzle,谜
-标签资源,标签资源
-search,搜索
+管理权限,"Quyền quản trị."
+shield,shield
+模块资源,"Tài nguyên module."
+puzzle,puzzle
+标签资源,"Tài nguyên nhãn."
+search,search
 加载IP白名单失败：%{1},加载IP白名单失败：%{1}
-IP地址不能为空,IP地址不能为空
+IP地址不能为空,"Địa chỉ IP không được để trống."
 IP地址格式不正确,IP地址格式不正确
-该IP地址已存在,该IP地址已存在
-添加成功,添加成功
+该IP地址已存在,"Địa chỉ IP này đã được sử dụng."
+添加成功,"Đã thêm thành công."
 添加失败,添加失败
 添加失败：%{1},添加失败：%{1}
-记录不存在,记录不存在
+记录不存在,"Không tìm thấy bản ghi."
 该IP地址已被其他记录使用,该IP地址已被其他记录使用
 更新成功,更新成功
 更新失败,更新失败
@@ -82,116 +82,116 @@ IP地址格式不正确,IP地址格式不正确
 删除成功,删除成功
 删除失败,删除失败
 删除失败：%{1},删除失败：%{1}
-状态更新成功,状态更新成功
-状态更新失败,状态更新失败
-状态更新失败：%{1},状态更新失败：%{1}
-IP白名单,IP白名单
-check,查看
-查看IP白名单,查看IP白名单
-添加IP白名单,添加IP白名单
-plus,加
-编辑IP白名单,编辑IP白名单
-edit,编辑
+状态更新成功,"Cập nhật trạng thái thành công."
+状态更新失败,"Lỗi cập nhật trạng thái."
+状态更新失败：%{1},"Cập nhật trạng thái thất bại: %{1}"
+IP白名单,"Danh sách IP được cho phép."
+check,check
+查看IP白名单,"Xem danh sách IP được phép."
+添加IP白名单,"Thêm danh sách IP được phép."
+plus,plus
+编辑IP白名单,"Chỉnh sửa danh sách IP được phép."
+edit,edit
 删除IP白名单,删除IP白名单
 trash,trash
-切换IP白名单状态,切换IP白名单状态
-switch,转变
-登录失败,登录失败
-登录成功,登录成功
-权限拒绝,权限拒绝
+切换IP白名单状态,"Chuyển đổi trạng thái danh sách IP được phép."
+switch,switch
+登录失败,"Đăng nhập không thành công."
+登录成功,"Đăng nhập thành công."
+权限拒绝,"Quyền truy cập bị từ chối."
 ACL违规,ACL违规
-可疑活动,可疑活动
+可疑活动,"Hoạt động đáng ngờ."
 加载安全日志失败：%{1},加载安全日志失败：%{1}
-安全日志,安全日志
-warning,警告
-查看安全日志,查看安全日志
+安全日志,"Nhật ký bảo mật."
+warning,warning
+查看安全日志,"Xem nhật ký bảo mật."
 标签词非法,标签词非法
-标签元数据已保存,标签元数据已保存
-标签仍被资源或角色订阅引用，不能删除元数据,标签仍被资源或角色订阅引用，不能删除元数据
-标签元数据已删除,标签元数据已删除
-ACL标签管理,ACL标签管理
-tag,标签
+标签元数据已保存,"Đã lưu siêu dữ liệu."
+标签仍被资源或角色订阅引用，不能删除元数据,"Nhãn vẫn đang được sử dụng bởi tài nguyên hoặc nhân vật, không thể xóa siêu dữ liệu."
+标签元数据已删除,"Đã xóa siêu dữ liệu của nhãn."
+ACL标签管理,"Quản lý nhãn ACL."
+tag,tag
 "管理 ACL source_id 标签元数据","管理 ACL source_id 标签元数据"
 标签列表,标签列表
-保存标签元数据,保存标签元数据
-删除标签元数据,删除标签元数据
-角色名不能为空！,角色名不能为空！
-角色已存在！,角色已存在！
+保存标签元数据,"Lưu trữ siêu dữ liệu của nhãn."
+删除标签元数据,"Xóa siêu dữ liệu của thẻ."
+角色名不能为空！,"Tên nhân vật không được để trống!"
+角色已存在！,"Nhân vật đã tồn tại!"
 角色创建成功！,角色创建成功！
-角色创建失败！,角色创建失败！
-角色已不存在！,角色已不存在！
+角色创建失败！,"Không thể tạo nhân vật!"
+角色已不存在！,"Nhân vật này không còn tồn tại!"
 删除成功！,删除成功！
 仅允许超管分配权限！,仅允许超管分配权限！
-角色ID不存在！,角色ID不存在！
+角色ID不存在！,"ID nhân vật không tồn tại!"
 权限分配被站级授权包拒绝,权限分配被站级授权包拒绝
 权限分配失败！,权限分配失败！
-权限分配成功，所有缓存已刷新！,权限分配成功，所有缓存已刷新！
+权限分配成功，所有缓存已刷新！,"Phân quyền thành công, tất cả bộ nhớ cache đã được làm mới!"
 权限已保存，但所有缓存刷新失败：%{1},权限已保存，但所有缓存刷新失败：%{1}
-搜索成功,搜索成功
-访问控制权限管理,访问控制权限管理
+搜索成功,"Tìm kiếm thành công."
+访问控制权限管理,"Quản lý quyền truy cập."
 角色列表,角色列表
 角色添加,角色添加
-角色编辑,角色编辑
+角色编辑,"Chỉnh sửa nhân vật"
 角色删除,角色删除
-权限分配,权限分配
-角色权限分配,角色权限分配
-角色搜索,角色搜索
-搜索角色列表,搜索角色列表
-不能删除超级管理员！,不能删除超级管理员！
+权限分配,"Phân quyền."
+角色权限分配,"Phân quyền cho người dùng."
+角色搜索,"Tìm kiếm nhân vật."
+搜索角色列表,"Tìm kiếm danh sách nhân vật."
+不能删除超级管理员！,"Không thể xóa tài khoản quản trị viên cấp cao!"
 添加IP,添加IP
 关键词,关键词
-搜索,搜索
-重置,重置
-IP白名单列表,IP白名单列表
+搜索,"Tìm kiếm"
+重置,"Thiết lập lại."
+IP白名单列表,"Danh sách IP được phép."
 ID,ID
 IP地址,IP地址
-描述,描述
+描述,"Mô tả."
 状态,状态
 创建时间,创建时间
 操作,操作
 编辑,编辑
 删除,删除
 显示,显示
-到,到
-共,共
-条记录,条记录
-上一页,上一页
+到,Đến.
+共,Cùng.
+条记录,"bản ghi"
+上一页,"Trang trước."
 下一页,下一页
 暂无IP白名单记录,暂无IP白名单记录
-支持单个IP或CIDR格式的IP范围,支持单个IP或CIDR格式的IP范围
+支持单个IP或CIDR格式的IP范围,"Hỗ trợ dải địa chỉ IP ở định dạng IP đơn lẻ hoặc CIDR."
 启用,启用
 取消,取消
 保存,保存
 搜索IP地址或描述,搜索IP地址或描述
 禁用,禁用
-"例如：192.168.1.1 或 192.168.1.0/24","例如：192.168.1.1 或 192.168.1.0/24"
-编辑ID：,编辑ID：
-操作失败,操作失败
+"例如：192.168.1.1 或 192.168.1.0/24","Ví dụ: 192.168.1.1 hoặc 192.168.1.0/24"
+编辑ID：,"ID chỉnh sửa:"
+操作失败,"Thao tác không thành công."
 确定要切换状态吗？,确定要切换状态吗？
 确定要删除这条记录吗？,确定要删除这条记录吗？
 事件类型,事件类型
 全部,全部
-日志列表,日志列表
+日志列表,"Danh sách nhật ký"
 用户ID,用户ID
-消息,消息
-查看详情,查看详情
-暂无安全日志记录,暂无安全日志记录
-搜索消息或IP地址,搜索消息或IP地址
+消息,"Tin nhắn."
+查看详情,"Xem chi tiết."
+暂无安全日志记录,"Hiện tại chưa có bản ghi nhật ký bảo mật."
+搜索消息或IP地址,"Tìm kiếm tin nhắn hoặc địa chỉ IP."
 查看日志ID：,查看日志ID：
-删除角色,删除角色
-确定删除角色“%{1}”吗？此操作无法撤销。,确定删除角色“%{1}”吗？此操作无法撤销。
-权限角色,权限角色
+删除角色,"Xóa nhân vật."
+确定删除角色“%{1}”吗？此操作无法撤销。,"Bạn có chắc chắn muốn xóa nhân vật ""%{1}"" không? Thao tác này không thể hoàn tác."
+权限角色,"Vai trò và quyền hạn."
 建立角色并按实际职责分配权限。,建立角色并按实际职责分配权限。
-面包屑,面包屑
+面包屑,"Bánh mì vụn."
 "ACL 权限管理","ACL 权限管理"
-角色,角色
-搜索角色,搜索角色
+角色,"Nhân vật."
+搜索角色,"Tìm kiếm nhân vật."
 搜索名称或描述,搜索名称或描述
-清除,清除
+清除,Xóa.
 添加角色,添加角色
-创建于,创建于
+创建于,"Đã tạo vào."
 更新于,更新于
-权限管理,权限管理
+权限管理,"Quản lý quyền."
 系统角色,系统角色
 暂无角色,暂无角色
 角色分页,角色分页
@@ -205,7 +205,7 @@ IP地址,IP地址
 返回列表,返回列表
 配置角色,配置角色
 操作者,操作者
-未知,未知
+未知,"Không rõ."
 标签包,标签包
 "已选择 %{1} 项权限","已选择 %{1} 项权限"
 没有匹配的权限,没有匹配的权限
@@ -256,7 +256,7 @@ IP地址,IP地址
 请求方法,请求方法
 路由,路由
 所属模块,所属模块
-更新时间,更新时间
+更新时间,"Thời gian cập nhật."
 搜索权限名称、ID、标签...,搜索权限名称、ID、标签...
 搜索权限名称、ID、路由...,搜索权限名称、ID、路由...
 搜索模块名称,搜索模块名称
@@ -278,7 +278,7 @@ Acl权限管理,Acl权限管理
 元数据名,元数据名
 颜色,颜色
 排序,排序
-说明,说明
+说明,"Mô tả."
 已配置,已配置
 选择颜色,选择颜色
 仍有资源引用，无法删除,仍有资源引用，无法删除
@@ -293,62 +293,12 @@ Acl权限管理,Acl权限管理
 操作授权条件不满足,操作授权条件不满足
 菜单,菜单
 "HTTP 接口","HTTP 接口"
-"REST API",休息API
-"bin-query 接口","bin 查询接口"
+"REST API","REST API"
+"bin-query 接口","bin-query 接口"
 后台任务,后台任务
 运维操作,运维操作
 其他,其他
 系统菜单,系统菜单
 用户菜单,用户菜单
-Acl角色管理,Acl角色管理
-添加,添加
-暂无记录,暂无记录
-提交,提交
-请输入角色名,请输入角色名
-为角色分配系统访问权限，控制菜单和功能的可见性,为角色分配系统访问权限，控制菜单和功能的可见性
-取消标签会收回该路径下全部叶子权限；保存使用页面级共享权限集合，避免切换视图丢权。,取消标签会收回该路径下全部叶子权限；保存使用页面级共享权限集合，避免切换视图丢权。
-标签权限树,标签权限树
-勾选标签可整包授权；叶子也可单独勾选或取消,勾选标签可整包授权；叶子也可单独勾选或取消
-勾选需要授予的权限，子权限会自动关联父权限,勾选需要授予的权限，子权限会自动关联父权限
-"搜索权限名称、ID 或描述...","搜索权限名称、ID 或描述..."
-按类型筛选,按类型筛选
-展开所有,展开所有
-折叠所有,折叠所有
-任务,任务
-运维,运维
-菜单权限,菜单权限
-接口权限,接口权限
-访问权限,访问权限
-保存中...,保存中...
-找到,找到
-个匹配权限,个匹配权限
-未找到匹配的权限，请尝试其他关键词,未找到匹配的权限，请尝试其他关键词
-已全选所有权限,已全选所有权限
-已清空所有选择,已清空所有选择
-筛选结果,筛选结果
-个分组,个分组
-项权限,项权限
-Acl角色添加,Acl角色添加
-角色名称验证成功,角色名称验证成功
-角色描述验证成功,角色描述验证成功
-"mdi mdi-security","MDI MDI 安全"
-"mdi mdi-puzzle-outline","MDI MDI-拼图大纲"
-"mdi mdi-tag-search-outline","mdi mdi 标签搜索大纲"
-"mdi mdi-tag-multiple","mdi mdi 标签多个"
-确认组件不可用，请刷新页面后重试,确认组件不可用，请刷新页面后重试
-权限分配成功，权限缓存已清理。,权限分配成功，权限缓存已清理。
-正在创建...,正在创建...
-正在创建角色...,正在创建角色...
-角色创建失败，请检查输入后重试,角色创建失败，请检查输入后重试
-权限分配成功！,权限分配成功！
-权限缓存清理成功！,权限缓存清理成功！
-"标签从 source_id 自动发现；可编辑显示名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。","标签从 source_id 自动发现；可编辑显示名、说明、颜色与排序。删除仅允许无资源引用且无角色订阅的手工元数据。"
-元数据,元数据
-删元数据,删元数据
-显示名,显示名
-按模块筛选,按模块筛选
-管理系统中所有的访问控制权限，包括菜单、接口等资源,管理系统中所有的访问控制权限，包括菜单、接口等资源
-接口,接口
-"对象 Scope 写入授权通过","对象 Scope 写入授权通过"
-"对象 Scope 授权拒绝","对象 Scope 授权拒绝"
-安全设置,安全设置
+确认组件不可用，请刷新页面后重试,"Xác nhận thành phần không khả dụng, vui lòng làm mới trang và thử lại."
+安全设置,"Cài đặt bảo mật."

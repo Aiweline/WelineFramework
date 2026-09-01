@@ -54,7 +54,7 @@ $getEventTypeBadgeClass = function ($eventType) {
     <div style="--w-span-lg:12;">
         <div class="w-card">
             <div class="w-card__body">
-                <w:form method="get" action="@var($this->getBackendUrl('*/backend/security-log'))" class="w-grid" style="--w-gap:var(--weline-space-4);">
+                <w:form method="get" action="@backend-url{'*/backend/security-log'}" class="w-grid" style="--w-gap:var(--weline-space-4);">
                     <div style="--w-span-md:3;">
                         <label class="w-field__label"><lang>事件类型</lang></label>
                         <select class="w-select" name="event_type">
@@ -76,7 +76,7 @@ $getEventTypeBadgeClass = function ($eventType) {
                             <button type="submit" class="w-button" data-tone="primary">
                                 <w:icon name="search" size="sm"></w:icon><lang>搜索</lang>
                             </button>
-                            <a href="<?= $this->getBackendUrl('*/backend/security-log') ?>" class="w-button" data-tone="neutral">
+                            <a href="@backend-url{'*/backend/security-log'}" class="w-button" data-tone="neutral">
                                 <w:icon name="refresh" size="sm"></w:icon><lang>重置</lang>
                             </a>
                         </div>
