@@ -58,6 +58,18 @@ if (!function_exists('Weline_Taglib_resolve')) {
 }
 PHP;
 
+        // Each tag must start with a clean Taglib__* slate. Otherwise a prior
+        // tag's optional attrs (e.g. multiple=true on domain:select) leak into
+        // later tags that omit the same attribute and silently change behavior.
+        $snippets[] = <<<'PHP'
+foreach (\array_keys(\get_defined_vars()) as $__weline_taglib_attr) {
+    if (!\is_string($__weline_taglib_attr) || !\str_starts_with($__weline_taglib_attr, 'Taglib__')) {
+        continue;
+    }
+    unset($$__weline_taglib_attr);
+}
+PHP;
+
         $keys = array_keys(array_diff_key($attributes, ['json' => true, 'showJson' => true]));
 
         foreach ($keys as $key) {

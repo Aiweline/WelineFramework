@@ -233,7 +233,37 @@ final class AppRequestRuntimeContextTest extends TestCase
         }
     }
 
-    public function testUnprefixedPathUsesStateLangInsteadOfStaleParserLocale(): void
+    public function testCanonicalizeStorefrontPathStripsDefaultLocaleAndCurrency(): void
+    {
+        self::assertSame(
+            '/product/x',
+            State::canonicalizeStorefrontLocalizationPath('/zh_Hans_CN/product/x', 'zh_Hans_CN', 'CNY')
+        );
+        self::assertSame(
+            '/product/x',
+            State::canonicalizeStorefrontLocalizationPath('/CNY/zh_Hans_CN/product/x', 'zh_Hans_CN', 'CNY')
+        );
+        self::assertSame(
+            '/USD/product/x',
+            State::canonicalizeStorefrontLocalizationPath('/USD/zh_Hans_CN/product/x', 'zh_Hans_CN', 'CNY')
+        );
+        self::assertSame(
+            '/en_US/product/x',
+            State::canonicalizeStorefrontLocalizationPath('/CNY/en_US/product/x', 'zh_Hans_CN', 'CNY')
+        );
+        self::assertNull(
+            State::canonicalizeStorefrontLocalizationPath('/en_US/product/x', 'zh_Hans_CN', 'CNY')
+        );
+        self::assertNull(
+            State::canonicalizeStorefrontLocalizationPath('/product/x', 'zh_Hans_CN', 'CNY')
+        );
+        self::assertSame(
+            '/',
+            State::canonicalizeStorefrontLocalizationPath('/zh_Hans_CN/', 'zh_Hans_CN', 'CNY')
+        );
+    }
+
+    public function testUnprefixedPathUsesWebsiteDefaultLanguageNotCookie(): void
     {
         $currencyMap = new \ReflectionProperty(State::class, 'allowedCurrencyCodeMap');
         $currencyScope = new \ReflectionProperty(State::class, 'allowedCurrencyCodeScope');
@@ -262,6 +292,7 @@ final class AppRequestRuntimeContextTest extends TestCase
                         'WELINE_ORIGIN_REQUEST_URI' => '/USD/help',
                         'WELINE_WEBSITE_ID' => '0',
                         'WELINE_WEBSITE_CODE' => 'default',
+                        'WELINE_WEBSITE_LANGUAGE' => 'zh_Hans_CN',
                     ],
                 ],
                 'route' => [
@@ -281,9 +312,12 @@ final class AppRequestRuntimeContextTest extends TestCase
             $languageMap->setValue(null, ['zh_hans_cn' => true, 'en_us' => true]);
             $languageScope->setValue(null, $scope);
 
+            WelineEnv::set('website.language', 'zh_Hans_CN', 'unit test website default');
             WelineEnv::set('user.lang', 'en_US', 'unit test stale worker locale');
-            $_COOKIE['WELINE_USER_LANG_w0'] = 'zh_Hans_CN';
-            WelineEnv::set('cookie.WELINE_USER_LANG_w0', 'zh_Hans_CN', 'unit test');
+            $_COOKIE['WELINE_USER_LANG'] = 'en_US';
+            $_COOKIE['WELINE_USER_LANG_w0'] = 'en_US';
+            WelineEnv::set('cookie.WELINE_USER_LANG', 'en_US', 'unit test');
+            WelineEnv::set('cookie.WELINE_USER_LANG_w0', 'en_US', 'unit test');
 
             $parse = [
                 'currency' => 'USD',
@@ -291,6 +325,7 @@ final class AppRequestRuntimeContextTest extends TestCase
                 'server' => [
                     'WELINE_USER_CURRENCY' => 'USD',
                     'WELINE_USER_LANG' => 'en_US',
+                    'WELINE_WEBSITE_LANGUAGE' => 'zh_Hans_CN',
                 ],
             ];
             $method->invokeArgs(new App(), [&$parse, '/USD/help']);
@@ -298,7 +333,8 @@ final class AppRequestRuntimeContextTest extends TestCase
             self::assertSame('zh_Hans_CN', $parse['language']);
             self::assertSame('zh_Hans_CN', $parse['server']['WELINE_USER_LANG']);
         } finally {
-            unset($_COOKIE['WELINE_USER_LANG_w0']);
+            unset($_COOKIE['WELINE_USER_LANG'], $_COOKIE['WELINE_USER_LANG_w0']);
+            WelineEnv::set('cookie.WELINE_USER_LANG', null, 'unit test cleanup');
             WelineEnv::set('cookie.WELINE_USER_LANG_w0', null, 'unit test cleanup');
             $currencyMap->setValue(null, $original[0]);
             $currencyScope->setValue(null, $original[1]);

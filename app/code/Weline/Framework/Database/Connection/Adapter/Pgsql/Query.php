@@ -251,7 +251,9 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                     }
                 }
                 if (!$insert_have_not_identity_fields) {
-                    if (empty($item[$this->identity_field])) {
+                    // 与 buildInsert 一致：仅 null/空串视为缺省自增主键，保留 0/'0'
+                    $identityValue = $item[$this->identity_field] ?? null;
+                    if ($identityValue === null || $identityValue === '') {
                         $this->insert['insert'][] = $item;
                         continue;
                     }
@@ -1306,7 +1308,12 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
         $all_insert_items = array_merge($insert_items, $insert_or_update_items);
         foreach ($all_insert_items as $insert_key => $insert) {
             $insert_key += 1;
-            if ($this->identity_field && empty($insert[$this->identity_field])) {
+            // 0/'0' 是合法显式主键（如 backend 默认配置 user_id=0），不可用 empty() 误剥
+            if ($this->identity_field && (
+                !array_key_exists($this->identity_field, $insert)
+                || $insert[$this->identity_field] === null
+                || $insert[$this->identity_field] === ''
+            )) {
                 unset($insert[$this->identity_field]);
                 $insert_fields = array_keys($insert);
                 $insert_fields_quoted = array_map(fn($field) => '"' . $field . '"', $insert_fields);

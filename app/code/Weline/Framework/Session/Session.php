@@ -56,6 +56,11 @@ class Session implements SessionInterface
     /** 默认 TTL（秒） */
     private int $defaultTtl;
 
+    /** 最近一次滑动续期尝试（请求内节流） */
+    private int $lastSlideAt = 0;
+
+    private const SLIDE_INTERVAL_SECONDS = 30;
+
     /**
      * 构造函数
      *
@@ -258,6 +263,18 @@ class Session implements SessionInterface
         return $this->started;
     }
 
+    /**
+     * @inheritDoc
+     */
+    public function reassertCookieWire(): void
+    {
+        if (!$this->started || $this->sessionId === '') {
+            return;
+        }
+
+        $this->strategy->setCookie($this->sessionId, $this->defaultTtl);
+    }
+
     // ==================== SessionDataInterface ====================
 
     /**
@@ -355,6 +372,17 @@ class Session implements SessionInterface
      */
     public function save(): void
     {
+        if ($this->sessionId !== '') {
+            $now = \time();
+            if (($now - $this->lastSlideAt) >= self::SLIDE_INTERVAL_SECONDS) {
+                // 活动续期：即使本请求无 dirty 写入，也刷新存储层 TTL，避免「只浏览不写」导致会话过期。
+                try {
+                    $this->storage->touch($this->sessionId, $this->defaultTtl > 0 ? $this->defaultTtl : 3600);
+                } catch (\Throwable) {
+                }
+                $this->lastSlideAt = $now;
+            }
+        }
         if ($this->dirty && $this->sessionId !== '') {
             $persistData = $this->buildPersistData();
             $ok = $this->strategy->persist($this->sessionId, $persistData, $this->defaultTtl);

@@ -12,7 +12,6 @@ namespace Weline\Framework\App;
 use Weline\Framework\App\Localization\LocalizationProviderRegistry;
 use Weline\Framework\Context;
 use Weline\Framework\DataObject\DataObject;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 
@@ -99,10 +98,9 @@ class State extends DataObject
 
     /**
      * 获取当前语言
-     * 优先级：URL 路径段 / PATH_LANG > Cookie > env > 网站默认语言
+     * 优先级：路径段 / PATH_LANG > 请求覆盖 > query(locale|locale_code|lang) > 网站默认 > zh_Hans_CN
      *
-     * 站点未启用的语言码（例如 Cookie 残留 ar_*，但 WebsiteLanguage 仅有 zh_Hans_CN）
-     * 一律拒绝并回落到网站默认，避免语言切换器显示幽灵短码（如 AR）且无法切回。
+     * 不读语言偏好 Cookie。非默认语种主 UX 走 /{locale}/...；query 仅作路径缺失时的兼容入口。
      *
      * @return string
      */
@@ -114,22 +112,14 @@ class State extends DataObject
         }
 
         // Theme preview / controlled shells may force a locale for this request only.
-        // Must not write WELINE_USER_LANG — external language switchers keep owning cookies.
         $forced = self::getRequestLanguageOverride();
         if ($forced !== '' && self::isLanguageSegmentCandidate($forced)) {
             return self::normalizeLanguageSegment($forced);
         }
 
-        // 无路径语言段时：Cookie 优先于 w_env，避免常驻进程残留 user.lang 压过用户偏好。
-        $lang = Cookie::get('WELINE_USER_LANG');
-        if (empty($lang)) {
-            $lang = Cookie::get('WELINE-WEBSITE-LANG');
-        }
-        if (empty($lang)) {
-            $lang = \w_env('user.lang');
-        }
-        if (!empty($lang) && self::isAllowedLanguageCode((string)$lang)) {
-            return self::normalizeLanguageSegment((string)$lang);
+        $queryLang = self::detectLanguageFromRequestQuery();
+        if ($queryLang !== '' && self::isAllowedLanguageCode($queryLang)) {
+            return self::normalizeLanguageSegment($queryLang);
         }
 
         return self::resolveWebsiteDefaultLanguage();
@@ -167,27 +157,22 @@ class State extends DataObject
 
     /**
      * 获取当前货币
-     * 优先级：URL 路径解析的变量 > 有效用户偏好 > 网站默认货币
+     * 优先级：路径段 > query(currency) > 网站默认 > CNY
+     *
+     * 不读货币偏好 Cookie；非默认货币主 UX 走 /{CURRENCY}/...；query 仅作路径缺失时的兼容入口。
      *
      * @return string
      */
     public static function getCurrency(): string
     {
-        // 优先从 URL 路径解析的变量中读取（从路径配置的 URL）
         $currency = self::detectCurrencyFromRequestPath();
-        if (!empty($currency)) {
+        if ($currency !== '' && self::isAllowedCurrencyCode($currency)) {
             return $currency;
         }
 
-        $candidates = [
-            \w_env('user.currency'),
-            Cookie::get('WELINE_USER_CURRENCY'),
-        ];
-        foreach ($candidates as $candidate) {
-            $currency = strtoupper(trim((string)$candidate));
-            if ($currency !== '' && self::isAllowedCurrencyCode($currency)) {
-                return $currency;
-            }
+        $queryCurrency = self::detectCurrencyFromRequestQuery();
+        if ($queryCurrency !== '' && self::isAllowedCurrencyCode($queryCurrency)) {
+            return $queryCurrency;
         }
 
         return self::resolveWebsiteDefaultCurrency();
@@ -336,6 +321,72 @@ class State extends DataObject
             'remaining' => $remaining,
             'canonical' => $canonical,
         ];
+    }
+
+    /**
+     * Rebuild a storefront path that omits website-default language/currency segments.
+     *
+     * Path-first contract: default locale/currency must not appear in visitor URLs.
+     * Returns null when the path is already canonical or is not a storefront
+     * localization prefix (e.g. backend area key as first segment).
+     */
+    public static function canonicalizeStorefrontLocalizationPath(
+        string $path,
+        string $defaultLanguage,
+        string $defaultCurrency,
+    ): ?string {
+        $path = \trim($path);
+        if ($path === '') {
+            $path = '/';
+        } elseif (!\str_starts_with($path, '/')) {
+            $path = '/' . $path;
+        }
+
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($path, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        $localized = self::resolveLocalizationFromPathSegments($segments);
+        if ((int)($localized['area_offset'] ?? 0) > 0) {
+            return null;
+        }
+
+        $currency = \strtoupper(\trim((string)($localized['currency'] ?? '')));
+        $language = self::normalizeLanguageSegment((string)($localized['language'] ?? ''));
+        $defaultLanguage = self::normalizeLanguageSegment($defaultLanguage);
+        $defaultCurrency = \strtoupper(\trim($defaultCurrency));
+
+        $omitCurrency = $currency !== '' && $defaultCurrency !== '' && $currency === $defaultCurrency;
+        $omitLanguage = $language !== '' && $defaultLanguage !== ''
+            && \strcasecmp($language, $defaultLanguage) === 0;
+        if (!$omitCurrency && !$omitLanguage) {
+            return null;
+        }
+
+        $out = [];
+        if ($currency !== '' && !$omitCurrency) {
+            $out[] = $currency;
+        }
+        if ($language !== '' && !$omitLanguage) {
+            $out[] = $language;
+        }
+        foreach ((array)($localized['remaining'] ?? []) as $part) {
+            $part = \trim((string)$part);
+            if ($part !== '') {
+                $out[] = $part;
+            }
+        }
+
+        $canonical = $out === [] ? '/' : '/' . \implode('/', $out);
+        $original = '/' . \trim($path, '/');
+        if ($original === '/') {
+            $original = '/';
+        }
+        if ($canonical === $original) {
+            return null;
+        }
+
+        return $canonical;
     }
 
     /**
@@ -781,6 +832,74 @@ class State extends DataObject
     private static function detectCurrencyFromRequestPath(): string
     {
         return self::resolveRequestPathLocalization()['currency'];
+    }
+
+    /**
+     * Query locale when path has no language segment: locale | locale_code | lang.
+     */
+    private static function detectLanguageFromRequestQuery(): string
+    {
+        $params = self::requestQueryParams();
+        foreach (['locale', 'locale_code', 'lang'] as $key) {
+            $raw = self::normalizeLanguageSegment((string)($params[$key] ?? ''));
+            if ($raw === '' || \strtolower($raw) === 'default') {
+                continue;
+            }
+            if (self::isLanguageSegmentCandidate($raw)) {
+                return $raw;
+            }
+        }
+
+        return '';
+    }
+
+    /**
+     * Query currency when path has no currency segment.
+     */
+    private static function detectCurrencyFromRequestQuery(): string
+    {
+        $params = self::requestQueryParams();
+        $code = \strtoupper(\trim((string)($params['currency'] ?? '')));
+        if ($code !== '' && self::isCurrencySegmentCandidate($code)) {
+            return $code;
+        }
+
+        return '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private static function requestQueryParams(): array
+    {
+        try {
+            $get = \Weline\Framework\Env\WelineEnv::getGet(null, null);
+            if (\is_array($get) && $get !== []) {
+                return $get;
+            }
+        } catch (\Throwable) {
+        }
+
+        if (isset($_GET) && \is_array($_GET) && $_GET !== []) {
+            return $_GET;
+        }
+
+        $query = '';
+        try {
+            $query = (string)\Weline\Framework\Env\WelineEnv::server('QUERY_STRING', '');
+        } catch (\Throwable) {
+        }
+        if ($query === '') {
+            $query = (string)($_SERVER['QUERY_STRING'] ?? '');
+        }
+        if ($query === '') {
+            return [];
+        }
+
+        $params = [];
+        \parse_str($query, $params);
+
+        return \is_array($params) ? $params : [];
     }
 
     /**

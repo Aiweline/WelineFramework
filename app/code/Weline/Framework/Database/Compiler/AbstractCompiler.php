@@ -437,6 +437,20 @@ abstract class AbstractCompiler implements CompilerInterface
         return in_array($operator, ['!=', '<>', 'not', 'not =', 'is not null'], true);
     }
 
+    /**
+     * 缺省自增主键判定：仅 null/空串视为缺省。
+     * 整数 0 与字符串 '0' 是合法显式主键（例如后台默认配置 user_id=0），不可用 empty()。
+     */
+    protected function isAbsentIdentityValue(array $row, string $identityField): bool
+    {
+        if ($identityField === '' || !array_key_exists($identityField, $row)) {
+            return true;
+        }
+        $value = $row[$identityField];
+
+        return $value === null || $value === '';
+    }
+
     abstract protected function buildInsert(array $ast, string $table, array $options): string;
 
     abstract protected function buildUpdate(array $ast, string $table, string $wheres, array $options): string;

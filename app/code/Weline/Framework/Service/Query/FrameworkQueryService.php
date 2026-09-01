@@ -4,7 +4,10 @@ declare(strict_types=1);
 namespace Weline\Framework\Service\Query;
 
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 class FrameworkQueryService
 {
@@ -70,8 +73,29 @@ class FrameworkQueryService
             throw new \InvalidArgumentException((string)__('未注册的查询器：%{1}。请通过 extends 注册 QueryProviderInterface 实现。', $provider));
         }
 
+        $ownerModule = $this->resolveProviderOwnerModule($provider, $providerInstance);
+        $request = null;
+        $previousModules = null;
+        if ($ownerModule !== '') {
+            try {
+                /** @var Request $request */
+                $request = ObjectManager::getInstance(Request::class);
+                $previousModules = \array_values($request->getModules());
+                $request->addModule($ownerModule);
+            } catch (\Throwable) {
+                $request = null;
+                $previousModules = null;
+            }
+        }
+
         $stepStart = \microtime(true);
-        $result = $providerInstance->execute($operation, (array)$eventData['params']);
+        try {
+            $result = $providerInstance->execute($operation, (array)$eventData['params']);
+        } finally {
+            if ($request !== null && \is_array($previousModules)) {
+                $request->setModules($previousModules);
+            }
+        }
         $this->recordQueryServiceStep('provider_execute', $stepStart, [
             'provider_class' => \get_class($providerInstance),
         ]);
@@ -87,6 +111,27 @@ class FrameworkQueryService
         $this->eventsManager->dispatch('Weline_Framework_Query::after_execute', $afterEventData);
         $this->recordQueryServiceStep('after_execute_event', $stepStart);
         return $afterEventData['result'] ?? $result;
+    }
+
+    /**
+     * Provider-owned module identity for phrase/i18n CSV resolution on WLS QueryBin.
+     */
+    private function resolveProviderOwnerModule(string $provider, QueryProviderInterface $providerInstance): string
+    {
+        $descriptor = $this->registry->getProviderDescriptor($provider);
+        if (\is_array($descriptor)) {
+            $module = \trim((string)($descriptor['module'] ?? ''));
+            if ($module !== '') {
+                return $module;
+            }
+        }
+
+        try {
+            $fallback = $providerInstance->getDescriptor();
+            return \trim((string)($fallback['module'] ?? ''));
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     /**

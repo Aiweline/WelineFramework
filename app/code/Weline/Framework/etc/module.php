@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Framework',
-    "version" => '2.5.0',
+    "version" => '2.5.2',
     "requires" => [
     ],
     "optional" => [
@@ -26,5 +26,7 @@ return [
             => \Weline\Framework\Event\Async\AsyncEventDeliveryRunner::class,
         \Weline\Framework\Api\Event\AsyncEventDeliveryMaintenanceInterface::class
             => \Weline\Framework\Event\Async\AsyncEventDeliveryMaintenance::class,
+        \Weline\Framework\Http\UrlInterface::class
+            => \Weline\Framework\Http\Url::class,
     ],
 ];

@@ -1316,6 +1316,22 @@ class Taglib
                     }
 
                     $attributes = \is_array($attributes) ? $attributes : [];
+                    foreach ($attributes as $attrName => $attrValue) {
+                        if (
+                            !\is_string($attrValue)
+                            || !\Weline\Framework\View\Form\FormRenderer::isReservedLiteralAttributeValue(
+                                (string)$attrName,
+                                $attrValue,
+                            )
+                        ) {
+                            continue;
+                        }
+                        $literal = \strtolower(\trim($attrValue));
+                        if ($attrName === 'enctype') {
+                            $literal = \trim($attrValue);
+                        }
+                        $attributes[$attrName] = '<?= ' . \var_export($literal, true) . ' ?>';
+                    }
                     $compiledAttributes = \Weline\Framework\Taglib\AttributeCodeCompiler::attributes($attributes);
                     return self::PHP_OPEN_TAG . 'php ' . $compiledAttributes
                         . ' $Taglib__form_attributes = json_decode($Taglib__json, true);'
@@ -2335,8 +2351,20 @@ class Taglib
                                 $result .= ')' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
-                                $data = str_replace(' ', '', $tag_data[1]);
-                                $result .= self::PHP_OPEN_TAG . '=$this->getUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
+                                // @url{'path'} / @url{'path'|['k'=>$v]} / @url{$route}
+                                // Pipe params must become getUrl($path, $params), never bitwise OR.
+                                $raw = str_replace(' ', '', (string)($tag_data[1] ?? ''));
+                                $parts = explode('|', $raw, 2);
+                                $pathExpr = $parts[0] ?? '';
+                                $paramsExpr = isset($parts[1]) ? trim($parts[1]) : '';
+                                if ($pathExpr === '') {
+                                    break;
+                                }
+                                if ($paramsExpr !== '') {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getUrl(' . $pathExpr . ',' . $paramsExpr . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getUrl(' . $pathExpr . ')' . self::PHP_CLOSE_TAG;
+                                }
                         };
                         return $result;
                     }
@@ -2367,8 +2395,18 @@ class Taglib
                                 $result .= ')' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
-                                $data = str_replace(' ', '', $tag_data[1]);
-                                $result .= self::PHP_OPEN_TAG . '=$this->getFrontendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
+                                $raw = str_replace(' ', '', (string)($tag_data[1] ?? ''));
+                                $parts = explode('|', $raw, 2);
+                                $pathExpr = $parts[0] ?? '';
+                                $paramsExpr = isset($parts[1]) ? trim($parts[1]) : '';
+                                if ($pathExpr === '') {
+                                    break;
+                                }
+                                if ($paramsExpr !== '') {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getFrontendUrl(' . $pathExpr . ',' . $paramsExpr . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getFrontendUrl(' . $pathExpr . ')' . self::PHP_CLOSE_TAG;
+                                }
                         };
                         return $result;
                     }
@@ -2399,8 +2437,18 @@ class Taglib
                                 $result .= ')' . self::PHP_CLOSE_TAG;
                                 break;
                             default:
-                                $data = str_replace(' ', '', $tag_data[1]);
-                                $result .= self::PHP_OPEN_TAG . '=$this->getApi(' . $data . ')' . self::PHP_CLOSE_TAG;
+                                $raw = str_replace(' ', '', (string)($tag_data[1] ?? ''));
+                                $parts = explode('|', $raw, 2);
+                                $pathExpr = $parts[0] ?? '';
+                                $paramsExpr = isset($parts[1]) ? trim($parts[1]) : '';
+                                if ($pathExpr === '') {
+                                    break;
+                                }
+                                if ($paramsExpr !== '') {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getApi(' . $pathExpr . ',' . $paramsExpr . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getApi(' . $pathExpr . ')' . self::PHP_CLOSE_TAG;
+                                }
                         };
                         return $result;
                     }
@@ -2411,33 +2459,41 @@ class Taglib
                 'tag-end' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                        $result = '';
                         switch ($tag_key) {
                             case 'tag':
-                                $data = trim(str_replace(' ', '', $tag_data[2]));
-                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
-                                if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
+                                $data = explode('|', $tag_data[2]);
+                                $var = $data[0] ?? '';
+                                $var = trim($var, "'\"");
+                                $var = str_replace(' ', '', $var);
+                                if (isset($data[1]) && $arr_str = $data[1]) {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendUrl(\'' . $var . '\',' . $arr_str . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl("' . $data . '")' . self::PHP_CLOSE_TAG;
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendUrl(\'' . $var . '\')' . self::PHP_CLOSE_TAG;
                                 }
-                            // no break
+                                break;
                             case 'tag-start':
-                                return self::PHP_OPEN_TAG . '=$this->getBackendUrl(';
+                                $result .= self::PHP_OPEN_TAG . '=$this->getBackendUrl(';
+                                break;
                             case 'tag-end':
-                                return ')' . self::PHP_CLOSE_TAG;
+                                $result .= ')' . self::PHP_CLOSE_TAG;
+                                break;
                             default:
-                                $data = trim(str_replace(' ', '', $tag_data[1]));
-                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
-                                if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
-                                } else {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl("' . $data . '")' . self::PHP_CLOSE_TAG;
+                                // @admin-url{'path'|['k'=>$v]} must become getBackendUrl(path, params), never bitwise OR.
+                                $raw = str_replace(' ', '', (string)($tag_data[1] ?? ''));
+                                $parts = explode('|', $raw, 2);
+                                $pathExpr = $parts[0] ?? '';
+                                $paramsExpr = isset($parts[1]) ? trim($parts[1]) : '';
+                                if ($pathExpr === '') {
+                                    break;
                                 }
-                        }
+                                if ($paramsExpr !== '') {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $pathExpr . ',' . $paramsExpr . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $pathExpr . ')' . self::PHP_CLOSE_TAG;
+                                }
+                        };
+                        return $result;
                     }
             ],
             'backend-url' => [
@@ -2446,33 +2502,41 @@ class Taglib
                 'tag-end' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                        $result = '';
                         switch ($tag_key) {
                             case 'tag':
-                                $data = trim(str_replace(' ', '', $tag_data[2]));
-                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
-                                if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
+                                $data = explode('|', $tag_data[2]);
+                                $var = $data[0] ?? '';
+                                $var = trim($var, "'\"");
+                                $var = str_replace(' ', '', $var);
+                                if (isset($data[1]) && $arr_str = $data[1]) {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendUrl(\'' . $var . '\',' . $arr_str . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl("' . $data . '")' . self::PHP_CLOSE_TAG;
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendUrl(\'' . $var . '\')' . self::PHP_CLOSE_TAG;
                                 }
-                            // no break
+                                break;
                             case 'tag-start':
-                                return self::PHP_OPEN_TAG . '=$this->getBackendUrl(';
+                                $result .= self::PHP_OPEN_TAG . '=$this->getBackendUrl(';
+                                break;
                             case 'tag-end':
-                                return ')' . self::PHP_CLOSE_TAG;
+                                $result .= ')' . self::PHP_CLOSE_TAG;
+                                break;
                             default:
-                                $data = trim(str_replace(' ', '', $tag_data[1]));
-                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
-                                if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
-                                } else {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendUrl("' . $data . '")' . self::PHP_CLOSE_TAG;
+                                // @backend-url{'path'|['k'=>$v]} must become getBackendUrl(path, params), never bitwise OR.
+                                $raw = str_replace(' ', '', (string)($tag_data[1] ?? ''));
+                                $parts = explode('|', $raw, 2);
+                                $pathExpr = $parts[0] ?? '';
+                                $paramsExpr = isset($parts[1]) ? trim($parts[1]) : '';
+                                if ($pathExpr === '') {
+                                    break;
                                 }
-                        }
+                                if ($paramsExpr !== '') {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $pathExpr . ',' . $paramsExpr . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendUrl(' . $pathExpr . ')' . self::PHP_CLOSE_TAG;
+                                }
+                        };
+                        return $result;
                     }
             ],
             'backend-api' => [
@@ -2481,33 +2545,41 @@ class Taglib
                 'tag-end' => 1,
                 'callback' =>
                     function ($tag_key, $config, $tag_data, $attributes) use ($template) {
+                        $result = '';
                         switch ($tag_key) {
                             case 'tag':
-                                $data = trim(str_replace(' ', '', $tag_data[2]));
-                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
-                                if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
+                                $data = explode('|', $tag_data[2]);
+                                $var = $data[0] ?? '';
+                                $var = trim($var, "'\"");
+                                $var = str_replace(' ', '', $var);
+                                if (isset($data[1]) && $arr_str = $data[1]) {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendApi(\'' . $var . '\',' . $arr_str . ')' . self::PHP_CLOSE_TAG;
                                 } else {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi("' . $data . '")' . self::PHP_CLOSE_TAG;
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendApi(\'' . $var . '\')' . self::PHP_CLOSE_TAG;
                                 }
-                            // no break
+                                break;
                             case 'tag-start':
-                                return self::PHP_OPEN_TAG . '=$this->getBackendApi(';
+                                $result .= self::PHP_OPEN_TAG . '=$this->getBackendApi(';
+                                break;
                             case 'tag-end':
-                                return ')' . self::PHP_CLOSE_TAG;
+                                $result .= ')' . self::PHP_CLOSE_TAG;
+                                break;
                             default:
-                                $data = trim(str_replace(' ', '', $tag_data[1]));
-                                // 如果以引号开头，保持原样；如果以 $ 开头，解析变量；否则当作字符串字面量
-                                if (str_starts_with($data, '"') || str_starts_with($data, "'")) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $data . ')' . self::PHP_CLOSE_TAG;
-                                } elseif (str_starts_with($data, '$') || str_contains($data, '{{')) {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $this->varParser($data) . ')' . self::PHP_CLOSE_TAG;
-                                } else {
-                                    return self::PHP_OPEN_TAG . '=$this->getBackendApi("' . $data . '")' . self::PHP_CLOSE_TAG;
+                                // @backend-api{'path'|['k'=>$v]} must become getBackendApi(path, params), never bitwise OR.
+                                $raw = str_replace(' ', '', (string)($tag_data[1] ?? ''));
+                                $parts = explode('|', $raw, 2);
+                                $pathExpr = $parts[0] ?? '';
+                                $paramsExpr = isset($parts[1]) ? trim($parts[1]) : '';
+                                if ($pathExpr === '') {
+                                    break;
                                 }
-                        }
+                                if ($paramsExpr !== '') {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $pathExpr . ',' . $paramsExpr . ')' . self::PHP_CLOSE_TAG;
+                                } else {
+                                    $result .= self::PHP_OPEN_TAG . '=$this->getBackendApi(' . $pathExpr . ')' . self::PHP_CLOSE_TAG;
+                                }
+                        };
+                        return $result;
                     }
             ],
             'string' => [
@@ -4124,6 +4196,15 @@ class Taglib
                 return '';
             }
             return \is_string($result) ? $result : (string)$result;
+        }
+
+        if ($tagKey === 'tag-start' && !empty($config['tag-end']) && isset($config['callback']) && \is_callable($config['callback'])) {
+            $start = $config['callback']('tag-start', $config, $tagData, $attributes);
+            $end = $config['callback']('tag-end', $config, $tagData, $attributes);
+            $start = \is_string($start) ? $start : (string)$start;
+            $end = \is_string($end) ? $end : (string)$end;
+
+            return $start . $content . $end;
         }
 
         $result = $config['callback']($tagKey, $config, $tagData, $attributes);

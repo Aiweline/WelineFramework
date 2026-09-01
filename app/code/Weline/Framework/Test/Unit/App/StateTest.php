@@ -58,17 +58,18 @@ class StateTest extends TestCore
 
         try {
             State::resetRequestPathLocalizationCache();
-            $_COOKIE['WELINE_USER_LANG'] = 'zh_Hans_CN';
+            $_COOKIE['WELINE_USER_LANG'] = 'ja_JP';
             WelineEnv::getInstance()->initFromSnapshot([], [], [], [], [
                 'REQUEST_METHOD' => 'GET',
                 'REQUEST_URI' => '/catalog/category/home',
                 'HTTP_HOST' => 'example.test',
             ]);
 
+            // Preference cookies must not drive language.
             self::assertSame('zh_Hans_CN', State::getLang());
             State::setRequestLanguageOverride('en_US');
             self::assertSame('en_US', State::getLang());
-            self::assertSame('zh_Hans_CN', $_COOKIE['WELINE_USER_LANG']);
+            self::assertSame('ja_JP', $_COOKIE['WELINE_USER_LANG']);
             State::setRequestLanguageOverride('');
             self::assertSame('zh_Hans_CN', State::getLang());
         } finally {
@@ -79,6 +80,62 @@ class StateTest extends TestCore
             } else {
                 $_COOKIE['WELINE_USER_LANG'] = $previousCookie;
             }
+            if ($hadContext) {
+                WelineEnv::getInstance()->restore($snapshot);
+            } else {
+                WelineEnv::getInstance()->reset();
+            }
+        }
+    }
+
+    public function testLangAndCurrencyFallBackToQueryWhenPathMissing(): void
+    {
+        $hadContext = Context::getCurrent() !== null;
+        $snapshot = WelineEnv::getInstance()->capture();
+
+        try {
+            State::resetRequestPathLocalizationCache();
+            WelineEnv::getInstance()->initFromSnapshot([], ['lang' => 'en_US', 'currency' => 'USD'], [], [], [
+                'REQUEST_METHOD' => 'GET',
+                'REQUEST_URI' => '/catalog/category/home?lang=en_US&currency=USD',
+                'QUERY_STRING' => 'lang=en_US&currency=USD',
+                'HTTP_HOST' => 'example.test',
+            ]);
+            self::seedAllowedLanguageCodes(['en_US', 'zh_Hans_CN', 'ja_JP']);
+            self::seedAllowedCurrencyCodes(['USD', 'CNY']);
+
+            self::assertSame('en_US', State::getLang());
+            self::assertSame('USD', State::getCurrency());
+        } finally {
+            State::resetRequestPathLocalizationCache();
+            if ($hadContext) {
+                WelineEnv::getInstance()->restore($snapshot);
+            } else {
+                WelineEnv::getInstance()->reset();
+            }
+        }
+    }
+
+    public function testPathLanguageAndCurrencyBeatQuery(): void
+    {
+        $hadContext = Context::getCurrent() !== null;
+        $snapshot = WelineEnv::getInstance()->capture();
+
+        try {
+            State::resetRequestPathLocalizationCache();
+            WelineEnv::getInstance()->initFromSnapshot([], ['lang' => 'ja_JP', 'currency' => 'EUR'], [], [], [
+                'REQUEST_METHOD' => 'GET',
+                'REQUEST_URI' => '/CNY/zh_Hans_CN/catalog/category/home?lang=ja_JP&currency=EUR',
+                'QUERY_STRING' => 'lang=ja_JP&currency=EUR',
+                'HTTP_HOST' => 'example.test',
+            ]);
+            self::seedAllowedLanguageCodes(['en_US', 'zh_Hans_CN', 'ja_JP']);
+            self::seedAllowedCurrencyCodes(['CNY', 'EUR', 'USD']);
+
+            self::assertSame('zh_Hans_CN', State::getLang());
+            self::assertSame('CNY', State::getCurrency());
+        } finally {
+            State::resetRequestPathLocalizationCache();
             if ($hadContext) {
                 WelineEnv::getInstance()->restore($snapshot);
             } else {
@@ -281,6 +338,24 @@ class StateTest extends TestCore
             self::assertSame(0, $notArea['consumed']);
             self::assertSame([$wrongCase, 'USD', 'en_US', 'admin', 'login'], $notArea['remaining']);
         }
+    }
+
+    /** @param list<string> $codes */
+    private static function seedAllowedLanguageCodes(array $codes): void
+    {
+        $map = [];
+        foreach ($codes as $code) {
+            $map[strtolower($code)] = true;
+        }
+
+        $scope = (string)\w_env('website_id', '')
+            . '|' . (string)\w_env('website.code', '')
+            . '|' . (string)WelineEnv::server('WELINE_WEBSITE_ID', '');
+
+        $mapProperty = new \ReflectionProperty(State::class, 'allowedLanguageCodeMap');
+        $mapProperty->setValue(null, $map);
+        $scopeProperty = new \ReflectionProperty(State::class, 'allowedLanguageCodeScope');
+        $scopeProperty->setValue(null, $scope);
     }
 
     /** @param list<string> $codes */

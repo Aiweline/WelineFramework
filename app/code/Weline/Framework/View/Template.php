@@ -762,8 +762,9 @@ class Template extends DataObject
                     . PHP_EOL . $repContent . PHP_EOL
                     . '<!--' . PHP_EOL . $com_str_pad_all . PHP_EOL . $com_str_pad_file . PHP_EOL . $com_str_pad_all . PHP_EOL . '-->';
             } else {
-                // 当 template.show_comments 为 false 时，移除所有 HTML 注释
-                $repContent = preg_replace('/\<!--([\s\S]*?)-->/', '', $repContent);
+                // 当 template.show_comments 为 false 时，移除展示用 HTML 注释；
+                // 保留 Theme Slot 边界注释（<!--@weline-slot:...-->），运行时填充依赖它们。
+                $repContent = preg_replace('/\<!--(?!@\/?weline-slot:)([\s\S]*?)-->/', '', $repContent);
             }
             
             // 触发模板编译后事件，允许 Observer 处理内容（如提取 JS 模块声明和翻译词）

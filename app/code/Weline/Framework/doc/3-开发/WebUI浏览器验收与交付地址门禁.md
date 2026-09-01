@@ -1,0 +1,111 @@
+# WebUI 浏览器验收与交付地址门禁
+
+> **硬规则**：凡触及页面 / 模板 / 后台 UI / 前台交互的任务，**开发完成 ≠ 代码写完**。必须由 AI **亲自用当前宿主可用的真实 Browser（操作员浏览器）按用例自测**，并在面向用户的交付汇报末尾列出「交付地址」。单测、curl、口头「看起来对」**一律不算** Web 完成。
+
+权威流程：[AI工程交付流程.md](../../Ai/doc/AI工程交付流程.md) §6–§7。机器契约：`workflow_contract.v1.feature_delivery_urls`、`closeout_delivery_reminder`、`chapter_delivery.webui_*`。
+
+## 何时必须执行
+
+触发任一即强制：
+
+- 改了 `.phtml` / layout / widget / partial / Taglib 渲染
+- 改了后台或前台 Controller 页面输出
+- 改了用户可见交互（表单、Toast、菜单、配置页、结账等）
+- 用户要求「验收 / 交付 / 完成汇报」且表面含 Web
+
+纯 Service / 无 UI 的 CLI：Browser 写 `N/A`，但交付地址小节仍须写 CLI 入口或 `N/A` 理由。
+
+## Browser 工具（客户端无关）
+
+**不绑定某一 IDE / 某一厂商。** 使用**当前 AI 宿主已提供的、能真实打开页面并交互**的 Browser 能力，例如：
+
+| 宿主示例 | 可用能力（择一即可） |
+|----------|----------------------|
+| Cursor | 内置 / IDE Browser、Browser MCP |
+| Codex / Claude Code / 其他 | 宿主自带 Browser、Playwright/Puppeteer 驱动的真实浏览器、等价操作员自动化 |
+
+硬要求：
+
+1. 必须是**真实页面交互**（导航、点击、填写、提交、观察 Toast/跳转/DOM），不是 HTTP 探活。
+2. **禁止写死**「只能用 Cursor 内置 Browser」——规范只要求「宿主可用的真实 Browser」。
+3. 当前宿主**没有任何**可交互 Browser 时：不得宣称 Web/UI 完成；只能报「代码已改，WebUI 验收未完成（宿主无 Browser）」并列出已探活 URL 供人工续测。
+
+## 门禁 A：Browser 操作员自测（WB-OP）
+
+1. **先有用例**：URL、步骤、期望结果（来自 `doc/需求.md` 或 TaskContract）；禁止先写代码后补「随便点一下」。
+2. **起真实 WLS**（测试实例），确认 Worker/静态资源已加载本次改动。
+3. **打开当前宿主可用的真实 Browser**，按用例逐步操作（点击、填写、提交、看 Toast/跳转）。
+4. **禁止替代物**：
+   - 禁止只用 `curl` / `http:request` 宣称页面可用
+   - 禁止只用 PHPUnit / 契约测试宣称 UI 完成
+   - 禁止「代码已改，请用户自己打开看」代替 AI 自测（宿主无 Browser 时除外，须明确标注未完成）
+5. 未跑通用例时，汇报只能写：**「代码已改，WebUI 验收未完成」**，禁止写「已完成 / 已交付」。
+
+## 门禁 B：视觉证据（WB-VIS）
+
+适用：有视觉布局/前台或后台 UI，且**当前宿主能截图**。
+
+- 至少覆盖断点：≈768 / ≥1024；表面面向手机时再加 375（相关时再加 1440）
+- 截图存归属模块 `doc/evidence/`（分章则 `doc/evidence/ch{N}/`）
+- 模块若有 `doc/原型设计.md` 则对照视觉清单；**无该文件时不虚构原型验收**
+- 无截图能力或非视觉面：WB-VIS 记 `N/A`，但 **WB-OP 仍须完成**（有可交互 Browser 时）
+
+## 门禁 C：交付地址汇报（每次功能完成必报）
+
+面向用户的**最终/阶段性交付回复末尾**必须有独立小节：
+
+```markdown
+## 交付地址
+
+- [后台系统配置](http://实例Host:端口/后台前缀/system-config/...)
+- [前台某某页](http://实例Host:端口/path)
+- API / Query：`w_query ...` 或 N/A
+```
+
+硬要求：
+
+| 项 | 要求 |
+|----|------|
+| 小节标题 | `交付地址`（或 `Delivery URLs`） |
+| 主验收链接 | 可点击 Markdown `[名称](http(s)://完整URL)`（本机 WLS 常为 `http://`） |
+| 探活 | 交付前对字面 URL `curl` 探活；失败不得交死链 |
+| 覆盖面 | 本功能涉及的全部前台页、后台页；有 API 一并列出 |
+| 无 UI | 写 `N/A` + CLI/接口入口，**禁止省略整节** |
+
+禁止：
+
+- 省略「交付地址」小节
+- 臆造路由 / Host
+- 主链用仅某客户端可点的伪协议（如 `command:simpleBrowser.api.open`）——主链用标准 `http(s)://…` Markdown 链接；宿主 opener 仅可作辅链
+- 有可用 `*.weline.test` Host 时强行改成 `127.0.0.1`
+- 仅变色「打开」文字、无 Markdown 链接语法
+- 把源码路径拼成假 URL（如 `…/app/code/.../*.php`）
+
+技能细节：`local-browser-urls`（探活、Host 优先、query 勿二次编码）。
+
+## 标准收口顺序（固定）
+
+```text
+1. 用例已定义（URL + 步骤 + 期望）
+2. 代码 / Schema / i18n:collect / setup:upgrade 等前置完成
+3. AI 用当前宿主真实 Browser 跑完 WB-OP（必要时 WB-VIS 截图）
+4. curl 探活交付 URL
+5. 用户可见回复：结论 + 证据摘要 + 末尾「交付地址」
+6. 开发日志写入：用例结果、截图路径、URL 清单、所用 Browser 工具名
+```
+
+## 会话纠正清单
+
+| 违规 | 正确做法 |
+|------|----------|
+| 「代码改完了」无 Browser | 补跑 WB-OP；未跑则改口为验收未完成 |
+| 只 curl 200 就交 UI | curl 只探活；交互必须真实 Browser |
+| 交付不写地址 | 末尾补「交付地址」小节 |
+| 让用户自己找路由 | AI 列出探活过的完整 https 链接 |
+| 规范写死某一 IDE Browser | 改用「宿主可用真实 Browser」表述 |
+
+## 相关
+
+- [AI工程交付流程.md](../../Ai/doc/AI工程交付流程.md)
+- [AI硬规则索引.md](../../Ai/doc/AI硬规则索引.md)
+- [开发标准与验收.md](./开发标准与验收.md)

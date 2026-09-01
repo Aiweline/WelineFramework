@@ -1067,10 +1067,9 @@ final class FullPageCacheCoordinator
             return null;
         }
 
-        $lang = $this->normalizeVariantLang((string)($variant['lang'] ?? ''));
-        $currency = $this->normalizeVariantCurrency((string)($variant['currency'] ?? ''));
-        $cookieHeader = 'WELINE_USER_LANG=' . \rawurlencode($lang)
-            . '; WELINE_USER_CURRENCY=' . \rawurlencode($currency);
+        // Locale/currency identity lives in full_uri + cache_key/variant.
+        // Prefer empty cookie_header so preference cookies are not implied.
+        $cookieHeader = '';
 
         return [
             'version' => 1,
@@ -1439,7 +1438,11 @@ final class FullPageCacheCoordinator
             return true;
         }
 
-        $bypassKeys = ['preview', 'visual_editor', 'editor_mode', 'workspace_preview', 'debug_hooks', 'no_cache', 'nocache'];
+        if ($this->hasPreviewTokenCookieHeader()) {
+            return true;
+        }
+
+        $bypassKeys = ['preview', 'visual_editor', 'editor_mode', 'workspace_preview', 'debug_hooks', 'no_cache', 'nocache', 'weline_preview_token'];
 
         $getParams = WelineEnv::getGet(null, []);
         if (\is_array($getParams)) {
@@ -1474,6 +1477,20 @@ final class FullPageCacheCoordinator
         }
 
         return false;
+    }
+
+    /**
+     * Live storefront preview keeps an HttpOnly cookie after URL token strip.
+     * Website cookie isolation may wire it as weline_preview_token_wN.
+     */
+    private function hasPreviewTokenCookieHeader(): bool
+    {
+        $cookie = (string)(WelineEnv::server('HTTP_COOKIE', '') ?: WelineEnv::get('server.http_cookie', ''));
+        if ($cookie === '') {
+            return false;
+        }
+
+        return \preg_match('/(?:^|;\s*)weline_preview_token(?:_w\d+)?=/i', $cookie) === 1;
     }
 
     private function isExcludedFrontendPath(string $fullUri): bool
@@ -1661,12 +1678,76 @@ final class FullPageCacheCoordinator
     private function cookieHeaderHasLoggedInFrontendSession(string $cookieHeader, string $fullUri = ''): bool
     {
         $cookies = $this->parseCookieHeader($cookieHeader);
-        $cookieName = $this->sessionCookieNameForFullUri($fullUri);
-        if (!array_key_exists($cookieName, $cookies)) {
-            return false;
+        foreach ($this->frontendSessionCookieNamesFromHeader($cookies, $fullUri) as $cookieName) {
+            $sessionId = (string)($cookies[$cookieName] ?? '');
+            if ($sessionId === '') {
+                continue;
+            }
+            if ($this->sessionIdIndicatesLoggedInFrontend($sessionId)) {
+                return true;
+            }
         }
-        $sessionId = (string)$cookies[$cookieName];
+
+        return false;
+    }
+
+    /**
+     * Session readers accept WELINE_SESSID / _{port} / _{port}_w{n} aliases; FPC login
+     * bypass must use the same candidate set or logged-in shoppers keep hitting guest HTML.
+     *
+     * @param array<string, string> $cookies
+     * @return list<string>
+     */
+    private function frontendSessionCookieNamesFromHeader(array $cookies, string $fullUri = ''): array
+    {
+        $host = '';
+        $fullUri = \trim($fullUri);
+        if ($fullUri !== '') {
+            try {
+                $parts = \parse_url($fullUri);
+            } catch (\ValueError) {
+                $parts = false;
+            }
+            if (\is_array($parts)) {
+                $authorityHost = \trim((string)($parts['host'] ?? ''));
+                if ($authorityHost !== '') {
+                    $host = \str_contains($authorityHost, ':')
+                        ? '[' . \trim($authorityHost, '[]') . ']'
+                        : $authorityHost;
+                    if (isset($parts['port'])) {
+                        $host .= ':' . (int)$parts['port'];
+                    }
+                }
+            }
+        }
+
+        $names = SessionCookieNameResolver::requestCookieCandidates($host !== '' ? $host : null);
+        foreach (\array_keys($cookies) as $name) {
+            if (!\is_string($name) || $name === '') {
+                continue;
+            }
+            if (\preg_match('/^WELINE_SESSID(?:_[1-9]\d{0,4})?(?:_w\d+)?$/D', $name) !== 1) {
+                continue;
+            }
+            $names[] = $name;
+        }
+
+        $unique = [];
+        foreach ($names as $name) {
+            $name = \trim((string)$name);
+            if ($name === '' || isset($unique[$name]) || !\array_key_exists($name, $cookies)) {
+                continue;
+            }
+            $unique[$name] = true;
+        }
+
+        return \array_keys($unique);
+    }
+
+    private function sessionIdIndicatesLoggedInFrontend(string $sessionId): bool
+    {
         if (!\preg_match('/^[a-f0-9]{32}$/i', $sessionId)) {
+            // Invalid wire shape: fail closed and bypass public FPC.
             return true;
         }
 
@@ -1690,6 +1771,7 @@ final class FullPageCacheCoordinator
             if ($loggedIn) {
                 $this->rememberFrontendLoginSessionState($sessionId);
             }
+
             return $loggedIn;
         } catch (\Throwable) {
             // If session state is unavailable, prefer correctness over serving a public cache to a logged-in user.
@@ -2762,15 +2844,12 @@ final class FullPageCacheCoordinator
      */
     private function buildFpcVariantFromCookieHeader(string $cookieHeader, string $fullUri = ''): array
     {
-        $cookies = $this->parseCookieHeader($cookieHeader);
-
+        // Preference cookies must not fork FPC variants. Path / query / website
+        // defaults are applied via mergePathVariant() + State::getLang/getCurrency().
+        unset($cookieHeader);
         $variant = [
-            'lang' => $this->normalizeVariantLang(
-                (string)($cookies['WELINE_USER_LANG'] ?? $cookies['WELINE-WEBSITE-LANG'] ?? self::DEFAULT_LANG)
-            ),
-            'currency' => $this->normalizeVariantCurrency(
-                (string)($cookies['WELINE_USER_CURRENCY'] ?? $cookies['WELINE_WEBSITE_CURRENCY'] ?? self::DEFAULT_CURRENCY)
-            ),
+            'lang' => $this->normalizeVariantLang(self::DEFAULT_LANG),
+            'currency' => $this->normalizeVariantCurrency(self::DEFAULT_CURRENCY),
         ];
         $context = $this->currentStorefrontCacheKeyContext();
         if (!$context->cacheable) {
@@ -3023,18 +3102,33 @@ final class FullPageCacheCoordinator
         if (($pathVariant['lang'] ?? '') !== '') {
             $variant['lang'] = $this->normalizeVariantLang((string)$pathVariant['lang']);
         } else {
-            // Unprefixed URLs represent the website default language. Do not let
-            // WELINE_USER_LANG fork `/` into a second locale cache entry — that
-            // makes the language switcher say 简体中文 while FPC still serves English.
-            $websiteLang = $this->resolveWebsiteDefaultLangForUnprefixedFpc();
-            if ($websiteLang !== '') {
-                $variant['lang'] = $this->normalizeVariantLang($websiteLang);
+            // No path language: follow State::getLang() (override → query → website → zh_Hans_CN).
+            // Never fork from preference cookies.
+            try {
+                $resolved = \trim(State::getLang());
+                if ($resolved !== '') {
+                    $variant['lang'] = $this->normalizeVariantLang($resolved);
+                }
+            } catch (\Throwable) {
+                $websiteLang = $this->resolveWebsiteDefaultLangForUnprefixedFpc();
+                if ($websiteLang !== '') {
+                    $variant['lang'] = $this->normalizeVariantLang($websiteLang);
+                }
             }
         }
         if (($pathVariant['currency'] ?? '') !== '') {
             $pathCurrency = $this->normalizePathVariantCurrency((string)$pathVariant['currency']);
             if ($pathCurrency !== '') {
                 $variant['currency'] = $pathCurrency;
+            }
+        } else {
+            try {
+                $resolved = \trim(State::getCurrency());
+                if ($resolved !== '') {
+                    $variant['currency'] = $this->normalizeVariantCurrency($resolved);
+                }
+            } catch (\Throwable) {
+                // keep incoming variant currency
             }
         }
 

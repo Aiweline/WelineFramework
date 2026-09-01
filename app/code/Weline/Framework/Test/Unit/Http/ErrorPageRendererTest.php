@@ -6,6 +6,7 @@ namespace Weline\Framework\Test\Unit\Http;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Http\ErrorPageRenderer;
 use Weline\Framework\Http\NoRouterException;
+use Weline\Framework\Http\StorefrontNotFoundStaticPage;
 
 final class ErrorPageRendererTest extends TestCase
 {
@@ -19,10 +20,72 @@ final class ErrorPageRendererTest extends TestCase
 
         self::assertStringContainsString('<!DOCTYPE html>', $html);
         self::assertStringContainsString('404', $html);
-        self::assertStringContainsString('页面不存在', $html);
-        self::assertStringContainsString('未知的路由！', $html);
-        self::assertStringContainsString('w-error', $html);
+        self::assertStringContainsString('抱歉，找不到您要的页面', $html);
         self::assertGreaterThan(80, \strlen(\trim(\strip_tags($html))));
+    }
+
+    public function testRenderHtmlPrefersStorefrontStatic404WhenAvailable(): void
+    {
+        if (!\defined('BP')) {
+            self::markTestSkipped('BP not defined');
+        }
+
+        $file = StorefrontNotFoundStaticPage::staticFilePath('zh_Hans_CN');
+        $dir = \dirname($file);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+        $marker = '<main data-testid="storefront-not-found-page">';
+        @\file_put_contents($file, '<!DOCTYPE html><html><body>' . $marker . '</body></html>');
+
+        $html = ErrorPageRenderer::render(404, '未知的路由！', [
+            'prefer_json' => false,
+            'is_dev' => false,
+            'home_href' => '/',
+        ]);
+
+        self::assertStringContainsString($marker, $html);
+        self::assertStringNotContainsString('w-error', $html);
+    }
+
+    public function testRenderHtmlPrefersStorefrontStatic404ForBackendArea(): void
+    {
+        if (!\defined('BP')) {
+            self::markTestSkipped('BP not defined');
+        }
+
+        $file = StorefrontNotFoundStaticPage::staticFilePath('zh_Hans_CN');
+        $dir = \dirname($file);
+        if (!\is_dir($dir)) {
+            @\mkdir($dir, 0755, true);
+        }
+        $marker = '<main data-testid="backend-not-found-page">';
+        @\file_put_contents($file, '<!DOCTYPE html><html><body>' . $marker . '</body></html>');
+
+        $previousArea = null;
+        if (\function_exists('w_env')) {
+            try {
+                $previousArea = \w_env('area', null);
+                \w_env('area', 'backend');
+            } catch (\Throwable) {
+                self::markTestSkipped('w_env unavailable');
+            }
+        }
+
+        try {
+            $html = ErrorPageRenderer::render(404, '未知的路由！', [
+                'prefer_json' => false,
+                'is_dev' => false,
+                'home_href' => '/',
+            ]);
+
+            self::assertStringContainsString($marker, $html);
+            self::assertStringNotContainsString('w-error', $html);
+        } finally {
+            if (\function_exists('w_env') && $previousArea !== null) {
+                \w_env('area', $previousArea);
+            }
+        }
     }
 
     public function testRenderJsonWhenPreferJson(): void
