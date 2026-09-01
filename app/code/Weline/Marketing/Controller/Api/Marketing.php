@@ -19,6 +19,8 @@ use Weline\Marketing\Model\Rule\Rule;
 
 /**
  * 营销API控制器
+ *
+ * @deprecated 前台请使用 BinQuery `marketing` provider；本 REST 控制器将在后续版本移除。
  */
 class Marketing extends AbstractRestController
 {

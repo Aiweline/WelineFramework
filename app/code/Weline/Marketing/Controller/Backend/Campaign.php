@@ -22,13 +22,13 @@ use Weline\Marketing\Service\CampaignService;
 /**
  * 促销活动管理控制器
  */
-#[Acl('Weline_Marketing::campaign', '促销活动', 'circle', '促销活动管理', 'Weline_Backend::marketing_group')]
+#[Acl('Weline_Marketing::commerce:marketing:campaigns', '万能促销活动', 'circle', '万能促销活动管理', 'Weline_Backend::marketing_group')]
 class Campaign extends BackendController
 {
     /**
      * 活动列表
      */
-    #[Acl('Weline_Marketing::campaign_list', '活动列表', 'list', '查看促销活动列表')]
+    #[Acl('Weline_Marketing::commerce:marketing:campaigns_index', '万能促销活动列表', 'list', '查看万能促销活动列表')]
     public function index(): string
     {
         try {
@@ -51,7 +51,7 @@ class Campaign extends BackendController
         }
     }
 
-    #[Acl('Weline_Marketing::campaign_add', '添加促销活动', 'plus', '打开促销活动新建表单')]
+    #[Acl('Weline_Marketing::commerce:marketing:campaigns_add', '添加万能促销活动', 'plus', '打开万能促销活动新建表单')]
     public function getAdd(): string
     {
         try {
@@ -67,7 +67,35 @@ class Campaign extends BackendController
         return $this->fetch('form');
     }
 
-    #[Acl('Weline_Marketing::campaign_save', '保存促销活动', 'save', '保存促销活动')]
+    #[Acl('Weline_Marketing::commerce:marketing:campaigns_edit', '编辑万能促销活动', 'edit', '编辑万能促销活动')]
+    public function getEdit(): string
+    {
+        $id = (int)$this->request->getParam('id', 0);
+        /** @var CampaignModel $campaign */
+        $campaign = ObjectManager::getInstance(CampaignModel::class);
+        $campaign->load($id);
+        if (!$campaign->getId()) {
+            Message::error(__('促销活动不存在'));
+
+            return $this->redirect('marketing/backend/campaign/index');
+        }
+
+        try {
+            /** @var RuleModel $rules */
+            $rules = ObjectManager::getInstance(RuleModel::class);
+            $rules->order(RuleModel::schema_fields_ID, 'DESC')->select()->fetch();
+            $this->assign('rules', $rules->getItems());
+        } catch (\Throwable $exception) {
+            Message::error(__('加载促销活动表单失败：%{1}', $exception->getMessage()));
+            $this->assign('rules', []);
+        }
+
+        $this->assign('campaign', $campaign);
+
+        return $this->fetch('form');
+    }
+
+    #[Acl('Weline_Marketing::commerce:marketing:campaigns_save', '保存万能促销活动', 'save', '保存万能促销活动')]
     public function postSave(): string
     {
         try {
@@ -86,7 +114,7 @@ class Campaign extends BackendController
         } catch (\Throwable $exception) {
             Message::error(__('保存促销活动失败：%{1}', $exception->getMessage()));
 
-            return $this->redirect('marketing/backend/campaign/getAdd');
+            return $this->redirect('marketing/backend/campaign/add');
         }
 
         return $this->redirect('marketing/backend/campaign/index');

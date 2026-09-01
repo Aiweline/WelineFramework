@@ -12,33 +12,13 @@ $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
 );
 ?>
 <link rel="stylesheet" href="@static(Weline_Marketing::css/coupon-index.css)">
-<div class="w-grid marketing-coupon-page">
-    <template>Weline_Component::message.phtml</template>
-</div>
-
-<div class="w-grid marketing-coupon-page">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading marketing-coupon-header w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;">
-                <lang>优惠券管理</lang>
-            </h4>
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><span><lang>后台</lang></span></li>
-                    <li class="w-breadcrumb__item"><span><lang>营销</lang></span></li>
-                    <li class="w-breadcrumb__item" data-state="active"><lang>优惠券</lang></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
 
 <div class="w-grid marketing-coupon-page" data-testid="marketing-coupon-management">
     <div style="--w-span:12;">
         <div class="marketing-coupon-card">
             <div class="marketing-coupon-card-header">
                 <h5 class="marketing-coupon-card-title"><lang>优惠券列表</lang></h5>
-                <a href="<?= $this->getBackendUrl('marketing/backend/coupon/getAdd') ?>" class="marketing-coupon-add-btn" data-testid="marketing-coupon-create">
+                <a href="@backend-url{'marketing/backend/coupon/add'}" class="marketing-coupon-add-btn" data-testid="marketing-coupon-create">
                     <w:icon name="plus" size="sm"></w:icon><lang>添加优惠券</lang>
                 </a>
             </div>
@@ -89,7 +69,7 @@ $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
                                 </td>
                                 <td><?= (int)($coupon['usage_count'] ?? 0) ?>/<?= ($coupon['usage_limit'] ?? 0) ? (int)$coupon['usage_limit'] : '∞' ?></td>
                                 <td>
-                                    <a href="<?= $this->getUrl('marketing/backend/coupon/getEdit', ['id' => $coupon['id']]) ?>"
+                                    <a href="@backend-url{'marketing/backend/coupon/edit'|['id' => $coupon['id']]}"
                                        class="marketing-coupon-action-btn" title="<?= __('编辑') ?>">
                                         <w:icon name="edit" size="sm"></w:icon>
                                     </a>

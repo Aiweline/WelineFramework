@@ -13,7 +13,7 @@ $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
 <div class="marketing-campaign-list" data-testid="marketing-campaign-management">
     <h1><?= __('促销活动列表') ?></h1>
     <div class="toolbar">
-        <a href="<?= $this->getBackendUrl('marketing/backend/campaign/getAdd') ?>" class="w-button" data-testid="marketing-campaign-create" data-tone="primary"><?= __('添加活动') ?></a>
+        <a href="@backend-url{'marketing/backend/campaign/add'}" class="w-button" data-testid="marketing-campaign-create" data-tone="primary"><?= __('添加活动') ?></a>
     </div>
     <table class="w-table">
         <thead>
@@ -39,7 +39,7 @@ $escapeHtml = static fn(mixed $value): string => htmlspecialchars(
                 <td><?= $campaign['budget'] ?? '-' ?></td>
                 <td><?= $campaign['spent'] ?></td>
                 <td>
-                    <a href="<?= $this->getUrl('marketing/backend/campaign/getEdit', ['id' => $campaign['id']]) ?>"><?= __('编辑') ?></a>
+                    <a href="@backend-url{'marketing/backend/campaign/edit'|['id' => $campaign['id']]}"><?= __('编辑') ?></a>
                 </td>
             </tr>
             <?php endforeach; ?>

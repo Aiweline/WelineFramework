@@ -47,6 +47,8 @@ class FixedAmount extends AbstractAction
         } elseif ($applyTo === 'shipping') {
             $order = $context['order'] ?? [];
             $amount = (float)($order['shipping_amount'] ?? $context['shipping_amount'] ?? 0);
+        } elseif ($applyTo === 'matched_products') {
+            $amount = $this->matchedProductsAmount($action, $context);
         }
 
         $discountAmount = $this->calculateDiscount($amount, 'fixed_amount', $discountValue);
@@ -55,6 +57,46 @@ class FixedAmount extends AbstractAction
             'discount_amount' => $discountAmount,
             'messages' => [sprintf(__('优惠 %.2f 元'), $discountAmount)],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $action
+     * @param array<string, mixed> $context
+     */
+    private function matchedProductsAmount(array $action, array $context): float
+    {
+        $skuList = $action['sku_list'] ?? [];
+        if (!is_array($skuList)) {
+            $skuList = array_filter(array_map('trim', explode(',', (string)$skuList)));
+        }
+        $allowed = [];
+        foreach ($skuList as $sku) {
+            $sku = trim((string)$sku);
+            if ($sku !== '') {
+                $allowed[$sku] = true;
+            }
+        }
+        if ($allowed === []) {
+            return 0.0;
+        }
+
+        $amount = 0.0;
+        $products = $context['products'] ?? $context['items'] ?? [];
+        if (!is_array($products)) {
+            return 0.0;
+        }
+        foreach ($products as $product) {
+            if (!is_array($product)) {
+                continue;
+            }
+            $sku = trim((string)($product['sku'] ?? ''));
+            if ($sku === '' || !isset($allowed[$sku])) {
+                continue;
+            }
+            $amount += (float)($product['price'] ?? 0) * (float)($product['qty'] ?? 1);
+        }
+
+        return $amount;
     }
 
     public function getFormFields(): array
@@ -75,6 +117,7 @@ class FixedAmount extends AbstractAction
                 'options' => [
                     'subtotal' => __('订单小计'),
                     'shipping' => __('运费'),
+                    'matched_products' => __('匹配商品行'),
                 ],
                 'required' => true,
             ],
