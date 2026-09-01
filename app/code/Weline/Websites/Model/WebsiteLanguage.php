@@ -79,6 +79,27 @@ class WebsiteLanguage extends Model
         foreach ($languages as $language) {
             $codes[] = $language->getLanguageCode();
         }
+
+        // Bare-path / empty-default fallbacks use preferredLanguageCodes()[0].
+        // Keep website.default_language first so those paths do not stick on en_US.
+        try {
+            $website = ObjectManager::getInstance(Website::class);
+            $website->clear()
+                ->where(Website::schema_fields_ID, $websiteId)
+                ->find()
+                ->fetch();
+            $default = trim((string)($website->getDefaultLanguage() ?? ''));
+            if ($default !== '') {
+                $rest = [];
+                foreach ($codes as $code) {
+                    if (strcasecmp((string)$code, $default) !== 0) {
+                        $rest[] = $code;
+                    }
+                }
+                $codes = array_values(array_merge([$default], $rest));
+            }
+        } catch (\Throwable) {
+        }
         
         return $codes;
     }

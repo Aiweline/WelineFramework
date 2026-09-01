@@ -58,7 +58,7 @@ final class ScopeManagement extends BackendController
             $websiteId = $this->postNonNegativeInt('website_id', 0);
             $this->admin->createChannel(
                 $websiteId,
-                $this->postPositiveInt('store_id'),
+                $this->postNonNegativeInt('store_id', 0),
                 $this->postString('code', 64),
                 $this->postString('name', 128),
             );

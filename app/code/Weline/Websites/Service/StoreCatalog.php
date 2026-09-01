@@ -54,7 +54,7 @@ final class StoreCatalog implements StoreCatalogInterface
 
     public function byId(int $storeId): ?StoreSummary
     {
-        if ($storeId <= 0) {
+        if ($storeId < 0) {
             return null;
         }
         $this->assertPositiveCatalogId($storeId, __('店铺 ID'));
@@ -122,7 +122,7 @@ final class StoreCatalog implements StoreCatalogInterface
                 throw new \RuntimeException((string)__('店铺目录包含非法数据行'));
             }
 
-            $id = $this->requireIntegerField($row, Store::schema_fields_ID, 1);
+            $id = $this->requireIntegerField($row, Store::schema_fields_ID, 0);
             $websiteId = $this->requireIntegerField($row, Store::schema_fields_WEBSITE_ID, 0);
             if ($expectedWebsiteId !== null && $websiteId !== $expectedWebsiteId) {
                 throw new \RuntimeException(

@@ -26,7 +26,7 @@ $createdField = \Weline\Websites\Model\ProvisioningOrder::schema_fields_CREATED_
             </h4>
             <div class="w-cluster">
                 <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><a href="<?= $this->getBackendUrl('admin') ?>"><?= __('首页') ?></a></li>
+                    <li class="w-breadcrumb__item"><a href="@backend-url{'admin'}"><?= __('首页') ?></a></li>
                     <li class="w-breadcrumb__item"><?= __('网站服务') ?></li>
                     <li class="w-breadcrumb__item" data-state="active"><?= __('配置订单') ?></li>
                 </ol>
@@ -47,7 +47,7 @@ $createdField = \Weline\Websites\Model\ProvisioningOrder::schema_fields_CREATED_
                 <?php endforeach; ?>
             </select>
             <button type="submit" class="w-button" data-shrink="false" data-tone="primary" data-size="sm"><w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?></button>
-            <a href="<?= $this->getBackendUrl('*/backend/provisioning/index') ?>" class="w-button" data-shrink="false" data-tone="neutral" data-size="sm"><w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?></a>
+            <a href="@backend-url{'*/backend/provisioning/index'}" class="w-button" data-shrink="false" data-tone="neutral" data-size="sm"><w:icon name="refresh" size="sm"></w:icon> <?= __('重置') ?></a>
         </w:form>
     </div>
 </div>

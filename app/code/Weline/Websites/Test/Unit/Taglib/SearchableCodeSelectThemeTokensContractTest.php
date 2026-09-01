@@ -6,11 +6,11 @@ namespace Weline\Websites\Test\Unit\Taglib;
 
 use PHPUnit\Framework\TestCase;
 
-final class WebsiteSelectThemeTokensContractTest extends TestCase
+final class SearchableCodeSelectThemeTokensContractTest extends TestCase
 {
-    public function testWebsiteSelectStylesPreferThemeTokensOverHardcodedLightPalette(): void
+    public function testSearchableCodeSelectStylesPreferThemeTokensOverHardcodedLightPalette(): void
     {
-        $path = dirname(__DIR__, 3) . '/Taglib/WebsiteSelect.php';
+        $path = dirname(__DIR__, 3) . '/Taglib/SearchableCodeSelect.php';
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
 
@@ -25,23 +25,8 @@ final class WebsiteSelectThemeTokensContractTest extends TestCase
             'background:var(--weline-theme-surface,var(--backend-color-card-bg,#fff))',
             $content
         );
-        self::assertStringContainsString(
-            'background:var(--weline-theme-surface-raised,var(--weline-theme-surface,var(--backend-color-card-bg,#fff)))',
-            $content
-        );
         self::assertStringNotContainsString('background:#f8fafc', $content);
         self::assertStringNotContainsString('background:#f1f5f9', $content);
         self::assertStringNotContainsString('color:#162033', $content);
-    }
-
-    public function testWebsiteSelectSearchIncludesNameAndDomain(): void
-    {
-        $path = dirname(__DIR__, 3) . '/Taglib/WebsiteSelect.php';
-        $content = (string) file_get_contents($path);
-
-        self::assertStringContainsString('搜索站点名称或域名', $content);
-        self::assertStringContainsString('function optionSearchHaystack(item){', $content);
-        self::assertStringContainsString('item.url, item.domain, item.code', $content);
-        self::assertStringContainsString('optionSearchHaystack(item).indexOf(kw)', $content);
     }
 }

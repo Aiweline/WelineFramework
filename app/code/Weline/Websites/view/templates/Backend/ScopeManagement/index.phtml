@@ -9,7 +9,7 @@ $isStores = $section === 'stores';
             <h4 style="--w-mb:var(--weline-space-1);"><lang><?= $isStores ? '商店管理' : '渠道管理' ?></lang></h4>
             <div class="w-text" data-tone="muted"><lang>Website Scope 管理工作台</lang> · website_id=<?= $website_id ?></div>
         </div>
-        <form method="get" class="w-cluster" style="--w-gap:var(--weline-space-2);">
+        <form method="get" id="scope-website-filter-form" class="w-cluster" style="--w-gap:var(--weline-space-2);">
             <label class="w-visually-hidden" for="scope-filter-website_trigger"><lang>网站</lang></label>
             <w:websites:website:select
                 id="scope-filter-website"
@@ -21,8 +21,9 @@ $isStores = $section === 'stores';
                 allow-empty="false"
                 empty-label="@lang(请选择站点)"
                 placeholder="@lang(搜索站点名称或编码)"
+                form="scope-website-filter-form"
+                auto-submit="true"
             />
-            <button class="w-button" type="submit" data-tone="primary"><lang>切换网站</lang></button>
         </form>
     </div>
 

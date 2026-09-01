@@ -73,6 +73,22 @@
     </event>
     
     <!-- ========== Server 模块事件观察者 ========== -->
+
+    <!-- WLS 本地域名注册：同步写入域名池 -->
+    <event name="Weline_Server::domain::local_domain_registered">
+        <observer name="Weline_Websites::sync_wls_local_domain_pool"
+                  instance="Weline\Websites\Observer\SyncWlsLocalDomainPool"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
+
+    <!-- WLS 启用域名：域名池缺失时补写 -->
+    <event name="Weline_Server::domain::managed_domain_active">
+        <observer name="Weline_Websites::sync_wls_managed_domain_active"
+                  instance="Weline\Websites\Observer\SyncWlsManagedDomainActive"
+                  disabled="false"
+                  shared="true" sort="10"/>
+    </event>
     
     <!--证书签发完成：同步域名 HTTPS 状态-->
     <event name="Weline_Server::domain::certificate_issued">

@@ -30,6 +30,8 @@ final class StoreChannelManagementContractTest extends TestCase
         }
         self::assertStringNotContainsString('self::STORE_SOURCE', $controller);
         self::assertStringNotContainsString('self::CHANNEL_SOURCE', $controller);
+        self::assertStringContainsString("postNonNegativeInt('store_id', 0)", $controller);
+        self::assertStringNotContainsString("postPositiveInt('store_id')", $controller);
     }
 
     public function testWorkbenchDelegatesReadsAndWritesToExistingDomainBoundaries(): void
@@ -43,6 +45,12 @@ final class StoreChannelManagementContractTest extends TestCase
         self::assertStringContainsString('data-testid="store-management-create-form"', $template);
         self::assertStringContainsString('data-testid="sales-channel-management-create-form"', $template);
         self::assertSame(2, substr_count($template, 'csrf="auto"'));
+        self::assertStringContainsString('id="scope-website-filter-form"', $template);
+        self::assertStringContainsString('auto-submit="true"', $template);
+        self::assertStringNotContainsString('切换网站', $template);
+        $taglib = (string)file_get_contents(BP . 'app/code/Weline/Websites/Taglib/WebsiteSelect.php');
+        self::assertStringContainsString("'auto-submit' => false", $taglib);
+        self::assertStringContainsString('var autoSubmit =', $taglib);
     }
 
     public function testBothBrowserWritesAssertPostgresqlAndCleanup(): void

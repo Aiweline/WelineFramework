@@ -9,6 +9,7 @@ use Weline\Currency\Api\CurrencyCatalogInterface;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Database\ConnectionFactory;
@@ -25,6 +26,7 @@ use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteDomain;
 use Weline\Websites\Model\WebsiteLanguage;
 use Weline\Websites\Model\DomainPool;
+use Weline\Websites\Service\WebsiteAdminListPresenter;
 use Weline\Websites\Service\WebsiteBackendEntryBridgeService;
 use Weline\Websites\Service\WebsiteCacheInvalidationService;
 use Weline\Websites\Service\WebsiteChangeSnapshotFactory;
@@ -43,6 +45,7 @@ class Website extends BackendController
         \Weline\Websites\Model\Website $website,
         private readonly RuntimeProviderResolver $runtimeProviders,
         private readonly WebsiteStoreChannelDirectory $storeChannelDirectory,
+        private readonly WebsiteAdminListPresenter $listPresenter,
     ) {
         $this->website = $website;
     }
@@ -64,10 +67,8 @@ class Website extends BackendController
         $items = $websites->getItems();
 
         $this->enrichWebsiteListingItems($items);
+        $this->assignListingTableView($items, $websites->getPagination(), $search);
 
-        $this->assign('websites', $items);
-        $this->assign('pagination', $websites->getPagination());
-        $this->assign('search', $search);
         return $this->fetch();
     }
 
@@ -93,11 +94,8 @@ class Website extends BackendController
             ])->select()->fetch();
             $items = $websites->getItems();
             $this->enrichWebsiteListingItems($items);
-
-            $this->assign('websites', $items);
-            $this->assign('pagination', $websites->getPagination());
-            $this->assign('search', $search);
-            $tableHtml = $this->template('Weline_Websites::templates/Admin/Website/table.phtml');
+            $this->assignListingTableView($items, $websites->getPagination(), $search);
+            $tableHtml = $this->template('Weline_Websites::templates/Admin/Website/datatable.phtml');
             $payload = [
                 'success' => true,
                 'html' => $tableHtml,
@@ -111,6 +109,91 @@ class Website extends BackendController
         }
 
         return $this->fetchJson($payload);
+    }
+
+    /**
+     * @param list<\Weline\Websites\Model\Website|array<string, mixed>> $items
+     */
+    private function assignListingTableView(array $items, string $pagination, string $search): void
+    {
+        $tableRows = $this->buildListingTableRows($items);
+        $this->assign('table_rows', $tableRows);
+        $this->assign('row_actions_json', $this->buildListingRowActionsJson());
+        $this->assign('pagination', $pagination);
+        $this->assign('search', $search);
+        $this->assign('total', count($tableRows));
+    }
+
+    /**
+     * @param list<\Weline\Websites\Model\Website|array<string, mixed>> $items
+     * @return list<array<string, mixed>>
+     */
+    private function buildListingTableRows(array $items): array
+    {
+        $tableRows = [];
+        foreach ($items as $website) {
+            if ($website instanceof \Weline\Websites\Model\Website) {
+                $website = $website->getData();
+            }
+            if (!\is_array($website)) {
+                throw new \RuntimeException((string)__('网站目录行必须是网站模型或数组'));
+            }
+            $row = $this->listPresenter->presentRow($website);
+            $websiteId = (int)($row['website_id'] ?? 0);
+            $row['edit_url'] = $this->getUrl('*/admin/website/edit', [
+                'id' => $websiteId,
+                'isIframe' => 'true',
+            ]);
+            $tableRows[] = $row;
+        }
+
+        return $tableRows;
+    }
+
+    private function buildListingRowActionsJson(): string
+    {
+        return json_encode([
+            [
+                'type' => 'link',
+                'label' => (string)__('访问前端'),
+                'hrefTemplate' => '{frontend_url}',
+                'testId' => 'website-visit-frontend-button',
+                'icon' => 'external-link',
+                'tone' => 'primary',
+                'variant' => 'outline',
+                'size' => 'sm',
+            ],
+            [
+                'type' => 'link',
+                'label' => (string)__('管理后端'),
+                'hrefTemplate' => '{backend_url}',
+                'testId' => 'website-visit-backend-button',
+                'icon' => 'grid',
+                'tone' => 'success',
+                'variant' => 'outline',
+                'size' => 'sm',
+            ],
+            [
+                'type' => 'event',
+                'label' => (string)__('编辑'),
+                'action' => 'edit',
+                'testId' => 'website-edit-button',
+                'icon' => 'edit',
+                'tone' => 'info',
+                'variant' => 'outline',
+                'size' => 'sm',
+            ],
+            [
+                'type' => 'event',
+                'label' => (string)__('删除'),
+                'action' => 'delete',
+                'testId' => 'website-delete-button',
+                'icon' => 'trash',
+                'tone' => 'danger',
+                'variant' => 'outline',
+                'size' => 'sm',
+            ],
+        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
     }
 
     /**
@@ -285,11 +368,45 @@ class Website extends BackendController
         return $websiteId;
     }
 
+    /**
+     * 编辑入口同时接受列表契约的 id 与常见别名 website_id（含默认站 0）。
+     * 二者皆有时以 id 为准。
+     */
+    private function resolveEditTargetWebsiteIdFromRequest(): int
+    {
+        $raw = $this->request->getParam('id');
+        if ($raw === null || $raw === '') {
+            $raw = $this->request->getParam('website_id');
+        }
+
+        return $this->requireWebsiteId($raw);
+    }
+
+    /**
+     * 弹窗/iframe 表单：隐藏 blank 布局的页面大标题（否则会露出模块名）。
+     */
+    private function suppressPageChromeForEmbeddedForm(string $pageTitle): void
+    {
+        $this->assign('title', $pageTitle);
+        $meta = $this->getTemplate()->getData('meta');
+        $meta = is_array($meta) ? $meta : [];
+        $meta['showPageHeader'] = false;
+        $meta['showMessages'] = false;
+        $meta['title'] = $pageTitle;
+        $meta['controller_title'] = $pageTitle;
+        $this->assign('meta', $meta);
+        $this->assign('layoutShowPageHeader', false);
+        $this->assign('layoutShowMessages', false);
+        // drawer/offcanvas 外层已有标题与操作条，表单内不再套一层卡片标题。
+        $this->assign('is_embedded_form', true);
+    }
+
     #[Acl('Weline_Websites::website_add', '添加网站', 'plus', '网站管理')]
     public function add()
     {
         // 使用空白布局（适用于 offcanvas/弹窗）
         $this->layoutType = 'default.blank';
+        $this->suppressPageChromeForEmbeddedForm((string)__('添加网站'));
 
         if ($this->request->isPost()) {
             $data = $this->request->getPost();
@@ -328,22 +445,21 @@ class Website extends BackendController
                 $firstSubPath = $addressList[0]['sub_path'];
                 $data['url'] = 'https://' . $firstDomain . $firstSubPath;
 
-                // 处理关联货币和语言
-                $currencyCodes = $data['currency_codes'] ?? [];
-                $languageCodes = $data['language_codes'] ?? [];
-
-                if (empty($data['default_currency']) && !empty($currencyCodes)) {
-                    $data['default_currency'] = $currencyCodes[0];
-                }
-                if (empty($data['default_language']) && !empty($languageCodes)) {
-                    $data['default_language'] = $languageCodes[0];
-                }
+                [$currencyCodes, $languageCodes] = $this->normalizeWebsiteLocaleMoneyPost($data);
                 $startPagePath = $this->normalizeStartPagePath((string)($data['start_page_path'] ?? ''));
 
                 if (isset($data['website_id'])) {
                     unset($data['website_id']);
                 }
-                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['sub_path'], $data['start_page_path']);
+                unset(
+                    $data['address_lines'],
+                    $data['domain_values'],
+                    $data['pool_ids'],
+                    $data['sub_path'],
+                    $data['start_page_path'],
+                    $data['currency_codes'],
+                    $data['language_codes'],
+                );
                 $this->stripExtensionPostData($data);
                 $connection = $this->website->getConnection();
                 $websiteId = $this->transactions()->runWrite(
@@ -400,13 +516,6 @@ class Website extends BackendController
                         return $websiteId;
                     },
                 );
-
-                $this->redirect('component/backend/offcanvas/getSuccess', [
-                    'msg' => __('网站添加成功'),
-                    'url' => '*/admin/website',
-                    'reload' => '1',
-                    'time' => '3',
-                ]);
             } catch (\Throwable $e) {
                 $errorMsg = $e->getMessage();
                 // 开发环境显示完整堆栈
@@ -420,6 +529,13 @@ class Website extends BackendController
                     'time' => '10',
                 ]);
             }
+
+            $this->redirect('component/backend/offcanvas/getSuccess', [
+                'msg' => __('网站添加成功'),
+                'url' => '*/admin/website',
+                'reload' => '1',
+                'time' => '3',
+            ]);
         }
 
         // 初始化空网站数据，避免模板中访问未定义变量
@@ -451,9 +567,10 @@ class Website extends BackendController
     {
         // 使用空白布局（适用于 offcanvas/弹窗）
         $this->layoutType = 'default.blank';
+        $this->suppressPageChromeForEmbeddedForm((string)__('编辑网站'));
 
         try {
-            $websiteId = $this->requireWebsiteId($this->request->getParam('id'));
+            $websiteId = $this->resolveEditTargetWebsiteIdFromRequest();
         } catch (\InvalidArgumentException $exception) {
             $this->redirect('component/backend/offcanvas/getError', [
                 'msg' => $exception->getMessage(),
@@ -479,13 +596,14 @@ class Website extends BackendController
             $data = $this->request->getPost();
             $postData = $data;
 
-            // 从 POST 数据中获取 website_id，如果没有则从 URL 参数中获取 id，最后使用已加载的 websiteId
+            // POST body website_id → URL id → URL website_id → 已加载的编辑目标
             $postWebsiteId = $data['website_id'] ?? null;
             if ($postWebsiteId === null || $postWebsiteId === '') {
-                $postWebsiteId = $this->request->getParam('id');
-            }
-            if ($postWebsiteId === null || $postWebsiteId === '') {
-                $postWebsiteId = $websiteId;
+                $raw = $this->request->getParam('id');
+                if ($raw === null || $raw === '') {
+                    $raw = $this->request->getParam('website_id');
+                }
+                $postWebsiteId = ($raw === null || $raw === '') ? $websiteId : $raw;
             }
 
             try {
@@ -519,20 +637,19 @@ class Website extends BackendController
                 $firstSubPath = $addressList[0]['sub_path'];
                 $data['url'] = 'https://' . $firstDomain . $firstSubPath;
 
-                // 处理关联货币和语言
-                $currencyCodes = $data['currency_codes'] ?? [];
-                $languageCodes = $data['language_codes'] ?? [];
-
-                if (empty($data['default_currency']) && !empty($currencyCodes)) {
-                    $data['default_currency'] = $currencyCodes[0];
-                }
-                if (empty($data['default_language']) && !empty($languageCodes)) {
-                    $data['default_language'] = $languageCodes[0];
-                }
+                [$currencyCodes, $languageCodes] = $this->normalizeWebsiteLocaleMoneyPost($data);
                 $startPagePath = $this->normalizeStartPagePath((string)($data['start_page_path'] ?? ''));
 
                 $data['website_id'] = $postWebsiteId;
-                unset($data['address_lines'], $data['domain_values'], $data['pool_ids'], $data['sub_path'], $data['start_page_path']);
+                unset(
+                    $data['address_lines'],
+                    $data['domain_values'],
+                    $data['pool_ids'],
+                    $data['sub_path'],
+                    $data['start_page_path'],
+                    $data['currency_codes'],
+                    $data['language_codes'],
+                );
                 $this->stripExtensionPostData($data);
                 $connection = $this->website->getConnection();
                 $this->transactions()->runWrite(
@@ -592,13 +709,6 @@ class Website extends BackendController
                         );
                     },
                 );
-
-                $this->redirect('component/backend/offcanvas/getSuccess', [
-                    'msg' => __('网站更新成功'),
-                    'url' => '*/admin/website',
-                    'reload' => '1',
-                    'time' => '3',
-                ]);
             } catch (\Throwable $e) {
                 $this->redirect('component/backend/offcanvas/getError', [
                     'msg' => $e->getMessage(),
@@ -606,6 +716,13 @@ class Website extends BackendController
                     'time' => '5',
                 ]);
             }
+
+            $this->redirect('component/backend/offcanvas/getSuccess', [
+                'msg' => __('网站更新成功'),
+                'url' => '*/admin/website',
+                'reload' => '1',
+                'time' => '3',
+            ]);
         }
 
         // 获取网站的关联货币和语言
@@ -912,6 +1029,88 @@ class Website extends BackendController
         unset(
             $data['extensions']
         );
+    }
+
+    /**
+     * Normalize default/related currency + language POST values.
+     *
+     * Multiple-select components may post arrays for a scalar field when a prior
+     * Taglib leaked `multiple=true`; keep the first non-empty code and ensure the
+     * default stays inside the related list.
+     *
+     * @param array<string, mixed> $data
+     * @return array{0: list<string>, 1: list<string>}
+     */
+    private function normalizeWebsiteLocaleMoneyPost(array &$data): array
+    {
+        $currencyCodes = $this->normalizeWebsiteCodeList($data['currency_codes'] ?? [], true);
+        $languageCodes = $this->normalizeWebsiteCodeList($data['language_codes'] ?? [], false);
+        $defaultCurrency = $this->normalizeWebsiteScalarCode($data['default_currency'] ?? '', true);
+        $defaultLanguage = $this->normalizeWebsiteScalarCode($data['default_language'] ?? '', false);
+
+        if ($defaultCurrency === '' && $currencyCodes !== []) {
+            $defaultCurrency = $currencyCodes[0];
+        }
+        if ($defaultLanguage === '' && $languageCodes !== []) {
+            $defaultLanguage = $languageCodes[0];
+        }
+        if ($defaultCurrency !== '' && !\in_array($defaultCurrency, $currencyCodes, true)) {
+            \array_unshift($currencyCodes, $defaultCurrency);
+        }
+        if ($defaultLanguage !== '' && !\in_array($defaultLanguage, $languageCodes, true)) {
+            \array_unshift($languageCodes, $defaultLanguage);
+        }
+
+        $data['default_currency'] = $defaultCurrency !== '' ? $defaultCurrency : null;
+        $data['default_language'] = $defaultLanguage !== '' ? $defaultLanguage : null;
+
+        return [$currencyCodes, $languageCodes];
+    }
+
+    private function normalizeWebsiteScalarCode(mixed $value, bool $upper): string
+    {
+        if (\is_array($value)) {
+            foreach ($value as $item) {
+                $normalized = $this->normalizeWebsiteScalarCode($item, $upper);
+                if ($normalized !== '') {
+                    return $normalized;
+                }
+            }
+
+            return '';
+        }
+        if (!\is_scalar($value)) {
+            return '';
+        }
+        $code = \trim((string)$value);
+        if ($code === '') {
+            return '';
+        }
+
+        return $upper ? \strtoupper($code) : $code;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function normalizeWebsiteCodeList(mixed $value, bool $upper): array
+    {
+        if (!\is_array($value)) {
+            if (\is_scalar($value) && \trim((string)$value) !== '') {
+                $value = \preg_split('/[\s,]+/', \trim((string)$value), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            } else {
+                $value = [];
+            }
+        }
+        $result = [];
+        foreach ($value as $item) {
+            $code = $this->normalizeWebsiteScalarCode($item, $upper);
+            if ($code !== '' && !\in_array($code, $result, true)) {
+                $result[] = $code;
+            }
+        }
+
+        return $result;
     }
 
     private function normalizeStartPagePath(string $path): string

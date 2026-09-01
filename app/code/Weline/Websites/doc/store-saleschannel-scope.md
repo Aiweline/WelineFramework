@@ -11,6 +11,8 @@
 
 - 表中展示的是逻辑名；实际 SQL 必须通过 Model/Connector 解析配置前缀与 PostgreSQL runtime schema（例如 `prefix=w_` 时为 `w_weline_websites_store`），不能把 `getOriginTableName()` 直接拼入 prepared SQL。
 - `website_id=0`（code=default）是合法系统默认站，不是空值。
+- 系统默认站的默认店铺固定 `store_id=0`（`Store::ID_DEFAULT`），其默认渠道固定 `channel_id=0`（`SalesChannel::ID_DEFAULT`）；安装/升级补种会强制写入并在必要时从历史正整数 ID 迁移引用列。其他 Website 的 default Store/Channel 仍使用自增主键。
+- 后台「渠道管理」创建渠道时 `store_id` 按非负整数解析，**允许 `0`**（默认店下建渠道）；不得再用正整数校验把默认店拒掉。
 - 每个 Website 恒有一个 default/normal Store；每个 active Store 恒有一个 default Channel。tombstone Store 只保留历史身份与既有 Channel，迁移和补种不得向其新增 Channel，迁移完整性统计必须排除墓碑。
 
 ## 补种（幂等）
@@ -111,7 +113,7 @@ WLS 的匿名首页 FPC prime 是共享缓存构建请求，必须通过框架�
 跨模块只允许依赖 `Websites/Api/Catalog/StoreCatalogInterface`、`SalesChannelCatalogInterface`（v1），不得直接引用 Store/SalesChannel Model。
 
 - `StoreSummary` v1 精确字段为 `store_id, website_id, code, name, store_mode, is_default, enabled, lifecycle_status, tombstoned_at, url`；`SalesChannelSummary` v1 精确字段为 `channel_id, website_id, store_id, code, name, is_default, enabled, parent_store_lifecycle_status, effective_enabled`。DTO 为 final readonly，增加、删除或改名字段必须发布新契约版本。
-- QueryProvider 只发布 `getStoreCatalogV1(website_id)` 与 `getSalesChannelCatalogV1(store_id)` 两个 Store/Channel 操作，固定 `v1/read/frontend=false/external=false/graph=false`。参数必须是唯一允许的规范整数键，范围分别为 `0..2147483647` 与 `1..2147483647`；额外参数和越界值 fail-closed。
+- QueryProvider 只发布 `getStoreCatalogV1(website_id)` 与 `getSalesChannelCatalogV1(store_id)` 两个 Store/Channel 操作，固定 `v1/read/frontend=false/external=false/graph=false`。参数必须是唯一允许的规范整数键，范围均为 `0..2147483647`（`website_id=0` / `store_id=0` / `channel_id=0` 分别是系统默认站、默认店铺、默认渠道）；额外参数和越界值 fail-closed。
 - Catalog 返回任何 Store 前必须只读确认父 Website 实际存在；返回任何 SalesChannel 前必须确认父 Store 存在且 Website 归属一致。`website_id=0` 与普通站点使用相同存在性校验，不得把 0 当成空值，也不得在缺失时补种。
 - Catalog 包含 disabled 与 tombstone 记录用于诊断和身份拒绝；`effective_enabled` 只有在 Channel enabled、父 Store enabled 且 lifecycle=`active` 时为 true。
 

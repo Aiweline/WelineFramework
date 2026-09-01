@@ -116,7 +116,7 @@ final class ScopeKernelRolloutPolicy
         string $storeMode,
         string $requestScheme,
     ): FrontendWorkerScopeRolloutDecision {
-        if ($websiteId < 0 || $storeId < 1 || $channelId < 1) {
+        if ($websiteId < 0 || $storeId < 0 || $channelId < 0) {
             throw new FrontendWorkerScopeException(
                 'rollout_scope_tuple_invalid',
                 503,
@@ -327,7 +327,7 @@ final class ScopeKernelRolloutPolicy
             $storeId = $entry['store_id'];
             $channelId = $entry['channel_id'];
             if (!\is_int($websiteId) || !\is_int($storeId) || !\is_int($channelId)
-                || $websiteId < 0 || $storeId < 1 || $channelId < 1) {
+                || $websiteId < 0 || $storeId < 0 || $channelId < 0) {
                 throw $this->invalidConfiguration('allowlist_entry_values');
             }
             $key = $this->tupleKey([$websiteId, $storeId, $channelId]);

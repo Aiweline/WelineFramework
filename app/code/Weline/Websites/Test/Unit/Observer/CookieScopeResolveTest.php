@@ -93,14 +93,77 @@ final class CookieScopeResolveTest extends TestCase
         self::assertSame('WELINE_SESSID_w251', SessionCookieNameResolver::resolve('shop.test'));
     }
 
-    public function testBackendAreaDoesNotQualifySessionCookieOrExpireUnscopedAliases(): void
+    public function testRootWebsiteWithEmptyConfiguredUrlStillQualifiesFromRequestHost(): void
     {
-        $this->enterRequest(257, 'https://shop.test:9555/', backend: true);
+        $this->enterRequest(0, '');
 
         self::assertSame('/', CookieScope::resolvePath('/'));
-        self::assertSame('WELINE_SESSID', CookieScope::qualifyName('WELINE_SESSID'));
-        self::assertSame('WELINE_SESSID_9555', SessionCookieNameResolver::resolve('shop.test:9555'));
-        self::assertFalse(CookieScope::shouldExpireUnscopedAliases());
+        self::assertSame('WELINE_SESSID_w0', CookieScope::qualifyName('WELINE_SESSID'));
+        self::assertSame('WELINE_SESSID_9555_w0', SessionCookieNameResolver::resolve('shop.test:9555'));
+        self::assertTrue(CookieScope::shouldExpireUnscopedAliases());
+    }
+
+    public function testBackendAreaQualifiesByWebsiteIdAndKeepsRootPath(): void
+    {
+        $this->enterRequest(257, 'https://shop.test:9555/aisite_accept_ok', backend: true);
+
+        // Admin must stay on Path=/ even when the website has a storefront mount.
+        self::assertSame('/', CookieScope::resolvePath('/'));
+        self::assertSame('WELINE_SESSID_w257', CookieScope::qualifyName('WELINE_SESSID'));
+        self::assertSame('WELINE_SESSID_9555_w257', SessionCookieNameResolver::resolve('shop.test:9555'));
+        self::assertTrue(CookieScope::shouldExpireUnscopedAliases());
+    }
+
+    public function testBackendRootWebsiteUsesSameSiteSuffixAsFrontend(): void
+    {
+        $this->enterRequest(0, '', backend: true);
+
+        self::assertSame('/', CookieScope::resolvePath('/'));
+        self::assertSame('WELINE_SESSID_9555_w0', SessionCookieNameResolver::resolve('shop.test:9555'));
+        self::assertTrue(CookieScope::shouldExpireUnscopedAliases());
+    }
+
+    public function testBackendDefaultsToWebsiteZeroWhenContextWebsiteMissing(): void
+    {
+        if (Context::hasCurrent()) {
+            Context::leave();
+        }
+        RequestContext::cleanup();
+        HeaderCollector::reset();
+        CookieScope::setPolicyResolverOverride(null);
+
+        Context::enter(new Context(['meta' => ['type' => 'request', 'mode' => 'wls']]));
+        // No RequestContext id / website_id — backend still scopes to _w0 via host.
+        WelineEnv::set('is_backend', true, 'CookieScopeResolveTest');
+        WelineEnv::set('area', 'backend', 'CookieScopeResolveTest');
+        Context::current()->set('input.server.HTTP_HOST', 'shop.test:9555');
+        Context::current()->set('input.host', 'shop.test:9555');
+        Context::current()->set('route.area', RequestContext::AREA_BACKEND);
+
+        CookieScope::setPolicyResolverOverride(static function (): array {
+            $data = [
+                'active' => false,
+                'name_suffix' => '',
+                'name_suffix_pattern' => '',
+                'mount_path' => '/',
+                'expire_unscoped_aliases' => false,
+                'revision' => '',
+            ];
+            $event = new Event($data);
+            (new CookieScopeResolve())->execute($event);
+            $modified = $event->getEvenData();
+            if (\is_array($modified)) {
+                foreach ($modified as $key => $value) {
+                    $data[$key] = $value;
+                }
+            }
+
+            return $data;
+        });
+
+        self::assertSame('WELINE_SESSID_9555_w0', SessionCookieNameResolver::resolve('shop.test:9555'));
+        self::assertSame('/', CookieScope::resolvePath('/'));
+        self::assertTrue(CookieScope::shouldExpireUnscopedAliases());
     }
 
     public function testHeaderCollectorEmitsIsolatedCookieAndKeepsProtocolExact(): void
