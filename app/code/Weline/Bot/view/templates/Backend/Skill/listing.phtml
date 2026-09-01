@@ -7,7 +7,6 @@
 $skills = is_array($skills ?? null) ? $skills : [];
 $categories = is_array($categories ?? null) ? $categories : [];
 $currentCategory = trim((string)($current_category ?? ''));
-$listingUrl = $this->getBackendUrl('*/backend/skill/listing');
 
 $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
     if (is_array($item)) {
@@ -32,7 +31,7 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
             <h4 class="mb-sm-0"><?= __('Skill Management') ?></h4>
             <div class="page-title-right">
                 <ol class="breadcrumb m-0">
-                    <li class="breadcrumb-item"><a href="<?= htmlspecialchars($listingUrl, ENT_QUOTES) ?>"><?= __('Bot') ?></a></li>
+                    <li class="breadcrumb-item"><a href="@backend-url{'*/backend/skill/listing'}"><?= __('Bot') ?></a></li>
                     <li class="breadcrumb-item active"><?= __('Skills') ?></li>
                 </ol>
             </div>
@@ -50,7 +49,7 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
     <div class="col-12">
         <div class="card">
             <div class="card-body">
-                <form class="row g-2 mb-3" method="get" action="<?= htmlspecialchars($listingUrl, ENT_QUOTES) ?>">
+                <form class="row g-2 mb-3" method="get" action="@backend-url{'*/backend/skill/listing'}">
                     <div class="col-md-4">
                         <label class="form-label"><?= __('Category') ?></label>
                         <select class="form-select" name="category">
@@ -97,7 +96,7 @@ $get = static function (mixed $item, string $key, mixed $default = ''): mixed {
                                     <td><span class="badge <?= $isActive ? 'bg-success' : 'bg-secondary' ?>"><?= $isActive ? __('Enabled') : __('Disabled') ?></span></td>
                                     <td>
                                         <a class="btn btn-sm btn-outline-primary"
-                                           href="<?= htmlspecialchars($this->getBackendUrl('*/backend/skill/view?id=' . $id), ENT_QUOTES) ?>">
+                                           href="@backend-url{'*/backend/skill/view'|['id' => $id]}">
                                             <?= __('View') ?>
                                         </a>
                                     </td>
