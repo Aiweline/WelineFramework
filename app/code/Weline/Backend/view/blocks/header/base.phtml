@@ -67,7 +67,6 @@ $apiConfig = [
 $runtime = [
     'env' => ['WELINE_ENV' => DEV ? 'DEV' : 'PROD', 'DEV' => DEV, 'PROD' => !DEV],
     'area' => 'backend',
-    'baseUrl' => (string)$this->request->getBaseUrl(),
     'modulesConfigUrl' => DEV
         ? '/Weline/Backend/view/statics/base/weline.modules.js'
         : '/static/Weline/Backend/base/weline.modules.js',
@@ -121,8 +120,13 @@ $runtime = [
 ];
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP
     | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_INVALID_UTF8_SUBSTITUTE;
+$runtimeJson = json_encode($runtime, $jsonFlags);
+if (!is_string($runtimeJson) || $runtimeJson === '' || $runtimeJson[0] !== '{') {
+    $runtimeJson = '{}';
+}
+$runtimeJsonTailBody = substr($runtimeJson, 1); // drop leading "{"
 ?>
-<script type="application/json" id="weline-backend-runtime-config" data-weline-runtime-config><?= json_encode($runtime, $jsonFlags) ?: '{}' ?></script>
+<script type="application/json" id="weline-backend-runtime-config" data-weline-runtime-config>{"baseUrl":"@backend-url{'/'}",<?= $runtimeJsonTailBody ?></script>
 <meta name="weline-worker-backend-bootstrap-slot" content="">
 <w:js>Weline_Backend::js/runtime.js</w:js>
 <w:js>Weline_Backend::js/cookie.js</w:js>

@@ -51,7 +51,7 @@ $keyword = $keyword ?? '';
     <div style="--w-span-lg:12;">
         <div class="w-card">
             <div class="w-card__body">
-                <w:form method="get" action="@var($this->getBackendUrl('*/backend/access-log'))" class="w-grid" style="--w-gap:var(--weline-space-4);">
+                <w:form method="get" action="@backend-url{'*/backend/access-log'}" class="w-grid" style="--w-gap:var(--weline-space-4);">
                     <div style="--w-span-md:9;">
                         <label class="w-field__label"><lang>关键词</lang></label>
                         <input type="text" class="w-input" name="keyword" value="<?= htmlspecialchars($keyword) ?>" placeholder="<?= __('搜索IP地址或URL') ?>">
@@ -62,7 +62,7 @@ $keyword = $keyword ?? '';
                             <button type="submit" class="w-button" data-tone="primary">
                                 <w:icon name="search" size="sm"></w:icon><lang>搜索</lang>
                             </button>
-                            <a href="<?= $this->getBackendUrl('*/backend/access-log') ?>" class="w-button" data-tone="neutral">
+                            <a href="@backend-url{'*/backend/access-log'}" class="w-button" data-tone="neutral">
                                 <w:icon name="refresh" size="sm"></w:icon><lang>重置</lang>
                             </a>
                         </div>

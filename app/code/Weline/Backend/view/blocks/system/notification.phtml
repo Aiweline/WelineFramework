@@ -16,40 +16,7 @@ $closeLabel = $escape(__('关闭通知'));
 $emptyLabel = $escape(__('暂无通知'));
 $allLabel = $escape(__('查看全部'));
 $subscriptionLabel = $escape(__('管理订阅'));
-$allUrl = $escape($this->getBackendUrl('system/backend/notification'));
-$subscriptionUrl = $escape($this->getBackendUrl('system/backend/notificationsubscription'));
-$triggerBadgeHtml = '';
-$headerBadgeHtml = '';
-if ($unreadCount > 0) {
-    $displayUnreadCount = $unreadCount > 99 ? '99+' : (string)(int)$unreadCount;
-    $triggerBadgeHtml = '<span class="w-notification-trigger__badge" aria-label="' . $unreadLabel . '">' . $displayUnreadCount . '</span>';
-    $headerBadgeHtml = '<span class="w-badge" data-tone="info">' . (int)$unreadCount . '</span>';
-}
-
-$notificationsHtml = '';
-if ($notifications === []) {
-    $notificationsHtml = '<div class="w-empty-state" role="status">'
-        . $iconRegistry->render('bell', 'lg')
-        . '<p>' . $emptyLabel . '</p></div>';
-} else {
-    foreach ($notifications as $notification) {
-        $type = strtolower((string)($notification['type'] ?? 'info'));
-        $notificationId = (int)($notification['notification_id'] ?? 0);
-        $detailUrl = $escape($this->getBackendUrl('system/backend/notification/detail', ['id' => $notificationId]));
-        $isRead = (bool)($notification['is_read'] ?? false);
-        $content = strip_tags((string)($notification['content'] ?? ''));
-        $shortContent = mb_substr($content, 0, 80) . (mb_strlen($content) > 80 ? '…' : '');
-        $tone = in_array($type, ['success', 'warning', 'error', 'urgent', 'info'], true) ? $type : 'info';
-        $notificationsHtml .= '<a class="w-menu__item w-notification-item" role="menuitem" href="' . $detailUrl . '" data-state="' . ($isRead ? 'read' : 'unread') . '">'
-            . '<span class="w-notification-item__icon" data-tone="' . $tone . '">'
-            . $iconRegistry->render($block->getTypeIcon($type), 'sm')
-            . '</span><span class="w-notification-item__content">'
-            . '<strong>' . $escape($notification['title'] ?? '') . '</strong>'
-            . '<span>' . $escape($shortContent) . '</span>'
-            . '<small>' . $escape($notification['notification_time'] ?? '') . '</small>'
-            . '</span></a>';
-    }
-}
+$detailPath = 'system/backend/notification/detail';
 ?>
 <div class="w-backend-topbar__menu w-menu-root" data-w-component="menu" data-w-placement="bottom-end" data-w-anchor-mode="element">
     <button
@@ -64,13 +31,17 @@ if ($notifications === []) {
         aria-label="<?= $notificationLabel ?>"
     >
         <w:icon name="bell" />
-        <?php echo $triggerBadgeHtml; ?>
+        <?php if ($unreadCount > 0): ?>
+            <span class="w-notification-trigger__badge" aria-label="<?= $unreadLabel ?>"><?= $unreadCount > 99 ? '99+' : (int)$unreadCount ?></span>
+        <?php endif; ?>
     </button>
     <div id="w-backend-notification-menu" class="w-menu w-notification-menu" data-w-menu-panel data-state="closed" role="menu" aria-labelledby="w-backend-notification-trigger" aria-hidden="true" hidden>
         <div class="w-notification-menu__header">
             <strong><?= $notificationLabel ?></strong>
             <span class="w-notification-menu__header-actions">
-                <?php echo $headerBadgeHtml; ?>
+                <?php if ($unreadCount > 0): ?>
+                    <span class="w-badge" data-tone="info"><?= (int)$unreadCount ?></span>
+                <?php endif; ?>
                 <button
                     class="w-button w-notification-menu__close"
                     data-tone="quiet"
@@ -82,11 +53,38 @@ if ($notifications === []) {
             </span>
         </div>
         <div class="w-notification-menu__list">
-            <?php echo $notificationsHtml; ?>
+            <?php if ($notifications === []): ?>
+                <div class="w-empty-state" role="status">
+                    <?php echo $iconRegistry->render('bell', 'lg'); ?>
+                    <p><?= $emptyLabel ?></p>
+                </div>
+            <?php else: ?>
+                <?php foreach ($notifications as $notification): ?>
+                    <?php
+                    $type = strtolower((string)($notification['type'] ?? 'info'));
+                    $notificationId = (int)($notification['notification_id'] ?? 0);
+                    $detailParams = ['id' => $notificationId];
+                    $isRead = (bool)($notification['is_read'] ?? false);
+                    $content = strip_tags((string)($notification['content'] ?? ''));
+                    $shortContent = mb_substr($content, 0, 80) . (mb_strlen($content) > 80 ? '…' : '');
+                    $tone = in_array($type, ['success', 'warning', 'error', 'urgent', 'info'], true) ? $type : 'info';
+                    ?>
+                    <a class="w-menu__item w-notification-item" role="menuitem" href="@backend-url{$detailPath|$detailParams}" data-state="<?= $isRead ? 'read' : 'unread' ?>">
+                        <span class="w-notification-item__icon" data-tone="<?= $escape($tone) ?>">
+                            <?php echo $iconRegistry->render($block->getTypeIcon($type), 'sm'); ?>
+                        </span>
+                        <span class="w-notification-item__content">
+                            <strong><?= $escape($notification['title'] ?? '') ?></strong>
+                            <span><?= $escape($shortContent) ?></span>
+                            <small><?= $escape($notification['notification_time'] ?? '') ?></small>
+                        </span>
+                    </a>
+                <?php endforeach; ?>
+            <?php endif; ?>
         </div>
         <div class="w-notification-menu__footer">
-            <a class="w-button" data-size="sm" href="<?= $allUrl ?>"><?= $allLabel ?></a>
-            <a class="w-button" data-size="sm" data-tone="neutral" href="<?= $subscriptionUrl ?>"><w:icon name="settings" size="sm" /><span class="w-visually-hidden"><?= $subscriptionLabel ?></span></a>
+            <a class="w-button" data-size="sm" href="@backend-url{'system/backend/notification'}"><?= $allLabel ?></a>
+            <a class="w-button" data-size="sm" data-tone="neutral" href="@backend-url{'system/backend/notificationsubscription'}"><w:icon name="settings" size="sm" /><span class="w-visually-hidden"><?= $subscriptionLabel ?></span></a>
         </div>
     </div>
 </div>

@@ -14,7 +14,7 @@ $notifications = is_array($notifications ?? null) ? $notifications : [];
 $pagination = is_array($pagination ?? null) ? $pagination : ['page' => 1, 'pages' => 1, 'total' => 0];
 $filter = is_array($filter ?? null) ? $filter : ['keyword' => '', 'type' => '', 'read' => 'all'];
 $typeOptions = is_array($type_options ?? null) ? $type_options : [];
-$baseUrl = $this->getBackendUrl('system/backend/notification');
+$notificationPath = 'system/backend/notification';
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 $queryParams = static function (array $overrides = []) use ($filter): array {
     return array_merge(array_filter([
@@ -23,9 +23,8 @@ $queryParams = static function (array $overrides = []) use ($filter): array {
         'read' => ($filter['read'] ?? 'all') !== 'all' ? (string)($filter['read'] ?? '') : '',
     ], static fn(mixed $value): bool => $value !== ''), $overrides);
 };
-$pageLink = static function (int $page) use ($baseUrl, $queryParams): string {
-    $params = $queryParams(['page' => max(1, $page)]);
-    return $params === [] ? $baseUrl : $baseUrl . '?' . http_build_query($params);
+$pageLinkParams = static function (int $page) use ($queryParams): array {
+    return $queryParams(['page' => max(1, $page)]);
 };
 $currentPage = max(1, (int)($pagination['page'] ?? 1));
 $totalPages = max(1, (int)($pagination['pages'] ?? 1));
@@ -41,12 +40,13 @@ $renderIcon = static function (string $name, string $size = 'md') use ($icons, &
 };
 ?>
 <link rel="stylesheet" href="@static(Weline_Backend::css/notification-center.css)">
+<w:js>Weline_Backend::js/notification-center.js</w:js>
 
 <section
     class="w-notification-center w-stack"
     data-w-component="notification-center"
     data-w-mode="index"
-    data-w-mark-all-url="<?= $escape($this->getBackendUrl('system/backend/notification/markAllRead')) ?>"
+    data-w-mark-all-url="@backend-url{'system/backend/notification/markAllRead'}"
     data-w-confirm-all="<?= $escape(__('确定要将所有通知标记为已读吗？')) ?>"
     data-w-success-message="<?= $escape(__('已标记全部已读')) ?>"
     data-w-failure-message="<?= $escape(__('操作失败')) ?>"
@@ -55,7 +55,7 @@ $renderIcon = static function (string $name, string $size = 'md') use ($icons, &
     <header class="w-notification-center__heading">
         <p class="w-text" data-tone="muted"><lang>集中查看系统消息、告警与业务提醒。</lang></p>
         <div class="w-notification-center__actions">
-            <a href="<?= $escape($this->getBackendUrl('system/backend/notificationsubscription')) ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
+            <a href="@backend-url{'system/backend/notificationsubscription'}" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
                 <w:icon name="settings" size="sm" /><lang>管理订阅</lang>
             </a>
             <?php if ($notifications !== []): ?>
@@ -68,7 +68,7 @@ $renderIcon = static function (string $name, string $size = 'md') use ($icons, &
 
     <template>Weline_Component::message.phtml</template>
 
-    <form class="w-card w-notification-filter" method="get" action="<?= $escape($baseUrl) ?>">
+    <form class="w-card w-notification-filter" method="get" action="@backend-url{$notificationPath}">
         <div class="w-card__body w-notification-filter__fields">
             <input type="hidden" name="page" value="1">
             <label class="w-field w-notification-filter__keyword">
@@ -96,7 +96,7 @@ $renderIcon = static function (string $name, string $size = 'md') use ($icons, &
                 <button type="submit" class="w-button" data-tone="primary" data-size="sm">
                     <w:icon name="search" size="sm" /><lang>搜索</lang>
                 </button>
-                <a href="<?= $escape($baseUrl) ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"><lang>重置</lang></a>
+                <a href="@backend-url{$notificationPath}" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm"><lang>重置</lang></a>
             </div>
         </div>
     </form>
@@ -122,14 +122,14 @@ $renderIcon = static function (string $name, string $size = 'md') use ($icons, &
                 $iconHtml = $renderIcon($icon !== '' ? $icon : 'bell', 'md');
                 $content = strip_tags((string)($notification['content'] ?? ''));
                 $notificationId = max(0, (int)($notification['notification_id'] ?? 0));
-                $detailHref = $escape($this->getBackendUrl('system/backend/notification/detail', ['id' => $notificationId]));
+                
                 $itemState = $isRead ? 'read' : 'unread';
                 $toneAttr = $escape($tone);
                 $rawTime = (string)($notification['notification_time'] ?? '');
                 $displayTime = preg_replace('/\.\d+$/', '', $rawTime) ?? $rawTime;
                 ?>
                 <a
-                    href="<?= $detailHref ?>"
+                    href="@backend-url{'system/backend/notification/detail'|['id' => $notificationId]}"
                     class="w-notification-center__item"
                     data-state="<?= $itemState ?>"
                 >
@@ -163,13 +163,13 @@ $renderIcon = static function (string $name, string $size = 'md') use ($icons, &
                     <nav aria-label="<?= $escape(__('通知分页')) ?>">
                         <ul class="w-pagination" data-justify="center">
                             <?php if ($currentPage > 1): ?>
-                                <li class="w-pagination__item"><a class="w-pagination__link" href="<?= $escape($pageLink($currentPage - 1)) ?>" aria-label="<?= $escape(__('上一页')) ?>"><w:icon name="chevron-left" size="sm" /></a></li>
+                                <li class="w-pagination__item"><a class="w-pagination__link" href="@backend-url{$notificationPath|$pageLinkParams($currentPage - 1)}" aria-label="<?= $escape(__('上一页')) ?>"><w:icon name="chevron-left" size="sm" /></a></li>
                             <?php endif; ?>
                             <?php for ($page = max(1, $currentPage - 2); $page <= min($totalPages, $currentPage + 2); $page++): ?>
-                                <li class="w-pagination__item"><a class="w-pagination__link" href="<?= $escape($pageLink($page)) ?>" <?= $page === $currentPage ? 'aria-current="page"' : '' ?>><?= $page ?></a></li>
+                                <li class="w-pagination__item"><a class="w-pagination__link" href="@backend-url{$notificationPath|$pageLinkParams($page)}" <?= $page === $currentPage ? 'aria-current="page"' : '' ?>><?= $page ?></a></li>
                             <?php endfor; ?>
                             <?php if ($currentPage < $totalPages): ?>
-                                <li class="w-pagination__item"><a class="w-pagination__link" href="<?= $escape($pageLink($currentPage + 1)) ?>" aria-label="<?= $escape(__('下一页')) ?>"><w:icon name="chevron-right" size="sm" /></a></li>
+                                <li class="w-pagination__item"><a class="w-pagination__link" href="@backend-url{$notificationPath|$pageLinkParams($currentPage + 1)}" aria-label="<?= $escape(__('下一页')) ?>"><w:icon name="chevron-right" size="sm" /></a></li>
                             <?php endif; ?>
                         </ul>
                     </nav>

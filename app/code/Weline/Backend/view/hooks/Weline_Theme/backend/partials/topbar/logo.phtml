@@ -16,9 +16,8 @@ if ($logoSm === '') {
     $logoSm = $siteBrand->resolveIconUrl($this, 50);
 }
 
-$homeUrl = $this->getBackendUrl('admin');
 ?>
-<a href="<?= htmlspecialchars($homeUrl) ?>" class="logo logo-dark">
+<a href="@backend-url{'admin'}" class="logo logo-dark">
     <span class="logo-sm">
         <img src="<?= htmlspecialchars($logoSm) ?>" alt="logo-sm-dark" height="50">
     </span>
@@ -26,7 +25,7 @@ $homeUrl = $this->getBackendUrl('admin');
         <img src="<?= htmlspecialchars($logoDark) ?>" alt="logo-dark" height="70">
     </span>
 </a>
-<a href="<?= htmlspecialchars($homeUrl) ?>" class="logo logo-light">
+<a href="@backend-url{'admin'}" class="logo logo-light">
     <span class="logo-sm">
         <img src="<?= htmlspecialchars($logoSm) ?>" alt="logo-sm-light" height="50">
     </span>

@@ -100,7 +100,7 @@ $backendDefaultLanguage = (string)($settings['language'] ?? 'zh_Hans_CN');
         save: function(event) {
             event.preventDefault();
             var formData = new FormData(event.target);
-            Weline.adminRequest('backend_admin', '<?= $this->getBackendUrl('*/backend/settings/basic/save') ?>', { method: 'POST', body: formData })
+            Weline.adminRequest('backend_admin', '@backend-url{'*/backend/settings/basic/save'}', { method: 'POST', body: formData })
             .then(function(response) {
                 var data = (function(r){ var b=window.WelineApiBusiness||(window.Weline&&window.Weline.ApiBusiness); return (b&&typeof b.unwrapBusiness==='function')?b.unwrapBusiness(r):r.data; })(response);
                 var Toast = window.Weline.UI.toast || window.Weline.UI.toast;

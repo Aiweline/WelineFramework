@@ -75,6 +75,15 @@ final class PageHeaderResolver
                 if ($current->getId()) {
                     return $current;
                 }
+
+                // menu.xml 允许 action 携带 query（如 target_scope）；库内按「路径?…」存储。
+                $withQuery = $menu->clear()->reset()
+                    ->where(Menu::schema_fields_ACTION, $candidate . '?%', 'like')
+                    ->find()
+                    ->fetch();
+                if ($withQuery->getId()) {
+                    return $withQuery;
+                }
             }
         }
 
@@ -106,8 +115,13 @@ final class PageHeaderResolver
                     $lookup[$source] = $item;
                 }
                 $action = strtolower(trim((string)($item['action'] ?? ''), '/'));
-                if ($action !== '') {
-                    $byAction[$action] = $item;
+                if ($action === '') {
+                    continue;
+                }
+                $byAction[$action] = $item;
+                $pathOnly = strtolower($this->actionPath($action));
+                if ($pathOnly !== '' && !isset($byAction[$pathOnly])) {
+                    $byAction[$pathOnly] = $item;
                 }
             }
         }
@@ -166,9 +180,50 @@ final class PageHeaderResolver
     private function isExactActionMatch(Request $request, string $action): bool
     {
         $routePath = strtolower(trim($request->getRouteUrlPath(), '/'));
-        $normalizedAction = strtolower(trim($action, '/'));
+        $normalizedAction = strtolower($this->actionPath($action));
 
         return $routePath !== '' && $normalizedAction !== '' && $routePath === $normalizedAction;
+    }
+
+    /**
+     * 菜单 action 可能带 query（对象 Scope 深链）；页头匹配只比路径。
+     */
+    private function actionPath(string $action): string
+    {
+        $action = trim($action);
+        $action = ltrim($action, '/');
+        $queryAt = strpos($action, '?');
+        if ($queryAt !== false) {
+            $action = substr($action, 0, $queryAt);
+        }
+
+        return trim($action, '/');
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function actionQueryParams(string $action): array
+    {
+        $queryAt = strpos($action, '?');
+        if ($queryAt === false) {
+            return [];
+        }
+        $query = substr($action, $queryAt + 1);
+        $params = [];
+        parse_str($query, $params);
+
+        return \is_array($params) ? $params : [];
+    }
+
+    private function backendActionUrl(Request $request, string $action): string
+    {
+        $path = $this->actionPath($action);
+        if ($path === '') {
+            return '';
+        }
+
+        return $request->getUrlBuilder()->getBackendUrl($path, $this->actionQueryParams($action), false);
     }
 
     /** @return list<array{title:string,url:string,active:bool}> */
@@ -256,7 +311,7 @@ final class PageHeaderResolver
         $action = trim((string)$menu->getData(Menu::schema_fields_ACTION), '/');
         return [
             'title' => $this->menuTitle($menu),
-            'url' => $active || $action === '' ? '' : $request->getUrlBuilder()->getBackendUrl('/' . $action),
+            'url' => $active || $action === '' ? '' : $this->backendActionUrl($request, $action),
             'active' => $active,
         ];
     }
@@ -267,7 +322,7 @@ final class PageHeaderResolver
         $action = trim((string)($menu['action'] ?? ''), '/');
         return [
             'title' => $this->configTitle($menu),
-            'url' => $active || $action === '' ? '' : $request->getUrlBuilder()->getBackendUrl('/' . $action),
+            'url' => $active || $action === '' ? '' : $this->backendActionUrl($request, $action),
             'active' => $active,
         ];
     }

@@ -193,7 +193,7 @@ $channels = $channels ?? [];
             var formData = new FormData(form);
             var bodyStr = new URLSearchParams(formData).toString();
 
-            var url = '<?= $this->getBackendUrl('*/backend/usercontact/save') ?>';
+            var url = '@backend-url{'*/backend/usercontact/save'}';
             var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: bodyStr };
             Weline.adminRequest('backend_admin', url, opts)
             .then(function(res) {
@@ -220,7 +220,7 @@ $channels = $channels ?? [];
             Weline.UI.dialog.confirm('<?= __('确定要将此联系人设为默认吗？') ?>').then(function(confirmed) {
                 if (!confirmed) return;
 
-                var url = '<?= $this->getBackendUrl('*/backend/usercontact/setDefault') ?>';
+                var url = '@backend-url{'*/backend/usercontact/setDefault'}';
                 var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'contact_id=' + contactId };
                 Weline.adminRequest('backend_admin', url, opts)
                 .then(function(res) {
@@ -243,7 +243,7 @@ $channels = $channels ?? [];
             Weline.UI.dialog.confirm('<?= __('确定要删除此联系人吗？') ?>').then(function(confirmed) {
                 if (!confirmed) return;
 
-                var url = '<?= $this->getBackendUrl('*/backend/usercontact/delete') ?>';
+                var url = '@backend-url{'*/backend/usercontact/delete'}';
                 var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'contact_id=' + contactId };
                 Weline.adminRequest('backend_admin', url, opts)
                 .then(function(res) {

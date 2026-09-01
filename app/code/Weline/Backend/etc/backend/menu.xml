@@ -27,8 +27,24 @@
         <menu source="Weline_Backend::commerce:catalog:group"
               name="commerce_catalog_group"
               title="商品与目录"
-              icon="close"
-              order="800"/>
+              icon="box"
+              order="800">
+            <menu source="Weline_Backend::commerce:catalog:product-group"
+                  name="commerce_catalog_product_group"
+                  title="商品运营"
+                  icon="box"
+                  order="100"/>
+            <menu source="Weline_Backend::commerce:catalog:taxonomy-group"
+                  name="commerce_catalog_taxonomy_group"
+                  title="分类体系"
+                  icon="tree"
+                  order="200"/>
+            <menu source="Weline_Backend::commerce:catalog:advanced-group"
+                  name="commerce_catalog_advanced_group"
+                  title="高级维护"
+                  icon="settings"
+                  order="300"/>
+        </menu>
         <menu source="Weline_Backend::commerce:inventory:group"
               name="commerce_inventory_group"
               title="库存与仓储"

@@ -5,15 +5,16 @@ declare(strict_types=1);
 namespace Weline\Backend\Block\System;
 
 use Weline\Backend\Enum\NotificationType;
-use Weline\Backend\Model\SystemNotification;
-use Weline\Backend\Model\UserNotificationStatus;
 use Weline\Backend\Service\BackendWarmupContext;
 use Weline\Backend\Service\NotificationService;
+use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Block;
 
 class Notification extends Block
 {
+    public const INBOX_REVISION_SESSION_KEY = 'backend_notification_inbox_rev';
+
     private const NOTIFICATION_CACHE_TTL = 15.0;
 
     public string $_template = 'Weline_Backend::blocks/system/notification.phtml';
@@ -65,9 +66,25 @@ class Notification extends Block
         return NotificationType::fromString($type)->getLabel();
     }
 
+    /**
+     * Drop process-local unread/list snapshot after mark-as-read mutations.
+     */
+    public static function clearCache(?int $userId = null): void
+    {
+        if ($userId === null) {
+            self::$notificationCache = [];
+            return;
+        }
+        unset(self::$notificationCache[$userId]);
+    }
+
     private function getLoginUserId(): int
     {
-        if (\class_exists(BackendWarmupContext::class)) {
+        // Warmup identity is valid only on the explicitly marked internal
+        // warmup request. Never let a stale RequestContext value outrank the
+        // authenticated browser session in a long-running WLS worker.
+        $request = ObjectManager::getInstance(Request::class);
+        if (BackendWarmupContext::isInternalWarmupRequest($request)) {
             $warmupUserId = BackendWarmupContext::currentUserId();
             if ($warmupUserId > 0) {
                 return $warmupUserId;
@@ -75,7 +92,11 @@ class Notification extends Block
         }
 
         $session = \Weline\Framework\Session\SessionFactory::getInstance()->createBackendSession();
-        return (int) ($session->getUserId() ?? 0);
+        if (\method_exists($session, 'getLoginUserID')) {
+            return (int)($session->getLoginUserID() ?? 0);
+        }
+
+        return (int)($session->getUserId() ?? 0);
     }
 
     /**
