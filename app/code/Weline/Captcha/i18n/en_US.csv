@@ -30,6 +30,8 @@ cloud,cloud
 "测试 Google reCAPTCHA Enterprise 连接","Test Google reCAPTCHA Enterprise connection"
 link,link
 "撤销 Google reCAPTCHA Enterprise 授权","Revoke Google reCAPTCHA Enterprise authorization"
+刷新,刷新
+刷新验证码,刷新验证码
 "撤销 Google 授权","Revoke Google authorization"
 "此操作会撤销远端 Token，并删除本地 Access Token 与 Refresh Token；现有 Project 和 Site Key 不会被删除。","This revokes the remote token and deletes local access and refresh tokens; existing Projects and Site Keys are not deleted."
 确认撤销授权,"Confirm authorization revocation"
