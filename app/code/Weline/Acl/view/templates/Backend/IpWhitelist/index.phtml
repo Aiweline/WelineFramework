@@ -41,7 +41,7 @@ $keyword = $keyword ?? '';
     <div style="--w-span-lg:12;">
         <div class="w-card">
             <div class="w-card__body">
-                <w:form method="get" action="@var($this->getBackendUrl('*/backend/ip-whitelist'))" class="w-grid" style="--w-gap:var(--weline-space-4);">
+                <w:form method="get" action="@backend-url{'*/backend/ip-whitelist'}" class="w-grid" style="--w-gap:var(--weline-space-4);">
                     <div style="--w-span-md:9;">
                         <label class="w-field__label"><lang>关键词</lang></label>
                         <input type="text" class="w-input" name="keyword" value="<?= htmlspecialchars($keyword) ?>" placeholder="<?= __('搜索IP地址或描述') ?>">
@@ -52,7 +52,7 @@ $keyword = $keyword ?? '';
                             <button type="submit" class="w-button" data-tone="primary">
                                 <w:icon name="search" size="sm"></w:icon><lang>搜索</lang>
                             </button>
-                            <a href="<?= $this->getBackendUrl('*/backend/ip-whitelist') ?>" class="w-button" data-tone="neutral">
+                            <a href="@backend-url{'*/backend/ip-whitelist'}" class="w-button" data-tone="neutral">
                                 <w:icon name="refresh" size="sm"></w:icon><lang>重置</lang>
                             </a>
                         </div>
@@ -270,8 +270,8 @@ $keyword = $keyword ?? '';
             return;
         }
         var url = id === '0' 
-            ? '<?= $this->getBackendUrl('*/backend/ip-whitelist/add') ?>'
-            : '<?= $this->getBackendUrl('*/backend/ip-whitelist/edit') ?>';
+            ? '@backend-url{'*/backend/ip-whitelist/add'}'
+            : '@backend-url{'*/backend/ip-whitelist/edit'}';
         
         Weline.adminRequest('acl', url, {
             method: 'POST',
@@ -306,7 +306,7 @@ $keyword = $keyword ?? '';
             var formData = new FormData();
             formData.append('id', id);
             
-            var url = '<?= $this->getBackendUrl('*/backend/ip-whitelist/toggle') ?>';
+            var url = '@backend-url{'*/backend/ip-whitelist/toggle'}';
             var opts = { method: 'POST', body: formData };
             Weline.adminRequest('acl', url, opts)
             .then(function(res) {
@@ -333,7 +333,7 @@ $keyword = $keyword ?? '';
             var formData = new FormData();
             formData.append('id', id);
             
-            var url = '<?= $this->getBackendUrl('*/backend/ip-whitelist/delete') ?>';
+            var url = '@backend-url{'*/backend/ip-whitelist/delete'}';
             var opts = { method: 'POST', body: formData };
             Weline.adminRequest('acl', url, opts)
             .then(function(res) {

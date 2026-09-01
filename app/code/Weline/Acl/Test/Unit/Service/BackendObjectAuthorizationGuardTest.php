@@ -52,6 +52,9 @@ final class BackendObjectAuthorizationGuardTest extends TestCase
         } catch (FrontendQueryException $exception) {
             self::assertSame('object_scope_access_denied', $exception->getErrorCode());
             self::assertSame(403, $exception->getHttpStatus());
+            if (\defined('DEV') && DEV) {
+                self::assertStringContainsString('reason=missing_backend_identity', $exception->getMessage());
+            }
         }
     }
 

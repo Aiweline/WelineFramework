@@ -16,13 +16,13 @@ $value = static function (mixed $role, string $key, mixed $default = ''): mixed 
     }
     return $default;
 };
-$listUrl = $this->getBackendUrl('*/backend/acl/role');
-$pageUrl = static function (int $number) use ($listUrl, $search): string {
+$listPath = '*/backend/acl/role';
+$pageParams = static function (int $number) use ($search): array {
     $params = ['page' => max(1, $number)];
     if ($search !== '') {
         $params['search'] = $search;
     }
-    return $listUrl . '?' . http_build_query($params);
+    return $params;
 };
 ?>
 
@@ -47,13 +47,13 @@ $pageUrl = static function (int $number) use ($listUrl, $search): string {
 
     <section class="w-card">
         <header class="w-card__header w-toolbar">
-            <form class="w-cluster" method="get" action="<?= $escape($listUrl) ?>" role="search">
+            <form class="w-cluster" method="get" action="@backend-url{$listPath}" role="search">
                 <label class="w-field">
                     <span class="w-visually-hidden"><?= $escape(__('搜索角色')) ?></span>
                     <input class="w-input" type="search" name="search" value="<?= $escape($search) ?>" placeholder="<?= $escape(__('搜索名称或描述')) ?>">
                 </label>
                 <button class="w-button" type="submit" data-tone="neutral"><w:icon name="search" size="sm"></w:icon><?= $escape(__('搜索')) ?></button>
-                <?php if ($search !== ''): ?><a class="w-button" data-tone="quiet" href="<?= $escape($listUrl) ?>"><?= $escape(__('清除')) ?></a><?php endif; ?>
+                <?php if ($search !== ''): ?><a class="w-button" data-tone="quiet" href="@backend-url{$listPath}"><?= $escape(__('清除')) ?></a><?php endif; ?>
             </form>
             <button class="w-button" type="button" data-tone="primary" data-w-action="drawer.open" data-w-target="#w-role-create"><w:icon name="plus" size="sm"></w:icon><?= $escape(__('添加角色')) ?></button>
         </header>
@@ -95,11 +95,11 @@ $pageUrl = static function (int $number) use ($listUrl, $search): string {
             <footer class="w-card__footer">
                 <nav aria-label="<?= $escape(__('角色分页')) ?>">
                     <ul class="w-pagination">
-                        <li class="w-pagination__item"><a class="w-pagination__link" href="<?= $escape($pageUrl(max(1, $page - 1))) ?>" <?= $page <= 1 ? 'aria-disabled="true" tabindex="-1"' : '' ?>><?= $escape(__('上一页')) ?></a></li>
+                        <li class="w-pagination__item"><a class="w-pagination__link" href="@backend-url{$listPath|$pageParams(max(1, $page - 1))}" <?= $page <= 1 ? 'aria-disabled="true" tabindex="-1"' : '' ?>><?= $escape(__('上一页')) ?></a></li>
                         <?php for ($number = max(1, $page - 2), $end = min($lastPage, $page + 2); $number <= $end; ++$number): ?>
-                            <li class="w-pagination__item" <?= $number === $page ? 'data-state="active"' : '' ?>><a class="w-pagination__link" href="<?= $escape($pageUrl($number)) ?>" <?= $number === $page ? 'aria-current="page"' : '' ?>><?= $number ?></a></li>
+                            <li class="w-pagination__item" <?= $number === $page ? 'data-state="active"' : '' ?>><a class="w-pagination__link" href="@backend-url{$listPath|$pageParams($number)}" <?= $number === $page ? 'aria-current="page"' : '' ?>><?= $number ?></a></li>
                         <?php endfor; ?>
-                        <li class="w-pagination__item"><a class="w-pagination__link" href="<?= $escape($pageUrl(min($lastPage, $page + 1))) ?>" <?= $page >= $lastPage ? 'aria-disabled="true" tabindex="-1"' : '' ?>><?= $escape(__('下一页')) ?></a></li>
+                        <li class="w-pagination__item"><a class="w-pagination__link" href="@backend-url{$listPath|$pageParams(min($lastPage, $page + 1))}" <?= $page >= $lastPage ? 'aria-disabled="true" tabindex="-1"' : '' ?>><?= $escape(__('下一页')) ?></a></li>
                     </ul>
                 </nav>
             </footer>
