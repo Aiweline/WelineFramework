@@ -8,7 +8,8 @@ $value = static function (mixed $item, string $key, mixed $default = ''): mixed 
     return $default;
 };
 $roleId = max(0, (int)$value($role, 'role_id'));
-$action = (string)($this->getData('action') ?: $this->getBackendUrl('*/backend/acl/role/add'));
+$actionPath = '*/backend/acl/role/add';
+$action = (string)($this->getData('action') ?: '');
 ?>
 <main class="w-backend-page w-stack">
     <header class="w-backend-page__heading">
@@ -17,7 +18,7 @@ $action = (string)($this->getData('action') ?: $this->getBackendUrl('*/backend/a
     </header>
     <section class="w-card">
         <div class="w-card__body">
-            <form class="w-form w-stack" action="<?= $escape($action) ?>" method="post">
+            <form class="w-form w-stack" action="<?php if ($action !== ''): ?><?= $escape($action) ?><?php else: ?>@backend-url{$actionPath}<?php endif; ?>" method="post">
                 <input type="hidden" name="form_key" value="<?= $escape($this->getFormKeyValue()) ?>">
                 <?php if ($roleId > 0): ?><input type="hidden" name="role_id" value="<?= $roleId ?>"><?php endif; ?>
                 <label class="w-field"><span class="w-field__label"><?= $escape(__('角色名')) ?></span><input class="w-input" type="text" name="role_name" value="<?= $escape($value($role, 'role_name')) ?>" required maxlength="120" autocomplete="off"><span class="w-field__error"><?= $escape(__('请输入角色名称')) ?></span></label>

@@ -67,7 +67,7 @@ final class BackendObjectAuthorizationGuard implements BackendObjectAuthorizatio
         $result = $this->check($action, $scope);
         if (!$result->allowed) {
             $this->audit($action, $scope, $result, 'read');
-            $this->deny();
+            $this->deny($result, $action, $scope);
         }
 
         return $result;
@@ -81,7 +81,7 @@ final class BackendObjectAuthorizationGuard implements BackendObjectAuthorizatio
         $result = $this->checkForSubmit($action, $scope, $expectedGrantVersion);
         $this->audit($action, $scope, $result, 'submit');
         if (!$result->allowed) {
-            $this->deny();
+            $this->deny($result, $action, $scope);
         }
 
         return $result;
@@ -89,13 +89,9 @@ final class BackendObjectAuthorizationGuard implements BackendObjectAuthorizatio
 
     public function denyForQuery(string $action, ScopeIdentity $scope): never
     {
-        $this->audit(
-            $action,
-            $scope,
-            ObjectAuthorizationResult::deny('object_not_accessible'),
-            'read',
-        );
-        $this->deny();
+        $result = ObjectAuthorizationResult::deny('object_not_accessible');
+        $this->audit($action, $scope, $result, 'read');
+        $this->deny($result, $action, $scope);
     }
 
     /**
@@ -140,11 +136,26 @@ final class BackendObjectAuthorizationGuard implements BackendObjectAuthorizatio
         );
     }
 
-    private function deny(): never
+    private function deny(ObjectAuthorizationResult $result, string $action, ScopeIdentity $scope): never
     {
+        $message = \function_exists('__')
+            ? (string)\__('操作授权条件不满足')
+            : '操作授权条件不满足';
+        if (\defined('DEV') && DEV) {
+            $actor = $this->currentActor();
+            $message .= \sprintf(
+                ' [code=%s reason=%s action=%s scope=%s role_id=%d]',
+                self::FIXED_ERROR_CODE,
+                $result->reason,
+                $action,
+                $scope->toLegacyScopeString(),
+                $actor['role_id'],
+            );
+        }
+
         throw new FrontendQueryException(
             self::FIXED_ERROR_CODE,
-            (string)\__('操作授权条件不满足'),
+            $message,
             403,
         );
     }

@@ -9,12 +9,15 @@ $tagGrants = array_fill_keys(array_map('strval', is_array($this->getData('tag_gr
 $assignRole = is_array($this->getData('assign_role')) ? $this->getData('assign_role') : [];
 $userRole = $this->getData('user_role');
 $assignmentMode = (string)($this->getData('assignment_mode') ?: 'role');
-$assignmentAction = (string)($this->getData('assignment_action') ?: $this->getBackendUrl('*/backend/acl/role/assign'));
+$assignmentActionPath = '*/backend/acl/role/assign';
+$assignmentAction = (string)($this->getData('assignment_action') ?: '');
 $assignmentIdentifierName = (string)($this->getData('assignment_identifier_name') ?: 'role_id');
 $assignmentIdentifierValue = max(0, (int)($this->getData('assignment_identifier_value') ?: ($assignRole['role_id'] ?? 0)));
 $assignmentTitle = (string)($this->getData('assignment_title') ?: __('角色权限配置'));
 $assignmentDescription = (string)($this->getData('assignment_description') ?: __('使用原生权限树控制菜单、接口、任务和运维能力'));
-$assignmentBackUrl = (string)($this->getData('assignment_back_url') ?: $this->getBackendUrl('*/backend/acl/role'));
+$assignmentBackPath = (string)($this->getData('assignment_back_path') ?: '*/backend/acl/role');
+$assignmentBackParams = is_array($this->getData('assignment_back_params')) ? $this->getData('assignment_back_params') : [];
+$assignmentBackUrl = (string)($this->getData('assignment_back_url') ?: '');
 $assignmentBackLabel = (string)($this->getData('assignment_back_label') ?: __('返回列表'));
 $assignmentSubjectLabel = (string)($this->getData('assignment_subject_label') ?: __('配置角色'));
 $assignmentSubjectName = (string)($this->getData('assignment_subject_name') ?: ($assignRole['role_name'] ?? ''));
@@ -156,7 +159,7 @@ $renderTagNodes = function (array $nodes, int $depth = 0, bool $ancestorGranted 
 <form
     class="w-backend-page w-acl-assign"
     method="post"
-    action="<?= $escape($assignmentAction) ?>"
+    action="<?php if ($assignmentAction !== ''): ?><?= $escape($assignmentAction) ?><?php else: ?>@backend-url{$assignmentActionPath}<?php endif; ?>"
     data-acl-assign
     data-assignment-mode="<?= $escape($assignmentMode) ?>"
     data-total-permissions="<?= $totalAll ?>"
@@ -174,7 +177,7 @@ $renderTagNodes = function (array $nodes, int $depth = 0, bool $ancestorGranted 
             <p class="w-text" data-tone="muted"><?= $escape($assignmentDescription) ?></p>
         </div>
         <nav class="w-cluster" aria-label="<?= $escape(__('权限配置操作')) ?>">
-            <a class="w-button" data-tone="neutral" href="<?= $escape($assignmentBackUrl) ?>"><w:icon name="arrow-left" size="sm"></w:icon><?= $escape($assignmentBackLabel) ?></a>
+            <a class="w-button" data-tone="neutral" href="<?php if ($assignmentBackUrl !== ''): ?><?= $escape($assignmentBackUrl) ?><?php elseif ($assignmentBackParams !== []): ?>@backend-url{$assignmentBackPath|$assignmentBackParams}<?php else: ?>@backend-url{$assignmentBackPath}<?php endif; ?>"><w:icon name="arrow-left" size="sm"></w:icon><?= $escape($assignmentBackLabel) ?></a>
             <button class="w-button" type="submit" data-tone="primary" data-acl-save><w:icon name="save" size="sm"></w:icon><span><?= $escape(__('保存权限配置')) ?></span></button>
         </nav>
     </header>

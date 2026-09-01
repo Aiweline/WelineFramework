@@ -439,18 +439,17 @@ class RouteBefore implements \Weline\Framework\Event\ObserverInterface
         // 如果没有用户，返回未授权（不调用 logout，避免重定向后 Session 未就绪时误清登录态）
         $hasUser = $user !== null || $sessionAclContext !== null;
         if (!$hasUser) {
-            $resolvedCookieName = \Weline\Framework\Session\SessionCookieNameResolver::resolve();
-            $resolvedCookie = (string) (\w_env_cookie($resolvedCookieName) ?? '');
-            $legacyCookie = (string) (\w_env_cookie(WlsStrategy::SESSION_NAME) ?? '');
-            $sidSource = $resolvedCookie !== '' ? $resolvedCookie : $legacyCookie;
             $backendSess = $this->getBackendSession()->getSession();
             $actualSid = $backendSess->getId();
             $sessionKeys = \method_exists($backendSess, 'all') ? \count($backendSess->all()) : 0;
             w_auth_log('acl_not_logged_in', 'Session 无 user_id，重定向登录', [
                 'uri' => $uri,
-                'cookie_present' => $sidSource !== '',
+                // Accept scoped + legacy aliases (port / _w{id}) so diagnostics
+                // match SessionCookieNameResolver::readRequestSessionId().
+                'cookie_present' => \Weline\Framework\Session\SessionCookieNameResolver::hasRequestCookie(),
                 'session_id_present' => $actualSid !== '',
                 'session_keys' => $sessionKeys,
+                'cookie_name' => \Weline\Framework\Session\SessionCookieNameResolver::resolve(),
             ]);
         }
         // 根因说明：not_logged_in = Session 无 user_id（getUserId() 为空），非「数据库查不到用户」。数据库查不到时会有 _user_not_found 且走 no_role 分支并提示「用户不存在或已被删除」；若 var/log 中见 getAclContext 的 acl 日志则为 DB 问题。
