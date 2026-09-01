@@ -82,7 +82,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
         <div class="row">
             <!-- 基础功能测试 -->
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="/datatable/test/basic">
+                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="@url{'datatable/test/basic'}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="card-title mb-0">
                             <i class="mdi mdi-table me-2 text-primary"></i>基础功能测试
@@ -105,7 +105,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
             <!-- 多表关联测试 -->
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="/datatable/test/join">
+                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="@url{'datatable/test/join'}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="card-title mb-0">
                             <i class="mdi mdi-link-variant me-2 text-info"></i>多表关联测试
@@ -128,7 +128,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
             <!-- 表单功能测试 -->
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="/datatable/test/form">
+                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="@url{'datatable/test/form'}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="card-title mb-0">
                             <i class="mdi mdi-pencil me-2 text-success"></i>表单功能测试
@@ -151,7 +151,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
             <!-- 文件上传测试 -->
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="/datatable/test/upload">
+                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="@url{'datatable/test/upload'}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="card-title mb-0">
                             <i class="mdi mdi-upload me-2 text-primary"></i>文件上传测试
@@ -174,7 +174,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
             <!-- 事务管理测试 -->
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="/datatable/test/transaction">
+                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="@url{'datatable/test/transaction'}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="card-title mb-0">
                             <i class="mdi mdi-shield me-2 text-danger"></i>事务管理测试
@@ -197,7 +197,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
             <!-- 依赖关系测试 -->
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="/datatable/test/dependency">
+                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="@url{'datatable/test/dependency'}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="card-title mb-0">
                             <i class="mdi mdi-sitemap me-2 text-info"></i>依赖关系测试
@@ -220,7 +220,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
             <!-- 级联删除测试 -->
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="/datatable/test/cascade">
+                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="@url{'datatable/test/cascade'}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="card-title mb-0">
                             <i class="mdi mdi-delete me-2 text-danger"></i>级联删除测试
@@ -243,7 +243,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 
             <!-- 性能测试 -->
             <div class="col-md-6 col-lg-4 mb-4">
-                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="/datatable/test/performance">
+                <div class="card test-card h-100" role="link" tabindex="0" data-datatable-test-href="@url{'datatable/test/performance'}">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h6 class="card-title mb-0">
                             <i class="mdi mdi-speedometer me-2 text-success"></i>性能测试
@@ -339,7 +339,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             const statusDiv = document.getElementById('data-status');
             statusDiv.innerHTML = '<div class="alert alert-info"><i class="mdi mdi-loading mdi-spin me-2"></i>正在初始化测试数据...</div>';
             
-            fetch('/datatable/test/initData', {
+            fetch("@url{'datatable/test/initData'}", {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -370,7 +370,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                 const statusDiv = document.getElementById('data-status');
                 statusDiv.innerHTML = '<div class="alert alert-warning"><i class="mdi mdi-loading mdi-spin me-2"></i>正在清理测试数据...</div>';
 
-                fetch('/datatable/test/clearData', {
+                fetch("@url{'datatable/test/clearData'}", {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

@@ -8,6 +8,8 @@ use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 class DataTableQueryProvider implements QueryProviderInterface
 {
+    private const ACL_SOURCE = 'Weline_DataTable::datatable_test_comprehensive';
+
     public function __construct(
         private readonly DemoTableService $demoTableService
     ) {
@@ -23,6 +25,7 @@ class DataTableQueryProvider implements QueryProviderInterface
         return match ($operation) {
             'data' => $this->success($this->demoTableService->getTableData($params)),
             'fields' => $this->success($this->demoTableService->getTableFields($params)),
+            'metadata' => $this->success($this->demoTableService->getModelMetadata($params)),
             'formFields' => $this->success($this->demoTableService->getFormFields($params)),
             'formRecord' => $this->success($this->demoTableService->getRecord($params)),
             'create' => $this->success($this->demoTableService->createRecord($params), 'Record created.'),
@@ -32,6 +35,8 @@ class DataTableQueryProvider implements QueryProviderInterface
             'exportData' => $this->success($this->demoTableService->exportData($params), 'Export generated.'),
             'saveConfig' => $this->success($this->demoTableService->saveFieldConfig($params), 'Field config saved.'),
             'clearConfig' => $this->success($this->demoTableService->clearFieldConfig($params), 'Field config cleared.'),
+            'previewWrite' => $this->success($this->demoTableService->previewWrite($params), 'Write plan ready.'),
+            'executeWrite' => $this->success($this->demoTableService->executeWrite($params), 'Confirmed write completed.'),
             'initData' => $this->success($this->demoTableService->initDemoData(), 'Demo data initialized.'),
             'clearData' => $this->success($this->demoTableService->clearDemoData(), 'Demo data cleared.'),
             default => throw new \InvalidArgumentException('DataTable query provider does not support operation: ' . $operation),
@@ -42,23 +47,26 @@ class DataTableQueryProvider implements QueryProviderInterface
     {
         return [
             'provider' => 'datatable',
-            'name' => __('DataTable Frontend Demo Query'),
-            'description' => __('Whitelist-only frontend DataTable demo operations through the worker channel.'),
+            'name' => __('DataTable Registered Resource Query'),
+            'description' => __('Registered DataTable demo resources through the Weline.Api worker channel.'),
             'module' => 'Weline_DataTable',
             'operations' => [
-                $this->operation('data', 'read', true, 3, 'Load demo table rows'),
-                $this->operation('fields', 'read', true, 2, 'Load demo table fields'),
-                $this->operation('formFields', 'read', true, 2, 'Load demo form fields'),
-                $this->operation('formRecord', 'read', false, 2, 'Load one demo form record'),
-                $this->operation('create', 'write', false, 5, 'Create demo record'),
-                $this->operation('update', 'write', false, 5, 'Update demo record'),
-                $this->operation('saveData', 'write', false, 5, 'Save demo record'),
-                $this->operation('deleteData', 'write', false, 5, 'Delete demo records'),
-                $this->operation('exportData', 'read', false, 5, 'Export demo rows'),
-                $this->operation('saveConfig', 'write', false, 3, 'Save demo field config'),
-                $this->operation('clearConfig', 'write', false, 3, 'Clear demo field config'),
-                $this->operation('initData', 'write', false, 5, 'Initialize demo data'),
-                $this->operation('clearData', 'write', false, 5, 'Clear demo data'),
+                $this->operation('data', 'read', true, 3, 'Load registered table rows', 'any'),
+                $this->operation('fields', 'read', true, 2, 'Load registered table fields', 'any'),
+                $this->operation('metadata', 'read', true, 2, 'Load registered model metadata', 'any'),
+                $this->operation('formFields', 'read', true, 2, 'Load registered form fields', 'any'),
+                $this->operation('formRecord', 'read', false, 2, 'Load one registered form record', 'backend'),
+                $this->operation('create', 'write', false, 5, 'Create registered record', 'backend'),
+                $this->operation('update', 'write', false, 5, 'Update registered record', 'backend'),
+                $this->operation('saveData', 'write', false, 5, 'Save registered record', 'backend'),
+                $this->operation('deleteData', 'write', false, 5, 'Delete registered records', 'backend'),
+                $this->operation('exportData', 'read', false, 5, 'Export registered rows', 'any'),
+                $this->operation('saveConfig', 'write', false, 3, 'Save table field preferences', 'backend'),
+                $this->operation('clearConfig', 'write', false, 3, 'Clear table field preferences', 'backend'),
+                $this->operation('previewWrite', 'write', false, 4, 'Preview a registered composite write', 'backend'),
+                $this->operation('executeWrite', 'write', false, 6, 'Execute a confirmed registered write', 'backend'),
+                $this->operation('initData', 'write', false, 5, 'Initialize demo data', 'backend'),
+                $this->operation('clearData', 'write', false, 5, 'Clear demo data', 'backend'),
             ],
         ];
     }
@@ -82,17 +90,28 @@ class DataTableQueryProvider implements QueryProviderInterface
     /**
      * @return array<string,mixed>
      */
-    private function operation(string $name, string $mode, bool $graph, int $cost, string $summary): array
+    private function operation(
+        string $name,
+        string $mode,
+        bool $graph,
+        int $cost,
+        string $summary,
+        string $auth
+    ): array
     {
-        return [
+        $descriptor = [
             'name' => $name,
             'description' => __($summary),
             'frontend' => true,
+            'backend' => $auth === 'backend',
+            'external' => false,
+            'auth' => $auth,
             'mode' => $mode,
             'graph' => $graph,
             'cost' => $cost,
             'params' => [
                 'model' => ['type' => 'string', 'required' => false],
+                'resource' => ['type' => 'string', 'required' => false, 'max_length' => 120],
                 'scope' => ['type' => 'string', 'required' => false],
                 'table_id' => ['type' => 'string', 'required' => false],
                 'form_id' => ['type' => 'string', 'required' => false],
@@ -118,9 +137,21 @@ class DataTableQueryProvider implements QueryProviderInterface
                 'transaction' => ['type' => 'bool', 'required' => false],
                 'type' => ['type' => 'string', 'required' => false, 'max_length' => 32],
                 'soft_delete' => ['type' => 'bool', 'required' => false],
+                'write_operation' => ['type' => 'string', 'required' => false, 'max_length' => 16],
+                'write_order' => ['type' => 'string', 'required' => false, 'max_length' => 1024],
+                'plan_token' => ['type' => 'string', 'required' => false, 'max_length' => 128],
             ],
             'returns' => ['type' => 'array'],
             'summary' => $summary,
         ];
+
+        if ($auth === 'backend') {
+            $descriptor['backend_acl'] = [
+                'kind' => 'source',
+                'source_id' => self::ACL_SOURCE,
+            ];
+        }
+
+        return $descriptor;
     }
 }

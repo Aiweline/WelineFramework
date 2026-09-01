@@ -31,6 +31,8 @@ final class TableFilter implements TaglibInterface, OwnsChildCompilationInterfac
             'searchable' => false,
             'advanced' => false,
             'collapsible' => false,
+            'filter-mode' => false,
+            'sync-url' => false,
             'allow-frontend' => false,
         ];
     }
@@ -53,10 +55,11 @@ final class TableFilter implements TaglibInterface, OwnsChildCompilationInterfac
     public static function callback(): callable
     {
         return static function ($tagKey, $config, $tagData, $attributes): string {
+            $tableContext = TableContext::getCurrentTableContext() ?? [];
             $attributes = TableContext::inheritTableAttributes($attributes, (string)($attributes['scope'] ?? ''), [
                 'model', 'scope', 'searchable', 'allow-frontend',
             ]);
-            if (!FrontendAccess::isAllowed($attributes, TableContext::getCurrentTableContext() ?? [])) {
+            if (!FrontendAccess::isAllowed($attributes, $tableContext)) {
                 return FrontendAccess::deniedComment('t-filter');
             }
             TableContext::validateRequiredAttributes($attributes, ['model', 'scope'], 't-filter');
@@ -74,13 +77,35 @@ final class TableFilter implements TaglibInterface, OwnsChildCompilationInterfac
                     $content = ObjectManager::getInstance(\Weline\Framework\View\Taglib::class)->tagReplace($template, $content);
                 }
                 $hidden = filter_var($attributes['searchable'] ?? true, FILTER_VALIDATE_BOOLEAN) ? '' : ' hidden';
+                $advanced = array_key_exists('advanced', $attributes)
+                    ? filter_var($attributes['advanced'], FILTER_VALIDATE_BOOLEAN)
+                    : (bool)($tableContext['filter-advanced'] ?? false);
+                $collapsible = array_key_exists('collapsible', $attributes)
+                    ? filter_var($attributes['collapsible'], FILTER_VALIDATE_BOOLEAN)
+                    : (bool)($tableContext['filter-collapsible'] ?? false);
+                $displayMode = $advanced ? 'advanced' : 'simple';
+                $filterMode = strtolower(trim((string)($attributes['filter-mode'] ?? $tableContext['filter-mode'] ?? 'ajax')));
+                if (!in_array($filterMode, ['ajax', 'client', 'page'], true)) {
+                    $filterMode = 'ajax';
+                }
                 $search = self::escape((string)__('筛选'));
                 $reset = self::escape((string)__('重置'));
-                return '<tbody class="w-datatable__filters" data-scope="' . self::escape($scope) . '"' . $hidden . '><tr><td colspan="100">'
-                    . '<form class="w-datatable__filter" data-w-datatable-filter><div class="w-cluster">' . $content
-                    . '<button type="submit" class="w-button" data-size="sm"><w-icon name="search" size="sm"></w-icon><span>' . $search . '</span></button>'
+                $advancedLabel = self::escape((string)__('高级筛选'));
+                $submit = $advanced
+                    ? '<button type="submit" class="w-button" data-size="sm"><w-icon name="search" size="sm"></w-icon><span>' . $search . '</span></button>'
+                    : '';
+                $form = '<form class="w-datatable__filter" method="get" data-w-datatable-filter data-filter-mode="' . $filterMode
+                    . '" data-filter-display="' . $displayMode . '"><div class="w-cluster">'
+                    . $content . $submit
                     . '<button type="reset" class="w-button" data-tone="neutral" data-size="sm">' . $reset . '</button>'
-                    . '</div></form></td></tr></tbody>';
+                    . '</div></form>';
+                if ($collapsible) {
+                    $form = '<details class="w-datatable__filter-disclosure"><summary><w-icon name="filter" size="sm"></w-icon><span>'
+                        . $advancedLabel . '</span></summary>' . $form . '</details>';
+                }
+                return '<tbody class="w-datatable__filters" data-scope="' . self::escape($scope) . '" data-filter-mode="'
+                    . $filterMode . '" data-filter-display="' . $displayMode . '"' . $hidden
+                    . '><tr><td colspan="100">' . $form . '</td></tr></tbody>';
             } finally {
                 TableContext::popTag();
             }

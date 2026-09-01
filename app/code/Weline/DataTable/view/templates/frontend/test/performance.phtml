@@ -31,4 +31,46 @@
                show-config="true"
                allow-frontend="true">
     </w:d-table>
+
+    <?php $localRows = w_obj(\Weline\DataTable\Model\TestProduct::class)->getTestData(); ?>
+    <script type="application/json" id="demo-local-products-data"><?= json_encode($localRows, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
+    <section class="w-card" weline-code="datatable-local-client-demo" data-testid="dt-local-client-demo">
+        <header class="w-card__header">
+            <div>
+                <h2 class="w-card__title"><lang>本地客户端筛选</lang></h2>
+                <p><lang>此表格完全在浏览器中搜索、筛选、多列排序和分页 JSON，不开放 CRUD 或远程偏好。</lang></p>
+            </div>
+        </header>
+        <div class="w-card__body">
+            <w:d-table id="demo-local-table"
+                       model="Weline\DataTable\Model\TestProduct"
+                       scope="demo-local-products"
+                       mode="local"
+                       local-data-el="#demo-local-products-data"
+                       filter-mode="client"
+                       filter-advanced="true"
+                       filter-collapsible="true"
+                       searchable="true"
+                       sortable="true"
+                       page-size="5"
+                       show-pagination="true"
+                       show-toolbar="true"
+                       show-config="true"
+                       allow-frontend="true">
+                <w:t-header>
+                    <w:field belong="t-header" name="id" type="number" sortable="true"><lang>ID</lang></w:field>
+                    <w:field belong="t-header" name="name" type="text" sortable="true"><lang>产品名称</lang></w:field>
+                    <w:field belong="t-header" name="sku" type="text" sortable="true"><lang>SKU</lang></w:field>
+                    <w:field belong="t-header" name="brand" type="text" sortable="true"><lang>品牌</lang></w:field>
+                    <w:field belong="t-header" name="price" type="number" sortable="true"><lang>价格</lang></w:field>
+                    <w:field belong="t-header" name="status" type="select" sortable="true"><lang>状态</lang></w:field>
+                </w:t-header>
+                <w:t-filter advanced="true" collapsible="true" filter-mode="client">
+                    <w:field belong="t-filter" name="name" type="search"><lang>产品名称</lang></w:field>
+                    <w:field belong="t-filter" name="brand" type="search"><lang>品牌</lang></w:field>
+                    <w:field belong="t-filter" name="status" type="select" options="1:启用,0:禁用"><lang>状态</lang></w:field>
+                </w:t-filter>
+            </w:d-table>
+        </div>
+    </section>
 </div>

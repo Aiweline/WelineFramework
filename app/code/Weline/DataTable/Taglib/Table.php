@@ -7,6 +7,7 @@ namespace Weline\DataTable\Taglib;
 use Weline\DataTable\Helper\FrontendAccess;
 use Weline\DataTable\Helper\TableContext;
 use Weline\DataTable\Helper\UiAssets;
+use Weline\DataTable\Service\DataTableResourceRegistry;
 use Weline\Framework\App\Exception;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Taglib\OwnsChildCompilationInterface;
@@ -47,8 +48,11 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
             'isolate' => false,
             'dependencies' => false,
             'transaction' => false,
+            'write-order' => false,
+            'composite-write' => false,
             'allow-frontend' => false,
             'api-provider' => false,
+            'resource' => false,
             'form' => false,
             'form-mode' => false,
             'form-title' => false,
@@ -59,6 +63,10 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
             'select-field' => false,
             'local-data-el' => false,
             'row-actions' => false,
+            'filter-mode' => false,
+            'filter-advanced' => false,
+            'filter-collapsible' => false,
+            'confirm-write' => false,
         ];
     }
 
@@ -114,6 +122,66 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
             }
             $localDataEl = trim((string)($attributes['local-data-el'] ?? ''));
             $rowActions = self::parseJsonArray((string)($attributes['row-actions'] ?? ''));
+            $filterMode = strtolower(trim((string)($attributes['filter-mode'] ?? '')));
+            $filterAdvanced = self::toBool($attributes['filter-advanced'] ?? false);
+            if ($filterMode === 'advanced') {
+                $filterAdvanced = true;
+                $filterMode = '';
+            }
+            if (!in_array($filterMode, ['ajax', 'client', 'page'], true)) {
+                $filterMode = $mode === 'local' ? 'client' : 'ajax';
+            }
+            $filterCollapsible = self::toBool($attributes['filter-collapsible'] ?? $filterAdvanced);
+            $isBackend = FrontendAccess::isBackendRequest();
+            $modelClasses = array_values($modelConfig['models']);
+            $resource = trim((string)($attributes['resource'] ?? ''));
+            if ($apiProvider === 'datatable' && $mode === 'api') {
+                foreach ($modelClasses as $modelClass) {
+                    DataTableResourceRegistry::assertRegisteredModel((string)$modelClass);
+                }
+                $resource = $resource ?: implode(',', array_values(array_filter(array_map(
+                    static fn (string $modelClass): ?string => DataTableResourceRegistry::resourceForModel($modelClass),
+                    $modelClasses
+                ))));
+                $baseCapabilities = DataTableResourceRegistry::capabilitiesForModels($modelClasses);
+            } else {
+                $baseCapabilities = [
+                    'read' => true,
+                    'create' => true,
+                    'update' => true,
+                    'delete' => true,
+                    'export' => true,
+                    'preferences' => true,
+                    'composite_write' => count($modelClasses) > 1,
+                ];
+            }
+            $editable = self::toBool($attributes['editable'] ?? false);
+            $modalEdit = self::toBool($attributes['modal-edit'] ?? true);
+            $capabilities = $mode === 'local'
+                ? [
+                    'read' => true,
+                    'create' => false,
+                    'update' => false,
+                    'delete' => false,
+                    'export' => false,
+                    'preferences' => true,
+                    'composite_write' => false,
+                ]
+                : [
+                    'read' => (bool)$baseCapabilities['read'],
+                    'create' => $isBackend && $modalEdit && (bool)$baseCapabilities['create'],
+                    'update' => $isBackend && ($editable || $modalEdit) && (bool)$baseCapabilities['update'],
+                    'delete' => $isBackend && ($editable || $modalEdit) && (bool)$baseCapabilities['delete'],
+                    'export' => (bool)$baseCapabilities['export'],
+                    'preferences' => $isBackend && (bool)$baseCapabilities['preferences'],
+                    'composite_write' => $isBackend && (bool)$baseCapabilities['composite_write'],
+                ];
+            $compositeWrite = self::toBool($attributes['composite-write'] ?? $capabilities['composite_write']);
+            $confirmWrite = self::toBool($attributes['confirm-write'] ?? $compositeWrite);
+            $transaction = array_key_exists('transaction', $attributes)
+                ? self::toBool($attributes['transaction'])
+                : count($modelClasses) > 1;
+            $writeOrder = trim((string)($attributes['write-order'] ?? ''));
 
             $tableContext = [
                 'id' => $id,
@@ -129,9 +197,9 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
                 'select-field' => $selectField,
                 'local-data-el' => $localDataEl,
                 'row-actions' => $rowActions,
-                'editable' => self::toBool($attributes['editable'] ?? false),
+                'editable' => $editable,
                 'inline-edit' => self::toBool($attributes['inline-edit'] ?? true),
-                'modal-edit' => self::toBool($attributes['modal-edit'] ?? true),
+                'modal-edit' => $modalEdit,
                 'searchable' => self::toBool($attributes['searchable'] ?? true),
                 'sortable' => self::toBool($attributes['sortable'] ?? true),
                 'page-size' => max(1, min(100, (int)($attributes['page-size'] ?? 20))),
@@ -140,10 +208,18 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
                 'show-config' => self::toBool($attributes['show-config'] ?? true),
                 'allow-frontend' => self::toBool($attributes['allow-frontend'] ?? false),
                 'dependencies' => trim((string)($attributes['dependencies'] ?? '')),
-                'transaction' => self::toBool($attributes['transaction'] ?? false),
+                'transaction' => $transaction,
                 'api-provider' => $apiProvider,
                 'form-mode' => $formMode,
                 'form-title' => trim((string)($attributes['form-title'] ?? '')),
+                'resource' => $resource,
+                'filter-mode' => $filterMode,
+                'filter-advanced' => $filterAdvanced,
+                'filter-collapsible' => $filterCollapsible,
+                'confirm-write' => $confirmWrite,
+                'composite-write' => $compositeWrite,
+                'write-order' => $writeOrder,
+                'capabilities' => $capabilities,
             ];
             TableContext::setTableContext($scope, $tableContext);
 
@@ -156,13 +232,13 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
                 $manual = trim($rawContent) !== '';
                 $rawContent = $manual
                     ? self::ensureRequiredTags($rawContent)
-                    : self::generateDefaultTableStructure($modelConfig);
+                    : self::generateDefaultTableStructure($modelConfig, $filterAdvanced, $filterCollapsible, $filterMode);
                 $content = $taglib->tagReplace($template, $rawContent);
 
                 if ($nestedFormSource !== '') {
                     $formId = $nestedFormId;
                     $formHtml = $taglib->tagReplace($template, $nestedFormSource);
-                } elseif ($mode === 'local' && !$tableContext['editable'] && !$tableContext['modal-edit']) {
+                } elseif (!$capabilities['create'] && !$capabilities['update']) {
                     $formHtml = '';
                 } else {
                     $formHtml = Form::renderGenerated([
@@ -173,8 +249,13 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
                         'form-mode' => $formMode,
                         'title' => $tableContext['form-title'],
                         'api-provider' => $apiProvider,
+                        'resource' => $resource,
                         'dependencies' => $tableContext['dependencies'],
                         'transaction' => $tableContext['transaction'],
+                        'write-order' => $writeOrder,
+                        'composite-write' => $compositeWrite,
+                        'confirm-write' => $confirmWrite,
+                        'capabilities' => $capabilities,
                         'show-trigger-button' => false,
                         'allow-frontend' => $tableContext['allow-frontend'],
                     ]);
@@ -194,6 +275,7 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
                     'modelConfig' => $modelConfig,
                     'joinConfig' => $joinConfig,
                     'apiProvider' => $apiProvider,
+                    'resource' => $resource,
                     'mode' => $mode,
                     'selectable' => $selectable,
                     'showActions' => (bool)$resolvedShowActions,
@@ -203,11 +285,14 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
                     'operations' => [
                         'data' => 'data',
                         'fields' => 'fields',
+                        'metadata' => 'metadata',
                         'saveConfig' => 'saveConfig',
                         'clearConfig' => 'clearConfig',
                         'saveData' => 'saveData',
                         'deleteData' => 'deleteData',
                         'exportData' => 'exportData',
+                        'previewWrite' => 'previewWrite',
+                        'executeWrite' => 'executeWrite',
                     ],
                     'dependencies' => $tableContext['dependencies'],
                     'transaction' => $tableContext['transaction'],
@@ -223,6 +308,13 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
                     'stickyActions' => $tableContext['sticky-actions'],
                     'autoGenerated' => !$manual,
                     'formId' => $formId,
+                    'filterMode' => $filterMode,
+                    'filterAdvanced' => $filterAdvanced,
+                    'filterCollapsible' => $filterCollapsible,
+                    'confirmWrite' => $confirmWrite,
+                    'compositeWrite' => $compositeWrite,
+                    'writeOrder' => $writeOrder,
+                    'capabilities' => $capabilities,
                 ];
 
                 return UiAssets::render($template)
@@ -274,7 +366,12 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
             ? ''
             : ' data-w-datatable-width="' . self::escape($rootWidth) . '"';
         $toolbarHidden = $showToolbar ? '' : ' hidden';
-        $configButton = $showConfig ? self::renderConfigButton($idHtml) : '';
+        $capabilities = is_array($config['capabilities'] ?? null) ? $config['capabilities'] : [];
+        $canCreate = (bool)($capabilities['create'] ?? false);
+        $canExport = (bool)($capabilities['export'] ?? false);
+        // Field visibility and column composition are browser-local display preferences.
+        $canConfigure = $showConfig;
+        $configButton = $canConfigure ? self::renderConfigButton($idHtml) : '';
         $autoBadge = $autoGenerated
             ? '<span class="w-badge" data-tone="info">' . self::escape((string)__('自动生成')) . '</span>'
             : '';
@@ -294,25 +391,29 @@ final class Table implements TaglibInterface, OwnsChildCompilationInterface
         $reset = self::escape((string)__('重置'));
         $cancel = self::escape((string)__('取消'));
         $save = self::escape((string)__('保存'));
+        $search = self::escape((string)__('搜索表格'));
+        $addButton = $canCreate
+            ? '<button type="button" class="w-button" data-size="sm" data-w-datatable-action="form.open" data-w-target="#' . $formDialogId . '"><w-icon name="plus" size="sm"></w-icon><span>' . $add . '</span></button>'
+            : '';
+        $exportMenu = $canExport
+            ? '<details class="w-menu-root w-datatable__menu"><summary class="w-button" data-tone="neutral" data-size="sm"><w-icon name="download" size="sm"></w-icon><span>' . $export . '</span></summary><div class="w-menu w-menu__panel"><button type="button" class="w-menu__item" data-w-datatable-action="export" data-format="excel">Excel</button><button type="button" class="w-menu__item" data-w-datatable-action="export" data-format="csv">CSV</button><button type="button" class="w-menu__item" data-w-datatable-action="export" data-format="json">JSON</button></div></details>'
+            : '';
+        $searchForm = !empty($config['searchable'])
+            ? '<form class="w-datatable__search" role="search" method="get" data-w-datatable-search-form><label class="w-visually-hidden" for="w-datatable-search-' . $idHtml . '">' . $search . '</label><w-icon name="search" size="sm"></w-icon><input id="w-datatable-search-' . $idHtml . '" class="w-input" type="search" name="search" autocomplete="off" placeholder="' . $search . '" data-w-datatable-search></form>'
+            : '';
 
         return <<<HTML
 <section id="{$rootId}" class="w-datatable" data-w-component="data-table" data-w-config="{$configHtml}"{$dimensionHtml}>
     <header class="w-datatable__toolbar"{$toolbarHidden}>
         <div class="w-cluster" data-align="center">
             <div class="w-datatable__title"><w-icon name="table" size="sm"></w-icon>{$autoBadge}</div>
-            <button type="button" class="w-button" data-size="sm" data-w-datatable-action="form.open" data-w-target="#{$formDialogId}"><w-icon name="plus" size="sm"></w-icon><span>{$add}</span></button>
+            {$addButton}
             {$configButton}
             <button type="button" class="w-button" data-tone="neutral" data-size="sm" data-w-datatable-action="reload"><w-icon name="refresh" size="sm"></w-icon><span>{$refresh}</span></button>
         </div>
+        {$searchForm}
         <div class="w-cluster" data-align="center">
-            <details class="w-menu-root w-datatable__menu">
-                <summary class="w-button" data-tone="neutral" data-size="sm"><w-icon name="download" size="sm"></w-icon><span>{$export}</span></summary>
-                <div class="w-menu w-menu__panel">
-                    <button type="button" class="w-menu__item" data-w-datatable-action="export" data-format="excel">Excel</button>
-                    <button type="button" class="w-menu__item" data-w-datatable-action="export" data-format="csv">CSV</button>
-                    <button type="button" class="w-menu__item" data-w-datatable-action="export" data-format="json">JSON</button>
-                </div>
-            </details>
+            {$exportMenu}
             <dl class="w-datatable__stats" aria-live="polite">
                 <div><dt>{$total}</dt><dd data-w-datatable-total>-</dd></div>
                 <div><dt>{$visible}</dt><dd data-w-datatable-visible>-</dd></div>
@@ -384,7 +485,12 @@ HTML;
         return $content;
     }
 
-    private static function generateDefaultTableStructure(array $modelConfig): string
+    private static function generateDefaultTableStructure(
+        array $modelConfig,
+        bool $filterAdvanced,
+        bool $filterCollapsible,
+        string $filterMode
+    ): string
     {
         $fields = self::modelFields($modelConfig);
         if ($fields === []) {
@@ -409,7 +515,10 @@ HTML;
             $filter .= '<w:field belong="t-filter" name="' . $name . '" type="' . $type . '"></w:field>';
         }
 
-        return '<w:t-header>' . $header . '</w:t-header><w:t-filter>' . $filter
+        return '<w:t-header>' . $header . '</w:t-header><w:t-filter advanced="'
+            . ($filterAdvanced ? 'true' : 'false') . '" collapsible="'
+            . ($filterCollapsible ? 'true' : 'false') . '" filter-mode="'
+            . self::xmlAttribute($filterMode) . '">' . $filter
             . '</w:t-filter><w:t-body></w:t-body><w:t-footer></w:t-footer>';
     }
 

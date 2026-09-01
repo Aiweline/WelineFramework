@@ -26,6 +26,9 @@
                       allow-frontend="true"
                       dependencies="u.id->o.user_id"
                       transaction="true"
+                      write-order="u,o"
+                      composite-write="true"
+                      confirm-write="true"
                       auto_fields="false"
                       show-trigger-button="false">
                 <fieldset id="u">
@@ -95,6 +98,11 @@
             <w:d-table id="demo-transaction-table"
                        model="Weline\DataTable\Model\TestUser as u, Weline\DataTable\Model\TestOrder as o"
                        join="left o on u.id = o.user_id"
+                       dependencies="u.id->o.user_id"
+                       transaction="true"
+                       write-order="u,o"
+                       composite-write="true"
+                       confirm-write="true"
                        scope="demo-transaction-flow"
                        searchable="true"
                        sortable="true"

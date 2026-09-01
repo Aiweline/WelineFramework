@@ -144,4 +144,64 @@ class DemoTableServiceTest extends TestCore
         $this->assertSame('Weline\DataTable\Model\TestUserProfile', $profileConfig['main_model']);
         $this->assertSame('Weline\DataTable\Model\TestUserAddress', $addressConfig['main_model']);
     }
+
+    public function testCompositeWritePlanShowsAllSafeFieldsDependenciesAndDefaultTransaction(): void
+    {
+        $service = new DemoTableService();
+        $method = new ReflectionMethod(DemoTableService::class, 'buildWritePlan');
+        $method->setAccessible(true);
+
+        $result = $method->invoke($service, [
+            'model' => 'Weline\DataTable\Model\TestUser as u, Weline\DataTable\Model\TestOrder as o',
+            'data' => [
+                'u' => ['name' => 'Plan User', 'email' => 'plan-user@example.test'],
+                'o' => ['order_no' => 'PLAN-ORDER-1'],
+            ],
+            'dependencies' => 'u.id->o.user_id',
+        ]);
+        $plan = $result['plan'];
+
+        $this->assertSame('datatable.write-plan.v1', $plan['schema_version']);
+        $this->assertTrue($plan['requires_confirmation']);
+        $this->assertTrue($plan['transaction']);
+        $this->assertSame(['u', 'o'], $plan['models']);
+        $this->assertTrue($plan['can_proceed']);
+        $this->assertSame([], $plan['missing_required']);
+        $this->assertGreaterThan(5, count($plan['steps'][0]['fields']));
+        $this->assertSame('u.id', $plan['steps'][1]['depends_on']['user_id']);
+        $userFieldNames = array_column($plan['steps'][0]['fields'], 'name');
+        $this->assertNotContains('password', $userFieldNames);
+    }
+
+    public function testCompositeWritePlanReportsMissingRequiredFieldsWithoutProceeding(): void
+    {
+        $service = new DemoTableService();
+        $plan = $service->previewWrite([
+            'model' => 'Weline\DataTable\Model\TestUser as u, Weline\DataTable\Model\TestOrder as o',
+            'data' => ['u' => ['name' => 'Incomplete'], 'o' => []],
+            'dependencies' => 'u.id->o.user_id',
+        ]);
+
+        $this->assertFalse($plan['can_proceed']);
+        $this->assertNull($plan['plan_token']);
+        $missing = array_map(static fn (array $field): string => $field['alias'] . '.' . $field['name'], $plan['missing_required']);
+        $this->assertContains('u.email', $missing);
+        $this->assertContains('o.order_no', $missing);
+        $this->assertNotContains('o.user_id', $missing);
+    }
+
+    public function testExplicitWriteOrderCannotViolateDependencies(): void
+    {
+        $service = new DemoTableService();
+        $this->expectException(\Throwable::class);
+        $service->previewWrite([
+            'model' => 'Weline\DataTable\Model\TestUser as u, Weline\DataTable\Model\TestOrder as o',
+            'data' => [
+                'u' => ['name' => 'Plan User', 'email' => 'plan-user@example.test'],
+                'o' => ['order_no' => 'PLAN-ORDER-2'],
+            ],
+            'dependencies' => 'u.id->o.user_id',
+            'write_order' => 'o,u',
+        ]);
+    }
 }

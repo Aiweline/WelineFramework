@@ -6,7 +6,38 @@
 
 ## 一、概述
 
-DataTable 模块提供完整的 RESTful API 接口，用于数据表格的增删改查、导入导出、权限控制等功能。
+DataTable 浏览器运行时以 `Weline.Api` QueryProvider 为规范接口。模块仍保留 Backend REST 兼容层，但它不再接受任意 PHP Model；默认资源注册表只允许模块 Demo 模型，业务模块必须发布自己的 Provider 与 ACL 策略。
+
+### 1.1 规范 Provider：`datatable`
+
+| operation | 模式 | auth | 说明 |
+|---|---|---|---|
+| `data` | read | any | 分页、搜索、筛选、排序 |
+| `fields` | read | any | 表格/筛选字段、资源能力 |
+| `metadata` | read | any | `datatable.model-metadata.v1` |
+| `formFields` | read | any | 安全表单字段；敏感字段不暴露 |
+| `formRecord` | read | backend | 单记录编辑数据 |
+| `create` / `update` / `saveData` / `deleteData` | write | backend + ACL | 单表写操作 |
+| `saveConfig` / `clearConfig` | write | backend + ACL | per-scope 远程偏好 |
+| `previewWrite` | write | backend + ACL | 非变更写入计划与单次 token |
+| `executeWrite` | write | backend + ACL | 摘要匹配后按计划事务执行 |
+
+所有 operation 都是 `external=false`。`frontend=true` 仅表示可通过 `Weline.Api` worker 通道调用，不代表匿名授权；真正授权以 `auth` 和 `backend_acl.source_id` 为准。
+
+### 1.2 资源边界
+
+默认 Provider 的资源为 `demo.users`、`demo.products`、`demo.orders`、`demo.user_profiles`、`demo.user_addresses`。`model` 仅参与元数据与载荷一致性校验，不能替代资源注册和 ACL。业务模块通过独立 `api-provider` 接入，禁止由浏览器提交 adapter 类名或任意 Model 类名。
+
+### 1.3 写入计划协议
+
+`previewWrite` 请求包含 `model`、`model_config`、`data`、`dependencies`、`transaction`、`write_order`、`scope` 和 `write_operation`。响应 `datatable.write-plan.v1` 包含：
+
+- `steps` / `targets`：顺序、资源、模型、全部非敏感字段、值、必填、变更、依赖；
+- `missing_required` 与 `can_proceed`；
+- `transaction`、`atomic_scope`、`warnings`；
+- 仅当 `can_proceed=true` 时返回 5 分钟、单次使用的 `plan_token`。
+
+`executeWrite` 必须原样重送同一载荷并附 token。服务端在执行前删除 token，再校验摘要，因此篡改、重放和并发重复提交都会失败。
 
 ### API 基础信息
 - **基础路径**: `/api/rest/v1/datatable/`
@@ -41,7 +72,9 @@ DataTable 模块提供完整的 RESTful API 接口，用于数据表格的增删
 }
 ```
 
-## 二、DataTable 控制器 API
+## 二、DataTable 控制器 API（后台兼容层）
+
+以下路由仅用于旧后台调用；新页面应使用上述 QueryProvider。兼容层同样逐个验证单/多模型声明是否位于显式资源注册表，并统一过滤未知、主键及敏感写入字段。
 
 ### 2.1 获取数据
 
@@ -365,4 +398,3 @@ $result = $dataTableApi->postData();
 ---
 
 **更多信息**: 请参考 [使用指南.md](使用指南.md) 和 [需求文档.md](需求文档.md)
-

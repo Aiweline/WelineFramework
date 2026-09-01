@@ -77,7 +77,7 @@ class TaglibTest extends TestCore
         $callback = Table::callback();
         
         $attributes = [
-            'model' => 'TestModel',
+            'model' => 'Weline\\DataTable\\Model\\TestUser',
             'scope' => 'test-scope',
             'id' => 'test-table',
             'class' => 'w-test-class'
@@ -88,7 +88,7 @@ class TaglibTest extends TestCore
         $this->assertIsString($result);
         $this->assertStringContainsString('test-table', $result);
         $this->assertStringContainsString('w-test-class', $result);
-        $this->assertStringContainsString('TestModel', $result);
+        $this->assertStringContainsString('demo.users', $result);
     }
 
     /**

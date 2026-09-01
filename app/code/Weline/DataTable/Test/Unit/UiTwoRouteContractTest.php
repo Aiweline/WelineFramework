@@ -24,6 +24,10 @@ final class UiTwoRouteContractTest extends TestCore
 
         $templates = glob(BP . '/app/code/Weline/DataTable/view/templates/frontend/test/*.phtml');
         self::assertIsArray($templates);
+        $templates = array_values(array_filter(
+            $templates,
+            static fn (string $path): bool => !str_starts_with(basename($path), '_')
+        ));
         self::assertCount(9, $templates);
         foreach ($templates as $path) {
             $content = file_get_contents($path);
@@ -52,6 +56,10 @@ final class UiTwoRouteContractTest extends TestCore
         $manager = $this->read('app/code/Weline/DataTable/view/statics/js/datatable-manager.js');
         self::assertStringContainsString("dataset.wSticky = 'end'", $manager);
         self::assertStringContainsString('data-w-sticky-end', $manager);
+        self::assertStringContainsString('config.showActions !== false && hasRowActions', $manager);
+        self::assertStringContainsString("table.removeAttribute('data-w-sticky-end')", $manager);
+        self::assertStringContainsString("--w-datatable-column-count", $manager);
+        self::assertStringContainsString('--w-datatable-column-min', $datatableCss);
     }
 
     public function testDemoMigrationPreservesEveryOriginalCapabilityScenario(): void
@@ -90,6 +98,8 @@ final class UiTwoRouteContractTest extends TestCore
         self::assertStringContainsString('id="demo-performance-table"', $performance);
         self::assertStringContainsString('show-config="true"', $performance);
         self::assertStringContainsString('data-w-datatable-demo-action="reload-performance"', $performance);
+        self::assertStringContainsString('id="demo-local-table"', $performance);
+        self::assertStringContainsString('filter-mode="client"', $performance);
     }
 
     public function testBackendDemoRoutesUseTheSameWelineUiShellWithoutLosingTools(): void
