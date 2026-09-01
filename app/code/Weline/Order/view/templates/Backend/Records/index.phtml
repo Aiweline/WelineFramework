@@ -11,7 +11,7 @@ $escape=static fn(mixed $value):string=>htmlspecialchars((string)$value,ENT_QUOT
     <div class="w-table-wrap"><table class="w-table"><thead><tr><?php foreach($columns as $label):?><th><?= $escape($label) ?></th><?php endforeach;?></tr></thead><tbody>
     <?php if($records===[]):?><tr><td colspan="<?= max(1,count($columns)) ?>" class="w-text" data-align="center" data-tone="muted"><?= __('暂无记录') ?></td></tr>
     <?php else:foreach($records as $record):?><tr><?php foreach($columns as $field=>$label):?><td>
-      <?php if($field==='order_id'):?><a href="<?= $this->getBackendUrl('weline_order/backend/order/view?id='.(int)($record[$field]??0)) ?>"><?= (int)($record[$field]??0) ?></a>
+      <?php if($field==='order_id'):?><a href="@backend-url{'weline_order/backend/order/view'|['id' => (int)($record[$field]??0)]}"><?= (int)($record[$field]??0) ?></a>
       <?php elseif(in_array($field,['transaction_id','tracking_number','invoice_number'],true)):?><code><?= $escape($record[$field]??'') ?></code>
       <?php else:?><?= $escape($record[$field]??'') ?><?php endif;?>
     </td><?php endforeach;?></tr><?php endforeach;endif;?></tbody></table></div>

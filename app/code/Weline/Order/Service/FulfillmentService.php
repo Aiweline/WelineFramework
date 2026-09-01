@@ -160,6 +160,10 @@ class FulfillmentService
         $shipment->setData(OrderShipment::schema_fields_ORDER_ID, $orderId);
         $shipment->setData(OrderShipment::schema_fields_TRACKING_NUMBER, $shipmentData['tracking_number'] ?? '');
         $shipment->setData(OrderShipment::schema_fields_CARRIER, $shipmentData['carrier'] ?? '');
+        $shipment->setData(
+            OrderShipment::schema_fields_TRACKING_PROVIDER_CODE,
+            (string) ($shipmentData['tracking_provider_code'] ?? $shipmentData['provider_code'] ?? '')
+        );
         $shipment->setData(OrderShipment::schema_fields_STATUS, OrderShipment::STATUS_SHIPPED);
         $shipment->setData(OrderShipment::schema_fields_SHIPPED_AT, date('Y-m-d H:i:s'));
         $shipment->save();

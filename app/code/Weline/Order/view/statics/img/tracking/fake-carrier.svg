@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Fake carrier">
+  <rect width="64" height="64" rx="12" fill="#1D4ED8"/>
+  <path d="M12 28h28l12 8v10H12z" fill="#DBEAFE"/>
+  <circle cx="22" cy="48" r="5" fill="#93C5FD"/>
+  <circle cx="44" cy="48" r="5" fill="#93C5FD"/>
+  <path d="M18 20h20v8H18z" fill="#BFDBFE"/>
+</svg>

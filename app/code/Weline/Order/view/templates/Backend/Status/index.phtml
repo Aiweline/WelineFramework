@@ -11,7 +11,7 @@
             <h4 class="w-backend-page__title">
                 <w:icon name="circle" size="sm"></w:icon><lang>订单状态管理</lang>
             </h4>
-            <a href="<?= $this->getBackendUrl('weline_order/backend/status/edit') ?>" class="w-button" data-testid="order-status-create" data-tone="primary">
+            <a href="@backend-url{'weline_order/backend/status/edit'}" class="w-button" data-testid="order-status-create" data-tone="primary">
                 <w:icon name="plus" size="sm"></w:icon><?= __('新建状态') ?>
             </a>
         </div>
@@ -89,7 +89,7 @@
                                         <td><?= htmlspecialchars($status->getData('sort_order')) ?></td>
                                         <td>
                                             <div class="w-button-group">
-                                                <a href="<?= $this->getBackendUrl('weline_order/backend/status/edit', ['id' => $status->getId()]) ?>" class="w-button" title="<?= __('编辑') ?>" data-tone="primary">
+                                                <a href="@backend-url{'weline_order/backend/status/edit'|['id' => $status->getId()]}" class="w-button" title="<?= __('编辑') ?>" data-tone="primary">
                                                     <w:icon name="edit" size="sm"></w:icon>
                                                 </a>
                                                 <?php if (!$status->isSystem()): ?>

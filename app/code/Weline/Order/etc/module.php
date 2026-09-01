@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Order',
-    "version" => '2.12.5',
+    "version" => '2.13.2',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Backend' => '*',
@@ -14,6 +14,7 @@ return [
         'Weline_Websites' => '*',
     ],
     "optional" => [
+        'Weline_Widget' => '*',
     ],
     "provides" => [
         \Weline\Order\Api\OrderFacadeInterface::class => \Weline\Order\Service\OrderFacade::class,
