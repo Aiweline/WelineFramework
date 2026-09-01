@@ -691,17 +691,22 @@ final class ProjectServingManifestStore
 
     /**
      * Retire only the mutable serving references selected by an exact stopped
-     * endpoint proof. The immutable manifests remain under the normal grace
-     * policy. Authority is removed last and is therefore the crash-replay
-     * commit marker: while it exists every remaining partial state can still
-     * be bound to the selected generation; once absent, every earlier mutable
-     * reference must already be absent.
+     * endpoint proof. An explicit terminal fence may additionally authorize a
+     * strict same-launch successor, solely for cleanup. The immutable
+     * manifests remain under the normal grace policy. Authority is removed
+     * last and is therefore the crash-replay commit marker: while it exists
+     * every remaining partial state can still be bound to the selected
+     * generation; once absent, every earlier mutable reference must already be
+     * absent.
+     *
+     * @param array<string,mixed>|null $terminalEndpointFence
      */
     public function retireInactiveInstanceReferences(
         string $instanceId,
         int $expectedGeneration,
         string $expectedDigest,
         ?float $deadlineMonotonic = null,
+        ?array $terminalEndpointFence = null,
     ): void {
         $this->assertInstanceId($instanceId);
         $expectedDigest = \strtolower(\trim($expectedDigest));
@@ -721,6 +726,7 @@ final class ProjectServingManifestStore
                 $expectedGeneration,
                 $expectedDigest,
                 $deadlineMonotonic,
+                $terminalEndpointFence,
             ): void {
                 GatewayProjectStateFilesystem::withExclusiveLock(
                     $this->storeRoot . DIRECTORY_SEPARATOR . 'publish.lock',
@@ -729,12 +735,14 @@ final class ProjectServingManifestStore
                         $expectedGeneration,
                         $expectedDigest,
                         $deadlineMonotonic,
+                        $terminalEndpointFence,
                     ): void {
                         $this->retireInactiveInstanceReferencesLocked(
                             $instanceId,
                             $expectedGeneration,
                             $expectedDigest,
                             $deadlineMonotonic,
+                            $terminalEndpointFence,
                         );
                     },
                     fn ($handle, string $path): mixed => $this->preserveOwnership(
@@ -756,6 +764,7 @@ final class ProjectServingManifestStore
         int $expectedGeneration,
         string $expectedDigest,
         ?float $deadlineMonotonic,
+        ?array $terminalEndpointFence,
     ): void {
         $this->assertPublicationDeadline($deadlineMonotonic);
         $authorityPath = $this->publicationAuthorityFile($instanceId);
@@ -789,6 +798,22 @@ final class ProjectServingManifestStore
             );
         }
         $this->assertRetirementAuthorityManifestBinding($authority, $instanceId);
+        if ((int)$authority['generation'] !== $expectedGeneration
+            || !\hash_equals(
+                $expectedDigest,
+                (string)$authority['manifest_digest'],
+            )
+        ) {
+            [$expectedGeneration, $expectedDigest]
+                = $this->resolveInactiveTerminalManifestSupersession(
+                    $instanceId,
+                    $expectedGeneration,
+                    $expectedDigest,
+                    $authority,
+                    $terminalEndpointFence,
+                );
+        }
+
         if ((int)$authority['generation'] !== $expectedGeneration
             || !\hash_equals(
                 $expectedDigest,
@@ -1930,6 +1955,119 @@ final class ProjectServingManifestStore
                 'WLS serving manifest recovery authority is unbound.',
             );
         }
+    }
+
+    /**
+     * An explicit clean-start may encounter an endpoint whose immutable
+     * serving reference was superseded after the endpoint stopped. Admit only
+     * a strict current-generation advance from the exact same Master launch;
+     * this path is retirement authority only and is never startup authority.
+     *
+     * @param array<string,mixed> $authority
+     * @param array<string,mixed>|null $terminalEndpointFence
+     * @return array{0:int,1:string}
+     */
+    private function resolveInactiveTerminalManifestSupersession(
+        string $instanceId,
+        int $endpointGeneration,
+        string $endpointDigest,
+        array $authority,
+        ?array $terminalEndpointFence,
+    ): array {
+        if ($terminalEndpointFence === null) {
+            throw new \RuntimeException(
+                'Serving manifest authority does not match the selected inactive endpoint.',
+            );
+        }
+        $projectUuid = \strtolower(\trim((string)(
+            $terminalEndpointFence['project_uuid'] ?? ''
+        )));
+        $instanceGeneration = (int)(
+            $terminalEndpointFence['instance_generation'] ?? 0
+        );
+        $masterEpoch = (int)($terminalEndpointFence['master_epoch'] ?? 0);
+        $launchId = \strtolower(\trim((string)(
+            $terminalEndpointFence['launch_id'] ?? ''
+        )));
+        if (\preg_match(
+            '/\A[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\z/D',
+            $projectUuid,
+        ) !== 1
+            || $instanceGeneration < 1
+            || $masterEpoch < 1
+            || \preg_match('/\A[a-f0-9]{32}\z/D', $launchId) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Inactive endpoint serving manifest supersession fence is invalid.',
+            );
+        }
+
+        $currentGeneration = (int)($authority['generation'] ?? 0);
+        $currentDigest = \strtolower(\trim((string)(
+            $authority['manifest_digest'] ?? ''
+        )));
+        if ($currentGeneration <= $endpointGeneration
+            || \preg_match('/\A[a-f0-9]{64}\z/D', $currentDigest) !== 1
+        ) {
+            throw new \RuntimeException(
+                'Serving manifest authority does not match the selected inactive endpoint.',
+            );
+        }
+
+        $endpointPublication = $this->readRetirementBound(
+            $this->manifestPath($endpointGeneration, $endpointDigest),
+            $endpointGeneration,
+            $endpointDigest,
+        );
+        $currentPublication = $this->readRetirementBound(
+            $this->manifestPath($currentGeneration, $currentDigest),
+            $currentGeneration,
+            $currentDigest,
+        );
+        $this->assertPublicationBelongsToInstance(
+            $endpointPublication,
+            $instanceId,
+            $projectUuid,
+        );
+        $this->assertPublicationBelongsToInstance(
+            $currentPublication,
+            $instanceId,
+            $projectUuid,
+        );
+        $endpointPayload = (array)$endpointPublication['payload'];
+        $currentPayload = (array)$currentPublication['payload'];
+        $endpointMasterPid = (int)($endpointPayload['master_pid'] ?? 0);
+        $endpointProjectGeneration = (int)(
+            $endpointPayload['project_generation'] ?? 0
+        );
+        if ($endpointMasterPid < 1
+            || $endpointMasterPid !== (int)($currentPayload['master_pid'] ?? 0)
+            || $instanceGeneration !== (int)(
+                $endpointPayload['instance_generation'] ?? 0
+            )
+            || $instanceGeneration !== (int)(
+                $currentPayload['instance_generation'] ?? 0
+            )
+            || $masterEpoch !== (int)($endpointPayload['master_epoch'] ?? 0)
+            || $masterEpoch !== (int)($currentPayload['master_epoch'] ?? 0)
+            || !\hash_equals(
+                $launchId,
+                (string)($endpointPayload['launch_id'] ?? ''),
+            )
+            || !\hash_equals(
+                $launchId,
+                (string)($currentPayload['launch_id'] ?? ''),
+            )
+            || $endpointProjectGeneration < 1
+            || (int)($currentPayload['project_generation'] ?? 0)
+                < $endpointProjectGeneration
+        ) {
+            throw new \RuntimeException(
+                'Current serving manifest belongs to another inactive endpoint generation.',
+            );
+        }
+
+        return [$currentGeneration, $currentDigest];
     }
 
     /** @param array<string,mixed> $authority */

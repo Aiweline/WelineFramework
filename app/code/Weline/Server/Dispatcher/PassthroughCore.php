@@ -596,7 +596,17 @@ class PassthroughCore
             }
         }
         if (isset($config['homepage_warmup_variants'])) {
-            $this->homepageWarmupCookies = $this->normalizeHomepageWarmupVariants($config['homepage_warmup_variants']);
+            $variantState = $this->normalizeHomepageWarmupVariants($config['homepage_warmup_variants']);
+            $this->homepageWarmupCookies = $variantState['cookies'];
+            if ($variantState['paths'] !== []) {
+                $mergedPaths = \array_values(\array_unique(\array_merge(
+                    $this->homepageWarmupPaths,
+                    $variantState['paths']
+                )));
+                if ($mergedPaths !== []) {
+                    $this->homepageWarmupPaths = $mergedPaths;
+                }
+            }
         } elseif (isset($config['homepage_warmup_cookies'])) {
             $this->homepageWarmupCookies = $this->normalizeHomepageWarmupCookies($config['homepage_warmup_cookies']);
         }
@@ -2137,12 +2147,28 @@ class PassthroughCore
             if ($cookie === '') {
                 continue;
             }
+            // Path-only language: drop WELINE_USER_LANG from warmup Cookie headers.
+            $context = $this->parseWarmupCookieContext($cookie);
+            if ($context['currency'] !== '' && State::isAllowedCurrencyCode($context['currency'])) {
+                $normalized = 'WELINE_USER_CURRENCY=' . $context['currency'];
+                $cookies[$normalized] = $normalized;
+                continue;
+            }
+            if ($context['lang'] !== '') {
+                continue;
+            }
             $cookies[$cookie] = $cookie;
         }
 
         return \array_values($cookies);
     }
 
+    /**
+     * Path-only language: variants may still declare locale+currency pairs, but
+     * language is expressed as URL path prefixes. Cookie headers carry currency only.
+     *
+     * @return array{cookies: array<int, string>, paths: array<int, string>}
+     */
     private function normalizeHomepageWarmupVariants(mixed $value): array
     {
         if (\is_string($value)) {
@@ -2150,10 +2176,11 @@ class PassthroughCore
             $value = \is_array($decoded) ? $decoded : (\preg_split('/[,\s]+/', $value) ?: []);
         }
         if (!\is_array($value)) {
-            return [''];
+            return ['cookies' => [''], 'paths' => []];
         }
 
         $cookies = [''];
+        $paths = [];
         foreach ($value as $variant) {
             $lang = '';
             $currency = '';
@@ -2163,31 +2190,34 @@ class PassthroughCore
             } elseif (\is_scalar($variant)) {
                 $raw = \trim((string)$variant);
                 if (\str_contains($raw, 'WELINE_USER_LANG=') || \str_contains($raw, 'WELINE_USER_CURRENCY=')) {
-                    $cookie = \str_replace(["\r", "\n", "\t"], '', $raw);
-                    if ($cookie !== '') {
-                        $cookies[$cookie] = $cookie;
-                    }
-                    continue;
+                    $cookieContext = $this->parseWarmupCookieContext($raw);
+                    $lang = $cookieContext['lang'];
+                    $currency = $cookieContext['currency'];
+                } else {
+                    $parts = \preg_split('/[:|\/,]/', $raw, 2) ?: [];
+                    $lang = (string)($parts[0] ?? '');
+                    $currency = (string)($parts[1] ?? '');
                 }
-                $parts = \preg_split('/[:|\/,]/', $raw, 2) ?: [];
-                $lang = (string)($parts[0] ?? '');
-                $currency = (string)($parts[1] ?? '');
             }
 
             $lang = \str_replace('-', '_', \trim($lang));
             $currency = \strtoupper(\trim($currency));
-            if ($lang === '' || !\preg_match('/^[a-z]{2}_[A-Za-z0-9_]{2,}$/', $lang)) {
-                continue;
+            if ($lang !== '' && \preg_match('/^[a-z]{2}_[A-Za-z0-9_]{2,}$/', $lang)) {
+                $paths['/' . $lang] = '/' . $lang;
+                $paths['/' . $lang . '/'] = '/' . $lang . '/';
             }
             if (!State::isAllowedCurrencyCode($currency)) {
                 continue;
             }
 
-            $cookie = "WELINE_USER_LANG={$lang}; WELINE_USER_CURRENCY={$currency}";
+            $cookie = "WELINE_USER_CURRENCY={$currency}";
             $cookies[$cookie] = $cookie;
         }
 
-        return \array_values($cookies);
+        return [
+            'cookies' => \array_values($cookies),
+            'paths' => \array_values($paths),
+        ];
     }
 
     private function normalizeWarmupList(mixed $value): array

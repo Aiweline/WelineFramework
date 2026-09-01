@@ -5,14 +5,13 @@
  * @var \Weline\Framework\View\Template $block
  * @var array $apiDocs
  */
-$monitorUrl = $this->getBackendUrl('*/backend/server-monitor');
 ?>
 
 <div class="api-doc-page">
     <!-- 面包屑 -->
     <nav aria-label="breadcrumb" style="--w-mb:var(--weline-space-4);">
         <ol class="w-breadcrumb">
-            <li class="w-breadcrumb__item"><a href="<?= $monitorUrl ?>"><?= __('服务器监控') ?></a></li>
+            <li class="w-breadcrumb__item"><a href="@backend-url{'*/backend/server-monitor'}"><?= __('服务器监控') ?></a></li>
             <li class="w-breadcrumb__item" data-state="active"><?= __('API 文档') ?></li>
         </ol>
     </nav>

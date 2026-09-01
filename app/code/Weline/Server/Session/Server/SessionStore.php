@@ -838,7 +838,7 @@ final class SessionStore
 
     /**
      * 刷新 Session 过期时间（滑动 TTL）
-     * 不调用 markDirty()，避免每次 get 都算“写入”导致频繁持久化刷屏。
+     * 默认不 markDirty，避免每次 get 刷盘；每隔一段时间落一次 expire，避免进程重启丢续期。
      */
     public function touch(string $sessionId, int $ttl = 0): bool
     {
@@ -847,10 +847,15 @@ final class SessionStore
         }
 
         $ttl = $ttl > 0 ? $ttl : $this->defaultTtl;
-        $this->store[$sessionId]['expire'] = $ttl > 0 ? \time() + $ttl : 0;
-        $this->store[$sessionId]['atime'] = \time();
+        $now = \time();
+        $this->store[$sessionId]['expire'] = $ttl > 0 ? $now + $ttl : 0;
+        $this->store[$sessionId]['atime'] = $now;
         $this->touchLru($sessionId);
-        // 不 markDirty：仅刷新内存中的 TTL，定时/按写入次数持久化时会带上最新状态
+        $lastPersist = (int)($this->store[$sessionId]['touch_persist_at'] ?? 0);
+        if (($now - $lastPersist) >= 60) {
+            $this->store[$sessionId]['touch_persist_at'] = $now;
+            $this->markDirty();
+        }
 
         return true;
     }

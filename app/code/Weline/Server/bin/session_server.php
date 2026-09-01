@@ -214,6 +214,16 @@ $supervisorEnabled = $supervisorEnabledRaw !== false
 
 $sessionConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['session'] ?? null))
     ? $envConfig['wls']['session'] : [];
+// 未显式配置 wls.session.session_ttl 时，对齐应用 session.lifetime，避免共享会话默认 3600s 与前台 86400 脱节。
+if (!isset($sessionConfig['session_ttl']) || (int)$sessionConfig['session_ttl'] <= 0) {
+    $appLifetime = 0;
+    if (\is_array($envConfig) && \is_array($envConfig['session'] ?? null)) {
+        $appLifetime = (int)($envConfig['session']['lifetime'] ?? $envConfig['session']['session_ttl'] ?? 0);
+    }
+    if ($appLifetime > 0) {
+        $sessionConfig['session_ttl'] = $appLifetime;
+    }
+}
 $sharedServiceConfig = (\is_array($envConfig) && \is_array($envConfig['wls']['shared_service'] ?? null))
     ? $envConfig['wls']['shared_service'] : [];
 foreach (['empty_token_exit_grace_sec', 'empty_token_check_interval_sec', 'startup_consumer_grace_sec'] as $sharedConfigKey) {

@@ -122,14 +122,9 @@ final class MaintenanceCheckObserverTest extends TestCase
         self::assertStringContainsString("defined('WLS_MODE')", $interceptorSource);
         self::assertStringNotContainsString("PHP_SAPI === 'cli'", $interceptorSource);
         self::assertStringContainsString('applyParsedRequestUri()', $interceptorSource);
-        self::assertStringContainsString('isStaticFileFresh', $interceptorSource);
-        self::assertStringContainsString('moduleFallbackTranslations', $interceptorSource);
-        self::assertStringContainsString('sendMaintenanceResponse()', $interceptorSource);
-        self::assertStringContainsString('ResponseTerminateException', $interceptorSource);
-        self::assertStringNotContainsString('exit;', $interceptorSource);
-        self::assertStringContainsString("getHook('header-language-switcher')", $maintenanceTemplateSource);
-        self::assertStringContainsString('WelineHeaderChoiceSelector', $maintenanceTemplateSource);
-        self::assertStringContainsString('Weline_I18n::templates/Frontend/header-choice-selector-assets.phtml', $maintenanceTemplateSource);
+        self::assertStringContainsString('MaintenanceStaticPage', $interceptorSource);
+        self::assertStringContainsString('MaintenanceStaticGenerator', $interceptorSource);
+        self::assertStringContainsString('MaintenanceStaticPage::publicHtmlUrl', $maintenanceTemplateSource);
         self::assertStringContainsString("defined('WLS_MAINTENANCE_WORKER')", $appSource);
         self::assertStringContainsString("defined('WLS_MAINTENANCE_WORKER')", $fpcObserverSource);
         self::assertStringContainsString("Env::system('maintenance')", $fpcObserverSource);
@@ -137,6 +132,27 @@ final class MaintenanceCheckObserverTest extends TestCase
         self::assertStringContainsString('setRuntimeMaintenanceMode(false)', $workerSslSource);
         self::assertStringNotContainsString('setRuntimeMaintenanceMode($mEnabled)', $workerSource);
         self::assertStringNotContainsString('setRuntimeMaintenanceMode($mEnabled)', $workerSslSource);
+
+        $policyKernelSource = (string) \file_get_contents(BP . 'app/code/Weline/Server/Security/WorkerPolicyKernel.php');
+        $unavailablePageSource = (string) \file_get_contents(BP . 'app/code/Weline/Server/Http/ServiceUnavailablePage.php');
+        self::assertStringContainsString('isMaintenanceWaitGiftPath', $policyKernelSource);
+        self::assertStringContainsString('/maintenance/frontend/wait-gift', $policyKernelSource);
+        self::assertStringContainsString('isMaintenanceStaticAssetPath', $policyKernelSource);
+        self::assertStringContainsString('PATH_SCAN_STATIC_EXTENSIONS', $policyKernelSource);
+        self::assertStringContainsString("'/pub/errors/'", $policyKernelSource);
+        self::assertStringContainsString('maintenanceGateSetCookie', $unavailablePageSource);
+        self::assertStringContainsString('weline_mw_gate', $unavailablePageSource);
+
+        $kernel = (new \ReflectionClass(\Weline\Server\Security\WorkerPolicyKernel::class))
+            ->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(\Weline\Server\Security\WorkerPolicyKernel::class, 'isMaintenanceStaticAssetPath');
+        $method->setAccessible(true);
+        self::assertTrue($method->invoke($kernel, '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png'));
+        self::assertTrue($method->invoke($kernel, '/static/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png'));
+        self::assertTrue($method->invoke($kernel, '/pub/errors/maintenance/zh_Hans_CN.html'));
+        self::assertTrue($method->invoke($kernel, '/Weline/Theme/view/statics/ui/weline-ui.js'));
+        self::assertFalse($method->invoke($kernel, '/'));
+        self::assertFalse($method->invoke($kernel, '/catalog/product/view'));
     }
 
     public function testWorkerEntriesAvoidBlockingUsleepInLongLivedSlotWait(): void

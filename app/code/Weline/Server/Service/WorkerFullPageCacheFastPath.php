@@ -196,6 +196,10 @@ final class WorkerFullPageCacheFastPath
             return true;
         }
 
+        if ($this->hasPreviewTokenCookie((string)($headers['cookie'] ?? ''))) {
+            return true;
+        }
+
         foreach (self::BYPASS_HEADERS as $name) {
             if ($this->truthy((string)($headers[$name] ?? ''))) {
                 return true;
@@ -226,6 +230,17 @@ final class WorkerFullPageCacheFastPath
         }
 
         return false;
+    }
+
+    private function hasPreviewTokenCookie(string $cookieHeader): bool
+    {
+        $cookieHeader = \trim($cookieHeader);
+        if ($cookieHeader === '') {
+            return false;
+        }
+
+        // Match logical and website-scoped wire names (weline_preview_token_w0=…).
+        return \preg_match('/(?:^|;\s*)weline_preview_token(?:_w\d+)?=/i', $cookieHeader) === 1;
     }
 
     private function truthy(string $value): bool

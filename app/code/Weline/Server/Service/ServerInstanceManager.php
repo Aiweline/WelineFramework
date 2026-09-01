@@ -355,17 +355,26 @@ class ServerInstanceManager
         $cleanedNames = [];
 
         foreach ($this->listRawInstanceNames() as $name) {
-            $selected = $this->selectInactiveCleanupEndpoint($name);
-            if ($selected === null) {
-                continue;
-            }
-
-            if ($this->purgeInactiveInstanceTransaction($name, $selected)) {
+            if ($this->cleanupInactiveInstance($name)) {
                 $cleanedNames[] = $name;
             }
         }
 
         return $cleanedNames;
+    }
+
+    /**
+     * Safely remove one exact offline instance generation without signalling
+     * any process. A live process, held lifecycle/start lock, changed endpoint,
+     * or unverifiable artifact makes this operation fail closed.
+     */
+    public function cleanupInactiveInstance(string $name): bool
+    {
+        self::assertGatewayEndpointName($name);
+        $selected = $this->selectInactiveCleanupEndpoint($name);
+
+        return $selected !== null
+            && $this->purgeInactiveInstanceTransaction($name, $selected);
     }
 
     private function shouldPurgeStoppedInstanceRecord(array $rawData): bool
@@ -634,7 +643,19 @@ class ServerInstanceManager
             );
         }
         (new ProjectServingManifestStore((string)BP))
-            ->retireInactiveInstanceReferences($name, $generation, $digest);
+            ->retireInactiveInstanceReferences(
+                $name,
+                $generation,
+                $digest,
+                terminalEndpointFence: [
+                    'project_uuid' => (string)($gateway['project_uuid'] ?? ''),
+                    'instance_generation' => (int)(
+                        $gateway['instance_generation'] ?? 0
+                    ),
+                    'master_epoch' => (int)($rawData['master_epoch'] ?? 0),
+                    'launch_id' => (string)($gateway['launch_id'] ?? ''),
+                ],
+            );
     }
 
     /**

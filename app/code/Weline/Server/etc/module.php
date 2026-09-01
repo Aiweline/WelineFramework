@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Server',
-    "version" => '2.0.1',
+    "version" => '2.0.11',
     "requires" => [
         'Weline_Framework' => '*',
     ],

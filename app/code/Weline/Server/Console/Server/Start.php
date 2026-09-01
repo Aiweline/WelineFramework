@@ -401,6 +401,11 @@ class Start extends CommandAbstract
         // otherwise an explicit Windows Direct request could silently become
         // a PHP CLI server when WLS dependencies are unavailable.
         $instanceName = $this->parseInstanceName($args);
+        $cleanRequested = \array_key_exists('clean', $args)
+            || $this->hasCliArgvToken(['--clean', '-clean']);
+        $cleanRestartCommand = 'php bin/w server:start'
+            . ($instanceName === 'default' ? '' : ' ' . $instanceName)
+            . ' -clean';
         $runtimeResolver = new RuntimeStrategyResolver();
         try {
             $config = $this->getServerConfig($instanceName, $args);
@@ -408,6 +413,45 @@ class Start extends CommandAbstract
         } catch (\RuntimeException $exception) {
             $this->printer->error($exception->getMessage());
             return 1;
+        }
+
+        // Explicit clean-start is intentionally targeted and fail-closed. The
+        // saved endpoint has already contributed its configuration above; now
+        // retire only this exact offline generation through the same fenced
+        // transaction used by server:clean. No process is signalled here.
+        $masterOnly = isset($args['master-only']) || getenv('WLS_MASTER_ONLY');
+        if ($cleanRequested && !$masterOnly) {
+            try {
+                $instanceManager = $this->getInstanceManager();
+                $oldEndpoint = $instanceManager->getRawInstanceData($instanceName);
+                if ($oldEndpoint === null) {
+                    $this->printer->note(__(
+                        '实例 [%{1}] 没有旧运行资料；继续执行完整新代启动。',
+                        [$instanceName],
+                    ));
+                } elseif (!$instanceManager->cleanupInactiveInstance($instanceName)) {
+                    $this->printer->error(__(
+                        '无法安全清理实例 [%{1}]：实例仍在运行、启动/生命周期锁被占用，或旧资料身份已变化。',
+                        [$instanceName],
+                    ));
+                    $this->printer->note(__(
+                        '如实例仍在线，请先执行 php bin/w server:stop %{1} -f，确认停止后再执行：%{2}',
+                        [$instanceName, $cleanRestartCommand],
+                    ));
+                    return 1;
+                } else {
+                    $this->printer->success(__(
+                        '实例 [%{1}] 的旧运行资料已安全清理；开始完整新代启动。',
+                        [$instanceName],
+                    ));
+                }
+            } catch (\Throwable $exception) {
+                $this->printer->error(__(
+                    '实例 [%{1}] 的旧运行资料无法安全清理：%{2}',
+                    [$instanceName, $exception->getMessage()],
+                ));
+                return 1;
+            }
         }
 
         // Capture the launcher's immutable birth before runtime setup creates
@@ -451,7 +495,7 @@ class Start extends CommandAbstract
         
         // 仅运行 Master 进程（由 daemon 模式后台启动时调用，内部使用）
         // master-only 不需要启动锁，因为它是由已经获取锁的父进程启动的
-        if (isset($args['master-only']) || getenv('WLS_MASTER_ONLY')) {
+        if ($masterOnly) {
             try {
                 $this->runMasterOnly($instanceName);
             } catch (\Throwable $exception) {
@@ -861,6 +905,10 @@ class Start extends CommandAbstract
                 $this->printer->error(__('纯 WLS 启动拒绝损坏或不匹配的服务清单：%{1}', [
                     $throwable->getMessage(),
                 ]));
+                $this->printer->note(__(
+                    '旧运行资料不会被普通启动自动删除。确认实例已停止后，请执行：%{1}',
+                    [$cleanRestartCommand],
+                ));
                 return 1;
             }
         }
@@ -5872,6 +5920,8 @@ class Start extends CommandAbstract
             $this->traceStartupPhase($instanceName, 'wildcard-certificate:after');
         }
 
+        $this->publishManagedDomainsInUse($config, $instanceName);
+
         // 生成多域名证书映射文件（用于 SNI 支持）
         if (!empty($config['no_ssl'])) {
             $this->traceStartupPhase($instanceName, 'certificate-map:skipped-http-only');
@@ -8437,6 +8487,44 @@ class Start extends CommandAbstract
     }
 
     /**
+     * 启动阶段广播 WLS 实际启用的 Host，并补发已有证书就绪通知。
+     *
+     * @param array<string,mixed> $config
+     */
+    protected function publishManagedDomainsInUse(array $config, string $instanceName): void
+    {
+        $domains = [];
+        foreach (['host', 'public_host', 'ssl_domain'] as $key) {
+            $candidate = $this->normalizeCertificateDomainCandidate((string)($config[$key] ?? ''));
+            if ($candidate === '' || $this->isWildcardBindHost($candidate)) {
+                continue;
+            }
+            if (\in_array($candidate, ['127.0.0.1', '0.0.0.0', 'localhost'], true)) {
+                continue;
+            }
+            $domains[$candidate] = $key;
+        }
+        if ($domains === []) {
+            return;
+        }
+
+        foreach ($domains as $domain => $role) {
+            \Weline\Server\Service\WlsManagedDomainActiveEventDispatcher::dispatch(
+                $domain,
+                $role,
+                $instanceName,
+            );
+        }
+
+        /** @var \Weline\Server\Service\SslCertificateService $sslService */
+        $sslService = $this->deferredCertificatePreparationService
+            ?? ObjectManager::getInstance(\Weline\Server\Service\SslCertificateService::class);
+        foreach (\array_keys($domains) as $domain) {
+            $sslService->publishCertificateIssuedNotification($domain);
+        }
+    }
+
+    /**
      * @return array<string,mixed>
      */
     protected function configureHostsWithAdministratorAuthorization(string $host): array
@@ -8508,6 +8596,7 @@ class Start extends CommandAbstract
         if ($sslService->hasValidLocalCertificate($wildcard)) {
             // ensureCertificate 的“已有证书”分支仍会重建映射并广播；启动阶段已有有效证书时直接复用。
             $this->ensureLocalDevelopmentCaTrusted($sslService);
+            $sslService->publishCertificateIssuedNotification($wildcard);
             return;
         }
 
@@ -12718,6 +12807,7 @@ PHP;
                 '-m, --mode <mode>' => __('运行模式：io（I/O密集）或 cpu（CPU密集）'),
                 '-r, --restart' => __('滚动排水重启：Master 保持运行，Orchestrator 分批次排水替换 Worker（默认三批）'),
                 '-f' => __('与 -r 同用时强制完整重启（停 Master，跳过排水等待）'),
+                '-clean, --clean' => __('仅安全清理当前已停止实例的旧运行资料，再执行完整新代启动；不会终止在线或身份不明的进程'),
                 '--ssl-cert <path>' => __('公网 TLS 证书文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）'),
                 '--ssl-key <path>' => __('公网 TLS 私钥文件路径（默认交给 Nginx；--no-nginx 时交给纯 WLS）'),
                 '--certificate-profile <profile>' => __('WLS 2.0 证书信任范围：production（默认）或显式 test；域名后缀不会自动启用 test'),
@@ -12742,6 +12832,7 @@ PHP;
                 __('启动副作用') => __('auto/gateway 仅在 virgin host 上从最终项目发行物自带的签名包首装宿主网关；不下载或编译 legacy Nginx，复制到宿主 A/B 槽后不依赖引导项目'),
                 __('多项目支持') => __('多个项目共享宿主 80/443，并通过项目 UUID、域名冲突检查、generation 和租约隔离'),
                 __('配置记忆') => __('首次 server:start api -p 9981 会保存回源端口，之后 server:start api 自动复用'),
+                __('清理启动') => __('普通启动不会自动删除损坏或过期资料；确认实例已停止后执行 php bin/w server:start [name] -clean'),
                 __('智能模式') => __('worker_count 设为 "auto" 时由运行时策略按 OS/CPU/内存自动计算'),
                 __('事件循环') => __('Windows Direct 使用内置 stream_select；Linux reuseport/shared_fd 与 macOS shared_fd Direct 使用预装 ext-event，缺失时停止并提示显式 --install-deps'),
                 __('HTTP/3') => __('仅当 nginx -V 证明包含 ngx_http_v3_module 时配置 QUIC/Alt-Svc；可用 verifier 必须通过 owner-bound 真实 QUIC，否则明确 pending'),

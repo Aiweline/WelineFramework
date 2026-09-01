@@ -1734,6 +1734,72 @@ function wlsAcmeHttp01ChallengeResponse(
 }
 
 /**
+ * Resolve the two exact plaintext loopback aliases to the immutable public
+ * HTTPS origin, but only while that origin is still an active serving route.
+ */
+function wlsServingManifestLoopbackRedirectHost(
+    string $authority,
+    int $publicTcpPort,
+    string $publicOrigin,
+    array $httpRoutes,
+): ?string {
+    if ($publicTcpPort < 1 || $publicTcpPort > 65535) {
+        return null;
+    }
+
+    $authority = \strtolower(\trim($authority));
+    if (!\in_array(
+        $authority,
+        [
+            '127.0.0.1:' . $publicTcpPort,
+            'localhost:' . $publicTcpPort,
+        ],
+        true,
+    )) {
+        return null;
+    }
+
+    try {
+        $origin = \parse_url($publicOrigin);
+    } catch (\ValueError) {
+        return null;
+    }
+    if (!\is_array($origin)) {
+        return null;
+    }
+
+    $originPath = (string)($origin['path'] ?? '');
+    $originPort = isset($origin['port']) ? (int)$origin['port'] : 443;
+    if (\strtolower((string)($origin['scheme'] ?? '')) !== 'https'
+        || (string)($origin['host'] ?? '') === ''
+        || $originPort !== $publicTcpPort
+        || ($originPath !== '' && $originPath !== '/')
+        || \array_key_exists('user', $origin)
+        || \array_key_exists('pass', $origin)
+        || \array_key_exists('query', $origin)
+        || \array_key_exists('fragment', $origin)
+    ) {
+        return null;
+    }
+
+    $originHost = wlsServingManifestNormalizeAuthority(
+        (string)$origin['host'],
+    );
+    if ($originHost === null) {
+        return null;
+    }
+    $route = wlsServingManifestRouteForHost($originHost, $httpRoutes);
+    if (!\is_array($route)
+        || (string)($route['route_id'] ?? '') === ''
+        || (string)($route['certificate_state'] ?? '') !== 'active'
+    ) {
+        return null;
+    }
+
+    return $originHost;
+}
+
+/**
  * Re-authorize a cleartext keep-alive request against the current complete
  * desired-route set. The Host observed during the initial non-consuming peek
  * is an immutable connection authority, but it is never sufficient by itself:
@@ -1746,15 +1812,26 @@ function wlsServingManifestPlaintextRequestAction(
     array $frame,
     string $connectionHost,
     array $httpRoutes,
+    int $publicTcpPort,
+    string $publicOrigin,
 ): string {
     $headers = \is_array($frame['headers'] ?? null) ? $frame['headers'] : [];
-    $host = wlsServingManifestNormalizeAuthority((string)($headers['host'] ?? ''));
+    $rawHost = (string)($headers['host'] ?? '');
+    $host = wlsServingManifestNormalizeAuthority($rawHost);
     $expectedHost = wlsServingManifestNormalizeAuthority($connectionHost);
     if ($host === null
         || $expectedHost === null
         || !\hash_equals($expectedHost, $host)
     ) {
         return 'misdirected';
+    }
+    if (wlsServingManifestLoopbackRedirectHost(
+        $rawHost,
+        $publicTcpPort,
+        $publicOrigin,
+        $httpRoutes,
+    ) !== null) {
+        return 'redirect_https';
     }
     $route = wlsServingManifestRouteForHost($host, $httpRoutes);
     $expectedRoute = wlsServingManifestRouteForHost($expectedHost, $httpRoutes);
@@ -6870,6 +6947,7 @@ while (true) {
         $servingManifestRoutes,
         $servingManifestHttpRoutes,
         $port,
+        $publicOrigin,
         $connectionPeerIps,
         $wlsRuntimeTopology,
         $masterRuntimeCredential,
@@ -7548,6 +7626,8 @@ while (true) {
                 $frame,
                 $plaintextHost,
                 $servingManifestHttpRoutes,
+                (int)$port,
+                $publicOrigin,
             )
             : null;
         $mustRejectMisdirected = !$frameHasHeaders
@@ -7588,9 +7668,13 @@ while (true) {
             continue;
         }
         if ($plaintextAction === 'redirect_https') {
-            $redirectHost = wlsServingManifestNormalizeAuthority(
-                (string)($frameHeaders['host'] ?? ''),
-            );
+            $rawRedirectAuthority = (string)($frameHeaders['host'] ?? '');
+            $redirectHost = wlsServingManifestLoopbackRedirectHost(
+                $rawRedirectAuthority,
+                (int)$port,
+                $publicOrigin,
+                $servingManifestHttpRoutes,
+            ) ?? wlsServingManifestNormalizeAuthority($rawRedirectAuthority);
             sslFinalizeHttpResponseAfterHandle(
                 $conn,
                 $connId,
@@ -8891,6 +8975,7 @@ function wlsSslAdvancePeekState(
     array $servingRoutes,
     array $servingHttpRoutes,
     int $publicTcpPort,
+    string $publicOrigin,
     array &$connectionPeerIps = [],
     string $runtimeTopology = 'direct',
     string $proxyAuthenticationSecret = '',
@@ -9001,14 +9086,15 @@ function wlsSslAdvancePeekState(
                     $_hostMatches,
                 )
                 : 0;
+            $_hostAuthority = $_hostCount === 1
+                ? (string)($_hostMatches[1][0] ?? '')
+                : '';
             $_host = $_hostCount === 1
-                ? wlsServingManifestNormalizeAuthority(
-                    (string)($_hostMatches[1][0] ?? ''),
-                )
+                ? wlsServingManifestNormalizeAuthority($_hostAuthority)
                 : null;
             if ($_requestLineValid && $_host !== null) {
                 $_preflightFrame = [
-                    'headers' => ['host' => $_host],
+                    'headers' => ['host' => $_hostAuthority],
                     'method' => (string)$_requestLine[1],
                     'target' => (string)$_requestLine[2],
                 ];
@@ -9016,6 +9102,8 @@ function wlsSslAdvancePeekState(
                     $_preflightFrame,
                     $_host,
                     $servingHttpRoutes,
+                    $publicTcpPort,
+                    $publicOrigin,
                 );
                 if (\in_array(
                     $_plaintextAction,
@@ -9032,8 +9120,14 @@ function wlsSslAdvancePeekState(
                     continue;
                 }
                 if ($_plaintextAction === 'redirect_https') {
+                    $_redirectHost = wlsServingManifestLoopbackRedirectHost(
+                        $_hostAuthority,
+                        $publicTcpPort,
+                        $publicOrigin,
+                        $servingHttpRoutes,
+                    ) ?? $_host;
                     $_resp = wlsServingManifestHttpsRedirectResponse(
-                        $_host,
+                        $_redirectHost,
                         (string)$_requestLine[2],
                         $publicTcpPort,
                     );
