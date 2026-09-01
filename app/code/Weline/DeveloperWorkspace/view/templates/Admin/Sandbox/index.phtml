@@ -4,9 +4,6 @@
  */
 $sandboxKeyConfigured = (bool)($this->getData('sandboxKeyConfigured') ?? false);
 $enabled = (string)($this->getData('enabled') ?? '') === '1';
-$enableUrl = $this->getBackendUrl('*/admin/sandbox/enable');
-$closeUrl = $this->getBackendUrl('*/admin/sandbox/close');
-$saveUrl = $this->getBackendUrl('*/admin/sandbox/setSandboxKey');
 ?>
 
 <template>Weline_DeveloperWorkspace::Backend/AsyncEventProbe/index.phtml</template>
@@ -47,8 +44,8 @@ $saveUrl = $this->getBackendUrl('*/admin/sandbox/setSandboxKey');
                         </span>
                     </div>
                     <div style="--w-mt:var(--weline-space-4);">
-                        <w:form class="w-grid" method="post" action="@var($saveUrl)" novalidate csrf="off" data-align="end" style="--w-gap:var(--weline-space-2);">
-                            <?= $this->getFormKey($saveUrl) ?>
+                        <w:form class="w-grid" method="post" action="@backend-url{'*/admin/sandbox/setSandboxKey'}" novalidate csrf="off" data-align="end" style="--w-gap:var(--weline-space-2);">
+                            <?= $this->getFormKey('*/admin/sandbox/setSandboxKey') ?>
                             <div style="--w-span-md:6;--w-span-lg:5;">
                                 <label class="w-field__label" for="sandbox_key_input" style="--w-mb:var(--weline-space-1);"><?= __('新沙盒Key') ?></label>
                                 <input type="password" class="w-input" name="key" id="sandbox_key_input" placeholder="<?= __('请输入新的沙盒Key') ?>" autocomplete="new-password" required>
@@ -63,15 +60,15 @@ $saveUrl = $this->getBackendUrl('*/admin/sandbox/setSandboxKey');
                         <div style="--w-mb:var(--weline-space-2);">
                             <?= __('沙盒请求请优先通过已授权表单开关；不要把启动Key放进可点击GET链接。') ?>
                         </div>
-                        <w:form class="me-2" method="post" action="@var($enableUrl)" csrf="off" data-w-display="inline-block">
-                            <?= $this->getFormKey($enableUrl) ?>
+                        <w:form class="me-2" method="post" action="@backend-url{'*/admin/sandbox/enable'}" csrf="off" data-w-display="inline-block">
+                            <?= $this->getFormKey('*/admin/sandbox/enable') ?>
                             <label class="w-visually-hidden" for="sandbox_enable_key"><?= __('沙盒启动Key') ?></label>
                             <input type="password" class="w-input me-1" name="key" id="sandbox_enable_key" placeholder="<?= __('沙盒启动Key') ?>" autocomplete="off" required data-w-display="inline-block" data-w-width="auto" data-size="sm">
                             <input type="hidden" name="enable" value="on">
                             <button type="submit" class="w-button" data-tone="success" data-size="sm"><?= __('开启沙盒') ?></button>
                         </w:form>
-                        <w:form method="post" action="@var($closeUrl)" csrf="off" data-w-display="inline-block">
-                            <?= $this->getFormKey($closeUrl) ?>
+                        <w:form method="post" action="@backend-url{'*/admin/sandbox/close'}" csrf="off" data-w-display="inline-block">
+                            <?= $this->getFormKey('*/admin/sandbox/close') ?>
                             <label class="w-visually-hidden" for="sandbox_close_key"><?= __('沙盒启动Key') ?></label>
                             <input type="password" class="w-input me-1" name="key" id="sandbox_close_key" placeholder="<?= __('沙盒启动Key') ?>" autocomplete="off" required data-w-display="inline-block" data-w-width="auto" data-size="sm">
                             <input type="hidden" name="close" value="on">

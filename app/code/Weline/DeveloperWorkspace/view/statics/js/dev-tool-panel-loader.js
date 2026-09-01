@@ -609,21 +609,35 @@
     }
 
     function tabOrderValue(manifest, button) {
-        var raw = manifest && manifest.order;
-        if (raw === undefined && button) {
+        // insertOrderedTab 以 tabOrderValue(null, item) 读取已有按钮；
+        // 切勿用 `manifest && manifest.order`（manifest=null 时得到 null，
+        // Number(null)===0 且不会回退到 data-order，导致排序失效、后注册的 Tab 全追加到末尾）。
+        var raw;
+        if (manifest && manifest.order !== undefined && manifest.order !== null && manifest.order !== '') {
+            raw = manifest.order;
+        } else if (button) {
             raw = button.getAttribute('data-order');
+        }
+        if (raw === null || raw === undefined || raw === '') {
+            var tabId = button ? button.getAttribute('data-tab') : (manifest && manifest.id);
+            var builtInOrder = {
+                performance: 10,
+                framework: 20,
+                docs: 30
+            };
+            return builtInOrder[tabId] || 1000;
         }
         var order = Number(raw);
         if (Number.isFinite(order)) {
             return order;
         }
-        var tabId = button ? button.getAttribute('data-tab') : (manifest && manifest.id);
-        var builtInOrder = {
+        var fallbackId = button ? button.getAttribute('data-tab') : (manifest && manifest.id);
+        var fallbackOrder = {
             performance: 10,
             framework: 20,
             docs: 30
         };
-        return builtInOrder[tabId] || 1000;
+        return fallbackOrder[fallbackId] || 1000;
     }
 
     function insertOrderedTab(tabs, button, order) {

@@ -133,6 +133,9 @@ WelineFramework开发文档,"WelineFramework Developer Docs"
 搜索关键词不能为空,"Search keyword cannot be empty"
 API文档管理,"API Documentation"
 开发工作区,"development workspace"
+系统与主题版本,系统与主题版本
+系统版本（Weline_Framework）,系统版本（Weline_Framework）
+前端主题发布版本,前端主题发布版本
 开发,Development
 Prompt,Prompt
 Completion,Completion
