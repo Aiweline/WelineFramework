@@ -400,13 +400,12 @@ class UrlRewriteSubmitSyncService
         $account = (array)($accountInfo['account'] ?? []);
         $provider = trim((string)($account[SeoAccount::schema_fields_PROVIDER] ?? $accountInfo['platform_code'] ?? ''));
         $accountId = (int)($accountInfo['account_id'] ?? $account[SeoAccount::schema_fields_ACCOUNT_ID] ?? 0);
-        $accountScope = trim((string)($account[SeoAccount::schema_fields_SCOPE] ?? ''));
 
         if ($provider === '' || $accountId <= 0) {
             return 0;
         }
 
-        $scope = $accountScope !== '' ? $accountScope : self::DEFAULT_SCOPE;
+        $scope = self::DEFAULT_SCOPE;
         $created = 0;
 
         foreach (array_chunk($targets, self::BATCH_SIZE) as $chunk) {

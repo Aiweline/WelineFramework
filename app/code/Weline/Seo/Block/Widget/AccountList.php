@@ -74,15 +74,9 @@ class AccountList extends Block
      */
     private function getAccounts(string $scope): array
     {
-        $query = $this->accountModel->reset()->select();
-        
-        // 按 scope 过滤
-        if ($scope !== '') {
-            $query->where(SeoAccount::schema_fields_SCOPE, $scope);
-        }
-        
-        $query->order(SeoAccount::schema_fields_CREATED_AT, 'DESC');
-        
-        return $query->fetchArray();
+        return $this->accountModel->reset()
+            ->select()
+            ->order(SeoAccount::schema_fields_CREATED_AT, 'DESC')
+            ->fetchArray();
     }
 }

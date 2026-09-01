@@ -94,6 +94,29 @@ class GoogleIndexingApiAdapter implements SearchEngineAdapterInterface
         ];
     }
 
+    public function getAccountConfigFields(): array
+    {
+        return [
+            [
+                'key' => 'service_account',
+                'label' => (string)__('Google Service Account JSON'),
+                'type' => 'json',
+                'required' => true,
+                'accept' => '.json,application/json',
+                'placeholder' => '{"type":"service_account","client_email":"...","private_key":"..."}',
+                'hint' => (string)__('Indexing API 与 Search Console 共用 Service Account；须在 GSC 中添加 client_email 为所有者'),
+            ],
+            [
+                'key' => 'site_url',
+                'label' => (string)__('站点属性 URL'),
+                'type' => 'website_url',
+                'required' => false,
+                'placeholder' => 'https://www.example.com/',
+                'hint' => (string)__('从网站列表选择；可选，用于与 Search Console 站点属性对齐'),
+            ],
+        ];
+    }
+
     public function isConfigured(): bool
     {
         // 适配器本身为无状态，实际配置在账户层面验证

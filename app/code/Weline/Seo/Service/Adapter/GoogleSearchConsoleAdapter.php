@@ -43,6 +43,29 @@ class GoogleSearchConsoleAdapter implements SearchEngineAdapterInterface
         ];
     }
 
+    public function getAccountConfigFields(): array
+    {
+        return [
+            [
+                'key' => 'service_account',
+                'label' => (string)__('Google Service Account JSON'),
+                'type' => 'json',
+                'required' => true,
+                'accept' => '.json,application/json',
+                'placeholder' => '{"type":"service_account","project_id":"..."}',
+                'hint' => (string)__('可粘贴完整 JSON，或上传 Google Cloud 下载的密钥文件'),
+            ],
+            [
+                'key' => 'site_url',
+                'label' => (string)__('Search Console 站点属性 URL'),
+                'type' => 'website_url',
+                'required' => true,
+                'placeholder' => 'https://www.example.com/',
+                'hint' => (string)__('从网站列表选择；须与 Search Console 已验证站点属性一致'),
+            ],
+        ];
+    }
+
     public function isConfigured(): bool
     {
         return true;

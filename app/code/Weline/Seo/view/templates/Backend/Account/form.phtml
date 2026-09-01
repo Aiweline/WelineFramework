@@ -7,6 +7,7 @@
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Service\PlatformVisual;
+use Weline\Seo\Service\SeoWebsiteDirectory;
 
 /** @var \Weline\Seo\Model\SeoAccount $account */
 $account = $account ?? null;
@@ -34,6 +35,39 @@ $enableCronSitemap = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAcco
 
 $configArray = $account ? $account->getConfigArray() : [];
 $configJson = $configArray ? json_encode($configArray, JSON_PRETTY_PRINT | $jsonForScriptFlags) : '';
+
+$seoAccountWebsiteSelectOptions = [];
+try {
+    /** @var SeoWebsiteDirectory $seoWebsiteDirectory */
+    $seoWebsiteDirectory = ObjectManager::getInstance(SeoWebsiteDirectory::class);
+    foreach ($seoWebsiteDirectory->listWebsites() as $websiteRow) {
+        if (!is_array($websiteRow)) {
+            continue;
+        }
+        $websiteId = (int)($websiteRow['website_id'] ?? -1);
+        if ($websiteId < 0) {
+            continue;
+        }
+        $siteUrl = rtrim($seoWebsiteDirectory->effectivePublicBaseUrl($websiteRow), '/');
+        $domain = strtolower((string)(parse_url($siteUrl, PHP_URL_HOST) ?: ($websiteRow['domain'] ?? '')));
+        $code = trim((string)($websiteRow['code'] ?? ''));
+        $label = trim((string)($websiteRow['name'] ?? ''));
+        if ($label === '') {
+            $label = (string)__('站点 %{1}', [$websiteId]);
+        }
+        $seoAccountWebsiteSelectOptions[] = [
+            'value' => (string)$websiteId,
+            'label' => $label,
+            'meta' => $domain !== '' ? $domain : $code,
+            'url' => $siteUrl,
+            'domain' => $domain,
+            'code' => $code,
+        ];
+    }
+} catch (\Throwable) {
+    $seoAccountWebsiteSelectOptions = [];
+}
+$seoAccountWebsiteSelectOptionsJson = json_encode($seoAccountWebsiteSelectOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 
 // 平台功能说明和配置指引
 $platformFeatures = [
@@ -172,10 +206,12 @@ foreach ($platforms as $code => $info) {
     $platformFeatures[$code]['supports_sitemap_submit'] = $supportsSitemapSubmit;
     $platformFeatures[$code]['supports_indexnow'] = $supportsIndexNow;
     $platformFeatures[$code]['catalog_only'] = $catalogOnly;
+    $platformFeatures[$code]['config_fields'] = is_array($info['config_fields'] ?? null) ? array_values($info['config_fields']) : [];
 }
 
 
 ?>
+<css>Weline_Seo::css/seo-admin.css</css>
 <!-- 消息提示 -->
                 <div class="w-grid">
                     <div style="--w-span:12;">
@@ -200,7 +236,7 @@ foreach ($platforms as $code => $info) {
                                     <li class="w-breadcrumb__item"><span>
                                             <lang>SEO管理</lang>
                                         </span></li>
-                                    <li class="w-breadcrumb__item"><a href='<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => $scope]) ?>'>
+                                    <li class="w-breadcrumb__item"><a href='@backend-url{'seo/backend/account/index'|['scope' => $scope]}'>
                                             <lang>账户管理</lang>
                                         </a></li>
                                     <li class="w-breadcrumb__item" data-state="active">
@@ -216,23 +252,14 @@ foreach ($platforms as $code => $info) {
                     </div>
                 </div>
 
-                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
-                    <div class="w-cluster" data-justify="between" data-align="center" style="--w-span:12;">
-                        <h4 style="--w-mb:0;">
-                            <?php if ($id): ?>
-                                <lang>编辑SEO账户</lang> #<?= $id ?>
-                            <?php else: ?>
-                                <lang>新增SEO账户</lang>
-                            <?php endif; ?>
-                        </h4>
-                    </div>
-                </div>
-
                 <!-- 平台配置 JavaScript（必须在表单之前定义） -->
                 <script>
                 // ==================== 平台配置数据 ====================
                 const PLATFORM_DATA = <?= json_encode($platformFeatures, $jsonForScriptFlags) ?>;
+                const ACCOUNT_CONFIG_VALUES = <?= json_encode($configArray, $jsonForScriptFlags) ?> || {};
+                const SEO_ACCOUNT_WEBSITE_OPTIONS = <?= json_encode($seoAccountWebsiteSelectOptions, $jsonForScriptFlags) ?> || [];
                 let currentSelectedPlatform = <?= json_encode($platform, $jsonForScriptFlags) ?>;
+                let seoAccountWebsiteUrlKey = '';
 
                 // ==================== 通用工具函数 ====================
                 
@@ -292,10 +319,97 @@ foreach ($platforms as $code => $info) {
                     handlePlatformChange(platformCode);
                 }
 
+                function getSelectedPlatformDisplayName(platformCode) {
+                    const select = document.getElementById('platformSelect');
+                    if (select) {
+                        const code = String(platformCode || '');
+                        for (let i = 0; i < select.options.length; i++) {
+                            const option = select.options[i];
+                            if (option.value !== code) {
+                                continue;
+                            }
+                            const named = (option.getAttribute('data-name') || '').trim();
+                            if (named !== '') {
+                                return named;
+                            }
+                            break;
+                        }
+                    }
+                    if (platformCode && PLATFORM_DATA[platformCode] && PLATFORM_DATA[platformCode].name) {
+                        return String(PLATFORM_DATA[platformCode].name);
+                    }
+                    return String(platformCode || '');
+                }
+
+                function getAccountNamePrefix(platformCode) {
+                    const displayName = getSelectedPlatformDisplayName(platformCode);
+                    return displayName ? (displayName + '-') : '';
+                }
+
+                function extractAccountNameSuffix(value, prefix) {
+                    const raw = String(value || '');
+                    if (!prefix) {
+                        return raw;
+                    }
+                    if (raw.startsWith(prefix)) {
+                        return raw.slice(prefix.length);
+                    }
+                    const dash = raw.indexOf('-');
+                    if (dash > 0) {
+                        return raw.slice(dash + 1);
+                    }
+                    return raw;
+                }
+
+                function syncAccountNameFormat(platformCode) {
+                    const field = document.getElementById('seoAccountNameField');
+                    const input = document.getElementById('seoAccountNameInput');
+                    const example = document.getElementById('seoAccountNameFormatExample');
+                    if (!field || !input) {
+                        return;
+                    }
+
+                    if (!platformCode) {
+                        field.hidden = true;
+                        input.required = false;
+                        input.removeAttribute('data-name-prefix');
+                        input.value = '';
+                        if (example) {
+                            example.textContent = '';
+                        }
+                        return;
+                    }
+
+                    const prefix = getAccountNamePrefix(platformCode);
+                    const suffix = extractAccountNameSuffix(input.value.trim(), prefix).trim();
+                    field.hidden = false;
+                    input.required = true;
+                    input.setAttribute('data-name-prefix', prefix);
+                    input.value = prefix + suffix;
+                    input.placeholder = prefix + (input.getAttribute('data-suffix-placeholder') || '');
+                    if (example) {
+                        example.textContent = prefix + (input.getAttribute('data-suffix-placeholder') || '');
+                    }
+                }
+
+                function enforceAccountNamePrefix(input) {
+                    if (!input) {
+                        return;
+                    }
+                    const prefix = input.getAttribute('data-name-prefix') || '';
+                    if (!prefix) {
+                        return;
+                    }
+                    if (!input.value.startsWith(prefix)) {
+                        const suffix = extractAccountNameSuffix(input.value, prefix);
+                        input.value = prefix + suffix;
+                    }
+                }
+
                 function handlePlatformChange(platformCode) {
-                    console.log('平台选择:', platformCode);
                     currentSelectedPlatform = platformCode;
                     syncPlatformCards(platformCode);
+                    syncAccountNameFormat(platformCode);
                     
                     if (!platformCode || !PLATFORM_DATA[platformCode]) {
                         hideAllPlatformInfo();
@@ -312,7 +426,7 @@ foreach ($platforms as $code => $info) {
                 function hideAllPlatformInfo() {
                     document.getElementById('platformFeaturesInfo').style.display = 'none';
                     document.getElementById('platformGuideInfo').style.display = 'none';
-                    document.getElementById('fillTemplateBtn').style.display = 'none';
+                    renderProviderConfigFields(null);
                 }
 
                 /**
@@ -336,6 +450,73 @@ foreach ($platforms as $code => $info) {
                             sitemapToggle.checked = false;
                         }
                     }
+                }
+
+                /**
+                 * 安全渲染配置指南步骤：保留 http(s) 链接与强调色，去掉手写序号避免与 <ol> 双重编号。
+                 */
+                function appendSafeGuideStep(target, stepHtml) {
+                    const raw = String(stepHtml || '').replace(/^\s*\d+\.\s*/, '');
+                    const parsed = new DOMParser().parseFromString('<div>' + raw + '</div>', 'text/html');
+                    const source = parsed.body.firstElementChild;
+                    if (!source) {
+                        target.textContent = raw;
+                        return;
+                    }
+
+                    const appendNode = function(parent, node) {
+                        if (node.nodeType === Node.TEXT_NODE) {
+                            parent.appendChild(document.createTextNode(node.nodeValue || ''));
+                            return;
+                        }
+                        if (node.nodeType !== Node.ELEMENT_NODE) {
+                            return;
+                        }
+                        const tag = node.tagName.toLowerCase();
+                        if (tag === 'a') {
+                            const href = String(node.getAttribute('href') || '').trim();
+                            if (!/^https?:\/\//i.test(href)) {
+                                Array.from(node.childNodes).forEach(function(child) {
+                                    appendNode(parent, child);
+                                });
+                                return;
+                            }
+                            const link = document.createElement('a');
+                            link.href = href;
+                            link.target = '_blank';
+                            link.rel = 'noopener noreferrer';
+                            Array.from(node.childNodes).forEach(function(child) {
+                                appendNode(link, child);
+                            });
+                            parent.appendChild(link);
+                            return;
+                        }
+                        if (tag === 'span' || tag === 'strong' || tag === 'em' || tag === 'code') {
+                            const el = document.createElement(tag);
+                            if (tag === 'span') {
+                                const color = String(node.style && node.style.color ? node.style.color : '').trim();
+                                if (color !== '') {
+                                    el.style.color = color;
+                                }
+                            }
+                            Array.from(node.childNodes).forEach(function(child) {
+                                appendNode(el, child);
+                            });
+                            parent.appendChild(el);
+                            return;
+                        }
+                        if (tag === 'br') {
+                            parent.appendChild(document.createElement('br'));
+                            return;
+                        }
+                        Array.from(node.childNodes).forEach(function(child) {
+                            appendNode(parent, child);
+                        });
+                    };
+
+                    Array.from(source.childNodes).forEach(function(child) {
+                        appendNode(target, child);
+                    });
                 }
 
                 /**
@@ -366,26 +547,36 @@ foreach ($platforms as $code => $info) {
                     guideSteps.replaceChildren();
                     platform.guide_steps.forEach(function(step) {
                         const item = document.createElement('li');
-                        item.textContent = step;
+                        appendSafeGuideStep(item, step);
                         guideSteps.appendChild(item);
                     });
                     
-                    document.getElementById('platformConfigTemplate').textContent = 
-                        JSON.stringify(platform.config_template, null, 2);
+                    const templateEl = document.getElementById('platformConfigTemplate');
+                    const templateWrap = document.getElementById('platformConfigTemplateWrap');
+                    if (templateEl) {
+                        const fields = Array.isArray(platform.config_fields) ? platform.config_fields : [];
+                        if (fields.length) {
+                            const preview = {};
+                            fields.forEach(function(field) {
+                                preview[field.key] = field.placeholder || '';
+                            });
+                            templateEl.textContent = JSON.stringify(preview, null, 2);
+                            if (templateWrap) {
+                                templateWrap.hidden = false;
+                            }
+                        } else if (templateWrap) {
+                            templateWrap.hidden = true;
+                        }
+                    }
                     
                     // 默认展开指南内容
                     document.getElementById('platformGuideContent').style.display = 'block';
-                    document.getElementById('guideToggleIcon').style.transform = 'rotate(180deg)';
-                    
-                    // 显示填充模板按钮
-                    document.getElementById('fillTemplateBtn').style.display = 'inline-block';
-                    
-                    // 更新配置框 placeholder
-                    const configTextarea = document.getElementById('configJsonTextarea');
-                    if (!configTextarea.value.trim()) {
-                        configTextarea.placeholder = JSON.stringify(platform.config_template, null, 2);
+                    const guideIcon = document.getElementById('guideToggleIcon');
+                    if (guideIcon) {
+                        guideIcon.style.transform = 'rotate(180deg)';
                     }
 
+                    renderProviderConfigFields(platform);
                     syncSubmitToggles(platform);
                 }
 
@@ -401,90 +592,349 @@ foreach ($platforms as $code => $info) {
                     icon.style.transform = isVisible ? 'rotate(0deg)' : 'rotate(180deg)';
                 }
 
-                /**
-                 * 填充配置模板
-                 */
-                function fillConfigTemplate() {
-                    if (!currentSelectedPlatform || !PLATFORM_DATA[currentSelectedPlatform]) {
-                        showMessage('warning', '请先选择平台');
-                        return;
+                function parkSeoAccountWebsiteUrlField() {
+                    const host = document.getElementById('seoAccountWebsiteUrlHost');
+                    const wrap = document.getElementById('seoAccountWebsiteUrlField');
+                    if (host && wrap && wrap.parentElement !== host) {
+                        host.appendChild(wrap);
                     }
-                    
-                    const configTextarea = document.getElementById('configJsonTextarea');
-                    const template = PLATFORM_DATA[currentSelectedPlatform].config_template;
-                    
-                    if (configTextarea.value.trim() !== '') {
-                        showConfirm('当前已有配置内容，是否覆盖？', function() {
-                            configTextarea.value = JSON.stringify(template, null, 2);
-                            configTextarea.focus();
+                    if (host) {
+                        host.hidden = true;
+                    }
+                    seoAccountWebsiteUrlKey = '';
+                    const hidden = document.getElementById('seoAccountWebsiteUrlValue');
+                    if (hidden) {
+                        hidden.removeAttribute('name');
+                        hidden.removeAttribute('data-seo-config-key');
+                        hidden.removeAttribute('required');
+                    }
+                }
+
+                function resolveWebsiteOptionUrl(item) {
+                    if (!item) {
+                        return '';
+                    }
+                    let url = String(item.url || (item.raw && item.raw.url) || '').trim();
+                    if (!url) {
+                        const found = SEO_ACCOUNT_WEBSITE_OPTIONS.find(function(opt) {
+                            return String(opt.value) === String(item.value || '');
                         });
+                        url = found ? String(found.url || '').trim() : '';
+                    }
+                    return url.replace(/\/$/, '');
+                }
+
+                window.handleSeoAccountWebsiteSelect = function(item) {
+                    const hidden = document.getElementById('seoAccountWebsiteUrlValue');
+                    const preview = document.getElementById('seoAccountWebsiteUrlPreview');
+                    if (!hidden || !seoAccountWebsiteUrlKey) {
                         return;
                     }
-                    
-                    configTextarea.value = JSON.stringify(template, null, 2);
-                    configTextarea.focus();
+                    const url = resolveWebsiteOptionUrl(item);
+                    hidden.value = url;
+                    if (preview) {
+                        preview.textContent = url;
+                    }
+                    syncConfigJsonFromFields();
+                };
+
+                function mountSeoAccountWebsiteUrlField(fieldsRoot, field, values) {
+                    const host = document.getElementById('seoAccountWebsiteUrlHost');
+                    const wrap = document.getElementById('seoAccountWebsiteUrlField');
+                    const hidden = document.getElementById('seoAccountWebsiteUrlValue');
+                    const label = document.getElementById('seoAccountWebsiteUrlLabel');
+                    const preview = document.getElementById('seoAccountWebsiteUrlPreview');
+                    const hint = document.getElementById('seoAccountWebsiteUrlHint');
+                    if (!host || !wrap || !hidden || !fieldsRoot) {
+                        return false;
+                    }
+
+                    const key = String(field.key || '');
+                    if (!key) {
+                        return false;
+                    }
+                    seoAccountWebsiteUrlKey = key;
+                    fieldsRoot.appendChild(wrap);
+                    host.hidden = true;
+
+                    if (label) {
+                        label.replaceChildren();
+                        label.appendChild(document.createTextNode(String(field.label || key)));
+                        if (field.required) {
+                            const req = document.createElement('span');
+                            req.className = 'w-text';
+                            req.setAttribute('data-tone', 'danger');
+                            req.textContent = ' *';
+                            label.appendChild(req);
+                        }
+                    }
+
+                    hidden.name = 'config[' + key + ']';
+                    hidden.setAttribute('data-seo-config-key', key);
+                    hidden.setAttribute('data-seo-config-type', 'website_url');
+                    hidden.required = !!field.required;
+
+                    const current = values[key];
+                    const currentUrl = (current !== undefined && current !== null && typeof current !== 'object')
+                        ? String(current).trim().replace(/\/$/, '')
+                        : '';
+                    hidden.value = currentUrl;
+                    if (preview) {
+                        preview.textContent = currentUrl;
+                    }
+                    if (hint) {
+                        hint.textContent = field.hint ? String(field.hint) : '';
+                        hint.hidden = !field.hint;
+                    }
+
+                    const match = SEO_ACCOUNT_WEBSITE_OPTIONS.find(function(opt) {
+                        return String(opt.url || '').replace(/\/$/, '') === currentUrl;
+                    });
+                    const api = window.WelineWebsiteSelect && window.WelineWebsiteSelect.seo_account_website_pick;
+                    if (api && typeof api.setValue === 'function') {
+                        if (match) {
+                            api.setValue(String(match.value));
+                        } else {
+                            const activeKey = seoAccountWebsiteUrlKey;
+                            seoAccountWebsiteUrlKey = '';
+                            api.setValue('');
+                            seoAccountWebsiteUrlKey = activeKey;
+                            hidden.value = currentUrl;
+                            if (preview) {
+                                preview.textContent = currentUrl;
+                            }
+                        }
+                    }
+
+                    return true;
                 }
 
                 /**
-                 * 处理 JSON 文件上传
+                 * 按 Provider 声明的字段渲染账户配置（禁止统一 JSON）
+                 */
+                function getCurrentConfigValues() {
+                    const hidden = document.getElementById('configJsonTextarea');
+                    if (hidden && hidden.value.trim()) {
+                        try {
+                            const parsed = JSON.parse(hidden.value);
+                            if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+                                return parsed;
+                            }
+                        } catch (e) {}
+                    }
+                    return Object.assign({}, ACCOUNT_CONFIG_VALUES || {});
+                }
+
+                function syncConfigJsonFromFields() {
+                    const hidden = document.getElementById('configJsonTextarea');
+                    const root = document.getElementById('seoProviderConfigFields');
+                    if (!hidden || !root) {
+                        return;
+                    }
+                    const values = {};
+                    root.querySelectorAll('[data-seo-config-key]').forEach(function(el) {
+                        const key = el.getAttribute('data-seo-config-key') || '';
+                        if (!key) {
+                            return;
+                        }
+                        if (el.type === 'checkbox') {
+                            values[key] = !!el.checked;
+                            return;
+                        }
+                        let raw = String(el.value || '').trim();
+                        if (el.getAttribute('data-seo-config-type') === 'json' && raw !== '') {
+                            try {
+                                values[key] = JSON.parse(raw);
+                                return;
+                            } catch (e) {
+                                values[key] = raw;
+                                return;
+                            }
+                        }
+                        values[key] = raw;
+                    });
+                    hidden.value = JSON.stringify(values, null, 2);
+                }
+
+                function renderProviderConfigFields(platform) {
+                    const section = document.getElementById('seoProviderConfigSection');
+                    const fieldsRoot = document.getElementById('seoProviderConfigFields');
+                    const empty = document.getElementById('seoProviderConfigEmpty');
+                    const title = document.getElementById('seoProviderConfigTitle');
+                    if (!section || !fieldsRoot || !empty) {
+                        return;
+                    }
+
+                    parkSeoAccountWebsiteUrlField();
+
+                    if (!platform) {
+                        section.hidden = true;
+                        fieldsRoot.replaceChildren();
+                        empty.hidden = true;
+                        return;
+                    }
+
+                    section.hidden = false;
+                    const fields = Array.isArray(platform.config_fields) ? platform.config_fields : [];
+                    const values = getCurrentConfigValues();
+                    fieldsRoot.replaceChildren();
+
+                    if (title) {
+                        title.textContent = (platform.name || '') + ' ' + (title.getAttribute('data-label-suffix') || '');
+                    }
+
+                    if (!fields.length) {
+                        empty.hidden = false;
+                        syncConfigJsonFromFields();
+                        return;
+                    }
+
+                    empty.hidden = true;
+                    let websiteUrlMounted = false;
+                    fields.forEach(function(field) {
+                        const key = String(field.key || '');
+                        if (!key) {
+                            return;
+                        }
+                        const type = String(field.type || 'text');
+                        if (type === 'website_url') {
+                            if (!websiteUrlMounted) {
+                                websiteUrlMounted = mountSeoAccountWebsiteUrlField(fieldsRoot, field, values);
+                            }
+                            return;
+                        }
+                        const fieldId = 'seo_config_' + key;
+                        const wrap = document.createElement('div');
+                        wrap.className = 'w-field';
+                        wrap.style.setProperty('--w-mb', 'var(--weline-space-3)');
+
+                        const label = document.createElement('label');
+                        label.className = 'w-field__label';
+                        label.setAttribute('for', fieldId);
+                        label.appendChild(document.createTextNode(String(field.label || key)));
+                        if (field.required) {
+                            const req = document.createElement('span');
+                            req.className = 'w-text';
+                            req.setAttribute('data-tone', 'danger');
+                            req.textContent = ' *';
+                            label.appendChild(req);
+                        }
+                        wrap.appendChild(label);
+
+                        let control;
+                        const current = values[key];
+                        if (type === 'checkbox') {
+                            control = document.createElement('input');
+                            control.type = 'checkbox';
+                            control.className = 'w-checkbox';
+                            control.checked = current === true || current === 1 || current === '1';
+                        } else if (type === 'textarea' || type === 'json') {
+                            control = document.createElement('textarea');
+                            control.className = 'w-textarea';
+                            control.rows = type === 'json' ? 10 : 4;
+                            if (type === 'json') {
+                                control.setAttribute('data-family', 'mono');
+                                control.style.fontSize = '12px';
+                            }
+                            if (current !== undefined && current !== null) {
+                                control.value = typeof current === 'string' ? current : JSON.stringify(current, null, 2);
+                            }
+                        } else {
+                            control = document.createElement('input');
+                            control.type = type === 'password' || type === 'url' ? type : 'text';
+                            control.className = 'w-input';
+                            if (current !== undefined && current !== null && typeof current !== 'object') {
+                                control.value = String(current);
+                            }
+                        }
+
+                        control.id = fieldId;
+                        control.name = 'config[' + key + ']';
+                        control.setAttribute('data-seo-config-key', key);
+                        control.setAttribute('data-seo-config-type', type);
+                        if (field.required && type !== 'checkbox') {
+                            control.required = true;
+                        }
+                        if (field.placeholder) {
+                            control.placeholder = String(field.placeholder);
+                        }
+                        control.addEventListener('input', syncConfigJsonFromFields);
+                        control.addEventListener('change', syncConfigJsonFromFields);
+                        wrap.appendChild(control);
+
+                        if (type === 'json') {
+                            const tools = document.createElement('div');
+                            tools.className = 'w-cluster';
+                            tools.style.setProperty('--w-mt', 'var(--weline-space-2)');
+                            tools.setAttribute('data-gap', 'sm');
+                            const uploadBtn = document.createElement('button');
+                            uploadBtn.type = 'button';
+                            uploadBtn.className = 'w-button';
+                            uploadBtn.setAttribute('data-tone', 'primary');
+                            uploadBtn.setAttribute('data-variant', 'outline');
+                            uploadBtn.setAttribute('data-size', 'sm');
+                            uploadBtn.setAttribute('data-seo-json-upload-for', fieldId);
+                            uploadBtn.textContent = <?= json_encode((string)__('上传 JSON 文件'), $jsonForScriptFlags) ?>;
+                            tools.appendChild(uploadBtn);
+                            const fileInput = document.createElement('input');
+                            fileInput.type = 'file';
+                            fileInput.accept = String(field.accept || '.json,application/json');
+                            fileInput.hidden = true;
+                            fileInput.setAttribute('data-seo-json-file-for', fieldId);
+                            tools.appendChild(fileInput);
+                            wrap.appendChild(tools);
+                        }
+
+                        if (field.hint) {
+                            const hint = document.createElement('div');
+                            hint.className = 'w-field__hint';
+                            hint.textContent = String(field.hint);
+                            wrap.appendChild(hint);
+                        }
+
+                        fieldsRoot.appendChild(wrap);
+                    });
+
+                    syncConfigJsonFromFields();
+                }
+
+                /**
+                 * 处理 JSON 文件上传到指定字段
                  */
                 function handleJsonFileUpload(input) {
                     const file = input.files[0];
-                    if (!file) {
+                    const targetId = input.getAttribute('data-seo-json-file-for') || '';
+                    const target = targetId ? document.getElementById(targetId) : null;
+                    if (!file || !target) {
                         return;
                     }
-                    
-                    // 检查文件类型
+
                     if (!file.name.endsWith('.json') && file.type !== 'application/json') {
-                        showMessage('error', '请上传 JSON 文件');
+                        showMessage('error', <?= json_encode((string)__('请上传 JSON 文件'), $jsonForScriptFlags) ?>);
                         input.value = '';
                         return;
                     }
-                    
-                    // 检查文件大小（限制 5MB）
                     if (file.size > 5 * 1024 * 1024) {
-                        showMessage('error', '文件大小不能超过 5MB');
+                        showMessage('error', <?= json_encode((string)__('文件大小不能超过 5MB'), $jsonForScriptFlags) ?>);
                         input.value = '';
                         return;
                     }
-                    
-                    const configTextarea = document.getElementById('configJsonTextarea');
-                    
-                    // 如果已有内容，确认是否覆盖
-                    if (configTextarea.value.trim() !== '') {
-                        showConfirm('当前已有配置内容，是否覆盖？', function() {
-                            readAndFillJsonFile(file, configTextarea, input);
-                        }, function() {
-                            input.value = '';
-                        });
-                        return;
-                    }
-                    
-                    readAndFillJsonFile(file, configTextarea, input);
-                }
-                
-                /**
-                 * 读取并填充 JSON 文件
-                 */
-                function readAndFillJsonFile(file, configTextarea, input) {
+
                     const reader = new FileReader();
                     reader.onload = function(e) {
                         try {
-                            const content = e.target.result;
-                            // 验证是否是有效的 JSON
-                            const jsonObj = JSON.parse(content);
-                            // 格式化后填充到 textarea
-                            configTextarea.value = JSON.stringify(jsonObj, null, 2);
-                            configTextarea.focus();
-                            showMessage('success', 'JSON 文件上传成功');
+                            const jsonObj = JSON.parse(e.target.result);
+                            target.value = JSON.stringify(jsonObj, null, 2);
+                            target.focus();
+                            syncConfigJsonFromFields();
+                            showMessage('success', <?= json_encode((string)__('JSON 文件上传成功'), $jsonForScriptFlags) ?>);
                         } catch (err) {
-                            showMessage('error', 'JSON 文件格式错误: ' + err.message);
+                            showMessage('error', <?= json_encode((string)__('JSON 文件格式错误'), $jsonForScriptFlags) ?> + ': ' + err.message);
                         }
-                        // 清空 input，允许再次上传同一文件
                         input.value = '';
                     };
                     reader.onerror = function() {
-                        showMessage('error', '文件读取失败，请重试');
+                        showMessage('error', <?= json_encode((string)__('文件读取失败，请重试'), $jsonForScriptFlags) ?>);
                         input.value = '';
                     };
                     reader.readAsText(file);
@@ -494,7 +944,31 @@ foreach ($platforms as $code => $info) {
                     window.__seoAccountFormActionsBound = true;
 
                     document.addEventListener('submit', function(event) {
-                        if (event.target && event.target.id === 'seoAccountForm' && typeof window.saveSeoAccount === 'function') {
+                        if (!event.target || event.target.id !== 'seoAccountForm') {
+                            return;
+                        }
+                        const nameInput = document.getElementById('seoAccountNameInput');
+                        const platformCode = (document.getElementById('platformSelect') || {}).value || '';
+                        if (!platformCode) {
+                            event.preventDefault();
+                            showMessage('warning', <?= json_encode((string)__('请先选择平台后再填写账户名称'), $jsonForScriptFlags) ?>);
+                            return;
+                        }
+                        if (nameInput) {
+                            enforceAccountNamePrefix(nameInput);
+                            const prefix = nameInput.getAttribute('data-name-prefix') || getAccountNamePrefix(platformCode);
+                            const suffix = extractAccountNameSuffix(nameInput.value.trim(), prefix).trim();
+                            if (!prefix || suffix === '') {
+                                event.preventDefault();
+                                const template = nameInput.getAttribute('data-format-invalid') || '';
+                                showMessage('warning', template.replace('%{1}', prefix));
+                                nameInput.focus();
+                                return;
+                            }
+                            nameInput.value = prefix + suffix;
+                        }
+                        syncConfigJsonFromFields();
+                        if (typeof window.saveSeoAccount === 'function') {
                             window.saveSeoAccount(event);
                         }
                     });
@@ -507,8 +981,14 @@ foreach ($platforms as $code => $info) {
                             handlePlatformChange(event.target.value);
                             return;
                         }
-                        if (event.target.matches('#jsonFileInput')) {
+                        if (event.target.matches('[data-seo-json-file-for]')) {
                             handleJsonFileUpload(event.target);
+                        }
+                    });
+
+                    document.addEventListener('input', function(event) {
+                        if (event.target && event.target.matches('#seoAccountNameInput')) {
+                            enforceAccountNamePrefix(event.target);
                         }
                     });
 
@@ -527,20 +1007,15 @@ foreach ($platforms as $code => $info) {
                             return;
                         }
 
-                        const fillTemplate = event.target.closest('[data-seo-fill-template]');
-                        if (fillTemplate) {
-                            event.preventDefault();
-                            fillConfigTemplate();
-                            return;
-                        }
-
-                        const uploadTrigger = event.target.closest('[data-seo-json-upload-trigger]');
+                        const uploadTrigger = event.target.closest('[data-seo-json-upload-for]');
                         if (uploadTrigger) {
                             event.preventDefault();
-                            const input = document.getElementById('jsonFileInput');
-                            if (input) {
-                                input.click();
+                            const fieldId = uploadTrigger.getAttribute('data-seo-json-upload-for') || '';
+                            const fileInput = document.querySelector('[data-seo-json-file-for="' + fieldId + '"]');
+                            if (fileInput) {
+                                fileInput.click();
                             }
+                            return;
                         }
                     });
 
@@ -567,20 +1042,6 @@ foreach ($platforms as $code => $info) {
                     <div class="w-card__body">
                         <w:form id="seoAccountForm">
                             <input type="hidden" name="id" value="<?= $id ?>">
-                            <input type="hidden" name="scope" value="<?= htmlspecialchars($scope, ENT_QUOTES) ?>">
-
-                            <div style="--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label"><lang>Scope</lang></label>
-                                <input type="text" class="w-input" value="<?= htmlspecialchars($scope, ENT_QUOTES) ?>" disabled>
-                                <div class="w-field__hint">
-                                    <lang>由URL参数指定的scope不可修改，用于区分不同业务范围。</lang>
-                                </div>
-                            </div>
-
-                            <div style="--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label"><lang>账户名称</lang></label>
-                                <input type="text" name="name" class="w-input" value="<?= htmlspecialchars($name, ENT_QUOTES) ?>" required>
-                            </div>
 
                             <div style="--w-mb:var(--weline-space-4);">
                                 <label class="w-field__label"><lang>平台(Platform)</lang> <span class="w-text" data-tone="danger">*</span></label>
@@ -659,6 +1120,26 @@ foreach ($platforms as $code => $info) {
                                 </div>
                             </div>
 
+                            <div id="seoAccountNameField" style="--w-mb:var(--weline-space-4);"<?= $platform === '' ? ' hidden' : '' ?>>
+                                <label class="w-field__label" for="seoAccountNameInput"><lang>账户名称</lang> <span class="w-text" data-tone="danger">*</span></label>
+                                <input
+                                    type="text"
+                                    name="name"
+                                    id="seoAccountNameInput"
+                                    class="w-input"
+                                    value="<?= htmlspecialchars($name, ENT_QUOTES) ?>"
+                                    <?= $platform !== '' ? 'required' : '' ?>
+                                    autocomplete="off"
+                                    data-suffix-placeholder="<?= htmlspecialchars((string)__('账户名'), ENT_QUOTES, 'UTF-8') ?>"
+                                    data-format-invalid="<?= htmlspecialchars((string)__('账户名称必须符合格式：%{1}{账户名}'), ENT_QUOTES, 'UTF-8') ?>"
+                                >
+                                <div class="w-field__hint" id="seoAccountNameFormatHint">
+                                    <w:icon name="warning" size="sm"></w:icon>
+                                    <lang>强制要求填写用户名的格式是：</lang>
+                                    <strong id="seoAccountNameFormatExample"></strong>
+                                </div>
+                            </div>
+
                             <!-- 平台功能说明 -->
                             <div id="platformFeaturesInfo" style="display: none;">
                                 <div class="w-alert" data-tone="info" style="--w-mb:0;">
@@ -688,9 +1169,13 @@ foreach ($platforms as $code => $info) {
                                     </div>
                                     <div class="w-card__body" id="platformGuideContent">
                                         <ol id="platformGuideSteps" style="line-height: 1.8;"></ol>
-                                        <div class="w-alert" data-tone="success" style="--w-mb:0;">
-                                            <strong><w:icon name="code" size="sm"></w:icon><lang>配置模板：</lang></strong>
-                                            <pre id="platformConfigTemplate" style="background: #f8f9fa; padding: 12px; border-radius: 4px; font-size: 12px; overflow-x: auto;"></pre>
+                                        <div class="seo-field-preview" id="platformConfigTemplateWrap" hidden>
+                                            <div class="seo-field-preview__head">
+                                                <w:icon name="code" size="sm"></w:icon>
+                                                <strong class="seo-field-preview__title"><lang>字段预览</lang></strong>
+                                                <span class="seo-field-preview__hint"><lang>示意结构，请在下方填写真实值</lang></span>
+                                            </div>
+                                            <pre class="seo-field-preview__code" id="platformConfigTemplate"></pre>
                                         </div>
                                     </div>
                                 </div>
@@ -701,24 +1186,39 @@ foreach ($platforms as $code => $info) {
                                 <textarea name="description" class="w-textarea" rows="2"><?= htmlspecialchars($description, ENT_QUOTES) ?></textarea>
                             </div>
 
-                            <div style="--w-mb:var(--weline-space-4);">
-                                <label class="w-field__label">
-                                    <lang>账户配置(JSON)</lang>
-                                    <button type="button" class="w-button ms-2" data-seo-fill-template id="fillTemplateBtn" style="display: none;" data-tone="neutral" data-variant="outline" data-size="sm">
-                                        <w:icon name="copy" size="sm"></w:icon>
-                                        <lang>填充模板</lang>
-                                    </button>
-                                    <button type="button" class="w-button ms-2" data-seo-json-upload-trigger data-tone="primary" data-variant="outline" data-size="sm">
-                                        <w:icon name="upload" size="sm"></w:icon>
-                                        <lang>上传 JSON 文件</lang>
-                                    </button>
-                                    <input type="file" id="jsonFileInput" accept=".json,application/json" style="display: none;">
-                                </label>
-                                <textarea name="config_json" id="configJsonTextarea" class="w-textarea w-text" rows="12" placeholder='{"service_account": {...}}' style="font-size: 12px;" data-family="mono"><?= htmlspecialchars($configJson, ENT_QUOTES) ?></textarea>
-                                <div class="w-field__hint" id="configJsonHelp">
-                                    <w:icon name="warning" size="sm"></w:icon>
-                                    <lang>请根据所选平台填写相应的配置信息，点击上方"配置获取指南"查看详细步骤，或直接上传从 Google Cloud 下载的 JSON 密钥文件</lang>
+                            <div id="seoProviderConfigSection" style="--w-mb:var(--weline-space-4);" hidden>
+                                <h5 id="seoProviderConfigTitle" class="w-text" data-weight="strong" data-label-suffix="<?= htmlspecialchars((string)__('账户配置'), ENT_QUOTES, 'UTF-8') ?>" style="--w-mb:var(--weline-space-3);">
+                                    <lang>账户配置</lang>
+                                </h5>
+                                <div id="seoProviderConfigFields" class="w-stack" data-gap="md"></div>
+                                <div id="seoAccountWebsiteUrlHost" hidden>
+                                    <div class="w-field" id="seoAccountWebsiteUrlField" style="--w-mb:var(--weline-space-3);">
+                                        <label class="w-field__label" id="seoAccountWebsiteUrlLabel"><lang>已验证站点</lang></label>
+                                        <w:websites:website:select
+                                            id="seo_account_website_pick"
+                                            name="seo_account_website_pick"
+                                            value=""
+                                            display=""
+                                            options="seoAccountWebsiteSelectOptionsJson"
+                                            empty-label="@lang(请选择网站)"
+                                            placeholder="@lang(搜索站点名称或域名)"
+                                            allow-empty="true"
+                                            clearable="true"
+                                            on-select="handleSeoAccountWebsiteSelect"
+                                        />
+                                        <input type="hidden" id="seoAccountWebsiteUrlValue" value="" data-seo-config-type="website_url">
+                                        <div class="w-field__hint">
+                                            <span id="seoAccountWebsiteUrlPreview"></span>
+                                        </div>
+                                        <div class="w-field__hint" id="seoAccountWebsiteUrlHint" hidden></div>
+                                    </div>
                                 </div>
+                                <div id="seoProviderConfigEmpty" class="w-empty" hidden>
+                                    <w:icon name="info" size="sm"></w:icon>
+                                    <p class="w-text" data-weight="strong"><lang>该平台无需填写 API 凭据</lang></p>
+                                    <p class="w-text" data-tone="muted" data-size="sm"><lang>保存账户并绑定站点后，按指南到对应站长平台手动提交 Sitemap 即可。</lang></p>
+                                </div>
+                                <textarea name="config_json" id="configJsonTextarea" hidden><?= htmlspecialchars($configJson, ENT_QUOTES) ?></textarea>
                             </div>
 
                             <div class="w-grid" style="--w-mb:var(--weline-space-4);">
@@ -754,7 +1254,7 @@ foreach ($platforms as $code => $info) {
                                     <lang>保存</lang>
                                 </button>
                                 <?php if (!$isAjax): ?>
-                                <a href="<?= $this->getBackendUrl('seo/backend/account/index', ['scope' => $scope]) ?>" class="w-button ms-2" data-tone="neutral">
+                                <a href="@backend-url{'seo/backend/account/index'|['scope' => $scope]}" class="w-button ms-2" data-tone="neutral">
                                     <lang>返回列表</lang>
                                 </a>
                                 <?php else: ?>

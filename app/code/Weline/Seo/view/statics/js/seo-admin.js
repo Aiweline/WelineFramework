@@ -667,6 +667,7 @@
             var target = root.querySelector('[data-role="seo-message"]');
             if (target) {
                 target.className = 'seo-message ' + (type === 'success' ? 'is-success' : 'is-error');
+                target.removeAttribute('hidden');
                 target.textContent = text || '';
             }
             toast(type, text || '');

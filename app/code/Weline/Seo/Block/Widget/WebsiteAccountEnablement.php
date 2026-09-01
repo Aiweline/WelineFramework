@@ -80,39 +80,10 @@ class WebsiteAccountEnablement extends Block
 
     private function loadAccounts(SeoAccount $accountModel, string $scope): array
     {
-        if ($scope === '') {
-            return $accountModel->reset()
-                ->select()
-                ->where(SeoAccount::schema_fields_IS_ACTIVE, SeoAccount::STATUS_ACTIVE)
-                ->order(SeoAccount::schema_fields_CREATED_AT, 'DESC')
-                ->fetchArray();
-        }
-
-        $scoped = $accountModel->reset()
+        return $accountModel->reset()
             ->select()
-            ->where(SeoAccount::schema_fields_SCOPE, $scope)
             ->where(SeoAccount::schema_fields_IS_ACTIVE, SeoAccount::STATUS_ACTIVE)
+            ->order(SeoAccount::schema_fields_CREATED_AT, 'DESC')
             ->fetchArray();
-
-        $global = $accountModel->reset()
-            ->select()
-            ->where(SeoAccount::schema_fields_SCOPE, '')
-            ->where(SeoAccount::schema_fields_IS_ACTIVE, SeoAccount::STATUS_ACTIVE)
-            ->fetchArray();
-
-        $map = [];
-        foreach (array_merge($scoped, $global) as $account) {
-            $accountId = (int)($account[SeoAccount::schema_fields_ACCOUNT_ID] ?? 0);
-            if ($accountId > 0) {
-                $map[$accountId] = $account;
-            }
-        }
-
-        $accounts = array_values($map);
-        usort($accounts, static function (array $left, array $right): int {
-            return strtotime((string)($right[SeoAccount::schema_fields_CREATED_AT] ?? '')) <=> strtotime((string)($left[SeoAccount::schema_fields_CREATED_AT] ?? ''));
-        });
-
-        return $accounts;
     }
 }
