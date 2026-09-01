@@ -19,6 +19,9 @@ use Weline\Framework\Console\CommandInterface;
 use Weline\Framework\App\Env;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Maintenance\Helper\WlsMaintenanceSync;
+use Weline\Maintenance\Service\MaintenanceStaticGenerator;
+use Weline\Maintenance\Service\UpgradeWaveService;
+use Weline\Maintenance\Service\WaitGiftCampaignSyncService;
 
 class Enable implements \Weline\Framework\Console\CommandInterface
 {
@@ -44,7 +47,22 @@ class Enable implements \Weline\Framework\Console\CommandInterface
      */
     public function execute(array $args = [], array $data = [])
     {
+        $waves = new UpgradeWaveService();
+        $gift = $waves->readGiftConfig();
+        if (!empty($gift['enabled'])) {
+            (new WaitGiftCampaignSyncService())->sync($gift);
+        }
+        $wave = $waves->beginWave();
+        $this->printing->note(__('升级波次已固化：%{1}（SYS %{2} · Theme %{3}）', [
+            (string)($wave['wave_id'] ?? ''),
+            (string)($wave['system_version_to'] ?? ''),
+            (string)($wave['theme_version_to'] ?? ''),
+        ]));
+
         Env::getInstance()->setConfig('system.maintenance', true);
+        $retryAfter = (int)(Env::getInstance()->getConfig('maintenance_retry_after', 60));
+        $locales = (new MaintenanceStaticGenerator())->publishAll($retryAfter);
+        $this->printing->note(__('维护静态页已生成：%{1}', [\implode(', ', $locales)]));
         $this->printing->success(__('维护模式已开启！'));
         WlsMaintenanceSync::syncAfterCliToggle($this->printing, true, $args);
     }
