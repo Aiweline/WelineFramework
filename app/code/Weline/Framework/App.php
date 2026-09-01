@@ -20,6 +20,7 @@ use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\RedirectException;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Http\Response;
 use Weline\Framework\Http\ResponseTerminateException;
@@ -355,6 +356,10 @@ class App
             'currency' => (string)($parse['currency'] ?? ''),
         ]);
 
+        if (!$isBackend && $welineArea === 'frontend') {
+            $this->redirectDefaultLocalizationPrefixIfNeeded($rawRequestUri, $parse);
+        }
+
         // 必须用 parser 已合并进 input.server 的 REQUEST_URI，不能读旧的 request.uri（WlsRuntime 预写会残留）。
         $serverMerged = Context::current()->server();
         $currentUri = Url::decode_url($this->normalizeParsedUri($serverMerged['REQUEST_URI'] ?? '/'));
@@ -465,6 +470,77 @@ class App
     }
 
     /**
+     * Path-first: strip website-default language/currency segments from the
+     * visitor-facing storefront URL (301). Non-default segments stay.
+     */
+    private function redirectDefaultLocalizationPrefixIfNeeded(string $rawRequestUri, array $parse = []): void
+    {
+        $method = \strtoupper(\trim((string)(
+            WelineEnv::server('REQUEST_METHOD', '')
+            ?: ($_SERVER['REQUEST_METHOD'] ?? 'GET')
+        )));
+        if ($method !== '' && !\in_array($method, ['GET', 'HEAD'], true)) {
+            return;
+        }
+        if (WelineEnv::get('is_static_file', false)) {
+            return;
+        }
+
+        // Authoritative site defaults only. Never preferredLanguageCodes /
+        // resolveWebsiteDefaultLanguage() — those can surface en_US and strip
+        // a legitimate non-default /en_US/ prefix.
+        $website = \is_array($parse['website'] ?? null) ? $parse['website'] : [];
+        $parseServer = \is_array($parse['server'] ?? null) ? $parse['server'] : [];
+        $defaultLanguage = \trim((string)(
+            WelineEnv::get('website.language', '')
+            ?: WelineEnv::server('WELINE_WEBSITE_LANGUAGE', '')
+            ?: ($parseServer['WELINE_WEBSITE_LANGUAGE'] ?? '')
+            ?: ($website['default_language'] ?? '')
+        ));
+        $defaultCurrency = \trim((string)(
+            WelineEnv::get('website.currency', '')
+            ?: WelineEnv::server('WELINE_WEBSITE_CURRENCY', '')
+            ?: ($parseServer['WELINE_WEBSITE_CURRENCY'] ?? '')
+            ?: ($website['default_currency'] ?? '')
+        ));
+        if ($defaultLanguage === '' && $defaultCurrency === '') {
+            return;
+        }
+
+        $path = (string)(\parse_url($rawRequestUri, \PHP_URL_PATH) ?: '/');
+        $query = (string)(\parse_url($rawRequestUri, \PHP_URL_QUERY) ?: '');
+        $websiteUrl = \trim((string)WelineEnv::get('website_url', ''));
+        $relative = State::stripWebsitePathPrefix($path, $websiteUrl);
+        $canonicalRelative = State::canonicalizeStorefrontLocalizationPath(
+            $relative,
+            $defaultLanguage,
+            $defaultCurrency,
+        );
+        if ($canonicalRelative === null) {
+            return;
+        }
+
+        $mount = '';
+        if ($websiteUrl !== '') {
+            try {
+                $mount = \trim((string)(\parse_url($websiteUrl, \PHP_URL_PATH) ?: ''), '/');
+            } catch (\ValueError) {
+                $mount = '';
+            }
+        }
+        if ($mount !== '') {
+            $targetPath = $canonicalRelative === '/'
+                ? '/' . $mount
+                : '/' . $mount . $canonicalRelative;
+        } else {
+            $targetPath = $canonicalRelative;
+        }
+        $target = $targetPath . ($query !== '' ? '?' . $query : '');
+
+        throw new RedirectException($target, 301);
+    }
+
+    /**
      * Synchronize the authoritative language/currency dimensions before any
      * Storefront cache context is frozen.
      *
@@ -525,37 +601,14 @@ class App
         if ($pathLanguage !== '') {
             $effectiveLanguage = $pathLanguage;
         } else {
-            // Unprefixed storefront URLs must follow Cookie/default via State::getLang().
-            // Parser/cache may still carry the previous route locale (e.g. en_US) even
-            // when the visitor path is /USD/help after switching back to zh_Hans_CN.
-            $effectiveLanguage = State::getLang();
+            // Unprefixed storefront URLs are the website default language.
+            // Cookie/en residual must not render a non-default locale into an
+            // unprefixed path (FPC keys the same entry as default language).
+            $effectiveLanguage = State::resolveWebsiteDefaultLanguage();
         }
         if ($effectiveLanguage === '' || !State::isAllowedLanguageCode($effectiveLanguage)) {
             $effectiveLanguage = State::resolveWebsiteDefaultLanguage();
         }
-
-        // #region agent log
-        if (\getenv('WELINE_DEBUG_LANG_SWITCH') === '1' || isset($_GET['_debug_lang_switch'])) {
-            @\file_put_contents(
-                \defined('BP') ? BP . '.cursor/debug-cf1e19.log' : '.cursor/debug-cf1e19.log',
-                \json_encode([
-                    'sessionId' => 'cf1e19',
-                    'hypothesisId' => 'H-server-sync',
-                    'location' => 'App.php:synchronizeParsedLocalization',
-                    'message' => 'locale sync',
-                    'data' => [
-                        'uri' => $rawRequestUri,
-                        'pathLanguage' => $pathLanguage,
-                        'parsedLanguage' => $parsedLanguage,
-                        'effectiveLanguage' => $effectiveLanguage,
-                        'cookieLang' => Cookie::get('WELINE_USER_LANG'),
-                    ],
-                    'timestamp' => (int)\round(\microtime(true) * 1000),
-                ], JSON_UNESCAPED_UNICODE) . "\n",
-                FILE_APPEND
-            );
-        }
-        // #endregion
 
         $parse['currency'] = $effectiveCurrency;
         $parse['language'] = $effectiveLanguage;
@@ -680,6 +733,7 @@ class App
         }
 
         SessionFactory::getInstance()->createSession()->start('');
+        $this->reassertSessionCookieWire();
     }
 
     private function isFrontendQueryBinRequestUri(string $requestUri): bool
@@ -1259,9 +1313,11 @@ class App
             return;
         }
 
+        // Path/query-only language + currency: expire legacy preference cookies.
+        $this->expireStorefrontLanguageCookies();
+        $this->expireStorefrontCurrencyCookies();
+
         $defaultCookies = [
-            'WELINE_USER_LANG',
-            'WELINE_USER_CURRENCY',
             'WELINE_WEBSITE_ID',
             'WELINE_WEBSITE_CODE',
             'WELINE_WEBSITE_URL',
@@ -1269,38 +1325,121 @@ class App
 
         $cookiesToSet = [];
         foreach ($defaultCookies as $key) {
-            // 语言/货币以 State 解析结果为准，避免站点已停用语言的 HttpOnly Cookie 残留无法被前端覆盖。
-            if ($key === 'WELINE_USER_LANG') {
-                $value = State::getLang();
-            } elseif ($key === 'WELINE_USER_CURRENCY') {
-                $value = State::getCurrency();
-            } else {
-                $value = $this->getContextServerValue($key, null);
-                if ($value === null) {
-                    $value = \in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true) ? '' : null;
-                }
+            $value = $this->getContextServerValue($key, null);
+            if ($value === null) {
+                $value = \in_array($key, ['WELINE_WEBSITE_ID', 'WELINE_WEBSITE_CODE'], true) ? '' : null;
             }
             if ($value === null) {
                 throw new Exception(__('系统错误：%{1}', $key));
             }
 
             $value = (string)$value;
-            // 语言/货币每次回写：清掉历史 HttpOnly 残留（JS 无法覆盖同名 HttpOnly Cookie）。
-            if ($key === 'WELINE_USER_LANG' || $key === 'WELINE_USER_CURRENCY') {
-                $cookiesToSet[$key] = $value;
-                continue;
-            }
             if (Cookie::get($key) !== $value) {
                 $cookiesToSet[$key] = $value;
             }
         }
 
         foreach ($cookiesToSet as $key => $value) {
-            // 语言/货币偏好需可被前台语言切换器 JS 读写；其余站点身份 Cookie 保持 HttpOnly。
-            $options = \in_array($key, ['WELINE_USER_LANG', 'WELINE_USER_CURRENCY'], true)
-                ? ['httponly' => false]
-                : [];
-            Cookie::set($key, $value, 3600 * 24 * 30, $options);
+            Cookie::set($key, $value, 3600 * 24 * 30, []);
+        }
+
+        // Website cookies flip CookieScope on; re-emit Session under the same wire
+        // name so login does not remain on an unscoped alias that later expires.
+        $this->reassertSessionCookieWire();
+    }
+
+    /**
+     * After CookieScope (or Session start) is known, rewrite the Session cookie
+     * under the active scoped name. No-op when Session has not started yet.
+     */
+    private function reassertSessionCookieWire(): void
+    {
+        if (WelineEnv::get('is_static_file', false)) {
+            return;
+        }
+
+        try {
+            $session = SessionFactory::getInstance()->createSession();
+            if (!$session->isStarted() || $session->getId() === '') {
+                return;
+            }
+            $session->reassertCookieWire();
+        } catch (\Throwable) {
+            // Cookie reassert must never break the response.
+        }
+    }
+
+    /**
+     * Clear residual WELINE_USER_LANG cookies (bare + website-scoped).
+     * Language identity is the request path / query only.
+     */
+    private function expireStorefrontLanguageCookies(): void
+    {
+        $candidates = ['WELINE_USER_LANG'];
+        $websiteId = \trim((string)WelineEnv::get('website_id', ''));
+        if ($websiteId !== '' && \ctype_digit($websiteId)) {
+            $candidates[] = 'WELINE_USER_LANG_w' . $websiteId;
+        }
+
+        try {
+            $bag = \w_env('cookie', []);
+            if (\is_array($bag)) {
+                foreach (\array_keys($bag) as $key) {
+                    $key = (string)$key;
+                    if ($key === 'WELINE_USER_LANG'
+                        || \preg_match('/^WELINE_USER_LANG_w\d+$/', $key) === 1
+                    ) {
+                        $candidates[] = $key;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $options = ['httponly' => false];
+        foreach (\array_values(\array_unique($candidates)) as $name) {
+            $current = Cookie::get($name);
+            if ($current === null || $current === '') {
+                continue;
+            }
+            Cookie::delete($name, $options);
+        }
+    }
+
+    /**
+     * Clear residual WELINE_USER_CURRENCY cookies (bare + website-scoped).
+     * Currency identity is the request path / query only.
+     */
+    private function expireStorefrontCurrencyCookies(): void
+    {
+        $candidates = ['WELINE_USER_CURRENCY'];
+        $websiteId = \trim((string)WelineEnv::get('website_id', ''));
+        if ($websiteId !== '' && \ctype_digit($websiteId)) {
+            $candidates[] = 'WELINE_USER_CURRENCY_w' . $websiteId;
+        }
+
+        try {
+            $bag = \w_env('cookie', []);
+            if (\is_array($bag)) {
+                foreach (\array_keys($bag) as $key) {
+                    $key = (string)$key;
+                    if ($key === 'WELINE_USER_CURRENCY'
+                        || \preg_match('/^WELINE_USER_CURRENCY_w\d+$/', $key) === 1
+                    ) {
+                        $candidates[] = $key;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        $options = ['httponly' => false];
+        foreach (\array_values(\array_unique($candidates)) as $name) {
+            $current = Cookie::get($name);
+            if ($current === null || $current === '') {
+                continue;
+            }
+            Cookie::delete($name, $options);
         }
     }
 

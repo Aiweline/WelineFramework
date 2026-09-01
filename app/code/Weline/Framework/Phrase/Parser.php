@@ -186,6 +186,16 @@ class Parser
         self::getWords();
         // 记录请求生命周期内使用的翻译词（用于按需加载到前端）
         self::$usedWords[$words] = $words;
+
+        $lang = State::getLangLocal();
+        $eventTranslation = self::translateFromEventDictionary($words, $lang);
+        if ($eventTranslation !== null) {
+            return $eventTranslation;
+        }
+        if (EventDictionary::isExclusive($lang)) {
+            EventDictionary::reportMissing($words, null, $lang);
+            return $words;
+        }
         
         if (isset(self::$words[$words])) {
             $translated = self::$words[$words];
@@ -194,6 +204,9 @@ class Parser
             }
         } else {
             self::$words[$words] = $words;
+            if (EventDictionary::isActive($lang)) {
+                EventDictionary::reportMissing($words, null, $lang);
+            }
         }
         return $words;
     }
@@ -506,6 +519,17 @@ class Parser
             return self::$workerLayeredWordsCache[$cacheKey];
         }
 
+        if (EventDictionary::isExclusive($lang)) {
+            return self::$workerLayeredWordsCache[$cacheKey] = [
+                'cache_key' => $cacheKey,
+                'lang' => $lang,
+                'modules' => $modules,
+                'module_words' => [],
+                'locale_words' => [],
+                'global_words' => [],
+            ];
+        }
+
         $moduleLayers = [];
         foreach ($modules as $moduleName) {
             $moduleLayers[$moduleName] = self::loadModuleWords($moduleName, $lang);
@@ -526,6 +550,18 @@ class Parser
         $workerCacheKey = (string)($layers['cache_key'] ?? '') . '|' . $word;
         if (\array_key_exists($workerCacheKey, self::$workerTranslatedWordsCache)) {
             return self::$workerTranslatedWordsCache[$workerCacheKey];
+        }
+
+        $lang = (string)($layers['lang'] ?? '');
+        if ($lang !== '') {
+            $eventTranslation = self::translateFromEventDictionary($word, $lang);
+            if ($eventTranslation !== null) {
+                return self::rememberWorkerTranslatedWord($workerCacheKey, $eventTranslation);
+            }
+            if (EventDictionary::isExclusive($lang)) {
+                EventDictionary::reportMissing($word, null, $lang);
+                return self::rememberWorkerTranslatedWord($workerCacheKey, $word);
+            }
         }
 
         $modules = (array)($layers['modules'] ?? []);
@@ -563,7 +599,25 @@ class Parser
             }
         }
 
+        if ($lang !== '' && EventDictionary::isActive($lang)) {
+            EventDictionary::reportMissing($word, null, $lang);
+        }
+
         return self::rememberWorkerTranslatedWord($workerCacheKey, $word);
+    }
+
+    private static function translateFromEventDictionary(string $word, string $lang): ?string
+    {
+        if (!EventDictionary::isActive($lang)) {
+            return null;
+        }
+
+        $translated = EventDictionary::translate($word, $lang);
+        if (\is_string($translated) && $translated !== '' && $translated !== $word) {
+            return $translated;
+        }
+
+        return null;
     }
 
     private static function rememberWorkerTranslatedWord(string $cacheKey, string $translation): string

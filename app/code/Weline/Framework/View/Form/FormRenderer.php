@@ -110,7 +110,10 @@ final class FormRenderer
             $scope = [];
         }
         foreach ($attributes as $name => $value) {
-            if (!\is_string($value) || !\array_key_exists($value, $scope)) {
+            if (!\is_string($value) || self::isReservedLiteralAttributeValue($name, $value)) {
+                continue;
+            }
+            if (!\array_key_exists($value, $scope)) {
                 continue;
             }
             $attributes[$name] = $scope[$value];
@@ -219,7 +222,10 @@ final class FormRenderer
             $attributes = \array_replace($preparedHtmlAttributes, $attributes);
         }
 
-        $method = \strtolower(\trim((string)($attributes['method'] ?? 'get')));
+        $methodRaw = $attributes['method'] ?? 'get';
+        $method = \is_string($methodRaw)
+            ? \strtolower(\trim($methodRaw))
+            : 'get';
         if (!\in_array($method, self::ALLOWED_METHODS, true)) {
             $method = 'get';
         }
@@ -418,6 +424,24 @@ HTML;
     {
         $value = \strtolower(\trim($value));
         return \in_array($value, $allowed, true) ? $value : $default;
+    }
+
+    /**
+     * Prevent template-scope variables (e.g. $post) from shadowing form literals like method="post".
+     */
+    public static function isReservedLiteralAttributeValue(string $name, string $value): bool
+    {
+        $normalized = \strtolower(\trim($value));
+
+        return match ($name) {
+            'method' => \in_array($normalized, self::ALLOWED_METHODS, true),
+            'csrf' => \in_array($normalized, ['auto', 'on', 'off'], true),
+            'captcha' => \in_array($normalized, ['auto', 'required', 'lazy', 'off'], true),
+            'enctype' => \in_array($normalized, self::ALLOWED_ENCTYPES, true),
+            'autocomplete' => \in_array($normalized, self::ALLOWED_AUTOCOMPLETE, true),
+            'novalidate' => \in_array($normalized, ['', '1', 'true', 'yes', 'on', 'novalidate'], true),
+            default => false,
+        };
     }
 
     private static function isSafeAction(string $action): bool

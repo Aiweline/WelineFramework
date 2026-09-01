@@ -9,6 +9,26 @@ class RegistryProgress
     private static bool $enabled = false;
     private static ?float $startedAt = null;
 
+    /** @var null|callable(string, ?int): void */
+    private static $webReporter = null;
+
+    /**
+     * 注册 Web/SSE 进度回调；CLI 仍走 stderr，Web 回调与 CLI 可并存。
+     *
+     * @param null|callable(string $message, ?int $progress): void $reporter
+     */
+    public static function setWebReporter(?callable $reporter): void
+    {
+        self::$webReporter = $reporter;
+    }
+
+    private static function emitWeb(string $message, ?int $progress = null): void
+    {
+        if (self::$webReporter !== null) {
+            (self::$webReporter)($message, $progress);
+        }
+    }
+
     public static function enable(bool $enabled = true): void
     {
         self::$enabled = $enabled;
@@ -40,6 +60,12 @@ class RegistryProgress
     }
 
     public static function log(string $message): void
+    {
+        self::emitWeb($message);
+        self::writeCli($message);
+    }
+
+    private static function writeCli(string $message): void
     {
         if (!self::isEnabled()) {
             return;
@@ -80,12 +106,17 @@ class RegistryProgress
     public static function module(string $scope, int $index, int $total, string $moduleName, string $message = ''): void
     {
         $suffix = $message !== '' ? ' ' . $message : '';
-        self::log(sprintf('%s [%d/%d] %s%s', $scope, $index, $total, $moduleName, $suffix));
+        $line = sprintf('%s [%d/%d] %s%s', $scope, $index, $total, $moduleName, $suffix);
+        $percent = $total > 0 ? (int) round(($index / $total) * 100) : null;
+        self::emitWeb($line, $percent);
+        self::writeCli($line);
     }
 
     public static function count(string $scope, int $count, string $label): void
     {
-        self::log(sprintf('%s: %d %s', $scope, $count, $label));
+        $line = sprintf('%s: %d %s', $scope, $count, $label);
+        self::emitWeb($line);
+        self::writeCli($line);
     }
 
     private static function formatBytes(int $bytes): string

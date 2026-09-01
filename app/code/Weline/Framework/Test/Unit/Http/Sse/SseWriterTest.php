@@ -50,6 +50,26 @@ final class SseWriterTest extends TestCase
         );
     }
 
+    public function testStartEmitsPendingSessionCookiesOnWlsSocket(): void
+    {
+        $stream = $this->createStream();
+        SseContext::setConnection($stream);
+
+        $collector = \Weline\Framework\Http\HeaderCollector::getInstance();
+        $collector->setCookie('WELINE_SESSID_9555', 'restored-session-id', \time() + 3600, '/', '', true, true, 'Lax');
+
+        $sse = new SseWriter();
+        $sse->start();
+
+        \rewind($stream);
+        $content = (string)\stream_get_contents($stream);
+
+        self::assertStringContainsString('HTTP/1.1 200 OK', $content);
+        self::assertStringContainsString('Content-Type: text/event-stream', $content);
+        self::assertStringContainsString('Set-Cookie: WELINE_SESSID_9555=restored-session-id', $content);
+        self::assertSame([], $collector->getCookies(), 'Emitted SSE cookies must be cleared to avoid Worker double-merge.');
+    }
+
     public function testSendEventSendsCorrectFormat(): void
     {
         $stream = $this->createStream();

@@ -115,13 +115,76 @@ final class SessionCookieNameResolver
 
     public static function hasRequestCookie(): bool
     {
+        return self::readRequestSessionId() !== '';
+    }
+
+    /**
+     * Session cookie wire names that may carry the active login for this request.
+     *
+     * Document navigations can emit the authority-qualified name before
+     * CookieScope is active (`WELINE_SESSID_9555`), while QueryBin often
+     * starts after website detection and uses the scoped name
+     * (`WELINE_SESSID_9555_w0`) while expiring the unscoped alias. Readers
+     * must accept every candidate so login state is not split across jars.
+     *
+     * @return list<string>
+     */
+    public static function requestCookieCandidates(?string $host = null): array
+    {
+        $names = [
+            self::resolve($host),
+            self::resolveUnscopedFor(self::LEGACY_NAME, $host),
+            self::LEGACY_NAME,
+        ];
+
         $cookies = Context::getCurrent()?->get('input.cookie', []) ?? [];
-        if (!\is_array($cookies)) {
-            return false;
+        if (\is_array($cookies)) {
+            foreach (\array_keys($cookies) as $name) {
+                if (!\is_string($name) || $name === '') {
+                    continue;
+                }
+                if (\preg_match('/^WELINE_SESSID(?:_[1-9]\d{0,4})?(?:_w\d+)?$/D', $name) !== 1) {
+                    continue;
+                }
+                $names[] = $name;
+            }
         }
 
-        $value = $cookies[self::resolve()] ?? null;
-        return \is_string($value) && \trim($value) !== '';
+        $unique = [];
+        foreach ($names as $name) {
+            $name = \trim($name);
+            if ($name === '' || isset($unique[$name])) {
+                continue;
+            }
+            $unique[$name] = true;
+        }
+
+        return \array_keys($unique);
+    }
+
+    /**
+     * First non-empty Session id from {@see requestCookieCandidates()}.
+     */
+    public static function readRequestSessionId(?string $host = null): string
+    {
+        $cookies = Context::getCurrent()?->get('input.cookie', []) ?? [];
+        if (!\is_array($cookies)) {
+            $cookies = [];
+        }
+
+        foreach (self::requestCookieCandidates($host) as $name) {
+            $value = $cookies[$name] ?? null;
+            if (!\is_string($value) || \trim($value) === '') {
+                if (\function_exists('w_env_cookie')) {
+                    $value = \w_env_cookie($name);
+                }
+            }
+            if (\is_string($value) && \trim($value) !== '') {
+                return \trim($value);
+            }
+        }
+
+        return '';
     }
 
     /**

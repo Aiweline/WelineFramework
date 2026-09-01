@@ -2,315 +2,201 @@
 
 ## 摘要
 
-本文档介绍 WelineFramework 中的 `url`、`frontend-url`、`backend-url`、`admin-url` 标签的使用方法。这些标签用于在模板中生成 URL 链接。
+模板中生成路由 URL 有**两种一等写法**，效果等价，按场景选用：
 
-## 什么是 url 标签
+1. **XML 标签**：`<url>` / `<frontend-url>` / `<backend-url>` / `<admin-url>` / `<api>` / `<backend-api>`
+2. **`@` 内联**：`@url(...)` / `@url{...}` / `@url{'...'}`（以及 `@frontend-url`、`@backend-url`、`@api` 等同族）
 
-`url` 标签是 WelineFramework 提供的 URL 生成标签，用于在模板中生成各种类型的 URL 链接。框架提供了多个 URL 标签，分别用于生成不同类型的 URL。
+前端主题与业务模板**优先**使用 `@url{'path'}`（花括号 + 单引号路径）。禁止在 HTML 属性里硬编码 `/path`，也禁止用 `<?= $this->getUrl() ?>` 代替标签。`<?php ?>` 数据准备块里若必须先算出完整 URL 再注入变量，可保留 `$this->getUrl()` / `$this->getFrontendUrl()`。
+
+权威对照：[Taglib 场景映射表](../../../Taglib/doc/场景映射表.md)。
 
 ## 为什么需要 url 标签
 
-在模板中使用 URL 标签提供了以下优势：
+- 自动走框架路由与站点前缀（含语言/货币等上下文）
+- 区分前台 / 后台 / API
+- 参数编码与 XSS 防护由框架处理
 
-- **URL 生成**：自动生成正确的 URL 链接
-- **路由支持**：支持框架的路由系统
-- **参数传递**：支持 URL 参数传递
-- **类型区分**：区分前端、后端、API 等不同类型的 URL
+## 标签族
 
-## 标签类型
+| 名称 | 作用 |
+|------|------|
+| `url` | 按当前区域上下文生成 URL |
+| `frontend-url` | 强制前台 URL |
+| `backend-url` / `admin-url` | 强制后台 URL |
+| `api` / `frontend-api` | API URL |
+| `backend-api` | 后台 API URL |
 
-框架提供以下 URL 标签：
+## 两种用法（同等合法）
 
-- **`url`**：生成通用 URL（根据当前上下文自动判断）
-- **`frontend-url`**：生成前端 URL
-- **`backend-url`** 或 **`admin-url`**：生成后端/管理后台 URL
-- **`api`**：生成 API URL
-- **`backend-api`**：生成后端 API URL
+### A. XML 标签
 
-## 语法格式
-
-### 1. `<url>` 标签格式
+适合独立输出、或需要 `path` / `params` 属性拆分的场景：
 
 ```html
-<url path="/module/controller/action"/>
-<url path="/module/controller/action" params="id=1&name=test"/>
+<url path="product/list"/>
+<url path="product/view" params="id=1&name=test"/>
+<frontend-url path="/"/>
+<backend-url path="admin/dashboard"/>
 ```
 
-### 2. `@url()` 格式
+也支持标签体写法（少见，多用于把路径交给标签体）：
 
 ```html
-@url(/module/controller/action)
-@url(/module/controller/action|['id' => 1, 'name' => 'test'])
+<a href="<url>product/list</url>">商品列表</a>
 ```
 
-### 3. `@url{}` 格式
+### B. `@` 内联（推荐用于属性）
+
+三种括号形态均可，**推荐花括号 + 引号路径**（与 Theme 现网一致）：
 
 ```html
-@url{/module/controller/action}
-@url{/module/controller/action|['id' => 1, 'name' => 'test']}
-```
+<!-- 推荐：花括号 + 单引号 -->
+<a href="@url{'product/list'}">商品列表</a>
+<a href="@url{'customer/account/index'}#orders">我的订单</a>
 
-## 使用方法
-
-### url 标签
-
-生成通用 URL（根据当前上下文自动判断）：
-
-```html
-<!-- 基本用法 -->
-<a href="@url('/')">首页</a>
+<!-- 圆括号 -->
+<a href="@url('product/list')">商品列表</a>
 <a href="@url('/product/list')">商品列表</a>
 
-<!-- 带参数 -->
-<a href="@url('/product/view', ['id' => '{{product.id}}'])">查看商品</a>
+<!-- 花括号无引号（字面路径） -->
+<a href="@url{product/list}">商品列表</a>
 ```
 
-### frontend-url 标签
-
-生成前端 URL：
+变量路径（PHP 变量名，不要加引号包住变量）：
 
 ```html
-<!-- 基本用法 -->
-<a href="@frontend-url('/')">首页</a>
-<a href="@frontend-url('/product/list')">商品列表</a>
-
-<!-- 带参数 -->
-<a href="@frontend-url('/product/view', ['id' => '{{product.id}}'])">查看商品</a>
+<a href="@url{$guideRoute}">指南</a>
+<a href="@url{$policyRoute}">政策</a>
 ```
 
-### backend-url 或 admin-url 标签
-
-生成后端/管理后台 URL：
+带参数（`|` 右侧为 PHP 数组字面量）：
 
 ```html
-<!-- 基本用法 -->
-<a href="@backend-url('/admin/dashboard')">管理后台</a>
-<a href="@admin-url('/admin/user/list')">用户列表</a>
-
-<!-- 带参数 -->
-<a href="@backend-url('/admin/user/edit', ['id' => '{{user.id}}'])">编辑用户</a>
+<a href="@url{'product/view'|['id' => 1, 'name' => 'test']}">查看</a>
+<a href="@url(/product/view|['id' => '{{product.id}}'])">查看</a>
 ```
 
-### api 标签
-
-生成 API URL：
+同族内联：
 
 ```html
-<!-- 基本用法 -->
+<a href="@frontend-url{'/'}">首页</a>
+<a href="@backend-url{'admin/dashboard'}">后台</a>
 <script>
-    var apiUrl = '@api(/api/user/info)';
-    fetch(apiUrl).then(response => response.json());
-</script>
-
-<!-- 带参数 -->
-<script>
-    var apiUrl = '@api(/api/product/list, ["page" => 1, "size" => 20])';
+  const api = "@api{'api/framework/query-bin'}";
+  const backendApi = "@backend-api{'admin/api/backend/user/list'}";
 </script>
 ```
 
-### backend-api 标签
+> 写在 HTML 属性或 `<script>` 输出上下文中的 `@url{'...'}`，会在模板编译期展开为 `<?= $this->getUrl('...') ?>`，运行时写入页面。不要把 `@url` 塞进 `<?php $x = "..."; ?>` 字符串赋值。
 
-生成后端 API URL：
+## 选用建议
+
+| 场景 | 写法 |
+|------|------|
+| `href` / `action` / `data-*-url` | `@url{'path'}` |
+| 需要强制前台 | `@frontend-url{'path'}` |
+| 后台链接 | `@backend-url{'path'}` / `@admin-url{'path'}` |
+| fetch / Weline.Api endpoint | `@api{'...'}` |
+| 独立块、属性拆分 | `<url path="..."/>` |
+| 路径来自 PHP 变量 | `@url{$routeVar}` |
+
+## 禁止
 
 ```html
-<!-- 基本用法 -->
+<!-- 禁止：硬编码站点路径 -->
+<a href="/blog">博客</a>
+<form action="/search">
+
+<!-- 禁止：HTML 属性里手写 getUrl -->
+<a href="<?= $this->getUrl('cart') ?>">购物车</a>
+```
+
+应改为：
+
+```html
+<a href="@url{'blog'}">博客</a>
+<form action="@url{'search'}">
+<a href="@url{'cart'}">购物车</a>
+```
+
+JS 输出上下文（`<script>` 内）同样用 `@` 内联，编译后会变成 PHP echo 写入字符串：
+
+```html
 <script>
-    var apiUrl = '@backend-api(/admin/api/backend/user/list)';
-    fetch(apiUrl).then(response => response.json());
+  const home = "@url{'/'}";
+  const api = "@api{'api/framework/query-bin'}";
 </script>
 ```
 
-## 参数传递
+**不要**在 `<?php ?>` 赋值里写 `$url = "@url{'products'}";`（标签会落在 PHP 字符串字面量内，无法执行）。数据准备应二选一：
 
-### 使用 @url() 格式传递参数
-
+```php
+// A. 只存路径，输出时用标签
+$productPath = 'product/' . $productSlug;
+```
 ```html
-<!-- 数组参数 -->
-@url(/product/view|['id' => 1, 'name' => 'test'])
-
-<!-- 使用模板变量 -->
-@url(/product/view|['id' => '{{product.id}}', 'name' => '{{product.name}}'])
+<a href="@url{$productPath}">详情</a>
 ```
 
-**语法说明**：
-- 使用 `|` 分隔路径和参数
-- 参数使用 PHP 数组格式
-- 可以使用模板变量
-
-### 使用标签属性传递参数
-
-```html
-<url path="/product/view" params="id=1&name=test"/>
+```php
+// B. 必须先持有完整 URL 时，PHP 块内调用 getUrl
+$checkoutUrl = $this->getUrl('checkout');
 ```
+
+静态资源（css/js/图片）用 `@static()` / `<css>` / `<js>` / `file` 标签，**不要**用 `url` 标签。
 
 ## 完整示例
 
-### 示例 1：导航菜单
+### 导航
 
 ```html
 <nav>
-    <ul>
-        <li><a href="@url('/')">首页</a></li>
-        <li><a href="@url('/product/list')">商品列表</a></li>
-        <li><a href="@url('/about')">关于我们</a></li>
-        <li><a href="@url('/contact')">联系我们</a></li>
-    </ul>
+  <a href="@url{'/'}">首页</a>
+  <a href="@url{'product/list'}">商品</a>
+  <a href="@url{'contact'}">联系</a>
 </nav>
 ```
 
-### 示例 2：商品列表
+### 表单
 
 ```html
-<div class="product-list">
-    <foreach name="products" item="product">
-        <div class="product">
-            <h3><var>product.name</var></h3>
-            <p>价格：¥<var>product.price</var></p>
-            <a href="@url('/product/view', ['id' => '{{product.id}}'])">查看详情</a>
-            <a href="@url('/product/add-to-cart', ['id' => '{{product.id}}'])">加入购物车</a>
-        </div>
-    </foreach>
-</div>
+<w:form action="@url{'search'}" method="get">
+  <input name="q" type="search"/>
+</w:form>
 ```
 
-### 示例 3：分页链接
-
-```html
-<div class="pagination">
-    <if condition="$currentPage > 1">
-        <a href="@url('/product/list', ['page' => '{{currentPage - 1}}'])">上一页</a>
-    </if>
-    
-    <span>第 <var>currentPage</var> 页，共 <var>totalPages</var> 页</span>
-    
-    <if condition="$currentPage < $totalPages">
-        <a href="@url('/product/list', ['page' => '{{currentPage + 1}}'])">下一页</a>
-    </if>
-</div>
-```
-
-### 示例 4：管理后台链接
-
-```html
-<div class="admin-menu">
-    <ul>
-        <li><a href="@backend-url('/admin/dashboard')">仪表盘</a></li>
-        <li><a href="@backend-url('/admin/user/list')">用户管理</a></li>
-        <li><a href="@backend-url('/admin/product/list')">商品管理</a></li>
-        <li><a href="@backend-url('/admin/order/list')">订单管理</a></li>
-    </ul>
-</div>
-```
-
-### 示例 5：AJAX 请求
+### AJAX
 
 ```html
 <script>
-    // 前端 API
-    function loadProducts() {
-        var url = '@api(/api/product/list, ["page" => 1, "size" => 20])';
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                // 处理数据
-            });
-    }
-    
-    // 后端 API
-    function loadUsers() {
-        var url = '@backend-api(/admin/api/backend/user/list)';
-        fetch(url)
-            .then(response => response.json())
-            .then(data => {
-                // 处理数据
-            });
-    }
+  fetch("@api{'api/product/list'|['page' => 1]}")
+    .then((r) => r.json());
 </script>
 ```
 
-## URL 路径格式
-
-### 路由格式
-
-URL 路径支持框架的路由格式：
+### 后台
 
 ```html
-<!-- 模块/控制器/操作 -->
-@url(/module/controller/action)
-
-<!-- 路由别名 -->
-@url(/product-list)
-
-<!-- 完整路径 -->
-@url(/product/list?page=1)
+<a href="@backend-url{'admin/user/list'}">用户</a>
 ```
 
-### 参数格式
+## 路径与参数
 
-参数可以使用数组或查询字符串格式：
-
-```html
-<!-- 数组格式（推荐） -->
-@url(/product/view|['id' => 1, 'name' => 'test'])
-
-<!-- 查询字符串格式 -->
-<url path="/product/view" params="id=1&name=test"/>
-```
-
-## 注意事项
-
-### 1. 路径格式
-
-- 路径可以以 `/` 开头，也可以不以 `/` 开头
-- 框架会自动处理路径格式
-- 支持路由别名和完整路径
-
-### 2. 参数传递
-
-- 数组格式：`['key' => 'value']`
-- 查询字符串格式：`key=value&key2=value2`
-- 可以使用模板变量
-
-### 3. URL 类型
-
-- `url`：根据当前上下文自动判断
-- `frontend-url`：强制生成前端 URL
-- `backend-url` / `admin-url`：强制生成后端 URL
-- `api`：生成 API URL
-- `backend-api`：生成后端 API URL
-
-### 4. 安全性
-
-- URL 标签会自动处理特殊字符
-- 参数会被正确编码
-- 防止 XSS 攻击
+- 路径可带或不带前导 `/`；框架会规范化
+- 锚点写在标签外：`@url{'customer/account/index'}#orders`
+- 查询串可写在路径后，或用 `|['k' => 'v']` 数组参数
 
 ## 常见问题
 
-### Q1: URL 生成不正确？
+**Q: 生成结果不对？** 检查路由是否存在、是否误用了后台/前台族标签。
 
-**A**: 检查以下几点：
-1. 确保路径格式正确
-2. 检查路由配置
-3. 确保模块、控制器、操作存在
+**Q: 动态 slug？** 先拼 `$path`，再用 `@url{$path}`，不要把 PHP 表达式塞进引号路径里。
 
-### Q2: 参数未传递？
-
-**A**: 检查以下几点：
-1. 确保参数格式正确
-2. 检查参数名是否正确
-3. 确保模板变量已传递
-
-### Q3: 如何生成带锚点的 URL？
-
-**A**: 在路径后添加锚点：
-
-```html
-<a href="@url('/product/list')#section1">跳转到章节1</a>
-```
+**Q: 和 `$this->getUrl` 的关系？** 标签编译结果就是调用 `getUrl` / `getFrontendUrl` / `getApi` 等；模板层请写标签，不要直接调 PHP。
 
 ## 相关文档
 
 - [var 标签使用指南](02-var标签使用指南.md)
-- [if 标签使用指南](03-if-elseif-else标签使用指南.md)
-
+- [static 标签使用指南](09-static-template-js-css标签使用指南.md)
+- [Taglib 场景映射表](../../../Taglib/doc/场景映射表.md)

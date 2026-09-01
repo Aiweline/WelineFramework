@@ -4,6 +4,17 @@
 
 本文档介绍 WelineFramework 中的 `lang` 标签的使用方法。`lang` 标签用于在模板中实现多语言翻译，支持多种语法格式和参数传递。
 
+**硬规则（必读）**：`@lang()` / `@lang{}` 把**未加引号的逗号**一律当作「源文 / 参数」分隔符，与 `@lang(文案, $args)` 相同。源文本身含逗号（如文件扩展名列表 `ico, png, svg`）时，**禁止**写成 `@lang{支持 .ico, .png}`——会编译成 `<?=__('支持 .ico', .png)?>` 并触发页面 `ParseError` / 500。应改用：
+
+| 场景 | 正确写法 |
+|------|----------|
+| 源文含逗号、无动态参数 | `<lang>支持 .ico, .png, .svg</lang>`（首选） |
+| 内联属性/脚本、源文含逗号 | `@lang('支持 .ico, .png, .svg')` 或 `@lang{"Supports .ico, .png"}` |
+| 源文无逗号、带翻译参数 | `@lang(Welcome %{}!, 'John')` / `@lang{User %{1} has %{2} messages, ['John', 5]}` |
+| 源文含逗号且要传参 | 用 `<lang args="...">源文含,逗号</lang>`，不要依赖裸 `@lang{源文, 参数}` |
+
+MCP 硬约束 id：`at_lang_no_unquoted_comma`（见 `AI硬规则索引.md`）。详例见下文「注意事项 → 参数分隔」与 FAQ Q2b。
+
 ## 什么是 lang 标签
 
 `lang` 标签是 WelineFramework 提供的模板翻译标签，用于在模板文件中标记需要翻译的文本。该标签会在模板编译时或运行时根据当前用户的语言环境自动翻译文本内容。
@@ -19,13 +30,18 @@
 
 ## 语法格式
 
-`lang` 标签支持以下三种语法格式：
+`lang` 标签支持以下三种语法格式。**`<lang>` 的正文可含任意逗号**；`@lang()` / `@lang{}` 仅在源文加了引号时，逗号才属于源文。
 
 ### 1. `<lang>` 标签格式
+
+源文写在标签体内，逗号不会被当成参数分隔（参数走 `args` 属性）。含逗号的说明文案优先用本格式。
 
 ```html
 <!-- 基本用法 -->
 <lang>网站维护</lang>
+
+<!-- 源文可含逗号 -->
+<lang>支持 .ico, .png, .svg</lang>
 
 <!-- 带 args 属性 -->
 <lang args="'John'">Welcome %{}!</lang>
@@ -37,11 +53,16 @@
 
 ### 2. `@lang()` 格式
 
+第一个逗号起（在未加引号的源文之后）开始切分参数。无参数时源文也不要夹未加引号的逗号。
+
 ```html
-<!-- 基本用法 -->
+<!-- 基本用法（源文无逗号） -->
 @lang(网站维护中...)
 
-<!-- 带参数（逗号分隔） -->
+<!-- 源文含逗号：必须给源文加引号 -->
+@lang('支持 .ico, .png, .svg')
+
+<!-- 带参数（逗号分隔：左侧源文无未加引号逗号，右侧才是 $args） -->
 @lang(Welcome %{}!, 'John')
 @lang(User %{1} has %{2} messages, ['John', 5])
 @lang(User %{name} has %{count} messages, ['name' => 'John', 'count' => 5])
@@ -49,14 +70,22 @@
 
 ### 3. `@lang{}` 格式
 
+与 `@lang()` 相同：花括号内**未加引号的逗号 = 参数分隔**，不是源文字面量。
+
 ```html
-<!-- 基本用法 -->
+<!-- 基本用法（源文无逗号） -->
 @lang{网站维护中...}
+
+<!-- 源文含逗号：必须加引号，或改用 <lang> -->
+@lang{'支持 .ico, .png, .svg'}
+@lang{"Supports .ico, .png, .svg"}
 
 <!-- 带参数（逗号分隔） -->
 @lang{Welcome %{}!, 'John'}
 @lang{User %{1} has %{2} messages, ['John', 5]}
 @lang{User %{name} has %{count} messages, ['name' => 'John', 'count' => 5]}
+
+<!-- 错误示例（会 500）：@lang{支持 .ico, .png, .svg} -->
 ```
 
 ## 使用方法
@@ -389,18 +418,27 @@ Website Maintenance
 @lang(网站维护)  <!-- 如果文本包含特殊字符，需要引号 -->
 ```
 
-### 2. 参数分隔
+### 2. 参数分隔（硬规则：源文含逗号必须加引号）
 
-在 `@lang()` 和 `@lang{}` 格式中，参数使用逗号分隔：
+在 `@lang()` 和 `@lang{}` 格式中，**未加引号的逗号一律当作参数分隔符**（与 `@lang(文案, $args)` 相同），不是源文字面量的一部分。
 
 ```html
-<!-- 正确 -->
+<!-- 正确：无逗号源文 -->
 @lang(Welcome %{}!, 'John')
 @lang{User %{1} has %{2} messages, ['John', 5]}
 
-<!-- 注意：如果文本本身包含逗号，需要引号包裹 -->
+<!-- 正确：源文本身含逗号 → 必须加引号，或改用 <lang> -->
 @lang('Hello, World!')
+@lang('支持 .ico, .png, .svg')
+@lang{"Supports .ico, .png, .svg"}
+<lang>支持 .ico, .png, .svg</lang>
+
+<!-- 错误：未加引号的逗号会被切成多个「参数」，编译成非法 PHP 并 500 -->
+@lang{支持 .ico, .png, .svg}
+<!-- 编译结果类似：<?=__('支持 .ico', .png, .svg)?> → ParseError: unexpected token "." -->
 ```
+
+**MCP 硬约束 id**：`at_lang_no_unquoted_comma`（见 `AI硬规则索引.md` / `hard-constraints.v1`）。
 
 ### 3. 嵌套使用
 
@@ -435,9 +473,13 @@ Website Maintenance
 
 **A**: 确保参数格式正确：
 - `<lang>` 标签使用 `args` 属性
-- `@lang()` 和 `@lang{}` 使用逗号分隔参数
+- `@lang()` 和 `@lang{}` 使用逗号分隔参数；**源文本身含逗号时必须加引号**，否则会编译成非法 PHP（`ParseError: unexpected token "."`）
 - 数组参数使用 `[]` 包裹
 - 命名参数使用关联数组
+
+### Q2b: `@lang{支持 .ico, .png}` 页面 500？
+
+**A**: 不是「在标签里写了 PHP」，而是未加引号的逗号被当成参数分隔。改为 `<lang>支持 .ico, .png</lang>` 或 `@lang('支持 .ico, .png')`，并清除对应 `view/tpl` 编译缓存。
 
 ### Q3: 编译后的文件还是中文？
 

@@ -84,6 +84,8 @@ final class FileStorage implements SessionStorageInterface
         if (self::shouldLogSessionOperations()) {
             w_log_info('[FileStorage] read keys=' . count($data), [], 'session');
         }
+        // 滑动续期：成功读取后刷新 mtime，避免仅浏览时被 GC/过期判定误删镜像。
+        @\touch($filePath);
         return $data;
     }
 

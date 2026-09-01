@@ -32,4 +32,25 @@ final class FrontendQueryGatewaySessionFactoryTest extends TestCase
             $source,
         );
     }
+
+    public function testBackendAttestationProviderSharesInjectedSessionFactory(): void
+    {
+        $source = (string)file_get_contents(
+            BP . 'app/code/Weline/Backend/Integration/Framework/FrontendWorkerBackendAttestationProvider.php'
+        );
+
+        self::assertStringContainsString(
+            'private readonly SessionFactory $sessionFactory',
+            $source,
+        );
+        self::assertStringNotContainsString('SessionFactory::getInstance()', $source);
+        self::assertStringContainsString(
+            '$this->sessionFactory->createBackendSession()',
+            $source,
+        );
+        self::assertStringContainsString(
+            '$this->sessionFactory->restoreAuthenticatedSession(',
+            $source,
+        );
+    }
 }

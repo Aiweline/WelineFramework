@@ -29,11 +29,15 @@ final class FrontendQueryGateway
     private const GRAPH_MAX_OPERATIONS = 10;
     private const AUTH_MODES = ['any', 'guest', 'customer', 'backend'];
 
+    private ?FrontendQueryOperationAttackGuard $operationAttackGuardFallback = null;
+
     public function __construct(
         private readonly FrameworkQueryService $queryService,
         private readonly QueryProviderRegistry $registry,
         private readonly FrontendWorkerSessionService $workerSessionService,
+        private readonly SessionFactory $sessionFactory,
         private readonly ?RuntimeProviderResolver $runtimeProviderResolver = null,
+        private readonly ?FrontendQueryOperationAttackGuard $operationAttackGuard = null,
     ) {
     }
 
@@ -80,6 +84,10 @@ final class FrontendQueryGateway
         $stepStart = \microtime(true);
         $descriptor = $this->requireOperation($provider, $operation);
         $this->recordGatewayStep('require_operation', $stepStart);
+
+        $stepStart = \microtime(true);
+        $this->resolveOperationAttackGuard()->assertAllowed($provider, $operation, $descriptor);
+        $this->recordGatewayStep('operation_attack_guard', $stepStart);
 
         $stepStart = \microtime(true);
         $expectedCapability = $provider . '.' . $operation;
@@ -569,9 +577,8 @@ final class FrontendQueryGateway
         if ($executionContext->area !== FrontendWorkerExecutionContext::AREA_FRONTEND) {
             $this->denyAuthorization();
         }
-        $sessionFactory = SessionFactory::getInstance();
         $authorized = match ($authMode) {
-            'guest' => !$sessionFactory->createFrontendSession()->isLoggedIn(),
+            'guest' => !$this->sessionFactory->createFrontendSession()->isLoggedIn(),
             'customer' => $this->currentPrincipal($authMode) !== null,
             default => false,
         };
@@ -771,10 +778,9 @@ final class FrontendQueryGateway
 
     private function currentPrincipal(string $authMode): ?string
     {
-        $sessionFactory = SessionFactory::getInstance();
         $session = $authMode === 'backend'
-            ? $sessionFactory->createBackendSession()
-            : $sessionFactory->createFrontendSession();
+            ? $this->sessionFactory->createBackendSession()
+            : $this->sessionFactory->createFrontendSession();
         if (!$session->isLoggedIn()) {
             return null;
         }
@@ -1058,5 +1064,14 @@ final class FrontendQueryGateway
         }
         $profile[] = $step;
         RequestContext::set('query_bin.gateway_profile', $profile);
+    }
+
+    private function resolveOperationAttackGuard(): FrontendQueryOperationAttackGuard
+    {
+        if ($this->operationAttackGuard instanceof FrontendQueryOperationAttackGuard) {
+            return $this->operationAttackGuard;
+        }
+
+        return $this->operationAttackGuardFallback ??= new FrontendQueryOperationAttackGuard();
     }
 }

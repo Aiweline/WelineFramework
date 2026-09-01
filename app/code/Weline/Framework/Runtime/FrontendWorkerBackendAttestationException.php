@@ -24,4 +24,23 @@ final class FrontendWorkerBackendAttestationException extends \RuntimeException
 
         parent::__construct($message, 0, $previous);
     }
+
+    /** Plain-text body for controlled HTTP responses. */
+    public function responseBody(): string
+    {
+        if (!\defined('DEV') || !DEV) {
+            return $this->getMessage();
+        }
+
+        $parts = [$this->reason];
+        $previous = $this->getPrevious();
+        if ($previous !== null) {
+            $detail = \trim($previous->getMessage());
+            if ($detail !== '') {
+                $parts[] = $detail;
+            }
+        }
+
+        return \implode(': ', $parts);
+    }
 }

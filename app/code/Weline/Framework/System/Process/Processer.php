@@ -1128,10 +1128,12 @@ class Processer
         }
 
         // WLS HTTP workers must not pcntl_fork() in-process: the child becomes a
-        // zombie under the worker and never reaches the target argv. Spawn via an
-        // out-of-process helper that forks + setsid + exec instead.
+        // zombie under the worker and never reaches the target argv. PHP-FPM
+        // pools commonly disable pcntl_* as well. Both request runtimes use a
+        // short-lived CLI helper that forks + setsid + exec instead.
         $inWlsWorker = \trim((string)(\getenv('WLS_WORKER_ID') ?: ($_ENV['WLS_WORKER_ID'] ?? '') )) !== '';
-        $pid = $inWlsWorker
+        $inFpmWorker = PHP_SAPI === 'fpm-fcgi';
+        $pid = ($inWlsWorker || $inFpmWorker)
             ? self::createPosixDetachedPhpArgvOutOfProcess(
                 $argv,
                 $resolvedCwd,
@@ -1177,6 +1179,8 @@ class Processer
         if (!\is_file($helper)) {
             throw new \RuntimeException('POSIX detached spawn helper is missing: ' . $helper);
         }
+        $cliPhpBinary = self::resolvePosixCliPhpBinary();
+        $argv[0] = $cliPhpBinary;
 
         $logEnabled = $enableLog ?? self::isLogEnabled();
         $stdoutPath = '/dev/null';
@@ -1286,7 +1290,7 @@ class Processer
         ];
         try {
             $process = @\proc_open(
-                [PHP_BINARY, $helper, $configPath],
+                [$cliPhpBinary, $helper, $configPath],
                 $descriptors,
                 $pipes,
                 $cwd,
@@ -1326,6 +1330,26 @@ class Processer
         } finally {
             @\unlink($configPath);
         }
+    }
+
+    private static function resolvePosixCliPhpBinary(): string
+    {
+        $current = \realpath(PHP_BINARY) ?: PHP_BINARY;
+        $candidates = [];
+        if (PHP_SAPI === 'cli' || PHP_SAPI === 'phpdbg' || \basename($current) === 'php') {
+            $candidates[] = $current;
+        }
+        $candidates[] = \dirname(\dirname($current)) . DS . 'bin' . DS . 'php';
+        $candidates[] = \dirname($current) . DS . 'php';
+
+        foreach (\array_unique($candidates) as $candidate) {
+            $resolved = \realpath($candidate);
+            if ($resolved !== false && \is_file($resolved) && \is_executable($resolved)) {
+                return $resolved;
+            }
+        }
+
+        throw new \RuntimeException('POSIX detached spawn CLI PHP binary is unavailable.');
     }
 
     /**

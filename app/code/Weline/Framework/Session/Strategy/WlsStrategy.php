@@ -114,7 +114,7 @@ final class WlsStrategy implements SessionStrategyInterface
         }
 
         if ($sessionId === null || $sessionId === '') {
-            $sessionId = \w_env_cookie(\Weline\Framework\Session\SessionCookieNameResolver::resolve()) ?? '';
+            $sessionId = \Weline\Framework\Session\SessionCookieNameResolver::readRequestSessionId();
         }
 
         if ($sessionId === '') {
@@ -125,6 +125,9 @@ final class WlsStrategy implements SessionStrategyInterface
         }
 
         $data = $this->storage->read($sessionId);
+        // Re-assert under the active CookieScope name so QueryBin (scoped) and
+        // document navigations (sometimes unscoped) share one login jar entry.
+        $this->setCookie($sessionId, $this->cookieLifetime);
 
         return $sessionId;
     }
@@ -188,7 +191,12 @@ final class WlsStrategy implements SessionStrategyInterface
         $headerCollector = HeaderCollector::getInstance();
         
         $expires = $lifetime > 0 ? \time() + $lifetime : 0;
-        $cookieName = \Weline\Framework\Session\SessionCookieNameResolver::resolve();
+        // Pass the authority-qualified name only. HeaderCollector applies
+        // CookieScope::qualifyName once so Session and website cookies share
+        // the same active suffix (e.g. _w0) at emission time.
+        $cookieName = \Weline\Framework\Session\SessionCookieNameResolver::resolveUnscopedFor(
+            \Weline\Framework\Session\SessionCookieNameResolver::LEGACY_NAME
+        );
         $secure = $this->resolveCookieSecure();
         $sameSite = $this->resolveCookieSameSite($secure);
         
@@ -202,6 +210,53 @@ final class WlsStrategy implements SessionStrategyInterface
             $this->cookieHttpOnly,
             $sameSite
         );
+
+        // Remember-me / regenerate may assert WELINE_SESSID_{port} while the
+        // browser still holds WELINE_SESSID_{port}_w0 from a scoped request.
+        // Leaving the sibling on a destroyed id causes session_rebound logout
+        // on the next navigation (SSE matrix expand path).
+        $this->expireSiblingSessionCookies($headerCollector, $cookieName, $secure, $sameSite);
+    }
+
+    /**
+     * Expire Session cookie names that would not resolve to the asserted wire name.
+     */
+    private function expireSiblingSessionCookies(
+        HeaderCollector $headerCollector,
+        string $assertedUnscopedName,
+        bool $secure,
+        string $sameSite,
+    ): void {
+        $activeWireName = \Weline\Framework\Http\CookieScope::isProtocolCookie($assertedUnscopedName)
+            ? $assertedUnscopedName
+            : \Weline\Framework\Http\CookieScope::qualifyName($assertedUnscopedName);
+        $expire = \time() - 42000;
+
+        foreach (\Weline\Framework\Session\SessionCookieNameResolver::requestCookieCandidates() as $name) {
+            $name = \trim((string)$name);
+            if ($name === '' || $name === $assertedUnscopedName) {
+                continue;
+            }
+            $wire = \Weline\Framework\Http\CookieScope::isProtocolCookie($name)
+                ? $name
+                : \Weline\Framework\Http\CookieScope::qualifyName($name);
+            // When CookieScope is active, unscoped aliases qualify onto the
+            // same wire name as the cookie we just set — skip those.
+            if ($wire === $activeWireName) {
+                continue;
+            }
+
+            $headerCollector->setCookie(
+                $name,
+                '',
+                $expire,
+                '/',
+                $this->cookieDomain,
+                $secure,
+                $this->cookieHttpOnly,
+                $sameSite
+            );
+        }
     }
 
     /**
@@ -211,17 +266,41 @@ final class WlsStrategy implements SessionStrategyInterface
     {
         $headerCollector = HeaderCollector::getInstance();
         $secure = $this->resolveCookieSecure();
-        
+        $sameSite = $this->resolveCookieSameSite($secure);
+        $expire = \time() - 42000;
+
+        // Expire under the active CookieScope name; HeaderCollector also expires
+        // unscoped aliases when the scope policy asks for it.
         $headerCollector->setCookie(
-            \Weline\Framework\Session\SessionCookieNameResolver::resolve(),
+            \Weline\Framework\Session\SessionCookieNameResolver::resolveUnscopedFor(
+                \Weline\Framework\Session\SessionCookieNameResolver::LEGACY_NAME
+            ),
             '',
-            \time() - 42000,
+            $expire,
             $this->resolveCookiePath(),
             $this->cookieDomain,
             $secure,
             $this->cookieHttpOnly,
-            $this->resolveCookieSameSite($secure)
+            $sameSite
         );
+
+        // When CookieScope is inactive, also expire sibling scoped/legacy names
+        // still present on the request so logout cannot leave QueryBin logged in.
+        foreach (\Weline\Framework\Session\SessionCookieNameResolver::requestCookieCandidates() as $name) {
+            if ($name === \Weline\Framework\Session\SessionCookieNameResolver::resolve()) {
+                continue;
+            }
+            $headerCollector->setCookie(
+                $name,
+                '',
+                $expire,
+                '/',
+                $this->cookieDomain,
+                $secure,
+                $this->cookieHttpOnly,
+                $sameSite
+            );
+        }
     }
 
     private function resolveCookieSecure(): bool
