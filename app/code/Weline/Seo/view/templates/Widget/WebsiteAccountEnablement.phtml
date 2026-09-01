@@ -65,6 +65,7 @@ $crawlOptions = [
     SeoWebsiteAccount::CRAWL_NEVER => __('从不'),
 ];
 ?>
+<css>Weline_Seo::css/seo-admin.css</css>
 <js>Weline_Seo::js/seo-admin.js</js>
 <div
     id="<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?>"
@@ -76,244 +77,46 @@ $crawlOptions = [
     data-save-failed="<?= htmlspecialchars(__('请检查输入后重试'), ENT_QUOTES, 'UTF-8') ?>"
     data-request-failed="<?= htmlspecialchars(__('请求失败'), ENT_QUOTES, 'UTF-8') ?>"
     data-api-unavailable="<?= htmlspecialchars(__('Weline API 不可用'), ENT_QUOTES, 'UTF-8') ?>"
-    data-resource-unavailable="<?= htmlspecialchars(__('Weline API 资源不可用'), ENT_QUOTES, 'UTF-8') ?>">
-    <style>
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> {
-            --seo-widget-border: #d8dee8;
-            --seo-widget-muted: #64748b;
-            --seo-widget-text: #172033;
-            --seo-widget-bg: #fff;
-            --seo-widget-soft: #f6f8fb;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-shell {
-            background: var(--seo-widget-bg);
-            border: 1px solid var(--seo-widget-border);
-            border-radius: 8px;
-            overflow: hidden;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            padding: 18px 20px;
-            border-bottom: 1px solid var(--seo-widget-border);
-            background: #f8fafc;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-title {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin: 0;
-            color: var(--seo-widget-text);
-            font-size: 16px;
-            font-weight: 650;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-subtitle {
-            color: var(--seo-widget-muted);
-            font-size: 12px;
-            margin-top: 4px;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-body {
-            padding: 18px;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-message {
-            display: none;
-            margin: 0 0 14px;
-            padding: 10px 12px;
-            border-radius: 6px;
-            font-size: 13px;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-message.is-success {
-            display: block;
-            color: #166534;
-            background: #ecfdf3;
-            border: 1px solid #bbf7d0;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-message.is-error {
-            display: block;
-            color: #991b1b;
-            background: #fef2f2;
-            border: 1px solid #fecaca;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-account-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 12px;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-card {
-            border: 1px solid var(--seo-widget-border);
-            border-left: 4px solid var(--seo-platform-color, #64748b);
-            border-radius: 8px;
-            background: #fff;
-            transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-card:hover {
-            border-color: var(--seo-platform-color, #64748b);
-            box-shadow: 0 8px 22px rgba(15, 23, 42, .08);
-            transform: translateY(-1px);
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-card.is-selected {
-            border-color: var(--seo-platform-color, #64748b);
-            background: #fbfdff;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-card.is-inactive {
-            opacity: .72;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-main {
-            display: grid;
-            grid-template-columns: auto 1fr auto;
-            gap: 12px;
-            align-items: start;
-            padding: 14px;
-            cursor: pointer;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-check {
-            margin-top: 7px;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-title {
-            display: flex;
-            align-items: center;
-            gap: 9px;
-            min-width: 0;
-            color: var(--seo-widget-text);
-            font-weight: 650;
-            line-height: 1.25;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-title span {
-            overflow-wrap: anywhere;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 8px;
-            color: var(--seo-widget-muted);
-            font-size: 12px;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            padding: 4px 8px;
-            border-radius: 999px;
-            background: var(--seo-widget-soft);
-            color: #475569;
-            white-space: nowrap;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-chip.is-on {
-            color: #166534;
-            background: #ecfdf3;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-chip.is-off {
-            color: #6b7280;
-            background: #f3f4f6;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-platform-icon {
-            flex: 0 0 auto;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-config {
-            display: none;
-            padding: 0 14px 14px 58px;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-card.is-selected .seo-engine-config {
-            display: block;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-config-panel {
-            border-top: 1px solid var(--seo-widget-border);
-            padding-top: 12px;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-config-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-config-grid label {
-            display: block;
-            color: #334155;
-            font-size: 12px;
-            font-weight: 600;
-            margin-bottom: 5px;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-auto-submit {
-            margin-top: 12px;
-            padding: 10px 12px;
-            border: 1px solid #cfe3ff;
-            border-radius: 7px;
-            background: #f3f8ff;
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-footer {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-top: 16px;
-            padding-top: 16px;
-            border-top: 1px solid var(--seo-widget-border);
-        }
-        #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-empty {
-            padding: 28px;
-            border: 1px dashed var(--seo-widget-border);
-            border-radius: 8px;
-            background: #f8fafc;
-            text-align: center;
-            color: var(--seo-widget-muted);
-        }
-        @media (max-width: 767px) {
-            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-header,
-            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-widget-footer {
-                align-items: stretch;
-                flex-direction: column;
-            }
-            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-account-grid,
-            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-config-grid {
-                grid-template-columns: 1fr;
-            }
-            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-main {
-                grid-template-columns: auto 1fr;
-            }
-            #<?= htmlspecialchars($widgetId, ENT_QUOTES, 'UTF-8') ?> .seo-engine-config {
-                padding-left: 14px;
-            }
-        }
-    </style>
-
+    data-resource-unavailable="<?= htmlspecialchars(__('Weline API 资源不可用'), ENT_QUOTES, 'UTF-8') ?>"
+>
     <?php if ($mode === 'standalone'): ?>
     <w:form class="seo-widget-form" method="post" action="@var($actionUrl)">
         <input type="hidden" name="website_id" value="<?= $websiteId ?>">
     <?php endif; ?>
 
-    <div class="seo-widget-shell">
-        <div class="seo-widget-header">
-            <div>
-                <h5 class="seo-widget-title">
-                    <?= $visual->renderIcon('seo', 'SEO', '#2563EB', 30, 'seo-platform-icon') ?>
-                    <span><lang>搜索引擎账户启用</lang></span>
-                </h5>
-                <div class="seo-widget-subtitle">
-                    <?= htmlspecialchars($websiteName, ENT_QUOTES, 'UTF-8') ?>
-                    <?php if ($scope !== ''): ?>
-                        <span class="ms-2">scope: <?= htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') ?></span>
-                    <?php endif; ?>
+    <div class="w-card seo-widget-shell" data-w-shadow="sm">
+        <div class="w-card__header seo-widget-header">
+            <div class="w-cluster" data-justify="between" data-align="center" data-gap="md">
+                <div class="seo-widget-heading">
+                    <h5 class="w-card__title seo-widget-title">
+                        <?= $visual->renderIcon('seo', 'SEO', '#2563EB', 30, 'seo-platform-icon') ?>
+                        <span><lang>搜索引擎账户启用</lang></span>
+                    </h5>
+                    <div class="w-text seo-widget-subtitle" data-tone="muted" data-size="sm">
+                        <?= htmlspecialchars($websiteName, ENT_QUOTES, 'UTF-8') ?>
+                        <?php if ($scope !== ''): ?>
+                            <span class="w-badge" data-size="sm">scope: <?= htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') ?></span>
+                        <?php endif; ?>
+                    </div>
                 </div>
+                <?php if ($manageUrl !== ''): ?>
+                    <a class="w-button" href="<?= htmlspecialchars($manageUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" rel="noopener" aria-label="<?= htmlspecialchars(__('打开 SEO 账户管理'), ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                        <w:icon name="user" size="sm"></w:icon>
+                        <lang>账户管理</lang>
+                    </a>
+                <?php endif; ?>
             </div>
-            <?php if ($manageUrl !== ''): ?>
-                <a class="w-button" href="<?= htmlspecialchars($manageUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" aria-label="<?= htmlspecialchars(__('打开 SEO 账户管理'), ENT_QUOTES, 'UTF-8') ?>" data-tone="primary" data-variant="outline" data-size="sm">
-                    <w:icon name="user" size="sm"></w:icon>
-                    <lang>账户管理</lang>
-                </a>
-            <?php endif; ?>
         </div>
-        <div class="seo-widget-body">
+        <div class="w-card__body seo-widget-body">
             <div class="seo-message" data-role="seo-message"></div>
 
             <?php if ($accounts === []): ?>
-                <div class="seo-empty">
-                    <div style="--w-mb:var(--weline-space-2);">
-                        <?= $visual->renderIcon('seo', 'SEO', '#94A3B8', 40) ?>
+                <div class="w-empty seo-empty">
+                    <div class="seo-empty__icon">
+                        <?= $visual->renderIcon('seo', 'SEO', 'currentColor', 40) ?>
                     </div>
                     <div class="w-text" data-weight="strong"><lang>暂无可启用的搜索引擎账户</lang></div>
-                    <div class="w-text" data-size="sm" style="--w-mt:var(--weline-space-1);"><lang>先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。</lang></div>
+                    <div class="w-text" data-size="sm" data-tone="muted"><lang>先在后台 SEO 账户管理里添加 Google、Bing、百度、IndexNow 或其它搜索引擎账户。</lang></div>
                 </div>
             <?php else: ?>
                 <input type="hidden" name="<?= htmlspecialchars($fieldName('account_ids', true), ENT_QUOTES, 'UTF-8') ?>" value="">
@@ -355,15 +158,15 @@ $crawlOptions = [
                                         <span><?= htmlspecialchars((string)($account[SeoAccount::schema_fields_NAME] ?? ''), ENT_QUOTES, 'UTF-8') ?></span>
                                     </label>
                                     <div class="seo-engine-meta">
-                                        <span class="seo-chip"><?= htmlspecialchars($platformName, ENT_QUOTES, 'UTF-8') ?></span>
-                                        <span class="seo-chip">ID <?= $accountId ?></span>
-                                        <span class="seo-chip<?= $isActive ? ' is-on' : ' is-off' ?>"><?= $isActive ? __('启用') : __('停用') ?></span>
-                                        <span class="seo-chip<?= $pushEnabled && $supportsUrlPush ? ' is-on' : ' is-off' ?>"><lang>URL Push</lang></span>
-                                        <span class="seo-chip<?= $sitemapEnabled ? ' is-on' : ' is-off' ?>"><lang>Sitemap</lang></span>
-                                        <?php if ($supportsIndexNow): ?><span class="seo-chip is-on"><lang>IndexNow</lang></span><?php endif; ?>
-                                        <?php if ($catalogOnly): ?><span class="seo-chip"><lang>Catalog Only</lang></span><?php endif; ?>
-                                        <?php if ($supportsSubmit): ?><span class="seo-chip is-on"><lang>Sitemap Submit</lang></span><?php endif; ?>
-                                        <?php if ($supportsStats): ?><span class="seo-chip is-on"><lang>数据同步</lang></span><?php endif; ?>
+                                        <span class="w-badge seo-chip"><?= htmlspecialchars($platformName, ENT_QUOTES, 'UTF-8') ?></span>
+                                        <span class="w-badge seo-chip">ID <?= $accountId ?></span>
+                                        <span class="w-badge seo-chip<?= $isActive ? ' is-on' : ' is-off' ?>"><?= $isActive ? __('启用') : __('停用') ?></span>
+                                        <span class="w-badge seo-chip<?= $pushEnabled && $supportsUrlPush ? ' is-on' : ' is-off' ?>"><lang>URL Push</lang></span>
+                                        <span class="w-badge seo-chip<?= $sitemapEnabled ? ' is-on' : ' is-off' ?>"><lang>Sitemap</lang></span>
+                                        <?php if ($supportsIndexNow): ?><span class="w-badge seo-chip is-on"><lang>IndexNow</lang></span><?php endif; ?>
+                                        <?php if ($catalogOnly): ?><span class="w-badge seo-chip"><lang>Catalog Only</lang></span><?php endif; ?>
+                                        <?php if ($supportsSubmit): ?><span class="w-badge seo-chip is-on"><lang>Sitemap Submit</lang></span><?php endif; ?>
+                                        <?php if ($supportsStats): ?><span class="w-badge seo-chip is-on"><lang>数据同步</lang></span><?php endif; ?>
                                     </div>
                                 </div>
                                 <w:icon name="chevron-down" size="sm"></w:icon>
@@ -417,7 +220,7 @@ $crawlOptions = [
             <?php endif; ?>
 
             <?php if ($showSubmit): ?>
-                <div class="seo-widget-footer">
+                <div class="seo-widget-footer w-cluster" data-justify="between" data-align="center" data-gap="md">
                     <div class="w-text" data-tone="muted" data-size="sm">
                         <w:icon name="check" size="sm"></w:icon>
                         <lang>保存后立即更新该网站的搜索引擎账户启用状态。</lang>

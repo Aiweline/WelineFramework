@@ -42,7 +42,7 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JS
 <main class="w-seo-embed w-stack">
     <header class="w-seo-embed__header w-cluster" data-justify="between" data-align="center">
         <div class="w-stack" style="--w-gap:var(--weline-space-2);">
-            <a href="<?= $escape($this->getUrl('*/backend/embed', $baseParams)) ?>" class="w-seo-embed__back">
+            <a href="@url{'*/backend/embed'|$baseParams}" class="w-seo-embed__back">
                 <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
             </a>
             <div class="w-cluster">

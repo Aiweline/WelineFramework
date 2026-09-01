@@ -121,6 +121,35 @@ class IndexNowSearchEngineAdapter implements SearchEngineAdapterInterface
         ];
     }
 
+    public function getAccountConfigFields(): array
+    {
+        return [
+            [
+                'key' => 'indexnow_key',
+                'label' => (string)__('IndexNow Key'),
+                'type' => 'text',
+                'required' => true,
+                'placeholder' => '8-128 位密钥',
+                'hint' => (string)__('网站根目录 Key 文件内容须与此一致'),
+            ],
+            [
+                'key' => 'key_location',
+                'label' => (string)__('Key 文件公开地址'),
+                'type' => 'url',
+                'required' => true,
+                'placeholder' => 'https://example.com/your-indexnow-key.txt',
+            ],
+            [
+                'key' => 'indexnow_endpoint',
+                'label' => (string)__('IndexNow Endpoint（可选）'),
+                'type' => 'url',
+                'required' => false,
+                'placeholder' => 'https://api.indexnow.org/indexnow',
+                'hint' => (string)__('留空则使用平台默认 IndexNow 端点'),
+            ],
+        ];
+    }
+
     public function isConfigured(): bool
     {
         return true;

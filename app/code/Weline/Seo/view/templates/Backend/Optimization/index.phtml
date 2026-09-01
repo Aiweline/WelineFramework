@@ -13,10 +13,16 @@ foreach ($websites as $websiteOption) {
         continue;
     }
     $optionLabel = (string)($websiteOption['name'] ?? __('站点 %{1}', $optionWebsiteId));
+    $siteUrl = \rtrim(\trim((string)($websiteOption['url'] ?? $websiteOption['base_url'] ?? '')), '/');
+    $domain = \strtolower((string)(\parse_url($siteUrl, \PHP_URL_HOST) ?: ($websiteOption['domain'] ?? '')));
+    $code = (string)($websiteOption['code'] ?? '');
     $seoWebsiteSelectOptions[] = [
         'value' => (string)$optionWebsiteId,
         'label' => $optionLabel,
-        'meta' => (string)($websiteOption['code'] ?? ''),
+        'meta' => $domain !== '' ? $domain : $code,
+        'url' => $siteUrl,
+        'domain' => $domain,
+        'code' => $code,
     ];
     if ($selectedWebsiteId !== null && (int)$selectedWebsiteId === $optionWebsiteId) {
         $seoWebsiteSelectDisplay = $optionLabel;
@@ -143,7 +149,7 @@ $copy = [
                 allow-empty="false"
                 clearable="false"
                 empty-label="@lang(请选择站点)"
-                placeholder="@lang(搜索站点名称或编码)"
+                placeholder="@lang(搜索站点名称或域名)"
                 class="seo-opt-website-select"
                 on-select="handleSeoOptWebsiteSelectChange"
             />

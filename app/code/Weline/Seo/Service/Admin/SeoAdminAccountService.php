@@ -31,9 +31,6 @@ final class SeoAdminAccountService
     public function listAccounts(string $scope = ''): array
     {
         $query = $this->accounts->reset()->select();
-        if (trim($scope) !== '') {
-            $query->where(SeoAccount::schema_fields_SCOPE, trim($scope));
-        }
         $rows = $query->order(SeoAccount::schema_fields_CREATED_AT, 'DESC')->fetchArray();
         foreach ($rows as &$row) {
             $accountId = (int)($row[SeoAccount::schema_fields_ID] ?? 0);
@@ -87,7 +84,7 @@ final class SeoAdminAccountService
             $account->setData(SeoAccount::schema_fields_NAME, $name)
                 ->setData(SeoAccount::schema_fields_PLATFORM, $platform)
                 ->setData(SeoAccount::schema_fields_PROVIDER, $platform)
-                ->setData(SeoAccount::schema_fields_SCOPE, trim((string)($params['scope'] ?? '')))
+                ->setData(SeoAccount::schema_fields_SCOPE, '')
                 ->setData(SeoAccount::schema_fields_DESCRIPTION, trim((string)($params['description'] ?? '')))
                 ->setData(SeoAccount::schema_fields_IS_ACTIVE, (int)($params['is_active'] ?? SeoAccount::STATUS_ACTIVE))
                 ->setData(SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS, $enablePush)

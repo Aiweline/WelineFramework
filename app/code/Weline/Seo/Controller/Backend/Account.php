@@ -53,13 +53,7 @@ class Account extends BackendController
     #[AclAttribute('Weline_Seo::seo_account_index', '查看SEO账户列表', 'list', '查看SEO账户列表')]
     public function index(): string
     {
-        $scope = trim((string)$this->request->getGet('scope', ''));
-
         $query = $this->getAccountModel()->reset()->select();
-
-        if ($scope !== '') {
-            $query->where(SeoAccount::schema_fields_SCOPE, $scope);
-        }
 
         $query->order(SeoAccount::schema_fields_CREATED_AT, 'DESC');
 
@@ -140,7 +134,7 @@ class Account extends BackendController
         $isAjax = $xRequestedWith === 'XMLHttpRequest';
 
         $this->assign('accounts', $accounts);
-        $this->assign('scope', $scope);
+        $this->assign('scope', '');
         $this->assign('is_ajax', $isAjax);
 
         return $this->fetch();
@@ -150,7 +144,6 @@ class Account extends BackendController
     public function form(): string
     {
         $id = (int)$this->request->getGet('id');
-        $scope = trim((string)$this->request->getGet('scope', ''));
 
         $account = $this->getAccountModel()->reset();
         if ($id) {
@@ -160,27 +153,17 @@ class Account extends BackendController
                 $this->redirect('seo/backend/account/index');
                 return '';
             }
-        } else {
-            if ($scope !== '') {
-                $account->setData(SeoAccount::schema_fields_SCOPE, $scope);
-            }
         }
 
-        // 检测是否是轻量级模式（不需要完整后端布局）
-        // 1. AJAX 请求
-        // 2. 有 scope 参数（说明是从特定模块调用，应该轻量级显示）
-        // 3. 有 lightweight=1 参数
         $xRequestedWith = (string)($this->request->getHeader('X-Requested-With') ?? '');
-        $isAjax = $xRequestedWith === 'XMLHttpRequest' 
+        $isAjax = $xRequestedWith === 'XMLHttpRequest'
                   || $this->request->isAjax()
-                  || $scope !== ''  // 从特定模块调用
                   || $this->request->getGet('lightweight') === '1';
 
-        // 获取所有可用的平台适配器
         $platforms = $this->getPlatformCapabilityService()->getCapabilities();
         
         $this->assign('account', $account);
-        $this->assign('scope', $scope);
+        $this->assign('scope', '');
         $this->assign('is_ajax', $isAjax);
         $this->assign('platforms', $platforms);
 
@@ -246,21 +229,92 @@ class Account extends BackendController
                 $enableCronSitemap = 0;
             }
 
-            $scope = trim((string)($data['scope'] ?? ''));
+            $platformDisplayName = trim((string)($platformCapability['name'] ?? $platform));
+            $expectedPrefix = $platformDisplayName !== '' ? ($platformDisplayName . '-') : '';
+            $nameSuffix = $expectedPrefix !== '' && str_starts_with($name, $expectedPrefix)
+                ? trim(substr($name, strlen($expectedPrefix)))
+                : '';
+            if ($expectedPrefix === '' || $nameSuffix === '') {
+                return $this->jsonResponse([
+                    'success' => false,
+                    'message' => __('账户名称必须符合格式：%{1}{账户名}', $expectedPrefix !== '' ? $expectedPrefix : ($platform . '-')),
+                ]);
+            }
+            $name = $expectedPrefix . $nameSuffix;
+
+            $configFields = is_array($platformCapability['config_fields'] ?? null)
+                ? $platformCapability['config_fields']
+                : $this->getPlatformCapabilityService()->resolveAccountConfigFields($platform);
+
+            $config = [];
+            if (isset($data['config']) && is_array($data['config'])) {
+                foreach ($configFields as $field) {
+                    if (!is_array($field)) {
+                        continue;
+                    }
+                    $key = trim((string)($field['key'] ?? ''));
+                    if ($key === '') {
+                        continue;
+                    }
+                    $type = strtolower((string)($field['type'] ?? 'text'));
+                    if ($type === 'checkbox') {
+                        $config[$key] = !empty($data['config'][$key]);
+                        continue;
+                    }
+                    if (!array_key_exists($key, $data['config'])) {
+                        continue;
+                    }
+                    $raw = $data['config'][$key];
+                    if ($type === 'json') {
+                        if (is_array($raw)) {
+                            $config[$key] = $raw;
+                        } else {
+                            $decodedField = json_decode(trim((string)$raw), true);
+                            $config[$key] = is_array($decodedField) ? $decodedField : trim((string)$raw);
+                        }
+                        continue;
+                    }
+                    $config[$key] = is_scalar($raw) ? trim((string)$raw) : '';
+                }
+            } else {
+                $configJson = (string)($data['config_json'] ?? '');
+                if ($configJson !== '') {
+                    $decoded = json_decode($configJson, true);
+                    $config = is_array($decoded) ? $decoded : [];
+                }
+            }
+
+            foreach ($configFields as $field) {
+                if (!is_array($field) || empty($field['required'])) {
+                    continue;
+                }
+                $key = trim((string)($field['key'] ?? ''));
+                if ($key === '') {
+                    continue;
+                }
+                $type = strtolower((string)($field['type'] ?? 'text'));
+                $value = $config[$key] ?? null;
+                $missing = $type === 'checkbox'
+                    ? false
+                    : ($value === null || $value === '' || $value === []);
+                if ($missing) {
+                    return $this->jsonResponse([
+                        'success' => false,
+                        'message' => __('请填写：%{1}', (string)($field['label'] ?? $key)),
+                    ]);
+                }
+            }
 
             $account->setData(SeoAccount::schema_fields_NAME, $name)
                 ->setData(SeoAccount::schema_fields_PLATFORM, $platform)
                 ->setData(SeoAccount::schema_fields_PROVIDER, $platform) // 向后兼容
-                ->setData(SeoAccount::schema_fields_SCOPE, $scope)
+                ->setData(SeoAccount::schema_fields_SCOPE, '')
                 ->setData(SeoAccount::schema_fields_DESCRIPTION, (string)($data['description'] ?? ''))
                 ->setData(SeoAccount::schema_fields_IS_ACTIVE, (int)($data['is_active'] ?? SeoAccount::STATUS_ACTIVE))
                 ->setData(SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS, $enableCronPushUrls)
                 ->setData(SeoAccount::schema_fields_ENABLE_CRON_SITEMAP, $enableCronSitemap);
 
-            $configJson = (string)($data['config_json'] ?? '');
-            if ($configJson !== '') {
-                $decoded = json_decode($configJson, true);
-                $config = is_array($decoded) ? $decoded : [];
+            if ($config !== [] || isset($data['config']) || isset($data['config_json'])) {
                 $account->setConfigArray($config);
             }
 
