@@ -2,11 +2,13 @@
 /**
  * Weline Switcher Component Template
  * SEO友好的切换器组件模板
- * 
+ *
  * 参数：
  * - type: 类型 (language|currency|region)
  * - current: 当前值
- * - options: 选项数组 [['value' => 'zh_Hans_CN', 'label' => '中文', 'href' => '/zh_Hans_CN/page']]
+ * - options: 选项数组
+ *   推荐：['value' => 'zh_Hans_CN', 'label' => '中文', 'url_path' => '/', 'url_params' => ['lang' => 'zh_Hans_CN']]
+ *   兼容：['value' => '...', 'label' => '...', 'href' => '已解析完整 URL']
  * - class: 额外CSS类
  * - id: 组件ID
  */
@@ -17,15 +19,10 @@ $options = $this->getData('options') ?? [];
 $class = $this->getData('class') ?? '';
 $id = $this->getData('id') ?? '';
 
-// 获取基础URL
-$baseUrl = $this->request->getBaseUrl();
-$frontendUrl = $this->request->getUrlBuilder()->getFrontendUrl('/');
-
-// 如果没有提供选项，尝试从配置中获取
+// 如果没有提供选项，尝试从配置中获取（仅存 path + params，输出点用 @url）
 if (empty($options)) {
     switch ($type) {
         case 'language':
-            // 从配置获取可用语言
             $availableLangs = $this->getData('availableLangs') ?? [
                 ['code' => 'zh_Hans_CN', 'name' => '中文', 'native' => '中文'],
                 ['code' => 'en_US', 'name' => 'English', 'native' => 'English'],
@@ -34,12 +31,12 @@ if (empty($options)) {
                 $options[] = [
                     'value' => $lang['code'],
                     'label' => $lang['native'] ?? $lang['name'],
-                    'href' => $frontendUrl . '?lang=' . urlencode($lang['code'])
+                    'url_path' => '/',
+                    'url_params' => ['lang' => $lang['code']],
                 ];
             }
             break;
         case 'currency':
-            // 从配置获取可用货币
             $availableCurrencies = $this->getData('availableCurrencies') ?? [
                 ['code' => 'CNY', 'name' => '人民币', 'symbol' => '¥'],
                 ['code' => 'USD', 'name' => '美元', 'symbol' => '$'],
@@ -48,38 +45,49 @@ if (empty($options)) {
                 $options[] = [
                     'value' => $currency['code'],
                     'label' => $currency['symbol'] . ' ' . $currency['name'],
-                    'href' => $frontendUrl . '?currency=' . urlencode($currency['code'])
+                    'url_path' => '/',
+                    'url_params' => ['currency' => $currency['code']],
                 ];
             }
             break;
         case 'region':
-            // 从配置获取可用地区
             $availableRegions = $this->getData('availableRegions') ?? [];
             foreach ($availableRegions as $region) {
                 $options[] = [
                     'value' => $region['code'],
                     'label' => $region['name'],
-                    'href' => $frontendUrl . '?region=' . urlencode($region['code'])
+                    'url_path' => '/',
+                    'url_params' => ['region' => $region['code']],
                 ];
             }
             break;
     }
 }
 ?>
-<weline-switcher 
-    type="<?= htmlspecialchars($type) ?>" 
+<weline-switcher
+    type="<?= htmlspecialchars($type) ?>"
     current="<?= htmlspecialchars($current) ?>"
     <?php if ($id): ?>id="<?= htmlspecialchars($id) ?>"<?php endif; ?>
     class="<?= htmlspecialchars($class) ?>"
     role="combobox"
     aria-label="<?= __('切换') . __(' ' . $type) ?>">
     <?php foreach ($options as $option): ?>
-        <a 
-            href="<?= htmlspecialchars($option['href'] ?? '#') ?>" 
+        <?php
+        $urlPath = trim((string)($option['url_path'] ?? ''));
+        $urlParams = $option['url_params'] ?? [];
+        if (!is_array($urlParams)) {
+            $urlParams = [];
+        }
+        ?>
+        <a
+            <?php if ($urlPath !== ''): ?>
+            href="@url{$urlPath|$urlParams}"
+            <?php else: ?>
+            href="<?= htmlspecialchars((string)($option['href'] ?? '#')) ?>"
+            <?php endif; ?>
             data-value="<?= htmlspecialchars($option['value']) ?>"
             <?php if ($option['value'] === $current): ?>aria-current="true"<?php endif; ?>>
             <?= htmlspecialchars($option['label']) ?>
         </a>
     <?php endforeach; ?>
 </weline-switcher>
-
