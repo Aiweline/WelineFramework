@@ -1,8 +1,6 @@
 <?php
 /** @var \Weline\Framework\Http\Request $request */
 $request = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Request::class);
-$backendUrlPrefix = $request->getUrlBuilder()->getBackendUrl('/');
-$backendUrlPrefix = rtrim($backendUrlPrefix, '/');
 ?>
 <div class="w-container">
     <!-- 页面标题 -->
@@ -780,7 +778,7 @@ select.w-input-sm {
 // 异步搜索功能
 (function() {
     let searchTimeout = null;
-    const backendUrlPrefix = '<?= $backendUrlPrefix ?>';
+    const hookSearchBaseUrl = "@backend-url{'hook/backend/hook/search-ajax'}";
     const hooksListContainer = document.querySelector('.hooks-list');
     const filterForm = document.querySelector('.filter-form');
 
@@ -807,7 +805,7 @@ select.w-input-sm {
         }
         
         // 构建 AJAX URL
-        const searchUrl = backendUrlPrefix + '/hook/backend/hook/search-ajax?' + params.toString();
+        const searchUrl = hookSearchBaseUrl + (hookSearchBaseUrl.indexOf('?') >= 0 ? '&' : '?') + params.toString();
         
         var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
         Weline.adminRequest('hook', searchUrl, opts)
@@ -999,8 +997,7 @@ select.w-input-sm {
             // 打开 offcanvas
             showOffcanvas();
             
-            const backendUrlPrefix = '<?= $backendUrlPrefix ?>';
-            const detailUrl = backendUrlPrefix + '/hook/backend/hook/detail?hook=' + encodeURIComponent(hookName) + '&isAjax=1';
+            const detailUrl = "@backend-url{'hook/backend/hook/detail'}" + '?hook=' + encodeURIComponent(hookName) + '&isAjax=1';
             var opts = { method: 'GET', headers: { 'X-Requested-With': 'XMLHttpRequest' } };
             Weline.adminRequest('hook', detailUrl, opts)
             .then(function(response) {
