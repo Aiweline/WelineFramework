@@ -20,7 +20,7 @@ $confirmMessages = [
     <w:slot:header>
         <div class="w-cluster" data-justify="between" data-align="center">
             <h5 style="--w-mb:0;"><?= __('存储配置') ?></h5>
-            <a href="<?= $this->getUrl('storage/backend/config/add') ?>" class="w-button" data-tone="primary" data-size="sm">
+            <a href="@url{'storage/backend/config/add'}" class="w-button" data-tone="primary" data-size="sm">
                 <w:icon name="plus" size="sm"></w:icon> <?= __('新增配置') ?>
             </a>
         </div>
@@ -76,7 +76,7 @@ $confirmMessages = [
                         <td><?= $config['created_at'] ?? '-' ?></td>
                         <td>
                             <div class="w-button-group">
-                                <a href="<?= $this->getUrl('storage/backend/config/edit', ['id' => $config['config_id']]) ?>" class="w-button" title="<?= __('编辑') ?>" data-tone="primary" data-variant="outline">
+                                <a href="@url{'storage/backend/config/edit'|['id' => $config['config_id']]}" class="w-button" title="<?= __('编辑') ?>" data-tone="primary" data-variant="outline">
                                     <w:icon name="edit" size="sm"></w:icon>
                                 </a>
                                 <button type="button" class="w-button weline-btn-delete" data-id="<?= $config['config_id'] ?>" title="<?= __('删除') ?>" data-tone="danger" data-variant="outline">
@@ -181,7 +181,7 @@ document.querySelectorAll('.weline-btn-delete').forEach(btn => {
         
         const id = this.dataset.id;
         try {
-            var url = '<?= $this->getUrl('storage/backend/config/delete') ?>';
+            var url = '@url{'storage/backend/config/delete'}';
             var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) };
             var res = await Weline.adminRequest('storage', url, opts);
             var data = (res && res.data) !== undefined ? res.data : res;
@@ -202,7 +202,7 @@ document.querySelectorAll('.weline-btn-set-default').forEach(btn => {
     btn.addEventListener('click', async function() {
         const id = this.dataset.id;
         try {
-            var url = '<?= $this->getUrl('storage/backend/config/setDefault') ?>';
+            var url = '@url{'storage/backend/config/setDefault'}';
             var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'id=' + encodeURIComponent(id) };
             var res = await Weline.adminRequest('storage', url, opts);
             var data = (res && res.data) !== undefined ? res.data : res;
