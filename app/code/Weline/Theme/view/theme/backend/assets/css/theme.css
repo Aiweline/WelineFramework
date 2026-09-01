@@ -839,6 +839,9 @@ body.visual-config-editor-open #layout-wrapper .card:hover {
 .w-form-control,
 .w-form-select,
 .w-admin-form-control,
+.w-input,
+.w-select,
+.w-textarea,
 .w-input-text,
 .w-input-control,
 .form-control,
@@ -846,7 +849,8 @@ body.visual-config-editor-open #layout-wrapper .card:hover {
 .admin-form-control,
 .input-text,
 .input-control,
-textarea.form-control {
+textarea.form-control,
+textarea.w-textarea {
     display: block;
     width: 100%;
     min-height: 44px;
@@ -858,13 +862,16 @@ textarea.form-control {
 }
 
 textarea.form-control,
-textarea.w-form-control {
+textarea.w-form-control,
+textarea.w-textarea {
     min-height: 120px;
 }
 
 .w-form-control::placeholder,
 .w-form-select::placeholder,
 .w-admin-form-control::placeholder,
+.w-input::placeholder,
+.w-textarea::placeholder,
 .w-input-text::placeholder,
 .w-input-control::placeholder,
 .form-control::placeholder,
@@ -878,6 +885,9 @@ textarea.w-form-control {
 .w-form-control:focus,
 .w-form-select:focus,
 .w-admin-form-control:focus,
+.w-input:focus,
+.w-select:focus,
+.w-textarea:focus,
 .w-input-text:focus,
 .w-input-control:focus,
 .form-control:focus,

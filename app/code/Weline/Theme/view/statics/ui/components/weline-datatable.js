@@ -29,15 +29,26 @@ function registerDataTable(UI) {
         }
         const table = element.querySelector('table');
         const isLocal = String(config.mode || 'api').toLowerCase() === 'local';
+        const capabilities = {
+            read: true,
+            create: false,
+            update: false,
+            delete: false,
+            export: false,
+            preferences: false,
+            composite_write: false,
+            ...(config.capabilities || {}),
+        };
         const selectable = config.selectable === true;
         const rowActions = Array.isArray(config.rowActions) ? config.rowActions : [];
-        const showActions = config.showActions === true
-            || config.editable === true
-            || config.modalEdit === true
+        const hasRowActions = capabilities.update === true
+            || capabilities.delete === true
             || rowActions.length > 0;
+        const showActions = config.showActions !== false && hasRowActions;
         const selectField = String(config.selectField || 'id');
-        if (table && config.stickyActions !== false && showActions) {
-            table.setAttribute('data-w-sticky-end', '');
+        if (table) {
+            if (config.stickyActions !== false && showActions) table.setAttribute('data-w-sticky-end', '');
+            else table.removeAttribute('data-w-sticky-end');
         }
         if (table && selectable) {
             table.setAttribute('data-w-sticky-start', '');
@@ -45,6 +56,9 @@ function registerDataTable(UI) {
         const body = table?.querySelector('.w-datatable__body');
         const filterForm = table?.querySelector('[data-w-datatable-filter]');
         const footer = table?.querySelector('.w-datatable__footer');
+        const searchForm = element.querySelector('[data-w-datatable-search-form]');
+        const searchInput = element.querySelector('[data-w-datatable-search]');
+        const pageSizeControl = footer?.querySelector('[data-w-datatable-page-size]');
         const configDialog = document.getElementById(`w-datatable-config-${config.id}`);
         const templateDisplayFields = parseFieldElements(table?.querySelectorAll('.w-datatable__head [data-w-field]') || []);
         const templateFilterFields = parseFieldElements(table?.querySelectorAll('.w-datatable__filters [data-w-field]') || []);
@@ -53,6 +67,8 @@ function registerDataTable(UI) {
             pageSize: Math.max(1, Number(config.pageSize) || 20),
             pagination: {page: 1, pageSize: Math.max(1, Number(config.pageSize) || 20), total: 0, pages: 1},
             data: [],
+            sourceData: [],
+            search: '',
             filters: {},
             sorts: {},
             allFields: mergeFields(templateDisplayFields, templateFilterFields),
@@ -60,8 +76,29 @@ function registerDataTable(UI) {
             filterFields: templateFilterFields,
             draftDisplayFields: [],
             draftFilterFields: [],
+            columnMerges: {},
+            draftColumnMerges: {},
             destroyed: false,
         };
+        const defaultDisplayFields = templateDisplayFields.map((field) => ({...field}));
+        const defaultFilterFields = templateFilterFields.map((field) => ({...field}));
+        const preferencesKey = `weline.datatable.v1.${String(config.scope || '')}.${String(config.id || '')}`;
+        const normalizeColumnMerges = (merges, fields) => {
+            const source = merges && typeof merges === 'object' && !Array.isArray(merges) ? merges : {};
+            const names = new Set(fields.map((field) => field.name));
+            const mergedSources = new Set(Object.keys(source).filter((name) => String(source[name] || '') !== ''));
+            const result = {};
+            for (const field of fields) {
+                const target = String(source[field.name] || '');
+                if (!target || target === field.name || !names.has(target) || mergedSources.has(target)) continue;
+                result[field.name] = target;
+            }
+            return result;
+        };
+        const visibleDisplayFields = () => state.displayFields.filter((field) => !state.columnMerges[field.name]);
+        const mergedFieldsFor = (target) => state.displayFields.filter((field) => state.columnMerges[field.name] === target);
+        const isEmptyDisplayValue = (value) => value == null || String(value).trim() === '';
+        const busyControls = new Map();
 
         if (!(table instanceof HTMLTableElement) || !(body instanceof HTMLTableSectionElement)) {
             return {state};
@@ -74,7 +111,18 @@ function registerDataTable(UI) {
             if (status) {
                 status.hidden = message === '';
                 status.dataset.tone = '';
+                status.setAttribute('role', 'status');
                 status.textContent = message;
+            }
+            for (const control of element.querySelectorAll('button, select[data-w-datatable-page-size]')) {
+                if (!(control instanceof HTMLButtonElement || control instanceof HTMLSelectElement)) continue;
+                if (busy) {
+                    if (!busyControls.has(control)) busyControls.set(control, control.disabled);
+                    control.disabled = true;
+                } else if (busyControls.has(control)) {
+                    control.disabled = busyControls.get(control) === true;
+                    busyControls.delete(control);
+                }
             }
         };
 
@@ -84,6 +132,7 @@ function registerDataTable(UI) {
             if (status) {
                 status.hidden = false;
                 status.dataset.tone = 'danger';
+                status.setAttribute('role', 'alert');
                 status.textContent = message;
             }
             UI.toast.error(message);
@@ -94,6 +143,7 @@ function registerDataTable(UI) {
             scope: config.scope,
             join: config.join || '',
             model_config: config.modelConfig || {},
+            resource: config.resource || '',
         });
 
         const updateStats = () => {
@@ -116,6 +166,9 @@ function registerDataTable(UI) {
                 head.className = 'w-datatable__head';
                 table.prepend(head);
             }
+            const renderedFields = visibleDisplayFields();
+            const renderedColumnCount = renderedFields.length + (selectable ? 1 : 0) + (showActions ? 1 : 0);
+            table.style.setProperty('--w-datatable-column-count', String(Math.max(1, renderedColumnCount)));
             const row = document.createElement('tr');
             if (selectable) {
                 const th = document.createElement('th');
@@ -129,7 +182,7 @@ function registerDataTable(UI) {
                 th.append(selectAll);
                 row.append(th);
             }
-            for (const field of state.displayFields) {
+            for (const field of renderedFields) {
                 const th = document.createElement('th');
                 th.dataset.field = field.name;
                 const width = safeCssLength(field.width);
@@ -155,12 +208,45 @@ function registerDataTable(UI) {
             head.replaceChildren(row);
         };
 
+        const renderCellContent = (rowData, field) => {
+            const fragment = document.createDocumentFragment();
+            const mergedFields = mergedFieldsFor(field.name);
+            if (mergedFields.length === 0) {
+                fragment.append(fieldValueNode(valueFor(rowData, field.name), field));
+                return fragment;
+            }
+            const composite = document.createElement('div');
+            composite.className = 'w-datatable__cell-composite';
+            const primary = document.createElement('div');
+            primary.className = 'w-datatable__cell-primary';
+            primary.append(fieldValueNode(valueFor(rowData, field.name), field));
+            composite.append(primary);
+            for (const mergedField of mergedFields) {
+                const value = valueFor(rowData, mergedField.name);
+                if (isEmptyDisplayValue(value)) continue;
+                const detail = document.createElement('div');
+                detail.className = 'w-datatable__cell-detail';
+                const label = document.createElement('span');
+                label.className = 'w-datatable__cell-detail-label';
+                label.textContent = `${mergedField.label}:`;
+                const displayValue = document.createElement('span');
+                displayValue.className = 'w-datatable__cell-detail-value';
+                displayValue.append(fieldValueNode(value, mergedField));
+                detail.append(label, displayValue);
+                composite.append(detail);
+            }
+            fragment.append(composite);
+            return fragment;
+        };
+
         const renderCell = (rowData, field, rowIndex) => {
             const cell = document.createElement('td');
             cell.dataset.field = field.name;
             cell.dataset.rowIndex = String(rowIndex);
-            cell.append(fieldValueNode(valueFor(rowData, field.name), field));
-            if (config.inlineEdit && field.editable) cell.dataset.editable = 'true';
+            const mergedFields = mergedFieldsFor(field.name);
+            if (mergedFields.length > 0) cell.dataset.mergedFields = mergedFields.map((item) => item.name).join(',');
+            cell.append(renderCellContent(rowData, field));
+            if (config.inlineEdit && !config.confirmWrite && capabilities.update === true && field.editable) cell.dataset.editable = 'true';
             return cell;
         };
 
@@ -185,19 +271,23 @@ function registerDataTable(UI) {
 
         const renderBody = () => {
             const fragment = document.createDocumentFragment();
+            const renderedFields = visibleDisplayFields();
             const extraColumns = (selectable ? 1 : 0) + (showActions ? 1 : 0);
             if (state.data.length === 0) {
                 const row = document.createElement('tr');
                 row.className = 'w-datatable__empty';
                 const cell = document.createElement('td');
-                cell.colSpan = Math.max(1, state.displayFields.length + extraColumns);
-                cell.textContent = translate('暂无数据');
+                cell.colSpan = Math.max(1, renderedFields.length + extraColumns);
+                cell.textContent = (state.search || Object.keys(state.filters).length > 0)
+                    ? translate('没有符合当前搜索或筛选条件的数据，请调整条件后重试。')
+                    : translate('暂无数据。可刷新表格，或在有写入权限时新增第一条记录。');
                 row.append(cell);
                 fragment.append(row);
             }
             state.data.forEach((rowData, rowIndex) => {
                 const row = document.createElement('tr');
                 row.dataset.rowIndex = String(rowIndex);
+                row.tabIndex = 0;
                 const recordId = valueFor(rowData, selectField) ?? rowData.id ?? rowData.product_id ?? '';
                 row.dataset.recordId = String(recordId);
                 if (selectable) {
@@ -215,14 +305,28 @@ function registerDataTable(UI) {
                     }
                     row.append(selectCell);
                 }
-                for (const field of state.displayFields) row.append(renderCell(rowData, field, rowIndex));
+                for (const field of renderedFields) row.append(renderCell(rowData, field, rowIndex));
                 if (showActions) {
                     const actions = document.createElement('td');
                     actions.dataset.wSticky = 'end';
                     const group = document.createElement('div');
                     group.className = 'w-datatable__cell-actions';
                     for (const action of rowActions) {
-                        if (String(action.type || 'link') !== 'link') continue;
+                        const actionType = String(action.type || 'link');
+                        if (actionType === 'event') {
+                            const control = button(String(action.label || translate('操作')), {
+                                tone: action.tone || 'neutral',
+                                size: action.size || 'sm',
+                                icon: action.icon || '',
+                            });
+                            if (action.variant) control.dataset.variant = String(action.variant);
+                            control.dataset.wDatatableRowEvent = String(action.event || action.action || action.name || 'action');
+                            control.dataset.rowIndex = String(rowIndex);
+                            if (action.testId) control.setAttribute('data-testid', String(action.testId));
+                            group.append(control);
+                            continue;
+                        }
+                        if (actionType !== 'link') continue;
                         const link = document.createElement('a');
                         link.className = 'w-button';
                         link.dataset.tone = action.tone || 'primary';
@@ -245,12 +349,15 @@ function registerDataTable(UI) {
                         link.append(label);
                         group.append(link);
                     }
-                    if (config.editable || config.modalEdit) {
+                    if (capabilities.update === true) {
                         const edit = button(translate('编辑'), {tone: 'neutral', size: 'sm', action: 'row.edit', icon: 'edit'});
                         edit.dataset.rowIndex = String(rowIndex);
+                        group.append(edit);
+                    }
+                    if (capabilities.delete === true) {
                         const remove = button(translate('删除'), {tone: 'danger', size: 'sm', action: 'row.delete', icon: 'trash'});
                         remove.dataset.rowIndex = String(rowIndex);
-                        group.append(edit, remove);
+                        group.append(remove);
                     }
                     actions.append(group);
                     row.append(actions);
@@ -263,6 +370,11 @@ function registerDataTable(UI) {
         };
 
         const renderPagination = () => {
+            if (pageSizeControl instanceof HTMLSelectElement) {
+                pageSizeControl.value = String(state.pageSize);
+            }
+            const pageSizeValue = footer?.querySelector('[data-w-datatable-page-size-value]');
+            if (pageSizeValue) pageSizeValue.textContent = String(state.pageSize);
             const pagination = footer?.querySelector('[data-w-datatable-pagination]');
             if (!pagination || config.showPagination === false) return;
             pagination.replaceChildren();
@@ -293,9 +405,11 @@ function registerDataTable(UI) {
         const readFilters = () => {
             const result = {};
             if (!filterForm) return result;
-            for (const control of filterForm.querySelectorAll('[data-field]')) {
+            for (const control of filterForm.querySelectorAll('input, select, textarea')) {
                 if (!(control instanceof HTMLInputElement || control instanceof HTMLSelectElement || control instanceof HTMLTextAreaElement)) continue;
-                const name = control.dataset.field || '';
+                const name = control.dataset.field
+                    || control.closest('[data-field]')?.getAttribute('data-field')
+                    || String(control.name || '').replace(/^filter\[|\]$/g, '');
                 if (!name || control.disabled) continue;
                 const value = control instanceof HTMLInputElement && control.type === 'checkbox'
                     ? (control.checked ? control.value : '')
@@ -341,10 +455,49 @@ function registerDataTable(UI) {
                 }
                 control.id = `w-filter-${config.id}-${field.name.replace(/[^A-Za-z0-9_-]/g, '-')}`;
                 control.dataset.field = field.name;
+                control.name = `filter[${field.name}]`;
                 label.htmlFor = control.id;
                 wrapper.append(label, control);
                 cluster.insertBefore(wrapper, firstButton);
             }
+        };
+
+        const normalizedText = (value) => String(value ?? '').toLocaleLowerCase();
+
+        const applyLocalState = () => {
+            let rows = state.sourceData.map((row, index) => ({row, index}));
+            if (state.search) {
+                const needle = normalizedText(state.search);
+                const searchable = state.allFields.filter((field) => field.searchable !== false);
+                rows = rows.filter(({row}) => searchable.some((field) => normalizedText(valueFor(row, field.name)).includes(needle)));
+            }
+            for (const [field, expected] of Object.entries(state.filters)) {
+                const needle = normalizedText(expected);
+                rows = rows.filter(({row}) => normalizedText(valueFor(row, field)).includes(needle));
+            }
+            const sorts = Object.entries(state.sorts);
+            if (sorts.length > 0) {
+                rows.sort((left, right) => {
+                    for (const [field, direction] of sorts) {
+                        const a = valueFor(left.row, field);
+                        const b = valueFor(right.row, field);
+                        const numeric = Number(a) - Number(b);
+                        const comparison = Number.isFinite(numeric) && String(a).trim() !== '' && String(b).trim() !== ''
+                            ? numeric
+                            : String(a ?? '').localeCompare(String(b ?? ''), undefined, {numeric: true, sensitivity: 'base'});
+                        if (comparison !== 0) return direction === 'desc' ? -comparison : comparison;
+                    }
+                    return left.index - right.index;
+                });
+            }
+            const total = rows.length;
+            const pages = Math.max(1, Math.ceil(total / state.pageSize));
+            state.page = Math.min(Math.max(1, state.page), pages);
+            const offset = (state.page - 1) * state.pageSize;
+            state.data = rows.slice(offset, offset + state.pageSize).map(({row}) => row);
+            state.pagination = {page: state.page, pageSize: state.pageSize, total, pages};
+            setBusy(false);
+            render();
         };
 
         const loadLocalData = () => {
@@ -360,16 +513,8 @@ function registerDataTable(UI) {
                     }
                 }
             }
-            state.data = Array.isArray(rows) ? rows : [];
-            state.pagination = {
-                page: 1,
-                pageSize: Math.max(1, state.data.length || state.pageSize),
-                total: state.data.length,
-                pages: 1,
-            };
-            state.page = 1;
-            setBusy(false);
-            render();
+            state.sourceData = Array.isArray(rows) ? rows.slice() : [];
+            applyLocalState();
         };
 
         const loadData = async () => {
@@ -387,6 +532,7 @@ function registerDataTable(UI) {
                     filters: state.filters,
                     sorts: state.sorts,
                     sort: state.sorts,
+                    search: state.search,
                 });
                 if (state.destroyed) return;
                 const payload = responsePayload(response);
@@ -410,6 +556,13 @@ function registerDataTable(UI) {
                 });
                 if (state.destroyed) return;
                 const payload = responsePayload(response);
+                if (payload.capabilities && typeof payload.capabilities === 'object') {
+                    for (const name of Object.keys(capabilities)) {
+                        if (name in payload.capabilities) {
+                            capabilities[name] = capabilities[name] === true && payload.capabilities[name] === true;
+                        }
+                    }
+                }
                 const apiFields = Array.isArray(payload.all_fields) ? payload.all_fields : [];
                 state.allFields = mergeFields(state.allFields, apiFields);
                 const hydrateFields = (fields) => {
@@ -443,6 +596,11 @@ function registerDataTable(UI) {
         };
 
         const openForm = async (mode, rowIndex = null) => {
+            const required = mode === 'edit' ? 'update' : 'create';
+            if (capabilities[required] !== true) {
+                showError(new Error(translate('当前上下文没有执行此写入操作的权限。')));
+                return;
+            }
             const component = getFormComponent();
             if (!component) {
                 showError(new Error(translate('数据表表单未挂载。')));
@@ -453,6 +611,10 @@ function registerDataTable(UI) {
         };
 
         const deleteRow = async (rowIndex) => {
+            if (capabilities.delete !== true) {
+                showError(new Error(translate('当前上下文没有删除权限。')));
+                return;
+            }
             const row = state.data[rowIndex];
             if (!row) return;
             const confirmed = await UI.dialog.confirm(translate('确定删除这条记录吗？'), {
@@ -463,7 +625,8 @@ function registerDataTable(UI) {
             if (!confirmed) return;
             setBusy(true, translate('正在删除…'));
             try {
-                await request(config, 'deleteData', {...payloadBase(), ids: [row.id]});
+                const recordId = valueFor(row, selectField) ?? row.id;
+                await request(config, 'deleteData', {...payloadBase(), ids: [recordId]});
                 UI.toast.success(translate('记录已删除。'));
                 await loadData();
             } catch (error) {
@@ -473,6 +636,7 @@ function registerDataTable(UI) {
         };
 
         const startInlineEdit = (cell) => {
+            if (capabilities.update !== true) return;
             if (!(cell instanceof HTMLTableCellElement) || cell.dataset.editable !== 'true' || cell.dataset.state === 'editing') return;
             const rowIndex = Number(cell.dataset.rowIndex);
             const field = fieldMap(state.displayFields).get(cell.dataset.field || '');
@@ -492,7 +656,7 @@ function registerDataTable(UI) {
                 if (settled) return;
                 settled = true;
                 cell.dataset.state = '';
-                cell.replaceChildren(fieldValueNode(oldValue, field));
+                cell.replaceChildren(renderCellContent(row, field));
             };
             const save = async () => {
                 if (settled) return;
@@ -505,11 +669,11 @@ function registerDataTable(UI) {
                     });
                     row[field.name] = input.value;
                     cell.dataset.state = 'saved';
-                    cell.replaceChildren(fieldValueNode(input.value, field));
+                    cell.replaceChildren(renderCellContent(row, field));
                     window.setTimeout(() => { if (cell.isConnected) cell.dataset.state = ''; }, 1200);
                 } catch (error) {
                     cell.dataset.state = '';
-                    cell.replaceChildren(fieldValueNode(oldValue, field));
+                    cell.replaceChildren(renderCellContent(row, field));
                     showError(error);
                 }
             };
@@ -531,13 +695,37 @@ function registerDataTable(UI) {
                 const item = document.createElement('li');
                 item.className = 'w-datatable__field-item';
                 const check = document.createElement('input');
+                check.id = `w-datatable-field-${config.id}-${mode}-${field.name.replace(/[^A-Za-z0-9_-]/g, '-')}`;
                 check.type = 'checkbox';
                 check.checked = selectedNames.has(field.name);
                 check.dataset.wDatatableAction = 'field.toggle';
                 check.dataset.mode = mode;
                 check.dataset.field = field.name;
-                const label = document.createElement('span');
+                const label = document.createElement('label');
+                label.htmlFor = check.id;
                 label.textContent = field.label;
+                if (mode === 'display') {
+                    const merge = document.createElement('select');
+                    merge.className = 'w-select w-datatable__field-merge';
+                    merge.dataset.wDatatableMergeField = field.name;
+                    merge.disabled = !selectedNames.has(field.name);
+                    merge.setAttribute('aria-label', translate('将 %{1} 合并到', [field.label]));
+                    const independent = document.createElement('option');
+                    independent.value = '';
+                    independent.textContent = translate('独立显示');
+                    merge.append(independent);
+                    for (const target of selected) {
+                        if (target.name === field.name || state.draftColumnMerges[target.name]) continue;
+                        const option = document.createElement('option');
+                        option.value = target.name;
+                        option.textContent = translate('合并到 %{1}', [target.label]);
+                        merge.append(option);
+                    }
+                    merge.value = state.draftColumnMerges[field.name] || '';
+                    item.append(check, label, merge);
+                } else {
+                    item.append(check, label);
+                }
                 const order = document.createElement('span');
                 order.className = 'w-datatable__field-order';
                 const up = button(translate('上移'), {tone: 'quiet', size: 'sm', action: 'field.up', icon: 'chevron-up'});
@@ -548,15 +736,41 @@ function registerDataTable(UI) {
                     control.disabled = !selectedNames.has(field.name);
                 }
                 order.append(up, down);
-                item.append(check, label, order);
+                item.append(order);
                 list.append(item);
             }
             container.replaceChildren(list);
         };
 
+        const fieldsFromNames = (names, fallback) => {
+            if (!Array.isArray(names)) return fallback.map((field) => ({...field}));
+            const available = fieldMap(state.allFields);
+            return names.map((name) => available.get(String(name))).filter(Boolean).map((field) => ({...field}));
+        };
+
+        const applyLocalPreferences = () => {
+            try {
+                const stored = JSON.parse(localStorage.getItem(preferencesKey) || '{}');
+                if (isLocal || capabilities.preferences !== true) {
+                    const display = fieldsFromNames(stored.displayFields, defaultDisplayFields);
+                    const filters = fieldsFromNames(stored.filterFields, defaultFilterFields);
+                    if (display.length > 0) state.displayFields = display;
+                    state.filterFields = filters;
+                }
+                state.columnMerges = normalizeColumnMerges(stored.columnMerges, state.displayFields);
+            } catch (_error) {
+                if (isLocal || capabilities.preferences !== true) {
+                    state.displayFields = defaultDisplayFields.map((field) => ({...field}));
+                    state.filterFields = defaultFilterFields.map((field) => ({...field}));
+                }
+                state.columnMerges = {};
+            }
+        };
+
         const openConfig = () => {
             state.draftDisplayFields = state.displayFields.map((field) => ({...field}));
             state.draftFilterFields = state.filterFields.map((field) => ({...field}));
+            state.draftColumnMerges = {...state.columnMerges};
             renderConfigList('display');
             renderConfigList('filter');
             UI.dialog.open(configDialog);
@@ -570,8 +784,30 @@ function registerDataTable(UI) {
                 const field = state.allFields.find((item) => item.name === name);
                 if (field) fields.push({...field});
             }
-            if (!checked && exists) state[key] = fields.filter((field) => field.name !== name);
+            if (!checked && exists) {
+                state[key] = fields.filter((field) => field.name !== name);
+                if (mode === 'display') {
+                    delete state.draftColumnMerges[name];
+                    for (const [source, target] of Object.entries(state.draftColumnMerges)) {
+                        if (target === name) delete state.draftColumnMerges[source];
+                    }
+                }
+            }
             renderConfigList(mode);
+        };
+
+        const setDraftColumnMerge = (source, target) => {
+            if (!state.draftDisplayFields.some((field) => field.name === source)) return;
+            if (!target) {
+                delete state.draftColumnMerges[source];
+            } else if (target !== source && state.draftDisplayFields.some((field) => field.name === target)) {
+                for (const [mergedSource, currentTarget] of Object.entries(state.draftColumnMerges)) {
+                    if (currentTarget === source) delete state.draftColumnMerges[mergedSource];
+                }
+                state.draftColumnMerges[source] = target;
+            }
+            state.draftColumnMerges = normalizeColumnMerges(state.draftColumnMerges, state.draftDisplayFields);
+            renderConfigList('display');
         };
 
         const moveDraftField = (mode, name, direction) => {
@@ -590,15 +826,24 @@ function registerDataTable(UI) {
                 return;
             }
             try {
-                await request(config, 'saveConfig', {
-                    scope: config.scope,
-                    table_id: config.id,
-                    display_fields: state.draftDisplayFields,
-                    filter_fields: state.draftFilterFields,
-                    config: {display_fields: state.draftDisplayFields, filter_fields: state.draftFilterFields},
-                });
+                const columnMerges = normalizeColumnMerges(state.draftColumnMerges, state.draftDisplayFields);
+                localStorage.setItem(preferencesKey, JSON.stringify({
+                    displayFields: state.draftDisplayFields.map((field) => field.name),
+                    filterFields: state.draftFilterFields.map((field) => field.name),
+                    columnMerges,
+                }));
+                if (!isLocal && capabilities.preferences === true) {
+                    await request(config, 'saveConfig', {
+                        ...payloadBase(),
+                        table_id: config.id,
+                        display_fields: state.draftDisplayFields,
+                        filter_fields: state.draftFilterFields,
+                        config: {display_fields: state.draftDisplayFields, filter_fields: state.draftFilterFields},
+                    });
+                }
                 state.displayFields = state.draftDisplayFields.map((field) => ({...field}));
                 state.filterFields = state.draftFilterFields.map((field) => ({...field}));
+                state.columnMerges = columnMerges;
                 UI.dialog.close(configDialog, 'saved');
                 renderFilters();
                 state.page = 1;
@@ -616,8 +861,16 @@ function registerDataTable(UI) {
             });
             if (!confirmed) return;
             try {
-                await request(config, 'clearConfig', {scope: config.scope, table_id: config.id, type: 'all'});
-                await loadFields();
+                localStorage.removeItem(preferencesKey);
+                state.columnMerges = {};
+                if (!isLocal && capabilities.preferences === true) {
+                    await request(config, 'clearConfig', {...payloadBase(), table_id: config.id, type: 'all'});
+                    await loadFields();
+                } else {
+                    state.displayFields = defaultDisplayFields.map((field) => ({...field}));
+                    state.filterFields = defaultFilterFields.map((field) => ({...field}));
+                }
+                renderFilters();
                 await loadData();
                 UI.dialog.close(configDialog, 'cleared');
                 UI.toast.success(translate('字段配置已重置。'));
@@ -627,6 +880,10 @@ function registerDataTable(UI) {
         };
 
         const exportData = async (format) => {
+            if (capabilities.export !== true) {
+                showError(new Error(translate('当前上下文不允许导出。')));
+                return;
+            }
             setBusy(true, translate('正在生成导出文件…'));
             try {
                 const response = await request(config, 'exportData', {
@@ -645,13 +902,17 @@ function registerDataTable(UI) {
             }
         };
 
-        const handleAction = (action) => {
+        const handleAction = (action, event = null) => {
             const name = action.dataset.wDatatableAction || '';
             if (name === 'reload') void loadData();
             if (name === 'sort') {
                 const field = action.dataset.field || '';
                 const current = state.sorts[field] || '';
-                state.sorts = current === 'asc' ? {[field]: 'desc'} : (current === 'desc' ? {} : {[field]: 'asc'});
+                const next = current === 'asc' ? 'desc' : (current === 'desc' ? '' : 'asc');
+                const sorts = event?.shiftKey ? {...state.sorts} : {};
+                if (next) sorts[field] = next;
+                else delete sorts[field];
+                state.sorts = sorts;
                 state.page = 1;
                 void loadData();
             }
@@ -662,10 +923,10 @@ function registerDataTable(UI) {
                     void loadData();
                 }
             }
-            if (name === 'form.open') void openForm('add');
-            if (name === 'row.edit') void openForm('edit', Number(action.dataset.rowIndex));
-            if (name === 'row.delete') void deleteRow(Number(action.dataset.rowIndex));
-            if (name === 'export') void exportData(action.dataset.format || 'csv');
+            if (name === 'form.open' && capabilities.create === true) void openForm('add');
+            if (name === 'row.edit' && capabilities.update === true) void openForm('edit', Number(action.dataset.rowIndex));
+            if (name === 'row.delete' && capabilities.delete === true) void deleteRow(Number(action.dataset.rowIndex));
+            if (name === 'export' && capabilities.export === true) void exportData(action.dataset.format || 'csv');
             if (name === 'config.open') openConfig();
             if (name === 'config.save') void saveConfig();
             if (name === 'config.clear') void clearConfig();
@@ -677,31 +938,109 @@ function registerDataTable(UI) {
         };
 
         const clickHandler = (event) => {
+            const path = typeof event.composedPath === 'function' ? event.composedPath() : [];
+            const rowEvent = path.find((node) => node instanceof HTMLElement && node.dataset.wDatatableRowEvent)
+                || (event.target instanceof Element ? event.target.closest('[data-w-datatable-row-event]') : null);
+            if (rowEvent instanceof HTMLElement) {
+                event.preventDefault();
+                const rowIndex = Number(rowEvent.dataset.rowIndex);
+                const row = state.data[rowIndex];
+                element.dispatchEvent(new CustomEvent('weline:datatable:row-action', {
+                    bubbles: true,
+                    detail: {
+                        tableId: config.id,
+                        action: rowEvent.dataset.wDatatableRowEvent || 'action',
+                        row,
+                        rowIndex,
+                    },
+                }));
+                return;
+            }
             const target = event.target instanceof Element ? event.target.closest('[data-w-datatable-action]') : null;
             if (!(target instanceof HTMLElement)) return;
             event.preventDefault();
-            handleAction(target);
+            handleAction(target, event);
             target.closest('details')?.removeAttribute('open');
         };
         listen(element, 'click', clickHandler);
-        if (configDialog) listen(configDialog, 'click', clickHandler);
+        if (configDialog) {
+            listen(configDialog, 'click', clickHandler);
+            listen(configDialog, 'change', (event) => {
+                const target = event.target;
+                if (!(target instanceof HTMLSelectElement) || !target.matches('[data-w-datatable-merge-field]')) return;
+                setDraftColumnMerge(target.dataset.wDatatableMergeField || '', target.value);
+            });
+        }
         listen(body, 'dblclick', (event) => {
             const cell = event.target instanceof Element ? event.target.closest('td[data-editable="true"]') : null;
             if (cell) startInlineEdit(cell);
         });
         if (filterForm) {
-            listen(filterForm, 'submit', (event) => {
+            const filterMode = filterForm.dataset.filterMode || (isLocal ? 'client' : 'ajax');
+            if (filterMode !== 'page') {
+                listen(filterForm, 'submit', (event) => {
+                    event.preventDefault();
+                    state.filters = readFilters();
+                    state.page = 1;
+                    void loadData();
+                });
+                listen(filterForm, 'reset', () => queueMicrotask(() => {
+                    state.filters = {};
+                    state.page = 1;
+                    void loadData();
+                }));
+            }
+            if (filterMode !== 'page' && filterForm.dataset.filterDisplay === 'simple') {
+                let filterTimer = 0;
+                listen(filterForm, 'input', () => {
+                    window.clearTimeout(filterTimer);
+                    filterTimer = window.setTimeout(() => {
+                        state.filters = readFilters();
+                        state.page = 1;
+                        void loadData();
+                    }, 250);
+                });
+                listen(filterForm, 'change', () => {
+                    state.filters = readFilters();
+                    state.page = 1;
+                    void loadData();
+                });
+            }
+        }
+        if (searchForm && config.filterMode !== 'page') {
+            const applySearch = () => {
+                state.search = searchInput instanceof HTMLInputElement ? searchInput.value.trim() : '';
+                state.page = 1;
+                void loadData();
+            };
+            listen(searchForm, 'submit', (event) => {
                 event.preventDefault();
-                state.filters = readFilters();
+                applySearch();
+            });
+            if (searchInput instanceof HTMLInputElement) {
+                let searchTimer = 0;
+                listen(searchInput, 'input', () => {
+                    window.clearTimeout(searchTimer);
+                    searchTimer = window.setTimeout(applySearch, 250);
+                });
+            }
+        }
+        if (pageSizeControl instanceof HTMLSelectElement) {
+            listen(pageSizeControl, 'change', () => {
+                state.pageSize = Math.max(1, Math.min(100, Number(pageSizeControl.value) || 20));
                 state.page = 1;
                 void loadData();
             });
-            listen(filterForm, 'reset', () => queueMicrotask(() => {
-                state.filters = {};
-                state.page = 1;
-                void loadData();
-            }));
         }
+        listen(body, 'keydown', (event) => {
+            const row = event.target instanceof Element ? event.target.closest('tr[data-row-index]') : null;
+            if (!(row instanceof HTMLTableRowElement) || event.target !== row || !['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+            event.preventDefault();
+            const rows = [...body.querySelectorAll('tr[data-row-index]')];
+            const index = rows.indexOf(row);
+            const target = rows[index + (event.key === 'ArrowDown' ? 1 : -1)];
+            if (target instanceof HTMLElement) target.focus();
+        });
         listen(document, 'weline:datatable:form:saved', (event) => {
             if (event instanceof CustomEvent && event.detail?.formId === config.formId) void loadData();
         });
@@ -727,10 +1066,13 @@ function registerDataTable(UI) {
                     ? templateDisplayFields
                     : state.displayFields;
                 state.filterFields = templateFilterFields;
+                applyLocalPreferences();
+                renderFilters();
                 if (!state.destroyed) loadLocalData();
                 return;
             }
             await loadFields();
+            applyLocalPreferences();
             if (!state.destroyed) await loadData();
         });
 

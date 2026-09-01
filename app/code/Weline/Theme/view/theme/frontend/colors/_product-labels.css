@@ -1,0 +1,47 @@
+/**
+ * 色系：product-labels
+ *
+ * 商品角标（新品 / 促销 / 演示）专用色盘，供全站商品标签与 Theme Editor 统一配置。
+ * 字段
+ * @meta.name {default="商品标签色",name="商品标签色",description="商品标签色盘名称"}
+ * @meta.description {default="商品 NEW / SALE / DEMO 等角标背景与文字配色",name="商品角标配色",description="商品标签色盘用途"}
+ * @meta.theme {default="default",name="主题标识",description="主题标识"}
+ * @meta.panel {default="color",name="panel",description="panel"}
+ * @meta.disk_kind {default="colors",name="disk_kind",description="disk_kind"}
+ * @meta.palette_role {default="semantic",name="palette_role",description="palette_role"}
+ */
+
+:root,
+[data-theme="default"],
+[data-theme="light"] {
+    /* 新品：Amazon Success Green #007600 浅底 + 深绿字 */
+    --color-product-label-new-bg: #e6f2e6;
+    --color-product-label-new-text: #007600;
+    /* 促销：淡粉底 + 深红字 */
+    --color-product-label-sale-bg: #fde8ec;
+    --color-product-label-sale-text: #9f1239;
+    /* 演示：中性灰蓝底 + 石板字 */
+    --color-product-label-demo-bg: #e8edf2;
+    --color-product-label-demo-text: #475569;
+    --weline-product-label-new-bg: var(--color-product-label-new-bg);
+    --weline-product-label-new-text: var(--color-product-label-new-text);
+    --weline-product-label-sale-bg: var(--color-product-label-sale-bg);
+    --weline-product-label-sale-text: var(--color-product-label-sale-text);
+    --weline-product-label-demo-bg: var(--color-product-label-demo-bg);
+    --weline-product-label-demo-text: var(--color-product-label-demo-text);
+}
+
+[data-theme="dark"] {
+    --color-product-label-new-bg: #14261a;
+    --color-product-label-new-text: #9fd4a8;
+    --color-product-label-sale-bg: #3f1d2b;
+    --color-product-label-sale-text: #fecdd3;
+    --color-product-label-demo-bg: #2a3441;
+    --color-product-label-demo-text: #cbd5e1;
+    --weline-product-label-new-bg: var(--color-product-label-new-bg);
+    --weline-product-label-new-text: var(--color-product-label-new-text);
+    --weline-product-label-sale-bg: var(--color-product-label-sale-bg);
+    --weline-product-label-sale-text: var(--color-product-label-sale-text);
+    --weline-product-label-demo-bg: var(--color-product-label-demo-bg);
+    --weline-product-label-demo-text: var(--color-product-label-demo-text);
+}

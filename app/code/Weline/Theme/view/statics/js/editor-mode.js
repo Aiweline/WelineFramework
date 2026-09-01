@@ -157,6 +157,32 @@
         refreshEmptySlotPlaceholders();
     }
 
+    function isShopperRuntimeEventTarget(target) {
+        if (!(target instanceof Element)) {
+            return false;
+        }
+        // Keep native shopper widgets working inside the visual editor.
+        // Do NOT include "view cart" / checkout anchors — those still navigate preview layouts.
+        return !!target.closest([
+            '[data-editor-interactive]',
+            '[data-mini-cart-trigger]',
+            '[data-mini-cart-close]',
+            '[data-mini-cart-overlay]',
+            '[data-qty-decrease]',
+            '[data-qty-increase]',
+            '[data-qty-input]',
+            '[data-remove-item]',
+            '[data-action="add-v2"]',
+            '[data-action="add"]',
+            '[data-action="wishlist-toggle"]',
+            '[data-action="compare-toggle"]',
+            '.weline-cart-product-add-to-cart',
+            '.weline-cart-product-card-add-to-cart',
+            '[data-w-product-purchase-actions]',
+            '[data-purchase-loading]'
+        ].join(', '));
+    }
+
     function bindNolinkClickGuard() {
         if (document.body._nolinkClickGuardBound) {
             return;
@@ -171,7 +197,7 @@
             if (!link) {
                 return;
             }
-            if (link.closest('.slot-toolbar, .widget-hover-actions, [data-editor-interactive]')) {
+            if (isShopperRuntimeEventTarget(link) || link.closest('.slot-toolbar, .widget-hover-actions')) {
                 return;
             }
             e.preventDefault();
@@ -764,6 +790,58 @@
     }
 
     /**
+     * 构建与父页 handleSlotSelected / openWidgetPanelForSlotSelection 对齐的插槽资料。
+     * 悬浮工具条必须自带这些字段，不能依赖点击时再 closest 找回插槽节点。
+     */
+    function buildSlotSelectionPayload(slot) {
+        if (!(slot instanceof HTMLElement)) {
+            return null;
+        }
+        const slotId = String(slot.dataset.wslot || slot.getAttribute('data-slot') || '').trim();
+        if (!slotId) {
+            return null;
+        }
+        const currentWidgets = getSlotWidgetElements(slot);
+        const maxWidgets = slot.dataset.wslotMax ? parseInt(slot.dataset.wslotMax, 10) : -1;
+        return {
+            id: slotId,
+            name: slot.dataset.wslotName || slot.getAttribute('data-name') || slotId,
+            accept: slot.dataset.wslotAccept
+                ? slot.dataset.wslotAccept.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
+                : [],
+            reject: slot.dataset.wslotReject
+                ? slot.dataset.wslotReject.split(',').map(function(s) { return s.trim(); }).filter(Boolean)
+                : [],
+            multiple: slot.dataset.wslotMultiple !== 'false',
+            exclusive: slot.dataset.wslotExclusive === 'true',
+            max: maxWidgets,
+            min: slot.dataset.wslotMin ? parseInt(slot.dataset.wslotMin, 10) : 0,
+            current_count: currentWidgets.length,
+            append: slot.dataset.wslotAppend === 'true',
+            prepend: slot.dataset.wslotPrepend === 'true',
+            area: slot.dataset.wslotPosition || slot.getAttribute('data-wslot-position') || '',
+            position: slot.dataset.wslotPosition || slot.getAttribute('data-wslot-position') || '',
+        };
+    }
+
+    function stampSlotToolbarSelection(toolbar, slot) {
+        const payload = buildSlotSelectionPayload(slot);
+        if (!(toolbar instanceof HTMLElement) || !payload) {
+            return null;
+        }
+        toolbar.dataset.slotId = payload.id;
+        toolbar.setAttribute('data-slot-id', payload.id);
+        toolbar.setAttribute('data-slot-selection', JSON.stringify(payload));
+        if (payload.area) {
+            toolbar.dataset.wslotPosition = payload.area;
+        }
+        if (payload.name) {
+            toolbar.dataset.wslotName = payload.name;
+        }
+        return payload;
+    }
+
+    /**
      * 为插槽添加选择按钮
      * @param {HTMLElement} slot - 插槽元素
      */
@@ -784,10 +862,8 @@
         toolbar.setAttribute('data-w-portal', '0');
         toolbar.setAttribute('data-slot-hover-actions', '1');
 
-        const slotIdForLabel = slot.dataset.wslot || slot.getAttribute('data-slot') || '';
-        if (slotIdForLabel) {
-            toolbar.dataset.slotId = slotIdForLabel;
-        }
+        const stamped = stampSlotToolbarSelection(toolbar, slot);
+        const slotIdForLabel = stamped?.id || slot.dataset.wslot || slot.getAttribute('data-slot') || '';
 
         // 选择按钮
         const btn = document.createElement('button');
@@ -804,6 +880,7 @@
             });
             closeSlotSelectTrees();
             slot._infoCardOpen = false;
+            stampSlotToolbarSelection(toolbar, slot);
             selectSlot(slot);
         });
 
@@ -829,10 +906,11 @@
         initBtn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
+            const payload = stampSlotToolbarSelection(toolbar, slot) || buildSlotSelectionPayload(slot) || {};
             postPreviewMessage('slot-init-defaults', {
-                slot_id: slot.dataset.wslot || '',
-                area: slot.dataset.wslotPosition || slot.getAttribute('data-wslot-position') || '',
-                name: slot.dataset.wslotName || slot.getAttribute('data-name') || '',
+                slot_id: payload.id || slot.dataset.wslot || '',
+                area: payload.area || slot.dataset.wslotPosition || slot.getAttribute('data-wslot-position') || '',
+                name: payload.name || slot.dataset.wslotName || slot.getAttribute('data-name') || '',
             });
         });
 
@@ -849,7 +927,7 @@
         slot.appendChild(toolbar);
         // 不在 iframe 内 attach：与部件一致，由父页挂载
         postPreviewMessage('slot-hover-sync', {
-            slot_id: slot.dataset.wslot || '',
+            slot_id: slotIdForLabel,
         });
     }
 
@@ -1115,24 +1193,10 @@
      * @param {HTMLElement} slot - 插槽元素
      */
     function selectSlot(slot) {
-        const currentWidgets = getSlotWidgetElements(slot);
-        const maxWidgets = slot.dataset.wslotMax ? parseInt(slot.dataset.wslotMax, 10) : -1;
-        // 构建插槽数据
-        const slotData = {
-            id: slot.dataset.wslot,
-            name: slot.dataset.wslotName || slot.dataset.wslot,
-            accept: slot.dataset.wslotAccept ? slot.dataset.wslotAccept.split(',').map(s => s.trim()) : [],
-            reject: slot.dataset.wslotReject ? slot.dataset.wslotReject.split(',').map(s => s.trim()).filter(Boolean) : [],
-            multiple: slot.dataset.wslotMultiple !== 'false',
-            exclusive: slot.dataset.wslotExclusive === 'true',
-            max: maxWidgets,
-            min: slot.dataset.wslotMin ? parseInt(slot.dataset.wslotMin, 10) : 0,
-            current_count: currentWidgets.length,
-            append: slot.dataset.wslotAppend === 'true',
-            prepend: slot.dataset.wslotPrepend === 'true',
-            area: slot.dataset.wslotPosition || '',
-            position: slot.dataset.wslotPosition || ''
-        };
+        const slotData = buildSlotSelectionPayload(slot);
+        if (!slotData) {
+            return;
+        }
 
         postPreviewMessage('slot-selected', { slot: slotData });
 
@@ -1148,13 +1212,13 @@
     // ========== iframe 内拖拽排序辅助函数 ==========
 
     /**
-     * 获取插槽内的部件元素（widget-wrapper / data-layout-id）
+     * 获取插槽内的部件元素（widget-wrapper / data-node-uid / data-layout-id）
      * @param {HTMLElement} slot - 插槽元素
      * @returns {HTMLElement[]}
      */
     function getSlotWidgetElements(slot) {
         const candidates = Array.from(slot.querySelectorAll(
-            '.widget-wrapper[data-layout-id], [data-layout-id], .widget-wrapper[data-widget-code], [data-widget-code]'
+            '.widget-wrapper[data-node-uid], .widget-wrapper[data-layout-id], [data-node-uid], [data-layout-id], .widget-wrapper[data-widget-code], [data-widget-code]'
         )).filter(function(el) {
             return el.closest('[data-wslot]') === slot;
         });
@@ -1164,6 +1228,17 @@
                 return parent.contains(el);
             });
         });
+    }
+
+    // Hex identity is node_uid only; keep data-layout-id for non-hex legacy keys.
+    function resolvePreviewWidgetIdentity(element) {
+        const nodeUid = String(element?.getAttribute?.('data-node-uid') || element?.dataset?.nodeUid || '')
+            .trim()
+            .toLowerCase();
+        if (/^[a-f0-9]{32}$/.test(nodeUid)) {
+            return nodeUid;
+        }
+        return String(element?.dataset?.layoutId || element?.getAttribute?.('data-layout-id') || '').trim();
     }
 
     function readDragWidgetData(event) {
@@ -1235,7 +1310,7 @@
             sort_order: slotData.exclusive ? 0 : insertIndex,
             placement: placement,
             reference_layout_id: target
-                ? String(target.dataset.layoutId || target.getAttribute('data-layout-id') || '')
+                ? resolvePreviewWidgetIdentity(target)
                 : '',
             pointer_y: Number.isFinite(Number(mouseY)) ? Number(mouseY) : null
         };
@@ -1323,6 +1398,115 @@
 
         postPreviewMessage('drop-candidate', candidate);
         return candidate;
+    }
+
+    /**
+     * 父页 drop-bridge / dragend 兜底：用 iframe 内坐标命中插槽并回传 drop-candidate。
+     * 解决 Chromium/Electron 跨 iframe HTML5 DataTransfer 丢失导致无法 dragover/drop 的问题。
+     * 命中策略：自 elementFromPoint 向上收集 [data-wslot]，优先最深且 accept/容量通过的插槽，
+     * 避免外层 header 等容器吞掉本可落入内层/同点其它插槽的放置。
+     */
+    function slotHasDropCapacity(slot, widgetData) {
+        const currentCount = getSlotWidgetElements(slot).length;
+        const maxWidgets = slot.dataset.wslotMax ? parseInt(slot.dataset.wslotMax, 10) : -1;
+        const exclusive = slot.dataset.wslotExclusive === 'true';
+        const multiple = slot.dataset.wslotMultiple !== 'false';
+        const singleFull = !exclusive && !multiple && currentCount >= 1;
+        const maxFull = !exclusive && maxWidgets > 0 && currentCount >= maxWidgets;
+        return {
+            allowed: slotAcceptsWidget(
+                normalizeCodeList(slot.dataset.wslotAccept || ''),
+                normalizeCodeList(slot.dataset.wslotReject || ''),
+                slot.dataset.wslot,
+                widgetData
+            ),
+            full: singleFull || maxFull,
+            singleFull: singleFull,
+            currentCount: currentCount,
+            maxWidgets: maxWidgets,
+        };
+    }
+
+    function collectSlotsAtPoint(clientX, clientY) {
+        const hit = document.elementFromPoint(clientX, clientY);
+        const chain = [];
+        const seen = new Set();
+        let el = hit;
+        while (el && el !== document.documentElement) {
+            if (el.matches && el.matches('[data-wslot]') && !seen.has(el)) {
+                seen.add(el);
+                chain.push(el);
+            }
+            el = el.parentElement;
+        }
+        document.querySelectorAll('[data-wslot]').forEach(function(slot) {
+            if (seen.has(slot)) return;
+            const rect = slot.getBoundingClientRect();
+            if (rect.width <= 0 || rect.height <= 0) return;
+            if (clientX >= rect.left && clientX <= rect.right
+                && clientY >= rect.top && clientY <= rect.bottom) {
+                seen.add(slot);
+                chain.push(slot);
+            }
+        });
+        return { hit: hit, slots: chain };
+    }
+
+    function resolveDropAtPoint(clientX, clientY, widgetData) {
+        if (!isEditInteractionMode()) {
+            return null;
+        }
+
+        const data = widgetData || activeDragWidget;
+        if (!data || !data.code) {
+            return null;
+        }
+
+        const x = Number(clientX);
+        const y = Number(clientY);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) {
+            return null;
+        }
+
+        const collected = collectSlotsAtPoint(x, y);
+        if (!collected.hit) {
+            clearIframeDropFeedback(null, true);
+            return null;
+        }
+
+        const slots = collected.slots;
+        if (!slots.length) {
+            clearIframeDropFeedback(null, true);
+            return null;
+        }
+
+        let invalidSlot = null;
+        let invalidReason = '';
+        for (let i = 0; i < slots.length; i++) {
+            const slot = slots[i];
+            const status = slotHasDropCapacity(slot, data);
+            if (status.allowed && !status.full) {
+                return showIframeDropFeedback(slot, y, data);
+            }
+            if (!invalidSlot) {
+                invalidSlot = slot;
+                invalidReason = status.singleFull
+                    ? '该插槽仅允许一个组件'
+                    : (status.full ? '该插槽已满' : '该组件不能放入此插槽');
+            }
+        }
+
+        if (invalidSlot) {
+            if (activeDropSlot && activeDropSlot !== invalidSlot) {
+                clearIframeDropFeedback(activeDropSlot);
+            }
+            clearIframeDropFeedback(invalidSlot);
+            activeDropSlot = invalidSlot;
+            invalidSlot.classList.add('drag-invalid');
+            invalidSlot.setAttribute('data-w-drop-position', 'invalid');
+            showIframeDropStatus(invalidSlot, invalidReason);
+        }
+        return null;
     }
 
     /**
@@ -1426,7 +1610,7 @@
         // 插槽内链接：阻止导航跳转，但不阻止其他交互
         slot.addEventListener('click', function(e) {
             const link = e.target.closest('a[href]');
-            if (link && !link.closest('.slot-toolbar') && !link.closest('[data-editor-interactive]')) {
+            if (link && !isShopperRuntimeEventTarget(link) && !link.closest('.slot-toolbar')) {
                 e.preventDefault(); // 仅阻止导航，不调用 selectSlot
                 if (isLinkBlockEnabled()) {
                     e.stopPropagation();
@@ -1643,6 +1827,112 @@
             });
         });
         refreshEmptySlotPlaceholders();
+        reportWidgetHtmlHealth();
+    }
+
+    /**
+     * 读取服务端挂在 widget-wrapper 上的 HTML 健康检测结果，用 Toast 提示（禁止 alert）。
+     * DEV / 预览态由 SlotRendererService 写入 data-w-widget-health*。
+     */
+    function reportWidgetHtmlHealth() {
+        if (document.documentElement.dataset.wWidgetHealthReported === '1') {
+            return;
+        }
+        const nodes = document.querySelectorAll('.widget-wrapper[data-w-widget-health]');
+        if (!nodes.length) {
+            return;
+        }
+        document.documentElement.dataset.wWidgetHealthReported = '1';
+
+        const findings = [];
+        nodes.forEach(function(node) {
+            if (!(node instanceof HTMLElement)) {
+                return;
+            }
+            const severity = String(node.dataset.wWidgetHealth || 'warning').toLowerCase();
+            let issues = [];
+            try {
+                const raw = node.getAttribute('data-w-widget-health-issues') || '[]';
+                const parsed = JSON.parse(raw);
+                if (Array.isArray(parsed)) {
+                    issues = parsed;
+                }
+            } catch (err) {
+                issues = [{ severity: severity, code: 'parse_error', message: '部件健康数据解析失败' }];
+            }
+            if (!issues.length) {
+                return;
+            }
+            findings.push({
+                severity: severity,
+                code: String(node.dataset.widgetCode || ''),
+                module: String(node.dataset.widgetModule || ''),
+                slot: String(node.dataset.slotId || ''),
+                name: String(node.dataset.widgetName || node.getAttribute('data-widget-name') || node.dataset.widgetCode || 'widget'),
+                issues: issues,
+            });
+        });
+
+        if (!findings.length) {
+            return;
+        }
+
+        const errorCount = findings.filter(function(item) { return item.severity === 'error'; }).length;
+        const warningCount = findings.filter(function(item) { return item.severity === 'warning'; }).length;
+        const summaryTone = errorCount > 0 ? 'error' : (warningCount > 0 ? 'warning' : 'info');
+        const summary = '部件 HTML 健康检测：' + findings.length + ' 个部件异常'
+            + (errorCount ? '（错误 ' + errorCount + '）' : '')
+            + (warningCount ? '（警告 ' + warningCount + '）' : '');
+
+        showWidgetHealthToast(summary, summaryTone);
+
+        findings.slice(0, 8).forEach(function(item) {
+            const first = item.issues[0] || {};
+            const detail = (item.name || item.code || 'widget')
+                + (item.slot ? ' @' + item.slot : '')
+                + '：'
+                + String(first.message || first.code || 'HTML 异常');
+            const tone = item.severity === 'error' ? 'error' : (item.severity === 'warning' ? 'warning' : 'info');
+            showWidgetHealthToast(detail, tone);
+        });
+
+        try {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage({
+                    source: 'weline-theme-preview',
+                    type: 'widget-health',
+                    summary: summary,
+                    severity: summaryTone,
+                    findings: findings,
+                }, EDITOR_ORIGIN);
+            }
+        } catch (err) {
+            // cross-origin parent: local toast already shown
+        }
+    }
+
+    function showWidgetHealthToast(message, type) {
+        const text = String(message || '').trim();
+        if (!text) {
+            return;
+        }
+        const tone = type === 'error' ? 'danger' : (['success', 'warning', 'info', 'danger'].includes(type) ? type : 'info');
+        try {
+            const UI = resolveEditorUi();
+            if (UI && UI.toast && typeof UI.toast.show === 'function') {
+                UI.toast.show(text, { tone: tone, duration: type === 'error' ? 8000 : 5000 });
+                return;
+            }
+        } catch (err) {}
+        try {
+            if (window.Weline && window.Weline.UI && window.Weline.UI.toast && typeof window.Weline.UI.toast.show === 'function') {
+                window.Weline.UI.toast.show(text, { tone: tone, duration: type === 'error' ? 8000 : 5000 });
+                return;
+            }
+        } catch (err) {}
+        try {
+            console.warn('[ThemePreview][widget-health]', text);
+        } catch (err) {}
     }
 
     // DOM 加载完成后初始化
@@ -1678,6 +1968,18 @@
         activeDragWidget = null;
         activeDragSessionId = '';
         activeDropCandidate = null;
+    });
+
+    window.Weline = window.Weline || {};
+    window.Weline.Theme = window.Weline.Theme || {};
+    window.Weline.Theme.Preview = Object.assign({}, window.Weline.Theme.Preview || {}, {
+        resolveDropAtPoint: resolveDropAtPoint,
+        clearDropFeedback: function() {
+            clearIframeDropFeedback(null, true);
+        },
+        getActiveDropCandidate: function() {
+            return activeDropCandidate;
+        },
     });
 
 })();

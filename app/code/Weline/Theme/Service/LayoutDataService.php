@@ -257,6 +257,7 @@ class LayoutDataService
             'checkout' => __('结算页'),
             'checkout_success' => __('结算成功页'),
             'checkout_failer' => __('结算失败页'),
+            'not_found' => __('404 页面'),
             'account' => __('账户中心'),
             'account_auth' => __('账户认证'),
             'account_logout' => __('退出登录'),

@@ -25,12 +25,8 @@ $separator = $this->getData("meta.separator") ?? '/';
 $class = $this->getData("meta.class") ?? '';
 $showHome = $this->getData("meta.showHome") ?? true;
 $homeText = $this->getData("meta.homeText") ?? __('首页');
-$homeUrl = $this->getData("meta.homeUrl") ?? '';
-
-// 如果没有指定首页URL，使用后端首页
-if (empty($homeUrl)) {
-    $homeUrl = $this->request->getUrlBuilder()->getBackendUrl('/');
-}
+$homeUrl = trim((string)($this->getData("meta.homeUrl") ?? ''));
+$useDefaultHomeUrl = ($homeUrl === '');
 
 // 构建CSS类（Bootstrap样式）
 $breadcrumbClass = 'breadcrumb m-0';
@@ -38,8 +34,8 @@ if ($class) {
     $breadcrumbClass .= ' ' . htmlspecialchars($class);
 }
 
-// 如果显示首页且items不为空，在开头添加首页项
-if ($showHome && !empty($items)) {
+// 如果显示首页且items不为空，在开头添加首页项（默认首页用模板标签，不在 PHP 内解析）
+if ($showHome && !empty($items) && !$useDefaultHomeUrl) {
     array_unshift($items, [
         'text' => $homeText,
         'url' => $homeUrl
@@ -52,12 +48,21 @@ if ($showHome && !empty($items)) {
             <!-- 如果没有提供items，显示默认首页 -->
             <?php if ($showHome): ?>
                 <li class="w-breadcrumb__item">
+                    <?php if ($useDefaultHomeUrl): ?>
+                    <a href="@backend-url{'/'}">
+                    <?php else: ?>
                     <a href="<?= htmlspecialchars($homeUrl) ?>">
+                    <?php endif; ?>
                         <?= htmlspecialchars($homeText) ?>
                     </a>
                 </li>
             <?php endif; ?>
         <?php else: ?>
+            <?php if ($showHome && $useDefaultHomeUrl): ?>
+                <li class="w-breadcrumb__item">
+                    <a href="@backend-url{'/'}"><?= htmlspecialchars($homeText) ?></a>
+                </li>
+            <?php endif; ?>
             <?php foreach ($items as $index => $item): ?>
                 <li class="w-breadcrumb__item <?= empty($item['url']) || $index === count($items) - 1 ? 'active' : '' ?>" <?= $index === count($items) - 1 ? 'aria-current="page"' : '' ?>>
                     <?php if (!empty($item['url']) && $index < count($items) - 1): ?>

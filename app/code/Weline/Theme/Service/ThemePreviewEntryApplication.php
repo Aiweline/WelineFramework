@@ -177,21 +177,18 @@ final class ThemePreviewEntryApplication
             ];
         }
 
-        $params = $previewContextService->toQueryParams($context, $appendPreviewThemeQueryOnFrontendUrl);
-        $params['page_type'] = $layoutType;
-        $params['layout_type'] = $layoutType;
-        $params['layout_option'] = $layoutOption;
-        $publicRoute = \trim(\str_replace('\\', '/', (string)($themePublicRoute ?? '')), '/');
-        if ($publicRoute !== '') {
-            $params['theme_public_route'] = $publicRoute;
+        $previewToken = \trim((string)($context['preview_token'] ?? ''));
+        if ($previewToken === '') {
+            return ['ok' => false, 'message' => __('Preview token is required')];
         }
-        $params['_t'] = \time();
 
         return [
             'ok' => true,
-            'redirect' => $url->getFrontendUrl(
-                'theme/frontend/theme-preview/content',
-                $params
+            'redirect' => $previewTokenService->getPreviewUrl(
+                $url->getFrontendUrl(
+                    $themePageTypeResolver->getPreviewRouteByPageType($resolvedPageType)
+                ),
+                $previewToken
             ),
         ];
     }

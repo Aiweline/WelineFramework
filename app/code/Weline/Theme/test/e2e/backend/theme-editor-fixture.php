@@ -90,6 +90,15 @@ function apply_layout_identity_filter($query, array $identity, string $modelClas
         ->where($modelClass::schema_fields_TARGET_ID, $identity['target_id']);
 }
 
+function theme_layout_table_exists(ThemeLayout $layout): bool
+{
+    try {
+        return (bool)$layout->getConnection()->getConnector()->tableExist(ThemeLayout::schema_table);
+    } catch (Throwable) {
+        return false;
+    }
+}
+
 function cleanup_theme_editor_fixture(
     ThemeLayout $layout,
     ThemeLayoutVersion $version,
@@ -98,6 +107,22 @@ function cleanup_theme_editor_fixture(
     array $identity = []
 ): void
 {
+    if (!theme_layout_table_exists($layout)) {
+        // Greenfield: theme_layout dropped; scoped cleanup is handled separately.
+        try {
+            $versionQuery = $version->clearQuery()
+                ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
+                ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType);
+            apply_layout_identity_filter($versionQuery, $identity, ThemeLayoutVersion::class)
+                ->delete()
+                ->fetch();
+        } catch (Throwable) {
+            // version table may also be absent / empty after reset
+        }
+        cleanup_scoped_layout_workspaces($themeId, $pageType, $identity);
+        return;
+    }
+
     $layoutQuery = $layout->clearQuery()
         ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
         ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType);
@@ -111,6 +136,83 @@ function cleanup_theme_editor_fixture(
     apply_layout_identity_filter($versionQuery, $identity, ThemeLayoutVersion::class)
         ->delete()
         ->fetch();
+
+    cleanup_scoped_layout_workspaces($themeId, $pageType, $identity);
+}
+
+/**
+ * Clear scoped workspace/patch/revision/release rows for a Theme editor fixture identity.
+ *
+ * @param array<string,mixed> $identity
+ * @return array{patches:int,revisions:int,releases:int,workspaces:int}
+ */
+function cleanup_scoped_layout_workspaces(int $themeId, string $pageType, array $identity = []): array
+{
+    $deleted = ['patches' => 0, 'revisions' => 0, 'releases' => 0, 'workspaces' => 0];
+    if ($themeId <= 0 || trim($pageType) === '') {
+        return $deleted;
+    }
+
+    /** @var ThemeScopeWorkspace $workspaceModel */
+    $workspaceModel = clone ObjectManager::getInstance(ThemeScopeWorkspace::class);
+    $query = $workspaceModel->clearData()->clearQuery()
+        ->where(ThemeScopeWorkspace::schema_fields_THEME_ID, $themeId)
+        ->where(ThemeScopeWorkspace::schema_fields_LAYOUT_TYPE, $pageType)
+        ->where(ThemeScopeWorkspace::schema_fields_RESOURCE_TYPE, 'layout');
+    if ($identity !== []) {
+        if (isset($identity['layout_option']) && trim((string)$identity['layout_option']) !== '') {
+            $query->where(
+                ThemeScopeWorkspace::schema_fields_LAYOUT_OPTION,
+                (string)$identity['layout_option'],
+            );
+        }
+        if (isset($identity['scope']) && trim((string)$identity['scope']) !== '') {
+            $query->where(ThemeScopeWorkspace::schema_fields_SCOPE, (string)$identity['scope']);
+        }
+        if (isset($identity['target_type']) && trim((string)$identity['target_type']) !== '') {
+            $query->where(
+                ThemeScopeWorkspace::schema_fields_TARGET_TYPE,
+                (string)$identity['target_type'],
+            );
+        }
+        if (array_key_exists('target_id', $identity)) {
+            $query->where(
+                ThemeScopeWorkspace::schema_fields_TARGET_ID,
+                (int)$identity['target_id'],
+            );
+        }
+    }
+
+    $rows = $query->select()->fetchArray();
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        $workspaceId = (int)($row[ThemeScopeWorkspace::schema_fields_ID] ?? 0);
+        if ($workspaceId <= 0) {
+            continue;
+        }
+        $deleted['patches'] += delete_theme_scope_rows(
+            ThemeScopePatch::class,
+            ThemeScopePatch::schema_fields_WORKSPACE_ID,
+            $workspaceId,
+        );
+        $deleted['revisions'] += delete_theme_scope_rows(
+            ThemeScopeRevision::class,
+            ThemeScopeRevision::schema_fields_WORKSPACE_ID,
+            $workspaceId,
+        );
+        $deleted['releases'] += delete_theme_scope_rows(
+            ThemeScopeRelease::class,
+            ThemeScopeRelease::schema_fields_WORKSPACE_ID,
+            $workspaceId,
+        );
+        $workspaceModel->getConnection()->getQuery()
+            ->table($workspaceModel->getTable())
+            ->where(ThemeScopeWorkspace::schema_fields_ID, $workspaceId)
+            ->delete()
+            ->fetch();
+        $deleted['workspaces']++;
+    }
+
+    return $deleted;
 }
 
 function snapshot_theme_editor_fixture(
@@ -121,6 +223,19 @@ function snapshot_theme_editor_fixture(
     array $identity = []
 ): array
 {
+    $scoped = snapshot_scoped_layout_workspaces($themeId, $pageType, $identity);
+
+    if (!theme_layout_table_exists($layout)) {
+        return [
+            'success' => true,
+            'layout' => [],
+            'versions' => [],
+            'legacy_table' => false,
+            'note' => 'theme_layout_missing_scoped_authority',
+            'scoped' => $scoped,
+        ];
+    }
+
     $layoutQuery = $layout->clearQuery()
         ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
         ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType);
@@ -146,6 +261,105 @@ function snapshot_theme_editor_fixture(
         'success' => true,
         'layout' => is_array($layoutRows) ? array_values($layoutRows) : [],
         'versions' => is_array($versionRows) ? array_values($versionRows) : [],
+        'legacy_table' => true,
+        'scoped' => $scoped,
+    ];
+}
+
+/**
+ * @param array<string,mixed> $identity
+ * @return array{workspaces:list<array<string,mixed>>,workspace_count:int,node_count:int}
+ */
+function snapshot_scoped_layout_workspaces(int $themeId, string $pageType, array $identity = []): array
+{
+    $workspaces = [];
+    $nodeCount = 0;
+    if ($themeId <= 0 || trim($pageType) === '') {
+        return ['workspaces' => [], 'workspace_count' => 0, 'node_count' => 0];
+    }
+
+    /** @var ThemeScopeWorkspace $workspaceModel */
+    $workspaceModel = clone ObjectManager::getInstance(ThemeScopeWorkspace::class);
+    $query = $workspaceModel->clearData()->clearQuery()
+        ->where(ThemeScopeWorkspace::schema_fields_THEME_ID, $themeId)
+        ->where(ThemeScopeWorkspace::schema_fields_LAYOUT_TYPE, $pageType)
+        ->where(ThemeScopeWorkspace::schema_fields_RESOURCE_TYPE, 'layout');
+    if ($identity !== []) {
+        if (isset($identity['layout_option']) && trim((string)$identity['layout_option']) !== '') {
+            $query->where(
+                ThemeScopeWorkspace::schema_fields_LAYOUT_OPTION,
+                (string)$identity['layout_option'],
+            );
+        }
+        if (isset($identity['scope']) && trim((string)$identity['scope']) !== '') {
+            $query->where(ThemeScopeWorkspace::schema_fields_SCOPE, (string)$identity['scope']);
+        }
+        if (isset($identity['target_type']) && trim((string)$identity['target_type']) !== '') {
+            $query->where(
+                ThemeScopeWorkspace::schema_fields_TARGET_TYPE,
+                (string)$identity['target_type'],
+            );
+        }
+        if (array_key_exists('target_id', $identity)) {
+            $query->where(
+                ThemeScopeWorkspace::schema_fields_TARGET_ID,
+                (int)$identity['target_id'],
+            );
+        }
+    }
+
+    $rows = $query->select()->fetchArray();
+    foreach (is_array($rows) ? $rows : [] as $row) {
+        if (!is_array($row)) {
+            continue;
+        }
+        $workspaceId = (int)($row[ThemeScopeWorkspace::schema_fields_ID] ?? 0);
+        $revision = (int)($row[ThemeScopeWorkspace::schema_fields_REVISION] ?? 0);
+        $patchCount = 0;
+        $releaseCount = 0;
+        if ($workspaceId > 0) {
+            try {
+                /** @var ThemeScopePatch $patchModel */
+                $patchModel = clone ObjectManager::getInstance(ThemeScopePatch::class);
+                $patches = $patchModel->clearData()->clearQuery()
+                    ->where(ThemeScopePatch::schema_fields_WORKSPACE_ID, $workspaceId)
+                    ->select()
+                    ->fetchArray();
+                $patchCount = is_array($patches) ? count($patches) : 0;
+            } catch (Throwable) {
+                $patchCount = 0;
+            }
+            try {
+                /** @var ThemeScopeRelease $releaseModel */
+                $releaseModel = clone ObjectManager::getInstance(ThemeScopeRelease::class);
+                $releases = $releaseModel->clearData()->clearQuery()
+                    ->where(ThemeScopeRelease::schema_fields_WORKSPACE_ID, $workspaceId)
+                    ->select()
+                    ->fetchArray();
+                $releaseCount = is_array($releases) ? count($releases) : 0;
+            } catch (Throwable) {
+                $releaseCount = 0;
+            }
+        }
+        $workspaces[] = [
+            'workspace_id' => $workspaceId,
+            'scope' => (string)($row[ThemeScopeWorkspace::schema_fields_SCOPE] ?? ''),
+            'layout_option' => (string)($row[ThemeScopeWorkspace::schema_fields_LAYOUT_OPTION] ?? ''),
+            'target_type' => (string)($row[ThemeScopeWorkspace::schema_fields_TARGET_TYPE] ?? ''),
+            'target_id' => (int)($row[ThemeScopeWorkspace::schema_fields_TARGET_ID] ?? 0),
+            'locale' => (string)($row[ThemeScopeWorkspace::schema_fields_LOCALE] ?? ''),
+            'revision' => $revision,
+            'patch_count' => $patchCount,
+            'release_count' => $releaseCount,
+            'published_release_id' => (int)($row[ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID] ?? 0),
+        ];
+        $nodeCount += max(0, $revision > 0 ? 1 : 0);
+    }
+
+    return [
+        'workspaces' => $workspaces,
+        'workspace_count' => count($workspaces),
+        'node_count' => $nodeCount,
     ];
 }
 
@@ -579,6 +793,61 @@ function prepare_theme_scope_hierarchy(int $themeId, string $pageType, string $t
     ];
 }
 
+/**
+ * Seed a scoped draft (+ optional publish) for Theme editor E2E without theme_layout.
+ *
+ * @param array<string,mixed> $identity
+ * @return array<string,mixed>
+ */
+function prepare_scoped_layout_fixture(
+    ThemeLayout $layout,
+    ThemeLayoutVersion $version,
+    int $themeId,
+    string $pageType,
+    array $identity = [],
+    bool $force = true,
+    bool $publish = true,
+): array {
+    $identity = $identity !== [] ? $identity : [
+        'layout_option' => 'default',
+        'scope' => 'default.default.default',
+        'target_type' => 'global',
+        'target_id' => 0,
+    ];
+
+    cleanup_theme_editor_fixture($layout, $version, $themeId, $pageType, $identity);
+
+    /** @var \Weline\Theme\Service\DefaultLayoutSeeder $seeder */
+    $seeder = ObjectManager::getInstance(\Weline\Theme\Service\DefaultLayoutSeeder::class);
+    $seeded = $seeder->seedDefaultLayout($themeId, $pageType, $force);
+
+    $published = false;
+    if ($publish) {
+        /** @var \Weline\Theme\Service\ThemeLayoutService $layoutService */
+        $layoutService = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutService::class);
+        $published = $layoutService->publishLayout(
+            $themeId,
+            $pageType,
+            [
+                'layout_option' => (string)($identity['layout_option'] ?? 'default'),
+                'scope' => (string)($identity['scope'] ?? 'default.default.default'),
+                'locale_code' => '',
+                'target_type' => (string)($identity['target_type'] ?? 'global'),
+                'target_id' => (int)($identity['target_id'] ?? 0),
+            ],
+            true,
+        );
+    }
+
+    return [
+        'success' => true,
+        'seeded' => (bool)$seeded,
+        'published' => (bool)$published,
+        'identity' => $identity,
+        'snapshot' => snapshot_theme_editor_fixture($layout, $version, $themeId, $pageType, $identity),
+    ];
+}
+
 $payload = read_payload();
 $action = (string)($payload['action'] ?? '');
 $themeId = (int)($payload['theme_id'] ?? 0);
@@ -643,6 +912,21 @@ try {
         exit(0);
     }
 
+    if ($action === 'prepare_scoped_layout' || $action === 'seed_scoped_layout') {
+        $force = !array_key_exists('force', $payload) || (bool)$payload['force'];
+        $publish = !array_key_exists('publish', $payload) || (bool)$payload['publish'];
+        output_json(prepare_scoped_layout_fixture(
+            $layout,
+            $version,
+            $themeId,
+            $pageType,
+            $identity,
+            $force,
+            $publish,
+        ));
+        exit(0);
+    }
+
     if ($action === 'default_injections') {
         /** @var WidgetDefaultInjectionService $service */
         $service = ObjectManager::getInstance(WidgetDefaultInjectionService::class);
@@ -682,11 +966,12 @@ try {
                 ThemeLayout::STATUS_DRAFT,
                 'backend'
             );
+            $applied = $item && !empty($item['node_uid']);
             $result = [
                 'items' => $item ? [$item] : [],
                 'current_item' => $item,
-                'applied_count' => $item && !empty($item['layout_id']) ? 1 : 0,
-                'skipped_count' => $item && !empty($item['layout_id']) ? 0 : 1,
+                'applied_count' => $applied ? 1 : 0,
+                'skipped_count' => $applied ? 0 : 1,
                 'total_identities' => 1,
             ];
         }

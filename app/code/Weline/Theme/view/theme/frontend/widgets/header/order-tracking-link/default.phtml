@@ -16,7 +16,7 @@
  * @widget.exclusive {false}
  *
  * @param label {default="订单跟踪",type="string",label="链接文字"}
- * @param url {default="/orders/track",type="string",label="链接地址"}
+ * @param url {default="/customer/account/index#orders",type="string",label="链接地址"}
  */
 
 use Weline\Theme\Helper\LegacyMediaUrl;
@@ -29,9 +29,17 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $label = WidgetI18n::label(trim((string)($this->getData('label') ?? '')), '订单跟踪');
-$url = LegacyMediaUrl::sanitize((string)($this->getData('url') ?? '/orders/track'));
-if ($url === '') {
-    $url = '/orders/track';
+$url = LegacyMediaUrl::sanitize((string)($this->getData('url') ?? ''));
+$urlPath = 'customer/account/index';
+$urlHash = '#orders';
+if ($url !== '' && (str_starts_with($url, 'http://') || str_starts_with($url, 'https://') || str_starts_with($url, '#'))) {
+    $urlPath = '';
+    $urlHash = '';
+} elseif ($url !== '') {
+    $parts = explode('#', ltrim($url, '/'), 2);
+    $urlPath = (string) ($parts[0] !== '' ? $parts[0] : 'customer/account/index');
+    $urlHash = isset($parts[1]) ? ('#' . $parts[1]) : '';
+    $url = '';
 }
 ?>
 
@@ -40,7 +48,7 @@ if ($url === '') {
    data-uid="<?= $esc($scope->uid) ?>"
    data-js-ns="<?= $esc($scope->jsNs) ?>"
    data-widget-type="notice-rights"
-   href="<?= $esc($url) ?>"><?= $esc($label) ?></a>
+   href="<?php if ($url !== ''): ?><?= $esc($url) ?><?php else: ?>@url{$urlPath}<?= $esc($urlHash) ?><?php endif; ?>"><?= $esc($label) ?></a>
 
 <style>
 .<?= $wc ?> {

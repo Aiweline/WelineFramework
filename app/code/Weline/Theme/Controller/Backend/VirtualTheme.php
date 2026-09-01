@@ -82,6 +82,7 @@ class VirtualTheme extends BackendController
                     'adapter_code' => $adapterCode,
                     'skills' => $this->buildSkillCatalog($adapterCode, $temporarySkillCodes),
                     'styles' => $this->buildStyleCatalog($adapterCode, $temporaryStyleCodes, $adminId),
+                    'virtual_layout_asset_available' => $this->virtualLayoutService->isVirtualLayoutAssetAvailable(),
                 ],
             ]);
         } catch (ResponseTerminateException $terminate) {
@@ -148,6 +149,9 @@ class VirtualTheme extends BackendController
     public function postCreateDraft()
     {
         try {
+            if ($blocked = $this->virtualLayoutAssetUnavailableResponse()) {
+                return $this->fetchJson($blocked);
+            }
             $payload = $this->getPayload();
             $result = $this->shouldCreateAllLayoutTypes($payload)
                 ? $this->createVirtualLayoutDrafts('create', $payload)
@@ -164,6 +168,9 @@ class VirtualTheme extends BackendController
     public function postBlockAction()
     {
         try {
+            if ($blocked = $this->virtualLayoutAssetUnavailableResponse()) {
+                return $this->fetchJson($blocked);
+            }
             $payload = $this->getPayload();
             $action = $this->normalizeBlockAction((string)($payload['action'] ?? ''));
             if ($action === '') {
@@ -191,6 +198,9 @@ class VirtualTheme extends BackendController
     public function postSaveSource()
     {
         try {
+            if ($blocked = $this->virtualLayoutAssetUnavailableResponse()) {
+                return $this->fetchJson($blocked);
+            }
             $payload = $this->getPayload();
             $themeId = $this->resolveThemeId($payload);
             $area = $this->normalizeArea((string)($payload['area'] ?? 'frontend'));
@@ -220,6 +230,9 @@ class VirtualTheme extends BackendController
     public function postPublishVersion()
     {
         try {
+            if ($blocked = $this->virtualLayoutAssetUnavailableResponse()) {
+                return $this->fetchJson($blocked);
+            }
             $payload = $this->getPayload();
             $versionId = (int)($payload['version_id'] ?? $payload['draft_version_id'] ?? 0);
             if ($versionId <= 0) {
@@ -242,6 +255,9 @@ class VirtualTheme extends BackendController
     public function postRollbackVersion()
     {
         try {
+            if ($blocked = $this->virtualLayoutAssetUnavailableResponse()) {
+                return $this->fetchJson($blocked);
+            }
             $payload = $this->getPayload();
             $result = $this->virtualLayoutService->rollbackPublishedVersion(
                 (int)($payload['asset_id'] ?? 0),
@@ -258,6 +274,22 @@ class VirtualTheme extends BackendController
         } catch (\Throwable $throwable) {
             return $this->fetchJson(['success' => false, 'message' => $throwable->getMessage()]);
         }
+    }
+
+    /**
+     * @return array{success:false,status:string,message:string}|null
+     */
+    private function virtualLayoutAssetUnavailableResponse(): ?array
+    {
+        if ($this->virtualLayoutService->isVirtualLayoutAssetAvailable()) {
+            return null;
+        }
+
+        return [
+            'success' => false,
+            'status' => 'theme_virtual_layout_missing',
+            'message' => (string)__('虚拟布局资产表已移除，请使用主题编辑器 scoped 工作区'),
+        ];
     }
 
     private function normalizeArea(string $area): string

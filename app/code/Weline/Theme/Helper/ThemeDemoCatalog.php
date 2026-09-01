@@ -46,7 +46,10 @@ final class ThemeDemoCatalog
      *     price:float,
      *     original_price:float,
      *     rating:float,
-     *     review_count:int
+     *     review_count:int,
+     *     is_new:int,
+     *     is_sale:int,
+     *     is_demo:int
      * }>
      */
     public static function products(int $limit = 8, int $seed = 0): array
@@ -69,6 +72,9 @@ final class ThemeDemoCatalog
                 'original_price' => $original,
                 'rating' => min(5.0, 4.2 + (($n % 5) * 0.15)),
                 'review_count' => 12 + ($n * 23),
+                'is_new' => ($n % 3 === 0) ? 1 : 0,
+                'is_sale' => ($n % 4 === 0) ? 1 : 0,
+                'is_demo' => 1,
             ];
         }
 

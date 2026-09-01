@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Observer;
 
+use Weline\Framework\Cache\SharedResponseCachePolicy;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -26,6 +27,9 @@ class ResolvePreviewToken implements ObserverInterface
         if (!$this->previewTokenService->isPreviewMode()) {
             return;
         }
+
+        // Preview HTML must never be published into the anonymous storefront FPC.
+        SharedResponseCachePolicy::forbid('theme_preview_mode');
 
         $data->setData('is_preview', true);
         $data->setData('preview_token', (string)$this->previewTokenService->getTokenFromRequest());

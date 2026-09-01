@@ -205,7 +205,7 @@ use Weline\Framework\Event\EventsManager;
         <?php if (!empty($meta['params'])): ?>
         <div class="component-params">
             <h3><?= __('组件参数') ?></h3>
-            <w:form id="componentParamsForm" method="post" action="@var($this->getUrl('theme/backend/config/component/saveParams'))">
+            <w:form id="componentParamsForm" method="post" action="@url{'theme/backend/config/component/saveParams'}">
                 <input type="hidden" name="theme_id" value="<?= $theme->getId() ?>">
                 <input type="hidden" name="component" value="<?= htmlspecialchars($component ?? '') ?>">
                 <input type="hidden" name="area" value="<?= htmlspecialchars($area ?? 'frontend') ?>">

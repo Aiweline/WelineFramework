@@ -480,13 +480,28 @@
     }
 
     function writeLanguagePreference(lang, expiry = 365) {
-        writeCanonicalLocalStorage('locale', lang);
-        writeCookieValue('WELINE_USER_LANG', lang, expiry);
+        void expiry;
+        // Path-only language: clear legacy locale storage/cookie; do not rewrite.
+        try {
+            localStorage.removeItem('locale');
+            localStorage.removeItem('weline_user_lang');
+            localStorage.removeItem('WELINE_USER_LANG');
+        } catch (error) {
+        }
+        writeCookieValue('WELINE_USER_LANG', '', -1);
     }
 
     function writeCurrencyPreference(currency, expiry = 365) {
-        writeCanonicalLocalStorage('currency', currency);
-        writeCookieValue('WELINE_USER_CURRENCY', currency, expiry);
+        void expiry;
+        void currency;
+        try {
+            localStorage.removeItem('weline_user_currency');
+            localStorage.removeItem('api_doc_currency');
+            localStorage.removeItem('WELINE_USER_CURRENCY');
+            localStorage.removeItem(canonicalUrlLocalStorageKeys.currency);
+        } catch (error) {
+        }
+        writeCookieValue('WELINE_USER_CURRENCY', '', -1);
     }
 
     function isValidLocale(value) {
@@ -706,12 +721,6 @@
     }
 
     function detectCurrencyFallback() {
-        const params = new URLSearchParams(window.location.search);
-        const paramCurrency = params.get('currency');
-        if (paramCurrency && isValidCurrency(paramCurrency)) {
-            return paramCurrency.toUpperCase();
-        }
-
         const pathParts = window.location.pathname.split('/').filter(Boolean);
         for (let i = 0; i < pathParts.length; i++) {
             const part = pathParts[i];
@@ -720,11 +729,10 @@
             }
         }
 
-        for (const key of urlLocalStorageKeys.currency) {
-            const value = safeLocalStorageGet(key);
-            if (value && isValidCurrency(value)) {
-                return value.toUpperCase();
-            }
+        const params = new URLSearchParams(window.location.search);
+        const paramCurrency = params.get('currency');
+        if (paramCurrency && isValidCurrency(paramCurrency)) {
+            return paramCurrency.toUpperCase();
         }
 
         const config = getUrlConfig();
@@ -733,12 +741,6 @@
     }
 
     function detectLocaleFallback() {
-        const params = new URLSearchParams(window.location.search);
-        const paramLocale = params.get('locale');
-        if (paramLocale && isValidLocale(paramLocale)) {
-            return paramLocale;
-        }
-
         const pathParts = window.location.pathname.split('/').filter(Boolean);
         for (let i = 0; i < pathParts.length; i++) {
             const part = pathParts[i];
@@ -747,11 +749,24 @@
             }
         }
 
-        for (const key of urlLocalStorageKeys.locale) {
-            const value = safeLocalStorageGet(key);
-            if (value && isValidLocale(value)) {
-                return value;
+        const params = new URLSearchParams(window.location.search);
+        for (const key of ['locale', 'locale_code', 'lang']) {
+            const paramLocale = params.get(key);
+            if (paramLocale && isValidLocale(paramLocale)) {
+                return paramLocale.replace(/-/g, '_');
             }
+        }
+
+        try {
+            const el = document.documentElement;
+            const raw = el && typeof el.getAttribute === 'function'
+                ? (el.getAttribute('data-lang') || el.getAttribute('lang') || '')
+                : '';
+            const docLang = String(raw || (el && el.lang) || '').trim().replace(/-/g, '_');
+            if (docLang && isValidLocale(docLang)) {
+                return docLang;
+            }
+        } catch (error) {
         }
 
         const config = getUrlConfig();
@@ -2356,6 +2371,13 @@
                 const AccountModule = await moduleLoader.loadModule('account');
                 return AccountModule.frontendLogout();
             },
+            handleAuthRefreshSignal: async () => {
+                const AccountModule = await moduleLoader.loadModule('account');
+                if (AccountModule && typeof AccountModule.handleAuthRefreshSignal === 'function') {
+                    return AccountModule.handleAuthRefreshSignal();
+                }
+                return { handled: false, reason: 'unsupported' };
+            },
             getFrontendUser: () => {
                 const globalVarName = moduleLoader.getGlobalVarName('account');
                 if (window[globalVarName] && window[globalVarName]._instance) {
@@ -2953,6 +2975,7 @@
 
             setup: function () {
                 this.setupAccountDropdown();
+                this.setupAccountAuthRefresh();
                 this.setupKeyboardNavigation();
                 this.setupClickOutside();
             },
@@ -3006,6 +3029,20 @@
                             trigger.focus();
                         }
                     });
+                });
+            },
+
+            // FPC / auth redirect: let Account module refresh header chrome on w_auth=0|1
+            setupAccountAuthRefresh: function () {
+                if (!document.querySelector('[data-w-header-account="1"]')) {
+                    return;
+                }
+                if (!window.Weline || !window.Weline.Account
+                    || typeof window.Weline.Account.handleAuthRefreshSignal !== 'function') {
+                    return;
+                }
+                window.Weline.Account.handleAuthRefreshSignal().catch(function () {
+                    // Soft-fail: keep SSR chrome.
                 });
             },
 
@@ -3345,8 +3382,7 @@
     (function initLanguageSwitcher() {
         /**
          * 获取当前语言代码
-         * 优先级与服务端 State::getLang / WelineI18n 一致：URL 路径段 > Cookie > 配置
-         * （禁止 Cookie 覆盖 /en_US 等显式前缀，否则切换器会显示中文而页面仍是英文）
+         * 优先级：URL 路径段 > query lang > document/config（不再读取 Cookie）
          */
         function getCurrentLang() {
             const pathParts = window.location.pathname.split('/').filter(Boolean);
@@ -3354,11 +3390,6 @@
                 if (/^[a-z]{2}_[A-Z][a-z]+(_[A-Z]{2})?$/i.test(part)) {
                     return part;
                 }
-            }
-
-            const cookieLang = readCookieValue('WELINE_USER_LANG');
-            if (cookieLang) {
-                return cookieLang;
             }
 
             const urlParams = new URLSearchParams(window.location.search);
@@ -3601,9 +3632,6 @@
             // 次优先使用 urlWithLang 函数
             if (typeof window.urlWithLang === 'function') {
                 const langUrl = resolveThemeLanguageHref(lang);
-                // #region agent log
-                fetch('http://127.0.0.1:7803/ingest/6514f9de-23ec-4b43-be58-46df67f9b538',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'cf1e19'},body:JSON.stringify({sessionId:'cf1e19',runId:'pre-fix',hypothesisId:'H1',location:'theme.js:switchLang',message:'theme fallback language switch',data:{lang,langUrl,pathname:window.location.pathname},timestamp:Date.now()})}).catch(()=>{});
-                // #endregion
                 writeLanguagePreference(lang);
                 window.location.href = langUrl;
                 return;
@@ -3712,19 +3740,7 @@
          */
         function getCurrentCurrency() {
             const config = window.__WelineThemeConfig || runtimeConfig || {};
-            const cookieCurrency = readCookieValue('WELINE_USER_CURRENCY');
-            if (isValidCurrency(cookieCurrency, config)) {
-                return cookieCurrency.toUpperCase();
-            }
 
-            // 从 URL 参数获取
-            const urlParams = new URLSearchParams(window.location.search);
-            const urlCurrency = urlParams.get('currency');
-            if (isValidCurrency(urlCurrency, config)) {
-                return urlCurrency.toUpperCase();
-            }
-
-            // 从 URL 路径获取（如 /CNY/...）
             const pathParts = window.location.pathname.split('/').filter(Boolean);
             for (const part of pathParts) {
                 if (isValidCurrency(part, config)) {
@@ -3732,7 +3748,12 @@
                 }
             }
 
-            // 从配置获取
+            const urlParams = new URLSearchParams(window.location.search);
+            const urlCurrency = urlParams.get('currency');
+            if (isValidCurrency(urlCurrency, config)) {
+                return urlCurrency.toUpperCase();
+            }
+
             const fallbackCurrency = isValidCurrency(config.currentCurrency, config)
                 ? config.currentCurrency
                 : (config.defaultCurrency || 'CNY');

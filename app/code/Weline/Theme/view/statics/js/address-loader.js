@@ -2,8 +2,8 @@
     'use strict';
 
     var moduleName = 'themeAddress';
-    var modulePath = 'Weline_Theme::js/address.js?v=20260824-address-module-11';
-    var fallbackUrl = '/Weline/Theme/view/statics/js/address.js?v=20260824-address-module-11';
+    var modulePath = 'Weline_Theme::js/address.js?v=20260831-address-catalog-2';
+    var fallbackUrl = '/Weline/Theme/view/statics/js/address.js?v=20260831-address-catalog-2';
 
     function bootLoadedModule() {
         if (window.WelineThemeAddress && typeof window.WelineThemeAddress.boot === 'function') {

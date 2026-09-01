@@ -9,7 +9,7 @@ use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
 
-#[Table(comment: '主题部件表')]
+#[Table(comment: '主题部件表（绿field：布局权威在 scoped workspace；本表保留给 AI 草稿/部件目录，非 theme_layout 替代）')]
 #[Index(name: 'idx_theme_component_theme', columns: ['theme_id', 'area', 'component_code'])]
 #[Index(name: 'idx_theme_component_source', columns: ['source_type', 'is_active'])]
 class ThemeComponent extends Model

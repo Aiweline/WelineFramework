@@ -16,9 +16,7 @@ $area = $area ?: 'frontend';
 $scope = $scope ?: 'default';
 
 // API URLs
-$getVariableFileUrl = $this->getUrl('theme/backend/config/variables/getVariableFile');
-$saveUrl = $this->getUrl('theme/backend/config/variables/save');
-$refreshPreviewUrl = $this->getUrl('theme/backend/config/variables/refreshPreview');
+$getVariableFilePath = 'theme/backend/config/variables/getVariableFile';
 ?>
 <!DOCTYPE html>
 <html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
@@ -122,7 +120,7 @@ $refreshPreviewUrl = $this->getUrl('theme/backend/config/variables/refreshPrevie
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
     <script>
         const variableFileConfig = {
-            getVariableFileUrl: <?= json_encode((string)$getVariableFileUrl, $jsonForScriptFlags) ?>,
+            getVariableFileUrl: "@url{$getVariableFilePath}",
             themeId: <?= json_encode((string)($theme->getId() ?? ''), $jsonForScriptFlags) ?>,
             area: <?= json_encode((string)$area, $jsonForScriptFlags) ?>,
             scope: <?= json_encode((string)$scope, $jsonForScriptFlags) ?>,

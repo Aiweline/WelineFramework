@@ -2,6 +2,7 @@
 declare(strict_types=1);
 namespace Weline\Theme\Model;
 use Weline\Framework\Database\Model;
+use Weline\Framework\Database\Schema\SchemaDiffExcludedModelInterface;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
@@ -17,7 +18,7 @@ use Weline\Theme\Service\LayoutDataService;
 #[Index(name: 'idx_theme_status', columns: ['theme_id', 'page_type', 'status'])]
 #[Index(name: 'idx_theme_layout_identity', columns: ['theme_id', 'page_type', 'layout_option', 'scope', 'locale_code', 'target_type', 'target_id', 'status'])]
 #[Index(name: 'uk_theme_layout_identity_node', columns: ['layout_identity_hash'], type: 'UNIQUE')]
-class ThemeLayout extends Model
+class ThemeLayout extends Model implements SchemaDiffExcludedModelInterface
 {
     public const schema_table = 'theme_layout';
     public const schema_primary_key = 'layout_id';
@@ -76,7 +77,9 @@ class ThemeLayout extends Model
     public const PAGE_TYPE_CHECKOUT = 'checkout';     // layouts/checkout/
     public const PAGE_TYPE_ACCOUNT = 'account';       // layouts/account/
     public const PAGE_TYPE_DASHBOARD = 'dashboard';   // layouts/dashboard/
-    public const PAGE_TYPE_SEARCH = 'search';         // layouts/search/ (待创建)
+    public const PAGE_TYPE_SEARCH = 'search';         // layouts/search/
+    public const PAGE_TYPE_BLOG = 'blog';             // layouts/blog/
+    public const PAGE_TYPE_BLOG_CATEGORY = 'blog_category'; // layouts/blog_category/
     public const PAGE_TYPE_DEFAULT = 'default';       // layouts/default/
     // 区域常量
     public const AREA_HEADER = 'header';
@@ -115,6 +118,8 @@ class ThemeLayout extends Model
             self::PAGE_TYPE_ACCOUNT => __('账户中心'),
             self::PAGE_TYPE_DASHBOARD => __('Dashboard'),
             self::PAGE_TYPE_SEARCH => __('搜索页'),
+            self::PAGE_TYPE_BLOG => __('博客详情'),
+            self::PAGE_TYPE_BLOG_CATEGORY => __('博客分类'),
             self::PAGE_TYPE_DEFAULT => __('默认布局'),
         ];
     }

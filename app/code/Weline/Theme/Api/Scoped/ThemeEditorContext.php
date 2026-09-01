@@ -95,6 +95,36 @@ final readonly class ThemeEditorContext
         );
     }
 
+    public function withLocale(string $locale): self
+    {
+        return new self(
+            scope: $this->scope,
+            area: $this->area,
+            resourceType: $this->resourceType,
+            themeId: $this->themeId,
+            layoutType: $this->layoutType,
+            layoutOption: $this->layoutOption,
+            locale: $locale,
+            targetType: $this->targetType,
+            targetId: $this->targetId,
+        );
+    }
+
+    public function withLayoutType(string $layoutType): self
+    {
+        return new self(
+            scope: $this->scope,
+            area: $this->area,
+            resourceType: $this->resourceType,
+            themeId: $this->themeId,
+            layoutType: $layoutType,
+            layoutOption: $this->layoutOption,
+            locale: $this->locale,
+            targetType: $this->targetType,
+            targetId: $this->targetId,
+        );
+    }
+
     /** Binding identity intentionally ignores all downstream selectors. */
     public function identityParts(): array
     {

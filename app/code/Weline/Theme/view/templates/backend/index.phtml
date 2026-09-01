@@ -149,14 +149,23 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                         $activateTone = 'success';
                         $activateVariant = $isActive ? 'soft' : 'outline';
                         $activateLabel = $h($isActive ? __('已激活') : __('激活'));
-                        $previewUrl = $url->getBackendUrl('theme/backend/index/preview', ['theme_id' => $themeId, 'area' => $area]);
-                        $editorUrl = $url->getBackendUrl('theme/backend/theme-editor', ['theme_id' => $themeId]);
                         $themeNameAttr = $h($themeName);
                         $moduleNameEsc = $h($moduleName);
                         $parentThemeEsc = $h($parentThemeName);
                 ?>
                     <div class="theme-grid-item">
-                        <article class="<?= $h($cardClass) ?>" data-theme-id="<?= $themeId ?>" data-theme-name="<?= $themeNameAttr ?>" data-area="<?= $h($area) ?>" data-has-preview="<?= $hasPreview ? '1' : '0' ?>" data-needs-preview="<?= $hasPreview ? '0' : '1' ?>">
+                        <article
+                            class="<?= $h($cardClass) ?>"
+                            data-theme-id="<?= $themeId ?>"
+                            data-theme-name="<?= $themeNameAttr ?>"
+                            data-area="<?= $h($area) ?>"
+                            data-has-preview="<?= $hasPreview ? '1' : '0' ?>"
+                            data-needs-preview="<?= $hasPreview ? '0' : '1' ?>"
+                            data-edit-href="@backend-url{'theme/backend/theme-editor'|['theme_id' => $themeId]}"
+                            tabindex="0"
+                            role="link"
+                            aria-label="<?= $h(__('编辑主题')) ?>: <?= $themeNameAttr ?>"
+                        >
                             <div class="theme-preview">
                                 <img
                                     src="<?= $hasPreview ? $h($previewImageSrc) : '' ?>"
@@ -212,10 +221,10 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                                 >
                                     <w:icon name="check" size="sm"></w:icon> <?= $activateLabel ?>
                                 </button>
-                                <a href="<?= $h($previewUrl) ?>" class="w-button" target="_blank" rel="noopener" title="<?= $h(__('预览主题')) ?>" data-tone="primary" data-variant="outline" data-size="sm">
+                                <a href="@backend-url{'theme/backend/index/preview'|['theme_id' => $themeId, 'area' => $area]}" class="w-button" target="_blank" rel="noopener" title="<?= $h(__('预览主题')) ?>" data-tone="primary" data-variant="outline" data-size="sm">
                                     <w:icon name="eye" size="sm"></w:icon> <?= $h(__('预览')) ?>
                                 </a>
-                                <a href="<?= $h($editorUrl) ?>" class="w-button" title="<?= $h(__('可视化编辑')) ?>" data-tone="info" data-variant="outline" data-size="sm">
+                                <a href="@backend-url{'theme/backend/theme-editor'|['theme_id' => $themeId]}" class="w-button theme-edit-link" title="<?= $h(__('可视化编辑')) ?>" data-tone="info" data-variant="outline" data-size="sm">
                                     <w:icon name="palette" size="sm"></w:icon> <?= $h(__('编辑')) ?>
                                 </a>
                             </div>
@@ -242,7 +251,6 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
         </section>
     <?php endif; ?>
 </main>
-
 
 <div class="w-dialog" id="aiVirtualThemeModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
     <div class="w-dialog__frame" data-size="lg">
@@ -318,7 +326,6 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
     </div>
 </div>
 
-
 <div class="w-dialog" id="batchGenerateModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
     <div class="w-dialog__frame">
         <div class="w-dialog__surface theme-preview-modal">
@@ -346,7 +353,6 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
     </div>
 </div>
 
-
 <div class="w-dialog" id="singleGenerateModal" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden>
     <div class="w-dialog__frame">
         <div class="w-dialog__surface theme-preview-modal">
@@ -373,12 +379,11 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
     </div>
 </div>
 
-
 <script>
 (function() {
     'use strict';
 
-    const THEME_EDITOR_URL = '<?= $url->getBackendUrl('theme/backend/theme-editor') ?>';
+    const THEME_EDITOR_URL = '@backend-url{'theme/backend/theme-editor'}';
     const batchGenerateModalElement = document.getElementById('batchGenerateModal');
     const singleGenerateModalElement = document.getElementById('singleGenerateModal');
     const aiVirtualThemeModalElement = document.getElementById('aiVirtualThemeModal');
@@ -1666,6 +1671,42 @@ $countText = $h(__('前端 %{1} 个，后端 %{2} 个', [$frontendThemeCount, $b
                 successMessage: force ? '<?= __('预览图已刷新') ?>' : '<?= __('预览图生成成功') ?>',
                 errorMessage: force ? '<?= __('刷新失败') ?>' : '<?= __('生成失败') ?>',
             });
+        });
+    });
+
+    // 整卡进入编辑：预览图/标题区点击等同「编辑」；激活/预览/预览图按钮保持独立。
+    document.querySelectorAll('.theme-card[data-edit-href]').forEach(function(card) {
+        const editHref = String(card.getAttribute('data-edit-href') || '').trim();
+        if (!editHref) {
+            return;
+        }
+
+        const openThemeEditor = function() {
+            window.location.href = editHref;
+        };
+
+        card.addEventListener('click', function(event) {
+            if (event.defaultPrevented || event.button !== 0) {
+                return;
+            }
+            if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+            if (event.target.closest('a, button, input, label, select, textarea, .theme-actions')) {
+                return;
+            }
+            openThemeEditor();
+        });
+
+        card.addEventListener('keydown', function(event) {
+            if (event.target !== card) {
+                return;
+            }
+            if (event.key !== 'Enter' && event.key !== ' ') {
+                return;
+            }
+            event.preventDefault();
+            openThemeEditor();
         });
     });
 

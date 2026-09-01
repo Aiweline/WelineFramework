@@ -48,6 +48,23 @@ function getContainerWithChildren(array $areaWidgets): array {
 }
 
 /**
+ * Hex identity is node_uid only; keep data-layout-id for non-hex legacy keys.
+ */
+if (!function_exists('themeEditorWidgetIdentityAttr')) {
+function themeEditorWidgetIdentityAttr(array $widget): string {
+    $nodeUid = strtolower(trim((string)($widget['node_uid'] ?? '')));
+    if ($nodeUid !== '' && preg_match('/^[a-f0-9]{32}$/D', $nodeUid) === 1) {
+        return 'data-node-uid="' . htmlspecialchars($nodeUid, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"';
+    }
+    $layoutId = (int)($widget['layout_id'] ?? 0);
+    if ($layoutId > 0) {
+        return 'data-layout-id="' . $layoutId . '"';
+    }
+    return '';
+}
+}
+
+/**
  * 渲染单个部件（function_exists 防护：WLS 下同进程可能多次 include 本模板，避免重复声明）
  */
 if (!function_exists('renderWidget')) {
@@ -55,7 +72,8 @@ function renderWidget($template, array $widget, array $children = []): string {
     $widgetTemplate = $widget['meta']['template'] ?? '';
     $config = $widget['config'] ?? [];
     $widgetCode = (string)($widget['widget_code'] ?? '');
-    $layoutId = (int)($widget['layout_id'] ?? 0);
+    $identityAttr = themeEditorWidgetIdentityAttr($widget);
+    $identityAttrHtml = $identityAttr !== '' ? ' ' . $identityAttr : '';
     
     if (!$widgetTemplate) {
         return renderWidgetPlaceholder($widget);
@@ -87,8 +105,8 @@ function renderWidget($template, array $widget, array $children = []): string {
         $widgetName = htmlspecialchars((string)($widget['meta']['name'] ?? $widget['widget_code'] ?? ''));
         $widgetType = htmlspecialchars((string)($widget['widget_type'] ?? ''));
         return sprintf(
-            '<div class="preview-widget" data-layout-id="%d" data-widget-code="%s" data-widget-name="%s" data-widget-module="%s" data-widget-type="%s" data-config=\'%s\'>%s</div>',
-            $layoutId,
+            '<div class="preview-widget"%s data-widget-code="%s" data-widget-name="%s" data-widget-module="%s" data-widget-type="%s" data-config=\'%s\'>%s</div>',
+            $identityAttrHtml,
             htmlspecialchars((string)($widgetCode ?? '')),
             $widgetName,
             $widgetModule,
@@ -101,13 +119,13 @@ function renderWidget($template, array $widget, array $children = []): string {
         $widgetName = htmlspecialchars((string)($widget['meta']['name'] ?? $widget['widget_code'] ?? ''));
         $widgetType = htmlspecialchars((string)($widget['widget_type'] ?? ''));
         return sprintf(
-            '<div class="preview-widget widget-error" data-layout-id="%d" data-widget-code="%s" data-widget-name="%s" data-widget-module="%s" data-widget-type="%s">
+            '<div class="preview-widget widget-error"%s data-widget-code="%s" data-widget-name="%s" data-widget-module="%s" data-widget-type="%s">
                 <div class="widget-error-content">
                     <i class="ri-error-warning-line"></i>
                     <span>渲染错误: %s</span>
                 </div>
             </div>',
-            $layoutId,
+            $identityAttrHtml,
             htmlspecialchars((string)($widgetCode ?? '')),
             $widgetName,
             $widgetModule,
@@ -124,19 +142,20 @@ function renderWidget($template, array $widget, array $children = []): string {
 if (!function_exists('renderWidgetPlaceholder')) {
 function renderWidgetPlaceholder(array $widget): string {
     $name = (string)($widget['meta']['name'] ?? $widget['widget_code'] ?? '未知部件');
-    $layoutId = (int)($widget['layout_id'] ?? 0);
+    $identityAttr = themeEditorWidgetIdentityAttr($widget);
+    $identityAttrHtml = $identityAttr !== '' ? ' ' . $identityAttr : '';
     $widgetCode = (string)($widget['widget_code'] ?? '');
     $widgetModule = (string)($widget['widget_module'] ?? '');
     $widgetType = (string)($widget['widget_type'] ?? '');
 
     return sprintf(
-        '<div class="preview-widget widget-placeholder" data-layout-id="%d" data-widget-code="%s" data-widget-name="%s" data-widget-module="%s" data-widget-type="%s">
+        '<div class="preview-widget widget-placeholder"%s data-widget-code="%s" data-widget-name="%s" data-widget-module="%s" data-widget-type="%s">
             <div class="placeholder-content">
                 <i class="ri-widget-line"></i>
                 <span>%s</span>
             </div>
         </div>',
-        $layoutId,
+        $identityAttrHtml,
         htmlspecialchars((string)($widgetCode ?? '')),
         htmlspecialchars((string)($name ?? '')),
         htmlspecialchars((string)($widgetModule ?? '')),
@@ -451,11 +470,21 @@ function renderAreaPlaceholder(string $area, string $label): string {
     </div>
     
     <script>
+    // Hex identity is node_uid only; keep data-layout-id for non-hex legacy keys.
+    function resolvePreviewWidgetIdentity(element) {
+        const nodeUid = String(element?.getAttribute?.('data-node-uid') || element?.dataset?.nodeUid || '')
+            .trim()
+            .toLowerCase();
+        if (/^[a-f0-9]{32}$/.test(nodeUid)) {
+            return nodeUid;
+        }
+        return String(element?.dataset?.layoutId || element?.getAttribute?.('data-layout-id') || '').trim();
+    }
     // 预览页面内的部件点击事件（通知父窗口）
     document.querySelectorAll('.preview-widget').forEach(widget => {
         widget.addEventListener('click', function(e) {
             e.stopPropagation();
-            const layoutId = this.dataset.layoutId;
+            const layoutId = resolvePreviewWidgetIdentity(this);
             const widgetCode = this.dataset.widgetCode;
             const widgetName = this.dataset.widgetName;
             const widgetModule = this.dataset.widgetModule;

@@ -27,6 +27,7 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
 
         $top = $service->megaMenuPanelLogicalKey('mega-menu-electronics', false, $item);
         $drawer = $service->megaMenuPanelLogicalKey('mega-menu-electronics', true, $item);
+        $bannerOff = $service->megaMenuPanelLogicalKey('mega-menu-electronics', false, $item, false);
         $other = $service->megaMenuPanelLogicalKey('mega-menu-electronics', false, [
             'text' => 'Electronics',
             'url' => '/categories/electronics',
@@ -35,10 +36,13 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
             ],
         ]);
 
-        self::assertStringContainsString('theme.header.mega_panel.top.', $top);
-        self::assertStringContainsString('theme.header.mega_panel.drawer.', $drawer);
+        self::assertStringContainsString('theme.header.mega_panel.v2.top.', $top);
+        self::assertStringContainsString('theme.header.mega_panel.v2.drawer.', $drawer);
+        self::assertStringContainsString('.banner1.', $top);
+        self::assertStringContainsString('.banner0.', $bannerOff);
         self::assertNotSame($top, $drawer);
         self::assertNotSame($top, $other);
+        self::assertNotSame($top, $bannerOff);
     }
 
     public function testSidebarNavLogicalKeyDependsOnNavList(): void

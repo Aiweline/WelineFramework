@@ -21,4 +21,14 @@
     root.dataset.themePreference = preference;
     root.dataset.theme = theme;
     root.style.colorScheme = theme;
+    if (area === 'backend') {
+        try {
+            const desktop = typeof window.matchMedia === 'function'
+                && window.matchMedia('(min-width: 64rem)').matches;
+            if (desktop && localStorage.getItem('weline_backend_sidebar_collapsed') === 'true') {
+                root.dataset.backendSidebarCollapsed = 'true';
+            }
+        } catch (_sidebarError) {
+        }
+    }
 })();

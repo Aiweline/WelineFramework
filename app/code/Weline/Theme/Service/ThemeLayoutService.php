@@ -8,14 +8,19 @@ use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
+use Weline\Theme\Api\Scoped\ThemeEditorContext;
+use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Interface\ThemePlaceableRegistryInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService;
 use Weline\Widget\Api\WidgetRegistryInterface;
 
 /**
- * 主题布局服务
- * 管理主题的部件布局配置
+ * 主题布局服务（绿field 门面）。
+ *
+ * 权威读写走 ThemeScopedLayoutWriteService / ThemeScopedWorkspace（node_uid）。
+ * 下列以数字 layout_id 为键的 API 在 theme_layout DROP 后一律 fail-closed，保留签名供旧调用方编译。
  */
 class ThemeLayoutService
 {
@@ -110,29 +115,22 @@ class ThemeLayoutService
      */
     private function deleteLayoutRows(int $themeId, string $pageType, string $status, ?array $identity = null): int
     {
-        $query = $this->themeLayout->clearQuery()->clearData()
-            ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-            ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
-            ->where(ThemeLayout::schema_fields_STATUS, $status);
-        if ($identity !== null) {
-            $query = $this->applyLayoutIdentityFilters($query, $this->normalizeLayoutIdentity($identity));
-        }
-        $rows = $query->select()->fetchArray();
+        // Greenfield: theme_layout is dropped. Row deletes are no-ops.
+        unset($themeId, $pageType, $status, $identity);
 
-        $layoutIds = [];
-        foreach ((array)$rows as $row) {
-            $layoutId = (int)($row[ThemeLayout::schema_fields_ID] ?? 0);
-            if ($layoutId > 0) {
-                $layoutIds[$layoutId] = true;
-            }
-        }
+        return 0;
+    }
 
-        foreach (array_keys($layoutIds) as $layoutId) {
-            $this->themeLayout->clearQuery()->clearData()->load($layoutId)->delete();
+    private function legacyLayoutTableExists(): bool
+    {
+        try {
+            return (bool)$this->themeLayout
+                ->getConnection()
+                ->getConnector()
+                ->tableExist(ThemeLayout::schema_table);
+        } catch (\Throwable) {
+            return false;
         }
-        $this->themeLayout->clearQuery()->clearData();
-
-        return count($layoutIds);
     }
 
     private function hasWidgetPlacementsInput(array $layoutData): bool
@@ -144,6 +142,14 @@ class ThemeLayoutService
         }
 
         return false;
+    }
+
+    /** @param array<string, mixed> $row */
+    private function isNoWidgetPlacementsRow(array $row): bool
+    {
+        return (string)($row[ThemeLayout::schema_fields_WIDGET_MODULE] ?? '') === self::NO_PLACEMENTS_WIDGET_MODULE
+            && (string)($row[ThemeLayout::schema_fields_WIDGET_TYPE] ?? '') === self::NO_PLACEMENTS_WIDGET_TYPE
+            && (string)($row[ThemeLayout::schema_fields_WIDGET_CODE] ?? '') === self::NO_PLACEMENTS_WIDGET_CODE;
     }
 
     /**
@@ -160,29 +166,42 @@ class ThemeLayoutService
     private function markNoWidgetPlacements(int $themeId, string $pageType, string $status, array $identity): void
     {
         $identity = $this->normalizeLayoutIdentity($identity);
-        if ($this->hasNoWidgetPlacements($themeId, $pageType, $status, $identity)) {
-            return;
+        try {
+            /** @var ThemeScopedLayoutWriteService $layoutWriter */
+            $layoutWriter = ObjectManager::getInstance(ThemeScopedLayoutWriteService::class);
+            /** @var ThemeScopedWorkspaceInterface $workspace */
+            $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+            $context = $this->buildScopedLayoutContext($themeId, $pageType, $identity);
+            $layoutWriter->clearDraftNodes($context, 'system:theme-layout-service', '');
+            $layoutWriter->addWidget($context, [
+                'theme_id' => $themeId,
+                'page_type' => $pageType,
+                'area' => ThemeLayout::AREA_CONTENT,
+                'slot_id' => null,
+                'widget_code' => self::NO_PLACEMENTS_WIDGET_CODE,
+                'widget_module' => self::NO_PLACEMENTS_WIDGET_MODULE,
+                'widget_type' => self::NO_PLACEMENTS_WIDGET_TYPE,
+                'config' => ['no_widget_placements' => true],
+                'sort_order' => 0,
+                'is_active' => false,
+                'exclusive' => false,
+            ], 'system:theme-layout-service', '');
+            if ($status === ThemeLayout::STATUS_PUBLISHED) {
+                $state = $workspace->load($context, true);
+                $workspace->publish(
+                    $context,
+                    (int)($state['revision'] ?? 0),
+                    isset($state['expected_parent_release_id'])
+                        ? (int)$state['expected_parent_release_id']
+                        : null,
+                    'system:theme-layout-service',
+                    '',
+                    'layout_marked_no_widget_placements',
+                );
+            }
+        } catch (\Throwable) {
+            // fail-closed: scoped marker is best-effort after theme_layout drop
         }
-
-        $this->themeLayout->clearQuery()->clearData()
-            ->setThemeId($themeId)
-            ->setPageType($pageType)
-            ->setLayoutOption($identity['layout_option'])
-            ->setScope($identity['scope'])
-            ->setLocaleCode($identity['locale_code'])
-            ->setTargetType($identity['target_type'])
-            ->setTargetId($identity['target_id'])
-            ->setArea(ThemeLayout::AREA_CONTENT)
-            ->setSlotId(null)
-            ->setWidgetCode(self::NO_PLACEMENTS_WIDGET_CODE)
-            ->setWidgetModule(self::NO_PLACEMENTS_WIDGET_MODULE)
-            ->setWidgetType(self::NO_PLACEMENTS_WIDGET_TYPE)
-            ->setWidgetConfig(['no_widget_placements' => true])
-            ->setSortOrder(0)
-            ->setIsActive(false)
-            ->setStatus($status)
-            ->save();
-        $this->themeLayout->clearQuery()->clearData();
     }
 
     /**
@@ -190,24 +209,8 @@ class ThemeLayoutService
      */
     private function deleteNoWidgetPlacementsMarker(int $themeId, string $pageType, string $status, array $identity): void
     {
-        $identity = $this->normalizeLayoutIdentity($identity);
-        $query = $this->themeLayout->clearQuery()->clearData()
-            ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-            ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
-            ->where(ThemeLayout::schema_fields_STATUS, $status)
-            ->where(ThemeLayout::schema_fields_WIDGET_MODULE, self::NO_PLACEMENTS_WIDGET_MODULE)
-            ->where(ThemeLayout::schema_fields_WIDGET_TYPE, self::NO_PLACEMENTS_WIDGET_TYPE)
-            ->where(ThemeLayout::schema_fields_WIDGET_CODE, self::NO_PLACEMENTS_WIDGET_CODE);
-        $query = $this->applyLayoutIdentityFilters($query, $identity);
-        $rows = $query->select()->fetchArray();
-
-        foreach ((array)$rows as $row) {
-            $layoutId = (int)($row[ThemeLayout::schema_fields_ID] ?? 0);
-            if ($layoutId > 0) {
-                $this->themeLayout->clearQuery()->clearData()->load($layoutId)->delete();
-            }
-        }
-        $this->themeLayout->clearQuery()->clearData();
+        // Greenfield: marker lives in scoped draft nodes; cleared by addWidget/clearDraftNodes paths.
+        unset($themeId, $pageType, $status, $identity);
     }
 
     /**
@@ -217,6 +220,11 @@ class ThemeLayoutService
     {
         try {
             $identity = $this->normalizeLayoutIdentity($identity);
+            if (!$this->legacyLayoutTableExists()) {
+                // Greenfield: no theme_layout sentinel table; empty vs never-configured
+                // is owned by scoped workspace revision, not a marker row.
+                return false;
+            }
             foreach ($this->getLayoutScopeNormalizer()->readFallbackScopes($identity['scope']) as $scope) {
                 foreach ($this->localeReadCandidates($identity['locale_code']) as $localeCode) {
                     $candidate = $identity;
@@ -243,8 +251,6 @@ class ThemeLayoutService
                             return true;
                         }
                     }
-                    // Any row at the nearest exact/legacy identity owns the
-                    // layout. Do not inspect a farther neutral or parent row.
                     return false;
                 }
             }
@@ -287,92 +293,21 @@ class ThemeLayoutService
         bool $strict = false,
     ): array
     {
-        // 按区域分组
+        try {
+            return $this->getScopedLayout($themeId, $pageType, $status, $identity);
+        } catch (\Throwable $scopedError) {
+            if ($strict) {
+                throw new \RuntimeException((string)__('Theme 布局读取失败。'), 0, $scopedError);
+            }
+        }
+
+        // Empty skeleton only — legacy theme_layout is not an authority after greenfield.
         $groupedLayout = [];
         foreach (ThemeLayout::getAreas() as $areaCode => $areaLabel) {
             $groupedLayout[$areaCode] = [
                 'label' => $areaLabel,
                 'widgets' => [],
             ];
-        }
-
-        try {
-            $normalizedIdentity = $this->normalizeLayoutIdentity($identity);
-            $layouts = [];
-            foreach ($this->getLayoutScopeNormalizer()->readFallbackScopes($normalizedIdentity['scope']) as $scope) {
-                foreach ($this->localeReadCandidates($normalizedIdentity['locale_code']) as $localeCode) {
-                    $candidateIdentity = $normalizedIdentity;
-                    $candidateIdentity['scope'] = $scope;
-                    $candidateIdentity['locale_code'] = $localeCode;
-                    $query = $this->themeLayout->reset()
-                        ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-                        ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
-                        ->where(ThemeLayout::schema_fields_STATUS, $status);
-
-                    $candidateRows = $this->applyNormalizedLayoutIdentityFilters($query, $candidateIdentity)
-                        ->order(ThemeLayout::schema_fields_AREA, 'ASC')
-                        ->order(ThemeLayout::schema_fields_SORT_ORDER, 'ASC')
-                        ->order(ThemeLayout::schema_fields_ID, 'ASC')
-                        ->select()
-                        ->fetchArray();
-                    if (!is_array($candidateRows) || $candidateRows === []) {
-                        continue;
-                    }
-
-                    // Any exact rows establish ownership. An all-inactive set
-                    // is the explicit empty-layout tombstone and must stop both
-                    // legacy-locale and parent-Scope fallback.
-                    $layouts = array_values(array_filter(
-                        $candidateRows,
-                        static fn(mixed $row): bool => is_array($row)
-                            && (int)($row[ThemeLayout::schema_fields_IS_ACTIVE] ?? 0) === 1,
-                    ));
-                    break 2;
-                }
-            }
-
-            // 确保 layouts 是数组
-            if (!is_array($layouts)) {
-                return $groupedLayout;
-            }
-
-            foreach ($layouts as $layout) {
-                // 确保 layout 是数组
-                if (!is_array($layout)) {
-                    continue;
-                }
-                
-                $area = $layout[ThemeLayout::schema_fields_AREA] ?? '';
-                if (isset($groupedLayout[$area])) {
-                    $config = $layout[ThemeLayout::schema_fields_CONFIG] ?? '{}';
-                    $groupedLayout[$area]['widgets'][] = [
-                        'layout_id' => $layout[ThemeLayout::schema_fields_ID] ?? 0,
-                        'node_uid' => $layout[ThemeLayout::schema_fields_NODE_UID] ?? null,
-                        'area' => $area,
-                        'page_type' => $layout[ThemeLayout::schema_fields_PAGE_TYPE] ?? $pageType,
-                        'widget_code' => $layout[ThemeLayout::schema_fields_WIDGET_CODE] ?? '',
-                        'widget_module' => $layout[ThemeLayout::schema_fields_WIDGET_MODULE] ?? '',
-                        'widget_type' => $layout[ThemeLayout::schema_fields_WIDGET_TYPE] ?? '',
-                        'slot_id' => $layout[ThemeLayout::schema_fields_SLOT_ID] ?? null,
-                        'layout_option' => $layout[ThemeLayout::schema_fields_LAYOUT_OPTION] ?? 'default',
-                        'scope' => $layout[ThemeLayout::schema_fields_SCOPE] ?? 'default',
-                        'locale_code' => $layout[ThemeLayout::schema_fields_LOCALE_CODE] ?? '',
-                        'target_type' => $layout[ThemeLayout::schema_fields_TARGET_TYPE] ?? 'global',
-                        'target_id' => (int)($layout[ThemeLayout::schema_fields_TARGET_ID] ?? 0),
-                        'config' => is_string($config) ? json_decode($config, true) : $config,
-                        'sort_order' => $layout[ThemeLayout::schema_fields_SORT_ORDER] ?? 0,
-                        'status' => $layout[ThemeLayout::schema_fields_STATUS] ?? $status,
-                    ];
-                }
-            }
-        } catch (\Throwable $throwable) {
-            if ($strict) {
-                throw new \RuntimeException((string)__('Theme 布局读取失败。'), 0, $throwable);
-            }
-            // Legacy storefront reads remain tolerant while an optional Theme
-            // table is not installed. Mutation/publication boundaries must use
-            // strict=true so a database failure is never interpreted as an
-            // intentional empty layout.
         }
 
         return $groupedLayout;
@@ -532,116 +467,93 @@ class ThemeLayoutService
     public function saveWidget(array $data): int
     {
         return $this->atomicWrite('theme_layout_widget_save', function () use ($data): int {
-        $layoutId = $data['layout_id'] ?? 0;
-        $slotId = $data['slot_id'] ?? null;
-        $exclusive = (bool)($data['exclusive'] ?? false);
-        $status = $data['status'] ?? ThemeLayout::STATUS_DRAFT;
-        $sortOrder = (int)($data['sort_order'] ?? 0);
-        $identity = $this->normalizeLayoutIdentity($data);
-        $pageType = $data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT;
-        $isNoPlacementsMarker = (string)($data['widget_module'] ?? '') === self::NO_PLACEMENTS_WIDGET_MODULE
-            && (string)($data['widget_type'] ?? '') === self::NO_PLACEMENTS_WIDGET_TYPE
-            && (string)($data['widget_code'] ?? '') === self::NO_PLACEMENTS_WIDGET_CODE;
-        $config = is_array($data['config'] ?? null) ? $data['config'] : [];
+            $status = (string)($data['status'] ?? ThemeLayout::STATUS_DRAFT);
+            $identity = $this->normalizeLayoutIdentity($data);
+            $pageType = (string)($data['page_type'] ?? ThemeLayout::PAGE_TYPE_DEFAULT);
+            $themeId = (int)($data['theme_id'] ?? 0);
+            if ($themeId <= 0) {
+                throw new \InvalidArgumentException('theme_id_required');
+            }
 
-        // saveWidget() is a public persistence path used by editor endpoints,
-        // seeders, version restores and compatibility callers. Enforce the
-        // same typed-image contract before shifting/deleting any durable rows.
-        if (!$isNoPlacementsMarker) {
-            $this->getImageContentValidator()->validate([
-                (string)($data['area'] ?? '') => [[
-                    'widget_module' => (string)($data['widget_module'] ?? ''),
-                    'widget_type' => (string)($data['widget_type'] ?? ''),
-                    'widget_code' => (string)($data['widget_code'] ?? ''),
+            $isNoPlacementsMarker = (string)($data['widget_module'] ?? '') === self::NO_PLACEMENTS_WIDGET_MODULE
+                && (string)($data['widget_type'] ?? '') === self::NO_PLACEMENTS_WIDGET_TYPE
+                && (string)($data['widget_code'] ?? '') === self::NO_PLACEMENTS_WIDGET_CODE;
+            $config = is_array($data['config'] ?? null) ? $data['config'] : [];
+
+            if (!$isNoPlacementsMarker) {
+                $this->getImageContentValidator()->validate([
+                    (string)($data['area'] ?? '') => [[
+                        'widget_module' => (string)($data['widget_module'] ?? ''),
+                        'widget_type' => (string)($data['widget_type'] ?? ''),
+                        'widget_code' => (string)($data['widget_code'] ?? ''),
+                        'page_type' => $pageType,
+                        'target_type' => (string)($identity['target_type'] ?? $data['target_type'] ?? ''),
+                        'config' => $config,
+                    ]],
+                ], [
+                    'phase' => 'save',
                     'page_type' => $pageType,
+                    'layout_area' => (string)($data['area'] ?? ''),
                     'target_type' => (string)($identity['target_type'] ?? $data['target_type'] ?? ''),
-                    'config' => $config,
-                ]],
-            ], [
-                'phase' => 'save',
-                'page_type' => $pageType,
-                'layout_area' => (string)($data['area'] ?? ''),
-                'target_type' => (string)($identity['target_type'] ?? $data['target_type'] ?? ''),
-            ]);
-        }
+                ]);
+            }
 
-        // 如果是独占插槽，先删除该插槽/区域中相同类型的部件（仅限同状态）
-        // 模板内嵌 CoW：带 template_ref 的物化不得清空同槽其他实例
-        $hasTemplateRef = trim((string)($config[TemplateInlineWidgetMerger::CONFIG_TEMPLATE_REF] ?? '')) !== '';
-        if ($exclusive && !$layoutId && !$hasTemplateRef) {
-            $this->removeExclusiveWidgets(
-                (int)$data['theme_id'],
-                $pageType,
-                $data['area'],
-                $slotId,
-                $data['widget_code'],
-                $status,
-                $identity
-            );
-        }
+            /** @var ThemeScopedLayoutWriteService $layoutWriter */
+            $layoutWriter = ObjectManager::getInstance(ThemeScopedLayoutWriteService::class);
+            /** @var ThemeScopedWorkspaceInterface $workspace */
+            $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+            $context = $this->buildScopedLayoutContext($themeId, $pageType, $identity);
 
-        // 非独占插入：将插入位置及之后的部件 sort_order +1，为新部件腾出位置
-        if (!$exclusive && !$layoutId) {
-            $this->shiftSortOrder(
-                (int)$data['theme_id'],
-                $pageType,
-                $data['area'],
-                $slotId,
-                $sortOrder,
-                $status,
-                $identity
-            );
-        }
+            $nodeUid = \strtolower(\trim((string)($data['node_uid'] ?? '')));
+            $layoutId = (int)($data['layout_id'] ?? 0);
 
-        if (!$layoutId && !$isNoPlacementsMarker) {
-            $this->deleteNoWidgetPlacementsMarker((int)$data['theme_id'], (string)$pageType, (string)$status, $identity);
-        }
+            // Legacy numeric layout_id updates are dead after theme_layout drop.
+            if ($layoutId > 0 && !\preg_match('/^[a-f0-9]{32}$/D', $nodeUid)) {
+                throw new \RuntimeException((string)__('Theme 布局写入已迁移到 scoped node_uid，不再支持 layout_id 更新。'));
+            }
 
-        if ($layoutId) {
-            // Lock and seal the persisted target identity. A caller may edit
-            // config/placement, but cannot move an arbitrary layout_id across
-            // Website/Store/locale/target boundaries.
-            $layout = $this->loadLayoutForUpdate((int)$layoutId);
-            $this->assertLayoutIdentityMatches(
-                $layout,
-                (int)($data['theme_id'] ?? 0),
-                (string)$pageType,
-                (string)$status,
-                $identity,
-            );
-            $existingConfig = $layout->getWidgetConfig();
-        } else {
-            $layout = clone $this->themeLayout;
-            $layout->clearQuery()->clearData();
-            $existingConfig = [];
-        }
+            if (\preg_match('/^[a-f0-9]{32}$/D', $nodeUid) === 1) {
+                $state = $workspace->load($context, true);
+                $nodes = \is_array($state['draft_payload']['nodes'] ?? null) ? $state['draft_payload']['nodes'] : [];
+                if (isset($nodes[$nodeUid]) && \is_array($nodes[$nodeUid])) {
+                    $existingConfig = \is_array($nodes[$nodeUid]['config'] ?? null)
+                        ? $nodes[$nodeUid]['config']
+                        : [];
+                    $config = $this->withWidgetI18nInstance($config, $existingConfig);
+                    $layoutWriter->updateWidgetConfig(
+                        $context,
+                        $nodeUid,
+                        $config,
+                        'system:theme-layout-service',
+                        '',
+                    );
+                } else {
+                    $data['node_uid'] = $nodeUid;
+                    $data['config'] = $this->withWidgetI18nInstance($config, []);
+                    $layoutWriter->addWidget($context, $data, 'system:theme-layout-service', '');
+                }
+            } else {
+                $data['config'] = $this->withWidgetI18nInstance($config, []);
+                $layoutWriter->addWidget($context, $data, 'system:theme-layout-service', '');
+            }
 
-        $config = $this->withWidgetI18nInstance($config, $existingConfig);
+            if ($status === ThemeLayout::STATUS_PUBLISHED) {
+                $state = $workspace->load($context, true);
+                $workspace->publish(
+                    $context,
+                    (int)($state['revision'] ?? 0),
+                    isset($state['expected_parent_release_id'])
+                        ? (int)$state['expected_parent_release_id']
+                        : null,
+                    'system:theme-layout-service',
+                    '',
+                    'layout_widget_published_via_theme_layout_service',
+                );
+                $this->purgePublishedLayoutCaches($themeId);
+            }
 
-        $layout = $layout
-            ->setThemeId((int)$data['theme_id'])
-            ->setPageType($pageType)
-            ->setLayoutOption($identity['layout_option'])
-            ->setScope($identity['scope'])
-            ->setLocaleCode($identity['locale_code'])
-            ->setTargetType($identity['target_type'])
-            ->setTargetId($identity['target_id'])
-            ->setArea($data['area'])
-            ->setSlotId($slotId)
-            ->setWidgetCode($data['widget_code'])
-            ->setWidgetModule($data['widget_module'])
-            ->setWidgetType($data['widget_type'] ?? '')
-            ->setWidgetConfig($config)
-            ->setSortOrder($sortOrder)
-            ->setIsActive((bool)($data['is_active'] ?? true))
-            ->setStatus($status);
-        $nodeUid = \strtolower(\trim((string)($data['node_uid'] ?? '')));
-        if ($nodeUid !== '') {
-            $layout->setNodeUid($nodeUid);
-        }
-        $layout->save();
-
-        return $layout->getLayoutId();
+            // No legacy layout_id after greenfield.
+            return 0;
         });
     }
 
@@ -650,6 +562,9 @@ class ThemeLayoutService
      */
     private function shiftSortOrder(int $themeId, string $pageType, string $area, ?string $slotId, int $fromSortOrder, string $status, array $identity = []): void
     {
+        if (!$this->legacyLayoutTableExists()) {
+            return;
+        }
         try {
             $query = $this->themeLayout->clearQuery()
                 ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
@@ -693,6 +608,9 @@ class ThemeLayoutService
      */
     private function removeExclusiveWidgets(int $themeId, string $pageType, string $area, ?string $slotId, string $widgetCode, string $status = ThemeLayout::STATUS_DRAFT, array $identity = []): void
     {
+        if (!$this->legacyLayoutTableExists()) {
+            return;
+        }
         try {
             $query = $this->themeLayout->clearQuery()
                 ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
@@ -737,60 +655,15 @@ class ThemeLayoutService
     }
 
     /**
-     * 清理孤儿部件。
-     *
-     * 只对独占插槽做同 slot 收敛；普通业务插槽允许多个部件共存，比如 Dashboard 的
-     * dashboard-summary/dashboard-analysis/dashboard-side/dashboard-detail。
+     * @deprecated Greenfield: theme_layout dropped. Orphan cleanup is scoped-workspace only.
      *
      * @param array<string,mixed> $identity layout_option/scope/target_type/target_id
      */
     public function cleanOrphanWidgets(int $themeId, ?string $pageType = null, array $identity = []): int
     {
-        $cleaned = 0;
-        $identity = $this->normalizeLayoutIdentity($identity);
-        
-        try {
-            $pageTypes = $pageType ? [$pageType] : array_keys(ThemeLayout::getPageTypes());
-            
-            foreach ($pageTypes as $type) {
-                foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
-                    $layout = $this->getLayout($themeId, $type, $status, $identity);
-                    
-                    foreach ($layout as $area => $areaData) {
-                        $slotWidgets = []; // slot_id => [layout_ids...]
-                        
-                        foreach ($areaData['widgets'] as $widget) {
-                            $slotId = $widget['slot_id'] ?? '';
-                            if (empty($slotId) || !$this->isExclusivePublishSlot((string)$slotId)) {
-                                continue;
-                            }
-                            
-                            $slotWidgets[$slotId][] = $widget['layout_id'];
-                        }
-                        
-                        foreach ($slotWidgets as $slotId => $layoutIds) {
-                            if (count($layoutIds) <= 1) {
-                                continue;
-                            }
-                            
-                            // 排序，保留最大的 layout_id
-                            sort($layoutIds);
-                            array_pop($layoutIds); // 移除最后一个（保留）
-                            
-                            // 删除多余的
-                            foreach ($layoutIds as $removeId) {
-                                $this->deleteWidget($removeId);
-                                $cleaned++;
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (\Exception $e) {
-            // 清理失败不影响发布
-        }
-        
-        return $cleaned;
+        unset($themeId, $pageType, $identity);
+
+        return 0;
     }
 
     /**
@@ -805,53 +678,72 @@ class ThemeLayoutService
         string $status = ThemeLayout::STATUS_DRAFT,
         array $identity = []
     ): bool {
-        return $this->atomicWrite('theme_layout_replace_rows', function () use (
-            $themeId,
-            $pageType,
-            $layoutData,
-            $status,
-            $identity,
-        ): bool {
-            $identity = $this->normalizeLayoutIdentity($identity);
-            // Reject new URL-backed image fields and dynamic <img src> markup before
-            // deleting the previous durable snapshot. Full asset/access/alt checks
-            // remain publication-time concerns because a draft may need review.
-            $this->getImageContentValidator()->validate($layoutData, ['phase' => 'save']);
+        try {
+            return $this->atomicWrite('theme_layout_replace_rows', function () use (
+                $themeId,
+                $pageType,
+                $layoutData,
+                $status,
+                $identity,
+            ): bool {
+                $identity = $this->normalizeLayoutIdentity($identity);
+                $this->getImageContentValidator()->validate($layoutData, ['phase' => 'save']);
 
-            // 先删除该页面该状态的所有布局
-            $this->deleteLayoutRows($themeId, $pageType, $status, $identity);
+                /** @var ThemeScopedLayoutWriteService $layoutWriter */
+                $layoutWriter = ObjectManager::getInstance(ThemeScopedLayoutWriteService::class);
+                /** @var ThemeScopedWorkspaceInterface $workspace */
+                $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+                $context = $this->buildScopedLayoutContext($themeId, $pageType, $identity);
 
-            if (!$this->hasWidgetPlacementsInput($layoutData)) {
-                $this->markNoWidgetPlacements($themeId, $pageType, $status, $identity);
-                return true;
-            }
-
-            // 保存新布局
-            foreach ($layoutData as $area => $widgets) {
-                foreach ($widgets as $index => $widget) {
-                    $this->saveWidget([
-                        'theme_id' => $themeId,
-                        'page_type' => $pageType,
-                        'layout_option' => $identity['layout_option'],
-                        'scope' => $identity['scope'],
-                        'locale_code' => $identity['locale_code'],
-                        'target_type' => $identity['target_type'],
-                        'target_id' => $identity['target_id'],
-                        'area' => $area,
-                        'widget_code' => $widget['widget_code'],
-                        'widget_module' => $widget['widget_module'],
-                        'widget_type' => $widget['widget_type'] ?? '',
-                        'slot_id' => $widget['slot_id'] ?? null,
-                        'config' => $widget['config'] ?? [],
-                        'sort_order' => $index,
-                        'is_active' => $widget['is_active'] ?? true,
-                        'status' => $status,
-                    ]);
+                if (!$this->hasWidgetPlacementsInput($layoutData)) {
+                    $this->markNoWidgetPlacements($themeId, $pageType, $status, $identity);
+                } else {
+                    $snapshot = [];
+                    foreach ($layoutData as $area => $widgets) {
+                        if (!\is_array($widgets)) {
+                            continue;
+                        }
+                        $normalizedWidgets = [];
+                        foreach ($widgets as $index => $widget) {
+                            if (!\is_array($widget)) {
+                                continue;
+                            }
+                            if (!isset($widget['sort_order'])) {
+                                $widget['sort_order'] = (int)$index;
+                            }
+                            unset($widget['layout_id']);
+                            $normalizedWidgets[] = $widget;
+                        }
+                        $snapshot[(string)$area] = ['widgets' => \array_values($normalizedWidgets)];
+                    }
+                    $layoutWriter->replaceDraftFromSnapshot(
+                        $context,
+                        $snapshot,
+                        'system:theme-layout-service',
+                        '',
+                        'layout_saved_via_theme_layout_service',
+                    );
+                    if ($status === ThemeLayout::STATUS_PUBLISHED) {
+                        $state = $workspace->load($context, true);
+                        $workspace->publish(
+                            $context,
+                            (int)($state['revision'] ?? 0),
+                            isset($state['expected_parent_release_id'])
+                                ? (int)$state['expected_parent_release_id']
+                                : null,
+                            'system:theme-layout-service',
+                            '',
+                            'layout_published_via_theme_layout_service',
+                        );
+                        $this->purgePublishedLayoutCaches($themeId);
+                    }
                 }
-            }
 
-            return true;
-        });
+                return true;
+            });
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function getImageContentValidator(): WidgetImageContentContractValidator
@@ -923,18 +815,17 @@ class ThemeLayoutService
             ];
         }
 
-        return $this->atomicWrite('theme_layout_copy_identity', function () use (
-            $sourceThemeId,
-            $targetThemeId,
-            $pageType,
-            $sourceIdentity,
-            $targetIdentity,
-            $targetDraftOnly,
-        ): array {
+        try {
+            /** @var ThemeScopedLayoutWriteService $layoutWriter */
+            $layoutWriter = ObjectManager::getInstance(ThemeScopedLayoutWriteService::class);
+            /** @var ThemeScopedWorkspaceInterface $workspace */
+            $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+            $targetContext = $this->buildScopedLayoutContext($targetThemeId, $pageType, $targetIdentity);
             $copied = [];
             $targetStatuses = $targetDraftOnly
                 ? [ThemeLayout::STATUS_DRAFT]
                 : [ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED];
+
             foreach ($targetStatuses as $targetStatus) {
                 $sourceStatus = $targetStatus;
                 if ($targetDraftOnly
@@ -953,6 +844,7 @@ class ThemeLayoutService
                 ) {
                     $sourceStatus = ThemeLayout::STATUS_PUBLISHED;
                 }
+
                 $layout = $this->getLayout(
                     $sourceThemeId,
                     $pageType,
@@ -960,42 +852,74 @@ class ThemeLayoutService
                     $sourceIdentity,
                     true,
                 );
-                $layoutData = [];
-                foreach ($layout as $area => $areaData) {
-                    $widgets = is_array($areaData['widgets'] ?? null) ? $areaData['widgets'] : [];
-                    foreach ($widgets as $widget) {
-                        if (!is_array($widget)) {
+                $widgetCount = 0;
+                foreach ($layout as $area => &$areaData) {
+                    if (!\is_array($areaData['widgets'] ?? null)) {
+                        $areaData['widgets'] = [];
+                        continue;
+                    }
+                    foreach ($areaData['widgets'] as $index => $widget) {
+                        if (!\is_array($widget)) {
+                            unset($areaData['widgets'][$index]);
                             continue;
                         }
-                        $layoutData[$area][] = [
-                            'widget_code' => (string)($widget['widget_code'] ?? ''),
-                            'widget_module' => (string)($widget['widget_module'] ?? ''),
-                            'widget_type' => (string)($widget['widget_type'] ?? ''),
-                            'slot_id' => $widget['slot_id'] ?? null,
-                            'config' => is_array($widget['config'] ?? null) ? $widget['config'] : [],
-                            'sort_order' => (int)($widget['sort_order'] ?? 0),
-                            'is_active' => (bool)($widget['is_active'] ?? true),
-                        ];
+                        if ($targetDraftOnly) {
+                            $widget = $this->markCopiedFileImagesForReview(
+                                $widget,
+                                (string)($targetIdentity['locale_code'] ?? ''),
+                            );
+                        }
+                        unset($widget['node_uid'], $widget['layout_id'], $widget['meta']);
+                        $areaData['widgets'][$index] = $widget;
+                        $widgetCount++;
                     }
+                    $areaData['widgets'] = \array_values($areaData['widgets']);
                 }
+                unset($areaData);
 
-                if ($layoutData === []) {
-                    if ($this->hasNoWidgetPlacements($sourceThemeId, $pageType, $sourceStatus, $sourceIdentity)) {
-                        $this->saveLayout($targetThemeId, $pageType, [], $targetStatus, $targetIdentity);
+                if ($widgetCount === 0) {
+                    $layoutWriter->clearDraftNodes(
+                        $targetContext,
+                        'system:layout-copy',
+                        '',
+                    );
+                    if ($targetStatus === ThemeLayout::STATUS_PUBLISHED && !$targetDraftOnly) {
+                        $state = $workspace->load($targetContext, true);
+                        $workspace->publish(
+                            $targetContext,
+                            (int)($state['revision'] ?? 0),
+                            isset($state['expected_parent_release_id'])
+                                ? (int)$state['expected_parent_release_id']
+                                : null,
+                            'system:layout-copy',
+                            '',
+                            'layout_copy_empty_publish',
+                        );
                     }
                     $copied[$targetStatus] = 0;
                     continue;
                 }
 
-                if ($targetDraftOnly) {
-                    $layoutData = $this->markCopiedFileImagesForReview(
-                        $layoutData,
-                        (string)($targetIdentity['locale_code'] ?? ''),
+                $stateAfter = $layoutWriter->replaceDraftFromSnapshot(
+                    $targetContext,
+                    $layout,
+                    'system:layout-copy',
+                    '',
+                    'layout_copied_from_scope:' . $sourceStatus,
+                );
+                if ($targetStatus === ThemeLayout::STATUS_PUBLISHED && !$targetDraftOnly) {
+                    $workspace->publish(
+                        $targetContext,
+                        (int)($stateAfter['revision'] ?? 0),
+                        isset($stateAfter['expected_parent_release_id'])
+                            ? (int)$stateAfter['expected_parent_release_id']
+                            : null,
+                        'system:layout-copy',
+                        '',
+                        'layout_copy_publish',
                     );
                 }
-
-                $this->saveLayout($targetThemeId, $pageType, $layoutData, $targetStatus, $targetIdentity);
-                $copied[$targetStatus] = array_sum(array_map('count', $layoutData));
+                $copied[$targetStatus] = $widgetCount;
             }
 
             return [
@@ -1005,7 +929,15 @@ class ThemeLayoutService
                 'source_identity' => $sourceIdentity,
                 'target_identity' => $targetIdentity,
             ];
-        });
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'status' => 'copy_failed:' . $e->getMessage(),
+                'copied' => [],
+                'source_identity' => $sourceIdentity,
+                'target_identity' => $targetIdentity,
+            ];
+        }
     }
 
     /** @param array<string|int,mixed> $value @return array<string|int,mixed> */
@@ -1053,15 +985,18 @@ class ThemeLayoutService
                 $allowEmpty,
                 $publicationContext,
             ): bool {
-                // 获取需要发布的页面类型列表
                 if ($pageType) {
                     $pageTypes = [$pageType];
                 } else {
                     $pageTypes = array_keys(ThemeLayout::getPageTypes());
                 }
 
+                /** @var ThemeScopedWorkspaceInterface $workspace */
+                $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+                /** @var ThemeScopedLayoutWriteService $layoutWriter */
+                $layoutWriter = ObjectManager::getInstance(ThemeScopedLayoutWriteService::class);
+
                 foreach ($pageTypes as $type) {
-                    // 1. 获取草稿布局
                     $draftLayout = $this->getLayout(
                         $themeId,
                         $type,
@@ -1070,19 +1005,14 @@ class ThemeLayoutService
                         true,
                     );
 
-                    // 检查草稿是否有数据
                     $hasDraftWidgets = false;
-                    foreach ($draftLayout as $area => $areaData) {
+                    foreach ($draftLayout as $areaData) {
                         if (!empty($areaData['widgets'])) {
                             $hasDraftWidgets = true;
                             break;
                         }
                     }
 
-                    // Publication validation is enforced at the lowest durable
-                    // projection boundary as well as by higher-level workspaces.
-                    // A typed file-image therefore cannot be published through a
-                    // legacy caller that omitted explicit Scope/locale context.
                     $this->getContentValidationRegistry()->validate(
                         $draftLayout,
                         array_replace($publicationContext, [
@@ -1093,65 +1023,30 @@ class ThemeLayoutService
                         ]),
                     );
 
-                    // 如果没有草稿数据，保持已发布数据不变
                     if (!$hasDraftWidgets && !$allowEmpty) {
                         continue;
                     }
 
-                    // 2. 删除旧的已发布记录（全量替换，避免残留）
-                    $this->deleteLayoutRows($themeId, $type, ThemeLayout::STATUS_PUBLISHED, $identity);
-                    if (!$hasDraftWidgets) {
-                        $this->markNoWidgetPlacements($themeId, $type, ThemeLayout::STATUS_PUBLISHED, $identity);
+                    $context = $this->buildScopedLayoutContext($themeId, (string)$type, $identity);
+                    if (!$hasDraftWidgets && $allowEmpty) {
+                        $layoutWriter->clearDraftNodes($context, 'system:theme-layout-service', '');
+                    }
+
+                    $state = $workspace->load($context, true);
+                    if ((int)($state['revision'] ?? 0) <= 0 && !$allowEmpty) {
                         continue;
                     }
 
-                    // 3. 去重：独占插槽按 slot_id；其余只去掉完全重复的脏草稿/快照记录。
-                    $exclusiveSlotSeen = [];
-                    $widgetIdentitySeen = [];
-
-                    foreach ($draftLayout as $area => $areaData) {
-                        foreach ($areaData['widgets'] as $widget) {
-                            $slotId = $widget['slot_id'] ?? null;
-
-                            if ($slotId && $this->isExclusivePublishSlot((string)$slotId)) {
-                                $slotKey = $area . '::' . $slotId;
-                                if (isset($exclusiveSlotSeen[$slotKey])) {
-                                    continue;
-                                }
-                                $exclusiveSlotSeen[$slotKey] = true;
-                            } else {
-                                $identityKey = $area . '::'
-                                    . ($slotId ?? '') . '::'
-                                    . ($widget['widget_module'] ?? '') . '::'
-                                    . ($widget['widget_code'] ?? '') . '::'
-                                    . ((int)($widget['sort_order'] ?? 0)) . '::'
-                                    . sha1(json_encode($widget['config'] ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
-                                if (isset($widgetIdentitySeen[$identityKey])) {
-                                    continue;
-                                }
-                                $widgetIdentitySeen[$identityKey] = true;
-                            }
-
-                            $this->saveWidget([
-                                'theme_id' => $themeId,
-                                'page_type' => $type,
-                                'layout_option' => $identity['layout_option'],
-                                'scope' => $identity['scope'],
-                                'locale_code' => $identity['locale_code'],
-                                'target_type' => $identity['target_type'],
-                                'target_id' => $identity['target_id'],
-                                'area' => $area,
-                                'widget_code' => $widget['widget_code'],
-                                'widget_module' => $widget['widget_module'],
-                                'widget_type' => $widget['widget_type'] ?? '',
-                                'slot_id' => $slotId,
-                                'config' => $widget['config'] ?? [],
-                                'sort_order' => $widget['sort_order'] ?? 0,
-                                'is_active' => true,
-                                'status' => ThemeLayout::STATUS_PUBLISHED,
-                            ]);
-                        }
-                    }
+                    $workspace->publish(
+                        $context,
+                        (int)($state['revision'] ?? 0),
+                        isset($state['expected_parent_release_id'])
+                            ? (int)$state['expected_parent_release_id']
+                            : null,
+                        'system:theme-layout-service',
+                        '',
+                        'layout_published_via_theme_layout_service',
+                    );
                 }
 
                 $this->purgePublishedLayoutCaches($themeId);
@@ -1187,27 +1082,17 @@ class ThemeLayoutService
      */
     public function hasDraft(int $themeId, ?string $pageType = null, array $identity = []): bool
     {
+        if ($pageType === null || $pageType === '') {
+            return false;
+        }
         try {
-            $query = $this->themeLayout->reset()
-                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::schema_fields_STATUS, ThemeLayout::STATUS_DRAFT);
+            $context = $this->buildScopedLayoutContext($themeId, $pageType, $identity);
+            /** @var ThemeScopedWorkspaceInterface $workspace */
+            $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
+            $state = $workspace->load($context, true);
 
-            if ($pageType) {
-                $query->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType);
-            }
-
-            if ($identity !== []) {
-                $query = $this->applyLayoutIdentityFilters($query, $identity);
-            }
-
-            // 使用 fetchArray() 替代 fetchOriginal()，与其他方法保持一致
-            $result = $query->select()->fetchArray();
-            
-            // 检查结果是否为有效数组
-            $count = is_array($result) ? count($result) : 0;
-            
-            return $count > 0;
-        } catch (\Exception $e) {
+            return (int)($state['revision'] ?? 0) > 0;
+        } catch (\Throwable) {
             return false;
         }
     }
@@ -1217,15 +1102,16 @@ class ThemeLayoutService
      */
     public function discardDraft(int $themeId, ?string $pageType = null, array $identity = []): bool
     {
+        $identity = $identity !== [] ? $this->normalizeLayoutIdentity($identity) : [];
         try {
-            $identityFilter = $identity !== [] ? $this->normalizeLayoutIdentity($identity) : null;
-            if ($pageType) {
-                $this->deleteLayoutRows((int)$themeId, $pageType, ThemeLayout::STATUS_DRAFT, $identityFilter);
-            } else {
-                foreach (array_keys(ThemeLayout::getPageTypes()) as $type) {
-                    $this->deleteLayoutRows((int)$themeId, $type, ThemeLayout::STATUS_DRAFT, $identityFilter);
-                }
+            /** @var ThemeScopedLayoutWriteService $layoutWriter */
+            $layoutWriter = ObjectManager::getInstance(ThemeScopedLayoutWriteService::class);
+            $pageTypes = $pageType ? [$pageType] : array_keys(ThemeLayout::getPageTypes());
+            foreach ($pageTypes as $type) {
+                $context = $this->buildScopedLayoutContext($themeId, (string)$type, $identity);
+                $layoutWriter->clearDraftNodes($context, 'system:theme-layout-service', '');
             }
+
             return true;
         } catch (\Exception $e) {
             return false;
@@ -1233,47 +1119,23 @@ class ThemeLayoutService
     }
 
     /**
-     * 初始化草稿：从已发布状态复制到草稿状态
-     * 用于首次编辑时，将线上数据复制为草稿进行编辑
+     * @deprecated Theme 2.2 greenfield: callers should load ThemeScopedWorkspace directly.
+     * Kept as a thin scoped workspace warm-up; does not copy theme_layout rows.
      */
     public function initDraftFromPublished(int $themeId, ?string $pageType = null, array $identity = []): bool
     {
         $identity = $identity !== [] ? $this->normalizeLayoutIdentity($identity) : [];
         try {
+            /** @var ThemeScopedWorkspaceInterface $workspace */
+            $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
             $pageTypes = $pageType ? [$pageType] : array_keys(ThemeLayout::getPageTypes());
-
             foreach ($pageTypes as $type) {
-                // 检查是否已有草稿
-                if ($this->hasDraft($themeId, $type, $identity)) {
-                    continue; // 已有草稿，跳过
+                if ($this->hasDraft($themeId, (string)$type, $identity)) {
+                    continue;
                 }
-
-                // 获取已发布布局
-                $publishedLayout = $this->getLayout($themeId, $type, ThemeLayout::STATUS_PUBLISHED, $identity);
-
-                // 复制为草稿
-                foreach ($publishedLayout as $area => $areaData) {
-                    foreach ($areaData['widgets'] as $widget) {
-                        $this->saveWidget([
-                            'theme_id' => $themeId,
-                            'page_type' => $type,
-                            'layout_option' => $identity['layout_option'] ?? ($widget['layout_option'] ?? 'default'),
-                            'scope' => $identity['scope'] ?? ($widget['scope'] ?? 'default'),
-                            'locale_code' => $identity['locale_code'] ?? ($widget['locale_code'] ?? ''),
-                            'target_type' => $identity['target_type'] ?? ($widget['target_type'] ?? 'global'),
-                            'target_id' => $identity['target_id'] ?? (int)($widget['target_id'] ?? 0),
-                            'area' => $area,
-                            'widget_code' => $widget['widget_code'],
-                            'widget_module' => $widget['widget_module'],
-                            'widget_type' => $widget['widget_type'] ?? '',
-                            'slot_id' => $widget['slot_id'] ?? null,
-                            'config' => $widget['config'] ?? [],
-                            'sort_order' => $widget['sort_order'] ?? 0,
-                            'is_active' => true,
-                            'status' => ThemeLayout::STATUS_DRAFT,
-                        ]);
-                    }
-                }
+                $context = $this->buildScopedLayoutContext($themeId, (string)$type, $identity);
+                // Parent release merge happens inside workspace load — no theme_layout copy.
+                $workspace->load($context, true);
             }
 
             return true;
@@ -1283,18 +1145,13 @@ class ThemeLayoutService
     }
 
     /**
-     * 更新部件配置
+     * @deprecated Greenfield: theme_layout dropped. Patch widget config via ThemeScopedLayoutWriteService + node_uid.
      */
     public function updateWidgetConfig(int $layoutId, array $config): bool
     {
-        $this->themeLayout->reset()->load($layoutId);
-        if (!$this->themeLayout->getLayoutId()) {
-            return false;
-        }
+        unset($layoutId, $config);
 
-        $config = $this->withWidgetI18nInstance($config, $this->themeLayout->getWidgetConfig());
-        $this->themeLayout->setWidgetConfig($config)->save();
-        return true;
+        return false;
     }
 
     private function withWidgetI18nInstance(array $config, array $existingConfig = []): array
@@ -1313,192 +1170,88 @@ class ThemeLayoutService
     }
 
     /**
-     * 删除部件
+     * @deprecated Greenfield: theme_layout dropped. Remove nodes via ThemeScopedLayoutWriteService::removeWidget(node_uid).
      */
     public function deleteWidget(int $layoutId): bool
     {
-        $this->themeLayout->clearQuery()->clearData()->load($layoutId);
-        $loadedId = $this->themeLayout->getLayoutId();
+        unset($layoutId);
 
-        if (!$loadedId) {
-            return false;
-        }
-        $themeId = (int)$this->themeLayout->getData(ThemeLayout::schema_fields_THEME_ID);
-        $pageType = (string)$this->themeLayout->getData(ThemeLayout::schema_fields_PAGE_TYPE);
-        $status = (string)$this->themeLayout->getData(ThemeLayout::schema_fields_STATUS);
-        $identity = $this->normalizeLayoutIdentity([
-            'layout_option' => $this->themeLayout->getData(ThemeLayout::schema_fields_LAYOUT_OPTION),
-            'scope' => $this->themeLayout->getData(ThemeLayout::schema_fields_SCOPE),
-            'locale_code' => $this->themeLayout->getData(ThemeLayout::schema_fields_LOCALE_CODE),
-            'target_type' => $this->themeLayout->getData(ThemeLayout::schema_fields_TARGET_TYPE),
-            'target_id' => $this->themeLayout->getData(ThemeLayout::schema_fields_TARGET_ID),
-        ]);
-        $wasNoPlacementsMarker = (string)$this->themeLayout->getData(ThemeLayout::schema_fields_WIDGET_MODULE) === self::NO_PLACEMENTS_WIDGET_MODULE
-            && (string)$this->themeLayout->getData(ThemeLayout::schema_fields_WIDGET_TYPE) === self::NO_PLACEMENTS_WIDGET_TYPE
-            && (string)$this->themeLayout->getData(ThemeLayout::schema_fields_WIDGET_CODE) === self::NO_PLACEMENTS_WIDGET_CODE;
-
-        // 使用模型已加载状态执行删除（getQuery() 会带表名，delete() 用主键条件，避免 clearQuery 后链式导致表名/条件丢失）
-        $this->themeLayout->delete()->fetch();
-
-        // 验证删除结果
-        $this->themeLayout->clearQuery()->clearData();
-        $checkAfter = $this->themeLayout->clearQuery()->clearData()
-            ->where(ThemeLayout::schema_fields_ID, $layoutId)
-            ->select()
-            ->fetchArray();
-        $this->themeLayout->clearQuery()->clearData();
-
-        $deleted = empty($checkAfter);
-        if ($deleted
-            && !$wasNoPlacementsMarker
-            && $themeId > 0
-            && $pageType !== ''
-            && $status !== ''
-            && !$this->hasActiveWidgetPlacementsForLayout($themeId, $pageType, $status, $identity)
-        ) {
-            $this->markNoWidgetPlacements($themeId, $pageType, $status, $identity);
-        }
-
-        return $deleted;
+        return false;
     }
 
     /**
-     * 根据布局ID获取部件数据
+     * @deprecated Greenfield: theme_layout dropped. Template tombstones live in scoped draft nodes.
+     *
+     * @param array<string,mixed> $identity
+     */
+    public function clearTemplateDeletedTombstonesForSlot(
+        int $themeId,
+        string $pageType,
+        array $identity,
+        string $slotId,
+        string $status = ThemeLayout::STATUS_DRAFT,
+    ): int {
+        unset($themeId, $pageType, $identity, $slotId, $status);
+
+        return 0;
+    }
+
+    /**
+     * @deprecated Greenfield: theme_layout dropped. Resolve widgets by node_uid from scoped workspace.
      */
     public function getWidgetByLayoutId(int $layoutId): ?array
     {
-        $this->themeLayout->reset()->load($layoutId);
-        if (!$this->themeLayout->getLayoutId()) {
-            return null;
-        }
+        unset($layoutId);
 
-        $widgetModule = $this->themeLayout->getWidgetModule();
-        $widgetCode = $this->themeLayout->getWidgetCode();
-        $config = $this->themeLayout->getWidgetConfig();
-
-        // 解析 JSON 配置
-        if (is_string($config)) {
-            $config = json_decode($config, true) ?: [];
-        }
-
-        return [
-            'layout_id' => $layoutId,
-            'widget_module' => $widgetModule,
-            'widget_type' => $this->themeLayout->getWidgetType(),
-            'widget_code' => $widgetCode,
-            'config' => $config,
-            'area' => $this->themeLayout->getArea(),
-            'slot_id' => $this->themeLayout->getSlotId(),
-            'sort_order' => $this->themeLayout->getSortOrder(),
-            'layout_option' => $this->themeLayout->getLayoutOption(),
-            'scope' => $this->themeLayout->getScope(),
-            'locale_code' => $this->themeLayout->getLocaleCode(),
-            'target_type' => $this->themeLayout->getTargetType(),
-            'target_id' => $this->themeLayout->getTargetId(),
-        ];
+        return null;
     }
 
     /**
-     * 更新部件排序
+     * @deprecated Greenfield: theme_layout dropped. Reorder via scoped layout patch /update-sort.
      */
     public function updateSortOrder(array $sortData): bool
     {
-        foreach ($sortData as $layoutId => $sortOrder) {
-            $this->themeLayout->reset()->load($layoutId);
-            if ($this->themeLayout->getLayoutId()) {
-                $this->themeLayout->setSortOrder((int)$sortOrder)->save();
-            }
-        }
-        return true;
+        return $sortData === [];
     }
 
     /**
-     * 移动部件到新区域
+     * @deprecated Greenfield: theme_layout dropped. Move via ThemeScopedLayoutWriteService.
      */
     public function moveWidget(int $layoutId, string $newArea, int $newSortOrder): bool
     {
-        $this->themeLayout->reset()->load($layoutId);
-        if (!$this->themeLayout->getLayoutId()) {
-            return false;
-        }
+        unset($layoutId, $newArea, $newSortOrder);
 
-        $this->themeLayout
-            ->setArea($newArea)
-            ->setSortOrder($newSortOrder)
-            ->save();
-
-        return true;
+        return false;
     }
 
     /**
-     * 交换两个部件的排序顺序
+     * @deprecated Greenfield: theme_layout dropped. Swap via scoped node_uid patch.
      */
     public function swapWidgetOrder(int $layoutId1, int $layoutId2): bool
     {
-        // 加载第一个部件
-        $layout1 = clone $this->themeLayout;
-        $layout1->reset()->load($layoutId1);
-        if (!$layout1->getLayoutId()) {
-            return false;
-        }
+        unset($layoutId1, $layoutId2);
 
-        // 加载第二个部件
-        $layout2 = clone $this->themeLayout;
-        $layout2->reset()->load($layoutId2);
-        if (!$layout2->getLayoutId()) {
-            return false;
-        }
-
-        // 交换排序值
-        $sortOrder1 = $layout1->getSortOrder();
-        $sortOrder2 = $layout2->getSortOrder();
-
-        $layout1->setSortOrder($sortOrder2)->save();
-        $layout2->setSortOrder($sortOrder1)->save();
-
-        return true;
+        return false;
     }
 
     /**
-     * 获取插槽内的部件列表（按排序）
-     * 
-     * @param int $themeId 主题ID
-     * @param string $pageType 页面类型
-     * @param string $slotId 插槽ID
-     * @param string $status 状态
-     * @return array
+     * @deprecated Greenfield: theme_layout dropped. Read slot widgets from scoped draft/release.
+     *
+     * @return array<int,array<string,mixed>>
      */
     public function getSlotWidgets(int $themeId, string $pageType, string $slotId, string $status = 'draft', array $identity = []): array
     {
-        $query = $this->themeLayout->reset()
-            ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-            ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
-            ->where(ThemeLayout::schema_fields_STATUS, $status)
-            ->where(ThemeLayout::schema_fields_SLOT_ID, $slotId);
+        unset($themeId, $pageType, $slotId, $status, $identity);
 
-        $layouts = $this->applyLayoutIdentityFilters($query, $identity)
-            ->order(ThemeLayout::schema_fields_SORT_ORDER, 'ASC')
-            ->select()
-            ->fetchArray();
-
-        return $layouts ?: [];
+        return [];
     }
 
     /**
-     * 批量更新插槽内部件排序
-     * 
-     * @param array $layoutIds 按顺序排列的布局ID数组
-     * @return bool
+     * @deprecated Greenfield: theme_layout dropped. Reorder via scoped layout patch.
      */
     public function updateSlotWidgetsOrder(array $layoutIds): bool
     {
-        foreach ($layoutIds as $sortOrder => $layoutId) {
-            $this->themeLayout->reset()->load($layoutId);
-            if ($this->themeLayout->getLayoutId()) {
-                $this->themeLayout->setSortOrder((int)$sortOrder)->save();
-            }
-        }
-        return true;
+        return $layoutIds === [];
     }
 
     /**
@@ -1762,5 +1515,43 @@ class ThemeLayoutService
         ];
 
         return \in_array($slotId, $exclusiveSlots, true);
+    }
+
+    /** @param array<string,mixed> $identity */
+    private function getScopedLayout(
+        int $themeId,
+        string $pageType,
+        string $status,
+        array $identity,
+    ): array {
+        /** @var ThemeRuntimeLayoutResolver $resolver */
+        $resolver = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class);
+
+        return $resolver->resolveLayout(
+            $themeId,
+            $pageType,
+            $status,
+            $this->resolveRuntimeLayoutArea($pageType),
+            $this->normalizeLayoutIdentity($identity),
+        );
+    }
+
+    /** @param array<string,mixed> $identity */
+    private function buildScopedLayoutContext(int $themeId, string $pageType, array $identity): ThemeEditorContext
+    {
+        /** @var ThemeRuntimeLayoutResolver $resolver */
+        $resolver = ObjectManager::getInstance(ThemeRuntimeLayoutResolver::class);
+
+        return $resolver->buildContext(
+            $themeId,
+            $pageType,
+            $this->resolveRuntimeLayoutArea($pageType),
+            $this->normalizeLayoutIdentity($identity),
+        )->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+    }
+
+    private function resolveRuntimeLayoutArea(string $pageType): string
+    {
+        return $pageType === ThemeLayout::PAGE_TYPE_DASHBOARD ? 'backend' : 'frontend';
     }
 }

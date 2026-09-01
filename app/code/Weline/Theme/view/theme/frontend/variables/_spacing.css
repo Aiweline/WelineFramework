@@ -170,6 +170,8 @@
     --weshop-spacing-3xl: var(--spacing-3xl);
     --weshop-container-max-width: var(--layout-max-width);
     --weshop-container-padding: var(--spacing-container-padding);
+    --weline-layout-content-max-width: var(--layout-max-width, var(--spacing-container-max-width, 1440px));
+    --weline-layout-content-padding-inline: var(--spacing-container-padding, var(--spacing-md, 1rem));
     --weshop-control-height: var(--control-height);
     --weshop-border-width: var(--border-width);
     --weshop-line-height-tight: var(--line-height-tight);

@@ -97,4 +97,10 @@
     --weline-chrome-text-light-secondary: var(--color-text-light-secondary);
     --weline-chrome-body-link-hover: var(--color-primary);
     --weline-chrome-menu-panel-text-hover: var(--color-primary);
+
+    /* 商品标签：Amazon 零售绿 #007600（In Stock / Success） */
+    --color-product-label-new-bg: #e6f2e6;
+    --color-product-label-new-text: #007600;
+    --weline-product-label-new-bg: var(--color-product-label-new-bg);
+    --weline-product-label-new-text: var(--color-product-label-new-text);
 }

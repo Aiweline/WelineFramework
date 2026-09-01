@@ -19,6 +19,7 @@
  * @param dropdown_items {default=[],type="array",label="下拉菜单项"}
  */
 
+use Weline\Framework\Session\SessionFactory;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('account');
@@ -30,106 +31,149 @@ $showAvatar = (bool)($this->getData('show_avatar') ?? true);
 $showName = (bool)($this->getData('show_name') ?? false);
 $dropdownItems = $this->getData('dropdown_items') ?? [];
 
+// Theme editor preview stays on the guest chrome shell.
 $isLoggedIn = false;
-$userName = '用户名';
+$userName = '';
 $userAvatar = '';
+if (!$isPreviewMode) {
+    try {
+        $session = SessionFactory::getInstance()->createFrontendSession();
+        $isLoggedIn = $session->isLoggedIn();
+        if ($isLoggedIn) {
+            // session->getUsername() is auth login (email); prefer Customer display name.
+            $user = $session->getUser();
+            if (is_object($user) && method_exists($user, 'getDisplayName')) {
+                $userName = trim((string)$user->getDisplayName());
+            } elseif (is_object($user) && method_exists($user, 'getUsername')) {
+                $raw = trim((string)($user->getUsername() ?? ''));
+                $userName = ($raw !== '' && filter_var($raw, FILTER_VALIDATE_EMAIL) === false)
+                    ? $raw
+                    : (($raw !== '' && str_contains($raw, '@'))
+                        ? trim((string)explode('@', $raw, 2)[0])
+                        : $raw);
+            }
+            if ($userName === '') {
+                $userName = (string)__('用户名');
+            }
+        }
+    } catch (\Throwable) {
+        $isLoggedIn = false;
+        $userName = '';
+    }
+}
 
 if (empty($dropdownItems)) {
     $dropdownItems = null;
 }
+
+$helloLoggedIn = ($isLoggedIn && $userName !== '' && $userName !== (string)__('用户名'))
+    ? (string)__('您好, %{1}', [$userName])
+    : (string)__('您好');
 ?>
 
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>">
-    <?php if ($isLoggedIn): ?>
-        <div class="account-logged-in">
-            <a href="@url{'customer/account/index'}" class="account-link">
-                <?php if ($showAvatar): ?>
-                    <span class="account-avatar">
-                        <?php if ($userAvatar !== ''): ?>
-                            <img src="<?= $esc($userAvatar) ?>" alt="<?= $esc($userName) ?>">
-                        <?php else: ?>
-                            <w:icon name="user" size="sm"></w:icon>
-                        <?php endif; ?>
-                    </span>
-                <?php endif; ?>
-                <?php if ($showName): ?>
-                    <span class="account-name"><?= $esc($userName) ?></span>
-                <?php endif; ?>
-                <w:icon name="arrow-down" size="sm"></w:icon>
-            </a>
-            <div class="account-dropdown">
-                <div class="dropdown-header">
-                    <span class="welcome-text"><?= __('欢迎回来') ?></span>
-                    <span class="user-name"><?= $esc($userName) ?></span>
-                </div>
-                <ul class="dropdown-menu" role="menu">
-                    <?php if ($dropdownItems === null): ?>
-                        <li>
-                            <a href="@url{'customer/account/index'}">
-                                <i class="user"></i>
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-weline-load="api,account"
+         data-w-header-account="1"
+         data-auth-state="<?= $isLoggedIn ? 'signed-in' : 'guest' ?>"
+         data-account-url="@url{'customer/account/index'}"
+         data-login-url="@url{'customer/account/login'}"
+         data-register-url="@url{'customer/account/register'}"
+         data-logout-url="@url{'customer/account/logout'}"
+         data-i18n-login="<?= $esc((string)__('登录')) ?>"
+         data-i18n-register="<?= $esc((string)__('注册')) ?>"
+         data-i18n-hello="<?= $esc((string)__('您好')) ?>"
+         data-i18n-hello-named="<?= $esc((string)__('您好, %{1}', ['%USERNAME%'])) ?>"
+         data-i18n-account="<?= $esc((string)__('我的账户')) ?>"
+         data-i18n-orders="<?= $esc((string)__('我的订单')) ?>"
+         data-i18n-addresses="<?= $esc((string)__('地址管理')) ?>"
+         data-i18n-logout="<?= $esc((string)__('退出登录')) ?>"
+         data-i18n-welcome="<?= $esc((string)__('欢迎回来')) ?>"
+         data-show-avatar="<?= $showAvatar ? '1' : '0' ?>"
+         data-show-name="<?= $showName ? '1' : '0' ?>">
+    <div class="account-logged-in" data-account-shell="signed-in"<?= $isLoggedIn ? '' : ' hidden' ?>>
+        <a href="@url{'customer/account/index'}" class="account-link" data-account-home-link>
+            <?php if ($showAvatar): ?>
+                <span class="account-avatar">
+                    <?php if ($userAvatar !== ''): ?>
+                        <img src="<?= $esc($userAvatar) ?>" alt="<?= $esc($userName) ?>" data-account-avatar>
+                    <?php else: ?>
+                        <w:icon name="user" size="sm"></w:icon>
+                    <?php endif; ?>
+                </span>
+            <?php endif; ?>
+            <?php if ($showName): ?>
+                <span class="account-name" data-account-display-name><?= $esc($userName) ?></span>
+            <?php endif; ?>
+            <span class="account-text">
+                <span class="login-text" data-account-line1><?= $esc($helloLoggedIn) ?></span>
+                <span class="register-text" data-account-line2><?= $esc((string)__('我的账户')) ?></span>
+            </span>
+            <w:icon name="arrow-down" size="sm"></w:icon>
+        </a>
+        <div class="account-dropdown">
+            <div class="dropdown-header">
+                <span class="welcome-text"><?= $esc((string)__('欢迎回来')) ?></span>
+                <span class="user-name" data-account-menu-name><?= $esc($userName) ?></span>
+            </div>
+            <ul class="dropdown-menu account-dropdown-menu" role="menu" data-account-menu>
+                <?php if ($dropdownItems === null): ?>
+                    <?php /* 个人中心入口由各模块 header-account-links 贡献（Customer/Shipping/Wishlist 等） */ ?>
+                    <w:hook>header-account-links<else/>
+                        <li role="none">
+                            <a href="@url{'customer/account/index'}" role="menuitem">
                                 <?= $esc((string)__('我的账户')) ?>
                             </a>
                         </li>
-                        <li>
-                            <a href="@url{'customer/account/index'}#orders">
-                                <i class="list"></i>
+                        <li role="none">
+                            <a href="@url{'customer/account/index'}#orders" role="menuitem">
                                 <?= $esc((string)__('我的订单')) ?>
                             </a>
                         </li>
-                        <li>
-                            <a href="@url{'customer/account/index'}#wishlist">
-                                <i class="heart"></i>
-                                <?= $esc((string)__('我的收藏')) ?>
-                            </a>
-                        </li>
-                        <li>
-                            <a href="@url{'customer/account/index'}#addresses">
-                                <i class="pin"></i>
+                        <li role="none">
+                            <a href="@url{'customer/account/index'}#addresses" role="menuitem">
                                 <?= $esc((string)__('地址管理')) ?>
                             </a>
                         </li>
                         <li class="divider" role="separator"></li>
-                        <li>
-                            <a href="@url{'customer/account/logout'}">
-                                <i class="box"></i>
+                        <li role="none">
+                            <a class="logout-link" href="@url{'customer/account/logout'}" role="menuitem">
                                 <?= $esc((string)__('退出登录')) ?>
                             </a>
                         </li>
+                    </w:hook>
+                <?php else: ?>
+                <?php foreach ($dropdownItems as $item): ?>
+                    <?php if (($item['type'] ?? '') === 'divider'): ?>
+                        <li class="divider" role="separator"></li>
                     <?php else: ?>
-                    <?php foreach ($dropdownItems as $item): ?>
-                        <?php if (($item['type'] ?? '') === 'divider'): ?>
-                            <li class="divider" role="separator"></li>
-                        <?php else: ?>
-                            <li>
-                                <a href="<?= $esc((string)($item['url'] ?? '#')) ?>">
-                                    <?php if (!empty($item['icon'])): ?>
-                                        <i class="<?= $esc((string)$item['icon']) ?>"></i>
-                                    <?php endif; ?>
-                                    <?= $esc((string)($item['label'] ?? '')) ?>
-                                </a>
-                            </li>
-                        <?php endif; ?>
-                    <?php endforeach; ?>
+                        <li role="none">
+                            <a href="<?= $esc((string)($item['url'] ?? '#')) ?>" role="menuitem">
+                                <?php if (!empty($item['icon'])): ?>
+                                    <i class="<?= $esc((string)$item['icon']) ?>"></i>
+                                <?php endif; ?>
+                                <?= $esc((string)($item['label'] ?? '')) ?>
+                            </a>
+                        </li>
                     <?php endif; ?>
-                </ul>
-            </div>
+                <?php endforeach; ?>
+                <?php endif; ?>
+            </ul>
         </div>
-    <?php else: ?>
-        <div class="account-guest">
-            <a href="@url{'customer/account/login'}" class="account-link">
-                <span class="account-avatar">
-                    <w:icon name="user" size="sm"></w:icon>
-                </span>
-                <span class="account-text">
-                    <span class="login-text"><?= __('登录') ?></span>
-                    <span class="register-text"><?= __('注册') ?></span>
-                </span>
-            </a>
-        </div>
-    <?php endif; ?>
+    </div>
+    <div class="account-guest" data-account-shell="guest"<?= $isLoggedIn ? ' hidden' : '' ?>>
+        <a href="@url{'customer/account/login'}" class="account-link" data-account-home-link>
+            <span class="account-avatar">
+                <w:icon name="user" size="sm"></w:icon>
+            </span>
+            <span class="account-text">
+                <span class="login-text"><?= $esc((string)__('登录')) ?></span>
+                <span class="register-text"><?= $esc((string)__('注册')) ?></span>
+            </span>
+        </a>
+    </div>
 </section>
 
 <style>
@@ -191,12 +235,20 @@ if (empty($dropdownItems)) {
     font-weight: 400;
     font-size: var(--weline-font-size-xs);
     color: var(--weline-chrome-text-light-secondary, var(--weline-theme-text-muted));
+    max-width: var(--token-size-100px, 7.5rem);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 .<?= $wc ?> .register-text {
     color: var(--weline-chrome-text-light, var(--weline-theme-text));
     font-size: var(--weline-font-size-sm);
     font-weight: 700;
+}
+
+.<?= $wc ?> .account-logged-in {
+    position: relative;
 }
 
 .<?= $wc ?> .account-dropdown {
@@ -210,9 +262,24 @@ if (empty($dropdownItems)) {
     opacity: 0;
     visibility: hidden;
     transform: translateY(var(--spacing-2_5));
-    transition: all var(--weline-theme-transition-base);
+    transition: opacity var(--weline-theme-transition-base),
+        visibility var(--weline-theme-transition-base),
+        transform var(--weline-theme-transition-base);
     z-index: 1000;
+    /* Visual gap only; ::before keeps :hover while the pointer crosses it. */
     margin-top: var(--weline-space-3);
+    /* Isolate from header chrome light text (inherit white on dark). */
+    color: var(--weline-theme-text);
+}
+
+/* Invisible hit bridge across margin-top so the menu does not dismiss mid-move. */
+.<?= $wc ?> .account-dropdown::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 100%;
+    height: var(--weline-space-3);
 }
 
 .<?= $wc ?> .account-logged-in:hover .account-dropdown {
@@ -238,27 +305,63 @@ if (empty($dropdownItems)) {
     display: block;
     font-weight: 600;
     font-size: var(--weline-font-size-base);
+    color: var(--weline-theme-text);
 }
 
-.<?= $wc ?> .dropdown-menu {
+/*
+ * theme.css 全局 .dropdown-menu { display:none } 面向 .dropdown/.w-dropdown 触发器。
+ * 本部件由 .account-logged-in:hover 展开外层面板，内层 ul 必须常显，否则只剩「欢迎回来」头。
+ */
+.<?= $wc ?> .account-dropdown .dropdown-menu,
+.<?= $wc ?> .account-dropdown .account-dropdown-menu {
+    display: block;
+    position: static;
+    inset: auto;
+    top: auto;
+    z-index: auto;
     list-style: none;
     margin: 0;
+    min-width: 0;
+    width: 100%;
     padding: var(--weline-space-2) 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
 }
 
-.<?= $wc ?> .dropdown-menu li a {
+/* Beat .weline-header .header-user-area a/:visited { color: inherit } (chrome light). */
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a,
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a:link,
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a:visited {
     display: flex;
     align-items: center;
     gap: var(--weline-space-3);
     padding: var(--weline-space-3) var(--weline-space-5);
     color: var(--weline-theme-text);
     text-decoration: none;
-    transition: all var(--weline-theme-transition-base);
+    transition: background-color var(--weline-theme-transition-base),
+        color var(--weline-theme-transition-base);
 }
 
-.<?= $wc ?> .dropdown-menu li a:hover {
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a:hover {
     background-color: var(--weline-theme-surface-muted);
     color: var(--weline-theme-primary);
+}
+
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a.logout-link,
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a.logout-link:link,
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a.logout-link:visited,
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm],
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm]:link,
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm]:visited {
+    color: var(--weline-theme-danger);
+}
+
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a.logout-link:hover,
+.<?= $wc ?> .account-logged-in .account-dropdown .dropdown-menu a[data-account-logout-confirm]:hover {
+    background-color: var(--weline-theme-danger-surface);
+    color: var(--weline-theme-danger-hover);
 }
 
 .<?= $wc ?> .dropdown-menu .divider {

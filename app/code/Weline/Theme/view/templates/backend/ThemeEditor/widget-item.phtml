@@ -17,6 +17,10 @@ if ($widget === []) {
 $escape = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
 
 $layoutId = (string)($widget['layout_id'] ?? '');
+$nodeUid = strtolower(trim((string)($widget['node_uid'] ?? '')));
+if ($nodeUid !== '' && preg_match('/^[a-f0-9]{32}$/D', $nodeUid) !== 1) {
+    $nodeUid = '';
+}
 $slotId = (string)($widget['slot_id'] ?? '');
 if ($slotId === '') {
     $slotId = (string)($widget['area'] ?? '');
@@ -54,6 +58,7 @@ $typeIcons = [
 $icon = $typeIcons[$widgetType] ?? 'circle';
 $iconHtml = ObjectManager::getInstance(IconRegistry::class)->render($icon, 'sm');
 $layoutIdSafe = $escape($layoutId);
+$nodeUidSafe = $escape($nodeUid);
 $slotIdSafe = $escape($slotId);
 $widgetCodeSafe = $escape($widgetCode);
 $widgetModuleSafe = $escape($widgetModule);
@@ -64,10 +69,14 @@ $previewText = !empty($meta['template'])
     ? $escape($widgetDesc !== '' ? $widgetDesc : __('点击配置此部件'))
     : $escape(__('无模板'));
 $previewTone = !empty($meta['template']) ? 'muted' : 'warning';
+// Hex identity is node_uid only; keep data-layout-id for non-hex legacy keys.
+$identityAttrs = $nodeUidSafe !== ''
+    ? 'data-node-uid="' . $nodeUidSafe . '"'
+    : ($layoutIdSafe !== '' && $layoutIdSafe !== '0' ? 'data-layout-id="' . $layoutIdSafe . '"' : '');
 ?>
 
 <div class="preview-widget-item" 
-     data-layout-id="<?= $layoutIdSafe ?>"
+     <?= $identityAttrs ?>
      data-slot-id="<?= $slotIdSafe ?>"
      data-widget-code="<?= $widgetCodeSafe ?>"
      data-widget-module="<?= $widgetModuleSafe ?>"

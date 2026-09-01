@@ -81,7 +81,7 @@ final class ThemeSurfaceTextRolesContractTest extends TestCase
 
     public function testFooterLocaleDeclaresInverseSurfaceForLanguageCurrencyTriggers(): void
     {
-        $footer = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/footer/default.phtml');
+        $footer = $this->read('app/code/Weline/Theme/view/theme/frontend/widgets/container/footer/default.phtml');
         self::assertStringContainsString('class="footer-locale w-surface-inverse"', $footer);
         self::assertStringContainsString('data-surface="inverse"', $footer);
 

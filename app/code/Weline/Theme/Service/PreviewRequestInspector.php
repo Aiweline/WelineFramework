@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Http\Cookie;
 use Weline\Framework\Http\Request;
 
 final class PreviewRequestInspector
@@ -158,22 +159,38 @@ final class PreviewRequestInspector
 
     public function shouldUseStoredPreviewContext(): bool
     {
-        return $this->isPreviewShellPath()
+        if ($this->isPreviewShellPath()
             || $this->isPreviewStaticPath()
-            || $this->hasExplicitPreviewCarrier();
+            || $this->hasExplicitPreviewCarrier()) {
+            return true;
+        }
+
+        return $this->shouldAllowPreviewTokenCookie() && $this->hasPreviewTokenCookie();
     }
 
     public function shouldAllowPreviewTokenCookie(): bool
     {
+        if ($this->hasExplicitPreviewTokenCarrier()) {
+            return true;
+        }
+
         if ($this->shouldKeepPreviewStateOnlyForCurrentRequest()) {
             return false;
         }
 
-        // Do not auto-apply preview token cookie on theme-editor shell routes.
-        // Editor entry URLs should stay deterministic and must not be polluted
-        // by stale preview sessions unless token is explicitly passed in URL/header.
-        return (!$this->isThemeEditorShellPath() && $this->isPreviewShellPath())
-            || $this->isPreviewStaticPath();
+        if ($this->isThemeEditorShellPath()) {
+            return false;
+        }
+
+        if ($this->hasPreviewTokenCookie()) {
+            return true;
+        }
+
+        if ($this->isPreviewStaticPath()) {
+            return true;
+        }
+
+        return $this->isPreviewShellPath();
     }
 
     public function hasExplicitPreviewTokenCarrier(): bool
@@ -181,6 +198,14 @@ final class PreviewRequestInspector
         $token = $this->request->getParam(PreviewTokenService::TOKEN_KEY);
         if (\is_scalar($token) && \trim((string)$token) !== '') {
             return true;
+        }
+
+        $rawParams = $this->getRawQueryParams();
+        if (\is_array($rawParams)) {
+            $rawToken = $rawParams[PreviewTokenService::TOKEN_KEY] ?? null;
+            if (\is_scalar($rawToken) && \trim((string)$rawToken) !== '') {
+                return true;
+            }
         }
 
         $header = $this->request->getHeader(PreviewTokenService::TOKEN_HEADER);
@@ -334,6 +359,28 @@ final class PreviewRequestInspector
         $path = $this->normalizePath();
 
         return \str_starts_with($path, '/theme/backend/theme-editor');
+    }
+
+    private function hasPreviewTokenCookie(): bool
+    {
+        try {
+            $token = Cookie::get(PreviewTokenService::TOKEN_KEY);
+            if (!\is_scalar($token)) {
+                return false;
+            }
+
+            $token = \trim((string)$token);
+            if ($token === '') {
+                return false;
+            }
+
+            return \preg_match(
+                '/^pv_(?:[A-Za-z0-9_-]{43}|[1-9][0-9]{0,18}_[0-9]{9,12}_[a-f0-9]{16})$/D',
+                $token,
+            ) === 1;
+        } catch (\Throwable) {
+            return false;
+        }
     }
 
     private function hasNonEmptyParam(array $keys): bool

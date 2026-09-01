@@ -125,8 +125,40 @@ class ControllerFetchFileBefore implements ObserverInterface
         }
         $meta['layoutType'] = 'account';
         $meta['layoutOption'] = 'auth';
-        $meta['showHeader'] = false;
-        $meta['showFooter'] = false;
+        // Default storefront chrome on; preserve explicit controller meta.
+        if (!\array_key_exists('showHeader', $meta)) {
+            $meta['showHeader'] = true;
+        }
+        if (!\array_key_exists('showFooter', $meta)) {
+            $meta['showFooter'] = (($meta['showHeader'] ?? true) !== false);
+        }
+        $template->setData('meta', $meta);
+    }
+
+    private function resolveFastAccountChallengeLayout(DataObject $eventData, Template $template, string $contentTemplateFileName): void
+    {
+        $layoutTemplate = 'Weline_Theme::theme/frontend/layouts/account/challenge.phtml';
+        $eventData->setData('contentTemplate', $contentTemplateFileName);
+        $eventData->setData('layoutTemplate', $layoutTemplate);
+        $eventData->setData('fileName', $contentTemplateFileName);
+        $eventData->setData('layoutType', 'account');
+        $eventData->setData('layoutOption', 'challenge');
+
+        $template->setData('contentTemplate', $contentTemplateFileName);
+        $template->setData('layoutTemplate', $layoutTemplate);
+        $template->setData('fileName', $contentTemplateFileName);
+        $meta = $template->getData('meta');
+        if (!\is_array($meta)) {
+            $meta = [];
+        }
+        $meta['layoutType'] = 'account';
+        $meta['layoutOption'] = 'challenge';
+        if (!\array_key_exists('showHeader', $meta)) {
+            $meta['showHeader'] = true;
+        }
+        if (!\array_key_exists('showFooter', $meta)) {
+            $meta['showFooter'] = (($meta['showHeader'] ?? true) !== false);
+        }
         $template->setData('meta', $meta);
     }
 
@@ -151,6 +183,10 @@ class ControllerFetchFileBefore implements ObserverInterface
         $contentTemplateFileName = $fileName;
         if ((string)$layoutType === 'account.auth') {
             $this->resolveFastAccountAuthLayout($eventData, Template::getInstance(), (string)$contentTemplateFileName);
+            return;
+        }
+        if ((string)$layoutType === 'account.challenge') {
+            $this->resolveFastAccountChallengeLayout($eventData, Template::getInstance(), (string)$contentTemplateFileName);
             return;
         }
         $contentTemplateFileName = $fileName; // 统一用初始控制器模板路径作为内容模板

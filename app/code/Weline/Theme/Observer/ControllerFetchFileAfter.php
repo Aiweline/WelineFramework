@@ -277,6 +277,12 @@ class ControllerFetchFileAfter implements ObserverInterface
             if (!\is_array($meta)) {
                 $meta = [];
             }
+            $showHeader = ($meta['showHeader'] ?? true) !== false;
+            $showFooter = ($meta['showFooter'] ?? true) !== false;
+            // With storefront chrome, fall through to the real auth.phtml layout (Partials).
+            if ($showHeader || $showFooter) {
+                return null;
+            }
             $locale = (string)($template->getData('locale') ?: \Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN');
             $lang = \str_replace('_', '-', $locale);
             $title = (string)($template->getData('title') ?: ($meta['title'] ?? 'Weline Framework'));
@@ -458,6 +464,8 @@ HTML;
             'assetVersion' => $themeAssetVersion,
             'deployVersion' => $this->resolveDeployVersion(),
             'workerBuildId' => $this->resolveWorkerBuildId(),
+            'themePublishedVersionId' => $this->resolveThemePublishedVersion()['themePublishedVersionId'],
+            'themePublishedVersion' => $this->resolveThemePublishedVersion()['themePublishedVersion'],
             'api' => [
                 'workerUrl' => $apiWorkerUrl,
                 'endpoint' => $queryBinUrl,
@@ -556,6 +564,29 @@ HTML;
             return is_array($data) && !empty($data['worker_build_id']) ? (string)$data['worker_build_id'] : 'dev';
         } catch (\Throwable) {
             return 'dev';
+        }
+    }
+
+    /**
+     * @return array{themePublishedVersionId: string, themePublishedVersion: string}
+     */
+    private function resolveThemePublishedVersion(): array
+    {
+        static $cached = null;
+        if (\is_array($cached)) {
+            return $cached;
+        }
+        try {
+            /** @var \Weline\Theme\Service\ThemePublishedVersionRuntimeResolver $resolver */
+            $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemePublishedVersionRuntimeResolver::class);
+            $cached = $resolver->resolve();
+            return $cached;
+        } catch (\Throwable) {
+            $cached = [
+                'themePublishedVersionId' => '',
+                'themePublishedVersion' => '',
+            ];
+            return $cached;
         }
     }
 

@@ -21,6 +21,80 @@ final class HeaderCommerceData
     }
 
     /**
+     * 横向分类条 / 分类部件：优先万能分类 product space 店面树。
+     *
+     * @return array{
+     *   items:list<array<string,mixed>>,
+     *   source:string,
+     *   is_demo:bool
+     * }
+     */
+    public static function resolveCategoryNavItems(): array
+    {
+        try {
+            if (!\class_exists(\Weline\Product\Service\StorefrontAllMenuCategoryTreeService::class)) {
+                return [
+                    'items' => [],
+                    'source' => 'unavailable',
+                    'is_demo' => false,
+                ];
+            }
+            /** @var \Weline\Product\Service\StorefrontAllMenuCategoryTreeService $service */
+            $service = ObjectManager::getInstance(
+                \Weline\Product\Service\StorefrontAllMenuCategoryTreeService::class
+            );
+            $tree = $service->navTree(self::resolveWebsiteId());
+            if ($tree === []) {
+                return [
+                    'items' => [],
+                    'source' => 'catalog_empty',
+                    'is_demo' => false,
+                ];
+            }
+            $normalizer = new \Weline\Theme\Service\AllMenu\MenuTreeNormalizer();
+            $items = $normalizer->toNavItems($tree);
+            if ($items === []) {
+                return [
+                    'items' => [],
+                    'source' => 'catalog_empty',
+                    'is_demo' => false,
+                ];
+            }
+
+            return [
+                'items' => $items,
+                'source' => 'catalog',
+                'is_demo' => false,
+            ];
+        } catch (\Throwable) {
+            return [
+                'items' => [],
+                'source' => 'error',
+                'is_demo' => false,
+            ];
+        }
+    }
+
+    private static function resolveWebsiteId(): int
+    {
+        try {
+            if (\class_exists(\Weline\Websites\Service\WebsiteAclGrantService::class)) {
+                /** @var \Weline\Websites\Service\WebsiteAclGrantService $grants */
+                $grants = ObjectManager::getInstance(
+                    \Weline\Websites\Service\WebsiteAclGrantService::class
+                );
+                $id = (int)$grants->currentWebsiteId();
+                if ($id >= 0) {
+                    return $id;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return 0;
+    }
+
+    /**
      * @return array{
      *   words:list<string>,
      *   source:string,

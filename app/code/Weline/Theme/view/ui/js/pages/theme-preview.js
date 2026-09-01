@@ -74,9 +74,105 @@ function mount(scope = document) {
     scope.querySelectorAll?.('[data-wslot]').forEach(mountSlot);
 }
 
+function clearPreviewClientState() {
+    document.cookie = 'weline_preview_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT';
+    try {
+        localStorage.removeItem('weline_preview_float_pos');
+    } catch (error) {
+        // Ignore storage failures.
+    }
+}
+
+function stripPreviewTokenFromUrl() {
+    try {
+        const url = new URL(window.location.href);
+        if (!url.searchParams.has('weline_preview_token')) {
+            return '';
+        }
+        url.searchParams.delete('weline_preview_token');
+        return url.toString();
+    } catch (error) {
+        return '';
+    }
+}
+
+function buildExitRedirectTarget() {
+    const cleanUrl = stripPreviewTokenFromUrl();
+    if (cleanUrl) {
+        try {
+            const parsed = new URL(cleanUrl, window.location.origin);
+            return parsed.pathname + parsed.search + parsed.hash;
+        } catch (error) {
+            return cleanUrl;
+        }
+    }
+    try {
+        const current = new URL(window.location.href);
+        current.searchParams.delete('weline_preview_token');
+        return current.pathname + current.search + current.hash;
+    } catch (error) {
+        return window.location.pathname + window.location.search + window.location.hash;
+    }
+}
+
+function buildExitNavigateUrl(exitUrl, previewToken) {
+    const target = buildExitRedirectTarget();
+    try {
+        const gateway = new URL(exitUrl, window.location.origin);
+        gateway.searchParams.set('exit', '1');
+        gateway.searchParams.set('redirect', target);
+        if (previewToken) {
+            gateway.searchParams.set('token', previewToken);
+        }
+        return gateway.toString();
+    } catch (error) {
+        const joinChar = exitUrl.includes('?') ? '&' : '?';
+        return `${exitUrl}${joinChar}exit=1&redirect=${encodeURIComponent(target)}`
+            + (previewToken ? `&token=${encodeURIComponent(previewToken)}` : '');
+    }
+}
+
+function navigatePreviewExit(exitUrl, previewToken = '') {
+    clearPreviewClientState();
+    try {
+        if (window.parent && window.parent !== window) {
+            window.parent.postMessage({
+                source: 'weline-theme-preview',
+                type: 'preview-exit',
+            }, window.location.origin);
+        }
+    } catch (error) {
+        // Ignore cross-origin parent access failures.
+    }
+    window.location.replace(buildExitNavigateUrl(exitUrl, previewToken));
+}
+
+function bindPreviewExitButtons() {
+    document.querySelectorAll('[data-w-preview-exit]').forEach((button) => {
+        if (!(button instanceof HTMLButtonElement) || button.dataset.wPreviewExitBound === '1') {
+            return;
+        }
+        button.dataset.wPreviewExitBound = '1';
+        button.addEventListener('click', (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            if (button.disabled) {
+                return;
+            }
+            button.disabled = true;
+            const exitUrl = String(button.dataset.wPreviewExitUrl || '').trim();
+            const tokenMatch = document.cookie.match(/(?:^|;\s*)weline_preview_token(?:_w\d+)?=([^;]+)/);
+            const urlToken = new URLSearchParams(window.location.search).get('weline_preview_token') || '';
+            const previewToken = decodeURIComponent(String(urlToken || (tokenMatch ? tokenMatch[1] : '') || '')).trim();
+            navigatePreviewExit(exitUrl, previewToken);
+        });
+    });
+}
+
 function initialize() {
     root.dataset.wEditorPreview = 'true';
     mount(document);
+    bindPreviewExitButtons();
 
     const observer = new MutationObserver((records) => {
         records.forEach((record) => record.addedNodes.forEach((node) => {

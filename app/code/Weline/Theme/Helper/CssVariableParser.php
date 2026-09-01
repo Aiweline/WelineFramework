@@ -53,15 +53,18 @@ class CssVariableParser
         
         // 按行处理，提取分类和变量
         $lines = explode("\n", $cssContent);
-        $currentCategory = '其他';
+        $currentCategory = AppearanceTokenGroupMeta::DEFAULT_CATEGORY;
+        $currentCategoryId = AppearanceTokenGroupMeta::hashGroupId($currentCategory);
         $currentDescription = '';
         
         foreach ($lines as $lineNum => $line) {
             $line = trim($line);
             
-            // 检查是否是分类注释（格式：/* ========== 分类名 ========== */）
+            // 分类注释：/* ========== 分类名 ========== */ 或 /* ========== 分类名 #id ========== */
             if (preg_match('/\/\*\s*={3,}\s*([^=]+)\s*={3,}\s*\*\//', $line, $categoryMatches)) {
-                $currentCategory = trim($categoryMatches[1]);
+                $parsed = AppearanceTokenGroupMeta::parseSectionHeading(trim($categoryMatches[1]));
+                $currentCategory = $parsed['label'];
+                $currentCategoryId = $parsed['id'];
                 $currentDescription = '';
                 continue;
             }
@@ -87,6 +90,7 @@ class CssVariableParser
                     'variable_type' => $varType,
                     'default_value' => $varValue,
                     'category' => $currentCategory,
+                    'category_id' => $currentCategoryId,
                     'description' => $currentDescription ?: self::generateDescription($varName, $varType),
                     'is_color' => $isColor,
                     'file' => $fileName,

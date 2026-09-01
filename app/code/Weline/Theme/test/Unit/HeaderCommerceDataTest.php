@@ -30,4 +30,29 @@ final class HeaderCommerceDataTest extends TestCase
         self::assertGreaterThan(0, $demo['cart_count']);
         self::assertNotSame('', $demo['subtotal_formatted']);
     }
+
+    public function testResolveCategoryNavItemsContractShape(): void
+    {
+        $resolved = HeaderCommerceData::resolveCategoryNavItems();
+        self::assertArrayHasKey('items', $resolved);
+        self::assertArrayHasKey('source', $resolved);
+        self::assertArrayHasKey('is_demo', $resolved);
+        self::assertIsArray($resolved['items']);
+        self::assertIsString($resolved['source']);
+        self::assertFalse($resolved['is_demo']);
+        self::assertStringNotContainsString('电子产品', json_encode($resolved['items'], JSON_UNESCAPED_UNICODE) ?: '');
+    }
+
+    public function testHeaderPrefersCatalogOverDemoNavFactory(): void
+    {
+        $header = dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/default.phtml';
+        $src = (string)file_get_contents($header);
+        self::assertStringContainsString('HeaderCommerceData::resolveCategoryNavItems', $src);
+        self::assertStringContainsString('AllMenuTreeRegistry::hasPublished()', $src);
+        // Live path must not force demo factory when catalog is available.
+        self::assertMatchesRegularExpression(
+            '/empty\(\$navItems\).*resolveCategoryNavItems/s',
+            $src
+        );
+    }
 }

@@ -1,0 +1,135 @@
+<?php
+/**
+ * 账号注册部件（Theme 归属）：与登录同款全宽舞台（左侧文案轨 + 右侧悬浮表单卡）。
+ * 供 account/auth 布局 slot 模板内嵌；主题编辑器可换背景/文案（Copy-on-Write）。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {account-register}
+ * @widget.name {客户注册}
+ * @widget.description {全宽注册舞台：背景铺满，左侧品牌文案，右侧悬浮注册表单}
+ * @widget.type {form}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["account"]}
+ * @widget.exclusive {true}
+ * @widget.supports {["layout-account-auth-content","account-auth-content","account-auth","auth-form","account-register","register"]}
+ *
+ * @param background_image {default="",type="media_image",label="背景图",description="全宽舞台背景；留空则使用色块渐变"}
+ * @param background_color {default="#1b2430",type="color",label="背景主色"}
+ * @param accent_color {default="#e08a2a",type="color",label="背景点缀色",description="无背景图时与主色组成渐变"}
+ * @param overlay_opacity {default="0.35",type="select",label="背景遮罩",options={0:"无遮罩",0.2:"20%",0.35:"35%",0.5:"50%",0.65:"65%"}}
+ * @param promo_eyebrow {default="Weline Account",type="string",label="舞台眉题"}
+ * @param promo_title {default="加入我们",type="string",label="舞台标题"}
+ * @param promo_subtitle {default="创建账户，同步订单与优惠",type="string",label="舞台副文案"}
+ * @param promo_trust {default="安全注册 · 隐私受保护",type="string",label="舞台信任文案"}
+ * @param title {default="创建账户",type="string",label="表单标题"}
+ * @param subtitle {default="使用邮箱注册您的账户",type="string",label="表单副标题"}
+ */
+
+use Weline\Theme\Helper\LegacyMediaUrl;
+use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('account-register');
+$wc = $scope->cssClass;
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
+    || (bool)($this->getData('editor_mode') ?? false);
+
+$backgroundImage = LegacyMediaUrl::sanitize($this->getData('background_image') ?? '', true);
+$backgroundImageFileHtml = (string)($this->getData('background_image_file_html') ?? '');
+$backgroundColor = ThemeUiColor::sanitize(
+    $this->getData('background_color') ?? '',
+    '#1b2430'
+);
+$accentColor = ThemeUiColor::sanitize(
+    $this->getData('accent_color') ?? '',
+    '#e08a2a'
+);
+$overlayOpacity = (float)($this->getData('overlay_opacity') ?? 0.35);
+if ($overlayOpacity < 0) {
+    $overlayOpacity = 0.0;
+}
+if ($overlayOpacity > 0.9) {
+    $overlayOpacity = 0.9;
+}
+
+$promoEyebrowRaw = trim((string)($this->getData('promo_eyebrow') ?? 'Weline Account'));
+$promoTitleRaw = trim((string)($this->getData('promo_title') ?? '加入我们'));
+$promoSubtitleRaw = trim((string)($this->getData('promo_subtitle') ?? '创建账户，同步订单与优惠'));
+$promoTrustRaw = trim((string)($this->getData('promo_trust') ?? '安全注册 · 隐私受保护'));
+$promoEyebrow = $promoEyebrowRaw !== '' && $promoEyebrowRaw !== 'Weline Account'
+    ? (string)__($promoEyebrowRaw)
+    : $promoEyebrowRaw;
+$promoTitleIsDefault = ($promoTitleRaw === '' || $promoTitleRaw === '加入我们');
+$promoSubtitleIsDefault = ($promoSubtitleRaw === '' || $promoSubtitleRaw === '创建账户，同步订单与优惠');
+$promoTrustIsDefault = ($promoTrustRaw === '' || $promoTrustRaw === '安全注册 · 隐私受保护');
+$promoTitle = $promoTitleIsDefault ? '' : (string)__($promoTitleRaw);
+$promoSubtitle = $promoSubtitleIsDefault ? '' : (string)__($promoSubtitleRaw);
+$promoTrust = $promoTrustIsDefault ? '' : (string)__($promoTrustRaw);
+
+$title = trim((string)($this->getData('title') ?? ''));
+$subtitle = trim((string)($this->getData('subtitle') ?? ''));
+if ($title !== '' && $title !== '创建账户') {
+    $this->setData('register_widget_title', (string)__($title));
+}
+if ($subtitle !== '' && $subtitle !== '使用邮箱注册您的账户') {
+    $this->setData('register_widget_subtitle', (string)__($subtitle));
+}
+
+$hasImage = $backgroundImageFileHtml !== '' || $backgroundImage !== '';
+$rootStyle = '--account-login-promo-bg:' . $backgroundColor . ';'
+    . '--account-login-accent:' . $accentColor . ';'
+    . '--account-login-overlay:' . $overlayOpacity . ';'
+    . '--account-login-float-max:24rem;';
+$backdropStyle = '';
+if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
+    $backdropStyle = 'background-image:url("' . $esc($backgroundImage) . '");';
+}
+?>
+<section class="<?= $esc($wc) ?> account-login-widget account-login-widget--register<?= $hasImage ? ' account-login-widget--has-image' : ' account-login-widget--wash' ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-w-component="account-login-stage"
+         style="<?= $esc($rootStyle) ?>">
+    <div class="account-login-widget__backdrop"
+         style="<?= $esc($backdropStyle) ?>"
+         aria-hidden="true">
+        <?php if ($backgroundImageFileHtml !== ''): ?>
+            <div class="account-login-widget__media"><?= $backgroundImageFileHtml ?></div>
+        <?php endif; ?>
+        <div class="account-login-widget__overlay"></div>
+    </div>
+
+    <div class="account-login-widget__rail" aria-label="<?= $esc((string)__('注册品牌文案')) ?>">
+        <?php if ($promoEyebrowRaw === 'Weline Account'): ?>
+            <p class="account-login-widget__eyebrow"><lang>Weline Account</lang></p>
+        <?php elseif ($promoEyebrow !== ''): ?>
+            <p class="account-login-widget__eyebrow"><?= $esc($promoEyebrow) ?></p>
+        <?php endif; ?>
+        <?php if ($promoTitleIsDefault): ?>
+            <p class="account-login-widget__promo-title"><lang>加入我们</lang></p>
+        <?php elseif ($promoTitle !== ''): ?>
+            <p class="account-login-widget__promo-title"><?= $esc($promoTitle) ?></p>
+        <?php endif; ?>
+        <?php if ($promoSubtitleIsDefault): ?>
+            <p class="account-login-widget__promo-subtitle"><lang>创建账户，同步订单与优惠</lang></p>
+        <?php elseif ($promoSubtitle !== ''): ?>
+            <p class="account-login-widget__promo-subtitle"><?= $esc($promoSubtitle) ?></p>
+        <?php endif; ?>
+        <?php if ($promoTrustIsDefault): ?>
+            <p class="account-login-widget__promo-trust"><lang>安全注册 · 隐私受保护</lang></p>
+        <?php elseif ($promoTrust !== ''): ?>
+            <p class="account-login-widget__promo-trust"><?= $esc($promoTrust) ?></p>
+        <?php endif; ?>
+    </div>
+
+    <div class="account-login-widget__dock">
+        <div class="account-login-widget__stage">
+            <?= $this->fetch('Weline_Customer::templates/frontend/account/register.phtml') ?>
+        </div>
+    </div>
+</section>

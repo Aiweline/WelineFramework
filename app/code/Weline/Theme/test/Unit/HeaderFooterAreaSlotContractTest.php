@@ -58,6 +58,8 @@ final class HeaderFooterAreaSlotContractTest extends TestCase
 
         self::assertStringContainsString('@widget.supports {["layout-global-header","header-container"]}', $header);
         self::assertStringContainsString('@widget.supports {["layout-global-footer","footer-container"]}', $footer);
+        self::assertStringContainsString('@widget.code {footer-container}', $footer);
+        self::assertStringContainsString('@widget.is_container {true}', $footer);
     }
 
     public function testEditorModeStylesTargetHeaderFooterSlotWrappers(): void

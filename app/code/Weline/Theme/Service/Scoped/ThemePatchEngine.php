@@ -16,6 +16,8 @@ final class ThemePatchEngine
     public function apply(array $base, array $commands): array
     {
         $payload = $base;
+        /** @var array<string, array<string, true>> $locallyAddedBySlot */
+        $locallyAddedBySlot = [];
         foreach ($commands as $command) {
             if (!$command instanceof ThemePatchCommand) {
                 throw new \InvalidArgumentException('theme_patch_command_type_invalid');
@@ -39,6 +41,10 @@ final class ThemePatchEngine
                         $node['position'] = $command->position;
                     }
                     $this->setPath($payload, $command->path, $node);
+                    $slotId = \trim((string)($node['slot_id'] ?? ''));
+                    if ($slotId !== '' && $command->nodeUid !== null) {
+                        $locallyAddedBySlot[$slotId][(string)$command->nodeUid] = true;
+                    }
                     break;
                 case ThemePatchCommand::OP_REMOVE_NODE:
                     $this->removePath($payload, $command->path);
@@ -64,6 +70,8 @@ final class ThemePatchEngine
                     break;
             }
         }
+
+        $payload = $this->stripParentNodesInLocallyOwnedSlots($payload, $locallyAddedBySlot);
 
         return $this->normalizeNodeIdentities($payload);
     }
@@ -370,6 +378,41 @@ final class ThemePatchEngine
         if ((string)($payload['nodes'][$uid]['node_uid'] ?? '') === '') {
             $payload['nodes'][$uid]['node_uid'] = $uid;
         }
+    }
+
+    /**
+     * Slot-level inheritance short-circuit.
+     *
+     * When this Scope locally ADD_NODE-owns a slot_id, parent nodes in that
+     * same slot must not appear in effective — only the local ADD nodes remain.
+     * Field-level SET on an inherited node does not claim the slot, so siblings
+     * keep flowing from the parent. Clearing ownership (inherit) restores ascent.
+     *
+     * @param array<string,mixed> $payload
+     * @param array<string, array<string, true>> $locallyAddedBySlot
+     * @return array<string,mixed>
+     */
+    private function stripParentNodesInLocallyOwnedSlots(array $payload, array $locallyAddedBySlot): array
+    {
+        if ($locallyAddedBySlot === [] || !isset($payload['nodes']) || !\is_array($payload['nodes'])) {
+            return $payload;
+        }
+
+        foreach ($payload['nodes'] as $uid => $node) {
+            if (!\is_array($node)) {
+                continue;
+            }
+            $slotId = \trim((string)($node['slot_id'] ?? ''));
+            if ($slotId === '' || !isset($locallyAddedBySlot[$slotId])) {
+                continue;
+            }
+            if (isset($locallyAddedBySlot[$slotId][(string)$uid])) {
+                continue;
+            }
+            unset($payload['nodes'][$uid]);
+        }
+
+        return $payload;
     }
 
     /** @param array<string,mixed> $payload @return array<string,mixed> */
