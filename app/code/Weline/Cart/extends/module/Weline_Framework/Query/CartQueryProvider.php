@@ -9,7 +9,12 @@ use Weline\Cart\Service\CartService;
 use Weline\Cart\Service\CartV2ConflictException;
 use Weline\Cart\Service\CartV2Service;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Marketing\Api\Quote\DiscountQuoteRequest;
+use Weline\Marketing\Api\Quote\DiscountQuoteServiceInterface;
+use Weline\Marketing\Service\MarketingCheckoutCouponSession;
 
 class CartQueryProvider implements QueryProviderInterface
 {
@@ -34,8 +39,8 @@ class CartQueryProvider implements QueryProviderInterface
     public function execute(string $operation, array $params = []): mixed
     {
         return match ($operation) {
-            'summary' => $this->success('Cart summary loaded.', $this->storefrontSummaryPayload()),
-            'count' => $this->success('Cart count loaded.', $this->cartCountPayload()),
+            'summary' => $this->success('Cart summary loaded.', $this->storefrontSummaryPayload($params)),
+            'count' => $this->success('Cart count loaded.', $this->cartCountPayload($params)),
             'items', 'miniItems' => $this->success('Cart items loaded.', $this->cartItemsPayload($params)),
             'add' => $this->successFromSummary($this->cartService->add(
                 $this->withTrustedCustomer($params),
@@ -51,10 +56,12 @@ class CartQueryProvider implements QueryProviderInterface
             'removeV2' => $this->removeV2($params),
             'clearV2' => $this->clearV2($params),
             'issueGuestToken' => $this->issueGuestToken(),
+            'renewGuestSession' => $this->renewGuestSession($params),
             'update' => $this->successFromSummary($this->cartService->update($params)),
             'remove' => $this->successFromSummary($this->cartService->remove($params)),
             'clear' => $this->successFromSummary($this->cartService->clear()),
             'options' => $this->success('Cart options loaded.', ['options' => []]),
+            'previewDiscount' => $this->previewDiscount($params),
             default => throw new \InvalidArgumentException((string)__('Cart 查询器不支持的 operation：%{1}', $operation)),
         };
     }
@@ -113,7 +120,58 @@ class CartQueryProvider implements QueryProviderInterface
                 'samesite' => 'Lax',
             ],
         );
-        return $this->success('Guest token issued.', ['guest_token' => $token, 'success' => true]);
+        return $this->success('Guest token issued.', [
+            'guest_token' => $token,
+            'success' => true,
+            'ttl_seconds' => 3600 * 24 * 7,
+            'expires_at_ms' => (int)(\round(\microtime(true) * 1000) + (3600 * 24 * 7 * 1000)),
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function renewGuestSession(array $params): array
+    {
+        $guestToken = trim((string)($params['guest_token'] ?? ''));
+        if ($guestToken === '') {
+            $guestToken = trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE));
+        }
+        if ($guestToken === '') {
+            return $this->success('Guest session missing.', [
+                'success' => false,
+                'message' => (string)__('缺少游客购物车凭证'),
+            ]);
+        }
+
+        $v2 = $this->cartService->cartV2();
+        if ($v2 !== null) {
+            try {
+                $scope = $this->scopeResolver->fromParams($params);
+                $v2->touchGuestCart($scope, $guestToken);
+            } catch (\Throwable) {
+                // Empty carts may not be persisted yet; cookie renew still proceeds.
+            }
+        }
+
+        Cookie::set(
+            CartV2Service::GUEST_TOKEN_COOKIE,
+            $guestToken,
+            3600 * 24 * 7,
+            [
+                'path' => '/',
+                'httponly' => true,
+                'samesite' => 'Lax',
+            ],
+        );
+
+        return $this->success('Guest session renewed.', [
+            'guest_token' => $guestToken,
+            'success' => true,
+            'ttl_seconds' => 3600 * 24 * 7,
+            'expires_at_ms' => (int)(\round(\microtime(true) * 1000) + (3600 * 24 * 7 * 1000)),
+        ]);
     }
 
     /**
@@ -134,6 +192,7 @@ class CartQueryProvider implements QueryProviderInterface
                 $guestToken = (string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE);
             }
             $summary = $v2->getCart($scope, $guestToken, $customerId);
+            $summary = $this->enrichSummaryWithDiscountPreview($summary, $params);
             return $this->successFromSummary($summary);
         } catch (\Throwable $e) {
             return [
@@ -200,6 +259,7 @@ class CartQueryProvider implements QueryProviderInterface
                     $customerId,
                 );
 
+            $summary = $this->enrichSummaryWithDiscountPreview($summary, $params);
             return $this->successFromSummary($summary);
         } catch (\Throwable $e) {
             return [
@@ -266,22 +326,179 @@ class CartQueryProvider implements QueryProviderInterface
     }
 
     /**
+     * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
-    private function storefrontSummaryPayload(): array
+    private function storefrontSummaryPayload(array $params = []): array
     {
-        $summary = $this->cartService->storefrontSummary();
+        $summary = $this->resolveStorefrontSummary($params);
         $summary['success'] = (bool)($summary['success'] ?? true);
+        if (!isset($summary['discount_preview']) || !\is_array($summary['discount_preview'])) {
+            $preview = $this->buildDiscountPreview($params, $summary);
+            if ($preview !== null) {
+                $summary['discount_preview'] = $preview;
+            }
+        }
 
         return $summary;
     }
 
     /**
+     * Resolve the storefront cart summary for read APIs.
+     *
+     * Browser may pass guest_token from sessionStorage; server still never trusts customer_id.
+     *
+     * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
-    private function cartCountPayload(): array
+    private function resolveStorefrontSummary(array $params = []): array
     {
-        $summary = $this->storefrontSummaryPayload();
+        $guestToken = trim((string)($params['guest_token'] ?? ''));
+        if ($guestToken !== '' && $this->currentCustomer->currentCustomerId() === null) {
+            $v2Response = $this->getV2Cart(['guest_token' => $guestToken] + $params);
+            if (($v2Response['success'] ?? false) && \is_array($v2Response['items'] ?? null)) {
+                return $v2Response;
+            }
+        }
+
+        return $this->cartService->storefrontSummary();
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function previewDiscount(array $params): array
+    {
+        $preview = $this->buildDiscountPreview($params);
+        if ($preview === null) {
+            return [
+                'success' => false,
+                'message' => (string)__('预计优惠暂不可用'),
+            ];
+        }
+
+        return $this->success((string)__('预计优惠已计算'), [
+            'discount_preview' => $preview,
+        ]);
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>|null
+     */
+    private function buildDiscountPreview(array $params, ?array $existingSummary = null): ?array
+    {
+        $quotes = ObjectManager::getInstance(RuntimeProviderResolver::class)
+            ->resolve(DiscountQuoteServiceInterface::class);
+        if (!$quotes instanceof DiscountQuoteServiceInterface) {
+            return null;
+        }
+
+        // When called from enrichSummaryWithDiscountPreview, reuse the already-loaded
+        // summary. Re-entering resolveStorefrontSummary/getV2Cart here recurses until OOM.
+        $summary = $existingSummary ?? $this->resolveStorefrontSummary($params);
+        $lines = [];
+        foreach ((array)($summary['items'] ?? []) as $item) {
+            $qty = (int)($item['qty'] ?? $item['quantity'] ?? 1);
+            $priceMinor = (int)($item['unit_price_minor'] ?? 0);
+            if ($priceMinor <= 0) {
+                $priceMinor = (int)\round(((float)($item['price'] ?? 0)) * 100);
+            }
+            $lines[] = [
+                'qty_minor' => max(1, $qty),
+                'unit_price_minor' => max(0, $priceMinor),
+                'sku' => (string)($item['sku'] ?? ''),
+                'product_id' => (int)($item['product_id'] ?? 0),
+            ];
+        }
+
+        $couponSession = ObjectManager::getInstance(MarketingCheckoutCouponSession::class);
+        $couponCode = trim((string)($params['coupon_code'] ?? $couponSession->getCouponCode()));
+
+        $request = new DiscountQuoteRequest(
+            scope: $this->scopeResolver->fromParams($params)->toArray(),
+            address: [],
+            lines: $lines,
+            currency: strtoupper((string)($summary['currency'] ?? 'CNY')),
+            customerId: $this->currentCustomer->currentCustomerId(),
+            couponCode: $couponCode !== '' ? $couponCode : null,
+            cartHash: (string)($summary['cart_hash'] ?? ''),
+        );
+
+        $quote = $quotes->quote($request);
+        $precision = max(0, $quote->currencyPrecision);
+        $divisor = 10 ** $precision;
+        $items = [];
+        $couponIndex = 0;
+        foreach ($quote->lines as $line) {
+            if (!\is_array($line)) {
+                continue;
+            }
+            $amountMajor = (float)($line['discount_amount'] ?? 0);
+            if ($amountMajor <= 0) {
+                continue;
+            }
+            $source = (string)($line['source'] ?? '');
+            $couponCode = strtoupper(trim((string)($line['coupon_code'] ?? '')));
+            $ruleName = trim((string)($line['rule_name'] ?? ''));
+            $label = $couponCode !== '' ? $couponCode : ($ruleName !== '' ? $ruleName : (string)__('优惠'));
+            $kind = 'automatic';
+            $stackable = false;
+            if ($source === 'coupon') {
+                $couponIndex++;
+                $kind = $couponIndex > 1 ? 'stack' : 'coupon';
+                $stackable = $couponIndex > 1;
+            }
+            $items[] = [
+                'label' => $label,
+                'source' => $source,
+                'coupon_code' => $couponCode,
+                'amount_minor' => (int)\round($amountMajor * $divisor),
+                'stackable' => $stackable,
+                'kind' => $kind,
+            ];
+        }
+
+        $subtotalMinor = (int)($summary['subtotal_minor'] ?? 0);
+        if ($subtotalMinor <= 0) {
+            $subtotalMinor = (int)\round(((float)($summary['subtotal'] ?? $summary['grand_total'] ?? 0)) * $divisor);
+        }
+
+        return [
+            'label' => (string)__('预计优惠'),
+            'amount_minor' => $quote->amountMinor,
+            'currency' => $quote->currency,
+            'currency_precision' => $quote->currencyPrecision,
+            'coupon_code' => $quote->couponCode,
+            'subtotal_minor' => $subtotalMinor,
+            'items' => $items,
+            'read_only' => true,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $summary
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function enrichSummaryWithDiscountPreview(array $summary, array $params = []): array
+    {
+        $preview = $this->buildDiscountPreview($params, $summary);
+        if ($preview !== null) {
+            $summary['discount_preview'] = $preview;
+        }
+
+        return $summary;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function cartCountPayload(array $params = []): array
+    {
+        $summary = $this->resolveStorefrontSummary($params);
 
         return [
             'success' => true,
@@ -297,7 +514,7 @@ class CartQueryProvider implements QueryProviderInterface
      */
     private function cartItemsPayload(array $params): array
     {
-        $summary = $this->storefrontSummaryPayload();
+        $summary = $this->resolveStorefrontSummary($params);
         $items = \is_array($summary['items'] ?? null) ? $summary['items'] : [];
         $limit = \max(1, \min(50, (int)($params['limit'] ?? $params['max_items'] ?? 5)));
 
@@ -335,6 +552,14 @@ class CartQueryProvider implements QueryProviderInterface
         ] + $data;
     }
 
+    /** @return array<string, array<string, mixed>> */
+    private function guestTokenParam(): array
+    {
+        return [
+            'guest_token' => ['type' => 'string', 'max_length' => 64],
+        ];
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -354,7 +579,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'params' => [],
+                    'params' => $this->guestTokenParam(),
                     'returns' => $commonReturns,
                     'summary' => 'Read cart summary',
                 ],
@@ -364,7 +589,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'params' => [],
+                    'params' => $this->guestTokenParam(),
                     'returns' => $commonReturns,
                     'summary' => 'Read cart item count',
                 ],
@@ -377,7 +602,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'params' => [
                         'limit' => ['type' => 'int', 'min' => 1, 'max' => 50],
                         'max_items' => ['type' => 'int', 'min' => 1, 'max' => 50],
-                    ],
+                    ] + $this->guestTokenParam(),
                     'returns' => $commonReturns,
                     'summary' => 'Read cart items',
                 ],
@@ -390,9 +615,15 @@ class CartQueryProvider implements QueryProviderInterface
                     'params' => [
                         'limit' => ['type' => 'int', 'min' => 1, 'max' => 50],
                         'max_items' => ['type' => 'int', 'min' => 1, 'max' => 50],
-                    ],
+                    ] + $this->guestTokenParam(),
                     'returns' => $commonReturns,
                     'summary' => 'Read mini cart items',
+                    'attack' => [
+                        'enabled' => true,
+                        'rate_limit' => '5/10s',
+                        'challenge' => 'human',
+                        'description' => '迷你购物车抽屉异步加载限流',
+                    ],
                 ],
                 [
                     'name' => 'add',
@@ -515,6 +746,16 @@ class CartQueryProvider implements QueryProviderInterface
                     'summary' => 'Issue opaque guest cart token',
                 ],
                 [
+                    'name' => 'renewGuestSession',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 1,
+                    'params' => $this->guestTokenParam(),
+                    'returns' => $commonReturns,
+                    'summary' => 'Renew guest cart cookie/cache TTL for another week',
+                ],
+                [
                     'name' => 'clearV2',
                     'frontend' => true,
                     'mode' => 'write',
@@ -571,6 +812,18 @@ class CartQueryProvider implements QueryProviderInterface
                     'params' => [],
                     'returns' => $commonReturns,
                     'summary' => 'Clear cart session',
+                ],
+                [
+                    'name' => 'previewDiscount',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 2,
+                    'params' => [
+                        'coupon_code' => ['type' => 'string', 'max_length' => 64],
+                    ],
+                    'returns' => $commonReturns,
+                    'summary' => 'Read-only estimated discount preview for cart summary',
                 ],
                 [
                     'name' => 'options',

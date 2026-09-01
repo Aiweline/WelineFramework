@@ -1,0 +1,90 @@
+<?php
+
+/**
+ * Cart-owned add-to-cart control for product cards (Hook-backed).
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('product-card-add-to-cart');
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8'
+);
+$isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
+    || (bool)($this->getData('editor_mode') ?? false);
+
+$offer = StorefrontOfferResolver::resolve($this);
+if ($offer === [] && !$isPreviewMode) {
+    return;
+}
+
+$productId = max(0, (int)($offer['product_id'] ?? 0));
+$offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
+$sellable = !empty($offer['sellable']);
+$quoteOnly = !empty($offer['quote_only']);
+$buttonEnabled = $isPreviewMode || ($sellable && $offerUuid !== '');
+
+$variant = trim((string)($this->getData('card_add_to_cart_variant') ?? 'cta'));
+$extraClass = trim((string)($this->getData('card_add_to_cart_button_class') ?? ''));
+$labelOverride = trim((string)($this->getData('card_add_to_cart_label') ?? ''));
+
+$buttonLabel = $labelOverride !== ''
+    ? $labelOverride
+    : ($quoteOnly
+        ? __('仅询价')
+        : ($sellable ? __('加入购物车') : __('暂不可售')));
+
+if ($variant === 'icon') {
+    $buttonClass = 'action-btn btn-cart weline-pixel::add_to_cart';
+} elseif ($variant === 'storefront') {
+    $buttonClass = 'product-storefront__add weline-pixel::add_to_cart';
+} elseif ($variant === 'amz-card') {
+    $buttonClass = 'amz-card__add weline-pixel::add_to_cart';
+} else {
+    $buttonClass = 'btn-add-to-cart weline-pixel::add_to_cart';
+}
+if ($extraClass !== '') {
+    $buttonClass .= ' ' . $extraClass;
+}
+?>
+<div class="weline-cart-product-card-add-to-cart"
+     data-weline-load="cart"
+     data-widget-module="Weline_Cart"
+     data-widget-code="product-card-add-to-cart"
+     data-uid="<?= $escape($scope->uid) ?>"
+     data-purchase-loading="<?= $escape(__('正在加入购物车...')) ?>"
+     data-purchase-success="<?= $escape(__('已加入购物车')) ?>"
+     data-purchase-error="<?= $escape(__('加入购物车失败')) ?>"
+     data-purchase-mark-added="<?= $escape(__('已加入')) ?>"
+     data-cart-url="@url{'cart'}"
+     data-cart-link-text="<?= $escape(__('前往购物车')) ?>"
+     weline-code="<?= $escape($scope->code) ?>">
+    <button type="button"
+            class="<?= $escape(trim($buttonClass)) ?>"
+            data-action="add-v2"
+            data-testid="product-card-add-to-cart"
+            data-default-label="<?= $escape($buttonLabel) ?>"
+            data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
+            data-product-id="<?= $productId ?>"
+            data-global-offer-uuid="<?= $escape($offerUuid) ?>"
+            data-qty="1"
+            <?= $buttonEnabled ? '' : 'disabled' ?>>
+        <?php if ($variant === 'icon'): ?>
+            <w:icon name="cart" size="sm"></w:icon>
+            <span class="visually-hidden"><?= $escape($buttonLabel) ?></span>
+        <?php else: ?>
+            <?php if ($variant === 'cta'): ?>
+                <w:icon name="cart" size="sm"></w:icon>
+            <?php endif; ?>
+            <span class="weline-pixel::add_to_cart" data-card-add-label="1"><?= $escape($buttonLabel) ?></span>
+        <?php endif; ?>
+    </button>
+    <?php if (!$quoteOnly && !$sellable && trim((string)($offer['message'] ?? '')) !== ''): ?>
+        <small class="weline-cart-product-card-add-to-cart__message"><?= $escape($offer['message']) ?></small>
+    <?php endif; ?>
+</div>

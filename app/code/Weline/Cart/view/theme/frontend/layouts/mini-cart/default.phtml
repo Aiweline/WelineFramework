@@ -1,0 +1,76 @@
+<?php
+/**
+ * @meta.name {default="迷你购物车",name="迷你购物车",description="迷你购物车抽屉底部扩展区布局，可在主题编辑器配置优惠券、订单留言等部件"}
+ * @param.title {default="迷你购物车",name="标题",description="编辑器预览标题"}
+ */
+$meta = $this->getData('meta') ?? [];
+$title = (string)($meta['title'] ?? __('迷你购物车'));
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}">
+<head>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <link rel="stylesheet"
+          href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)?v=20260827-extras-tabs2">
+</head>
+<body class="mini-cart-layout-preview">
+<main class="mini-cart-layout" data-layout="mini-cart" id="mini-cart-layout-main"
+      data-weline-load="miniCartExtras">
+    <div class="mini-cart-drawer mini-cart-drawer--layout-preview is-open" aria-hidden="false">
+        <header class="mini-cart-drawer__header">
+            <h2 class="mini-cart-drawer__title"><?= htmlspecialchars($title, ENT_QUOTES, 'UTF-8') ?></h2>
+        </header>
+        <div class="mini-cart-drawer__body">
+            <p class="mini-cart-layout__hint"><?= __('商品行由购物车实时数据渲染，此处仅编辑底部扩展区。') ?></p>
+        </div>
+        <footer class="mini-cart-drawer__footer">
+            <w:slot id="footer-extras"
+                    name="底部扩展区"
+                    accept="layout-mini-cart-footer-extras,mini-cart-coupon,checkout-coupon,order-notice,marketing,order"
+                    multiple="true"
+                    position="footer"
+                    class="mini-cart-drawer__extras">
+            </w:slot>
+            <div class="mini-cart-drawer__subtotal">
+                <span><?= __('小计') ?></span>
+                <strong class="total-amount">¥0.00</strong>
+            </div>
+            <p class="mini-cart-drawer__note"><?= __('税费与运费将在结算时计算') ?></p>
+            <div class="mini-cart-drawer__actions">
+                <span class="mini-cart-drawer__btn mini-cart-drawer__btn--primary"><?= __('去结算') ?></span>
+                <span class="mini-cart-drawer__btn mini-cart-drawer__btn--secondary"><?= __('查看购物车') ?></span>
+            </div>
+        </footer>
+    </div>
+</main>
+<style>
+.mini-cart-layout-preview {
+    margin: 0;
+    background: var(--weline-theme-surface-muted, #f3f4f6);
+}
+
+.mini-cart-layout {
+    min-height: 100vh;
+    display: flex;
+    justify-content: flex-end;
+    padding: var(--weline-space-4, 1rem);
+}
+
+.mini-cart-drawer--layout-preview {
+    position: relative;
+    inset: auto;
+    transform: none;
+    width: min(var(--size-panel-400, 25rem), 100%);
+    max-height: calc(100vh - 2rem);
+    box-shadow: var(--weline-theme-shadow-md, 0 0.5rem 1.5rem rgba(15, 23, 42, 0.12));
+}
+
+.mini-cart-layout__hint {
+    margin: 0;
+    font-size: var(--weline-font-size-sm, 0.875rem);
+    color: var(--weline-theme-text-muted, #6b7280);
+}
+</style>
+<?php // miniCartExtras：由主节点 data-weline-load 声明，禁止 @static 直引 ?>
+</body>
+</html>

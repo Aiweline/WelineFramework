@@ -117,7 +117,21 @@ class CartService
             return $this->summary(false, (string)($snapshot['message'] ?? __('商品不存在或已下架。')));
         }
         if (($snapshot['sellable'] ?? true) === false) {
-            return $this->summary(false, (string)($snapshot['message'] ?? __('该商品暂不可售。')));
+            $stockName = trim((string)($snapshot['name'] ?? ''));
+            if ($stockName === '') {
+                $stockName = (string)__('该商品');
+            }
+            $message = trim((string)($snapshot['message'] ?? ''));
+            $genericCandidates = [
+                (string)__('商品库存不足'),
+                '商品库存不足',
+                'Out of stock',
+            ];
+            if ($message === '' || in_array($message, $genericCandidates, true)) {
+                $message = (string)__('「%{1}」库存不足', [$stockName]);
+            }
+
+            return $this->summary(false, $message !== '' ? $message : (string)__('该商品暂不可售。'));
         }
 
         $requestedQty = $qty;
@@ -126,7 +140,21 @@ class CartService
             $qty = $this->normalizeQty($snapshot['qty']);
         } elseif ($stock !== null) {
             if ($stock <= 0) {
-                return $this->summary(false, (string)($snapshot['message'] ?? __('该商品暂时缺货。')));
+                $stockName = trim((string)($snapshot['name'] ?? ''));
+                if ($stockName === '') {
+                    $stockName = (string)__('该商品');
+                }
+                $message = trim((string)($snapshot['message'] ?? ''));
+                $genericCandidates = [
+                    (string)__('商品库存不足'),
+                    '商品库存不足',
+                    'Out of stock',
+                ];
+                if ($message === '' || in_array($message, $genericCandidates, true)) {
+                    $message = (string)__('「%{1}」库存不足', [$stockName]);
+                }
+
+                return $this->summary(false, $message !== '' ? $message : (string)__('该商品暂时缺货。'));
             }
             $qty = \min($qty, $stock);
         }
@@ -142,7 +170,8 @@ class CartService
             if ($stock !== null) {
                 $availableQty = $stock - (int)$item['qty'];
                 if ($availableQty <= 0) {
-                    return $this->summary(false, (string)__('库存不足，购物车中该商品数量已达到当前可售库存。'));
+                    $stockName = trim((string)($item['name'] ?? $snapshot['name'] ?? ''));
+                    return $this->summary(false, (string)__('「%{1}」库存不足，购物车中该商品数量已达到当前可售库存。', [$stockName !== '' ? $stockName : (string)__('该商品')]));
                 }
                 $qty = \min($qty, $availableQty);
             }
@@ -185,7 +214,8 @@ class CartService
             $summary['quantity_adjusted'] = true;
             $summary['requested_quantity'] = $requestedQty;
             $summary['adjusted_quantity'] = $qty;
-            $summary['message'] = (string)__('库存不足，已按当前可售数量加入购物车。');
+            $adjustedName = trim((string)($snapshot['name'] ?? ''));
+            $summary['message'] = (string)__('「%{1}」库存不足，已按当前可售数量加入购物车。', [$adjustedName !== '' ? $adjustedName : (string)__('该商品')]);
         }
 
         return $summary;
