@@ -22,13 +22,13 @@ use Weline\Marketing\Service\CouponService;
 /**
  * 优惠券管理控制器
  */
-#[Acl('Weline_Marketing::coupon', '优惠券管理', 'circle', '优惠券管理', 'Weline_Backend::marketing_group')]
+#[Acl('Weline_Marketing::commerce:marketing:coupons', '万能优惠券', 'circle', '万能优惠券管理', 'Weline_Backend::marketing_group')]
 class Coupon extends BackendController
 {
     /**
      * 优惠券列表
      */
-    #[Acl('Weline_Marketing::coupon_list', '优惠券列表', 'list', '查看优惠券列表')]
+    #[Acl('Weline_Marketing::commerce:marketing:coupons_index', '万能优惠券列表', 'list', '查看万能优惠券列表')]
     public function index(): string
     {
         try {
@@ -51,8 +51,28 @@ class Coupon extends BackendController
         }
     }
 
-    #[Acl('Weline_Marketing::coupon_add', '添加优惠券', 'plus', '打开优惠券新建表单')]
+    #[Acl('Weline_Marketing::commerce:marketing:coupons_add', '添加万能优惠券', 'plus', '打开万能优惠券新建表单')]
     public function getAdd(): string
+    {
+        return $this->renderForm();
+    }
+
+    #[Acl('Weline_Marketing::commerce:marketing:coupons_add', '编辑万能优惠券', 'edit', '编辑万能优惠券')]
+    public function getEdit(): string
+    {
+        $id = (int)$this->request->getParam('id', 0);
+        /** @var CouponModel $coupon */
+        $coupon = ObjectManager::getInstance(CouponModel::class);
+        $coupon->load($id);
+        if (!$coupon->getId()) {
+            Message::error(__('优惠券不存在'));
+            return $this->redirect('marketing/backend/coupon/index');
+        }
+
+        return $this->renderForm($coupon);
+    }
+
+    private function renderForm(?CouponModel $coupon = null): string
     {
         try {
             /** @var RuleModel $rules */
@@ -64,30 +84,42 @@ class Coupon extends BackendController
             $this->assign('rules', []);
         }
 
+        $this->assign('coupon', $coupon);
+
         return $this->fetch('form');
     }
 
-    #[Acl('Weline_Marketing::coupon_save', '保存优惠券', 'save', '保存优惠券')]
+    #[Acl('Weline_Marketing::commerce:marketing:coupons_save', '保存万能优惠券', 'save', '保存万能优惠券')]
     public function postSave(): string
     {
+        $id = (int)$this->request->getPost('id', 0);
+        $payload = [
+            CouponModel::schema_fields_RULE_ID => (int)$this->request->getPost('rule_id', 0),
+            CouponModel::schema_fields_CODE => trim((string)$this->request->getPost('code', '')),
+            CouponModel::schema_fields_TYPE => trim((string)$this->request->getPost('type', '')),
+            CouponModel::schema_fields_DISCOUNT_VALUE => (float)$this->request->getPost('discount_value', 0),
+            CouponModel::schema_fields_MIN_AMOUNT => (float)$this->request->getPost('min_amount', 0),
+            CouponModel::schema_fields_USAGE_LIMIT => (int)$this->request->getPost('usage_limit', 0),
+            CouponModel::schema_fields_CUSTOMER_LIMIT => (int)$this->request->getPost('customer_limit', 1),
+            CouponModel::schema_fields_STATUS => trim((string)$this->request->getPost('status', CouponModel::STATUS_ACTIVE)),
+        ];
+
         try {
             /** @var CouponService $service */
             $service = ObjectManager::getInstance(CouponService::class);
-            $service->createCoupon([
-                CouponModel::schema_fields_RULE_ID => (int)$this->request->getPost('rule_id', 0),
-                CouponModel::schema_fields_CODE => trim((string)$this->request->getPost('code', '')),
-                CouponModel::schema_fields_TYPE => trim((string)$this->request->getPost('type', '')),
-                CouponModel::schema_fields_DISCOUNT_VALUE => (float)$this->request->getPost('discount_value', 0),
-                CouponModel::schema_fields_MIN_AMOUNT => (float)$this->request->getPost('min_amount', 0),
-                CouponModel::schema_fields_USAGE_LIMIT => (int)$this->request->getPost('usage_limit', 0),
-                CouponModel::schema_fields_CUSTOMER_LIMIT => (int)$this->request->getPost('customer_limit', 1),
-                CouponModel::schema_fields_STATUS => trim((string)$this->request->getPost('status', CouponModel::STATUS_ACTIVE)),
-            ]);
-            Message::success(__('优惠券保存成功'));
+            if ($id > 0) {
+                $service->updateCoupon($id, $payload);
+                Message::success(__('优惠券更新成功'));
+            } else {
+                $service->createCoupon($payload);
+                Message::success(__('优惠券保存成功'));
+            }
         } catch (\Throwable $exception) {
             Message::error(__('保存优惠券失败：%{1}', $exception->getMessage()));
 
-            return $this->redirect('marketing/backend/coupon/getAdd');
+            return $id > 0
+                ? $this->redirect('marketing/backend/coupon/edit', ['id' => $id])
+                : $this->redirect('marketing/backend/coupon/add');
         }
 
         return $this->redirect('marketing/backend/coupon/index');

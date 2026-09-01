@@ -1,42 +1,69 @@
-﻿加载活动列表失败：%{1},"Failed to load campaign list: %{1}"
+﻿营销报价服务不可用,营销报价服务不可用
+营销接口不支持操作：%{1},营销接口不支持操作：%{1}
+营销服务暂时不可用，请稍后再试。,营销服务暂时不可用，请稍后再试。
+万能优惠规则,万能优惠规则
+优惠券校验、折扣报价与会话绑定。,优惠券校验、折扣报价与会话绑定。
+营销后台接口不支持操作：%{1},营销后台接口不支持操作：%{1}
+营销后台服务暂时不可用。,营销后台服务暂时不可用。
+万能优惠规则后台,万能优惠规则后台
+"读取营销规则摘要，供后台浏览器 API 使用。","读取营销规则摘要，供后台浏览器 API 使用。"
+活动,Campaigns
+浏览当前进行中的营销活动与优惠说明。,"Browse active marketing campaigns and offer details."
+加载活动列表失败：%{1},"Failed to load campaign list: %{1}"
 加载促销活动表单失败：%{1},"Failed to load promotion form: %{1}"
+促销活动不存在,促销活动不存在
 促销活动保存成功,"Promotion saved successfully"
 保存促销活动失败：%{1},"Failed to save promotion: %{1}"
-促销活动,promotions
+万能促销活动,万能促销活动
 circle,circle
-促销活动管理,"Promotional event management"
-活动列表,"Activity list"
+万能促销活动管理,万能促销活动管理
+万能促销活动列表,万能促销活动列表
 list,list
-查看促销活动列表,"View a list of promotions"
-添加促销活动,"Add promotion"
+查看万能促销活动列表,查看万能促销活动列表
+添加万能促销活动,添加万能促销活动
 plus,plus
-打开促销活动新建表单,"Open the new promotion form"
-保存促销活动,"Save promotion"
+打开万能促销活动新建表单,打开万能促销活动新建表单
+编辑万能促销活动,编辑万能促销活动
+edit,edit
+保存万能促销活动,保存万能促销活动
 save,save
 加载规则列表失败：%{1},"Failed to load rule list: %{1}"
+加载规则列表失败,加载规则列表失败
+规则不存在,"Rule not found"
 加载规则表单失败：%{1},"Failed to load rule form: %{1}"
 规则名称和有效类型不能为空,"Rule name and valid type cannot be empty"
 规则状态无效,"Rule status is invalid"
 规则保存成功,"Rule saved successfully"
 保存规则失败：%{1},"Failed to save rule: %{1}"
-营销规则,"Marketing Rule"
-营销规则管理,"Marketing rule management"
-规则列表,"Rule List"
-查看营销规则列表,"View a list of marketing rules"
+规则ID不能为空,"Rule ID is required"
+规则已删除,"Rule deleted"
+删除规则失败：%{1},"Failed to delete rule: %{1}"
+万能优惠规则管理,万能优惠规则管理
+万能优惠规则列表,万能优惠规则列表
+查看万能优惠规则列表,查看万能优惠规则列表
 添加规则,"Add Rule"
 添加营销规则,"Add marketing rules"
+编辑规则,编辑规则
+编辑营销规则,编辑营销规则
 保存规则,"save rule"
 保存营销规则,"Save marketing rules"
+删除规则,"Delete rule"
+trash,trash
+删除营销规则,"Delete marketing rules"
 加载优惠券列表失败：%{1},"Failed to load coupon list: %{1}"
+优惠券不存在,优惠券不存在
 加载优惠券表单失败：%{1},"Failed to load coupon form: %{1}"
+优惠券更新成功,优惠券更新成功
 优惠券保存成功,"Coupon saved successfully"
 保存优惠券失败：%{1},"Failed to save coupon: %{1}"
-优惠券管理,"Coupon Management"
-优惠券列表,"Coupon List"
-查看优惠券列表,"View coupon list"
-添加优惠券,"Add Coupon"
-打开优惠券新建表单,"Open the coupon creation form"
-保存优惠券,"Save Coupon"
+万能优惠券,万能优惠券
+万能优惠券管理,万能优惠券管理
+万能优惠券列表,万能优惠券列表
+查看万能优惠券列表,查看万能优惠券列表
+添加万能优惠券,添加万能优惠券
+打开万能优惠券新建表单,打开万能优惠券新建表单
+编辑万能优惠券,编辑万能优惠券
+保存万能优惠券,保存万能优惠券
 优惠券代码不能为空,"Coupon Code Cannot Be Empty"
 优惠券无效或已过期,"Coupon is invalid or expired"
 免运费,"Free Shipping"
@@ -49,6 +76,7 @@ save,save
 应用于,"Apply To"
 订单小计,"Order Subtotal"
 运费,Shipping
+匹配商品行,匹配商品行
 买X送Y,"Buy X Get Y"
 购买X件商品，赠送Y件商品（或折扣）,"Buy X items, get Y items (or discount)"
 "买 %d 送 %d，共赠送 %d 件商品，优惠 %.2f 元","Buy %d and get %d for free. A total of %d products will be given away, with a discount of %.2f yuan."
@@ -182,19 +210,23 @@ VIP等级,"VIP Level"
 包含任一标签,"Contains Any Tag"
 不包含任一标签,"Not Contains Any Tag"
 标签,Tag
-后台,Background
-营销,Marketing
+当前暂无进行中的活动，请稍后再来看看。,"There are no active campaigns right now. Please check back later."
+优惠券代码,"Coupon Code"
+应用,Apply
 优惠券,Coupon
+输入优惠券代码,"Enter coupon code"
+应用中...,Applying...
+优惠券列表,"Coupon List"
+添加优惠券,"Add Coupon"
 暂无数据,"No data"
 ID,ID
-优惠券代码,"Coupon Code"
 折扣值,"Discount Value"
 状态,Status
 使用次数,"Usage Count"
 操作,Action
 编辑,Edit
-新建优惠券,"Create new coupon"
 返回列表,"Return to list"
+营销规则,"Marketing Rule"
 请选择,"Please select"
 优惠类型,"Offer type"
 固定金额,"fixed amount"
@@ -204,12 +236,21 @@ ID,ID
 最低订单金额,"Minimum order amount"
 总使用次数,"total number of uses"
 每客户次数,"times per customer"
-规则管理,"Rule Management"
+更新优惠券,更新优惠券
+保存优惠券,"Save Coupon"
+万能优惠规则列表与维护入口,万能优惠规则列表与维护入口
+规则列表,"Rule List"
+系统同步,"System synced"
 规则名称,"Rule Name"
 优先级,Priority
+系统同步折扣不可删除，请到来源模块管理活动,"System-synced discounts cannot be deleted; manage the activity in the source module"
+确定删除该营销规则吗？,"Delete this marketing rule?"
+删除,删除
+系统同步规则请到来源模块管理活动，折扣模块不可保存修改。,系统同步规则请到来源模块管理活动，折扣模块不可保存修改。
 新建营销规则,"Create new marketing rules"
 规则描述,"Rule description"
 规则类型,"Rule type"
+促销活动,Promotion
 自动规则,"Automated rules"
 已过期,Expired
 促销活动列表,"Campaign List"
@@ -223,6 +264,8 @@ ID,ID
 活动描述,"Activity description"
 草稿,draft
 暂停,pause
+保存促销活动,"Save promotion"
+外部模块自动同步的折扣规则，请到来源模块管理活动以禁用；折扣模块不可删除。,"Externally synced discount rule. Disable it in the source module; Marketing cannot delete it."
 活动名称和有效营销规则不能为空,"Campaign name and active marketing rules cannot be empty"
 活动状态无效,"Activity status is invalid"
 活动结束时间必须晚于开始时间,"Event end time must be later than start time"
@@ -231,3 +274,32 @@ ID,ID
 优惠券类型无效,"Invalid coupon type"
 优惠券状态无效,"Coupon status is invalid"
 优惠券代码已存在,"Coupon code already exists"
+"优惠券 ID 无效","优惠券 ID 无效"
+请输入优惠券代码,请输入优惠券代码
+优惠券已保存，将在结账报价时生效,优惠券已保存，将在结账报价时生效
+已移除优惠券,已移除优惠券
+优惠券无效或不可用,优惠券无效或不可用
+此折扣由「%{1}」活动自动同步，请到该模块管理活动以禁用或调整；折扣模块不可删除。,"This discount is synced from \"%{1}\". Manage/disable the activity there; it cannot be deleted in Marketing."
+无法保存该规则,"Unable to save this rule"
+无法删除该规则,"Unable to delete this rule"
+系统同步折扣不可在折扣模块修改。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be edited in Marketing. Manage/disable the activity in \"%{1}\"."
+系统同步折扣不可在折扣模块删除。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be deleted in Marketing. Manage/disable the activity in \"%{1}\"."
+来源业务模块,"Source business module"
+后台,Background
+营销,Marketing
+规则管理,"Rule Management"
+优惠券管理,"Coupon Management"
+编辑优惠券,编辑优惠券
+新建优惠券,"Create new coupon"
+清除优惠券,清除优惠券
+移除优惠券,移除优惠券
+促销活动管理,"Promotional event management"
+活动列表,"Activity list"
+查看促销活动列表,"View a list of promotions"
+添加促销活动,"Add promotion"
+打开促销活动新建表单,"Open the new promotion form"
+营销规则管理,"Marketing rule management"
+查看营销规则列表,"View a list of marketing rules"
+查看优惠券列表,"View coupon list"
+打开优惠券新建表单,"Open the coupon creation form"
+"活动时间：%{1} — %{2}","Campaign period: %{1} — %{2}"

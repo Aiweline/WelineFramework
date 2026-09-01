@@ -1,0 +1,19 @@
+.w-marketing-checkout-coupon--mini-cart {
+    padding: var(--weline-space-3, 0.75rem);
+    border: var(--border-width-thin, 1px) solid var(--weline-theme-border, #e5e7eb);
+    border-radius: var(--weline-radius-md, 0.375rem);
+    background: var(--weline-theme-surface-muted, #f9fafb);
+}
+
+.w-marketing-checkout-coupon--mini-cart .w-marketing-checkout-coupon__title {
+    font-size: var(--weline-font-size-sm, 0.875rem);
+}
+
+.w-marketing-checkout-coupon--mini-cart .w-marketing-checkout-coupon__row {
+    gap: var(--weline-space-2, 0.5rem);
+}
+
+.w-marketing-checkout-coupon--mini-cart .w-marketing-checkout-coupon__apply,
+.w-marketing-checkout-coupon--mini-cart .w-marketing-checkout-coupon__remove {
+    font-size: var(--weline-font-size-xs, 0.75rem);
+}
