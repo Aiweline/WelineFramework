@@ -35,11 +35,6 @@ if ($isPreviewMode && $wishlistCount <= 0) {
     $wishlistCount = 2;
 }
 
-$wishlistPath = parse_url($this->getFrontendUrl('wishlist/frontend/index'), PHP_URL_PATH);
-if (!is_string($wishlistPath) || $wishlistPath === '') {
-    $wishlistPath = '/wishlist';
-}
-$wishlistPath = rtrim($wishlistPath, '/');
 ?>
 
 <section class="header-wishlist header-action-item <?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?><?= $wishlistCount <= 0 ? ' is-empty' : '' ?>"
@@ -48,7 +43,7 @@ $wishlistPath = rtrim($wishlistPath, '/');
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-w-wishlist-icon="1"
          data-wishlist-count="<?= $wishlistCount ?>">
-    <a href="<?= $esc($wishlistPath) ?>" class="wishlist-link" title="<?= __('我的收藏') ?>">
+    <a href="@url{'customer/account/index'}#wishlist" class="wishlist-link" title="<?= __('我的收藏') ?>">
         <span class="wishlist-icon-wrapper">
             <span class="header-wishlist-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">

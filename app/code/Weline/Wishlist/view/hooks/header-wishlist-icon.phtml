@@ -1,0 +1,13 @@
+<?php
+/**
+ * Weline_Wishlist — header user-area wishlist icon.
+ *
+ * Hook: header-wishlist-icon
+ * Theme partial 不得内嵌非 Theme 的 w:widget；收藏入口经 Hook 交付。
+ *
+ * @hook-priority 42
+ * @hook-sort-order 6
+ * @hook-solo false
+ */
+?>
+<?= $this->fetch('Weline_Wishlist::theme/frontend/widgets/header/wishlist-icon/default.phtml') ?>
