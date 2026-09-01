@@ -51,6 +51,10 @@ class WidgetRegistryRecordService
                 if (!empty($entry['updated'])) {
                     $report['updated_widgets'][] = $entry['widget'];
                     $report['updated_count']++;
+                    if (!empty($entry['has_default_injections'])) {
+                        $report['created_default_injection_widgets'][] = $entry['widget'];
+                        $report['created_default_injection_count']++;
+                    }
                 }
             }
         } catch (\Throwable $e) {
