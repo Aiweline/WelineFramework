@@ -33,10 +33,11 @@ final class StorefrontHeaderNavFragmentCache
         bool $drawerFlyout,
         array $item,
         callable $builder,
+        bool $showBannerWithChildren = true,
     ): string {
         $html = $this->hotCache->remember(
             self::CACHE_POOL,
-            $this->megaMenuPanelLogicalKey($panelId, $drawerFlyout, $item),
+            $this->megaMenuPanelLogicalKey($panelId, $drawerFlyout, $item, $showBannerWithChildren),
             self::FRESH_TTL_SECONDS,
             static function () use ($builder): string {
                 $rendered = $builder();
@@ -77,8 +78,12 @@ final class StorefrontHeaderNavFragmentCache
     /**
      * @param array<string, mixed> $item
      */
-    public function megaMenuPanelLogicalKey(string $panelId, bool $drawerFlyout, array $item): string
-    {
+    public function megaMenuPanelLogicalKey(
+        string $panelId,
+        bool $drawerFlyout,
+        array $item,
+        bool $showBannerWithChildren = true,
+    ): string {
         $panelId = \trim($panelId);
         if ($panelId === '') {
             $panelId = 'panel-' . \substr(\sha1((string)\json_encode($item, JSON_UNESCAPED_UNICODE)), 0, 12);
@@ -87,9 +92,10 @@ final class StorefrontHeaderNavFragmentCache
         $structureFp = $this->navStructureFingerprint($item);
 
         return \sprintf(
-            'theme.header.mega_panel.%s.%s.%s',
+            'theme.header.mega_panel.v2.%s.%s.%s.%s',
             $drawerFlyout ? 'drawer' : 'top',
             $panelSlug,
+            $showBannerWithChildren ? 'banner1' : 'banner0',
             $structureFp,
         );
     }
@@ -112,12 +118,23 @@ final class StorefrontHeaderNavFragmentCache
             (string)($item['url'] ?? ''),
             (string)($item['text'] ?? $item['name'] ?? ''),
             (string)($item['ref'] ?? ''),
+            (string)($item['banner'] ?? ''),
+            (string)($item['description'] ?? ''),
+            (string)($item['summary'] ?? ''),
         ];
         foreach ($children as $child) {
             if (!\is_array($child)) {
                 continue;
             }
-            $parts[] = (string)($child['url'] ?? '') . '|' . (string)($child['text'] ?? $child['name'] ?? '');
+            $parts[] = (string)($child['url'] ?? '')
+                . '|'
+                . (string)($child['text'] ?? $child['name'] ?? '')
+                . '|'
+                . (string)($child['banner'] ?? '')
+                . '|'
+                . (string)($child['description'] ?? '')
+                . '|'
+                . (string)($child['summary'] ?? '');
         }
 
         return \substr(\sha1(\implode("\n", $parts)), 0, 16);

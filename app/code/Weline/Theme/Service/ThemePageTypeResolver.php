@@ -26,13 +26,17 @@ final class ThemePageTypeResolver
         'account_orders' => ThemeLayout::PAGE_TYPE_ACCOUNT,
         'account_logout' => ThemeLayout::PAGE_TYPE_ACCOUNT,
         ThemeLayout::PAGE_TYPE_SEARCH => ThemeLayout::PAGE_TYPE_SEARCH,
+        ThemeLayout::PAGE_TYPE_BLOG => ThemeLayout::PAGE_TYPE_BLOG,
+        ThemeLayout::PAGE_TYPE_BLOG_CATEGORY => ThemeLayout::PAGE_TYPE_BLOG_CATEGORY,
         ThemeLayout::PAGE_TYPE_DEFAULT => ThemeLayout::PAGE_TYPE_DEFAULT,
         'checkout_success' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'checkout_failer' => ThemeLayout::PAGE_TYPE_DEFAULT,
+        'not_found' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'customer_service' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'help' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'order_tracking' => ThemeLayout::PAGE_TYPE_DEFAULT,
+        'payment_guide' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'contact' => ThemeLayout::PAGE_TYPE_DEFAULT,
+        'about' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'promotion' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'review' => ThemeLayout::PAGE_TYPE_DEFAULT,
         'qa' => ThemeLayout::PAGE_TYPE_DEFAULT,
@@ -51,6 +55,8 @@ final class ThemePageTypeResolver
         ThemeLayout::PAGE_TYPE_CHECKOUT => 'checkout',
         ThemeLayout::PAGE_TYPE_ACCOUNT => 'account',
         ThemeLayout::PAGE_TYPE_SEARCH => 'search',
+        ThemeLayout::PAGE_TYPE_BLOG => 'blog',
+        ThemeLayout::PAGE_TYPE_BLOG_CATEGORY => 'blog',
         ThemeLayout::PAGE_TYPE_DEFAULT => 'index/index',
     ];
 
@@ -193,6 +199,15 @@ final class ThemePageTypeResolver
         if ($contains('search') && $contains('frontend')) {
             return ThemeLayout::PAGE_TYPE_SEARCH;
         }
+        if ($contains('blog') && $contains('category')) {
+            return ThemeLayout::PAGE_TYPE_BLOG_CATEGORY;
+        }
+        if ($contains('blog') && ($contains('index') || $contains('frontend_index'))) {
+            return ThemeLayout::PAGE_TYPE_BLOG_CATEGORY;
+        }
+        if ($contains('blog')) {
+            return ThemeLayout::PAGE_TYPE_BLOG;
+        }
         if ($contains('category')) {
             return ThemeLayout::PAGE_TYPE_CATEGORY;
         }
@@ -214,6 +229,9 @@ final class ThemePageTypeResolver
         }
         if ($contains('cart')) {
             return ThemeLayout::PAGE_TYPE_CART;
+        }
+        if ($contains('account') && $contains('challenge')) {
+            return 'account.challenge';
         }
         if ($contains('account') && ($contains('login') || $contains('register') || $contains('forgotpassword'))) {
             return 'account.auth';
@@ -257,6 +275,12 @@ final class ThemePageTypeResolver
         if ($this->pathMatchesRoute($path, 'search')) {
             return ThemeLayout::PAGE_TYPE_SEARCH;
         }
+        if ($path === 'blog' || str_starts_with($path, 'blog/category')) {
+            return ThemeLayout::PAGE_TYPE_BLOG_CATEGORY;
+        }
+        if ($this->pathMatchesRoute($path, 'blog')) {
+            return ThemeLayout::PAGE_TYPE_BLOG;
+        }
         // products before product — avoid matching product-list prefix incorrectly.
         if ($this->pathMatchesRoute($path, 'products') || $this->pathMatchesRoute($path, 'product-list')) {
             return ThemeLayout::PAGE_TYPE_PRODUCT_LIST;
@@ -279,6 +303,11 @@ final class ThemePageTypeResolver
         if ($this->pathMatchesRoute($path, 'cart')) {
             return ThemeLayout::PAGE_TYPE_CART;
         }
+        if ($this->pathMatchesRoute($path, 'account/challenge')
+            || $this->pathMatchesRoute($path, 'customer/account/challenge')
+        ) {
+            return 'account.challenge';
+        }
         if ($this->pathMatchesRoute($path, 'account/login')
             || $this->pathMatchesRoute($path, 'account/register')
             || $this->pathMatchesRoute($path, 'account/forgot')
@@ -297,7 +326,8 @@ final class ThemePageTypeResolver
             || $this->pathMatchesRoute($path, 'order/track')
             || $this->pathMatchesRoute($path, 'order/tracking')
         ) {
-            return 'order_tracking';
+            // Legacy public track URLs redirect into account orders.
+            return 'account_orders';
         }
         if ($this->pathMatchesRoute($path, 'help') || $this->pathMatchesRoute($path, 'faq')) {
             return 'help';
@@ -307,6 +337,9 @@ final class ThemePageTypeResolver
         }
         if ($this->pathMatchesRoute($path, 'contact') || $path === 'support' || str_ends_with($path, '/support')) {
             return 'contact';
+        }
+        if ($this->pathMatchesRoute($path, 'about')) {
+            return 'about';
         }
         if ($this->pathMatchesRoute($path, 'promotion')) {
             return 'promotion';

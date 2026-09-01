@@ -50,6 +50,12 @@ Discovery precedence: active `app/design` theme chain -> `Weline_Theme/view/them
 - `activity`
   - `default`
 
+- `about`
+  - `default`
+
+- `terms`
+  - `default`
+
 - `cart`
   - `default`
   - `empty`
@@ -79,6 +85,7 @@ Discovery precedence: active `app/design` theme chain -> `Weline_Theme/view/them
   - `minimal`
 
 - `policy`
+  - `ads-preferences`
   - `cookie`
   - `default`
   - `disclaimer`
@@ -89,7 +96,13 @@ Discovery precedence: active `app/design` theme chain -> `Weline_Theme/view/them
 - `product`
   - `default`
 
-- `product_list`
+- `search`
+  - `default`
+
+- `blog`
+  - `default`
+
+- `blog_category`
   - `default`
 
 - `test`

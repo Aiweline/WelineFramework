@@ -7,9 +7,8 @@
         transition: box-shadow var(--weline-motion-normal), outline var(--weline-motion-normal);
     }
 
-    html[data-w-editor-interaction="edit"] .widget-wrapper:hover,
+    /* Outline only the active hover target (JS .show-actions), not every :hover ancestor. */
     html[data-w-editor-interaction="edit"] .widget-wrapper.show-actions,
-    body.editor-mode .widget-wrapper:hover,
     body.editor-mode .widget-wrapper.show-actions {
         z-index: 100;
         outline: 2px solid var(--weline-theme-primary);
@@ -69,10 +68,9 @@
         visibility: hidden;
     }
 
-    html[data-w-editor-interaction="edit"] .widget-wrapper.show-actions .widget-hover-actions,
-    html[data-w-editor-interaction="edit"] .widget-wrapper:hover > .widget-hover-actions,
-    body.editor-mode .widget-wrapper.show-actions .widget-hover-actions,
-    body.editor-mode .widget-wrapper:hover > .widget-hover-actions {
+    /* Direct child only: parent .show-actions must not reveal nested sibling toolbars. */
+    html[data-w-editor-interaction="edit"] .widget-wrapper.show-actions > .widget-hover-actions,
+    body.editor-mode .widget-wrapper.show-actions > .widget-hover-actions {
         display: flex;
     }
 

@@ -23,12 +23,18 @@
  * @param show_wishlist {default=true,type="bool",label="显示收藏"}
  * @param show_compare {default=true,type="bool",label="显示对比"}
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ * @param label_new_bg {default="",type="color",label="新品标签背景",description="留空使用主题全局色盘"}
+ * @param label_new_text {default="",type="color",label="新品标签文字",description="留空使用主题全局色盘"}
+ * @param label_sale_bg {default="",type="color",label="促销标签背景",description="留空使用主题全局色盘"}
+ * @param label_sale_text {default="",type="color",label="促销标签文字",description="留空使用主题全局色盘"}
  */
 
 
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('deals-of-day');
@@ -61,15 +67,20 @@ foreach (ThemeDemoCatalog::products($limit, 60) as $index => $demo) {
         'review_count' => $demo['review_count'],
         'stock_total' => 80 + ($index * 15),
         'stock_sold' => 35 + ($index * 9),
+        'is_new' => ($index % 3 === 0) ? 1 : 0,
+        'is_sale' => 1,
     ];
 }
+
+$labelOverrides = ProductLabelStyle::widgetOverridesFromTemplate($this);
+$scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 
 ?>
 
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>">
+         data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
     <div class="widget-header">
         <div class="header-left">
             <?php if ($title): ?>
@@ -125,10 +136,13 @@ foreach (ThemeDemoCatalog::products($limit, 60) as $index => $demo) {
                                  loading="lazy">
                         </a>
                         
-                        <?php if ($showDiscountPercent): ?>
-                            <div class="discount-badge">
-                                -<?= $product['discount_percent'] ?>%
-                            </div>
+                        <?php if ($showDiscountPercent || !empty($product['is_new']) || !empty($product['is_demo'])): ?>
+                            <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/labels.phtml', [
+                                'is_demo' => (bool)($product['is_demo'] ?? false),
+                                'is_new' => (bool)($product['is_new'] ?? false),
+                                'is_sale' => $showDiscountPercent,
+                                'sale_text' => $showDiscountPercent ? '-' . (int)$product['discount_percent'] . '%' : '',
+                            ]) ?>
                         <?php endif; ?>
                         
                         <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
@@ -176,10 +190,13 @@ foreach (ThemeDemoCatalog::products($limit, 60) as $index => $demo) {
                             </div>
                         <?php endif; ?>
                         
-                        <button class="btn-add-to-cart btn-deal" data-product-id="<?= $product['id'] ?>">
-                            <w:icon name="bolt" size="sm"></w:icon>
-                            <span><?= __('立即抢购') ?></span>
-                        </button>
+                        <?= $this->fetch(
+                            'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
+                            ProductCardAddToCartParams::fetchDictionary($product, [
+                                'button_class' => 'btn-deal',
+                                'label' => (string)__('立即抢购'),
+                            ])
+                        ) ?>
                     </div>
                 </div>
             <?php endforeach; ?>
@@ -336,19 +353,6 @@ foreach (ThemeDemoCatalog::products($limit, 60) as $index => $demo) {
     color: var(--weline-theme-danger);
 }
 
-/* 折扣标签 */
-.<?= $wc ?> .discount-badge {
-    position: absolute;
-    top: var(--spacing-2_5);
-    left: var(--spacing-2_5);
-    background: var(--weline-theme-danger);
-    color: var(--weline-theme-on-primary);
-    padding: var(--spacing-1_5) var(--weline-space-3);
-    border-radius: var(--token-size-20px);
-    font-weight: 700;
-    font-size: var(--font-size-sm);
-    z-index: 2;
-}
 
 /* 库存进度条 */
 .<?= $wc ?> .stock-progress {

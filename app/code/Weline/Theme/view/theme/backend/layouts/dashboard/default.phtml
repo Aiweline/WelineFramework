@@ -38,7 +38,7 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_
     <w:hook>Weline_Theme::backend::layouts::dashboard::body-start</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="backend" type="loading" default-option="default"/>
 
-    <div class="w-backend-shell w-dashboard-shell">
+    <div class="w-backend-shell w-dashboard-shell" data-w-component="backend-sidebar-collapse">
         <?php if ($showHeader): ?>
             <w:hook>Weline_Theme::backend::layouts::base::topbar-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="backend" type="topbar" default-option="default"/>

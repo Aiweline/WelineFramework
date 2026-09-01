@@ -111,8 +111,8 @@ function generateColorGradient($primaryColor, $secondaryColor) {
 
 <?php
 $themeId = $theme && is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? $theme['identity_id'] ?? null);
-$saveUrl = $this->getUrl('theme/backend/config/layout/saveColorPalette');
-$saveVariablesUrl = $this->getUrl('theme/backend/config/layout/saveColorPaletteVariables');
+$savePath = 'theme/backend/config/layout/saveColorPalette';
+$saveVariablesPath = 'theme/backend/config/layout/saveColorPaletteVariables';
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
@@ -133,8 +133,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     const themeId = <?= json_encode($themeId, $jsonForScriptFlags) ?>;
     const area = <?= json_encode($area, $jsonForScriptFlags) ?>;
     const scope = <?= json_encode($scope, $jsonForScriptFlags) ?>;
-    const saveUrl = <?= json_encode($saveUrl, $jsonForScriptFlags) ?>;
-    const saveVariablesUrl = <?= json_encode($saveVariablesUrl, $jsonForScriptFlags) ?>;
+    const saveUrl = "@url{$savePath}";
+    const saveVariablesUrl = "@url{$saveVariablesPath}";
     const selectThemeText = <?= json_encode((string)__('请先选择主题'), $jsonForScriptFlags) ?>;
     const loadFailedText = <?= json_encode((string)__('加载失败'), $jsonForScriptFlags) ?>;
     const loadModalFailedText = <?= json_encode((string)__('加载弹窗失败'), $jsonForScriptFlags) ?>;
@@ -276,8 +276,8 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
             return;
         }
         
-        const getUrl = <?= json_encode($this->getUrl('theme/backend/config/layout/getColorPaletteVariables'), $jsonForScriptFlags) ?>;
-        const modalUrl = <?= json_encode($this->getUrl('theme/backend/config/layout/getColorPaletteModal'), $jsonForScriptFlags) ?>;
+        const getUrl = "@url{'theme/backend/config/layout/getColorPaletteVariables'}";
+        const modalUrl = "@url{'theme/backend/config/layout/getColorPaletteModal'}";
         
         // 显示加载状态
         const loadingHtml = `

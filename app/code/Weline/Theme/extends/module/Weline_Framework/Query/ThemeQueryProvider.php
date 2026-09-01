@@ -715,6 +715,7 @@ class ThemeQueryProvider implements QueryProviderInterface
         $path = strtolower($this->normalizeEditorRequestPath((string)$parts['path']));
         if (!str_starts_with($path, '/theme/backend/theme-editor/')
             && !str_starts_with($path, '/theme/backend/virtual-theme/')
+            && !str_starts_with($path, '/theme/backend/ai/')
             && !str_starts_with($path, '/theme/backend/widget/paramrender/')
             && !str_starts_with($path, '/theme/backend/config/')
             && !str_starts_with($path, '/weline/eav/api/options')
@@ -742,8 +743,11 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/widgets' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgets(),
                 '/theme/backend/theme-editor/default-injections' => ($themeEditor ??= $this->createDirectThemeEditor())->getDefaultInjections(),
                 '/theme/backend/theme-editor/apply-default-injection' => ($themeEditor ??= $this->createDirectThemeEditor())->postApplyDefaultInjection(),
+                '/theme/backend/theme-editor/reconcile-required-defaults' => ($themeEditor ??= $this->createDirectThemeEditor())->postReconcileRequiredDefaults(),
+                '/theme/backend/theme-editor/apply-required-defaults' => ($themeEditor ??= $this->createDirectThemeEditor())->postApplyRequiredDefaults(),
                 '/theme/backend/theme-editor/init-slot-defaults' => ($themeEditor ??= $this->createDirectThemeEditor())->postInitSlotDefaults(),
                 '/theme/backend/theme-editor/widget-config' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetConfig(),
+                '/theme/backend/theme-editor/widget-field-i18n' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetFieldI18n(),
                 '/theme/backend/theme-editor/widget-preview' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgetPreview(),
                 '/theme/backend/theme-editor/layout-options' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutOptionsPayload(),
                 '/theme/backend/theme-editor/layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->getLayoutConfigPayload(),
@@ -784,7 +788,9 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/save-version' => ($themeEditor ??= $this->createDirectThemeEditor())->saveVersionPayload(),
                 '/theme/backend/theme-editor/switch-version' => ($themeEditor ??= $this->createDirectThemeEditor())->switchVersionPayload(),
                 '/theme/backend/theme-editor/restore-original' => ($themeEditor ??= $this->createDirectThemeEditor())->restoreOriginalPayload(),
+                '/theme/backend/theme-editor/clear-theme-cache' => ($themeEditor ??= $this->createDirectThemeEditor())->clearThemeCachePayload(),
                 '/theme/backend/theme-editor/reset-draft-resources' => ($themeEditor ??= $this->createDirectThemeEditor())->resetDraftResourcesPayload(),
+                '/theme/backend/theme-editor/factory-reset' => ($themeEditor ??= $this->createDirectThemeEditor())->factoryResetPayload(),
                 '/theme/backend/theme-editor/publish-version' => ($themeEditor ??= $this->createDirectThemeEditor())->publishVersionPayload(),
                 '/theme/backend/theme-editor/delete-version' => ($themeEditor ??= $this->createDirectThemeEditor())->deleteVersionPayload(),
                 '/theme/backend/theme-editor/rename-version' => ($themeEditor ??= $this->createDirectThemeEditor())->renameVersionPayload(),
@@ -802,6 +808,9 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/virtual-theme/save-source' => $this->createDirectVirtualTheme()->postSaveSource(),
                 '/theme/backend/virtual-theme/publish-version' => $this->createDirectVirtualTheme()->postPublishVersion(),
                 '/theme/backend/virtual-theme/rollback-version' => $this->createDirectVirtualTheme()->postRollbackVersion(),
+                '/theme/backend/ai/agents' => $this->createDirectThemeAi()->getAgents(),
+                '/theme/backend/ai/publish' => $this->createDirectThemeAi()->postPublish(),
+                '/theme/backend/ai/prepare-refine' => $this->createDirectThemeAi()->postPrepareRefine(),
                 '/theme/backend/widget/paramrender/form' => $this->createDirectParamRender()->postForm(),
                 '/weline/eav/api/options' => $this->eavOptionsQuery()->queryOptions($requestParams),
                 '/weline/eav/api/options/attributes' => $this->eavOptionsQuery()->queryAttributes($requestParams),
@@ -862,6 +871,17 @@ class ThemeQueryProvider implements QueryProviderInterface
             ObjectManager::getInstance(WelineTheme::class),
             ObjectManager::getInstance(\Weline\Theme\Service\ThemeVirtualThemeManifestService::class),
             ObjectManager::getInstance(ThemeVirtualLayoutService::class)
+        );
+        $this->injectRequestIntoController($controller);
+        return $controller;
+    }
+
+    private function createDirectThemeAi(): \Weline\Theme\Controller\Backend\Ai
+    {
+        $controller = new \Weline\Theme\Controller\Backend\Ai(
+            ObjectManager::getInstance(\Weline\Ai\Api\AiRuntimeInterface::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeAiDraftService::class),
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeAiPayloadValidator::class),
         );
         $this->injectRequestIntoController($controller);
         return $controller;
@@ -1078,6 +1098,7 @@ class ThemeQueryProvider implements QueryProviderInterface
         foreach ([
             '/theme/backend/theme-editor/',
             '/theme/backend/virtual-theme/',
+            '/theme/backend/ai/',
             '/theme/backend/widget/paramrender/form',
             '/theme/backend/config/',
             '/weline/eav/api/options',

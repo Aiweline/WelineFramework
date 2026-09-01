@@ -24,15 +24,12 @@ $logoText = $this->getData("meta.logoText") ?? __('Weline Admin');
 $navItems = $this->getData("meta.navItems") ?? [];
 $showUserMenu = $this->getData("meta.showUserMenu") ?? true;
 $class = $this->getData("meta.class") ?? '';
-
-$baseUrl = $this->request->getBaseUrl();
-$backendUrl = $this->request->getUrlBuilder()->getBackendUrl('/');
 ?>
 <header class="backend-header <?= htmlspecialchars($class) ?>">
     <div class="header-container">
         <!-- Logo -->
         <div class="header-logo">
-            <a href="<?= $backendUrl ?>" title="<?= __('管理后台') ?>">
+            <a href="@backend-url{'/'}" title="<?= __('管理后台') ?>">
                 <?php if ($logo): ?>
                     <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('后台Logo') ?>">
                 <?php else: ?>
@@ -60,7 +57,7 @@ $backendUrl = $this->request->getUrlBuilder()->getBackendUrl('/');
         <?php if ($showUserMenu): ?>
             <div class="header-actions">
                 <div class="header-action-item header-account">
-                    <a href="<?= $backendUrl ?>account" class="account-link" title="<?= __('我的账户') ?>">
+                    <a href="@backend-url{'account'}" class="account-link" title="<?= __('我的账户') ?>">
                         <i class="fas fa-user"></i>
                         <span class="account-text"><?= __('账户') ?></span>
                     </a>

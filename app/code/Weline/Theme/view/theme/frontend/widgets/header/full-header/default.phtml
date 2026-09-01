@@ -75,9 +75,9 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                 <span class="topbar-text"><?= __('欢迎光临！免费配送满') ?> ¥299</span>
             </div>
             <div class="topbar-right">
-                <a href="<?= $block->getUrl('help') ?>" class="topbar-link"><?= __('帮助中心') ?></a>
+                <a href="@url{'help'}" class="topbar-link"><?= __('帮助中心') ?></a>
                 <span class="topbar-divider">|</span>
-                <a href="<?= $block->getUrl('orders/track') ?>" class="topbar-link"><?= __('订单跟踪') ?></a>
+                <a href="@url{'customer/account/index'}#orders" class="topbar-link"><?= __('订单跟踪') ?></a>
             </div>
         </div>
     </div>
@@ -88,7 +88,7 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                 <w:icon name="menu" size="sm"></w:icon>
             </button>
             <div class="header-logo">
-                <a href="<?= $block->getUrl('/') ?>" class="logo-link" title="<?= $esc((string)$logoText) ?>">
+                <a href="@url{'/'}" class="logo-link" title="<?= $esc((string)$logoText) ?>">
                     <?php if ($logoImageFileHtml !== ''): ?>
                         <span class="logo-image logo-image--asset"><?= $logoImageFileHtml ?></span>
                     <?php elseif ($logoImage !== ''): ?>
@@ -101,7 +101,7 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
 
             <?php if ($showSearch): ?>
             <div class="header-search">
-                <w:form action="@var($block->getUrl('search'))" method="get" class="search-form">
+                <w:form action="@url{'search'}" method="get" class="search-form">
                     <div class="search-input-wrapper">
                         <input type="text" name="q" class="search-input" placeholder="<?= $esc((string)$searchPlaceholder) ?>" autocomplete="off">
                         <button type="submit" class="search-btn" aria-label="<?= __('搜索') ?>">
@@ -115,7 +115,7 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
             <div class="header-tools">
                 <?php if ($showAccount): ?>
                 <div class="tool-item tool-account">
-                    <a href="<?= $block->getUrl('customer/account') ?>" class="tool-link">
+                    <a href="@url{'customer/account'}" class="tool-link">
                         <w:icon name="user" size="sm"></w:icon>
                         <span class="tool-label"><?= __('账户') ?></span>
                     </a>
@@ -123,7 +123,7 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                 <?php endif; ?>
                 <?php if ($showWishlist): ?>
                 <div class="tool-item tool-wishlist">
-                    <a href="<?= $block->getUrl('wishlist') ?>" class="tool-link">
+                    <a href="@url{'customer/account/index'}#wishlist" class="tool-link">
                         <w:icon name="heart" size="sm"></w:icon>
                         <span class="tool-label"><?= __('收藏') ?></span>
                         <span class="tool-badge wishlist-count" data-count="0" hidden>0</span>
@@ -132,7 +132,7 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                 <?php endif; ?>
                 <?php if ($showCart): ?>
                 <div class="tool-item tool-cart">
-                    <a href="<?= $block->getUrl('checkout/cart') ?>" class="tool-link">
+                    <a href="@url{'checkout/cart'}" class="tool-link">
                         <w:icon name="pin" size="sm"></w:icon>
                         <span class="tool-label"><?= __('购物车') ?></span>
                         <span class="tool-badge cart-count" data-count="0">0</span>
@@ -148,12 +148,12 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
         <div class="w-container">
             <ul class="nav-list">
                 <li class="nav-item">
-                    <a href="<?= $block->getUrl('/') ?>" class="nav-link" data-state="active">
+                    <a href="@url{'/'}" class="nav-link" data-state="active">
                         <w:icon name="home" size="sm"></w:icon><span><?= __('首页') ?></span>
                     </a>
                 </li>
                 <li class="nav-item has-dropdown">
-                    <a href="<?= $block->getUrl('catalog/category') ?>" class="nav-link">
+                    <a href="@url{'catalog/category'}" class="nav-link">
                         <w:icon name="grid" size="sm"></w:icon><span><?= __('商品分类') ?></span>
                         <w:icon name="arrow-down" size="sm"></w:icon>
                     </a>
@@ -179,10 +179,10 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                         </div>
                     </div>
                 </li>
-                <li class="nav-item"><a href="<?= $block->getUrl('catalog/products', ['filter' => 'hot']) ?>" class="nav-link"><w:icon name="fire" size="sm"></w:icon><span><?= __('热卖') ?></span></a></li>
-                <li class="nav-item"><a href="<?= $block->getUrl('catalog/products', ['filter' => 'new']) ?>" class="nav-link"><w:icon name="bolt" size="sm"></w:icon><span><?= __('新品') ?></span></a></li>
-                <li class="nav-item"><a href="<?= $block->getUrl('promotions') ?>" class="nav-link highlight"><w:icon name="circle" size="sm"></w:icon><span><?= __('促销活动') ?></span></a></li>
-                <li class="nav-item"><a href="<?= $block->getUrl('about') ?>" class="nav-link"><w:icon name="info" size="sm"></w:icon><span><?= __('关于我们') ?></span></a></li>
+                <li class="nav-item"><a href="@url{'catalog/products'|['filter' => 'hot']}" class="nav-link"><w:icon name="fire" size="sm"></w:icon><span><?= __('热卖') ?></span></a></li>
+                <li class="nav-item"><a href="@url{'catalog/products'|['filter' => 'new']}" class="nav-link"><w:icon name="bolt" size="sm"></w:icon><span><?= __('新品') ?></span></a></li>
+                <li class="nav-item"><a href="@url{'promotions'}" class="nav-link highlight"><w:icon name="circle" size="sm"></w:icon><span><?= __('促销活动') ?></span></a></li>
+                <li class="nav-item"><a href="@url{'about'}" class="nav-link"><w:icon name="info" size="sm"></w:icon><span><?= __('关于我们') ?></span></a></li>
             </ul>
         </div>
     </nav>

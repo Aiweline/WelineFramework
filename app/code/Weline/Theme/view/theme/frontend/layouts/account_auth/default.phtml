@@ -61,7 +61,7 @@ $this->assign('meta', $meta);
             window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
         })();
     </script>
-    <js>Weline_Frontend::js/weline.js</js>
+    <?php // weline.js 由 Partials head 在 runtime 配置之后注入；提前加载会锁死错误 modulesBaseUrl ?>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <style data-auth-theme-vars>
         :root {

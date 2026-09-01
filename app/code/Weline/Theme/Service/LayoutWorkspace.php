@@ -149,61 +149,42 @@ final class LayoutWorkspace implements LayoutWorkspaceInterface
 
     public function hasLayout(int $themeId, string $pageType, LayoutIdentity $identity): bool
     {
-        $identity = $identity->toArray();
-        $model = null;
+        $identityArray = $identity->toArray();
         try {
-            $model = clone $this->layout;
-            $row = $model->clearQuery()->clearData()
-                ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-                ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
-                ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
-                ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
-                ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
-                ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
-                ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
-                ->find()
-                ->fetchArray();
+            foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
+                $layout = $this->layoutService->getLayout($themeId, $pageType, $status, $identityArray);
+                foreach ($layout as $areaData) {
+                    if (\is_array($areaData) && !empty($areaData['widgets'])) {
+                        return true;
+                    }
+                }
+            }
         } catch (\Throwable) {
             return false;
-        } finally {
-            $model?->clearQuery()->clearData();
         }
 
-        return is_array($row) && (int)($row[ThemeLayout::schema_fields_ID] ?? 0) > 0;
+        return false;
     }
 
     public function deleteLayout(int $themeId, string $pageType, LayoutIdentity $identity): int
     {
-        $identity = $identity->toArray();
+        $identityArray = $identity->toArray();
         try {
             return $this->atomic('theme_layout_delete', function () use (
                 $themeId,
                 $pageType,
-                $identity,
+                $identityArray,
             ): int {
-                $model = clone $this->layout;
-                $rows = $model->clearQuery()->clearData()
-                    ->where(ThemeLayout::schema_fields_THEME_ID, $themeId)
-                    ->where(ThemeLayout::schema_fields_PAGE_TYPE, $pageType)
-                    ->where(ThemeLayout::schema_fields_LAYOUT_OPTION, $identity['layout_option'])
-                    ->where(ThemeLayout::schema_fields_SCOPE, $identity['scope'])
-                    ->where(ThemeLayout::schema_fields_LOCALE_CODE, $identity['locale_code'])
-                    ->where(ThemeLayout::schema_fields_TARGET_TYPE, $identity['target_type'])
-                    ->where(ThemeLayout::schema_fields_TARGET_ID, $identity['target_id'])
-                    ->select()
-                    ->fetchArray();
+                /** @var \Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService $writer */
+                $writer = ObjectManager::getInstance(\Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService::class);
+                /** @var \Weline\Theme\Service\ThemeRuntimeLayoutResolver $resolver */
+                $resolver = ObjectManager::getInstance(\Weline\Theme\Service\ThemeRuntimeLayoutResolver::class);
+                $area = $pageType === ThemeLayout::PAGE_TYPE_DASHBOARD ? 'backend' : 'frontend';
+                $context = $resolver->buildContext($themeId, $pageType, $area, $identityArray)
+                    ->withResource(\Weline\Theme\Api\Scoped\ThemeEditorContext::RESOURCE_LAYOUT);
+                $writer->clearDraftNodes($context, 'system:layout-workspace', '');
 
-                $deleted = 0;
-                foreach (is_array($rows) ? $rows : [] as $row) {
-                    $layoutId = (int)($row[ThemeLayout::schema_fields_ID] ?? 0);
-                    if ($layoutId <= 0) {
-                        continue;
-                    }
-                    $item = clone $this->layout;
-                    $item->clearQuery()->clearData()->load($layoutId)->delete();
-                    $deleted++;
-                }
-                return $deleted;
+                return 1;
             });
         } catch (\Throwable) {
             return 0;

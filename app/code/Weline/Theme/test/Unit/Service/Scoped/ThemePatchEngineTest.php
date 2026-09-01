@@ -350,6 +350,106 @@ final class ThemePatchEngineTest extends TestCase
         self::assertSame('Hero', $payload['nodes'][$uid]['config']['slides'][0]['title']);
     }
 
+    public function testLocalAddNodeInSlotStripsParentNodesInSameSlot(): void
+    {
+        $parentUid = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+        $childUid = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+        $parent = [
+            'nodes' => [
+                $parentUid => [
+                    'node_uid' => $parentUid,
+                    'slot_id' => 'footer',
+                    'widget_code' => 'footer-container',
+                    'config' => ['from' => 'website'],
+                ],
+            ],
+        ];
+        $addChild = ThemePatchCommand::fromArray([
+            'op' => 'add_node',
+            'path' => '/nodes/' . $childUid,
+            'node_uid' => $childUid,
+            'value' => [
+                'node_uid' => $childUid,
+                'slot_id' => 'footer',
+                'widget_code' => 'footer-container',
+                'config' => ['from' => 'store'],
+            ],
+        ]);
+
+        $payload = $this->engine->apply($parent, [$addChild]);
+
+        self::assertArrayHasKey($childUid, $payload['nodes']);
+        self::assertArrayNotHasKey($parentUid, $payload['nodes']);
+        self::assertSame('store', $payload['nodes'][$childUid]['config']['from']);
+    }
+
+    public function testFieldSetOnInheritedNodeDoesNotStripParentSlotSiblings(): void
+    {
+        $ownedUid = 'cccccccccccccccccccccccccccccccc';
+        $siblingUid = 'dddddddddddddddddddddddddddddddd';
+        $parent = [
+            'nodes' => [
+                $ownedUid => [
+                    'node_uid' => $ownedUid,
+                    'slot_id' => 'footer-about-links',
+                    'widget_code' => 'footer-blog-link',
+                    'config' => ['title' => 'Website'],
+                ],
+                $siblingUid => [
+                    'node_uid' => $siblingUid,
+                    'slot_id' => 'footer-about-links',
+                    'widget_code' => 'footer-news-link',
+                    'config' => ['title' => 'News'],
+                ],
+            ],
+        ];
+
+        $payload = $this->engine->apply($parent, [
+            $this->set('/nodes/' . $ownedUid . '/config/title', 'Store'),
+        ]);
+
+        self::assertSame('Store', $payload['nodes'][$ownedUid]['config']['title']);
+        self::assertArrayHasKey($siblingUid, $payload['nodes']);
+        self::assertSame('News', $payload['nodes'][$siblingUid]['config']['title']);
+    }
+
+    public function testLocalAddOnlyCutsOffMatchingSlotNotOtherSlots(): void
+    {
+        $parentFooter = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+        $parentHelp = 'ffffffffffffffffffffffffffffffff';
+        $childFooter = '99999999999999999999999999999999';
+        $parent = [
+            'nodes' => [
+                $parentFooter => [
+                    'node_uid' => $parentFooter,
+                    'slot_id' => 'footer',
+                    'widget_code' => 'footer-container',
+                ],
+                $parentHelp => [
+                    'node_uid' => $parentHelp,
+                    'slot_id' => 'footer-help-links',
+                    'widget_code' => 'footer-help-center-link',
+                ],
+            ],
+        ];
+        $addChild = ThemePatchCommand::fromArray([
+            'op' => 'add_node',
+            'path' => '/nodes/' . $childFooter,
+            'node_uid' => $childFooter,
+            'value' => [
+                'node_uid' => $childFooter,
+                'slot_id' => 'footer',
+                'widget_code' => 'footer-container',
+            ],
+        ]);
+
+        $payload = $this->engine->apply($parent, [$addChild]);
+
+        self::assertArrayHasKey($childFooter, $payload['nodes']);
+        self::assertArrayNotHasKey($parentFooter, $payload['nodes']);
+        self::assertArrayHasKey($parentHelp, $payload['nodes']);
+    }
+
     private function set(string $path, mixed $value): ThemePatchCommand
     {
         return ThemePatchCommand::fromArray(['op' => 'set', 'path' => $path, 'value' => $value]);

@@ -8,7 +8,7 @@
 ?>
 <?php
 $themeId = $theme && is_object($theme) && method_exists($theme, 'getId') ? $theme->getId() : ($theme['id'] ?? $theme['identity_id'] ?? null);
-$saveUrl = $this->getUrl('theme/backend/config/layout/saveColorPaletteVariables');
+$savePath = 'theme/backend/config/layout/saveColorPaletteVariables';
 $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
     | JSON_UNESCAPED_SLASHES
     | JSON_HEX_TAG
@@ -164,7 +164,7 @@ foreach ($variables as $varName => $var) {
 <script src='@static(Weline_Admin::assets/libs/sweetalert2/sweetalert2.min.js)'></script>
 <script>
 (function() {
-    const saveUrl = <?= json_encode($saveUrl, $jsonForScriptFlags) ?>;
+    const saveUrl = "@url{$savePath}";
     const modal = document.getElementById('colorPaletteVariablesModal');
     if (!modal) return;
     

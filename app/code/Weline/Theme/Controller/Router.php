@@ -50,26 +50,30 @@ class Router implements RouterInterface
             'support' => ['layout_type' => 'contact', 'layout_option' => 'default', 'title' => '支持'],
             'help' => ['layout_type' => 'help', 'layout_option' => 'default', 'title' => '帮助中心'],
             'faq' => ['layout_type' => 'help', 'layout_option' => 'default', 'title' => '常见问题'],
-            'orders/track' => ['layout_type' => 'order_tracking', 'layout_option' => 'default', 'title' => '订单跟踪'],
-            'order/track' => ['layout_type' => 'order_tracking', 'layout_option' => 'default', 'title' => '订单跟踪'],
-            'order/tracking' => ['layout_type' => 'order_tracking', 'layout_option' => 'default', 'title' => '订单跟踪'],
-            'about' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '关于我们'],
+            'about' => ['layout_type' => 'about', 'layout_option' => 'default', 'title' => '关于我们'],
             'solutions' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '解决方案'],
             'docs' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '文档'],
             'page' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '页面'],
             'policy' => ['layout_type' => 'policy', 'layout_option' => 'default', 'title' => '政策'],
             'privacy' => ['layout_type' => 'policy', 'layout_option' => 'privacy', 'title' => '隐私政策'],
-            'terms' => ['layout_type' => 'policy', 'layout_option' => 'term-condition', 'title' => '服务条款'],
-            'term-condition' => ['layout_type' => 'policy', 'layout_option' => 'term-condition', 'title' => '服务条款'],
-            'terms-and-conditions' => ['layout_type' => 'policy', 'layout_option' => 'term-condition', 'title' => '服务条款'],
+            'terms' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
+            'term-condition' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
+            'terms-and-conditions' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
             'cookie' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
+            // Footer legalLinks 使用 /cookies；保留 /cookie 兼容旧入口。
+            'cookies' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
+            'cookie-policy' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
+            'ads-preferences' => ['layout_type' => 'policy', 'layout_option' => 'ads-preferences', 'title' => '广告偏好'],
+            'advertising-preferences' => ['layout_type' => 'policy', 'layout_option' => 'ads-preferences', 'title' => '广告偏好'],
             'refund' => ['layout_type' => 'policy', 'layout_option' => 'refund', 'title' => '退款政策'],
             'returns' => ['layout_type' => 'policy', 'layout_option' => 'refund', 'title' => '退货政策'],
             'disclaimer' => ['layout_type' => 'policy', 'layout_option' => 'disclaimer', 'title' => '免责声明'],
             'policy/privacy' => ['layout_type' => 'policy', 'layout_option' => 'privacy', 'title' => '隐私政策'],
-            'policy/term-condition' => ['layout_type' => 'policy', 'layout_option' => 'term-condition', 'title' => '服务条款'],
-            'policy/terms' => ['layout_type' => 'policy', 'layout_option' => 'term-condition', 'title' => '服务条款'],
+            'policy/term-condition' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
+            'policy/terms' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
             'policy/cookie' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
+            'policy/cookies' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
+            'policy/ads-preferences' => ['layout_type' => 'policy', 'layout_option' => 'ads-preferences', 'title' => '广告偏好'],
             'policy/refund' => ['layout_type' => 'policy', 'layout_option' => 'refund', 'title' => '退款政策'],
             'policy/disclaimer' => ['layout_type' => 'policy', 'layout_option' => 'disclaimer', 'title' => '免责声明'],
             'search' => ['layout_type' => 'search', 'layout_option' => 'default', 'title' => '搜索'],
@@ -222,7 +226,26 @@ class Router implements RouterInterface
             if ($normalizedPath === 'compare' && class_exists('Weline\\Compare\\Controller\\Router')) {
                 \Weline\Compare\Controller\Router::process($path, $rule);
             }
+            if (class_exists('Weline\\Blog\\Controller\\Router')) {
+                \Weline\Blog\Controller\Router::process($path, $rule);
+            }
+            if (class_exists('Weline\\Payment\\Controller\\Router')) {
+                \Weline\Payment\Controller\Router::process($path, $rule);
+            }
+            if (class_exists('Weline\\Order\\Controller\\Router')) {
+                \Weline\Order\Controller\Router::process($path, $rule);
+            }
+            if (class_exists('Weline\\Promotion\\Controller\\Router')) {
+                \Weline\Promotion\Controller\Router::process($path, $rule);
+            }
             return;
+        }
+
+        if (class_exists('Weline\\Order\\Controller\\Router')) {
+            \Weline\Order\Controller\Router::process($path, $rule);
+            if (!empty($rule['module'])) {
+                return;
+            }
         }
 
         $target = self::resolveDefaultPublicTarget($normalizedPath);
@@ -371,6 +394,45 @@ class Router implements RouterInterface
 
         if (class_exists('Weline\\Compare\\Controller\\Router') && $normalizedPath === 'compare') {
             return true;
+        }
+
+        if (class_exists('Weline\\Blog\\Controller\\Router')) {
+            if ($normalizedPath === 'blog' || $normalizedPath === 'blog/category') {
+                return true;
+            }
+            if (preg_match('#^blog/category/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$#D', $normalizedPath) === 1) {
+                return true;
+            }
+            if (preg_match('#^blog/([a-z][a-z0-9]*(?:-[a-z0-9]+)*)$#D', $normalizedPath) === 1) {
+                return true;
+            }
+        }
+
+        if (class_exists('Weline\\Payment\\Controller\\Router')) {
+            if ($normalizedPath === 'guide/payment') {
+                return true;
+            }
+            if (preg_match('#^guide/payment/([a-z0-9][a-z0-9_.-]*)/policy$#D', $normalizedPath) === 1) {
+                return true;
+            }
+            if (preg_match('#^guide/payment/([a-z0-9][a-z0-9_.-]*)$#D', $normalizedPath) === 1) {
+                return true;
+            }
+        }
+
+        if (class_exists('Weline\\Shipping\\Controller\\Router')) {
+            if (in_array($normalizedPath, ['guide/shipping', 'guide/returns'], true)) {
+                return true;
+            }
+        }
+
+        if (class_exists('Weline\\Promotion\\Controller\\Router')) {
+            if ($normalizedPath === 'promotion') {
+                return true;
+            }
+            if (preg_match('#^promotion/([a-z0-9_-]+)$#D', $normalizedPath) === 1) {
+                return true;
+            }
         }
 
         return false;

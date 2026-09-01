@@ -98,7 +98,7 @@ foreach ($items as $index => $item) {
         continue;
     }
     $textPlain = trim((string)($item['text'] ?? $item['name'] ?? ''));
-    $url = (string)($item['url'] ?? '#');
+    $url = \Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($item['url'] ?? '#'));
     $children = is_array($item['children'] ?? null) ? $item['children'] : [];
     $hasChildren = $children !== [];
     $image = $resolveImage($item, ((int)$index + 1) * 19);
@@ -155,6 +155,7 @@ foreach ($items as $index => $item) {
             'esc' => $esc,
             'esc_desc' => $escDesc,
             'drawer_flyout' => true,
+            'show_banner_with_children' => $show_banner_with_children ?? $this->getData('show_banner_with_children') ?? true,
         ]) ?>
     </li>
     <?php

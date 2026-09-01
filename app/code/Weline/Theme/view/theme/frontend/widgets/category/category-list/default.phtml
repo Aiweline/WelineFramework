@@ -103,7 +103,7 @@ $renderCategoryList = static function (
     foreach ($items as $category) {
         $hasChildren = !empty($category['children']);
         echo '<li class="category-item' . ($hasChildren ? ' has-children' : '') . '">';
-        echo '<a href="' . $esc((string)($category['url'] ?? '#')) . '" class="category-link">';
+        echo '<a href="' . $esc(\Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($category['url'] ?? '#'))) . '" class="category-link">';
 
         if ($showImage && !empty($category['image'])) {
             echo '<img src="' . $esc((string)$category['image']) . '" alt="' . $esc((string)($category['name'] ?? '')) . '" class="category-image" loading="lazy">';

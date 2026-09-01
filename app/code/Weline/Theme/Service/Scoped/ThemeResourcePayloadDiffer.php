@@ -43,7 +43,7 @@ final class ThemeResourcePayloadDiffer
 
         $roots = match ($context->resourceType) {
             ThemeEditorContext::RESOURCE_META => ['values'],
-            ThemeEditorContext::RESOURCE_APPEARANCE => ['tokens', 'disks'],
+            ThemeEditorContext::RESOURCE_APPEARANCE => ['tokens', 'disks', 'brand'],
             ThemeEditorContext::RESOURCE_I18N => ['translations'],
             default => [],
         };

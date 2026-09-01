@@ -38,9 +38,6 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'function loadLayoutConfig(',
             'function saveLayoutConfig(',
             'function deferWidgetLibraryLoad(',
-            'function kickoffLayoutPreview(',
-            'function scheduleSecondaryEditorBootstrap(',
-            'function hasServerSeededPreviewSrc(',
             'function prefetchWidgetsCatalog(',
             'function resolveWidgetContextFromIframe(',
             'function buildWidgetDeletePayload(',
@@ -58,13 +55,19 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'data-w-component="reorder-list"',
             "'weline:ui:reorder-list:change'",
             'function saveWidgetConfig(',
+            'function requestSaveWidgetConfig(',
+            'function finalizeWidgetConfigSave(',
             'function openComponentPreviewModal(',
             'function fetchInstalledLocales(',
+            'function getScopeWebsiteId(',
+            'installed-locales?website_id=',
             'function loadI18nValues(',
-            'function loadVirtualThemeAiCatalog(',
+            'function openThemeComponentAiDialog(',
+            'function handleWidgetAiAction(',
             'function getThemeWidgetAiContext(',
             'function loadVersions(',
             'function handleRestoreLayout(',
+            'function handleClearThemeCache(',
             'function openResetDraftModal(',
             'function executeResetDraftResources(',
             'function publishTheme(',
@@ -76,6 +79,8 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('skip full preview reload', $editor);
         self::assertStringContainsString("weline:form:prepare-submit", $editor);
         self::assertStringContainsString('save-widget-config missing preview_html for locale; skip full preview reload', $editor);
+        self::assertStringContainsString('syncLayoutWorkspaceAfterServerMutation(saveResult)', $editor);
+        self::assertStringContainsString('wThemeEditorSubmitDelegated', $editor);
         self::assertStringNotContainsString('Existing widget ${layoutId} not found, triggering full refresh', $editor);
         self::assertStringContainsString('async function translateI18nValues(', $editor);
         self::assertStringContainsString('TE-CAP-020: template widgets may have empty layout_id', $editor);
@@ -84,12 +89,23 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
 
         $editorCss = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.css');
         self::assertStringContainsString('TE-CAP side-panel-push', $editorCss);
+        self::assertStringContainsString('panel-widget-open .editor-widget-panel', $editorCss);
+        self::assertStringContainsString('z-index: 2001', $editorCss);
         self::assertStringNotContainsString('editor-compact-mode .editor-main {\n        grid-template-columns: minmax(0, 1fr);', $editorCss);
         self::assertStringNotContainsString('editor-compact-mode .editor-config-panel,\n    .theme-editor-container.editor-compact-mode .editor-widget-panel {\n        position: absolute;', $editorCss);
         $editorTemplate = $this->read('app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml');
-        self::assertStringContainsString('weline-theme-editor.css?v=20260825-syntax-fix-v1', $editorTemplate);
+        self::assertStringContainsString('weline-theme-editor.css?v=20260901-widget-library-header-v3', $editorTemplate);
+        self::assertStringContainsString('.panel-header.widget-library-panel-header', $editorCss);
+        self::assertStringContainsString('.widget-library-type-chip.is-active', $editorCss);
+        self::assertStringContainsString('id="wAiWidgetButton"', $editorTemplate);
         self::assertStringContainsString('rel="modulepreload"', $editorTemplate);
-        self::assertStringContainsString('weline-theme-editor.js)?v=20260826-slot-toolbar-resolve-v1', $editorTemplate);
+        self::assertStringContainsString('weline-theme-editor.js)?v=20260901-clear-theme-cache-v1', $editorTemplate);
+        self::assertStringContainsString('data-library-type="applications"', $editorTemplate);
+        self::assertStringContainsString('data-library-type="app_default">@lang{默认安装}', $editorTemplate);
+        self::assertStringContainsString('data-api-theme-ai-publish=', $editorTemplate);
+        self::assertStringContainsString('data-api-theme-ai-prepare-refine=', $editorTemplate);
+        self::assertStringContainsString('id="widgetLibraryTypeFilters"', $editorTemplate);
+        self::assertStringContainsString('widget-library-panel-header__row--filters', $editorTemplate);
         self::assertStringContainsString('type="module" async src="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)', $editorTemplate);
         $mainPreloadPos = strpos($editorTemplate, 'rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor.js)');
         $paramScriptPos = strpos($editorTemplate, 'type="module" async src="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)');
@@ -98,9 +114,36 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         // Main editor modulepreload must appear before the async widget-param script tag.
         self::assertLessThan($paramScriptPos, $mainPreloadPos);
 
-        self::assertStringContainsString('const EditorApi = Weline.Theme.Editor', $editor);
+        $widgetParamJs = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor-widget-param.js');
+        $widgetParamCss = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor-widget-param.css');
+        self::assertStringContainsString('function showAiWidgetToast(', $widgetParamJs);
+        self::assertStringContainsString('function formatAiWidgetErrorMessage(', $widgetParamJs);
+        self::assertStringContainsString('function buildAiWidgetPanelMarkup(', $widgetParamJs);
+        self::assertStringContainsString('w-ai-widget-footer', $widgetParamJs);
+        self::assertStringContainsString('.w-ai-widget-status-wrap', $widgetParamCss);
+        self::assertStringContainsString('function renderTreeNode(node, level, parentAnchor, pathSeen)', $widgetParamJs);
+        self::assertStringContainsString('w-ai-context-option__content', $widgetParamJs);
+        self::assertStringContainsString('data-ai-preview', $widgetParamJs);
+        self::assertStringContainsString('setAiPreviewGenerating', $widgetParamJs);
+        self::assertStringContainsString('.w-ai-widget-preview__overlay', $widgetParamCss);
+
+        self::assertStringContainsString('function resolveAnchorTreeKey(', $editor);
+        self::assertStringContainsString('function isPlacementTreeDescendant(', $editor);
+        self::assertStringContainsString('weline-widget-ai-context-api-ready', $widgetParamJs);
+        self::assertStringContainsString('weline-widget-ai-context-api-ready', $editor);
         self::assertStringContainsString('placeWidgetFromProvider,', $editor);
         self::assertStringContainsString('publishEmbeddedLayout,', $editor);
+        self::assertStringContainsString('apiThemeAiPublish', $editor);
+        self::assertStringContainsString('config.apiThemeAiPublish', $editor);
+        // TE-CAP-021 must not call VirtualTheme block-action for hover AI.
+        $hoverAiStart = strpos($editor, 'async function handleWidgetAiAction(');
+        self::assertNotFalse($hoverAiStart);
+        $hoverAiEnd = strpos($editor, "\n    function ", $hoverAiStart + 10);
+        self::assertNotFalse($hoverAiEnd);
+        $hoverAiBody = substr($editor, $hoverAiStart, $hoverAiEnd - $hoverAiStart);
+        self::assertStringNotContainsString('apiVirtualThemeBlockAction', $hoverAiBody);
+        self::assertStringContainsString('placeWidgetFromProvider', $hoverAiBody);
+        self::assertStringContainsString('apiThemeAiPublish', $hoverAiBody);
         self::assertStringNotContainsString('window.scrollToSlot =', $editor);
         self::assertStringNotContainsString('window.WidgetParamTypesInit', $editor);
         self::assertStringNotContainsString("handle.addEventListener('mousedown'", $editor);
@@ -120,6 +163,18 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('Promise.resolve(apiHost.Weline.Api)', $editor);
     }
 
+    public function testIframeEmbeddedEditorLockUsesNativeFetchBypassingWorkerBootstrap(): void
+    {
+        $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+
+        self::assertStringContainsString('function initializeEditorLock(', $editor);
+        self::assertStringContainsString('config.apiCheckLock', $editor);
+        self::assertStringContainsString("lockSource !== 'cms'", $editor);
+        self::assertStringContainsString('function buildCmsEditorLockPayload(', $editor);
+        self::assertStringContainsString('function applyEditorLockHeldState(', $editor);
+        self::assertStringContainsString('function renderEditorLockOverlay(', $editor);
+    }
+
     public function testTemplateRetainsEveryProductWorkspaceAndEndpoint(): void
     {
         $template = $this->read('app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml');
@@ -135,10 +190,16 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'id="themeDiskAppearanceModal"',
             'data-api-save-widget=',
             'data-api-update-config=',
+            'data-api-chrome-mode=',
+            'data-api-detach-chrome=',
+            'data-api-restore-chrome=',
             'data-api-default-injections=',
+            'data-api-reconcile-required-defaults=',
+            'data-api-apply-required-defaults=',
             'data-api-layout-config=',
             'data-api-versions=',
             'data-api-restore-original=',
+            'data-api-clear-theme-cache=',
             'data-api-reset-draft-resources=',
             'data-api-publish=',
             'data-api-check-lock=',
@@ -146,6 +207,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'data-api-theme-disk-tokens=',
             'data-api-disk-save=',
             'id="btnResetDraftResources"',
+            'id="btnClearThemeCache"',
             'id="themeEditorResetDraftModal"',
         ] as $contract) {
             self::assertStringContainsString($contract, $template, $contract);
@@ -186,6 +248,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString("close('pagehide', false, true)", $overflow);
         self::assertStringContainsString('Math.abs(root.offsetTop - left.offsetTop) > 1', $overflow);
         self::assertStringContainsString('return Math.max(96, Math.floor(parentWidth));', $overflow);
+        self::assertStringContainsString('Pack back the most recently overflowed items', $overflow);
         self::assertStringNotContainsString('window.WelineThemeEditorToolbarOverflow', $overflow);
         self::assertFileDoesNotExist(BP . '/app/code/Weline/Theme/view/statics/css/theme-editor-toolbar-overflow.css');
     }
@@ -259,9 +322,11 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('nestHoverPendingKey === pendingKey', $editor);
         self::assertStringContainsString('function bindSlotToolbarActionEvents(', $editor);
         self::assertStringContainsString('bindSlotToolbarActionEvents(iframeDoc)', $editor);
+        self::assertStringContainsString('function readSlotSelectionFromToolbar(', $editor);
+        self::assertStringContainsString('data-slot-selection', $engine);
+        self::assertStringContainsString('function buildSlotSelectionPayload(', $engine);
+        self::assertStringContainsString('function stampSlotToolbarSelection(', $engine);
         self::assertStringContainsString('function resolveSlotElementForToolbar(', $editor);
-        self::assertStringContainsString('toolbar.dataset.slotId = slotIdForLabel', $engine);
-        self::assertStringContainsString('syncSlotToolbarOwnerMeta(toolbar, ownerSlot)', $editor);
         self::assertStringContainsString("data-action', 'slot-select'", $engine);
         self::assertStringContainsString("data-action', 'slot-init-defaults'", $engine);
         self::assertStringContainsString('.widget-hover-actions[data-slot-hover-actions="1"]', $editor);
@@ -288,6 +353,13 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
 
         self::assertStringContainsString('[data-w-component~="anchored-float"][data-w-floating-positioned]', $foundation);
         self::assertStringContainsString('.widget-hover-actions[data-w-floating-positioned]', $overlay);
+        self::assertStringContainsString('.widget-wrapper.show-actions > .widget-hover-actions', $overlay);
+        self::assertStringNotContainsString('.widget-wrapper.show-actions .widget-hover-actions,', $overlay);
+        self::assertStringNotContainsString('.widget-wrapper:hover > .widget-hover-actions', $overlay);
+        self::assertStringNotContainsString('html[data-w-editor-interaction="edit"] .widget-wrapper:hover', $overlay);
+        self::assertStringNotContainsString('body.editor-mode .widget-wrapper:hover,', $overlay);
+        self::assertStringContainsString('pending.length ? pending.length - 1 : 0', $editor);
+        self::assertStringContainsString('stack.length ? stack.length - 1 : 0', $editor);
         self::assertStringContainsString(':not([data-slot-hover-actions="1"]) button', $overlay);
         self::assertStringContainsString('var(--w-floating-left, 0px)', $overlay);
     }
@@ -342,6 +414,18 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringNotContainsString('body.editor-mode [data-wslot]:hover {', $styles);
         $thin = $this->read('app/code/Weline/Theme/view/ui/css/pages/theme-preview.css');
         self::assertStringContainsString(':not([data-w-editor-preview-engine="full"])', $thin);
+    }
+
+    public function testSlotInitDefaultsUsesEditorContextIdentityMirrors(): void
+    {
+        $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+
+        self::assertStringContainsString('async function initSlotDefaultsFromPreview(', $editor);
+        self::assertStringContainsString('function getLayoutLockVirtualPayload(', $editor);
+        self::assertStringContainsString('function buildTypedEditorContext(', $editor);
+        self::assertStringContainsString('init-slot-defaults', $editor);
+        self::assertStringContainsString('slot_id: slotId,', $editor);
+        self::assertStringContainsString('editor_context:', $editor);
     }
 
     public function testVisualPreviewDragDropKeepsInsideBeforeAndAfterFeedback(): void
@@ -400,7 +484,6 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             'loadAppearance',
             'saveAppearance',
             'root.dataset.apiDiskSelect',
-            'root.dataset.apiThemeDiskTokens',
             'loadDiskTokens',
             'tokens_json',
             'root.dataset.apiDiskDelete',
@@ -432,6 +515,17 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('refreshLayoutPreview', $appearance);
         self::assertStringContainsString("data-theme-scoped-preview-appearance", $appearance);
         self::assertStringContainsString('editor.refreshPreview', $appearance);
+        self::assertStringContainsString('appearanceTokenPrefix', $appearance);
+        self::assertStringContainsString('APPEARANCE_TOKEN_LEAF', $appearance);
+        self::assertStringContainsString('groupAppearanceTokenEntries', $appearance);
+        self::assertStringContainsString('resolveAppearanceTokenGroup', $appearance);
+        self::assertStringContainsString('tokenMeta', $appearance);
+        self::assertStringContainsString('category_label', $appearance);
+        self::assertStringContainsString('data-w-appearance-token-group', $appearance);
+        self::assertStringContainsString('w-theme-disk-token-group', $appearance);
+        self::assertStringContainsString('label: `--${prefix}`', $appearance);
+        self::assertStringNotContainsString('APPEARANCE_TOKEN_GROUPS_BY_PANEL', $appearance);
+        self::assertStringContainsString('.w-theme-disk-token-group', $styles);
         self::assertMatchesRegularExpression(
             '/\.w-theme-disk-appearance-token-search\s*\{[^}]*inline-size:\s*100%;[^}]*min-inline-size:\s*0;[^}]*max-inline-size:\s*100%;/s',
             $styles,
@@ -447,6 +541,9 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         $styles = $this->read('app/code/Weline/Theme/view/ui/css/pages/theme-editor.css');
 
         self::assertStringContainsString('ScopeSelectorCatalogInterface::class', $controller);
+        self::assertStringContainsString('LocaleCatalogScopeResolver::class', $controller);
+        self::assertStringContainsString('resolveEditorWebsiteId(', $controller);
+        self::assertStringContainsString('getInstalledLocalesPayload($scopeIdentityForLocales)', $controller);
         self::assertStringNotContainsString('ThemeEditorScopeCatalogService::class', $controller);
         self::assertStringContainsString('$requestedFrontendThemeId = 0;', $controller);
         self::assertStringContainsString('$requestedBackendThemeId = 0;', $controller);
@@ -459,7 +556,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('search-placeholder="@lang(搜索网站、店铺或渠道)"', $template);
         self::assertStringNotContainsString('<w:websites:', $template);
         self::assertStringNotContainsString('data-scope-catalog=', $template);
-        self::assertStringContainsString('Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260826-slot-toolbar-resolve-v1', $template);
+        self::assertStringContainsString('Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260901-clear-theme-cache-v1', $template);
         self::assertStringContainsString('INTERACTION_MODE_STORAGE_KEY', $editor);
         self::assertStringContainsString('resolveInitialInteractionMode', $editor);
         self::assertStringContainsString("'interaction_mode'", $editor);
@@ -635,6 +732,8 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         $template = $this->read('app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml');
 
         self::assertStringNotContainsString("setData('skip_view_file_cache', true)", $content);
+        self::assertStringContainsString('ThemePreviewRenderCache::class', $content);
+        self::assertStringContainsString('$previewRenderCache->remember(', $content);
         self::assertStringContainsString('assign(\'editor_mode\', $isEditorMode)', $content);
         $header = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/header/default.phtml');
         self::assertStringContainsString('editor-preview-light: skip mega-menu panel trees', $header);
@@ -645,11 +744,26 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString("'Weline_Theme::theme_visual_editor_scope_read'", $content);
         self::assertStringContainsString('$this->assertBackendScopePreviewAllowed();', $content);
         self::assertStringContainsString('async function buildAuthorizedLayoutPreviewUrl(', $editor);
-        self::assertStringContainsString('await apiJson(config.apiStartPreview', $editor);
-        self::assertStringContainsString("url.searchParams.set('weline_preview_token', token)", $editor);
+        self::assertStringContainsString("url.searchParams.delete('weline_preview_token')", $editor);
+        self::assertStringContainsString('async function openFrontendPreview()', $editor);
+        self::assertMatchesRegularExpression(
+            '/async function openFrontendPreview\(\)\s*\{[\s\S]*?await apiJson\(config\.apiStartPreview/s',
+            $editor,
+            'Only #btnFrontendPreview may call start-preview for live storefront preview.',
+        );
+        $authorizedStart = strpos($editor, 'async function buildAuthorizedLayoutPreviewUrl(');
+        $authorizedEnd = strpos($editor, 'function resolveThemePreviewGatewayUrl(', $authorizedStart ?: 0);
+        self::assertNotFalse($authorizedStart);
+        self::assertNotFalse($authorizedEnd);
+        $authorizedBlock = substr($editor, (int)$authorizedStart, (int)$authorizedEnd - (int)$authorizedStart);
+        self::assertStringNotContainsString('apiStartPreview', $authorizedBlock);
+        self::assertStringNotContainsString("url.searchParams.set('weline_preview_token'", $authorizedBlock);
+        self::assertStringContainsString('handlePreviewExitFromIframe', $editor);
+        self::assertStringContainsString('setLayoutPreviewSource({ _t: Date.now() })', $editor);
         self::assertStringContainsString('editor_context: editorContext,', $editor);
         self::assertStringContainsString('async function setLayoutPreviewSource(', $editor);
-        self::assertStringContainsString("? 'about:blank'", $template);
+        self::assertStringContainsString("data-initial-preview-token=", $template);
+        self::assertStringContainsString('theme/frontend/theme-preview/content', $template);
     }
 
     public function testEditorPreviewLocaleOverrideDoesNotWriteLanguageCookie(): void
@@ -704,6 +818,91 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('.weline-template-widget[data-template-ref]', $editor);
         self::assertStringContainsString('materializeTemplateWidgetIfNeeded', $editor);
         self::assertStringContainsString('data-template-ref', $editor);
+    }
+
+    public function testSlotWidgetAccordionDisclosurePanelAndUniqueCollapseIds(): void
+    {
+        $source = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+        $bundle = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+        $template = $this->read('app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml');
+
+        foreach ([$source, $bundle] as $editor) {
+            self::assertStringContainsString('data-w-disclosure-panel', $editor);
+            self::assertStringContainsString('widgetConfig_${i}_${identityKey}', $editor);
+            self::assertStringContainsString('loadWidgetConfigForAccordion(identity, widgetElement = null, configBodyEl = null)', $editor);
+            self::assertStringContainsString('configBodyEl instanceof HTMLElement', $editor);
+        }
+        self::assertStringContainsString('weline-theme-editor.js)?v=20260901-clear-theme-cache-v1', $template);
+    }
+
+    public function testPreviewDropBridgeKeepsLibraryDragEventsInParentDocument(): void
+    {
+        $editor = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+        $bundle = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+        $preview = $this->read('app/code/Weline/Theme/view/statics/js/editor-mode.js');
+        $previewBundle = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-preview.js');
+        $css = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.css');
+
+        foreach ([$editor, $bundle] as $source) {
+            self::assertStringContainsString('function ensurePreviewDropBridge()', $source);
+            self::assertStringContainsString('function resolvePreviewDropViaBridge(', $source);
+            self::assertStringContainsString("setPreviewDropBridgeActive(true)", $source);
+            self::assertStringContainsString('previewDropBridge', $source);
+        }
+        foreach ([$preview, $previewBundle] as $source) {
+            self::assertStringContainsString('function resolveDropAtPoint(', $source);
+            self::assertStringContainsString('function collectSlotsAtPoint(', $source);
+            self::assertStringContainsString('Weline.Theme.Preview', $source);
+            self::assertStringContainsString('clearDropFeedback:', $source);
+        }
+        foreach ([$editor, $bundle] as $source) {
+            self::assertStringContainsString('不得静默丢弃', $source);
+            self::assertStringContainsString('无法放入当前位置，请拖到可接收的插槽', $source);
+        }
+        self::assertStringContainsString('.preview-drop-bridge.is-active', $css);
+    }
+
+    public function testEditorLinkInterceptionKeepsShopperRuntimeInteractive(): void
+    {
+        $editor = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+        $bundle = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+        $engine = $this->read('app/code/Weline/Theme/view/statics/js/editor-mode.js');
+
+        foreach ([$editor, $engine] as $source) {
+            self::assertStringContainsString('function isShopperRuntimeEventTarget(', $source);
+            self::assertStringContainsString('[data-mini-cart-trigger]', $source);
+        }
+        self::assertStringContainsString("typeof target.closest !== 'function'", $editor);
+        self::assertStringContainsString('[data-action="add-v2"]', $editor);
+        foreach ([$editor, $bundle] as $source) {
+            self::assertStringContainsString('isShopperRuntimeEventTarget(e.target)', $source);
+            self::assertStringContainsString('bindWidgetActionEvents', $source);
+        }
+        self::assertStringContainsString('isShopperRuntimeEventTarget(link)', $engine);
+    }
+
+    public function testDefaultInjectionAppliedCardsSupportUninstallAndPreviewLocate(): void
+    {
+        foreach ([
+            'app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js',
+            'app/code/Weline/Theme/view/statics/js/theme-editor.js',
+        ] as $path) {
+            $editor = $this->read($path);
+            self::assertStringContainsString('function defaultInjectionCanRemove(', $editor, $path);
+            self::assertStringContainsString('function locateDefaultInjectionInPreview(', $editor, $path);
+            self::assertStringContainsString('function removeDefaultInjection(', $editor, $path);
+            self::assertStringContainsString('w-theme-editor-remove-default-injection', $editor, $path);
+            self::assertStringContainsString('widget-default-injection-locate-target', $editor, $path);
+            self::assertStringContainsString('widget-locate-flash', $editor, $path);
+        }
+
+        $css = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.css');
+        self::assertStringContainsString('.widget-default-injection-locate-target', $css);
+        self::assertStringContainsString('.widget-locate-flash', $css);
+
+        $service = $this->read('app/code/Weline/Theme/Service/WidgetDefaultInjectionService.php');
+        self::assertStringContainsString('function resolveAppliedLayoutNode(', $service);
+        self::assertStringContainsString("'removable'] = true", $service);
     }
 
     private function read(string $path): string

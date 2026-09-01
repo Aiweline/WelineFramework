@@ -541,6 +541,29 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
                 ];
             }
         }
+
+        // Language-specific layout/meta inherits the default-locale Release at the
+        // same Scope before walking Scope parents. Storefront RequestContext locale
+        // (e.g. zh_Hans_CN) must not blank published widgets when only locale=default
+        // was seeded; i18n overlays still use the original context locale.
+        if ($this->shouldInheritDefaultLocalePublished($context)) {
+            $defaultLocale = $context->withLocale('default');
+            $workspace = $this->findWorkspace($defaultLocale);
+            if ($workspace instanceof ThemeScopeWorkspace) {
+                $release = $this->loadRelease((int)$workspace->getData(
+                    ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
+                ));
+                if ($release instanceof ThemeScopeRelease) {
+                    return [
+                        'payload' => $release->payload(),
+                        'release_id' => $release->getId(),
+                        'source_scope' => (string)$release->getData(ThemeScopeRelease::schema_fields_SCOPE),
+                        'release' => $release,
+                    ];
+                }
+            }
+        }
+
         $parentIdentity = $this->scopes->parentIdentity($context->scope->identity);
         if ($parentIdentity instanceof ScopeIdentity) {
             return $this->publishedState(
@@ -554,6 +577,18 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
             'source_scope' => 'theme-package-default',
             'release' => null,
         ];
+    }
+
+    private function shouldInheritDefaultLocalePublished(ThemeEditorContext $context): bool
+    {
+        if ($context->locale === 'default') {
+            return false;
+        }
+
+        return \in_array($context->resourceType, [
+            ThemeEditorContext::RESOURCE_LAYOUT,
+            ThemeEditorContext::RESOURCE_META,
+        ], true);
     }
 
     /** @return array{payload:array<string,mixed>,release_id:?int,source_scope:string,release:?ThemeScopeRelease} */
@@ -1027,7 +1062,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
             ThemeEditorContext::RESOURCE_LAYOUT => \preg_match($nodePath, $command->path) === 1
                 || \preg_match('#^/selection' . $mapPath . '$#D', $command->path) === 1,
             ThemeEditorContext::RESOURCE_META => \preg_match('#^/values' . $mapPath . '$#D', $command->path) === 1,
-            ThemeEditorContext::RESOURCE_APPEARANCE => \preg_match('#^/(?:tokens|disks)' . $mapPath . '$#D', $command->path) === 1,
+            ThemeEditorContext::RESOURCE_APPEARANCE => \preg_match('#^/(?:tokens|disks|brand)' . $mapPath . '$#D', $command->path) === 1,
             ThemeEditorContext::RESOURCE_I18N => \preg_match('#^/translations' . $mapPath . '$#D', $command->path) === 1,
             default => false,
         };

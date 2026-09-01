@@ -26,6 +26,10 @@ final class ThemeColorModeContractTest extends TestCase
         self::assertStringContainsString("localStorage.getItem('weline_theme_preference')", $prepaint);
         self::assertStringContainsString("['system', 'light', 'dark'].includes(preference)", $prepaint);
         self::assertStringContainsString('root.dataset.theme = theme;', $prepaint);
+        self::assertStringContainsString('function persistBackendThemePreference(preference)', $runtime);
+        self::assertStringContainsString("'theme-mode-switch': preference", $runtime);
+        self::assertStringContainsString('system/theme-config/set', $runtime);
+        self::assertStringNotContainsString("Weline.Api.call('theme', 'setBackendThemeMode'", $runtime);
         // Storefront must not follow OS dark into near-black body canvas (#020617).
         self::assertStringContainsString("const area = root.dataset.wArea || 'frontend';", $prepaint);
         self::assertStringContainsString("if (area !== 'backend' && preference === 'system') preference = 'light';", $prepaint);
@@ -57,10 +61,17 @@ final class ThemeColorModeContractTest extends TestCase
         self::assertStringContainsString('.w-alert > .w-button[data-w-close]', $foundation);
 
         self::assertStringContainsString('--backend-theme-sidebar-width:', $foundation);
+        self::assertStringContainsString('--backend-theme-sidebar-collapsed-width:', $foundation);
+        self::assertStringContainsString('--weline-theme-surface: var(--backend-color-card-bg', $foundation);
+        self::assertStringContainsString('--backend-theme-sidebar-bg: var(--backend-color-sidebar-bg', $foundation);
         $backend = $this->read('app/code/Weline/Theme/view/ui/css/backend.css');
         self::assertStringContainsString('var(--backend-theme-sidebar-width)', $backend);
+        self::assertStringContainsString('var(--backend-theme-sidebar-bg)', $backend);
+        self::assertStringContainsString('var(--backend-theme-header-bg)', $backend);
         self::assertStringNotContainsString('--bs-', $backend);
         self::assertStringNotContainsString('.dropdown-menu', $backend);
+        self::assertStringContainsString('--backend-color-input-border', $backend);
+        self::assertStringContainsString('[data-w-area="backend"] :is(.w-input, .w-select, .w-textarea)', $backend);
     }
 
     public function testFloatingUiPreservesClickReferencesAndClampsToTheVisualViewport(): void
@@ -97,6 +108,9 @@ final class ThemeColorModeContractTest extends TestCase
         }
         self::assertStringContainsString("window.visualViewport?.addEventListener('resize'", $runtime);
         self::assertStringContainsString("document.addEventListener('scroll', scheduleFloatingViewportUpdate", $runtime);
+        self::assertStringContainsString('function isFloatingInternalScrollTarget(target)', $runtime);
+        self::assertStringContainsString('snapshotFloatingScrollPositions(floating)', $runtime);
+        self::assertStringContainsString("alreadyVisible ? 'true' : 'pending'", $runtime);
         self::assertStringContainsString("window.screen?.orientation?.addEventListener('change'", $runtime);
 
         $advanced = $this->read('app/code/Weline/Theme/view/ui/js/components/advanced.js');
@@ -116,6 +130,18 @@ final class ThemeColorModeContractTest extends TestCase
         self::assertStringContainsString('.w-dialog:has(> [data-w-floating-portal])', $foundation);
         self::assertStringNotContainsString('.w-drawer:has(> [data-w-floating-portal])', $foundation);
         self::assertStringContainsString('[data-w-floating-portal][data-w-floating-positioned]', $foundation);
+        self::assertStringContainsString('Portaled to body: keep an opaque panel surface', $foundation);
+        self::assertStringContainsString('background: var(--weline-theme-surface-raised, #ffffff)', $foundation);
+        self::assertStringContainsString('.w-language-switcher__flag svg {', $foundation);
+        self::assertStringContainsString('stroke: none', $foundation);
+        self::assertStringContainsString('.w-language-switcher__menu {', $foundation);
+        self::assertStringContainsString('.w-language-switcher__list {', $foundation);
+        self::assertStringContainsString('.w-language-switcher__footer {', $foundation);
+        self::assertStringContainsString('grid-template-rows: auto minmax(0, 1fr) auto', $foundation);
+
+        $theme = $this->read('app/code/Weline/Theme/view/theme/frontend/assets/css/theme.css');
+        self::assertStringContainsString('[data-surface="inverse"] .w-language-switcher__flag svg', $theme);
+        self::assertStringContainsString('Flag SVGs carry authored fill colors', $theme);
         self::assertStringContainsString('min-inline-size: min(12rem, var(--w-floating-max-inline-size', $foundation);
         self::assertStringContainsString('.w-button[data-size="sm"], .w-menu__item, .w-combobox__option { min-block-size: 2.75rem; }', $foundation);
         self::assertStringContainsString('.w-menu__item[data-tone="primary"]', $foundation);
@@ -161,6 +187,17 @@ final class ThemeColorModeContractTest extends TestCase
         self::assertStringContainsString('aria-hidden="true" hidden', $notification);
         self::assertStringContainsString('data-w-menu-close', $notification);
 
+        $backendCss = $this->read('app/code/Weline/Theme/view/ui/css/backend.css');
+        self::assertStringContainsString('.w-notification-trigger__badge', $backendCss);
+        self::assertStringContainsString('color: var(--weline-theme-on-danger)', $backendCss);
+        self::assertStringNotContainsString('color: var(--weline-theme-surface)', $backendCss);
+        self::assertStringContainsString('.w-notification-menu__list { display: flex; flex-direction: column;', $backendCss);
+        self::assertStringContainsString('height: auto; flex: 0 0 auto;', $backendCss);
+        self::assertStringContainsString('-webkit-line-clamp: 2', $backendCss);
+        $publishedBackendCss = $this->read('app/code/Weline/Theme/view/statics/ui/weline-backend.css');
+        self::assertStringContainsString('.w-notification-menu__list { display: flex; flex-direction: column;', $publishedBackendCss);
+        self::assertStringContainsString('-webkit-line-clamp: 2', $publishedBackendCss);
+
         $runtime = $this->read('app/code/Weline/Theme/view/ui/js/weline-ui.js');
         self::assertStringContainsString("open(event.detail === 0, recentPointer)", $runtime);
         self::assertStringContainsString("close(true, 'dismiss')", $runtime);
@@ -174,6 +211,14 @@ final class ThemeColorModeContractTest extends TestCase
         self::assertStringContainsString('Weline_Theme::ui/weline-backend.css', $backend);
         self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $backend);
         self::assertStringContainsString('ThemeDiskHeadService', $backend);
+        self::assertSame(1, substr_count($backend, 'colors/_light.css'));
+        self::assertSame(1, substr_count($backend, 'colors/_default.css'));
+        self::assertSame(1, substr_count($backend, 'colors/_dark.css'));
+        self::assertLessThan(
+            strpos($backend, 'weline-foundation.css'),
+            strpos($backend, 'colors/_default.css'),
+            'Backend palette must load before foundation CSS.',
+        );
 
         foreach (['default.phtml', 'minimal.phtml'] as $head) {
             $frontend = $this->read('app/code/Weline/Theme/view/theme/frontend/partials/head/' . $head);
@@ -191,7 +236,7 @@ final class ThemeColorModeContractTest extends TestCase
             );
             self::assertDoesNotMatchRegularExpression('/<script(?:\s[^>]*)?>\s*\(function/s', $frontend);
             self::assertStringNotContainsString('assets/js/theme.js', $frontend);
-            self::assertStringNotContainsString('assets/css/theme.css', $frontend);
+            self::assertStringContainsString('Weline_Theme::theme/frontend/assets/css/theme.css', $frontend);
         }
     }
 

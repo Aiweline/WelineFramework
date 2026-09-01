@@ -74,6 +74,24 @@ final class ThemeRuntimeCacheCleaner
         $this->runStep($result, 'partials_runtime', static function (): void {
             Partials::clearAllCaches();
         });
+        $this->runStep($result, 'storefront_chrome_hot_cache', static function (): void {
+            if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
+                return;
+            }
+            $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
+            $hotCache->purgeProcessCacheForLogicalKey('theme.chrome.');
+            foreach (['footer', 'header', 'head'] as $chromeType) {
+                try {
+                    $hotCache->forget(
+                        'weline_theme_storefront_chrome',
+                        'theme.chrome.' . $chromeType,
+                        ['website' => true, 'lang' => true],
+                    );
+                } catch (\Throwable) {
+                }
+            }
+            \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+        });
         foreach ($this->themeCacheServices() as $step => $serviceClass) {
             $this->runStep($result, $step, static function () use ($serviceClass): void {
                 $service = ObjectManager::getInstance($serviceClass);
@@ -181,6 +199,15 @@ final class ThemeRuntimeCacheCleaner
             $state->clearCache('router');
             $state->clearCache('fpc');
             $state->clearNamespace('theme_runtime');
+        });
+
+        $this->runStep($result, 'storefront_chrome_hot_cache', static function (): void {
+            if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
+                return;
+            }
+            $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
+            $hotCache->purgeProcessCacheForLogicalKey('theme.chrome.');
+            \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
         });
 
         $this->runStep($result, 'runtime_cache_broadcast', function (): void {

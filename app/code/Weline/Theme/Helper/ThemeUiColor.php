@@ -33,6 +33,10 @@ final class ThemeUiColor
         'var(--weline-theme-danger-surface)',
         'var(--weline-theme-info)',
         'var(--weline-theme-info-surface)',
+        'var(--weline-product-label-new-bg)',
+        'var(--weline-product-label-new-text)',
+        'var(--weline-product-label-sale-bg)',
+        'var(--weline-product-label-sale-text)',
         'var(--weline-theme-canvas)',
         'var(--weline-theme-body-bg)',
     ];

@@ -16,6 +16,7 @@ namespace Weline\Theme\Taglib;
 
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Taglib\TaglibInterface;
+use Weline\Theme\Service\SlotBoundaryMarkers;
 
 /**
  * 插槽标签
@@ -84,6 +85,7 @@ class Slot implements TaglibInterface
             'wrapper' => 0,      // 可选：包裹元素标签
             'class' => 0,        // 可选：添加到包裹元素的 CSS 类
             'style' => 0,        // 可选：添加到包裹元素的内联样式
+            'layout' => 0,       // 可选：部件配置来源布局类型（如 mini-cart）
             'weline-code' => 0,  // 可选：事件溯源区块 code（wrapper=section 时由 Validator 强制）
         ];
     }
@@ -153,8 +155,8 @@ class Slot implements TaglibInterface
         // 获取包裹元素标签
         $wrapper = $attrs['wrapper'] ?? 'div';
         $wrapper = htmlspecialchars($wrapper, ENT_QUOTES, 'UTF-8');
-        
-        return "<{$wrapper}{$htmlAttrs}>";
+
+        return SlotBoundaryMarkers::open($id) . "<{$wrapper}{$htmlAttrs}>";
     }
     
     /**
@@ -164,8 +166,9 @@ class Slot implements TaglibInterface
     {
         $wrapper = $attrs['wrapper'] ?? 'div';
         $wrapper = htmlspecialchars($wrapper, ENT_QUOTES, 'UTF-8');
-        
-        return "</{$wrapper}>";
+        $id = (string) ($attrs['id'] ?? '');
+
+        return "</{$wrapper}>" . SlotBoundaryMarkers::close($id);
     }
     
     /**
@@ -187,7 +190,9 @@ class Slot implements TaglibInterface
         $wrapper = $attrs['wrapper'] ?? 'div';
         $wrapper = htmlspecialchars($wrapper, ENT_QUOTES, 'UTF-8');
         
-        return "<{$wrapper}{$htmlAttrs}>{$content}</{$wrapper}>";
+        return SlotBoundaryMarkers::open($id)
+            . "<{$wrapper}{$htmlAttrs}>{$content}</{$wrapper}>"
+            . SlotBoundaryMarkers::close($id);
     }
 
     /**
@@ -214,6 +219,7 @@ class Slot implements TaglibInterface
             'required' => 'data-wslot-required',
             'append' => 'data-wslot-append',
             'prepend' => 'data-wslot-prepend',
+            'layout' => 'data-wslot-layout',
         ];
         
         foreach ($attrMapping as $key => $dataAttr) {

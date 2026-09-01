@@ -31,6 +31,10 @@
     --backend-color-bg-body: #0b1220;
     --backend-color-bg-surface: #111827;
     --backend-color-bg-overlay: rgba(2, 6, 23, 0.74);
+    --color-bg-canvas: var(--backend-color-bg-canvas);
+    --color-bg-primary: var(--backend-color-bg-primary);
+    --color-bg-secondary: var(--backend-color-bg-secondary);
+    --color-bg-tertiary: var(--backend-color-bg-tertiary);
 
     /* Borders */
     --backend-color-border-default: #64748b;
@@ -163,6 +167,10 @@
         --backend-color-bg-surface: #111827;
         --backend-color-bg-overlay: rgba(2, 6, 23, 0.74);
         --backend-color-bg-canvas: #020617;
+        --color-bg-canvas: var(--backend-color-bg-canvas);
+        --color-bg-primary: var(--backend-color-bg-primary);
+        --color-bg-secondary: var(--backend-color-bg-secondary);
+        --color-bg-tertiary: var(--backend-color-bg-tertiary);
         --backend-color-border-default: #64748b;
         --backend-color-border-light: #64748b;
         --backend-color-card-bg: rgba(15, 23, 42, 0.92);

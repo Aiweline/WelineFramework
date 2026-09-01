@@ -17,10 +17,15 @@ $uiAssetVersion = static function (string $relative): string {
     $path = BP . 'app/code/Weline/Theme/view/statics/ui/' . \ltrim($relative, '/');
     return \is_file($path) ? (string)\filemtime($path) : '0';
 };
+$prepaintV = $uiAssetVersion('weline-theme-prepaint.js');
 ?>
+<script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)?v=<?= $prepaintV ?>"></script>
 <w:theme:font src="Weline_Theme::NotoSansSC-Regular.ttf" family="Noto Sans SC" weight="400" display="swap"/>
 <w:theme:font src="Weline_Theme::NotoSansSC-Bold.ttf" family="Noto Sans SC" weight="700" display="swap"/>
+<theme:css>Weline_Theme::theme/backend/colors/_light.css</theme:css>
+<theme:css>Weline_Theme::theme/backend/colors/_default.css</theme:css>
+<theme:css>Weline_Theme::theme/backend/colors/_dark.css</theme:css>
+<?php echo $diskOverrideHtml; ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)?v=<?= $uiAssetVersion('weline-foundation.css') ?>">
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-backend.css)?v=<?= $uiAssetVersion('weline-backend.css') ?>">
-<?php echo $diskOverrideHtml; ?>
 <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)?v=<?= $uiAssetVersion('weline-ui.js') ?>"></script>

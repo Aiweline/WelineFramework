@@ -67,6 +67,16 @@
     --scrollbar-thumb: #8590a5;
     --scrollbar-thumb-hover: #a2adb7;
     --scrollbar-track: transparent;
+
+    /* 商品标签色 */
+    --color-product-label-new-bg: #14261a;
+    --color-product-label-new-text: #9fd4a8;
+    --color-product-label-sale-bg: #3f1d2b;
+    --color-product-label-sale-text: #fecdd3;
+    --weline-product-label-new-bg: var(--color-product-label-new-bg);
+    --weline-product-label-new-text: var(--color-product-label-new-text);
+    --weline-product-label-sale-bg: var(--color-product-label-sale-bg);
+    --weline-product-label-sale-text: var(--color-product-label-sale-text);
 }
 
 /* Complete semantic dark palette; every global component consumes these tokens. */

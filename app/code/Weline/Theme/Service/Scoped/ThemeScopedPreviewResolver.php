@@ -6,7 +6,6 @@ namespace Weline\Theme\Service\Scoped;
 
 use Weline\Theme\Helper\CssVariableInjector;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
-use Weline\Theme\Api\Scoped\ThemeScopedResourceAdapterInterface;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
@@ -18,16 +17,13 @@ use Weline\Theme\Service\ThemeLayoutService;
 /**
  * Controlled Theme Editor preview resolver.
  *
- * A typed, server-validated editor context is mandatory at the call boundary.
  * Draft rendering composes the direct parent's published Release with current
- * patches; published rendering reads Releases only. Legacy rows are used only
- * to attach expendable editor IDs and registry metadata.
+ * patches; published rendering reads Releases only.
  */
 final class ThemeScopedPreviewResolver
 {
     public function __construct(
         private readonly ThemeScopedWorkspaceInterface $workspace,
-        private readonly ThemeScopedResourceAdapterInterface $adapter,
         private readonly ThemeLayoutSnapshotNormalizer $normalizer,
         private readonly ThemeLayoutService $layouts,
         private readonly ThemeLayoutScopeNormalizer $scopeNormalizer,
@@ -48,22 +44,8 @@ final class ThemeScopedPreviewResolver
             throw new \RuntimeException('theme_scoped_preview_layout_payload_missing');
         }
 
-        // Current-scope shadow rows keep old editor actions from ever receiving
-        // an inherited parent's layout_id. They are fully rebuildable and do not
-        // establish scoped ownership.
-        if ($includeDraft) {
-            $this->adapter->projectDraft($context, $payload);
-        }
-
         $layout = $this->normalizer->denormalize($context, $payload);
         $identity = $this->legacyIdentity($context);
-        $legacy = $this->layouts->getFullLayout(
-            $context->themeId,
-            $context->layoutType,
-            $status,
-            $identity,
-        );
-        $legacyIds = $this->legacyIdsByUid($legacy);
         $translations = $this->resolveTranslations($context, $includeDraft);
 
         foreach ($layout as &$areaData) {
@@ -75,10 +57,8 @@ final class ThemeScopedPreviewResolver
                     continue;
                 }
                 $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
-                if (isset($legacyIds[$uid])) {
-                    $widget['layout_id'] = $legacyIds[$uid];
-                } elseif ($includeDraft) {
-                    throw new \RuntimeException('theme_scope_draft_projection_node_missing:' . $uid);
+                if (\preg_match('/^[a-f0-9]{32}$/D', $uid) !== 1) {
+                    throw new \RuntimeException('theme_scoped_preview_node_uid_invalid');
                 }
                 $widget['status'] = $status;
                 $widget['scope'] = $identity['scope'];
@@ -223,26 +203,6 @@ final class ThemeScopedPreviewResolver
             'target_id' => $context->targetId,
             'locale_code' => $context->locale === 'default' ? '' : $context->locale,
         ];
-    }
-
-    /** @return array<string,int> */
-    private function legacyIdsByUid(array $layout): array
-    {
-        $ids = [];
-        foreach ($layout as $areaData) {
-            foreach (\is_array($areaData['widgets'] ?? null) ? $areaData['widgets'] : [] as $widget) {
-                if (!\is_array($widget)) {
-                    continue;
-                }
-                $uid = \strtolower(\trim((string)($widget['node_uid'] ?? '')));
-                $id = (int)($widget['layout_id'] ?? 0);
-                if (\preg_match('/^[a-f0-9]{32}$/D', $uid) === 1 && $id > 0) {
-                    $ids[$uid] = $id;
-                }
-            }
-        }
-
-        return $ids;
     }
 
     /** @return array<string,string> */

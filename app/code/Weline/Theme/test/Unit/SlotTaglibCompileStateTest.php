@@ -39,6 +39,8 @@ class SlotTaglibCompileStateTest extends TestCore
         $secondResult = $taglib->compile($template, $secondContent, 'slot-second-cycle.phtml');
 
         $this->assertStringContainsString('data-wslot="widget-hero"', $firstResult);
+        $this->assertStringContainsString('<!--@weline-slot:widget-hero-->', $firstResult);
+        $this->assertStringContainsString('<!--@/weline-slot:widget-hero-->', $firstResult);
         $this->assertStringContainsString('data-wslot="widget-hero"', $secondResult);
         $this->assertSame([], Slot::getRegisteredSlots(), 'Top-level compile should not leak slot state across cycles.');
     }
@@ -93,6 +95,37 @@ class SlotTaglibCompileStateTest extends TestCore
         $this->assertStringContainsString('<?php else:', $result);
     }
 
+    public function testRuntimeSlotTagClosesWrapperBeforeFollowingMarkup(): void
+    {
+        /** @var Taglib $taglib */
+        $taglib = ObjectManager::getInstance(Taglib::class);
+        /** @var Template $template */
+        $template = ObjectManager::getInstance(Template::class);
+
+        $rendered = $taglib->renderRuntimeTag(
+            $template,
+            'w:slot',
+            'tag-start',
+            [
+                'id' => 'product-purchase-actions',
+                'wrapper' => 'div',
+                'class' => 'actions',
+            ],
+            '<span>Preview</span>',
+            'slot-runtime-close.phtml',
+            ' id="product-purchase-actions" wrapper="div" class="actions"',
+            '',
+        ) . '<p class="after-slot">After</p>';
+
+        $this->assertStringContainsString('data-wslot="product-purchase-actions"', $rendered);
+        $this->assertStringContainsString('<span>Preview</span>', $rendered);
+        $this->assertStringContainsString('<p class="after-slot">After</p>', $rendered);
+        $this->assertMatchesRegularExpression(
+            '/<!--@weline-slot:product-purchase-actions-->.*?data-wslot="product-purchase-actions"[^>]*>\s*<span>Preview<\/span>\s*<\/div>\s*<!--@\/weline-slot:product-purchase-actions-->\s*<p class="after-slot">After<\/p>/s',
+            $rendered,
+        );
+    }
+
     public function testDuplicateSlotErrorReportsTemplateSource(): void
     {
         /** @var Taglib $taglib */
@@ -113,5 +146,86 @@ PHTML;
             $this->assertStringContainsString('slot-duplicate-source.phtml', $message);
             $this->assertStringNotContainsString('unknown:0', $message);
         }
+    }
+
+    public function testRuntimeSlotRegistryCanResetBetweenWidgetRenders(): void
+    {
+        /** @var Taglib $taglib */
+        $taglib = ObjectManager::getInstance(Taglib::class);
+        /** @var Template $template */
+        $template = ObjectManager::getInstance(Template::class);
+
+        $attrs = [
+            'id' => 'product-purchase-actions',
+            'wrapper' => 'div',
+            'class' => 'actions',
+            'multiple' => 'true',
+        ];
+        $raw = ' id="product-purchase-actions" wrapper="div" class="actions" multiple="true"';
+
+        $first = $taglib->renderRuntimeTag(
+            $template,
+            'w:slot',
+            'tag-start',
+            $attrs,
+            '<span>One</span>',
+            'product-info-first.phtml',
+            $raw,
+            '',
+        );
+        $this->assertStringContainsString('data-wslot="product-purchase-actions"', $first);
+
+        Slot::clearRegisteredSlots();
+
+        $second = $taglib->renderRuntimeTag(
+            $template,
+            'w:slot',
+            'tag-start',
+            $attrs,
+            '<span>Two</span>',
+            'product-info-second.phtml',
+            $raw,
+            '',
+        );
+        $this->assertStringContainsString('data-wslot="product-purchase-actions"', $second);
+        $this->assertStringContainsString('<span>Two</span>', $second);
+    }
+
+    public function testRuntimeDuplicateSlotWithoutResetStillThrows(): void
+    {
+        /** @var Taglib $taglib */
+        $taglib = ObjectManager::getInstance(Taglib::class);
+        /** @var Template $template */
+        $template = ObjectManager::getInstance(Template::class);
+
+        $attrs = [
+            'id' => 'product-purchase-actions',
+            'wrapper' => 'div',
+            'class' => 'actions',
+        ];
+        $raw = ' id="product-purchase-actions" wrapper="div" class="actions"';
+
+        $taglib->renderRuntimeTag(
+            $template,
+            'w:slot',
+            'tag-start',
+            $attrs,
+            '<span>One</span>',
+            'product-info-a.phtml',
+            $raw,
+            '',
+        );
+
+        $this->expectException(TemplateException::class);
+        $taglib->renderRuntimeTag(
+            $template,
+            'w:slot',
+            'tag-start',
+            $attrs,
+            '<span>Two</span>',
+            'product-info-b.phtml',
+            $raw,
+            '',
+        );
     }
 }

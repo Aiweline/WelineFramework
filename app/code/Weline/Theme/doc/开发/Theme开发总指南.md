@@ -1,5 +1,7 @@
 # Theme 开发总指南
 
+> **写任何 `.phtml` / 模板 / 布局 / 部件前**：先读 [AI硬规则索引.md](../../Ai/doc/AI硬规则索引.md) 与 [Taglib 场景映射表.md](../../Taglib/doc/场景映射表.md)。
+>
 > 适用范围：WelineFramework 当前主题开发、布局开发、部件开发、主题覆盖、前端请求链路、Taglib 与可视化编辑器相关开发。
 >
 > MCP / AI 侧将本指南视为 **`frontend_development`（前端开发规范）** 表面；其中「前台 section 身份属性（`weline-code`）」只是规范条目之一，不是独立技能名。
@@ -148,6 +150,15 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
   - `Weline.Api.graph()`
   - `Weline.Api.createStream()` / `Weline.Api.stream()`
 
+#### 前端 JS 模块加载（硬约束）
+
+前台主题/部件/布局 **禁止** 用 `<script src="@static(...js)">`、裸 `<js>` 或自造 loader 拉取模块级脚本。必须：
+
+1. 在模块 `view/statics/frontend/weline.modules.js` 注册；
+2. 部件根节点 `data-weline-load` / `data-weline-declare`，或 head hook `module-declarations` 内 `Weline.declare(...)`。
+
+完整规范见 [前端JS模块加载规范.md](../前端JS模块加载规范.md)、[Theme.js使用指南.md](../Theme.js使用指南.md)。MCP 规则 id：`theme_js_module_declare_only`。
+
 主题运行时会读取服务端唯一的 opaque meta 并立即预热 Scope/Backend Worker bootstrap。业务代码不得手工构造、复制或持久化 bootstrap ID，也不得在 Worker/身份失效后绕过刷新流程。
 
 后台 `ModuleLoader` 对动态脚本使用 `loading / loaded / failed` 显式状态：同一逻辑路径（包括带 `_weline_retry` 的重试 URL）只保留一个 in-flight 请求，并发调用共享结果；只有 loaded，或预期全局模块已经就绪的服务端直出脚本，才可直接复用，声明阶段的按需加载 Proxy 不属于已就绪模块。服务端直出脚本存在但全局模块缺失、模块仅为不完整 fallback，或动态脚本触发 onerror 时，必须移除该元素，让上层清理 `loadingModules` 后的下一次用户刷新真正重新发起脚本请求，不得把残留的失败 `<script>` 误认为成功。加载器仅在真实失败后为同一路径附加递增的 `_weline_retry` 查询参数，绕过浏览器同页失败 URL 的负缓存；正常首次加载不附加该参数，继续使用既有静态资源缓存。
@@ -160,6 +171,7 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 - 禁止 `axios`
 - 禁止手写 `/api/framework/query-bin`
 - 禁止手写业务 REST URL
+- 禁止部件/布局直接 `@static` / `<script src>` 加载已登记或应登记的 JS 模块（见上「前端 JS 模块加载」）
 
 ## 3. 当前 Theme 目录的权威位置
 
@@ -203,6 +215,51 @@ Weline UI 的原生 `input`、`select`、`textarea` 必须以包含块宽度为�
 
 - 新增无前缀全局基础组件类来替代 `w-*`
 - 在可复用组件里大量硬编码颜色、边框、圆角、阴影
+
+## 4.1 前端文案与 i18n（强推荐）
+
+主题模板（layout / partial / component / widget 的 `.phtml`）里，用户可见文案**优先**使用 `<lang>` 标签与 `@lang()` / `@lang{}` 内联语法；**不要**在 HTML 正文或属性里写 `<?= __('...') ?>`。
+
+**为什么前端首选 `@lang` / `<lang>`，而不是 `__()`**：
+
+- 无参数时，`<lang>` / `@lang` 在**模板编译期**直接烘焙为当前 locale 的静态译文，运行时零词典查询
+- `__()` 是 PHP 运行时函数，每次请求都要查词典；也无法用于 Taglib / `w:*` 标签属性（属性禁止 `<?=` / `<?php`）
+- 编译期自动收集词条到 i18n 词典，翻译维护成本更低
+
+**推荐写法**：
+
+```html
+<!-- HTML 正文 -->
+<h1><lang>用户管理</lang></h1>
+<button><lang>保存</lang></button>
+
+<!-- HTML 属性 -->
+<input placeholder="<lang>请输入用户名</lang>" />
+<a title="@lang(删除)"><lang>删除</lang></a>
+
+<!-- w:* 标签属性（禁止 <?= __() ?>） -->
+<w:select placeholder="@lang(请选择站点)" />
+
+<!-- 页面内联 script -->
+<script>alert('@lang(操作成功)');</script>
+
+<!-- 带占位符 -->
+<p><lang args="['name' => $user->getName()]">欢迎，%{name}！</lang></p>
+
+<!-- 源文含逗号：禁止裸 @lang{a, b}（逗号当参数分隔 → ParseError）；用 <lang> 或加引号 -->
+<p><lang>支持 .ico, .png, .svg</lang></p>
+<span>@lang('支持 .ico, .png, .svg')</span>
+```
+
+**硬规则**：`@lang()` / `@lang{}` 把未加引号的逗号当参数分隔；含逗号源文必须 `<lang>…</lang>` 或 `@lang('…')`（权威：`01-lang标签使用指南.md`；MCP id `at_lang_no_unquoted_comma`）。
+
+**仍使用 `__()` 的合理场景**（仅限 PHP 逻辑层，不在 HTML 直接输出）：
+
+- Controller / Service / Block 组装后交给模板的动态字符串
+- `<?php ?>` 块内分支逻辑所需的文案
+- 外部 `.js` 文件依赖的全局变量注入（在 PHP 块赋值 `window.i18nTexts` 等）
+
+详细语法与占位符规则：`app/code/Weline/Framework/doc/4-内置标签/01-lang标签使用指南.md`
 
 ## 5. 布局与部件的边界
 
@@ -314,6 +371,7 @@ component 负责：
 - 前台 `<section>` / `wrapper=section` 不配 `weline-code`（升级致命 + Pixel 溯源降级）
 - 直接在浏览器侧拼 query-bin URL
 - 把 `app/design` 覆盖与模块 `view/theme` 追加混为一谈
+- 在 `.phtml` 的 HTML 正文或属性里写 `<?= __('...') ?>`（应优先 `<lang>` / `@lang()` 编译期静态译文）
 
 ## 10. 推荐给 AI / 开发者的最短路径
 
@@ -324,7 +382,8 @@ component 负责：
 3. 这次改动属于默认主题，还是某个设计主题覆盖？
 4. 有没有浏览器业务请求？如果有，是否走了 `Weline.Api.*`？
 5. 新增/改动的前台 section 是否已配非空语义 `weline-code`？
-6. 最终验证入口是什么？
+6. 用户可见文案是否已用 `<lang>` / `@lang()`，而非 HTML 里的 `<?= __() ?>`？
+7. 最终验证入口是什么？
 
 然后对应去读：
 
@@ -345,3 +404,13 @@ component 负责：
 - `app/code/Weline/Theme/doc/Theme.js使用指南.md`
 - `app/code/Weline/Frontend/doc/Weline.Api使用指南.md`
 - `app/code/Weline/Taglib/doc/README.md`
+- `app/code/Weline/Framework/doc/4-内置标签/01-lang标签使用指南.md`（前端 i18n 首选）
+
+## 12. 商城默认内容视觉
+
+默认首页部件必须可直接上线，不得使用电子产品、家居等演示分类或纯渐变促销占位：
+
+- `hero-slider` 无运营 slides 时使用三组汉服商品视觉；桌面 16:5、移动 3:4 通过 `<picture>` 切换，图片不烘焙文字，文案按中英文 locale 输出。
+- `category-grid` 无数据源时只展示真实顶级分类：女装、男装、童装、配饰、套装与场景；方图来自已登记的 R2 FileAsset。
+- 响应式验收固定覆盖 375 / 768 / 1024，检查主体裁切、文字安全区、按钮可读性、分类形制与图片对应关系。
+- 模板只能引用 `pub/media` 中已经登记并具备双语 reviewed/manual 元数据的资源；替换后不得继续引用抽象 SVG 或 demo helper。

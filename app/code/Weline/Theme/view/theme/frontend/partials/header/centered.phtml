@@ -24,8 +24,6 @@ $logoText = $this->getData("meta.logoText") ?? __('Weline');
 $navItems = $this->getData("meta.navItems") ?? [];
 $showSearch = $this->getData("meta.showSearch") ?? true;
 $class = $this->getData("meta.class") ?? '';
-
-$baseUrl = $this->request->getBaseUrl();
 ?>
 <?php
 use Weline\Framework\Manager\ObjectManager;
@@ -38,7 +36,7 @@ $__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
     <div class="header-container">
         <!-- Logo 居中 -->
         <div class="header-logo-centered">
-            <a href="/" title="<?= __('首页') ?>">
+            <a href="@url{'/'}" title="<?= __('首页') ?>">
                 <?php if ($logo): ?>
                     <img src="<?= htmlspecialchars($logo) ?>" alt="<?= __('网站Logo') ?>" class="centered-header__logo-image" data-fallback-target=".logo-text" data-fallback-display="inline-block">
                 <?php else: ?>
@@ -51,7 +49,7 @@ $__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
         <!-- 搜索框（Logo下方） -->
         <?php if ($showSearch): ?>
             <div class="header-search-centered">
-                <w:form action="/search" method="get" class="search-form">
+                <w:form action="@url{'search'}" method="get" class="search-form">
                     <input type="text" name="q" class="search-input" placeholder="<?= __('搜索商品...') ?>" autocomplete="off">
                     <button type="submit" class="search-button" title="<?= __('搜索') ?>">
                         <w:icon name="search" size="sm"></w:icon>
@@ -95,7 +93,7 @@ $__defaultFrontendLogo = $__siteBrand->resolveFrontendLogoUrl($this);
 
             <!-- 购物车 Hook -->
             <div class="header-action-item" data-hook="header-cart">
-                <w:hook>header-cart<else/><a href="/cart" class="cart-link" title="<?= __('购物车') ?>">
+                <w:hook>header-cart<else/><a href="@url{'cart'}" class="cart-link" title="<?= __('购物车') ?>">
                     <w:icon name="pin" size="sm"></w:icon>
                     <span class="cart-text"><?= __('购物车') ?></span>
                     <span class="cart-count">0</span>

@@ -1,16 +1,17 @@
 <!--
 布局：account/auth - 登录/注册等认证页面
 兼容 layoutType=account.auth 的路径解析；顶栏底栏与首页同源（Theme Partials）。
+登录/注册舞台由 Theme form/account-login、account-register 部件卡片内嵌（部件边界内左右分栏，非整页布局）。
 
 字段
 @meta.name {default="账号认证布局",name="账号认证布局",description="登录注册等认证页布局"}
-@meta.description {default="Partials 顶栏底栏与首页一致",name="描述",description="顶栏底栏与首页一致"}
+@meta.description {default="Partials 顶栏底栏与首页一致；登录/注册由 Theme 内嵌部件渲染",name="描述",description="顶栏底栏与首页一致"}
 @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="认证页通常不需要已登录"}
 @param.title {default="登录",name="页面标题",description="页面标题"}
 @param.content {default="",name="主要内容",description="认证表单等内容"}
 @param.class {default="",name="额外CSS类",description="根节点额外 class"}
-@param.showHeader {default=false,name="是否显示header",description="认证页默认不渲染商城顶栏"}
-@param.showFooter {default=false,name="是否显示footer",description="认证页默认不渲染商城底栏"}
+@param.showHeader {default=true,name="是否显示header",description="认证页默认渲染商城顶栏（Theme Partials）"}
+@param.showFooter {default=true,name="是否显示footer",description="认证页默认渲染商城底栏（Theme Partials）"}
 @param.showSearch {default=true,name="顶栏搜索",description="顶栏是否展示搜索（Partials）"}
 @param.showUserMenu {default=true,name="用户菜单",description="顶栏是否展示用户菜单（Partials）"}
 
@@ -24,13 +25,27 @@
     if (!is_array($meta)) {
         $meta = [];
     }
+    if (!array_key_exists('showHeader', $meta)) {
+        $meta['showHeader'] = true;
+    }
+    if (!array_key_exists('showFooter', $meta)) {
+        // Legacy bare-auth: if header was explicitly off and footer unset, keep chrome off.
+        $meta['showFooter'] = (($meta['showHeader'] ?? true) !== false);
+    }
+    $this->assign('meta', $meta);
+    $showHeader = ($meta['showHeader'] ?? true) !== false;
+    $showFooter = ($meta['showFooter'] ?? true) !== false;
     $pageTitle = trim((string)($this->getData('title') ?: ($meta['title'] ?? __('登录'))));
     $this->setData('__weline_frontend_final_title', $pageTitle);
     $pageDescription = trim((string)($this->getData('description') ?: ($meta['description'] ?? '')));
     $contentTemplate = (string)($this->getData('meta.contentTemplate') ?: $this->getData('contentTemplate') ?: $meta['contentTemplate'] ?? '');
     $normalizedContentTemplate = str_replace('\\', '/', $contentTemplate);
     $isLoginAuthPage = str_contains($normalizedContentTemplate, '/account/login.phtml')
+        || str_contains($normalizedContentTemplate, '/account/login-shell.phtml')
         || str_contains($normalizedContentTemplate, '/customer/login.phtml');
+    $isRegisterAuthPage = str_contains($normalizedContentTemplate, '/account/register.phtml')
+        || str_contains($normalizedContentTemplate, '/customer/register.phtml');
+    $isAuthStagePage = $isLoginAuthPage || $isRegisterAuthPage;
     $isDev = defined('DEV') && DEV;
     $apiWorkerUrl = $isDev
         ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
@@ -60,7 +75,7 @@
             window.WelineApiConfig.cartCountCookieKey = window.WelineApiConfig.cartCountCookieKey || 'weline_cart_item_count';
         })();
     </script>
-    <js>Weline_Frontend::js/weline.js</js>
+    <?php // weline.js 必须在 runtime 配置 + runtime.js 之后（由 Partials head 注入），不可提前加载，否则 modulesBaseUrl 落默认 /static/Weline_Frontend/... 404 ?>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <style data-auth-theme-vars>
         :root,
@@ -77,67 +92,224 @@
         body.account-auth-layout {
             margin: 0;
             min-height: 100vh;
-            background: var(--weline-layout-surface-secondary);
+            display: flex;
+            flex-direction: column;
+            background: #232f3e;
             font-family: var(--weline-layout-font-family);
             font-size: var(--weline-layout-font-size-base);
             line-height: var(--weline-layout-line-height-normal);
             color: var(--weline-layout-text-primary);
             transition: background var(--weline-theme-transition-base), color var(--weline-theme-transition-base);
         }
-        .weline-page-wrapper {
-            min-height: 100vh;
+        .weline-page-wrapper.account-auth-stage {
+            flex: 1 1 auto;
+            min-height: 0;
             display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: var(--weline-layout-spacing-xl) var(--weline-layout-spacing-md);
-            box-sizing: border-box;
-        }
-        .weline-main-content,
-        .auth-container {
+            flex-direction: column;
             width: 100%;
+            padding: 0;
+            box-sizing: border-box;
+            background: transparent;
         }
-        .account-auth-shell {
+        /* Neutralize global .weline-main-content white canvas so login stage can breathe */
+        .weline-main-content.account-auth-stage__main {
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            background: transparent;
+            background-color: transparent;
+        }
+        .auth-container.account-auth-stage__container,
+        .account-auth-shell.account-auth-stage__shell,
+        .account-auth-content {
+            width: 100%;
+            max-width: none;
+            margin: 0;
+            flex: 1 1 auto;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            background: transparent;
+        }
+        .account-auth__content-slot,
+        .account-auth__content-root-slot {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            width: 100%;
+            min-height: 0;
+        }
+        .account-auth-shell.auth-login-card {
+            padding-block: 0;
+            background: transparent;
+        }
+        /* First-paint: adaptive grid stage (widget only; no absolute clip) */
+        .account-login-widget {
             position: relative;
-            width: fit-content;
-            max-width: 100%;
-            margin: 0 auto;
+            isolation: isolate;
+            box-sizing: border-box;
+            width: 100%;
+            min-height: min(70vh, 42rem);
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
+            align-items: start;
+            column-gap: clamp(1rem, 3vw, 2.5rem);
+            padding: clamp(1.5rem, 4vh, 2.75rem) clamp(1rem, 4vw, 3rem) clamp(2rem, 5vh, 3.25rem);
+            overflow: visible;
+            background: var(--account-login-promo-bg, #1b2430);
         }
-        @media screen and (max-width: 640px) {
-            .account-auth-shell {
-                width: 100%;
+        .account-login-widget__backdrop {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+            background-color: var(--account-login-promo-bg, #1b2430);
+            background-size: cover;
+            background-position: center;
+            overflow: hidden;
+        }
+        .account-login-widget--wash .account-login-widget__backdrop {
+            background-image:
+                radial-gradient(90% 70% at 12% 18%, rgba(255, 153, 0, 0.28) 0%, transparent 55%),
+                linear-gradient(145deg, #1b2430 0%, #37475a 46%, var(--account-login-accent, #e08a2a) 100%);
+        }
+        .account-login-widget__overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 17, 17, var(--account-login-overlay, 0.35));
+            opacity: 0;
+        }
+        .account-login-widget--has-image .account-login-widget__overlay { opacity: 1; }
+        .account-login-widget__rail {
+            position: relative;
+            z-index: 1;
+            grid-column: 1;
+            max-width: 40rem;
+            width: 100%;
+            padding: 0.35rem 0 0;
+            color: #fff;
+            display: grid;
+            gap: 0.55rem;
+            align-content: start;
+        }
+        .account-login-widget__eyebrow {
+            margin: 0;
+            font-size: 0.75rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: rgba(255,255,255,0.75);
+        }
+        .account-login-widget__promo-title {
+            margin: 0;
+            font-size: clamp(2rem, 3.6vw, 3rem);
+            font-weight: 700;
+            line-height: 1.15;
+        }
+        .account-login-widget__promo-subtitle {
+            margin: 0;
+            max-width: 22rem;
+            font-size: 1.05rem;
+            color: rgba(255,255,255,0.92);
+        }
+        .account-login-widget__promo-trust {
+            margin: 0.25rem 0 0;
+            font-size: 0.8125rem;
+            color: rgba(255,255,255,0.72);
+        }
+        .account-login-widget__dock {
+            position: relative;
+            z-index: 2;
+            grid-column: 2;
+            width: 100%;
+            max-width: 22rem;
+            justify-self: end;
+            pointer-events: none;
+        }
+        .account-login-widget__stage {
+            width: 100%;
+            pointer-events: auto;
+            filter: drop-shadow(0 14px 32px rgba(15, 17, 17, 0.28));
+        }
+        .account-login-widget .w-auth-login--amazon {
+            width: 100%;
+            margin: 0;
+            border-radius: 12px;
+            overflow: hidden;
+        }
+        .account-login-widget .w-auth-login--amazon .w-auth-login__header {
+            gap: 0.35rem;
+            padding: 1.25rem 1.25rem 0.5rem;
+        }
+        .account-login-widget .w-auth-login--amazon .w-auth-login__form {
+            gap: 0.75rem;
+            padding-inline: 1.25rem;
+        }
+        .account-login-widget .w-auth-login--amazon .w-auth-login__footer {
+            margin-block-start: 0.65rem;
+            padding: 0.15rem 1.25rem 1.1rem;
+        }
+        @media (max-width: 47.99rem) {
+            .account-login-widget {
+                min-height: 0;
+                grid-template-columns: 1fr;
+                padding: 2rem 1rem 3rem;
+            }
+            .account-login-widget__rail { grid-column: 1; max-width: none; padding: 0 0.25rem 2.75rem; }
+            .account-login-widget__dock {
+                grid-column: 1;
+                justify-self: center;
+                width: min(100%, 22rem);
+                margin-block-start: -1.75rem;
             }
         }
     </style>
     <w:hook>seo::head</w:hook>
 </head>
-<body class="account-auth-layout">
+<body class="account-auth-layout<?= $showHeader || $showFooter ? ' account-auth-layout--with-chrome' : '' ?>">
     <w:hook>seo::body</w:hook>
-    <div class="weline-page-wrapper">
-        <div class="weline-main-content">
+    <?php if ($showHeader): ?>
+        <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::account::header-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+        <w:hook>Weline_Theme::frontend::layouts::account::header-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+    <?php endif; ?>
+    <div class="weline-page-wrapper account-auth-stage">
+        <div class="weline-main-content account-auth-stage__main">
             <main class="account-auth-content <?= htmlspecialchars(($meta['class'] ?? '')) ?>" id="account-auth-content" data-layout="account_auth_content">
-                <div class="auth-container">
-                    <div class="account-auth-shell<?= $isLoginAuthPage ? ' auth-login-card' : '' ?>">
+                <div class="auth-container account-auth-stage__container">
+                    <div class="account-auth-shell account-auth-stage__shell<?= $isAuthStagePage ? ' auth-login-card' : '' ?>">
                         <w:slot id="content"
                                 name="内容区"
-                                accept="layout-account-content,layout-account-auth-content,layout-default-content,content,account-auth,auth-form"
+                                accept="layout-account-content,layout-account-auth-content,layout-default-content,content,account-auth,auth-form,account-login,account-register"
                                 reject="header,footer"
                                 multiple="true"
                                 position="content"
                                 class="account-auth__content-root-slot">
                             <w:slot id="account-auth-content"
                                 name="账号认证内容"
-                                accept="layout-account-auth-content,account-auth,auth-form,content"
+                                accept="layout-account-auth-content,account-auth-content,account-auth,auth-form,account-login,login,account-register,register"
                                 reject="header,footer"
-                                multiple="true"
+                                multiple="false"
+                                exclusive="true"
                                 position="content"
                                 class="account-auth__content-slot">
-                            <?php if ($isLoginAuthPage): ?>
+                            <?php if ($isAuthStagePage && !$showHeader): ?>
                                 <div class="auth-login-toolbar" aria-label="<?= htmlspecialchars((string) __('登录页工具'), ENT_QUOTES) ?>">
                                     <div class="auth-login-language">
                                         <w:i18n:switcher for="js" />
                                     </div>
                                 </div>
                             <?php endif; ?>
+                            <?php if ($isLoginAuthPage): ?>
+                            <!-- Theme 归属内嵌部件：主题编辑器可改背景图（Copy-on-Write），不走应用注入 -->
+                            <w:widget type="form" name="account-login" />
+                            <?php elseif ($isRegisterAuthPage): ?>
+                            <w:widget type="form" name="account-register" />
+                            <?php else: ?>
                             <if condition="meta.content">
                                 {{meta.content}}
                                 <elseif condition="content"/>
@@ -145,6 +317,7 @@
                                 <elseif condition="meta.contentTemplate"/>
                                 <?php echo $this->fetch($this->getData("meta.contentTemplate")); ?>
                             </if>
+                            <?php endif; ?>
                             </w:slot>
                         </w:slot>
                     </div>
@@ -152,6 +325,15 @@
             </main>
         </div>
     </div>
+    <?php if ($showFooter): ?>
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::account::footer-before</w:hook>
+        <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+        <w:hook>Weline_Theme::frontend::layouts::account::footer-after</w:hook>
+        <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+    <?php endif; ?>
     <w:hook>seo::footer</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::account::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 </body>
 </html>

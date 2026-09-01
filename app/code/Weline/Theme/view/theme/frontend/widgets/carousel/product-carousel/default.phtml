@@ -22,9 +22,15 @@
  * @param show_wishlist {default=true,type="bool",label="显示收藏"}
  * @param show_compare {default=true,type="bool",label="显示对比"}
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ * @param label_new_bg {default="",type="color",label="新品标签背景",description="留空使用主题全局色盘"}
+ * @param label_new_text {default="",type="color",label="新品标签文字",description="留空使用主题全局色盘"}
+ * @param label_sale_bg {default="",type="color",label="促销标签背景",description="留空使用主题全局色盘"}
+ * @param label_sale_text {default="",type="color",label="促销标签文字",description="留空使用主题全局色盘"}
  */
 
+use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ThemeUiColor;
 use Weline\Theme\Helper\WidgetUiScope;
@@ -47,6 +53,9 @@ $products = ThemeDemoCatalog::products($limit, 80);
 if ($title === '') {
     $title = __('精选轮播');
 }
+
+$labelOverrides = ProductLabelStyle::widgetOverridesFromTemplate($this);
+$scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
 ?>
 
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
@@ -55,7 +64,7 @@ if ($title === '') {
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-slides-per-view="<?= $esc((string)$slidesPerView) ?>"
          data-autoplay="<?= $autoplay ? 'true' : 'false' ?>"
-         data-loop="<?= $loop ? 'true' : 'false' ?>">
+         data-loop="<?= $loop ? 'true' : 'false' ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
 
     <?php if ($title): ?>
         <div class="widget-header">
@@ -70,8 +79,11 @@ if ($title === '') {
 
         <div class="carousel-viewport">
             <div class="carousel-track">
-                <?php foreach ($products as $product): ?>
-                    <?php $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0); ?>
+                <?php foreach ($products as $index => $product): ?>
+                    <?php
+                    $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0);
+                    $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
+                    ?>
                     <div class="carousel-slide">
                         <div class="product-card" data-product-id="<?= $actionProductId ?>">
                             <div class="product-image-wrapper">
@@ -82,6 +94,12 @@ if ($title === '') {
                                          loading="lazy">
                                 </a>
 
+                                <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/labels.phtml', [
+                                    'is_demo' => $labelFlags['is_demo'],
+                                    'is_new' => $labelFlags['is_new'],
+                                    'is_sale' => $labelFlags['is_sale'],
+                                ]) ?>
+
                                 <div class="product-action-bar product-action-bar--carousel">
                                     <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
                                         'product_id' => $actionProductId,
@@ -89,9 +107,10 @@ if ($title === '') {
                                         'show_compare' => $shopperActions['show_compare'],
                                         'show_quickview' => $shopperActions['show_quickview'],
                                     ]) ?>
-                                    <button class="action-btn btn-cart" type="button" title="<?= __('加入购物车') ?>" aria-label="<?= __('加入购物车') ?>" data-product-id="<?= $actionProductId ?>">
-                                        <w:icon name="pin" size="sm"></w:icon>
-                                    </button>
+                                    <?= $this->fetch(
+                                        'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
+                                        ProductCardAddToCartParams::fetchDictionary($product, ['variant' => 'icon'])
+                                    ) ?>
                                 </div>
                             </div>
 

@@ -36,7 +36,8 @@ if (is_string($slides)) {
 if (!is_array($slides)) {
     $slides = [];
 }
-$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
+// 部件 CSS/尺寸自我完全：始终用配置 height。库卡片缩略由编辑器外壳 viewport+scale 完成，
+// 禁止按 preview_mode/editor_mode 压高度，也禁止选择外部编辑器类名。
 $autoplay = (bool)($this->getData('autoplay') ?? $this->getData('auto_play') ?? true);
 $autoplaySpeed = max(1000, min(600000, (int)($this->getData('autoplay_speed') ?? $this->getData('interval') ?? 5000)));
 $showDots = (bool)($this->getData('show_dots') ?? true);
@@ -45,17 +46,24 @@ $effect = strtolower(trim((string)($this->getData('effect') ?? 'slide')));
 if (!in_array($effect, ['slide', 'fade'], true)) {
     $effect = 'slide';
 }
-$height = $isPreviewMode ? '120px' : trim((string)($this->getData('height') ?? '500px'));
+$height = trim((string)($this->getData('height') ?? '500px'));
 if (preg_match('/^(?:0|[0-9]+(?:\\.[0-9]+)?(?:px|rem|em|%|vh|vw|svh|lvh|dvh))$/D', $height) !== 1) {
     $height = '500px';
 }
-$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
-$configTitle = trim((string)($this->getData('title') ?? ''));
-$configSubtitle = trim((string)($this->getData('subtitle') ?? ''));
-$configButtonText = trim((string)($this->getData('button_text') ?? ''));
-$configLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('link') ?? '#');
-$configTextPosition = trim((string)($this->getData('text_position') ?? 'left'));
-$configImage = trim((string)($this->getData('image') ?? ''));
+$placeholder = '';
+try {
+    $placeholder = \Weline\Theme\Helper\StorefrontImagePlaceholder::url();
+} catch (\Throwable) {
+    $placeholder = '/Weline/Theme/view/statics/images/storefront-placeholder/default.svg';
+}
+// hero-slider 未声明 title/subtitle/button_text 参数；共享 Template 上的页面 title
+//（如主题名 Weline_Theme）不得当作轮播文案，否则 slides 为空时会落成单页半成品。
+$configTitle = '';
+$configSubtitle = '';
+$configButtonText = '';
+$configLink = '#';
+$configTextPosition = 'left';
+$configImage = '';
 
 $defaultGradients = [
     'linear-gradient(135deg, var(--weline-theme-primary) 0%, var(--weline-theme-primary-hover) 100%)',
@@ -83,51 +91,77 @@ $resolveSlideBackground = static function (array $slide, int $index) use ($defau
     return 'background: ' . $gradient . ';';
 };
 
-// 示例数据
+// 无运营配置时提供可直接上线的汉服视觉；图片不烘焙文字，文案按当前 storefront locale 输出。
+$requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+$currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
+$isEnglish = str_starts_with(strtolower($currentLocale), 'en')
+    || preg_match('#/en_US(?:/|$)#', $requestUri) === 1;
+$heroImage = static function (string $slug, string $alt, bool $priority = false) use ($esc): string {
+    $desktop = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '.webp';
+    $mobile = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '-mobile.webp';
+    return '<picture>'
+        . '<source media="(max-width: 768px)" srcset="' . $esc($mobile) . '">'
+        . '<img src="' . $esc($desktop) . '" alt="' . $esc($alt) . '" '
+        . 'loading="' . ($priority ? 'eager' : 'lazy') . '" decoding="async"'
+        . ($priority ? ' fetchpriority="high"' : '')
+        . '>'
+        . '</picture>';
+};
+
 if (empty($slides)) {
-    if ($configTitle !== '' || $configSubtitle !== '' || $configButtonText !== '') {
-        $slides = [[
-            'gradient' => $defaultGradients[0],
-            'image' => $configImage,
-            'title' => $configTitle,
-            'subtitle' => $configSubtitle,
-            'button_text' => $configButtonText,
-            'link' => $configLink,
-            'text_position' => $configTextPosition !== '' ? $configTextPosition : 'left',
-        ]];
-    } else {
-        $slides = [
-            [
-                'gradient' => $defaultGradients[0],
-                'title' => __('2026春季新品上市'),
-                'subtitle' => __('探索最新时尚潮流'),
-                'button_text' => __('立即选购'),
-                'link' => '/products/new',
-                'text_position' => 'left',
-            ],
-            [
-                'gradient' => $defaultGradients[1],
-                'title' => __('限时特惠'),
-                'subtitle' => __('全场满300减50'),
-                'button_text' => __('查看详情'),
-                'link' => '/promotions',
-                'text_position' => 'center',
-            ],
-            [
-                'gradient' => $defaultGradients[2],
-                'title' => __('品质生活'),
-                'subtitle' => __('精选优质好物'),
-                'button_text' => __('开始探索'),
-                'link' => '/featured',
-                'text_position' => 'right',
-            ],
+    $defaults = [
+        [
+            'slug' => 'taoyuan-qingmeng',
+            'title_zh' => '桃园清梦 · 明制花鸟套装',
+            'title_en' => 'Peach Garden Dream · Ming-Style Set',
+            'subtitle_zh' => '烟粉花鸟，上衣与马面裙可选',
+            'subtitle_en' => 'Ivory and blush florals, with top and mamian options',
+            'alt_zh' => '桃园清梦米白粉色明制上衣与马面裙套装',
+            'alt_en' => 'Peach Garden Dream ivory-and-pink Ming-style top and mamian set',
+            'link' => '/product/taoyuan-qingmeng',
+        ],
+        [
+            'slug' => 'shenlong-yin',
+            'title_zh' => '神龙吟 · 妆花马面裙',
+            'title_en' => 'Dragon Chant · Zhuanghua Mamian',
+            'subtitle_zh' => '黑红妆花，马面裙与飞机袖可选',
+            'subtitle_en' => 'Black-and-red zhuanghua, with mamian and feijixiu options',
+            'alt_zh' => '神龙吟黑红妆花明制马面裙造型',
+            'alt_en' => 'Dragon Chant black-and-red zhuanghua Ming-style mamian look',
+            'link' => '/product/shenlong-yin-zhuanghua-mamian',
+        ],
+        [
+            'slug' => 'zuimeng-xifeng',
+            'title_zh' => '醉梦夕风 · 仙鹤织金',
+            'title_en' => 'Evening Wind · Crane Brocade',
+            'subtitle_zh' => '仙鹤织金，单裙与套装可选',
+            'subtitle_en' => 'Crane brocade, available as a skirt or coordinated set',
+            'alt_zh' => '醉梦夕风深色仙鹤织金马面裙造型',
+            'alt_en' => 'Evening Wind dark crane-brocade mamian look',
+            'link' => '/product/zuimeng-xifeng-xianhe-mamian',
+        ],
+    ];
+    $slides = [];
+    foreach ($defaults as $index => $default) {
+        $slides[] = [
+            'gradient' => $defaultGradients[$index],
+            'title' => $isEnglish ? $default['title_en'] : $default['title_zh'],
+            'subtitle' => $isEnglish ? $default['subtitle_en'] : $default['subtitle_zh'],
+            'button_text' => $isEnglish ? 'View product' : '查看商品',
+            'link' => $default['link'],
+            'text_position' => 'left',
+            'image_file_html' => $heroImage(
+                $default['slug'],
+                $isEnglish ? $default['alt_en'] : $default['alt_zh'],
+                $index === 0,
+            ),
         ];
     }
 }
 
 ?>
 
-<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+<section class="<?= $esc($wc) ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
@@ -240,6 +274,7 @@ if (empty($slides)) {
 
 .<?= $wc ?> .slide-media img {
     object-fit: cover;
+    object-position: 75% center;
 }
 
 /* Slide效果 */
@@ -409,72 +444,17 @@ if (empty($slides)) {
     transform: scale(1.2);
 }
 
-/* 部件库 / 编辑器预览：压缩高度并缩小文案，避免灰块占位 */
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    min-height: var(--size-panel-120);
-}
-
-.widget-preview-canvas .<?= $wc ?> .slide-overlay,
-.<?= $wc ?>.is-preview .slide-overlay {
-    background: linear-gradient(to right, var(--token-color-rgba-0-0-0-0-35) 0%, var(--color-overlay-05) 100%);
-}
-
-.widget-preview-canvas .<?= $wc ?> .slide-content,
-.<?= $wc ?>.is-preview .slide-content {
-    padding: 0 6%;
-}
-
-.widget-preview-canvas .<?= $wc ?> .slide-title,
-.<?= $wc ?>.is-preview .slide-title {
-    font-size: var(--token-size-1-1rem);
-    margin-bottom: var(--spacing-xs);
-    animation: none;
-    opacity: 1;
-}
-
-.widget-preview-canvas .<?= $wc ?> .slide-subtitle,
-.<?= $wc ?>.is-preview .slide-subtitle {
-    font-size: var(--font-size-xs);
-    margin-bottom: var(--spacing-sm);
-    animation: none;
-    opacity: 1;
-}
-
-.widget-preview-canvas .<?= $wc ?> .slide-button,
-.<?= $wc ?>.is-preview .slide-button {
-    padding: var(--spacing-xs) var(--weline-space-3);
-    font-size: var(--spacing-0_7);
-    animation: none;
-    opacity: 1;
-}
-
-.widget-preview-canvas .<?= $wc ?> .slider-arrow,
-.<?= $wc ?>.is-preview .slider-arrow {
-    width: var(--spacing-lg);
-    height: var(--spacing-lg);
-    opacity: 0.85;
-}
-
-.widget-preview-canvas .<?= $wc ?> .slider-arrow i,
-.<?= $wc ?>.is-preview .slider-arrow i {
-    font-size: var(--font-size-sm);
-}
-
-.widget-preview-canvas .<?= $wc ?> .slider-dots,
-.<?= $wc ?>.is-preview .slider-dots {
-    bottom: var(--spacing-sm);
-    gap: var(--spacing-xs);
-}
-
-.widget-preview-canvas .<?= $wc ?> .dot,
-.<?= $wc ?>.is-preview .dot {
-    width: var(--size-scrollbar);
-    height: var(--size-scrollbar);
-}
-
 /* 响应式 */
 @media (max-width: 768px) {
+    .<?= $wc ?> .slide-media img {
+        object-position: center;
+    }
+
+    .<?= $wc ?> .slide-content {
+        align-items: flex-start;
+        padding: var(--weline-space-8) var(--weline-space-5);
+    }
+
     .<?= $wc ?> .slide-title {
         font-size: var(--font-size-4xl);
     }

@@ -30,8 +30,30 @@ $shouldRenderMetaContent = trim($metaContent) !== '' && !$isEditorPreview;
             overflow: hidden;
         }
 
+        /*
+         * Shell B：homepage 未包 .w-container；部件按契约 padding-inline:0。
+         * 非全宽 Hero/Promo 区由布局提供版心 max-width + 左右 gutter，避免推荐/新品/分类顶边。
+         * Hero/Promo 本身 padding-block:0，避免默认 Banner 顶部出现白缝。
+         */
         .theme-layout-homepage .homepage-section {
-            padding: clamp(var(--weline-layout-spacing-xl), 6vw, calc(var(--weline-layout-spacing-3xl) * 1.2)) 0;
+            padding-block: clamp(var(--weline-layout-spacing-xl), 6vw, calc(var(--weline-layout-spacing-3xl) * 1.2));
+            padding-inline: 0;
+        }
+
+        .theme-layout-homepage .homepage-hero,
+        .theme-layout-homepage .homepage-promo,
+        .theme-layout-homepage .homepage-section:has([data-widget-code="hero-slider"]),
+        .theme-layout-homepage .homepage-section:has([data-widget-code="promo-banner"]) {
+            padding-block: 0;
+        }
+
+        .theme-layout-homepage .homepage-section:not(.homepage-hero):not(.homepage-promo) > * {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
         }
 
         .theme-layout-homepage .homepage-section--soft {

@@ -6,7 +6,11 @@ export function register(UI) {
         const eventNames = [...new Set(String(element.dataset.wScopeEvents || 'input change').split(/\s+/).filter(Boolean))];
         const storageKey = 'weline_scope_data.v2';
         const loadedScopes = new Set();
+        const loadFailedScopes = new Set();
+        const toastedScopes = new Set();
+        const pendingCategoryById = new Map();
         let saveTimer = 0;
+        let discoverTimer = 0;
 
         const container = () => document.getElementById(containerId) || document.body;
         const fields = () => [...container().querySelectorAll('[scope][name]')]
@@ -60,7 +64,37 @@ export function register(UI) {
                 }
                 return;
             }
-            if ('value' in field && field.value === '') field.value = normalized;
+            // 分类多选标签：走官方 API 静默回填芯片；控件未就绪时写入 pending，等 ready 事件再补一次。
+            if (field instanceof HTMLInputElement
+                && field.hasAttribute('data-catalog-category-select-value')
+                && field.id) {
+                const applyCategory = (attempt = 0) => {
+                    const widget = window.WelineCatalogCategorySelect
+                        && window.WelineCatalogCategorySelect[field.id];
+                    if (widget && typeof widget.setValue === 'function') {
+                        pendingCategoryById.delete(field.id);
+                        widget.setValue(normalized, { silent: true });
+                        return;
+                    }
+                    pendingCategoryById.set(field.id, normalized);
+                    if (attempt < 40) {
+                        window.setTimeout(() => applyCategory(attempt + 1), 50);
+                        return;
+                    }
+                    if (field.value === '' && normalized !== '') {
+                        field.value = normalized;
+                        field.dispatchEvent(new Event('input', { bubbles: true }));
+                    }
+                };
+                applyCategory();
+                return;
+            }
+            if ((field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)
+                && field.value === ''
+                && normalized !== '') {
+                field.value = normalized;
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+            }
         };
         const applyScope = (scope, values) => {
             if (!values || typeof values !== 'object') return;
@@ -70,8 +104,15 @@ export function register(UI) {
                 applyValue(field, values[name]);
             });
         };
+        const toastOnce = (scope, error) => {
+            const key = String(scope || '');
+            if (key === '' || toastedScopes.has(key)) return;
+            toastedScopes.add(key);
+            componentUI.toast.error(error instanceof Error ? error.message : String(error));
+        };
         const loadScope = async (scope) => {
-            if (scope === '' || loadedScopes.has(scope) || endpoint === '') return;
+            // 失败后不再因 MutationObserver/DOM 重绘风暴重试；刷新页面可再次尝试。
+            if (scope === '' || loadedScopes.has(scope) || loadFailedScopes.has(scope) || endpoint === '') return;
             loadedScopes.add(scope);
             try {
                 const url = new URL(endpoint, window.location.href);
@@ -81,12 +122,17 @@ export function register(UI) {
                 applyScope(scope, response?.json || {});
             } catch (error) {
                 loadedScopes.delete(scope);
-                componentUI.toast.error(error instanceof Error ? error.message : String(error));
+                loadFailedScopes.add(scope);
+                toastOnce(`load:${scope}`, error);
             }
         };
         const discoverScopes = () => {
             const scopes = new Set(fields().map((field) => field.getAttribute('scope') || '').filter(Boolean));
             scopes.forEach((scope) => void loadScope(scope));
+        };
+        const scheduleDiscover = () => {
+            window.clearTimeout(discoverTimer);
+            discoverTimer = window.setTimeout(() => discoverScopes(), 50);
         };
         const saveChangedScopes = async () => {
             const store = readStore();
@@ -99,8 +145,9 @@ export function register(UI) {
                         latest[scope].hasChange = false;
                         writeStore(latest);
                     }
+                    toastedScopes.delete(`save:${scope}`);
                 } catch (error) {
-                    componentUI.toast.error(error instanceof Error ? error.message : String(error));
+                    toastOnce(`save:${scope}`, error);
                 }
             }
         };
@@ -127,7 +174,24 @@ export function register(UI) {
         };
 
         eventNames.forEach((eventName) => listen(container(), eventName, record));
-        const observer = new MutationObserver(discoverScopes);
+        const onCategorySelectReady = (event) => {
+            const id = String(event && event.detail && event.detail.id || '');
+            if (id === '' || !pendingCategoryById.has(id)) return;
+            const next = pendingCategoryById.get(id);
+            pendingCategoryById.delete(id);
+            const widget = window.WelineCatalogCategorySelect && window.WelineCatalogCategorySelect[id];
+            if (widget && typeof widget.setValue === 'function') {
+                widget.setValue(next, { silent: true });
+                return;
+            }
+            const field = document.getElementById(id);
+            if (field instanceof HTMLInputElement && field.value === '' && String(next || '') !== '') {
+                field.value = String(next);
+                field.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        };
+        document.addEventListener('weline:catalog-category-select-ready', onCategorySelectReady);
+        const observer = new MutationObserver(scheduleDiscover);
         observer.observe(container(), { childList: true, subtree: true });
         discoverScopes();
 
@@ -136,6 +200,8 @@ export function register(UI) {
             element,
             destroy() {
                 window.clearTimeout(saveTimer);
+                window.clearTimeout(discoverTimer);
+                document.removeEventListener('weline:catalog-category-select-ready', onCategorySelectReady);
                 observer.disconnect();
             },
         };

@@ -13,6 +13,19 @@ use Weline\Theme\Service\ThemePageTypeResolver;
  */
 final class ThemePageTypeResolverAuthRoutesTest extends TestCase
 {
+    public function testCustomerChallengeUriResolvesToAccountDotChallenge(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+        $this->assertSame(
+            'account.challenge',
+            $resolver->resolveLayoutTypeFromUri('/customer/account/challenge?challenge_token=x')
+        );
+        $this->assertSame(
+            'account.challenge',
+            $resolver->resolveLayoutTypeFromUri('/zh_CN/customer/account/challenge')
+        );
+    }
+
     public function testCustomerLoginUriResolvesToAccountDotAuth(): void
     {
         $resolver = new ThemePageTypeResolver();
@@ -49,6 +62,41 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         );
     }
 
+    public function testBareProductSlugUriResolvesToProductLayout(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+        $this->assertSame(
+            ThemeLayout::PAGE_TYPE_PRODUCT,
+            $resolver->resolveLayoutTypeFromUri('/product/benq-screenbar')
+        );
+        $this->assertSame(
+            ThemeLayout::PAGE_TYPE_PRODUCT,
+            $resolver->resolveLayoutTypeFromUri('product/theme-mug')
+        );
+    }
+
+    public function testLocalePrefixedProductSlugUriResolvesToProductLayout(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+        $this->assertSame(
+            ThemeLayout::PAGE_TYPE_PRODUCT,
+            $resolver->resolveLayoutTypeFromUri('/en_US/product/benq-screenbar')
+        );
+    }
+
+    public function testProductPreviewRouteUsesThemeVisualContent(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+        $this->assertSame(
+            'theme/frontend/theme-preview/content',
+            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
+        );
+        $this->assertStringNotContainsString(
+            'product/default',
+            $resolver->getPreviewRouteByPageType(ThemeLayout::PAGE_TYPE_PRODUCT)
+        );
+    }
+
     public function testUnknownLayoutTypeMapsToItselfForDynamicThemeLayouts(): void
     {
         $resolver = new ThemePageTypeResolver();
@@ -56,6 +104,19 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
         $this->assertSame(
             'e2e_custom_layout',
             $resolver->mapLayoutTypeToPageType('e2e_custom_layout')
+        );
+    }
+
+    public function testProductsListingUriResolvesToProductListLayout(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+        $this->assertSame(
+            ThemeLayout::PAGE_TYPE_PRODUCT_LIST,
+            $resolver->resolveLayoutTypeFromUri('/en_US/products/')
+        );
+        $this->assertSame(
+            ThemeLayout::PAGE_TYPE_PRODUCT_LIST,
+            $resolver->resolvePageTypeFromUri('/products')
         );
     }
 }

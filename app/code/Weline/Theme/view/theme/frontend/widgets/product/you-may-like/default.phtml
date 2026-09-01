@@ -22,12 +22,18 @@
  * @param show_wishlist {default=true,type="bool",label="显示收藏"}
  * @param show_compare {default=true,type="bool",label="显示对比"}
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
+ * @param label_new_bg {default="",type="color",label="新品标签背景",description="留空使用主题全局色盘"}
+ * @param label_new_text {default="",type="color",label="新品标签文字",description="留空使用主题全局色盘"}
+ * @param label_sale_bg {default="",type="color",label="促销标签背景",description="留空使用主题全局色盘"}
+ * @param label_sale_text {default="",type="color",label="促销标签文字",description="留空使用主题全局色盘"}
  */
 
 
 use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('you-may-like');
@@ -46,12 +52,15 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
     $products[] = $demo + ['match_score' => 92 - ($index % 8)];
 }
 
+$labelOverrides = ProductLabelStyle::widgetOverridesFromTemplate($this);
+$scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
+
 ?>
 
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>">
+         data-js-ns="<?= $esc($scope->jsNs) ?>"<?= $scopeLabelStyle !== '' ? ' style="' . $esc($scopeLabelStyle) . '"' : '' ?>>
     <div class="widget-header">
         <?php if ($title): ?>
             <h2 class="widget-title">
@@ -73,7 +82,7 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
         
         <div class="products-wrapper">
             <div class="products-grid columns-<?= htmlspecialchars($columns) ?>">
-                <?php foreach ($products as $product): ?>
+                <?php foreach ($products as $index => $product): ?>
                     <?php
                     $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0);
                     // 确保所有产品字段都是字符串，避免null值
@@ -89,10 +98,24 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
                                      class="product-image"
                                      loading="lazy">
                             </a>
-                            
-                            <div class="match-badge">
-                                <w:icon name="circle" size="sm"></w:icon>
-                                <?= $product['match_score'] ?>% <?= __('匹配') ?>
+
+                            <div class="w-product-labels product-badges w-product-labels--bottom-start">
+                                <?php
+                                $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
+                                if ($labelFlags['is_demo'] || $labelFlags['is_new'] || $labelFlags['is_sale']) {
+                                    echo $this->fetch('Weline_Theme::theme/frontend/partials/product/labels.phtml', [
+                                        'is_demo' => $labelFlags['is_demo'],
+                                        'is_new' => $labelFlags['is_new'],
+                                        'is_sale' => $labelFlags['is_sale'],
+                                        'bare' => true,
+                                    ]);
+                                }
+                                echo $this->fetch('Weline_Theme::theme/frontend/components/product-label.phtml', [
+                                    'kind' => ProductLabelStyle::KIND_NEW,
+                                    'text' => (int)$product['match_score'] . '% ' . (string)__('匹配'),
+                                    'icon' => 'circle',
+                                ]);
+                                ?>
                             </div>
                             
                             <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
@@ -126,10 +149,10 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
                                 <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
                             </div>
                             
-                            <button class="btn-add-to-cart" data-product-id="<?= $product['id'] ?>">
-                                <w:icon name="pin" size="sm"></w:icon>
-                                <span><?= __('加入购物车') ?></span>
-                            </button>
+                            <?= $this->fetch(
+                                'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
+                                ProductCardAddToCartParams::fetchDictionary($product)
+                            ) ?>
                         </div>
                     </div>
                 <?php endforeach; ?>
@@ -243,35 +266,6 @@ foreach (ThemeDemoCatalog::products($limit, 40) as $index => $demo) {
 
 .<?= $wc ?> .product-card:hover .product-image {
     transform: scale(1.08);
-}
-
-/* -- 匹配度徽章 -- */
-.<?= $wc ?> .match-badge {
-    position: absolute;
-    bottom: var(--weline-space-3);
-    left: var(--weline-space-3);
-    background: linear-gradient(135deg, color-mix(in srgb, var(--weline-theme-primary) 92%, transparent), color-mix(in srgb, var(--weline-theme-primary-hover) 92%, transparent));
-    color: var(--weline-theme-on-primary);
-    padding: var(--spacing-1_5) var(--weline-space-3);
-    border-radius: var(--token-size-20px);
-    font-size: var(--font-size-xs);
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    gap: var(--spacing-1_5);
-    z-index: 2;
-    backdrop-filter: blur(var(--spacing-xs));
-    box-shadow: var(--weline-theme-shadow-sm);
-    animation: matchPulse 3s ease-in-out infinite;
-}
-
-@keyframes matchPulse {
-    0%, 100% { box-shadow: var(--weline-theme-shadow-sm); }
-    50% { box-shadow: var(--weline-theme-shadow-md); }
-}
-
-.<?= $wc ?> .match-badge i {
-    font-size: var(--weline-font-size-sm);
 }
 
 /* -- 产品操作按钮 -- */

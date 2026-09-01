@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service\Disk;
 
+use Weline\Theme\Helper\AppearanceTokenGroupMeta;
 use Weline\Theme\Helper\CssVariableParser;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
@@ -32,13 +33,13 @@ class ThemeTokenCatalogService
 
         $disks = [];
         foreach ($this->resourceCatalog->getResources('colors', $area, $theme) as $resource) {
-            $disk = $this->mapCssResource($resource, 'colors', $includeDiskTokens);
+            $disk = $this->mapCssResource($resource, 'colors', $area, $includeDiskTokens);
             if ($disk !== null) {
                 $disks[] = $disk;
             }
         }
         foreach ($this->resourceCatalog->getResources('variables', $area, $theme) as $resource) {
-            $disk = $this->mapCssResource($resource, 'variables', $includeDiskTokens);
+            $disk = $this->mapCssResource($resource, 'variables', $area, $includeDiskTokens);
             if ($disk !== null) {
                 $disks[] = $disk;
             }
@@ -90,7 +91,10 @@ class ThemeTokenCatalogService
                 throw new \InvalidArgumentException((string)__('主题盘不存在'));
             }
 
-            return CssVariableParser::parseFile($path);
+            $tokens = CssVariableParser::parseFile($path);
+            AppearanceTokenGroupMeta::registerGroupsFromTokens($area, $tokens);
+
+            return AppearanceTokenGroupMeta::enrichTokensWithLabels($area, $tokens);
         }
 
         throw new \InvalidArgumentException((string)__('主题盘不存在'));
@@ -151,14 +155,19 @@ class ThemeTokenCatalogService
         ];
     }
 
-    private function mapCssResource(array $resource, string $diskKind, bool $includeDiskTokens = true): ?array
-    {
+    private function mapCssResource(
+        array $resource,
+        string $diskKind,
+        string $area,
+        bool $includeDiskTokens = true,
+    ): ?array {
         $path = (string)($resource['file_path'] ?? $resource['path'] ?? '');
         $value = (string)($resource['value'] ?? '');
         if ($path === '' || $value === '') {
             return null;
         }
 
+        $area = ThemeDiskKeys::normalizeArea($area);
         $fileMeta = CssVariableParser::parseFileMeta($path);
         $paletteRole = (string)($fileMeta['palette_role'] ?? '');
         if ($paletteRole === '' && $diskKind === 'colors') {
@@ -180,6 +189,8 @@ class ThemeTokenCatalogService
         }
 
         $parsedTokens = CssVariableParser::parseFile($path);
+        AppearanceTokenGroupMeta::registerGroupsFromTokens($area, $parsedTokens);
+        $enrichedTokens = AppearanceTokenGroupMeta::enrichTokensWithLabels($area, $parsedTokens);
 
         return [
             'key' => $value,
@@ -194,8 +205,8 @@ class ThemeTokenCatalogService
             'logical_key' => (string)($resource['logical_key'] ?? ''),
             'layer_type' => (string)($resource['layer_type'] ?? ''),
             'module_name' => (string)($resource['module_name'] ?? ''),
-            'token_count' => \count($parsedTokens),
-            'tokens' => $includeDiskTokens ? $parsedTokens : [],
+            'token_count' => \count($enrichedTokens),
+            'tokens' => $includeDiskTokens ? $enrichedTokens : [],
         ];
     }
 }

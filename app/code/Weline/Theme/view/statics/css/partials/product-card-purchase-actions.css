@@ -1,0 +1,152 @@
+/**
+ * Amazon-inspired purchase actions for product cards (Cart add + Checkout buy now).
+ */
+.product-card-purchase-actions {
+    display: grid;
+    gap: 6px;
+    width: 100%;
+}
+
+.product-card-purchase-actions > .weline-cart-product-card-add-to-cart,
+.product-card-purchase-actions > .weline-checkout-product-card-buy-now {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+}
+
+.product-card-purchase-actions > .weline-cart-product-card-add-to-cart button,
+.product-card-purchase-actions > .weline-checkout-product-card-buy-now button {
+    display: flex;
+    width: 100%;
+    min-height: 30px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 12px;
+    border-radius: 999px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.2;
+    cursor: pointer;
+    appearance: none;
+    -webkit-appearance: none;
+    box-sizing: border-box;
+    box-shadow: 0 2px 5px rgba(213, 217, 217, 0.45);
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+/* amz-card / category PLP */
+.product-card-purchase-actions--amz-card .amz-card__add {
+    border: 1px solid #fcd200;
+    background: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
+    color: #0f1111;
+}
+
+.product-card-purchase-actions--amz-card .amz-card__add:hover:not(:disabled) {
+    background: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
+    border-color: #e7b92e;
+}
+
+.product-card-purchase-actions--amz-card .amz-card__add.is-added {
+    border-color: #067d62;
+    background: #e3f7ef;
+    color: #067d62;
+    box-shadow: none;
+}
+
+.product-card-purchase-actions--amz-card .amz-card__add:disabled {
+    border-color: #d5d9d9;
+    background: #f0f2f2;
+    color: #9a9a9a;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.product-card-purchase-actions--amz-card .amz-card__buy-now {
+    border: 1px solid #ff8f00;
+    background: linear-gradient(180deg, #ffb84d 0%, #ffa41c 100%);
+    color: #0f1111;
+}
+
+.product-card-purchase-actions--amz-card .amz-card__buy-now:hover:not(:disabled) {
+    background: linear-gradient(180deg, #ff9f1a 0%, #fa8900 100%);
+    border-color: #e77600;
+}
+
+.product-card-purchase-actions--amz-card .amz-card__buy-now:disabled {
+    border-color: #d5d9d9;
+    background: #f0f2f2;
+    color: #565959;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+/* storefront catalog cards */
+.product-card-purchase-actions--storefront .product-storefront__add {
+    border: 1px solid #fcd200;
+    background: #ffd814;
+    color: #0f1111;
+}
+
+.product-card-purchase-actions--storefront .product-storefront__add:hover:not(:disabled) {
+    background: #f7ca00;
+}
+
+.product-card-purchase-actions--storefront .product-storefront__buy-now {
+    border: 1px solid #ff8f00;
+    background: #ffa41c;
+    color: #0f1111;
+}
+
+.product-card-purchase-actions--storefront .product-storefront__buy-now:hover:not(:disabled) {
+    background: #fa8900;
+}
+
+/* default cta cards (homepage widgets) */
+.product-card-purchase-actions--cta .btn-add-to-cart,
+.product-card-purchase-actions--cta .btn-buy-now {
+    min-height: 2.5rem;
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
+.product-card-purchase-actions--cta .btn-add-to-cart {
+    border: 1px solid #fcd200;
+    background: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
+    color: #0f1111;
+}
+
+.product-card-purchase-actions--cta .btn-add-to-cart:hover:not(:disabled) {
+    background: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
+}
+
+.product-card-purchase-actions--cta .btn-buy-now {
+    border: 1px solid #ff8f00;
+    background: linear-gradient(180deg, #ffb84d 0%, #ffa41c 100%);
+    color: #0f1111;
+}
+
+.product-card-purchase-actions--cta .btn-buy-now:hover:not(:disabled) {
+    background: linear-gradient(180deg, #ff9f1a 0%, #fa8900 100%);
+}
+
+.product-card-purchase-actions--cta .btn-add-to-cart:disabled,
+.product-card-purchase-actions--cta .btn-buy-now:disabled {
+    border-color: #d5d9d9;
+    background: #f0f2f2;
+    color: #565959;
+    cursor: not-allowed;
+    box-shadow: none;
+}
+
+.weline-amz-card-widget .product-card-purchase-actions {
+    margin-top: var(--weline-space-1, 4px);
+}
+
+.weline-amz-card-widget .product-card-purchase-actions .btn-add-to-cart,
+.weline-amz-card-widget .product-card-purchase-actions .btn-buy-now {
+    min-height: 2.5rem;
+    font-size: var(--font-size-sm, 0.875rem);
+    font-weight: 700;
+}
+
+/* Amazon shopper notices: see storefront-shopper-toast-amazon.css */

@@ -271,4 +271,14 @@
     --token-color-rgba-59-130-246-0-28: rgba(59, 130, 246, 0.28);
     --token-color-rgba-6-78-59-0-4: rgba(6, 78, 59, 0.4);
     --token-color-rgba-96-165-250-0-42: rgba(96, 165, 250, 0.42);
+
+    /* ========== 商品标签色（NEW / SALE 等，Theme Editor 色盘可统一配置） ========== */
+    --color-product-label-new-bg: #e6f2e6;
+    --color-product-label-new-text: #007600;
+    --color-product-label-sale-bg: #fde8ec;
+    --color-product-label-sale-text: #9f1239;
+    --weline-product-label-new-bg: var(--color-product-label-new-bg);
+    --weline-product-label-new-text: var(--color-product-label-new-text);
+    --weline-product-label-sale-bg: var(--color-product-label-sale-bg);
+    --weline-product-label-sale-text: var(--color-product-label-sale-text);
 }

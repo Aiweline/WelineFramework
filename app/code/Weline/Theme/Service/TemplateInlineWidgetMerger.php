@@ -20,6 +20,61 @@ final class TemplateInlineWidgetMerger
     public const CONFIG_COW_FULL_SLOT = 'cow_full_slot';
 
     /**
+     * @return list<array{ref:string,html:string,element?:\DOMElement}>
+     */
+    public function extractTemplateWidgetsFromHtml(string $slotInnerHtml): array
+    {
+        if ($slotInnerHtml === '' || !str_contains($slotInnerHtml, self::ATTR_TEMPLATE_WIDGET)) {
+            return [];
+        }
+
+        $out = [];
+        $offset = 0;
+        $length = strlen($slotInnerHtml);
+
+        while ($offset < $length) {
+            if (preg_match(
+                '/<div\b[^>]*\b' . preg_quote(self::ATTR_TEMPLATE_WIDGET, '/') . '\s*=\s*(["\']?)1\1[^>]*>/i',
+                $slotInnerHtml,
+                $match,
+                PREG_OFFSET_CAPTURE,
+                $offset,
+            ) !== 1) {
+                break;
+            }
+
+            $openStart = (int) $match[0][1];
+            $openTag = (string) $match[0][0];
+            $openEnd = $openStart + strlen($openTag);
+            $closeEnd = $this->findMatchingDivClose($slotInnerHtml, $openEnd);
+            if ($closeEnd === null) {
+                break;
+            }
+
+            $fullEnd = $closeEnd + 6;
+            $ref = '';
+            if (preg_match(
+                '/\b' . preg_quote(self::ATTR_TEMPLATE_REF, '/') . '\s*=\s*(["\'])([^"\']*)\1/i',
+                $openTag,
+                $refMatch,
+            ) === 1) {
+                $ref = trim((string) ($refMatch[2] ?? ''));
+            }
+
+            if ($ref !== '' && !$this->hasTemplateWidgetAncestor($slotInnerHtml, $openStart)) {
+                $out[] = [
+                    'ref' => $ref,
+                    'html' => substr($slotInnerHtml, $openStart, $fullEnd - $openStart),
+                ];
+            }
+
+            $offset = $fullEnd;
+        }
+
+        return $out;
+    }
+
+    /**
      * @return list<array{ref:string,html:string,element:\DOMElement}>
      */
     public function extractTemplateWidgets(\DOMElement $slot): array
@@ -136,6 +191,37 @@ final class TemplateInlineWidgetMerger
             ];
         }
 
+        // Drop empty / comment-only template shells when the slot already has layout rows.
+        // Theme editor preview otherwise keeps hollow data-weline-template-widget wrappers
+        // beside real layout siblings and WidgetHtmlHealthInspector flags empty_html.
+        if ($additions !== [] || $overrides !== [] || $plan !== []) {
+            $hasLayout = false;
+            foreach ($plan as $item) {
+                if (($item['kind'] ?? '') === 'layout') {
+                    $hasLayout = true;
+                    break;
+                }
+            }
+            if (!$hasLayout) {
+                foreach ($additions as $_) {
+                    $hasLayout = true;
+                    break;
+                }
+            }
+            if ($hasLayout || $additions !== []) {
+                $plan = array_values(array_filter($plan, static function (array $item): bool {
+                    if (($item['kind'] ?? '') !== 'template') {
+                        return true;
+                    }
+                    $html = (string)($item['html'] ?? '');
+                    $meaningful = trim(preg_replace('/<!--.*?-->/s', '', $html) ?? $html);
+                    $meaningful = trim(strip_tags($meaningful));
+
+                    return $meaningful !== '';
+                }));
+            }
+        }
+
         foreach ($overrides as $widget) {
             $additions[] = $widget;
         }
@@ -179,5 +265,47 @@ final class TemplateInlineWidgetMerger
         }
 
         return is_array($config) ? $config : [];
+    }
+
+    private function hasTemplateWidgetAncestor(string $html, int $position): bool
+    {
+        $prefix = substr($html, 0, $position);
+        if ($prefix === false || $prefix === '') {
+            return false;
+        }
+
+        $opens = preg_match_all(
+            '/<div\b[^>]*\b' . preg_quote(self::ATTR_TEMPLATE_WIDGET, '/') . '\s*=\s*(["\']?)1\1[^>]*>/i',
+            $prefix,
+        ) ?: 0;
+        $closes = preg_match_all('/<\/div>/i', $prefix) ?: 0;
+
+        return $opens > $closes;
+    }
+
+    private function findMatchingDivClose(string $html, int $openEnd): ?int
+    {
+        $length = strlen($html);
+        $depth = 1;
+        $cursor = $openEnd;
+        while ($cursor < $length && $depth > 0) {
+            $nextOpen = stripos($html, '<div', $cursor);
+            $nextClose = stripos($html, '</div>', $cursor);
+            if ($nextClose === false) {
+                return null;
+            }
+            if ($nextOpen !== false && $nextOpen < $nextClose && preg_match('/<div\b/i', substr($html, $nextOpen, 10)) === 1) {
+                $depth++;
+                $cursor = $nextOpen + 4;
+                continue;
+            }
+            $depth--;
+            if ($depth === 0) {
+                return $nextClose;
+            }
+            $cursor = $nextClose + 6;
+        }
+
+        return null;
     }
 }

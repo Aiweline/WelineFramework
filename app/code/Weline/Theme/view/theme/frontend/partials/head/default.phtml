@@ -29,7 +29,9 @@ $prepaintV = $uiAssetVersion('weline-theme-prepaint.js');
 <theme:css>Weline_Theme::theme/frontend/colors/_default.css</theme:css>
 <w:hook>Weline_Theme::frontend::partials::head::styles-after</w:hook>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
+<theme:css>Weline_Theme::theme/frontend/variables/_spacing.css</theme:css>
 <?php echo $diskOverrideHtml; ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)?v=<?= $foundationV ?>">
 <link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)?v=<?= $frontendV ?>">
+<theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
 <script type="module" src="@static(Weline_Theme::ui/weline-ui.js)?v=<?= $uiJsV ?>"></script>

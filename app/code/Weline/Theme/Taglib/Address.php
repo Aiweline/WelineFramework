@@ -47,6 +47,7 @@ class Address implements TaglibInterface
             'cascade' => false,
             'searchable' => false,
             'url' => false,
+            'catalog' => false,
             'class' => false,
             'style' => false,
         ];
@@ -119,6 +120,10 @@ class Address implements TaglibInterface
         $searchable = $bool($attributes, 'searchable', true);
         $cascade = $bool($attributes, 'cascade', true);
         $includeDistrict = $bool($attributes, 'district', true);
+        $catalog = strtolower(trim((string)($attributes['catalog'] ?? 'installed')));
+        if (!in_array($catalog, ['installed', 'global'], true)) {
+            $catalog = 'installed';
+        }
         $locale = (string)(w_env('user.lang') ?: \Weline\Framework\Http\Cookie::getLangLocal() ?: 'zh_Hans_CN');
         $useEnglishFallback = !str_starts_with($locale, 'zh');
         $translate = static function (string $source, string $fallback) use ($useEnglishFallback): string {
@@ -185,12 +190,13 @@ class Address implements TaglibInterface
             'sourceUrl' => $sourceUrl,
             'searchable' => $searchable,
             'cascade' => $cascade,
+            'catalog' => $catalog,
         ];
 
         $idAttr = $id !== '' ? ' id="' . $escape($id) . '"' : '';
         $html = [];
         $html[] = '<div' . $idAttr . ' class="w-address ' . $escape($class) . '" style="' . $escape($style) . '" data-w-address data-address-config="' . $escape(json_encode($data, JSON_UNESCAPED_UNICODE)) . '"></div>';
-        $html[] = '<script src="/Weline/Theme/view/statics/js/address-loader.js?v=20260824-address-loader-13" data-w-address-loader data-no-extract="true" defer></script>';
+        $html[] = '<script src="/Weline/Theme/view/statics/js/address-loader.js?v=20260831-address-catalog-2" data-w-address-loader data-no-extract="true" defer></script>';
 
         return implode("\n", $html);
     }
@@ -212,6 +218,18 @@ class Address implements TaglibInterface
 
     public static function document(): string
     {
-        return '<w:theme:address levels="country,province,city" code="shipping" district="true" searchable="true" />';
+        $doc = <<<'DOC'
+<h3><code>&lt;w:theme:address&gt;</code> 使用文档</h3>
+<p>国家/省/市/区级联地址选择器，配合 <code>address-loader.js</code> 与 <code>data-w-address</code> 使用。</p>
+<ul>
+<li><code>levels</code> / <code>for</code>：级联层级，如 <code>country|province|city</code>；仅国家时用 <code>levels="country"</code>。</li>
+<li><code>catalog</code>：国家目录范围。<code>installed</code>（默认）仅已安装/地区库国家；<code>global</code> 使用 Symfony Intl 全球国家列表，不限已安装国家（供应商申请等跨境场景）。全球目录走 HTTP JSON 接口，避免 Worker 200 条列表上限。</li>
+<li><code>cascade="false"</code>：关闭下级联动；<code>searchable="true"</code>：可搜索下拉。</li>
+</ul>
+<p>示例（全球国家，不联动省市区）：</p>
+<pre>&lt;w:theme:address levels="country" catalog="global" code="supplier-country" searchable="true" cascade="false" /&gt;</pre>
+DOC;
+
+        return \htmlspecialchars($doc, ENT_NOQUOTES);
     }
 }

@@ -101,12 +101,31 @@ class EditorLockService
                 $userName,
                 $contextKey,
             ),
-            fn (): array => [
-                'success' => false,
-                'message' => (string)__('编辑锁服务正忙，请稍后重试'),
-                'lock_info' => null,
-            ],
         );
+    }
+
+    /**
+     * 解析 acquire 结果中的锁归属，供 API 与前端区分「他人占用」与「服务不可用」。
+     *
+     * @param array{success:bool,message:mixed,lock_info?:array|null} $result
+     * @return array{
+     *     lock_info: array|null,
+     *     current_user_id: int,
+     *     is_locked_by_other: bool,
+     *     is_locked_by_self: bool
+     * }
+     */
+    public function describeAcquireResult(array $result, int $userId): array
+    {
+        $lockInfo = \is_array($result['lock_info'] ?? null) ? $result['lock_info'] : null;
+        $lockUserId = (int)($lockInfo['user_id'] ?? 0);
+
+        return [
+            'lock_info' => $lockInfo,
+            'current_user_id' => $userId,
+            'is_locked_by_other' => !$result['success'] && $lockUserId > 0 && !$this->isSameEditorUser($lockUserId, $userId),
+            'is_locked_by_self' => !$result['success'] && $lockUserId > 0 && $this->isSameEditorUser($lockUserId, $userId),
+        ];
     }
 
     /** @return array{success:bool,message:mixed,lock_info?:array|null} */
@@ -123,10 +142,13 @@ class EditorLockService
         
         // 如果已被锁定
         if ($currentLock !== null) {
-            // 检查是否是同一用户
-            if ($currentLock['user_id'] === $userId) {
+            // 同一管理员（多 Tab / 刷新 / 心跳续期）直接续锁，不应互相阻塞。
+            if ($this->isSameEditorUser((int)$currentLock['user_id'], $userId)) {
                 // 更新活动时间
                 $currentLock['last_activity'] = time();
+                if ($userName !== '') {
+                    $currentLock['user_name'] = $userName;
+                }
                 $updated = $this->cache->set(
                     $this->getLockCacheKey($themeId, $pageType, $contextKey),
                     $currentLock,
@@ -194,7 +216,7 @@ class EditorLockService
                 if ($currentLock === null) {
                     return true;
                 }
-                if ($currentLock['user_id'] !== $userId) {
+                if (!$this->isSameEditorUser((int)$currentLock['user_id'], $userId)) {
                     return false;
                 }
                 if (!$this->cache->delete($this->getLockCacheKey($themeId, $pageType, $contextKey))) {
@@ -203,7 +225,6 @@ class EditorLockService
                 $this->cache->delete($this->getTakeoverCacheKey($themeId, $pageType, $contextKey));
                 return true;
             },
-            static fn (): bool => false,
         );
     }
 
@@ -224,7 +245,7 @@ class EditorLockService
             $contextKey,
             function () use ($themeId, $pageType, $userId, $contextKey): bool {
                 $currentLock = $this->getLockInfo($themeId, $pageType, $contextKey);
-                if ($currentLock === null || $currentLock['user_id'] !== $userId) {
+                if ($currentLock === null || !$this->isSameEditorUser((int)$currentLock['user_id'], $userId)) {
                     return false;
                 }
                 $currentLock['last_activity'] = time();
@@ -235,7 +256,6 @@ class EditorLockService
                 );
                 return $updated;
             },
-            static fn (): bool => false,
         );
     }
 
@@ -268,10 +288,6 @@ class EditorLockService
                 $userName,
                 $contextKey,
             ),
-            fn (): array => [
-                'success' => false,
-                'message' => (string)__('编辑锁服务正忙，请稍后重试'),
-            ],
         );
     }
 
@@ -292,11 +308,8 @@ class EditorLockService
             return $this->acquireLockUnlocked($themeId, $pageType, $userId, $userName, $contextKey);
         }
         
-        if ($currentLock['user_id'] === $userId) {
-            return [
-                'success' => true,
-                'message' => __('您已持有编辑锁定'),
-            ];
+        if ($this->isSameEditorUser((int)$currentLock['user_id'], $userId)) {
+            return $this->acquireLockUnlocked($themeId, $pageType, $userId, $userName, $contextKey);
         }
         
         $existingTakeover = $this->getTakeoverRequest($themeId, $pageType, $contextKey);
@@ -391,10 +404,6 @@ class EditorLockService
                 $userName,
                 $contextKey,
             ),
-            fn (): array => [
-                'success' => false,
-                'message' => (string)__('编辑锁服务正忙，请稍后重试'),
-            ],
         );
     }
 
@@ -414,11 +423,8 @@ class EditorLockService
             return $this->acquireLockUnlocked($themeId, $pageType, $userId, $userName, $contextKey);
         }
         
-        if ($currentLock['user_id'] === $userId) {
-            return [
-                'success' => true,
-                'message' => __('您已持有编辑锁定'),
-            ];
+        if ($this->isSameEditorUser((int)$currentLock['user_id'], $userId)) {
+            return $this->acquireLockUnlocked($themeId, $pageType, $userId, $userName, $contextKey);
         }
         
         // 检查是否有接管请求且已过等待时间
@@ -496,13 +502,12 @@ class EditorLockService
         return self::TAKEOVER_PREFIX . $themeId . '_' . $pageType . $this->contextKeySuffix($contextKey);
     }
 
-    /** @template T @param callable():T $operation @param callable():T|null $onBusy @return T */
+    /** @template T @param callable():T $operation @return T */
     private function synchronized(
         int $themeId,
         string $pageType,
         string $contextKey,
         callable $operation,
-        ?callable $onBusy = null,
     ): mixed {
         $this->assertLockIdentity($themeId, $pageType, $contextKey);
         $coordinationKey = 'theme_editor_lock_mutation_' . hash(
@@ -511,16 +516,19 @@ class EditorLockService
         );
         $token = $this->coordinator->acquire($coordinationKey, 2000, 10);
         if ($token === null) {
-            if ($onBusy !== null) {
-                return $onBusy();
-            }
-            throw new \RuntimeException((string)__('编辑锁服务正忙，请稍后重试'));
+            // SingleFlight 约定：协调锁超时时直接执行业务，避免误报「服务正忙」阻断同页编辑。
+            return $operation();
         }
         try {
             return $operation();
         } finally {
             $this->coordinator->release($coordinationKey, $token);
         }
+    }
+
+    private function isSameEditorUser(int $lockUserId, int $userId): bool
+    {
+        return $lockUserId > 0 && $userId > 0 && $lockUserId === $userId;
     }
 
     private function assertLockIdentity(int $themeId, string $pageType, string $contextKey): void

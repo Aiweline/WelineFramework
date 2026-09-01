@@ -1,5 +1,17 @@
 /* Weline UI source: css/websites-admin.css */
 @layer page {
+    /* drawer/offcanvas 内嵌：去掉与外层重复的卡片壳与内边距 */
+    .w-website-form.is-embedded {
+        background: transparent;
+        border: 0;
+        box-shadow: none;
+        border-radius: 0;
+    }
+
+    .w-website-form.is-embedded > .w-card__body {
+        padding: 0;
+    }
+
     .w-website-form__sections {
         display: grid;
         gap: var(--weline-space-3);
@@ -129,23 +141,134 @@
         font-weight: 600;
     }
 
-    .w-website-timezone__search {
-        margin-block-end: var(--weline-space-2);
+    .w-website-timezone {
+        position: relative;
+        display: inline-flex;
+        flex-direction: column;
+        min-inline-size: min(16rem, 100%);
+        max-inline-size: 100%;
     }
 
-    .w-website-timezone__list,
-    .w-website-form .w-select[multiple] {
+    .w-website-timezone[data-w-width="full"] {
+        display: flex;
+        inline-size: 100%;
+    }
+
+    .w-website-timezone__trigger {
+        display: inline-flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: var(--weline-space-2);
+        inline-size: 100%;
+        min-block-size: 2.75rem;
+        padding: var(--weline-space-2) var(--weline-space-3);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-md);
+        background: var(--weline-theme-surface);
+        color: var(--weline-theme-text);
+        text-align: start;
+        cursor: pointer;
+    }
+
+    .w-website-timezone__trigger:hover {
+        border-color: var(--weline-theme-border-strong);
+    }
+
+    .w-website-timezone__trigger:focus-visible {
+        outline: 2px solid var(--weline-theme-focus-ring, var(--weline-theme-primary));
+        outline-offset: 2px;
+    }
+
+    .w-website-timezone__trigger > .w-icon:last-child {
+        flex: 0 0 auto;
+        transition: rotate var(--weline-motion-fast);
+    }
+
+    .w-website-timezone[data-state="open"] .w-website-timezone__trigger > .w-icon:last-child {
+        rotate: 180deg;
+    }
+
+    .w-website-timezone__value {
+        min-inline-size: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .w-website-timezone__value[data-empty="true"] {
+        color: var(--weline-theme-text-muted);
+    }
+
+    .w-website-timezone__popover {
+        z-index: var(--w-floating-z-index, 1200);
+        display: flex;
+        flex-direction: column;
+        gap: var(--weline-space-2);
+        min-inline-size: min(var(--w-website-timezone-anchor-width, 16rem), var(--w-floating-max-inline-size, calc(100dvw - 1rem)));
+        max-inline-size: var(--w-floating-max-inline-size, calc(100dvw - 1rem));
+        padding: var(--weline-space-2);
+        border: 1px solid var(--weline-theme-border);
+        border-radius: var(--weline-radius-lg);
+        background: var(--weline-theme-surface-raised, var(--weline-theme-surface));
+        box-shadow: var(--weline-theme-shadow-md);
+        color: var(--weline-theme-text);
+    }
+
+    .w-website-timezone__popover[hidden] {
+        display: none !important;
+    }
+
+    .w-website-timezone__popover[data-w-floating-positioned] {
+        position: fixed;
+        inset: auto;
+        margin: 0;
+        top: max(var(--w-floating-top, 0px), var(--w-floating-viewport-top, .5rem));
+        left: max(var(--w-floating-left, 0px), var(--w-floating-viewport-left, .5rem));
+    }
+
+    .w-website-timezone__search {
+        width: 100%;
+    }
+
+    .w-website-timezone__list {
+        display: flex;
+        max-height: min(18rem, 50dvh);
+        flex-direction: column;
+        gap: var(--weline-space-1);
+        overflow: auto;
+        overscroll-behavior: contain;
         scrollbar-color: var(--weline-theme-border-strong) var(--weline-theme-surface-muted);
         scrollbar-width: thin;
     }
 
-    .w-website-timezone__list {
-        max-block-size: 18.75rem;
-        overflow-y: auto;
+    .w-website-timezone__option {
+        display: flex;
+        align-items: center;
+        min-block-size: 2.75rem;
+        padding: var(--weline-space-2) var(--weline-space-3);
+        border: 0;
+        border-radius: var(--weline-radius-md);
+        background: transparent;
+        color: inherit;
+        text-align: start;
+        cursor: pointer;
     }
 
-    .w-website-timezone__list option {
-        padding: var(--weline-space-2);
+    .w-website-timezone__option:hover,
+    .w-website-timezone__option:focus-visible,
+    .w-website-timezone__option[aria-selected="true"] {
+        background: var(--weline-theme-surface-muted);
+    }
+
+    .w-website-timezone__empty {
+        padding: var(--weline-space-3);
+        color: var(--weline-theme-text-muted);
+        font-size: var(--weline-font-size-sm);
+    }
+
+    .w-website-form .w-select[multiple] {
+        scrollbar-color: var(--weline-theme-border-strong) var(--weline-theme-surface-muted);
+        scrollbar-width: thin;
     }
 
     @media (max-width: 40rem) {

@@ -23,8 +23,6 @@ $subtitle = (string)($meta['subtitle'] ?? __('告诉我们你需要什么，支�
 $contactEmail = (string)($meta['contactEmail'] ?? 'support@example.com');
 $contactPhone = (string)($meta['contactPhone'] ?? '+1 000 000 0000');
 $contactHours = (string)($meta['contactHours'] ?? __('周一至周五，9:00 - 18:00'));
-$accountUrl = $this->getUrl('customer/account');
-$contactUrl = $this->getUrl('contact');
 $mailHref = 'mailto:' . $contactEmail;
 ?>
 <!DOCTYPE html>
@@ -300,7 +298,7 @@ $mailHref = 'mailto:' . $contactEmail;
                                     <a class="contact-layout__button contact-layout__button--primary" href="<?= $escape($mailHref) ?>">
                                         <?= __('发送邮件') ?>
                                     </a>
-                                    <a class="contact-layout__button" href="<?= $escape($accountUrl) ?>">
+                                    <a class="contact-layout__button" href="@url{'customer/account'}">
                                         <?= __('查看我的账户') ?>
                                     </a>
                                 </div>
@@ -322,7 +320,7 @@ $mailHref = 'mailto:' . $contactEmail;
                                 <h2><?= __('需要订单支持？') ?></h2>
                                 <p class="contact-layout__note"><?= __('请附上订单号、邮箱和简短问题描述，方便团队快速分派处理。') ?></p>
                                 <div class="contact-layout__actions">
-                                    <a class="contact-layout__button contact-layout__button--primary" href="<?= $escape($accountUrl) ?>">
+                                    <a class="contact-layout__button contact-layout__button--primary" href="@url{'customer/account'}">
                                         <?= __('进入支持中心') ?>
                                     </a>
                                 </div>

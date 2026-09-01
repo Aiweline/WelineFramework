@@ -60,7 +60,7 @@ $itemCount = count($cartItems);
         <div class="cart-empty">
             <w:icon name="pin" size="sm"></w:icon>
             <p><?= __('购物车是空的') ?></p>
-            <a href="/products" class="btn-shop"><?= __('去购物') ?></a>
+            <a href="@url{'products'}" class="btn-shop"><?= __('去购物') ?></a>
         </div>
     <?php else: ?>
         <div class="cart-items">
@@ -88,10 +88,10 @@ $itemCount = count($cartItems);
         <?php endif; ?>
         <div class="cart-actions">
             <?php if ($showViewCartButton): ?>
-                <a href="/cart" class="action-btn action-btn-outline"><?= __('查看购物车') ?></a>
+                <a href="@url{'cart'}" class="action-btn action-btn-outline"><?= __('查看购物车') ?></a>
             <?php endif; ?>
             <?php if ($showCheckoutButton): ?>
-                <a href="/checkout" class="action-btn action-btn-primary"><?= __('去结算') ?></a>
+                <a href="@url{'checkout'}" class="action-btn action-btn-primary"><?= __('去结算') ?></a>
             <?php endif; ?>
         </div>
     <?php endif; ?>

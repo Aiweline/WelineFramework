@@ -12,8 +12,6 @@ $area = $area ?: 'frontend';
 $scope = $scope ?: 'default';
 
 // API URLs
-$saveUrl = $this->getUrl('theme/backend/config/variables/save');
-$applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
 ?>
 <!DOCTYPE html>
 <html lang="en" <?= ('rtl' === $themeConfig->getThemeModel()) ? " dir=\"rtl\"" : '' ?>>
@@ -174,7 +172,7 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
             const form = document.getElementById('variables-form');
             const formData = new FormData(form);
             
-            WelineThemeBinQuery.request('<?= $saveUrl ?>', {
+            WelineThemeBinQuery.request('@url{'theme/backend/config/variables/save'}', {
                 method: 'POST',
                 body: formData
             })
@@ -244,7 +242,7 @@ $applyPaletteUrl = $this->getUrl('theme/backend/config/variables/applyPalette');
             formData.append('scope', '<?= htmlspecialchars($scope) ?>');
             formData.append('palette', paletteName);
             
-            WelineThemeBinQuery.request('<?= $applyPaletteUrl ?>', {
+            WelineThemeBinQuery.request('@url{'theme/backend/config/variables/applyPalette'}', {
                 method: 'POST',
                 body: formData
             })

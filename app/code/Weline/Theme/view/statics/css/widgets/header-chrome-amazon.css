@@ -51,10 +51,10 @@
 }
 
 .weline-header .header-container {
-    width: 100%;
-    max-width: var(--weline-layout-content-max-width, 1440px);
-    margin: 0 auto;
-    padding: 0 var(--weline-layout-content-padding-inline, 1.25rem);
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
+    padding: 0 var(--weline-layout-content-padding-inline);
     box-sizing: border-box;
     background-color: var(--weline-chrome-bg-dark, #131921);
     color: var(--weline-chrome-text-light, #ffffff);
@@ -69,10 +69,10 @@
 }
 
 .weline-header .header-site-notice-inner {
-    width: 100%;
-    max-width: var(--weline-layout-content-max-width, 1440px);
-    margin: 0 auto;
-    padding: var(--spacing-0_4, 0.25rem) var(--weline-layout-content-padding-inline, 1.25rem);
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
+    padding: var(--spacing-0_4, 0.25rem) var(--weline-layout-content-padding-inline);
     box-sizing: border-box;
     display: flex;
     align-items: center;
@@ -180,6 +180,22 @@
     display: flex;
     align-items: center;
     flex-shrink: 0;
+}
+
+/* Keep logo sized even when editor/preview strips the header partial inline <style>. */
+.weline-header .header-logo img,
+.weline-header .header-logo .logo-image,
+.weline-header .header-logo .logo-image--asset img {
+    height: var(--header-logo-height, 50px);
+    width: auto;
+    max-width: min(200px, 100%);
+    object-fit: contain;
+}
+
+.weline-header.is-compact .header-logo img,
+.weline-header.is-compact .header-logo .logo-image,
+.weline-header.is-compact .header-logo .logo-image--asset img {
+    height: var(--header-logo-height-compact, 40px);
 }
 
 .weline-header .header-location {
@@ -442,6 +458,42 @@
     color: inherit;
 }
 
+/* Dark flyout (portaled outside .weline-header): beat foundation w-menu light hover */
+.search-type-submenu .w-menu__item:hover,
+.search-type-submenu .w-menu__item:focus-visible,
+.search-type-submenu .w-menu__item.is-active,
+.search-type-submenu .w-menu__item[aria-selected="true"],
+.search-type-submenu .search-type-node.is-open > .search-type-option--branch,
+.search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch,
+.weline-header .search-type-submenu .w-menu__item:hover,
+.weline-header .search-type-submenu .w-menu__item:focus-visible,
+.weline-header .search-type-submenu .w-menu__item.is-active,
+.weline-header .search-type-submenu .w-menu__item[aria-selected="true"],
+.weline-header .search-type-submenu .search-type-node.is-open > .search-type-option--branch,
+.weline-header .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch {
+    background: rgba(255, 255, 255, 0.14) !important;
+    color: var(--weline-chrome-text-on-inverse, #ffffff) !important;
+    outline: 0;
+}
+
+.search-type-submenu .w-menu__item:hover .search-type-option-chevron,
+.search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
+.search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
+.search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron,
+.weline-header .search-type-submenu .w-menu__item:hover .search-type-option-chevron,
+.weline-header .search-type-submenu .w-menu__item:focus-visible .search-type-option-chevron,
+.weline-header .search-type-submenu .search-type-node.is-open > .search-type-option--branch .search-type-option-chevron,
+.weline-header .search-type-submenu .search-type-node[data-state="open"] > .search-type-option--branch .search-type-option-chevron {
+    color: rgba(255, 255, 255, 0.85) !important;
+}
+
+.search-type-submenu .w-menu__item.is-active .search-type-option-check,
+.search-type-submenu .w-menu__item[aria-selected="true"] .search-type-option-check,
+.weline-header .search-type-submenu .w-menu__item.is-active .search-type-option-check,
+.weline-header .search-type-submenu .w-menu__item[aria-selected="true"] .search-type-option-check {
+    color: var(--weline-chrome-primary, #ff9900) !important;
+}
+
 .weline-header .search-category-select,
 .weline-header .search-type-select {
     position: absolute;
@@ -573,10 +625,10 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--spacing-sm, 0.5rem);
-    width: 100%;
-    max-width: var(--weline-layout-content-max-width, 1440px);
-    margin: 0 auto;
-    padding: 0 var(--weline-layout-content-padding-inline, 1.25rem);
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
+    padding: 0 var(--weline-layout-content-padding-inline);
     box-sizing: border-box;
     background: transparent;
     color: inherit;
@@ -658,10 +710,15 @@
     background-color: var(--weline-theme-mega-menu-top-hover-bg, var(--weline-chrome-mega-menu-top-hover-bg, var(--color-on-dark-15, rgba(255, 255, 255, 0.15))));
 }
 
-.w-popover.header-category-panel,
-.w-popover.categories-overflow-panel,
+.w-popover.header-category-panel:not(.is-megamenu),
+.w-popover.categories-overflow-panel:not(.is-megamenu),
 .w-menu.nav-more-menu.w-surface-body {
     color: var(--weline-theme-body-text, var(--weline-chrome-body-text, #0f1111));
+}
+
+.w-popover.header-category-panel.is-megamenu,
+.w-popover.categories-overflow-panel.is-megamenu {
+    color: var(--weline-theme-text-on-dark, #ffffff);
 }
 
 .weline-header .header-category-panel.w-surface-body .category-link,
@@ -673,9 +730,17 @@
 .categories-overflow-panel.w-surface-body .category-link,
 .categories-overflow-panel.w-surface-body .category-link-wrapper .category-link,
 .nav-more-menu.w-surface-body .w-menu__item,
-body > .header-category-panel.w-surface-body,
-body > .categories-overflow-panel.w-surface-body {
+body > .header-category-panel.w-surface-body:not(.is-megamenu),
+body > .categories-overflow-panel.w-surface-body:not(.is-megamenu) {
     color: var(--weline-theme-body-text, var(--weline-chrome-body-text, #0f1111));
+    text-decoration: none !important;
+}
+
+.weline-header .header-category-panel.is-megamenu .mega-menu-sidebar-item,
+.weline-header .categories-overflow-panel.is-megamenu .mega-menu-sidebar-item,
+.header-category-panel.is-megamenu .mega-menu-sidebar-item,
+.categories-overflow-panel.is-megamenu .mega-menu-sidebar-item {
+    color: var(--weline-theme-mega-menu-top-hover-color, var(--weline-chrome-mega-menu-top-hover-color, #ffffff));
     text-decoration: none !important;
 }
 
@@ -706,14 +771,20 @@ body > .categories-overflow-panel.w-surface-body {
     display: flex;
     align-items: center;
     justify-content: flex-end;
-    flex: 1 1 0;
+    flex: 0 1 auto;
     min-width: 0;
+    width: auto;
+}
+
+.weline-header .header-nav-fill-inner {
+    width: auto;
+    max-width: 100%;
 }
 
 /* Widget header-container alias */
 .weline-widget-header-container .header-main,
 .weline-widget-header-container .header-nav {
-    max-width: var(--weline-layout-content-max-width, 1440px);
+    max-width: var(--weline-layout-content-max-width);
     margin: 0 auto;
 }
 
@@ -740,6 +811,26 @@ body > .categories-overflow-panel.w-surface-body {
 .weline-header .header-user-area a:visited {
     color: inherit;
     text-decoration: none;
+}
+
+/* Raised account panel sits on light surface; do not inherit chrome light text. */
+.weline-header .header-actions .account-dropdown,
+.weline-header .header-user-area .account-dropdown {
+    color: var(--weline-theme-text);
+}
+
+.weline-header .header-actions .account-dropdown a,
+.weline-header .header-actions .account-dropdown a:visited,
+.weline-header .header-user-area .account-dropdown a,
+.weline-header .header-user-area .account-dropdown a:visited {
+    color: var(--weline-theme-text);
+}
+
+.weline-header .header-actions .account-dropdown a.logout-link,
+.weline-header .header-actions .account-dropdown a.logout-link:visited,
+.weline-header .header-user-area .account-dropdown a.logout-link,
+.weline-header .header-user-area .account-dropdown a.logout-link:visited {
+    color: var(--weline-theme-danger);
 }
 
 .weline-header .header-actions .w-icon,
@@ -772,6 +863,7 @@ body > .categories-overflow-panel.w-surface-body {
 .weline-header .w-language-switcher__flag svg {
     inline-size: var(--weline-chrome-action-icon-size);
     max-block-size: var(--weline-chrome-action-icon-size);
+    stroke: none;
 }
 
 .weline-header .header-actions .w-button[data-tone="quiet"],
@@ -879,6 +971,13 @@ body > .categories-overflow-panel.w-surface-body {
     background-color: var(--weline-chrome-primary, #ff9900);
     color: var(--weline-chrome-text-primary, #111111);
     border: var(--border-width-thin, 1px) solid var(--weline-chrome-bg-dark, #131921);
+}
+
+.weline-header .header-cart {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: flex-end;
+    max-width: 100%;
 }
 
 .weline-header .header-user-area .account-link {

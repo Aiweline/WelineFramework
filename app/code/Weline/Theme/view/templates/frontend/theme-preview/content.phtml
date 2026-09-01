@@ -9,5 +9,6 @@ if (is_string($content) && $content !== '') {
     echo $content;
     return;
 }
-?>
-<div class="weline-theme-preview-content" data-theme-preview-content="1"></div>
+// Empty content must stay empty: emitting a stub here becomes meta.content and
+// replaces homepage nested slots (hero/featured), wiping amazon-card markup.
+return;

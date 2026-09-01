@@ -8,23 +8,30 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
 
+use Weline\Theme\Service\Scoped\ThemeScopedLayoutWriteService;
+
 /**
  * 默认布局种子生成器
- * 
- * 当某 theme+pageType 没有任何 widget 时，写入一份默认 draft 布局配置
- * 复用 SlotRendererService 的 draft→published 自动发布机制
+ *
+ * 当某 theme+pageType 没有任何 widget 时，写入 scoped draft patch。
  */
 class DefaultLayoutSeeder
 {
     private ThemeLayoutService $layoutService;
     private WelineTheme $welineTheme;
+    private ThemeRuntimeLayoutResolver $runtimeLayoutResolver;
+    private ThemeScopedLayoutWriteService $layoutWriter;
 
     public function __construct(
         ThemeLayoutService $layoutService,
-        WelineTheme $welineTheme
+        WelineTheme $welineTheme,
+        ThemeRuntimeLayoutResolver $runtimeLayoutResolver,
+        ThemeScopedLayoutWriteService $layoutWriter,
     ) {
         $this->layoutService = $layoutService;
         $this->welineTheme = $welineTheme;
+        $this->runtimeLayoutResolver = $runtimeLayoutResolver;
+        $this->layoutWriter = $layoutWriter;
     }
 
     /**
@@ -54,14 +61,25 @@ class DefaultLayoutSeeder
             $this->clearLayout($themeId, $pageType);
         }
 
-        // 写入默认配置
         foreach ($defaultConfig as $widgetData) {
-            $this->layoutService->saveWidget(array_merge($widgetData, [
-                'theme_id' => $themeId,
-                'page_type' => $pageType,
-                'status' => ThemeLayout::STATUS_DRAFT,
-                'is_active' => true,
-            ]));
+            $context = $this->runtimeLayoutResolver->buildContext($themeId, $pageType, 'frontend', [
+                'layout_option' => 'default',
+                'scope' => 'default.default.default',
+                'target_type' => 'global',
+                'target_id' => 0,
+                'locale_code' => '',
+            ]);
+            $this->layoutWriter->addWidget(
+                $context,
+                \array_merge($widgetData, [
+                    'theme_id' => $themeId,
+                    'page_type' => $pageType,
+                    'status' => ThemeLayout::STATUS_DRAFT,
+                    'is_active' => true,
+                ]),
+                'system:default-layout-seeder',
+                'DefaultLayoutSeeder',
+            );
         }
 
         return true;
@@ -115,19 +133,37 @@ class DefaultLayoutSeeder
      */
     private function hasLayout(int $themeId, string $pageType): bool
     {
-        // 检查草稿和已发布状态
-        $draftLayout = $this->layoutService->getLayout($themeId, $pageType, ThemeLayout::STATUS_DRAFT);
-        $publishedLayout = $this->layoutService->getLayout($themeId, $pageType, ThemeLayout::STATUS_PUBLISHED);
-
-        foreach ($draftLayout as $area => $areaData) {
-            if (!empty($areaData['widgets'])) {
-                return true;
-            }
+        $identity = [
+            'layout_option' => 'default',
+            'scope' => 'default.default.default',
+            'target_type' => 'global',
+            'target_id' => 0,
+            'locale_code' => '',
+        ];
+        try {
+            $draftLayout = $this->runtimeLayoutResolver->resolveLayout(
+                $themeId,
+                $pageType,
+                ThemeLayout::STATUS_DRAFT,
+                'frontend',
+                $identity,
+            );
+            $publishedLayout = $this->runtimeLayoutResolver->resolveLayout(
+                $themeId,
+                $pageType,
+                ThemeLayout::STATUS_PUBLISHED,
+                'frontend',
+                $identity,
+            );
+        } catch (\Throwable) {
+            return false;
         }
 
-        foreach ($publishedLayout as $area => $areaData) {
-            if (!empty($areaData['widgets'])) {
-                return true;
+        foreach ([$draftLayout, $publishedLayout] as $layout) {
+            foreach ($layout as $areaData) {
+                if (!empty($areaData['widgets'])) {
+                    return true;
+                }
             }
         }
 
@@ -139,8 +175,18 @@ class DefaultLayoutSeeder
      */
     private function clearLayout(int $themeId, string $pageType): void
     {
-        // 使用 saveLayout 空数据来清除
-        $this->layoutService->saveLayout($themeId, $pageType, [], ThemeLayout::STATUS_DRAFT);
+        $context = $this->runtimeLayoutResolver->buildContext($themeId, $pageType, 'frontend', [
+            'layout_option' => 'default',
+            'scope' => 'default.default.default',
+            'target_type' => 'global',
+            'target_id' => 0,
+            'locale_code' => '',
+        ]);
+        $this->layoutWriter->clearDraftNodes(
+            $context,
+            'system:default-layout-seeder',
+            'DefaultLayoutSeeder',
+        );
     }
 
     /**
@@ -214,6 +260,24 @@ class DefaultLayoutSeeder
                     'widget_type' => 'product',
                     'config' => [],
                     'sort_order' => 0,
+                ],
+                [
+                    'area' => ThemeLayout::AREA_CONTENT,
+                    'slot_id' => 'product-purchase-actions',
+                    'widget_code' => 'product-add-to-cart',
+                    'widget_module' => 'Weline_Cart',
+                    'widget_type' => 'product',
+                    'config' => [],
+                    'sort_order' => 0,
+                ],
+                [
+                    'area' => ThemeLayout::AREA_CONTENT,
+                    'slot_id' => 'product-purchase-actions',
+                    'widget_code' => 'product-buy-now',
+                    'widget_module' => 'Weline_Checkout',
+                    'widget_type' => 'product',
+                    'config' => [],
+                    'sort_order' => 10,
                 ],
                 // 相关产品推荐
                 [
@@ -331,6 +395,14 @@ class DefaultLayoutSeeder
                     ],
                     'sort_order' => 0,
                 ],
+            ],
+
+            ThemeLayout::PAGE_TYPE_BLOG => [
+                // 博客详情由内容模板渲染，默认不注入 widgets
+            ],
+
+            ThemeLayout::PAGE_TYPE_BLOG_CATEGORY => [
+                // 博客分类列表由内容模板渲染，默认不注入 widgets
             ],
 
             // ==================== CMS页面默认布局 ====================

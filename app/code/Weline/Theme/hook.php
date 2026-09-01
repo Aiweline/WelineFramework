@@ -210,6 +210,18 @@ return [
         'description' => __('覆盖前台主题的面包屑节点列表，允许其他模块输出自定义的面包屑结构（如基于分类层级、搜索结果等动态生成路径）。如果未实现此 Hook，将回退到主题默认的面包屑渲染逻辑。'),
         'doc' => 'frontend/partials/breadcrumb/items.md',
     ],
+
+    'Weline_Theme::frontend::partials::product-card::add-to-cart' => [
+        'name' => __('商品卡片加购按钮'),
+        'description' => __('商品卡片加购操作槽，默认由 Weline_Cart 通过 Cart V2 addV2 提供加购按钮。'),
+        'doc' => 'frontend/partials/product-card/add-to-cart.md',
+    ],
+
+    'Weline_Theme::frontend::partials::product-card::buy-now' => [
+        'name' => __('商品卡片立即购买按钮'),
+        'description' => __('商品卡片立即购买操作槽，默认由 Weline_Checkout 提供立即购买按钮。'),
+        'doc' => 'frontend/partials/product-card/buy-now.md',
+    ],
     
     // ==================== Theme Frontend Layouts - Base ====================
     'Weline_Theme::frontend::layouts::base::head-before' => [
@@ -872,6 +884,11 @@ return [
         'description' => __('在空购物车推荐区域触发。'),
         'doc' => 'frontend/layouts/cart-empty/recommendations.md',
     ],
+    'Weline_Theme::frontend::layouts::not-found::recommendations' => [
+        'name' => __('404 推荐产品'),
+        'description' => __('在 404 页面推荐产品区域触发。'),
+        'doc' => 'frontend/layouts/not-found/recommendations.md',
+    ],
 
     // ==================== Theme Frontend Layouts - Category ====================
     'Weline_Theme::frontend::layouts::category::subcategories-filter' => [
@@ -968,8 +985,33 @@ return [
     // ==================== Theme Frontend Account Sidebar (简单格式 Hook，向后兼容) ====================
     'account.sidebar' => [
         'name' => __('账户侧边栏'),
-        'description' => __('在账户页面的侧边栏导航中注入内容，允许其他模块添加自定义导航项。'),
+        'description' => __('兼容期扁平注入位。新入口请使用 account.sidebar.group.*；Customer 宿主负责分组壳。'),
         'doc' => 'frontend/account/sidebar.md',
+    ],
+    'account.sidebar.group.security' => [
+        'name' => __('账户侧栏·安全设置分组'),
+        'description' => __('注入安全设置子项（如设备管理、两步验证）。须带 data-account-nav-parent="security"。'),
+        'doc' => 'frontend/account/sidebar-group-security.md',
+    ],
+    'account.sidebar.group.commerce' => [
+        'name' => __('账户侧栏·消费与资产分组'),
+        'description' => __('注入订阅、资产、分销、订单、收藏等消费类入口。须带 data-account-nav-parent="commerce"。'),
+        'doc' => 'frontend/account/sidebar-group-commerce.md',
+    ],
+    'account.sidebar.group.addresses' => [
+        'name' => __('账户侧栏·地址管理分组'),
+        'description' => __('注入发货/收货等地址入口。须带 data-account-nav-parent="addresses"。'),
+        'doc' => 'frontend/account/sidebar-group-addresses.md',
+    ],
+    'account.sidebar.group.connections' => [
+        'name' => __('账户侧栏·连接与应用分组'),
+        'description' => __('注入授权应用、邮箱等连接类入口。须带 data-account-nav-parent="connections"。'),
+        'doc' => 'frontend/account/sidebar-group-connections.md',
+    ],
+    'account.sidebar.group.developer' => [
+        'name' => __('账户侧栏·开发者分组'),
+        'description' => __('注入开发者相关入口。须带 data-account-nav-parent="developer"；分组标题由 Customer 宿主输出。'),
+        'doc' => 'frontend/account/sidebar-group-developer.md',
     ],
     'account.sidebar.content' => [
         'name' => __('账户侧边栏内容'),
@@ -977,21 +1019,11 @@ return [
         'doc' => 'frontend/account/sidebar-content.md',
     ],
 
-    // ==================== Help / Order tracking layouts ====================
+    // ==================== Help layouts ====================
     'Weline_Theme::frontend::layouts::help::extras' => [
         'name' => __('帮助中心扩展区'),
         'description' => __('在帮助中心主内容扩展槽注入额外说明、活动或业务模块内容。'),
         'doc' => 'frontend/layouts/help/extras.md',
-    ],
-    'Weline_Theme::frontend::layouts::order-tracking::result' => [
-        'name' => __('订单跟踪查询结果'),
-        'description' => __('在订单跟踪页查询结果区注入真实物流轨迹或业务模块查询结果。'),
-        'doc' => 'frontend/layouts/order-tracking/result.md',
-    ],
-    'Weline_Theme::frontend::layouts::order-tracking::extras' => [
-        'name' => __('订单跟踪扩展区'),
-        'description' => __('在订单跟踪页底部扩展槽注入额外提示或业务部件。'),
-        'doc' => 'frontend/layouts/order-tracking/extras.md',
     ],
 
     // ==================== Theme Backend Partials - Topbar ====================

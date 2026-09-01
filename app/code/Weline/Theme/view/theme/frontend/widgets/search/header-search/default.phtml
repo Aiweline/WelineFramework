@@ -40,14 +40,15 @@ $searchCategoryId = (int)($this->request->getParam('category_id') ?? 0);
 ?>
 
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)?v=20260825-type-label-sync1">
+      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)?v=20260826-search-submenu-hover1">
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)?v=20260825-type-label-sync1">
+      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)?v=20260826-search-submenu-hover1">
 
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>">
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-weline-load="headerSearch">
     <?= $this->fetch('Weline_Theme::theme/frontend/partials/search/header-bar.phtml', [
         'placeholder' => (string)$placeholder,
         'query' => $query,
@@ -77,7 +78,4 @@ $searchCategoryId = (int)($this->request->getParam('category_id') ?? 0);
 }
 </style>
 
-<script src="@static(Weline_Theme::js/widgets/header-search.js)?v=20260825-type-label-sync1"
-        defer
-        data-no-extract="true"
-        data-w-header-search-loader="true"></script>
+<?php // headerSearch：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

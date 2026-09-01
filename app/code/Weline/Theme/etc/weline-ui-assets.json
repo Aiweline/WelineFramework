@@ -84,7 +84,7 @@
     "theme-editor-css": {
       "type": "css",
       "output": "pages/weline-theme-editor.css",
-      "sources": ["css/pages/theme-editor.css"]
+      "sources": ["css/pages/theme-editor.css", "css/pages/theme-editor-brand-chrome.css"]
     },
     "theme-editor-widget-config-css": {
       "type": "css",
@@ -108,7 +108,7 @@
       "type": "js",
       "output": "pages/weline-theme-editor.js",
       "source_root": "app/code/Weline/Theme/view/statics",
-      "sources": ["js/cms-preview-bridge.js", "js/theme-editor-toolbar-overflow.js", "js/theme-editor.js", "js/theme-disk-appearance.js"]
+      "sources": ["js/cms-preview-bridge.js", "js/theme-editor-toolbar-overflow.js", "js/theme-editor.js", "js/theme-disk-appearance.js", "js/theme-editor-chrome.js", "js/theme-brand-basics.js", "js/theme-editor-fit-controls.js"]
     },
     "theme-editor-overlay-css": {
       "type": "css",
@@ -126,6 +126,12 @@
       "output": "pages/weline-theme-preview.js",
       "source_root": "app/code/Weline/Theme/view",
       "sources": ["statics/js/editor-mode.js", "ui/js/pages/theme-preview.js"]
+    },
+    "preview-bootstrap-js": {
+      "type": "js",
+      "output": "pages/weline-preview-bootstrap.js",
+      "source_root": "app/code/Weline/Theme/view",
+      "sources": ["ui/js/pages/preview-bootstrap.js"]
     },
     "developer-docs-css": {
       "type": "css",
@@ -241,6 +247,18 @@
       "source_root": "app/code/Weline/Eav/view/statics",
       "sources": ["js/eav-manager-native.js"]
     },
+    "system-config-css": {
+      "type": "css",
+      "output": "pages/weline-system-config.css",
+      "source_root": "app/code/Weline/SystemConfig/view/statics",
+      "sources": ["css/system-config.css"]
+    },
+    "system-config-js": {
+      "type": "js",
+      "output": "pages/weline-system-config.js",
+      "source_root": "app/code/Weline/SystemConfig/view/statics",
+        "sources": ["js/system-config-filter.js", "js/system-config-guide.js"]
+    },
     "choice-selector-css": {
       "type": "css",
       "output": "components/weline-choice-selector.css",
@@ -264,6 +282,18 @@
       "output": "components/weline-language-select.js",
       "source_root": "app/code/Weline/I18n/view/statics",
       "sources": ["js/language-select.js"]
+    },
+    "currency-select-css": {
+      "type": "css",
+      "output": "components/weline-currency-select.css",
+      "source_root": "app/code/Weline/Currency/view/statics",
+      "sources": ["css/currency-select.css"]
+    },
+    "currency-select-js": {
+      "type": "js",
+      "output": "components/weline-currency-select.js",
+      "source_root": "app/code/Weline/Currency/view/statics",
+      "sources": ["js/currency-select.js"]
     },
     "language-switcher-js": {
       "type": "js",
@@ -440,6 +470,7 @@
     "datatable-js": ["data-table"],
     "datatable-form-js": ["data-table-form"],
     "language-select-js": ["language-select"],
+    "currency-select-js": ["currency-select"],
     "language-switcher-js": ["language-switcher"],
     "mega-menu-js": ["mega-menu"],
     "online-translation-collector-js": ["online-translation-collector"],
@@ -468,6 +499,11 @@
       "owner": "Weline_I18n",
       "components": ["language-select"],
       "bundles": ["language-select-css", "language-select-js"]
+    },
+    "currency-select": {
+      "owner": "Weline_Currency",
+      "components": ["currency-select"],
+      "bundles": ["currency-select-css", "currency-select-js"]
     },
     "language-switcher": {
       "owner": "Weline_I18n",
@@ -649,7 +685,7 @@
     "websites.website.form": {
       "area": "backend",
       "templates": ["app/code/Weline/Websites/view/templates/Admin/Website/form.phtml"],
-      "bundles": ["websites-admin-css", "websites-form-js", "language-select-css", "language-select-js"],
+      "bundles": ["websites-admin-css", "websites-form-js", "language-select-css", "language-select-js", "currency-select-css", "currency-select-js"],
       "engines": []
     },
     "websites.site-builder.workspace": {
@@ -697,7 +733,7 @@
     "system-config.index": {
       "area": "backend",
       "templates": ["app/code/Weline/SystemConfig/view/templates/backend/config/index.phtml"],
-      "bundles": ["language-select-css", "language-select-js"],
+      "bundles": ["system-config-css", "system-config-js", "language-select-css", "language-select-js"],
       "engines": []
     },
     "developer.documents.edit": {

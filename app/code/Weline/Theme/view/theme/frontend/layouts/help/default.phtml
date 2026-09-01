@@ -47,25 +47,20 @@ $phone = (string)$contact['contact_phone'];
 $hours = (string)$contact['service_hours'];
 $address = (string)$contact['contact_address'];
 $mailHref = 'mailto:' . $email;
-$trackUrl = '/orders/track';
-$contactUrl = '/contact';
-$accountUrl = '/account';
-$cartUrl = '/cart';
-
 $topics = [
-    ['icon' => 'truck', 'title' => __('物流配送'), 'desc' => __('发货时效、运费与配送范围'), 'url' => '#help-shipping'],
-    ['icon' => 'undo', 'title' => __('退换货'), 'desc' => __('退货条件、流程与退款进度'), 'url' => '/rma'],
-    ['icon' => 'credit-card', 'title' => __('支付与发票'), 'desc' => __('支付方式、账单与发票开具'), 'url' => '#help-payment'],
-    ['icon' => 'box', 'title' => __('订单问题'), 'desc' => __('下单、改单、取消与订单状态'), 'url' => $trackUrl],
-    ['icon' => 'user', 'title' => __('账户与安全'), 'desc' => __('登录、密码与个人信息'), 'url' => $accountUrl],
-    ['icon' => 'headset', 'title' => __('联系客服'), 'desc' => __('电话、邮箱与在线支持通道'), 'url' => $contactUrl],
+    ['icon' => 'truck', 'title' => __('物流配送'), 'desc' => __('发货时效、运费与配送范围'), 'url' => 'guide/shipping', 'route' => true],
+    ['icon' => 'undo', 'title' => __('退换货'), 'desc' => __('退货条件、流程与退款进度'), 'url' => 'guide/returns', 'route' => true],
+    ['icon' => 'credit-card', 'title' => __('支付与发票'), 'desc' => __('支付方式、账单与发票开具'), 'url' => 'guide/payment', 'route' => true],
+    ['icon' => 'box', 'title' => __('订单问题'), 'desc' => __('下单、改单、取消与订单状态'), 'url' => 'customer/account/index#orders', 'route' => true],
+    ['icon' => 'user', 'title' => __('账户与安全'), 'desc' => __('登录、密码与个人信息'), 'url' => 'customer/account/index', 'route' => true],
+    ['icon' => 'headset', 'title' => __('联系客服'), 'desc' => __('电话、邮箱与在线支持通道'), 'url' => '#contact-service', 'open_cs' => true],
 ];
 
 $faqs = [
     ['q' => __('下单后多久发货？'), 'a' => __('一般情况下，现货订单在付款成功后 24–48 小时内发出；预售或定制商品以商品页说明为准。')],
-    ['q' => __('如何查询物流？'), 'a' => __('可在「订单跟踪」页输入订单号与下单邮箱/手机号查询；登录账户后也可在「我的订单」中查看物流。')],
-    ['q' => __('支持哪些支付方式？'), 'a' => __('支持常见在线支付与站点已开通的支付渠道。具体可用方式以结算页展示为准。')],
-    ['q' => __('如何申请退换货？'), 'a' => __('请确认商品在可退换期内且符合退换政策，然后前往退换货中心提交申请，或联系客服协助处理。')],
+    ['q' => __('如何查询物流？'), 'a' => __('登录账户后可在「我的订单」中查看物流；也可在页脚「配送说明」了解发货与签收规则。')],
+    ['q' => __('支持哪些支付方式？'), 'a' => __('支持常见在线支付与站点已开通的支付渠道。具体可用方式以结算页与「支付方式指南」为准。')],
+    ['q' => __('如何申请退换货？'), 'a' => __('请先阅读「退换政策」，确认符合条件后在「我的订单」提交售后，或点击「联系客服」获取协助。')],
 ];
 ?>
 <!DOCTYPE html>
@@ -134,7 +129,7 @@ $faqs = [
                     <h1><?= $escape($title) ?></h1>
                     <p><?= $escape($subtitle) ?></p>
                     <div class="help-layout__search">
-                        <w:form action="/search" method="get" class="help-layout__search-form">
+                        <w:form action="@url{'search'}" method="get" class="help-layout__search-form">
                             <input type="search" name="q" placeholder="<?= $escape(__('搜索帮助主题，例如：退货、运费、发票')) ?>" aria-label="<?= $escape(__('搜索帮助')) ?>">
                             <button type="submit"><?= $escape(__('搜索')) ?></button>
                         </w:form>
@@ -154,7 +149,12 @@ $faqs = [
                                 class="help-layout__topics-slot">
                             <div class="help-layout__topics" id="help-topics">
                                 <?php foreach ($topics as $topic): ?>
-                                    <a class="help-layout__topic" href="<?= $escape($topic['url']) ?>">
+                                    <?php
+                                    $topicOpenCs = !empty($topic['open_cs']);
+                                    $topicAttrs = $topicOpenCs ? ' data-cs-footer-open-chat role="button"' : '';
+                                    ?>
+                                    <a class="help-layout__topic"
+                                       href="<?php if (!empty($topic['route'])): ?>@url{$topic['url']}<?php else: ?><?= $escape($topic['url']) ?><?php endif; ?>"<?= $topicAttrs ?>>
                                         <strong><?= $escape($topic['title']) ?></strong>
                                         <span><?= $escape($topic['desc']) ?></span>
                                     </a>
@@ -221,16 +221,18 @@ $faqs = [
                                 <?php if ($address !== ''): ?>
                                     <p><?= $escape($address) ?></p>
                                 <?php endif; ?>
-                                <p><a href="<?= $escape($contactUrl) ?>"><?= $escape(__('前往联系我们页')) ?></a></p>
+                                <p><a href="@url{'contact'}"><?= $escape(__('前往联系我们页')) ?></a></p>
                             </div>
                             <div class="help-layout__card">
                                 <h3><?= $escape(__('快捷入口')) ?></h3>
-                                <p><a href="<?= $escape($trackUrl) ?>"><?= $escape(__('订单跟踪')) ?></a></p>
-                                <p><a href="<?= $escape($accountUrl) ?>"><?= $escape(__('我的账户')) ?></a></p>
-                                <p><a href="<?= $escape($cartUrl) ?>"><?= $escape(__('购物车')) ?></a></p>
-                                <p><a href="/rma"><?= $escape(__('退换货')) ?></a></p>
-                                <p><a href="/privacy"><?= $escape(__('隐私政策')) ?></a></p>
-                                <p><a href="/terms"><?= $escape(__('服务条款')) ?></a></p>
+                                <p><a href="@url{'customer/account/index'}#orders"><?= $escape(__('我的订单')) ?></a></p>
+                                <p><a href="@url{'customer/account/index'}"><?= $escape(__('我的账户')) ?></a></p>
+                                <p><a href="@url{'guide/shipping'}"><?= $escape(__('配送说明')) ?></a></p>
+                                <p><a href="@url{'guide/returns'}"><?= $escape(__('退换政策')) ?></a></p>
+                                <p><a href="@url{'guide/payment'}"><?= $escape(__('支付方式')) ?></a></p>
+                                <p><a href="@url{'privacy'}"><?= $escape(__('隐私政策')) ?></a></p>
+                                <p><a href="@url{'terms'}"><?= $escape(__('服务条款')) ?></a></p>
+                                <p><a href="#contact-service" data-cs-footer-open-chat role="button"><?= $escape(__('联系客服')) ?></a></p>
                             </div>
                         </w:slot>
                     </aside>

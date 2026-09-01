@@ -312,7 +312,19 @@ class ThemeCacheGenerator
             $template = $widget['meta']['template'] ?? '';
             $config = $widget['config'] ?? [];
 
-            $render .= $indent . '<div class="theme-widget" data-widget-id="' . $widgetId . '" data-layout-id="' . ($widget['layout_id'] ?? '') . '">' . "\n";
+            $layoutIdRaw = trim((string)($widget['layout_id'] ?? ''));
+            $nodeUidRaw = strtolower(trim((string)($widget['node_uid'] ?? '')));
+            if ($nodeUidRaw !== '' && preg_match('/^[a-f0-9]{32}$/D', $nodeUidRaw) !== 1) {
+                $nodeUidRaw = '';
+            }
+            // Hex identity is node_uid only; keep data-layout-id for non-hex legacy keys.
+            $identityAttr = $nodeUidRaw !== ''
+                ? 'data-node-uid="' . htmlspecialchars($nodeUidRaw, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"'
+                : ($layoutIdRaw !== '' && $layoutIdRaw !== '0'
+                    ? 'data-layout-id="' . htmlspecialchars($layoutIdRaw, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') . '"'
+                    : '');
+            $render .= $indent . '<div class="theme-widget" data-widget-id="' . $widgetId . '"'
+                . ($identityAttr !== '' ? ' ' . $identityAttr : '') . '>' . "\n";
 
             if ($template) {
                 // 使用模板渲染
