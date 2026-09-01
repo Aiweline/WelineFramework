@@ -35,6 +35,10 @@ class Social extends BaseController
         $accounts = $this->accountService->listAccounts();
         $websites = $this->websiteAccountService->listWebsites();
         $socialScopes = $this->websiteAccountService->listScopes();
+        $initialScope = $this->websiteAccountService->resolveAdminScopeSelection(
+            \is_array($this->request->getParams()) ? $this->request->getParams() : [],
+            $socialScopes,
+        );
         $websiteRelations = $this->websiteAccountService->listRelations();
         $scopeRelations = $this->websiteAccountService->listScopeRelations();
         $drafts = $this->creativeService->listRecentDrafts(8);
@@ -46,12 +50,15 @@ class Social extends BaseController
             $families[$family] = ($families[$family] ?? 0) + 1;
         }
 
-        $this->assign('page_title', (string)__('融媒体管理'));
+        $pageTitle = (string)__('融媒体管理');
+        $this->assign('title', $pageTitle);
+        $this->assign('page_title', $pageTitle);
         $this->assign('platforms', $platforms);
         $this->assign('families', $families);
         $this->assign('accounts', $accounts);
         $this->assign('websites', $websites);
         $this->assign('social_scopes', $socialScopes);
+        $this->assign('initial_scope', $initialScope);
         $this->assign('website_relations', $websiteRelations);
         $this->assign('scope_relations', $scopeRelations);
         $this->assign('drafts', $drafts);
@@ -62,6 +69,6 @@ class Social extends BaseController
         $this->assign('platform_credential_guides', $this->credentialGuide->getAllGuides());
         $this->assign('platform_guide_keys', $this->credentialGuide->getGuideKeys());
 
-        return $this->fetchBase();
+        return (string) $this->fetch();
     }
 }
