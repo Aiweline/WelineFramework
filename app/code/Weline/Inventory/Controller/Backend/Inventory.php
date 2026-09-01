@@ -72,7 +72,7 @@ final class Inventory extends BackendController
         return $this->handleMutation('authorizations', function (int $websiteId): void {
             $this->mutations->authorizeWarehouse(
                 $websiteId,
-                $this->postPositiveInt('store_id'),
+                $this->postNonNegativeInt('store_id', 0),
                 $this->postPositiveInt('warehouse_id'),
                 (string)$this->request->getPost('is_default', '0') === '1',
             );
@@ -85,7 +85,7 @@ final class Inventory extends BackendController
         return $this->handleMutation('adjustments', function (int $websiteId): void {
             $this->mutations->setOnHand(
                 $websiteId,
-                $this->postPositiveInt('store_id'),
+                $this->postNonNegativeInt('store_id', 0),
                 $this->postPositiveInt('offer_id'),
                 $this->postNonNegativeInt('on_hand_minor', 0),
                 $this->postString('command_id', 96),

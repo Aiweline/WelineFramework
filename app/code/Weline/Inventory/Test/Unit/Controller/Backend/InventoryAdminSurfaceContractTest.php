@@ -58,10 +58,24 @@ final class InventoryAdminSurfaceContractTest extends TestCase
         self::assertStringContainsString('WarehouseAuthorizationService', $service);
         self::assertStringContainsString('InventoryService', $service);
         self::assertStringContainsString('function createWarehouse', $authorization);
+        self::assertSame(2, substr_count($controller, "postNonNegativeInt('store_id', 0)"));
+        self::assertStringNotContainsString("postPositiveInt('store_id')", $controller);
+        self::assertSame(2, substr_count($template, 'min="0" name="store_id"'));
         foreach (['inventory-warehouse-create-form', 'inventory-warehouse-authorization-form', 'inventory-stock-adjust-form'] as $testId) {
             self::assertStringContainsString('data-testid="' . $testId . '"', $template);
         }
         self::assertSame(3, substr_count($template, 'csrf="auto"'));
+    }
+
+    public function testSetOnHandDispatchesStockProjectionChangedEvent(): void
+    {
+        $service = (string)file_get_contents(BP . 'app/code/Weline/Inventory/Service/InventoryService.php');
+        self::assertStringContainsString(
+            "EVENT_STOCK_PROJECTION_CHANGED = 'Weline_Inventory::stock_projection_changed'",
+            $service,
+        );
+        self::assertStringContainsString('notifyStockProjectionChanged', $service);
+        self::assertStringContainsString('$didMutate = true', $service);
     }
 
     public function testInventoryBrowserCaseHasPostgresqlAssertionAndCleanup(): void
@@ -74,5 +88,7 @@ final class InventoryAdminSurfaceContractTest extends TestCase
         self::assertStringContainsString("fixture('cleanup'", $spec);
         self::assertStringContainsString('r43_inventory_requires_postgresql', $fixture);
         self::assertStringContainsString('InventoryLedger::schema_fields_IDEMPOTENCY_KEY', $fixture);
+        self::assertStringContainsString("array_key_exists('store_id', \$data) && (int)\$data['store_id'] >= 0", $fixture);
+        self::assertStringNotContainsString("!empty(\$data['store_id'])", $fixture);
     }
 }
