@@ -11,16 +11,13 @@ $status = $status ?? '';
 $keyword = $keyword ?? '';
 $platformOptions = $platformOptions ?? [];
 $healthStatusOptions = $healthStatusOptions ?? [];
-$listUrl = $this->getBackendUrl('*/backend/bt-server');
-$formUrl = $this->getBackendUrl('*/backend/bt-server/form');
-$deleteUrl = $this->getBackendUrl('*/backend/bt-server/delete');
 ?>
 
 <div class="row">
     <div class="col-12">
         <div class="page-title-box d-sm-flex align-items-center justify-content-between">
             <h4 class="mb-sm-0 font-size-18"><?= __('BT 服务器列表') ?></h4>
-            <a href="<?= $formUrl ?>" class="btn btn-primary">
+            <a href="@backend-url{'*/backend/bt-server/form'}" class="btn btn-primary">
                 <i class="mdi mdi-plus-circle-outline me-1"></i><?= __('新增服务器') ?>
             </a>
         </div>
@@ -45,7 +42,7 @@ $deleteUrl = $this->getBackendUrl('*/backend/bt-server/delete');
     <div class="col-xl-12">
         <div class="card mb-3">
             <div class="card-body">
-                <form method="get" action="<?= $listUrl ?>" class="row g-3">
+                <form method="get" action="@backend-url{'*/backend/bt-server'}" class="row g-3">
                     <div class="col-md-3">
                         <label class="form-label"><?= __('云平台') ?></label>
                         <select name="platform" class="form-select">
@@ -82,7 +79,7 @@ $deleteUrl = $this->getBackendUrl('*/backend/bt-server/delete');
                             <button type="submit" class="btn btn-primary">
                                 <i class="mdi mdi-magnify me-1"></i><?= __('搜索') ?>
                             </button>
-                            <a href="<?= $listUrl ?>" class="btn btn-secondary">
+                            <a href="@backend-url{'*/backend/bt-server'}" class="btn btn-secondary">
                                 <i class="mdi mdi-refresh me-1"></i><?= __('重置') ?>
                             </a>
                         </div>
@@ -169,7 +166,7 @@ $deleteUrl = $this->getBackendUrl('*/backend/bt-server/delete');
                                         </div>
                                     </td>
                                     <td>
-                                        <a href="<?= $this->getBackendUrl('*/backend/bt-server/form', ['id' => (int) ($server[BtServer::schema_fields_SERVER_ID] ?? 0)]) ?>"
+                                        <a href="@backend-url{'*/backend/bt-server/form'|['id' => (int) ($server[BtServer::schema_fields_SERVER_ID] ?? 0)]}"
                                            class="btn btn-sm btn-outline-primary me-1">
                                             <i class="mdi mdi-pencil me-1"></i><?= __('编辑') ?>
                                         </a>
@@ -268,7 +265,7 @@ $deleteUrl = $this->getBackendUrl('*/backend/bt-server/delete');
         var formData = new URLSearchParams();
         formData.append('id', id);
 
-        fetch('<?= $deleteUrl ?>', {
+        fetch('@backend-url{'*/backend/bt-server/delete'}', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: formData.toString()
