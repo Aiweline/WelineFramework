@@ -26,6 +26,8 @@
 订单取消后触发，可用于处理取消后的相关操作。,"Triggered after order cancellation, can be used to handle related operations after cancellation."
 订单退款后,"After Order Refund"
 订单退款后触发，可用于处理退款后的相关操作。,"Triggered after an order refund, can be used to handle post-refund operations."
+"物流反馈写入 Inbox 后","物流反馈写入 Inbox 后"
+"跟踪壳在验签/解析并持久化反馈 Inbox 后触发；可用于异步应用状态、通知或开发中继观察。Provider 不得在 verify/parse 内推进订单状态。","跟踪壳在验签/解析并持久化反馈 Inbox 后触发；可用于异步应用状态、通知或开发中继观察。Provider 不得在 verify/parse 内推进订单状态。"
 获取订单状态标签,"Fetch order status label"
 获取订单状态标签，允许其他模块扩展状态标签。,"Fetch order status label, allowing other modules to extend status labels."
 获取订单状态CSS类,"Fetch order status CSS class"
@@ -36,11 +38,48 @@
 获取发货状态标签，允许其他模块扩展发货状态标签。,"Shipping status label retrieved, allowing other modules to extend shipping status labels."
 解析完整状态信息,"Parse full status information"
 解析完整状态信息，允许其他模块扩展状态信息解析。,"Parse full status information, allowing other modules to extend status information parsing."
+订单接口不支持操作：%{1},订单接口不支持操作：%{1}
+订单服务暂时不可用，请稍后再试。,订单服务暂时不可用，请稍后再试。
+订单前台,订单前台
+订单留言等前台会话能力。,订单留言等前台会话能力。
 "Weline_Order typed admin operations","Weline_Order typed admin operations"
 "按类型与 Scope 查询订单对象展示号","Query order object display number by type and scope"
 订单状态后台类型化操作,"Order status background typed operation"
 页面读取到的对象授权版本,"The authorized version of the object read by the page"
 退款接口不支持该操作：%{1},"The refund interface does not support this operation: %{1}"
+系统订单追踪,"System order tracking"
+暂无第三方物流商时，按订单履约状态展示系统追踪。,"Shows system tracking from fulfillment status when no carrier provider is bound."
+已下单,已下单
+已支付,Paid
+已发货,Fulfilled
+发往目的地,"In transit to destination"
+已送达,Delivered
+订单已送达,订单已送达
+已发货，发往目的地,"Shipped — in transit to destination"
+订单已支付，等待发货,订单已支付，等待发货
+订单处理中,订单处理中
+系统追踪不接收外部物流反馈,系统追踪不接收外部物流反馈
+系统追踪无需外部连接,系统追踪无需外部连接
+订单已创建,"Order created"
+支付完成，仓库备货中,支付完成，仓库备货中
+目的地,目的地
+发往目的地：%{1},发往目的地：%{1}
+演示物流,"Demo carrier"
+仅用于本地开发验证正式物流轨迹与反馈中转，不连接真实承运商。,"Local demo carrier for formal tracking and feedback relay; not a real carrier."
+已揽收,已揽收
+运输中,运输中
+派送中,派送中
+已签收,已签收
+【演示】快递员正在派送,【演示】快递员正在派送
+【演示】包裹已到达目的地转运中心,【演示】包裹已到达目的地转运中心
+【演示】承运商已揽收,【演示】承运商已揽收
+【演示】包裹派送中,【演示】包裹派送中
+空反馈体,空反馈体
+演示反馈签名无效,演示反馈签名无效
+演示反馈验签通过,演示反馈验签通过
+"演示反馈 JSON 无效","演示反馈 JSON 无效"
+【演示】物流状态已更新,【演示】物流状态已更新
+演示物流连接正常,演示物流连接正常
 账户首页订单分区,"Account Homepage Orders Section"
 在顾客账户首页「我的订单」分区注入订单列表、订单状态与售后入口等内容。,"Inject order lists, order states, and after-sales entries into the My Orders section on the customer account homepage."
 订单详情页之前,"Before Order Details Page"
@@ -56,6 +95,9 @@
 订单管理模块安装完成,"Order Management Module Installed"
 "已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","The following data tables have been created: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
 "安装失败: %{1}","Installation failed: %{1}"
+开发物流中继未启用,开发物流中继未启用
+【演示】开发中继探针,【演示】开发中继探针
+【演示】中继探针节点,【演示】中继探针节点
 发货操作失败，请稍后重试。,"The shipping operation failed, please try again later."
 订单发货控制器,"Order Shipping Controller"
 truck,truck
@@ -155,8 +197,6 @@ switch,switch
 发票生成成功,"Invoice generated successfully"
 待处理,Pending
 处理中,Processing
-已支付,Paid
-已发货,Fulfilled
 已完成,Completed
 已取消,Cancelled
 已退款,Refunded
@@ -164,7 +204,6 @@ switch,switch
 部分支付,"Partial Payment"
 待发货,"Pending Shipment"
 部分发货,"Partial Shipment"
-已送达,Delivered
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot required fields are empty: %{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot value/hash is illegal"
 我的订单,"My Orders"
@@ -180,6 +219,7 @@ SKU,SKU
 单价,Price
 小计,Subtotal
 收货信息,"Receiving information"
+物流追踪,物流追踪
 商品小计,Subtotal
 运费,"Shipping Amount"
 税费,"Tax Amount"
@@ -190,6 +230,11 @@ SKU,SKU
 订单明细,"Order details"
 退货,Return
 与我的订单,"And My Orders"
+查询失败,查询失败
+物流单号,"Tracking Number"
+当前,当前
+订单留言,"Order note"
+如有特殊要求请留言,"Leave a message if you have special requirements"
 订单列表,"Order List"
 新建订单,"Create Order"
 搜索订单号、客户姓名、邮箱,"Search order number, customer name, email"
@@ -226,7 +271,6 @@ SKU,SKU
 支付时间,"Paid At"
 暂无支付记录,"No Payment Records"
 发货记录,"Shipment Records"
-物流单号,"Tracking Number"
 承运商,Carrier
 发货时间,"Shipped At"
 送达时间,"Delivered At"
@@ -361,7 +405,6 @@ Outbox,Outbox
 订单金额加法溢出,"Order amount addition overflows"
 "Order Tax 快照与已分配税额不一致","The Order Tax snapshot does not match its allocated Tax amount"
 "非零税额必须提供完整 Tax 快照","A non-zero Tax amount requires a complete Tax snapshot"
-订单已创建,"Order created"
 订单冻结快照不可修改,"Order frozen snapshot cannot be modified"
 新订单拓扑的冻结字段不可修改,"The frozen fields of the new order topology cannot be modified."
 订单已更新,"Order updated"
@@ -385,6 +428,9 @@ Outbox,Outbox
 订单已发货,"Order shipped"
 发货记录不存在,"Shipment record does not exist"
 订单已完成,"Order completed"
+"订单留言过长，请控制在 1000 字以内","Order note is too long. Please keep it within 1000 characters."
+订单留言已保存，将在结账时带入,"Order note saved; it will be applied at checkout"
+已清除订单留言,"Order note cleared"
 "CheckoutGroup 不能无 Order","CheckoutGroup cannot be without Order"
 "CheckoutGroup 金额不守恒","CheckoutGroup amount is not conserved"
 "shipping owner 必须承载组运费 100%","The shipping owner must carry 100% of the group shipping cost"
@@ -430,6 +476,7 @@ Outbox,Outbox
 部分履约,"Partially fulfilled"
 履约未开始,"Performance has not started"
 履约状态待确认,"Fulfillment status pending confirmation"
+物流状态不一致,物流状态不一致
 订单支付状态提交后无法重新读取,"The order payment status cannot be re-read after submission."
 "Order 持久化快照无效","Order persistence snapshot is invalid"
 "支付通知与 Order 持久化事实不一致","Payment notification is inconsistent with Order persistence facts"
@@ -452,6 +499,17 @@ Outbox,Outbox
 "订单状态不能从 %{1} 转换到 %{2}","Order status cannot transition from %{1} to %{2}"
 状态转换被阻止,"Status Transition Blocked"
 订单状态已被并发修改,"The order status has been modified concurrently"
+"endpoint_code 无效","endpoint_code 无效"
+"跟踪 Provider 不存在","跟踪 Provider 不存在"
+物流反馈验签失败,物流反馈验签失败
+物流反馈解析失败,物流反馈解析失败
+同源事件载荷冲突,同源事件载荷冲突
+物流反馈已接收（幂等）,物流反馈已接收（幂等）
+"物流反馈已写入 Inbox","Tracking feedback stored in inbox"
+请填写订单号与下单邮箱或手机号,"Enter order number and email or phone used at checkout"
+未找到匹配的订单,"No matching order found"
+联系方式与订单不匹配,"Contact does not match this order"
+订单标识不能为空,订单标识不能为空
 "OrderPlan 影子比对只允许在 shadow mode 执行","OrderPlan shadow comparison is only allowed in shadow mode"
 "影子计划字段 %{1} 必须是数组","Shadow plan field %{1} must be an array"
 影子副作用快照必须返回数组,"Shadow side-effect snapshot must return an array"

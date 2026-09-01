@@ -32,6 +32,8 @@ class OrderShipment extends Model
     public const schema_fields_TRACKING_NUMBER = 'tracking_number';
     #[Col('varchar', 100, comment: '承运商')]
     public const schema_fields_CARRIER = 'carrier';
+    #[Col('varchar', 64, nullable: false, default: '', comment: '跟踪 Provider code')]
+    public const schema_fields_TRACKING_PROVIDER_CODE = 'tracking_provider_code';
     #[Col('varchar', 50, nullable: false, default: 'pending', comment: '发货状态')]
     public const schema_fields_STATUS = 'status';
     #[Col('timestamp', comment: '发货时间')]

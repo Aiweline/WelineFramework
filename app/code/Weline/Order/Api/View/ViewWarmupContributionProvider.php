@@ -14,7 +14,7 @@ final class ViewWarmupContributionProvider implements ViewWarmupContributionProv
         return new ViewWarmupContribution(
             tagTemplates: [
                 'hooks' => [
-                    'Weline_Order::hooks/account.sidebar.phtml',
+                    'Weline_Order::hooks/account.sidebar.group.commerce.phtml',
                     'Weline_Order::hooks/account.sidebar.content.phtml',
                 ],
             ],

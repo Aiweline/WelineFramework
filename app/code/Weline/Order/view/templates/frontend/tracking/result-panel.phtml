@@ -1,0 +1,79 @@
+<?php
+/**
+ * Shared order tracking result panel（账户详情 / Theme 访客兜底共用）。
+ *
+ * @var array|null $trackingResult OrderTrackingService 返回结构
+ * @var string|null $trackingPanelTestId
+ */
+$trackingResult = is_array($trackingResult ?? null) ? $trackingResult : null;
+if ($trackingResult === null) {
+    return;
+}
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$provider = is_array($trackingResult['provider'] ?? null) ? $trackingResult['provider'] : [];
+$display = is_array($provider['display'] ?? null) ? $provider['display'] : [];
+$tracking = is_array($trackingResult['tracking'] ?? null) ? $trackingResult['tracking'] : [];
+$stages = is_array($tracking['stages'] ?? null) ? $tracking['stages'] : [];
+$nodes = is_array($tracking['nodes'] ?? null) ? $tracking['nodes'] : [];
+$title = (string) ($display['title'] ?? __('系统订单追踪'));
+$summary = (string) ($tracking['summary'] ?? ($trackingResult['message'] ?? ''));
+$icon = (string) ($display['icon_url'] ?? $display['icon'] ?? '');
+$testId = trim((string) ($trackingPanelTestId ?? 'order-tracking-result'));
+$ok = !empty($trackingResult['ok']);
+?>
+<section class="order-tracking-result"
+         data-testid="<?= $escape($testId) ?>"
+         data-ok="<?= $ok ? '1' : '0' ?>"
+         weline-code="order.tracking.result.panel">
+    <?php if (!$ok): ?>
+        <p class="order-tracking__tips" data-tone="danger"><?= $escape((string) ($trackingResult['message'] ?? __('查询失败'))) ?></p>
+    <?php else: ?>
+        <div class="order-tracking-result__provider w-cluster" data-align="center" style="--w-mb: var(--spacing-3_5);">
+            <?php if ($icon !== ''): ?>
+                <w:static src="<?= $escape($icon) ?>" style="width:2rem;height:2rem;" alt="<?= $escape($title) ?>"/>
+            <?php endif; ?>
+            <div>
+                <strong><?= $escape($title) ?></strong>
+                <?php if (!empty($display['description'])): ?>
+                    <div class="order-tracking__tips" style="margin:0;"><?= $escape((string) $display['description']) ?></div>
+                <?php endif; ?>
+            </div>
+        </div>
+
+        <p><strong><?= $escape($summary) ?></strong></p>
+        <?php if (!empty($tracking['tracking_number'])): ?>
+            <p class="order-tracking__tips"><?= $escape(__('物流单号')) ?>：<code><?= $escape((string) $tracking['tracking_number']) ?></code></p>
+        <?php endif; ?>
+
+        <?php if ($stages !== []): ?>
+            <ol class="order-tracking-result__stages" style="display:grid;gap:0.5rem;padding-left:1.25rem;">
+                <?php foreach ($stages as $stage): ?>
+                    <?php
+                    $state = (string) ($stage['state'] ?? 'upcoming');
+                    $label = (string) ($stage['label'] ?? $stage['code'] ?? '');
+                    ?>
+                    <li data-state="<?= $escape($state) ?>">
+                        <?= $escape($label) ?>
+                        <?php if ($state === 'current'): ?>
+                            <span>（<?= $escape(__('当前')) ?>）</span>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ol>
+        <?php endif; ?>
+
+        <?php if ($nodes !== []): ?>
+            <ul class="order-tracking-result__nodes" style="margin-top:1rem;display:grid;gap:0.75rem;padding-left:1.25rem;">
+                <?php foreach ($nodes as $node): ?>
+                    <li>
+                        <div><?= $escape((string) ($node['text'] ?? '')) ?></div>
+                        <?php if (!empty($node['time'])): ?>
+                            <small class="order-tracking__tips"><?= $escape((string) $node['time']) ?></small>
+                        <?php endif; ?>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        <?php endif; ?>
+    <?php endif; ?>
+</section>
