@@ -78,8 +78,8 @@ if ($selectedAccount) {
         $mailError = $throwable->getMessage();
     }
 }
-$accountUrl = $this->getFrontendUrl('customer/account/index');
-$sendUrl = $this->getFrontendUrl('weline_mail/frontend/account/mail/send');
+$accountUrl = '/customer/account/index';
+
 ?>
 <style data-no-extract="true">
 .weline-mail-client{display:grid;gap:var(--weline-space-5);font-family:Inter,var(--weline-font-family)}
@@ -120,7 +120,7 @@ $sendUrl = $this->getFrontendUrl('weline_mail/frontend/account/mail/send');
     <?php if ($mailError): ?><div class="w-alert" data-tone="danger"><?= $escape($mailError) ?></div><?php endif; ?>
 
     <div class="weline-mail-client__toolbar">
-        <form method="get" action="<?= $escape($accountUrl) ?>">
+        <form method="get" action="@url{'customer/account/index'}">
             <label class="w-field">
                 <span class="w-field__label"><?= __('邮箱账号') ?></span>
                 <select class="w-select" name="mail_account" onchange="this.form.submit()">
@@ -140,7 +140,7 @@ $sendUrl = $this->getFrontendUrl('weline_mail/frontend/account/mail/send');
         <details>
             <summary class="weline-mail-client__compose"><?= __('写邮件') ?></summary>
             <div class="weline-mail-client__compose">
-                <w:form method="post" action="@var($escape($sendUrl))">
+                <w:form method="post" action="@frontend-url{'weline_mail/frontend/account/mail/send'}">
                     <div class="weline-mail-client__compose-grid">
                         <label class="w-field"><span class="w-field__label"><?= __('发件账号') ?></span><select class="w-select" name="account_id" required><?php foreach ($accounts as $account): ?><option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $selectedAccountId ? 'selected' : '' ?>><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?></option><?php endforeach; ?></select></label>
                         <label class="w-field"><span class="w-field__label"><?= __('收件人') ?></span><input class="w-input" type="text" name="to_email" required placeholder="name@example.com"></label>
