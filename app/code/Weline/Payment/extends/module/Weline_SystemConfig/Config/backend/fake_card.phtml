@@ -38,6 +38,16 @@
         validation="min:0|max:9999" />
 
     <w:config:field
+        key="payment/method/fake_card/icon"
+        label="支付图标"
+        description="覆盖 Provider 默认图标。从图库选择图片，或留空使用 Provider 自带图标。"
+        type="image"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:1024" />
+
+    <w:config:field
         key="payment/method/fake_card/default_currency"
         label="默认支付货币"
         description="可支付对象没有指定目标支付货币时使用的默认货币。"

@@ -1,0 +1,31 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$entry = (array) ($this->getData('payment_guide_entry') ?? []);
+$pageType = (string) ($this->getData('payment_guide_page_type') ?? 'guide');
+$providerTitle = (string) ($entry['title'] ?? '');
+$guideRoute = (string) ($entry['guide_route'] ?? '');
+$articleTitle = match ($pageType) {
+    'policy' => (string) ($entry['policy_title'] ?? ''),
+    'agreement' => (string) ($entry['agreement_title'] ?? ''),
+    default => (string) ($entry['guide_title'] ?? ''),
+};
+$navLabel = match ($pageType) {
+    'policy' => '@lang(支付政策导航)',
+    'agreement' => '@lang(用户协议导航)',
+    default => '@lang(支付指南导航)',
+};
+$escape = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+?>
+<nav class="amazon-payment-guide-article__breadcrumb"
+     aria-label="<?= $navLabel ?>">
+    <a href="@url{'guide/payment'}"><lang>支付方式指南</lang></a>
+    <span aria-hidden="true">›</span>
+    <?php if (($pageType === 'policy' || $pageType === 'agreement') && $guideRoute !== ''): ?>
+        <a href="@url{$guideRoute}"><?= $escape($providerTitle) ?></a>
+    <?php else: ?>
+        <span><?= $escape($providerTitle) ?></span>
+    <?php endif; ?>
+    <span aria-hidden="true">›</span>
+    <span aria-current="page"><?= $escape($articleTitle) ?></span>
+</nav>

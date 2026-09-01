@@ -37,6 +37,13 @@ interface ProviderInterface
     public function getCapabilities(): array;
 
     /**
+     * Display metadata for admin and checkout.
+     *
+     * Required keys:
+     * - icon_url|icon: non-empty module static ref (Vendor_Module::img/....svg), media path, or absolute URL.
+     * Optional: title, description, checkout_mode, checkout_template_code, config_template_code.
+     * Admins may override the icon via SystemConfig `payment/method/{code}/icon`.
+     *
      * @return array<string, mixed>
      */
     public function getDisplayMetadata(): array;

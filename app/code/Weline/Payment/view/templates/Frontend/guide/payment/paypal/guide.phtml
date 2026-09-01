@@ -1,0 +1,58 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$entry = (array) ($this->getData('payment_guide_entry') ?? []);
+$policyRoute = (string) ($entry['policy_route'] ?? '');
+?>
+
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+
+<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-guide-paypal">
+    <?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+
+    <header class="amazon-payment-guide-article__header">
+        <p class="amazon-payment-guide-article__badge">PayPal</p>
+        <h1 class="amazon-payment-guide-article__title"><lang>PayPal 支付指南</lang></h1>
+        <p class="amazon-payment-guide-article__lead"><lang>使用 PayPal 账户或支持的银行卡完成支付，并在 PayPal 页面确认订单金额。</lang></p>
+    </header>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.guide.paypal.prepare">
+        <h2><lang>支付前准备</lang></h2>
+        <ul>
+            <li><lang>确认订单金额、币种与收货国家/地区。</lang></li>
+            <li><lang>准备可用的 PayPal 账户，或支持 Guest Checkout 的银行卡。</lang></li>
+            <li><lang>确保浏览器允许跳转到 PayPal 安全结账页。</lang></li>
+        </ul>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.guide.paypal.steps">
+        <h2><lang>支付步骤</lang></h2>
+        <ol>
+            <li><lang>在结账页选择 PayPal。</lang></li>
+            <li><lang>跳转至 PayPal 页面登录并确认付款。</lang></li>
+            <li><lang>支付完成后自动返回本站，订单状态将同步更新。</lang></li>
+        </ol>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.guide.paypal.faq">
+        <h2><lang>常见问题</lang></h2>
+        <ul class="amazon-payment-guide-article__faq">
+            <li>
+                <strong><lang>支付后页面没有返回？</lang></strong>
+                <p><lang>请手动返回本站订单页查看状态，或联系客服并提供订单号。</lang></p>
+            </li>
+            <li>
+                <strong><lang>提示币种或国家不支持？</lang></strong>
+                <p><lang>请更换支持的币种/收货国家，或选择其他支付方式。</lang></p>
+            </li>
+        </ul>
+    </section>
+
+    <?php if ($policyRoute !== ''): ?>
+        <footer class="amazon-payment-guide-article__footer">
+            <a href="@url{$policyRoute}"><lang>查看 PayPal 支付政策</lang></a>
+        </footer>
+    <?php endif; ?>
+</article>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>

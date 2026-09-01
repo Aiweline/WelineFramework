@@ -1,6 +1,10 @@
 # 第三方支付模块开发指南
 
-本文面向接入 `Weline_Payment` 的第三方支付模块。新支付方式不继承抽象类，只实现一个 Provider 接口类，并交付 checkout 模板和 SystemConfig 配置模板。特殊授权页、Webhook 辅助页或 OAuth 返回页可以由第三方模块自己的 controller 实现，但支付、退款、回调归一化和业务状态推进必须回到 `Weline_Payment`。
+本文面向接入 `Weline_Payment` 万能支付壳的第三方支付模块。新支付方式不继承抽象类，只实现一个 Provider 接口类，并交付 checkout 模板和 SystemConfig 配置模板。
+
+**统一 URL（硬要求）**：浏览器 OAuth / 支付回跳只登记壳的 `payment/frontend/callback/return`；Webhook 用 `payment/frontend/callback/notify?endpoint_code={method}.{env}.default`。一键授权走 `payment/backend/connect/authorize?method_code=`。可选实现 `ProviderConnectInterface`；**禁止**为每个 Provider 再登记独立 Developer Return URL，也禁止改壳 `Callback.php`。
+
+壳边界、结账三层、NextAction/iframe、幂等表见 [payment-shell.md](payment-shell.md)。支付、退款、回调归一化和业务状态推进必须回到 `Weline_Payment`。
 
 ## 1. 最小模块结构
 
@@ -9,11 +13,18 @@
 ```text
 app/code/Vendor/YourPay/
 ├─ extends/module/Weline_Payment/PaymentProvider/YourPayProvider.php
+├─ extends/module/Weline_Payment/PaymentCustomerGuide/YourPayCustomerGuide.php   # 推荐
 ├─ extends/module/Weline_SystemConfig/Config/backend/your_pay.phtml
 ├─ view/templates/Frontend/checkout/your_pay.phtml
+├─ view/templates/Frontend/guide/payment/your_pay/guide.phtml                    # 推荐
+├─ view/templates/Frontend/guide/payment/your_pay/policy.phtml                   # 推荐
+├─ i18n/zh_Hans_CN.csv
+├─ i18n/en_US.csv
 ├─ etc/env.php
 └─ register.php
 ```
+
+客户指南与政策的完整 i18n 约定见 [payment-customer-guide-i18n.md](payment-customer-guide-i18n.md)。**正文只写在 phtml 里并用 `<lang>` / `@lang()`**，以便 `i18n:collect` 与 AI 翻译。
 
 `etc/env.php` 只在第三方模块需要暴露自己路由时配置；`Weline_Payment` 自身路由前缀是 `payment`，例如 `payment/backend/method/edit?code=your_pay`。第三方支付模块不应声明 `weline_payment` 路由。
 
@@ -41,6 +52,14 @@ namespace Vendor\YourPay\Extends\Module\Weline_Payment\PaymentProvider;
 
 Provider 必须实现 `Weline\Payment\Interface\ProviderInterface`。接口函数全部要实现，不能只实现支付成功路径。
 
+需要 OAuth / 一键授权时，额外实现 `Weline\Payment\Interface\ProviderConnectInterface`（`startConnect` / `completeConnect` / `ownsOAuthState` / `suggestedRedirectUris` 等）。壳入口：
+
+- 授权：`payment/backend/connect/authorize?method_code={code}&environment=sandbox|live`
+- 测连 / 撤销：`payment/backend/connect/test|revoke?method_code=...`
+- 浏览器回跳：仅 `payment/frontend/callback/return`（`PaymentBrowserReturnDispatcher` 调度）
+
+内置样板：`fake_card`（无 Connect）与 `paypal`（实现 Connect，OAuth 私有服务经 Provider 封装）。
+
 | 函数 | 必须处理 |
 | --- | --- |
 | `getCode()` | 稳定 method code。 |
@@ -48,7 +67,7 @@ Provider 必须实现 `Weline\Payment\Interface\ProviderInterface`。接口函�
 | `getProviderApiVersion()` | Provider API 版本，写入快照。 |
 | `getWebhookSchemaVersion()` | 回调 schema 版本，历史回调按版本解析。 |
 | `getCapabilities()` | 货币、国家、默认货币、授权、捕获、取消、退款、部分退款、保存支付工具、线下确认等硬能力。 |
-| `getDisplayMetadata()` | 标题、描述、icon、`checkout_template_code`、`config_template_code`。 |
+| `getDisplayMetadata()` | **必须**提供非空 `icon_url`（或 `icon`：模块静态 `Vendor_Module::img/...`、媒体相对路径或绝对 URL）、标题、描述、`checkout_mode`（`shell`/`template`/`hybrid`）、`checkout_template_code`、`config_template_code`。后台可用 SystemConfig `payment/method/{code}/icon`（`type=image`）覆盖图标。 |
 | `getConfigSchema()` | Provider 动态校验补充；后台 UI 仍由 config phtml 生成。 |
 | `getDynamicFormSchema()` | checkout 需要的本地字段，例如税号、银行、手机号、UPI、分期数。 |
 | `checkAvailability()` | 按 amount、currency、country、scope、Payable、runtime config 判断是否可用并返回禁用原因。 |
@@ -192,12 +211,13 @@ view/templates/Frontend/checkout/your_pay.phtml
 ```php
 [
     'title' => 'Your Pay',
+    'checkout_mode' => 'hybrid', // shell | template | hybrid（iframe/SDK 默认 hybrid）
     'checkout_template_code' => 'your_pay',
     'config_template_code' => 'your_pay',
 ]
 ```
 
-checkout 模板只负责展示和收集本支付方式需要的字段，不保存配置、不直接调用 Provider API、不直接改订单状态。提交支付时由 `Weline_Payment` 创建 checkout session、intent、attempt 和 transaction。
+checkout 模板只负责展示和收集本支付方式需要的字段，不保存配置、不直接调用 Provider API、不直接改订单/支付终态。提交支付时由壳创建 checkout session、intent、attempt 和 transaction，且**必须带 idempotency key**。`next_action_type` 含 `iframe` 时由壳提供槽位契约，Provider 模板负责 iframe/SDK（PCI/CSP 自担）。详见 [payment-shell.md](payment-shell.md)。
 
 ## 6. Payable 接入
 

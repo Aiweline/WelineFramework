@@ -1,0 +1,34 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$entry = (array) ($this->getData('payment_guide_entry') ?? []);
+?>
+
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+
+<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-agreement-fake-card">
+    <?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+
+    <header class="amazon-payment-guide-article__header">
+        <p class="amazon-payment-guide-article__badge"><lang>用户协议</lang></p>
+        <h1 class="amazon-payment-guide-article__title"><lang>本地测试支付用户协议</lang></h1>
+        <p class="amazon-payment-guide-article__lead"><lang>本协议仅适用于开发与联调环境的本地测试支付，不构成真实收款或资金授权。</lang></p>
+    </header>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.agreement.fake_card.nonproduction">
+        <h2><lang>非生产用途</lang></h2>
+        <p><lang>您同意仅在测试环境使用本地测试支付，不得将其用于真实商品/服务收款或生产流量。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.agreement.fake_card.data">
+        <h2><lang>测试数据</lang></h2>
+        <p><lang>请仅填写虚构测试卡号与信息；若误填真实敏感数据，本站不承担因此产生的风险，请立即停止并清理。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.agreement.fake_card.disable">
+        <h2><lang>上线前义务</lang></h2>
+        <p><lang>上线前您必须禁用或移除本地测试支付方式，并改用经审批的正式支付供应商。</lang></p>
+    </section>
+</article>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>

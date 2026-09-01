@@ -41,29 +41,34 @@ class Method extends BackendController
     #[Acl('Weline_Payment::payment_method_index', '查看支付方式', 'list', '查看支付方式列表')]
     public function index()
     {
+        $missingScopeRedirect = $this->redirectUnlessUsableTargetScope('*/backend/method');
+        if ($missingScopeRedirect !== null) {
+            return $missingScopeRedirect;
+        }
         try {
             [$target, $grantVersion] = $this->authorizeTarget(ObjectAction::LIST);
         } catch (FrontendQueryException $exception) {
             $this->request->getResponse()->setCode(403);
 
             return $exception->getMessage();
-        } catch (\Throwable) {
-            $this->request->getResponse()->setCode(403);
-
-            return (string)__('操作授权条件不满足');
         }
-        /** @var PaymentMethod $paymentMethod */
-        $paymentMethod = ObjectManager::getInstance(PaymentMethod::class);
-        $paymentMethod->select()->fetch();
-        $methods = $paymentMethod->getItems();
-        
+        $storageScope = $this->publicTargetScope($target);
+        $listContext = [
+            'scope' => $storageScope === 'global' ? 'default.default.default' : $storageScope,
+            'environment' => 'sandbox',
+        ];
+        $methods = $this->methodManager->listMethodsForAdmin($listContext);
+
         $this->assign('methods', $methods);
-        $this->assign('target_scope', $target->isGlobal() ? 'global' : $target->toLegacyScopeString());
+        $this->assign('page_title', (string)__('支付方式'));
+        $this->assign('target_scope', $storageScope);
         $updateGrant = ObjectManager::getInstance(BackendObjectAuthorizationGuardInterface::class)
             ->check(ObjectAction::UPDATE, $target);
         $this->assign('can_register_providers', $updateGrant->allowed && $updateGrant->matchedGrantVersion > 0);
+        $this->assign('can_reorder_methods', $updateGrant->allowed && $updateGrant->matchedGrantVersion > 0);
         $this->assign('expected_grant_version', $updateGrant->matchedGrantVersion);
-        
+        $this->assign('list_scope_context', $listContext);
+
         return $this->fetch();
     }
 
@@ -74,26 +79,28 @@ class Method extends BackendController
     public function edit()
     {
         $code = $this->request->getParam('code');
+        $missingScopeRedirect = $this->redirectUnlessUsableTargetScope('*/backend/method/edit');
+        if ($missingScopeRedirect !== null) {
+            return $missingScopeRedirect;
+        }
         try {
             [$target, $grantVersion] = $this->authorizeTarget(ObjectAction::VIEW);
         } catch (FrontendQueryException $exception) {
             $this->request->getResponse()->setCode(403);
 
             return $exception->getMessage();
-        } catch (\Throwable) {
-            $this->request->getResponse()->setCode(403);
-
-            return (string)__('操作授权条件不满足');
         }
-        $storageScope = $target->isGlobal() ? 'global' : $target->toLegacyScopeString();
+        $storageScope = $this->publicTargetScope($target);
         $scope = $this->scopeConfigService->resolveScope([
-            'scope' => $storageScope,
+            'scope' => $storageScope === 'global' ? 'default.default.default' : $storageScope,
             'environment' => (string)$this->request->getParam('environment', 'sandbox'),
         ]);
         
         if (!$code) {
             $this->getMessageManager()->addError(__('缺少支付方式代码'));
-            return $this->redirect('*/backend/method/index');
+            return $this->redirect('*/backend/method/index', [
+                'target_scope' => $storageScope,
+            ]);
         }
         
         /** @var PaymentMethod $paymentMethod */
@@ -102,7 +109,9 @@ class Method extends BackendController
         
         if (!$paymentMethod->getId()) {
             $this->getMessageManager()->addError(__('支付方式不存在'));
-            return $this->redirect('*/backend/method/index');
+            return $this->redirect('*/backend/method/index', [
+                'target_scope' => $storageScope,
+            ]);
         }
         
         $metadata = [];
@@ -115,6 +124,7 @@ class Method extends BackendController
         }
 
         $this->assign('method', $paymentMethod);
+        $this->assign('page_title', (string)__('编辑支付方式'));
         $this->assign('scope', $scope);
         $this->assign('target_scope', $storageScope);
         $this->assign('expected_grant_version', $grantVersion);
@@ -122,6 +132,51 @@ class Method extends BackendController
         $this->assign('runtimeConfig', $runtimeConfig);
         
         return $this->fetch();
+    }
+
+    /**
+     * 裸链缺少或携带非法 Scope（如截断的 default.）时补齐默认站，
+     * 避免被误报为「操作授权条件不满足」。
+     */
+    private function redirectUnlessUsableTargetScope(string $path): ?string
+    {
+        $raw = \trim((string)$this->request->getParam(
+            'target_scope',
+            $this->request->getParam('scope', ''),
+        ));
+        if ($this->isUsablePaymentTargetScope($raw)) {
+            return null;
+        }
+
+        $params = ['target_scope' => 'default.default.default'];
+        foreach (['code', 'environment'] as $key) {
+            $value = \trim((string)$this->request->getParam($key, ''));
+            if ($value !== '') {
+                $params[$key] = $value;
+            }
+        }
+
+        return $this->redirect($path, $params);
+    }
+
+    private function isUsablePaymentTargetScope(string $raw): bool
+    {
+        $raw = \strtolower(\trim($raw));
+        if ($raw === 'global') {
+            return true;
+        }
+
+        return $raw !== '' && \preg_match('/^[a-z0-9_-]+(?:\.[a-z0-9_-]+){2}$/D', $raw) === 1;
+    }
+
+    private function publicTargetScope(\Weline\Framework\Runtime\ScopeIdentity $target): string
+    {
+        if ($target->isGlobal()) {
+            return 'global';
+        }
+        $legacy = \trim($target->toLegacyScopeString());
+
+        return $legacy !== '' ? $legacy : 'default.default.default';
     }
 
     /**

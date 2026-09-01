@@ -31,6 +31,13 @@ return [
             'description' => '可支付对象解析扩展点，用于订单、商城、应用市场、A2A 等业务对象接入统一支付内核。',
             'required' => true,
             'multiple' => true
+        ],
+        'PaymentCustomerGuide' => [
+            'path' => 'extends/module/Weline_Payment/PaymentCustomerGuide',
+            'interface' => 'Weline\Payment\Interface\PaymentCustomerGuideInterface',
+            'description' => '支付供应商客户指南扩展点。每个供应商需提供客户支付指南页与支付政策页模板。',
+            'required' => false,
+            'multiple' => true
         ]
     ]
 ];

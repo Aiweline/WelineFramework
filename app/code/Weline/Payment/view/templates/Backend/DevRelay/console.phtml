@@ -1,0 +1,50 @@
+<?php
+/** @var string $session_code */
+/** @var string $token */
+/** @var string $stream_url */
+/** @var string $ack_url */
+/** @var string $command_url */
+/** @var string $mode */
+/** @var string $local_inbound_url */
+/** @var string $outbound_mode */
+?>
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title><lang>Dev Relay SSE 终端</lang></title>
+    <style>
+        body { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; margin: 0; background: #0f172a; color: #e2e8f0; }
+        .wrap { padding: 16px; max-width: 960px; margin: 0 auto; }
+        .status { margin-bottom: 12px; color: #93c5fd; }
+        pre { background: #111827; border: 1px solid #334155; border-radius: 8px; padding: 12px; min-height: 320px; overflow: auto; white-space: pre-wrap; }
+        .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+        button { background: #2563eb; color: #fff; border: 0; border-radius: 6px; padding: 8px 12px; cursor: pointer; }
+        button.secondary { background: #475569; }
+    </style>
+</head>
+<body>
+<div class="wrap">
+    <div class="status" id="dev-relay-sse-status"><lang>正在连接 SSE...</lang></div>
+    <div class="toolbar">
+        <button type="button" id="dev-relay-sse-reconnect"><lang>重新连接</lang></button>
+        <button type="button" class="secondary" id="dev-relay-sse-close"><lang>关闭窗口</lang></button>
+    </div>
+    <pre id="dev-relay-sse-log"></pre>
+</div>
+<script src="@static(Weline_Payment::js/backend/dev-relay-console.js)"></script>
+<script>
+window.WelinePaymentDevRelayConsole && window.WelinePaymentDevRelayConsole.init({
+    sessionCode: <?= json_encode($session_code, JSON_UNESCAPED_UNICODE) ?>,
+    token: <?= json_encode($token, JSON_UNESCAPED_UNICODE) ?>,
+    streamUrl: <?= json_encode($stream_url, JSON_UNESCAPED_UNICODE) ?>,
+    ackUrl: <?= json_encode($ack_url, JSON_UNESCAPED_UNICODE) ?>,
+    commandUrl: <?= json_encode($command_url, JSON_UNESCAPED_UNICODE) ?>,
+    mode: <?= json_encode($mode, JSON_UNESCAPED_UNICODE) ?>,
+    localInboundUrl: <?= json_encode($local_inbound_url, JSON_UNESCAPED_UNICODE) ?>,
+    outboundMode: <?= json_encode($outbound_mode, JSON_UNESCAPED_UNICODE) ?>
+});
+</script>
+</body>
+</html>

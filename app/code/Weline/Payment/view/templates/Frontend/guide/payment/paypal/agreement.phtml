@@ -1,0 +1,45 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+
+$entry = (array) ($this->getData('payment_guide_entry') ?? []);
+$agreementRoute = (string) ($entry['agreement_route'] ?? '');
+?>
+
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-sidebar.phtml'); ?>
+
+<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="payment-agreement-paypal">
+    <?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-breadcrumb.phtml'); ?>
+
+    <header class="amazon-payment-guide-article__header">
+        <p class="amazon-payment-guide-article__badge"><lang>用户协议</lang></p>
+        <h1 class="amazon-payment-guide-article__title"><lang>PayPal 用户协议</lang></h1>
+        <p class="amazon-payment-guide-article__lead"><lang>本协议说明您在本站选择 PayPal 完成支付或授权连接时，与本站之间的权利与义务。使用 PayPal 即表示您同意本协议及 PayPal 自身的用户协议。</lang></p>
+    </header>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.agreement.paypal.scope">
+        <h2><lang>适用范围</lang></h2>
+        <p><lang>本协议适用于本站结账选择 PayPal、沙箱/正式环境一键授权，以及因此产生的订单支付、退款与争议协同处理。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.agreement.paypal.authorization">
+        <h2><lang>授权与账户连接</lang></h2>
+        <p><lang>若您通过一键授权连接 PayPal，即授权本站在您同意的范围内获取完成收款所需的商户凭据与交易状态，并仅用于本站订单履约与售后。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.agreement.paypal.charges">
+        <h2><lang>扣款与确认</lang></h2>
+        <p><lang>最终扣款金额、币种与支付工具以您在 PayPal 页面确认的内容为准。您应确保 PayPal 账户或绑定支付工具可用且有权使用。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.agreement.paypal.liability">
+        <h2><lang>责任边界</lang></h2>
+        <p><lang>PayPal 账户安全、登录验证与 PayPal 侧拒付/限制由 PayPal 按其规则处理；本站负责订单履约、退款申请受理及与支付结果相关的订单状态更新。</lang></p>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="payment.agreement.paypal.thirdparty">
+        <h2><lang>第三方条款</lang></h2>
+        <p><lang>除本协议外，您还须遵守 PayPal 用户协议、隐私声明及当地适用法律。若条款冲突，涉及 PayPal 账户与资金清算的部分以 PayPal 规则为准。</lang></p>
+    </section>
+</article>
+<?php echo $this->fetch('Weline_Payment::templates/Frontend/guide/payment/partials/amazon-shell-close.phtml'); ?>
