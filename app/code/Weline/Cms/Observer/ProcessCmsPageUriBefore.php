@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Cms\Observer;
 
+use Weline\Cms\Service\CmsUriInterceptSkipRegistry;
 use Weline\Cms\Service\PageService;
 use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
@@ -31,7 +32,8 @@ class ProcessCmsPageUriBefore implements ObserverInterface
 
     public function __construct(
         private readonly Request $request,
-        private readonly PageService $pageService
+        private readonly PageService $pageService,
+        private readonly CmsUriInterceptSkipRegistry $uriInterceptSkipRegistry,
     ) {
     }
 
@@ -65,6 +67,9 @@ class ProcessCmsPageUriBefore implements ObserverInterface
         }
 
         $identifier = (string)($slug['identifier'] ?? '');
+        if ($this->shouldSkipUriIntercept($identifier)) {
+            return;
+        }
         $previewByPath = !empty($slug['preview']);
         $previewByQuery = (int)$this->request->getParam('preview', 0) === 1
             || (int)$this->request->getParam(PageService::PREVIEW_QUERY_FLAG, 0) === 1;
@@ -149,13 +154,39 @@ class ProcessCmsPageUriBefore implements ObserverInterface
             } catch (\Throwable) {
                 continue;
             }
-            if ($identifier === '' || $this->shouldBypass($identifier) || $this->generatedFrontendRouteExists($identifier)) {
+            if (
+                $identifier === ''
+                || $this->shouldBypass($identifier)
+                || $this->shouldSkipUriIntercept($identifier)
+                || $this->generatedFrontendRouteExists($identifier)
+            ) {
                 continue;
             }
             $candidates[] = $identifier;
         }
 
         return array_values(array_unique($candidates));
+    }
+
+    private function shouldSkipUriIntercept(string $identifier): bool
+    {
+        $identifier = trim(strtolower($identifier), '/ ');
+        if ($identifier === '') {
+            return false;
+        }
+
+        $skip = $this->request->getData('cms_uri_skip');
+        if (is_array($skip)) {
+            $prefix = trim(strtolower((string)($skip['identifier_prefix'] ?? '')), '/ ');
+            if ($prefix !== '' && ($identifier === $prefix || str_starts_with($identifier, $prefix . '/'))) {
+                return true;
+            }
+        }
+
+        return $this->uriInterceptSkipRegistry->shouldSkip($identifier, [
+            'request' => $this->request,
+            'path' => (string)$this->request->getUri(),
+        ]);
     }
 
     private function shouldBypass(string $identifier): bool
