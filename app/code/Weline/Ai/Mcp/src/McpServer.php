@@ -102,7 +102,7 @@ final class McpServer
                 'title' => 'Weline Project Intelligence MCP',
                 'version' => ToolService::VERSION,
             ],
-            'instructions' => ToolService::INSTRUCTIONS,
+            'instructions' => ToolService::instructions(),
         ];
     }
 

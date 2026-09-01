@@ -19,10 +19,10 @@ return [
     
     // 模块配置
     'config' => [
-        // 默认AI模型配置
+        // 默认AI模型配置（运行时以 ai_default_model 表为准；本地开发默认走 Ollama）
         'default_model' => [
-            'vendor' => 'openai',
-            'model_code' => 'gpt-3.5-turbo',
+            'vendor' => 'ollama_webui_test',
+            'model_code' => 'translategemma:12b',
         ],
         
         // 场景适配器配置

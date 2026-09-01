@@ -13,7 +13,6 @@ use Weline\Ai\Service\UsageStatisticsService;
 $service = ObjectManager::getInstance(UsageStatisticsService::class);
 $data = $service->getStatsForPanel(UsageStatisticsService::PERIOD_DAY);
 $summary = $data['summary'] ?? [];
-$statsUrl = $this->getBackendUrl('ai/backend/statistics');
 ?>
 <div class="col-12 col-md-6 col-xl-4 mb-3">
     <div class="card h-100">
@@ -23,7 +22,7 @@ $statsUrl = $this->getBackendUrl('ai/backend/statistics');
                 <p class="mb-1"><strong><?= number_format((int)($summary['total_tokens'] ?? 0)) ?></strong> <lang>总令牌</lang></p>
                 <p class="mb-0 text-muted small">¥ <?= htmlspecialchars($summary['total_cost_formatted'] ?? '0.00') ?> <lang>约花费</lang></p>
             </div>
-            <a href="<?= htmlspecialchars($statsUrl) ?>" class="btn btn-sm btn-outline-primary">
+            <a href="@backend-url{'ai/backend/statistics'}" class="btn btn-sm btn-outline-primary">
                 <lang>详情</lang>
             </a>
         </div>

@@ -25,6 +25,7 @@ final class ProcessRunner
         array $env = [],
     ): array {
         $this->assertArguments($argv);
+        GitSafetyPolicy::assertNonDestructive($argv);
         $cwd = realpath($cwd) ?: '';
         if ($cwd === '' || !is_dir($cwd)) {
             throw new RuntimeException('Process working directory does not exist');

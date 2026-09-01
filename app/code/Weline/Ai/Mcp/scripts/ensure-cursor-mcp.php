@@ -33,6 +33,8 @@ if ($repoRoot === null) {
 $php = welineCursorMcpResolvePhpBinary();
 
 $configPath = welineCursorMcpConfigPath();
+$dataDir = welineCursorMcpProjectDataDir($repoRoot);
+$dataDirState = welineCursorMcpEnsureProjectDataDir($dataDir, $repoRoot);
 $serverConfig = [
     'command' => $php,
     'args' => array_values(array_filter([
@@ -41,6 +43,12 @@ $serverConfig = [
         $configPath,
     ])),
     'cwd' => $repoRoot,
+    // Each attached project gets its own STDIO MCP process + isolated data_dir.
+    // Bound repository refuses cross-project index work; data_dir keeps disks separate.
+    'env' => [
+        'LEARNING_MCP_BOUND_REPOSITORY' => $repoRoot,
+        'LEARNING_MCP_DATA_DIR' => $dataDir,
+    ],
     'startup_timeout_sec' => 120,
     'tool_timeout_sec' => 180,
 ];
@@ -94,6 +102,9 @@ $result = [
     'command' => $php,
     'entry' => $entry,
     'cwd' => $repoRoot,
+    'bound_repository' => $repoRoot,
+    'data_dir' => $dataDir,
+    'data_dir_state' => $dataDirState,
     'enable' => $enable,
     'permissions' => $permissions,
     'host' => $status,
@@ -107,8 +118,8 @@ exit(($status['ready'] ?? false) ? 0 : 1);
 
 function welineCursorMcpUserConfigPath(): ?string
 {
-    $home = getenv('HOME') ?: '';
-    if ($home === '') {
+    $home = welineCursorMcpTryResolveHome();
+    if ($home === null) {
         return null;
     }
 
@@ -125,8 +136,8 @@ function welineCursorMcpConfigPath(): ?string
     if ($default === null) {
         return null;
     }
-    $home = getenv('HOME') ?: '';
-    if ($home === '') {
+    $home = welineCursorMcpTryResolveHome();
+    if ($home === null) {
         return null;
     }
     $path = $home . DIRECTORY_SEPARATOR . '.learning-mcp' . DIRECTORY_SEPARATOR . 'config.yaml';
@@ -228,12 +239,206 @@ function welineCursorMcpResolveRepoRoot(string $mcpRoot): ?string
     return null;
 }
 
+/**
+ * @return non-empty-string|null
+ */
+function welineCursorMcpTryResolveHome(): ?string
+{
+    foreach ([getenv('HOME'), getenv('USERPROFILE')] as $candidate) {
+        if (!is_string($candidate) || trim($candidate) === '') {
+            continue;
+        }
+        $trimmed = trim($candidate);
+        if (preg_match('#^https?://#i', $trimmed) === 1 || str_contains($trimmed, '://')) {
+            continue;
+        }
+
+        return rtrim($trimmed, "/\\");
+    }
+    if (function_exists('posix_geteuid') && function_exists('posix_getpwuid')) {
+        $info = posix_getpwuid(posix_geteuid());
+        if (is_array($info) && is_string($info['dir'] ?? null) && trim($info['dir']) !== '') {
+            return rtrim($info['dir'], "/\\");
+        }
+    }
+
+    return null;
+}
+
+/**
+ * Resolve a filesystem home even when HOST injects a URL into HOME (common in WLS agent shells).
+ *
+ * @return non-empty-string
+ */
+function welineCursorMcpResolveHome(): string
+{
+    $home = welineCursorMcpTryResolveHome();
+    if ($home === null) {
+        welineCursorMcpFail('HOME_MISSING', 'Unable to resolve a filesystem HOME directory');
+    }
+
+    return $home;
+}
+
+/**
+ * Isolated MCP data directory for one attached project (never inside the repo).
+ *
+ * @return non-empty-string
+ */
+function welineCursorMcpProjectDataDir(string $repoRoot): string
+{
+    if (preg_match('#^https?://#i', trim($repoRoot)) === 1 || str_contains(trim($repoRoot), '://')) {
+        welineCursorMcpFail('REPO_ROOT_INVALID', 'Repository must be a filesystem path, not a URL', [
+            'repository' => $repoRoot,
+        ]);
+    }
+    $home = welineCursorMcpResolveHome();
+    $canonical = realpath($repoRoot);
+    if ($canonical === false || !is_dir($canonical)) {
+        welineCursorMcpFail('REPO_ROOT_INVALID', 'Unable to resolve canonical repository for MCP data_dir', [
+            'repository' => $repoRoot,
+        ]);
+    }
+    $canonical = rtrim($canonical, DIRECTORY_SEPARATOR);
+    if (PHP_OS_FAMILY === 'Windows') {
+        $canonical = strtolower(str_replace('\\', '/', $canonical));
+    }
+
+    return rtrim($home, DIRECTORY_SEPARATOR)
+        . DIRECTORY_SEPARATOR . '.learning-mcp'
+        . DIRECTORY_SEPARATOR . 'projects'
+        . DIRECTORY_SEPARATOR . hash('sha256', $canonical);
+}
+
+/**
+ * Create the project data dir and optionally migrate the bound index from the shared legacy root.
+ *
+ * @return array<string, mixed>
+ */
+function welineCursorMcpEnsureProjectDataDir(string $dataDir, string $repoRoot): array
+{
+    $created = false;
+    if (!is_dir($dataDir)) {
+        if (!mkdir($dataDir, 0700, true) && !is_dir($dataDir)) {
+            welineCursorMcpFail('DATA_DIR_CREATE_FAILED', 'Unable to create project MCP data directory', [
+                'data_dir' => $dataDir,
+            ]);
+        }
+        $created = true;
+    }
+    @chmod($dataDir, 0700);
+
+    $migration = welineCursorMcpMigrateSharedIndexOnce($dataDir, $repoRoot);
+
+    return [
+        'path' => $dataDir,
+        'created' => $created,
+        'migration' => $migration,
+    ];
+}
+
+/**
+ * One-shot move of this project's index generation out of the legacy shared ~/.learning-mcp/indexes.
+ *
+ * @return array<string, mixed>
+ */
+function welineCursorMcpMigrateSharedIndexOnce(string $dataDir, string $repoRoot): array
+{
+    $marker = $dataDir . DIRECTORY_SEPARATOR . '.migrated-from-shared-v1';
+    if (is_file($marker)) {
+        return ['status' => 'already_migrated', 'marker' => $marker];
+    }
+
+    $home = welineCursorMcpResolveHome();
+    $sharedRoot = rtrim($home, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . '.learning-mcp';
+    $sharedIndexes = $sharedRoot . DIRECTORY_SEPARATOR . 'indexes';
+    if ($home === '' || !is_dir($sharedIndexes)) {
+        file_put_contents($marker, json_encode([
+            'status' => 'no_shared_indexes',
+            'at' => gmdate('c'),
+        ], JSON_UNESCAPED_SLASHES) . "\n");
+        @chmod($marker, 0600);
+
+        return ['status' => 'no_shared_indexes'];
+    }
+
+    $canonical = realpath($repoRoot);
+    if ($canonical === false) {
+        return ['status' => 'skip', 'reason' => 'repo_unresolved'];
+    }
+    $canonical = rtrim($canonical, DIRECTORY_SEPARATOR);
+    $identity = $canonical;
+    if (PHP_OS_FAMILY === 'Windows') {
+        $identity = strtolower(str_replace('\\', '/', $canonical));
+    }
+    $projectId = 'dir:sha256:' . hash('sha256', $identity);
+    $generation = hash('sha256', $projectId . "\0" . $canonical);
+    $source = $sharedIndexes . DIRECTORY_SEPARATOR . $generation;
+    $targetIndexes = $dataDir . DIRECTORY_SEPARATOR . 'indexes';
+    $destination = $targetIndexes . DIRECTORY_SEPARATOR . $generation;
+
+    if (!is_dir($source)) {
+        file_put_contents($marker, json_encode([
+            'status' => 'shared_generation_missing',
+            'generation' => $generation,
+            'at' => gmdate('c'),
+        ], JSON_UNESCAPED_SLASHES) . "\n");
+        @chmod($marker, 0600);
+
+        return ['status' => 'shared_generation_missing', 'generation' => $generation];
+    }
+    if (is_dir($destination)) {
+        file_put_contents($marker, json_encode([
+            'status' => 'destination_exists',
+            'generation' => $generation,
+            'at' => gmdate('c'),
+        ], JSON_UNESCAPED_SLASHES) . "\n");
+        @chmod($marker, 0600);
+
+        return ['status' => 'destination_exists', 'generation' => $generation];
+    }
+    if (!is_dir($targetIndexes) && !mkdir($targetIndexes, 0700, true) && !is_dir($targetIndexes)) {
+        return ['status' => 'failed', 'reason' => 'indexes_mkdir_failed'];
+    }
+    @chmod($targetIndexes, 0700);
+    if (!rename($source, $destination)) {
+        return ['status' => 'failed', 'reason' => 'rename_failed', 'source' => $source, 'destination' => $destination];
+    }
+    // Ownership HMAC is keyed by data_dir session-identity.key; drop the legacy
+    // manifest so ProjectIndex rewrites it under the project-local key.
+    $ownerManifest = $destination . DIRECTORY_SEPARATOR . '.weline-index-owner.json';
+    if (is_file($ownerManifest)) {
+        @unlink($ownerManifest);
+    }
+    $sharedKey = $sharedRoot . DIRECTORY_SEPARATOR . 'session-identity.key';
+    $projectKey = $dataDir . DIRECTORY_SEPARATOR . 'session-identity.key';
+    if (is_file($sharedKey) && !is_file($projectKey)) {
+        @copy($sharedKey, $projectKey);
+        @chmod($projectKey, 0600);
+    }
+    file_put_contents($marker, json_encode([
+        'status' => 'moved',
+        'generation' => $generation,
+        'source' => $source,
+        'destination' => $destination,
+        'at' => gmdate('c'),
+    ], JSON_UNESCAPED_SLASHES) . "\n");
+    @chmod($marker, 0600);
+
+    return [
+        'status' => 'moved',
+        'generation' => $generation,
+        'source' => $source,
+        'destination' => $destination,
+    ];
+}
+
 /** @return list<string> */
 function welineCursorMcpAgentCandidates(): array
 {
-    $home = getenv('HOME') ?: '';
+    $home = welineCursorMcpTryResolveHome();
     $candidates = ['cursor-agent', 'agent'];
-    if ($home !== '') {
+    if ($home !== null) {
         $candidates[] = $home . '/.local/bin/cursor-agent';
         $candidates[] = $home . '/.local/bin/agent';
     }

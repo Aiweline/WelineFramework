@@ -245,7 +245,7 @@ $isIframe = $this->request->getGet('isIframe');
         btn.innerHTML = '<w:icon name="circle" size="sm"></w:icon> <?= __('复制中...') ?>';
         
         var formData = new FormData(this);
-        window.Weline.Api.request('<?= $this->getBackendUrl('*/backend/model/copy') ?>', { method: 'POST', body: formData })
+        window.Weline.Api.request('@backend-url{'*/backend/model/copy'}', { method: 'POST', body: formData })
         .then(function(response) {
             var data = response.data;
             if (response.ok && data && data.success) {

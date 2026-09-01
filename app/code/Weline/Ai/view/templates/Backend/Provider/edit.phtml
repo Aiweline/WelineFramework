@@ -25,7 +25,7 @@
     <div style="--w-span:12;">
         <div class="w-card">
             <div class="w-card__body">
-                <w:form id="weline-ai-provider-form" method="post" action="@var($this->getBackendUrl('*/backend/provider/save'))">
+                <w:form id="weline-ai-provider-form" method="post" action="@backend-url{'*/backend/provider/save'}">
                     <?php if (isset($account)): ?>
                         <input type="hidden" name="id" value="<?= $account->getId() ?>">
                     <?php endif; ?>
@@ -207,7 +207,7 @@
                             <button type="submit" class="w-button" data-tone="primary">
                                 <w:icon name="save" size="sm"></w:icon><lang>保存</lang>
                             </button>
-                            <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="w-button" data-tone="neutral">
+                            <a href="@backend-url{'*/backend/provider'}" class="w-button" data-tone="neutral">
                                 <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
                             </a>
                         </div>
@@ -463,7 +463,7 @@
                         Weline.UI.toast.success(data.message);
                     }
                     setTimeout(function() {
-                        window.location.href = '<?= $this->getBackendUrl('*/backend/provider') ?>';
+                        window.location.href = '@backend-url{'*/backend/provider'}';
                     }, 1500);
                 } else {
                     if (typeof Weline.UI.toast !== 'undefined') {
@@ -491,7 +491,7 @@
             var providerCode = '<?= isset($account) ? addslashes((string)$account->getData('provider_code')) : '' ?>';
             var chooseModel = Promise.resolve('');
             if (accountId && providerCode) {
-                var modelUrl = '<?= $this->getBackendUrl('*/backend/provider/getRemoteModelsForSelect') ?>';
+                var modelUrl = '@backend-url{'*/backend/provider/getRemoteModelsForSelect'}';
                 var modelForm = new FormData();
                 modelForm.set('provider_code', providerCode);
                 modelForm.set('account_id', accountId);

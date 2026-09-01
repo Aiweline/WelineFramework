@@ -2,6 +2,11 @@
 
 declare(strict_types=1);
 
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-reload-policy.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-runtime-time.php';
+require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-required-tools.php';
+require_once dirname(__DIR__) . DIRECTORY_SEPARATOR . 'src' . DIRECTORY_SEPARATOR . 'GitSafetyPolicy.php';
+
 /**
  * Step 0 bootstrap: verify Weline project guidance host state and auto-repair when possible.
  *
@@ -35,13 +40,6 @@ if ($repoRoot === null) {
 
 $repairs = [];
 $branch = welineGuidanceGitBranch($repoRoot);
-if ($branch !== 'dev' && welineGuidanceDevBranchExists($repoRoot)) {
-    $switch = welineGuidanceExec(['git', '-C', $repoRoot, 'switch', 'dev'], $repoRoot);
-    if (($switch['exit_code'] ?? 1) === 0) {
-        $repairs[] = 'git_switch_dev';
-        $branch = welineGuidanceGitBranch($repoRoot);
-    }
-}
 $branchOk = $branch === 'dev';
 
 $sourceState = welineGuidanceSourceState($mcpRoot);
@@ -109,21 +107,40 @@ if (($codexPlugin['changed'] ?? false) === true) {
 
 $stdio = welineGuidanceProbeStdioMcp($repoRoot, $mcpRoot);
 $stdioOk = (bool) ($stdio['ready'] ?? false);
-$hostReloadRequired = ($hostRuntime['kind'] ?? 'other') === 'codex_app_server'
-    && ($mcpConfigChanged
-        || (($codexPlugin['changed'] ?? false) === true)
-        || (($hostRuntime['current'] ?? false) !== true));
-$restart = ['scheduled' => false, 'reason' => 'not_required'];
+$missingRequiredTools = is_array($stdio['missing_required_tools'] ?? null)
+    ? $stdio['missing_required_tools']
+    : [];
+$cursorMcpProcess = welineGuidanceCursorMcpProcessState((int) $sourceState['latest_mtime']);
+$reloadDecision = welineGuidanceReloadDecision(
+    $hostRuntime,
+    $mcpConfigChanged,
+    (($codexPlugin['changed'] ?? false) === true),
+    $cursorMcpProcess,
+    $missingRequiredTools,
+);
+$hostReloadRequired = $reloadDecision['reload_required'];
+$cursorBounceRequired = (bool) ($reloadDecision['cursor_mcp_bounce_required'] ?? false);
+$restart = ['scheduled' => false, 'reason' => $reloadDecision['reason']];
+$cursorBounce = ['attempted' => false, 'bounced' => false, 'reason' => $reloadDecision['reason']];
 if ($branchOk && $stdioOk && $hostReady && $hostReloadRequired) {
     $restart = welineGuidanceScheduleCodexHostRestart($hostRuntime);
     if (($restart['scheduled'] ?? false) === true) {
         $repairs[] = 'scheduled_single_shot_codex_app_server_restart';
     }
 }
+if ($branchOk && $stdioOk && $hostReady && $cursorBounceRequired) {
+    $cursorBounce = welineGuidanceBounceCursorMcpProcess($cursorMcpProcess, $userMcp);
+    if (($cursorBounce['bounced'] ?? false) === true) {
+        $repairs[] = 'bounced_cursor_mcp_process_for_tool_catalog';
+    }
+}
 
 $status = 'ready';
 $blocker = null;
-$nextAction = 'Call prepare_project with repository and a stable client_session_id, then resolve_task_context.';
+$nextAction = 'Call prepare_project with repository and a stable client_session_id, then resolve_task_context. Before sealed edits verify host tools include submit_task_plan/get_task_plan; if missing in this chat despite mcp_stdio.ready, start a new Agent turn (HOST_MCP_SESSION_CATALOG_STALE).';
+if ($reloadDecision['plugin_refresh_deferred']) {
+    $nextAction = 'The Hook-only Codex plugin registration was refreshed non-blockingly; the current healthy STDIO MCP remains ready. Continue with prepare_project.';
+}
 
 if (!$branchOk) {
     $status = 'blocked';
@@ -145,6 +162,18 @@ if (!$branchOk) {
         'details' => $stdio,
     ];
     $nextAction = 'Stop with blocked HOST_MCP_NOT_ATTACHED; include stdio probe details.';
+} elseif ($missingRequiredTools !== []) {
+    $status = 'blocked';
+    $blocker = [
+        'code' => 'MCP_REQUIRED_TOOLS_MISSING',
+        'message' => 'STDIO tools/list is missing required plan/edit tools after host repair.',
+        'details' => [
+            'missing_required_tools' => $missingRequiredTools,
+            'tools' => $stdio['tools'] ?? [],
+            'next_action' => 'Repair ToolService definitions, rerun ensure-project-guidance, then start a new Agent turn.',
+        ],
+    ];
+    $nextAction = 'Stop with MCP_REQUIRED_TOOLS_MISSING; do not call prepare_project through an incomplete tool catalog.';
 } elseif (!$hostReady) {
     $status = 'host_repair_needed';
     $nextAction = 'Host CLI is not ready yet. Rerun ensure-project-guidance after the host reload; never continue through a closed MCP handle.';
@@ -153,6 +182,11 @@ if (!$branchOk) {
     $nextAction = (($restart['scheduled'] ?? false) === true)
         ? 'A single-shot Codex app-server restart is scheduled. After reconnection rerun ensure-project-guidance; continue only when the new PID and source generation are current.'
         : 'Restart the Codex app-server once, rerun ensure-project-guidance, and continue only when host_runtime.current is true.';
+} elseif ($cursorBounceRequired) {
+    $status = 'host_repair_needed';
+    $nextAction = (($cursorBounce['bounced'] ?? false) === true)
+        ? 'Cursor Helper mcp-process was bounced so tools/list can refresh. Start a new Agent turn in this workspace, rerun ensure-project-guidance, verify submit_task_plan is visible, then prepare_project.'
+        : 'Cursor MCP tool catalog is stale or incomplete. Start a new Agent turn after ensure-project-guidance; never continue sealed edits without submit_task_plan.';
 }
 
 welineGuidanceEmit([
@@ -163,10 +197,14 @@ welineGuidanceEmit([
     'git_branch' => $branch,
     'git_branch_ok' => $branchOk,
     'mcp_stdio' => $stdio,
+    'mcp_required_tools' => welineGuidanceRequiredMcpTools(),
     'mcp_source' => $sourceState,
     'host_runtime' => $hostRuntime,
+    'cursor_mcp_process' => $cursorMcpProcess,
     'codex_plugin' => $codexPlugin,
+    'host_reload_policy' => $reloadDecision,
     'host_restart' => $restart,
+    'cursor_mcp_bounce' => $cursorBounce,
     'mcp_host' => $ensurePayload['host'] ?? null,
     'ensure_mcp' => [
         'changed' => $ensurePayload['changed'] ?? false,
@@ -214,13 +252,6 @@ function welineGuidanceGitBranch(string $repoRoot): string
     }
 
     return trim($result['stdout']);
-}
-
-function welineGuidanceDevBranchExists(string $repoRoot): bool
-{
-    $result = welineGuidanceExec(['git', '-C', $repoRoot, 'show-ref', '--verify', '--quiet', 'refs/heads/dev'], $repoRoot);
-
-    return ($result['exit_code'] ?? 1) === 0;
 }
 
 function welineGuidanceUserMcpPath(): ?string
@@ -324,19 +355,127 @@ function welineGuidanceProbeStdioMcp(string $repoRoot, string $mcpRoot): array
     $exitCode = proc_close($process);
 
     $toolLine = null;
+    $tools = [];
     foreach (preg_split('/\R/', $stdout) ?: [] as $line) {
         if (!str_contains($line, '"tools"')) {
             continue;
         }
+        $decoded = json_decode($line, true);
+        if (!is_array($decoded)) {
+            continue;
+        }
+        $listed = $decoded['result']['tools'] ?? null;
+        if (!is_array($listed)) {
+            continue;
+        }
         $toolLine = $line;
+        foreach ($listed as $tool) {
+            if (!is_array($tool)) {
+                continue;
+            }
+            $name = trim((string) ($tool['name'] ?? ''));
+            if ($name !== '') {
+                $tools[] = $name;
+            }
+        }
         break;
     }
+    $tools = array_values(array_unique($tools));
+    $missing = welineGuidanceMissingRequiredMcpTools($tools);
 
     return [
         'ready' => $toolLine !== null,
         'exit_code' => $exitCode,
         'stderr' => trim((string) $stderr),
+        'tool_count' => count($tools),
+        'tools' => $tools,
+        'missing_required_tools' => $missing,
+        'required_tools' => welineGuidanceRequiredMcpTools(),
     ];
+}
+
+/**
+ * Locate the Cursor Helper mcp-process that owns learning-mcp for this repo.
+ *
+ * @return array<string,mixed>
+ */
+function welineGuidanceCursorMcpProcessState(int $latestSourceMtime): array
+{
+    if (!is_executable('/bin/ps')) {
+        return ['kind' => 'unavailable', 'current' => true, 'reason' => 'ps_missing'];
+    }
+    $cwd = dirname(__DIR__);
+    $listed = welineGuidanceExec(['/bin/ps', '-ax', '-o', 'pid=,ppid=,etime=,command='], $cwd);
+    if (($listed['exit_code'] ?? 1) !== 0) {
+        return ['kind' => 'unavailable', 'current' => true, 'reason' => 'ps_failed'];
+    }
+    $needle = 'learning-mcp';
+    $candidates = [];
+    foreach (preg_split('/\R/', (string) ($listed['stdout'] ?? '')) ?: [] as $line) {
+        $line = trim($line);
+        if ($line === '' || !str_contains($line, $needle)) {
+            continue;
+        }
+        if (!preg_match('/^(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/', $line, $matches)) {
+            continue;
+        }
+        $pid = (int) $matches[1];
+        $ppid = (int) $matches[2];
+        $elapsed = (string) $matches[3];
+        $command = (string) $matches[4];
+        $parent = welineGuidanceProcessInfo($ppid);
+        $parentCommand = (string) ($parent['command'] ?? '');
+        if (!str_contains($parentCommand, 'mcp-process')) {
+            continue;
+        }
+        $startedEpoch = welineGuidanceStartedEpochFromElapsed($elapsed, time());
+        $candidates[] = [
+            'kind' => 'cursor_mcp_process',
+            'pid' => $pid,
+            'parent_pid' => $ppid,
+            'parent_command' => $parentCommand,
+            'command' => $command,
+            'elapsed' => $elapsed,
+            'started_epoch' => $startedEpoch,
+            'source_latest_mtime' => $latestSourceMtime,
+            'current' => $startedEpoch > 0 && $startedEpoch >= $latestSourceMtime,
+        ];
+    }
+    if ($candidates === []) {
+        return ['kind' => 'cursor_mcp_process', 'pid' => 0, 'current' => true, 'reason' => 'not_running'];
+    }
+    usort($candidates, static fn (array $a, array $b): int => ((int) $b['started_epoch']) <=> ((int) $a['started_epoch']));
+
+    return $candidates[0];
+}
+
+/**
+ * @param array<string,mixed> $cursorMcpProcess
+ * @return array<string,mixed>
+ */
+function welineGuidanceBounceCursorMcpProcess(array $cursorMcpProcess, ?string $userMcpPath): array
+{
+    $pid = (int) ($cursorMcpProcess['pid'] ?? 0);
+    $result = [
+        'attempted' => true,
+        'bounced' => false,
+        'pid' => $pid,
+        'signal' => 'SIGTERM',
+        'touched_user_mcp' => false,
+    ];
+    if ($pid > 1) {
+        $killed = @posix_kill($pid, SIGTERM);
+        $result['kill_ok'] = $killed === true;
+        $result['bounced'] = $killed === true;
+    }
+    if (is_string($userMcpPath) && $userMcpPath !== '' && is_file($userMcpPath)) {
+        $result['touched_user_mcp'] = @touch($userMcpPath) === true;
+        if ($result['touched_user_mcp']) {
+            $result['bounced'] = true;
+        }
+    }
+
+    return $result;
 }
 
 function welineGuidanceConfigPath(string $mcpRoot): ?string
@@ -369,6 +508,11 @@ function welineGuidanceConfigPath(string $mcpRoot): ?string
  */
 function welineGuidanceExec(array $command, string $cwd): array
 {
+    try {
+        \LearningMcp\GitSafetyPolicy::assertNonDestructive($command);
+    } catch (RuntimeException $exception) {
+        return ['exit_code' => 126, 'stdout' => '', 'stderr' => $exception->getMessage()];
+    }
     $descriptors = [
         0 => ['file', '/dev/null', 'r'],
         1 => ['pipe', 'w'],
@@ -468,6 +612,7 @@ function welineGuidanceHostRuntimeState(int $latestSourceMtime): array
                 'parent_pid' => $process['parent_pid'],
                 'started_at' => $process['started_at'],
                 'started_epoch' => $process['started_epoch'],
+                'elapsed' => $process['elapsed'],
                 'source_latest_mtime' => $latestSourceMtime,
                 'current' => $process['started_epoch'] >= $latestSourceMtime,
             ];
@@ -482,7 +627,7 @@ function welineGuidanceHostRuntimeState(int $latestSourceMtime): array
     ];
 }
 
-/** @return array{pid:int,parent_pid:int,started_at:string,started_epoch:int,command:string}|null */
+/** @return array{pid:int,parent_pid:int,started_at:string,started_epoch:int,elapsed:string,command:string}|null */
 function welineGuidanceProcessInfo(int $pid): ?array
 {
     if ($pid <= 1 || !is_executable('/bin/ps')) {
@@ -491,18 +636,23 @@ function welineGuidanceProcessInfo(int $pid): ?array
     $cwd = dirname(__DIR__);
     $parent = welineGuidanceExec(['/bin/ps', '-p', (string) $pid, '-o', 'ppid='], $cwd);
     $started = welineGuidanceExec(['/bin/ps', '-p', (string) $pid, '-o', 'lstart='], $cwd);
+    $elapsed = welineGuidanceExec(['/bin/ps', '-p', (string) $pid, '-o', 'etime='], $cwd);
     $command = welineGuidanceExec(['/bin/ps', '-p', (string) $pid, '-o', 'command='], $cwd);
-    if (($parent['exit_code'] ?? 1) !== 0 || ($command['exit_code'] ?? 1) !== 0) {
+    if (($parent['exit_code'] ?? 1) !== 0
+        || ($elapsed['exit_code'] ?? 1) !== 0
+        || ($command['exit_code'] ?? 1) !== 0) {
         return null;
     }
     $startedAt = trim($started['stdout'] ?? '');
-    $startedEpoch = $startedAt === '' ? 0 : (int) (strtotime($startedAt) ?: 0);
+    $elapsedText = trim($elapsed['stdout'] ?? '');
+    $startedEpoch = welineGuidanceStartedEpochFromElapsed($elapsedText, time());
 
     return [
         'pid' => $pid,
         'parent_pid' => (int) trim($parent['stdout'] ?? '0'),
         'started_at' => $startedAt,
         'started_epoch' => $startedEpoch,
+        'elapsed' => $elapsedText,
         'command' => trim($command['stdout'] ?? ''),
     ];
 }
@@ -681,7 +831,7 @@ function welineGuidanceRestartCodexHost(
             return 0;
         }
         $identityMatches = $process['parent_pid'] === $parentPid
-            && $process['started_epoch'] === $startedEpoch
+            && abs($process['started_epoch'] - $startedEpoch) <= 2
             && str_contains($process['command'], ' app-server');
         if (!$identityMatches) {
             welineGuidanceWriteRestartReceipt($receipt, 'aborted', $pid, 0, 'process_identity_changed');

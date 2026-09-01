@@ -69,6 +69,8 @@ final class IndexGarbageCollector
             'quarantined' => 0,
             'quarantine_skipped' => 0,
             'deleted' => 0,
+            'unbound_skipped' => 0,
+            'unbound_purged' => 0,
             'errors' => [],
         ];
         try {
@@ -82,6 +84,14 @@ final class IndexGarbageCollector
             $retention = $this->config->duration('index.gc.retention');
             $dryRunPeriod = $this->config->duration('index.gc.dry_run_period');
             $limit = max(1, min(10_000, (int) $this->config->get('index.gc.max_generations', 100)));
+            $boundGeneration = null;
+            try {
+                $boundGeneration = RepositoryScope::boundGeneration($this->config);
+            } catch (Throwable $exception) {
+                $metrics['errors'][] = $exception->getMessage();
+            }
+            $purgeUnbound = $boundGeneration !== null
+                && (bool) $this->config->get('index.gc.purge_unbound', true);
             $entries = scandir($indexRoot);
             if (!is_array($entries)) {
                 throw new RuntimeException('Unable to inventory project index generations');
@@ -102,6 +112,20 @@ final class IndexGarbageCollector
                 $directory = $indexRoot . DIRECTORY_SEPARATOR . $entry;
                 if (!is_dir($directory) || is_link($directory)) {
                     ++$metrics['unowned_skipped'];
+                    continue;
+                }
+                if ($boundGeneration !== null && $entry !== $boundGeneration) {
+                    if (!$purgeUnbound) {
+                        ++$metrics['unbound_skipped'];
+                        unset($candidates[$entry]);
+                        continue;
+                    }
+                    if ($this->quarantineGeneration($directory, $entry, $quarantineRoot, $indexRoot, $now)) {
+                        ++$metrics['unbound_purged'];
+                        unset($candidates[$entry]);
+                    } else {
+                        ++$metrics['quarantine_skipped'];
+                    }
                     continue;
                 }
                 $manifestPath = $directory . DIRECTORY_SEPARATOR . ProjectIndex::OWNER_MANIFEST;
@@ -515,6 +539,51 @@ final class IndexGarbageCollector
     private function quarantineRoot(): string
     {
         return rtrim($this->config->dataDir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR . 'index-quarantine';
+    }
+
+    /** Move an out-of-scope project index generation into quarantine. */
+    private function quarantineGeneration(
+        string $directory,
+        string $entry,
+        string $quarantineRoot,
+        string $indexRoot,
+        string $now,
+    ): bool {
+        if (!$this->sameFilesystem($indexRoot, $quarantineRoot)) {
+            return false;
+        }
+        if (!$this->safeGenerationFiles($directory)) {
+            return false;
+        }
+        $lock = $this->exclusiveGenerationLock($directory);
+        if (!is_resource($lock)) {
+            return false;
+        }
+        try {
+            $manifest = $this->readOwnedManifest($directory, $entry) ?? [
+                'schema_version' => ProjectIndex::OWNER_SCHEMA,
+                'owner' => ProjectIndex::OWNER_NAME,
+                'generation' => $entry,
+                'unbound_purge' => true,
+            ];
+            $manifest['quarantined_at'] = $now;
+            $manifest['quarantine_source'] = $entry;
+            $manifest['quarantine_reason'] = 'unbound_repository';
+            $this->writeManifest($directory, $manifest);
+            $destination = $quarantineRoot . DIRECTORY_SEPARATOR . $entry
+                . '--' . preg_replace('/[^0-9]/', '', $now)
+                . '--' . bin2hex(random_bytes(4));
+            if (!rename($directory, $destination)) {
+                return false;
+            }
+
+            return true;
+        } catch (Throwable) {
+            return false;
+        } finally {
+            flock($lock, LOCK_UN);
+            fclose($lock);
+        }
     }
 
     private function ensureDirectory(string $directory): void

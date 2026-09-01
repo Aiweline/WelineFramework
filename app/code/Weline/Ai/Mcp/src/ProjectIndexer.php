@@ -61,6 +61,10 @@ final class ProjectIndexer
 
     private const PHP_PARSER_INLINE_MEMORY_RESERVE_BYTES = 64 * 1_024 * 1_024;
 
+    private const PHP_PARSER_INLINE_MEMORY_FLOOR_BYTES = 8 * 1_024 * 1_024;
+
+    private const PHP_PARSER_INLINE_BYTES_PER_SOURCE_BYTE = 64;
+
     private const PHP_PARSER_OUTPUT_BYTES_PER_SOURCE_BYTE_LIMIT = 24;
 
     private const PHP_PARSER_TIMEOUT_SECONDS = 60;
@@ -120,7 +124,7 @@ final class ProjectIndexer
             $eligible = [];
             $removed = [];
             $warnings = [];
-            $skipped = ['policy' => 0, 'missing' => 0, 'oversized' => 0, 'binary' => 0, 'unreadable' => 0];
+            $skipped = ['policy' => 0, 'missing' => 0, 'oversized' => 0, 'binary' => 0, 'unreadable' => 0, 'parser_capacity' => 0];
 
             foreach ($discovered as $path) {
                 if (!$this->pathAllowed($path, $requestedPaths !== null)) {
@@ -239,6 +243,12 @@ final class ProjectIndexer
                     try {
                         $writes[] = $this->prepareFile($file, $content, $hash, $revision);
                     } catch (Throwable $exception) {
+                        if ($this->isPhpParserCapacityFailure($exception)) {
+                            // Retain the last good revision and keep readiness unblocked.
+                            ++$skipped['parser_capacity'];
+                            $warnings[] = $file['path'] . ': PHP symbol parse degraded: ' . $exception->getMessage();
+                            continue;
+                        }
                         $errors[] = $file['path'] . ': ' . $exception->getMessage();
                     }
                 }
@@ -1087,10 +1097,26 @@ final class ProjectIndexer
         ];
     }
 
+    private function isPhpParserCapacityFailure(Throwable $exception): bool
+    {
+        $message = $exception->getMessage();
+
+        return str_contains($message, 'decode memory reserve')
+            || str_contains($message, 'too large for bounded decode')
+            || str_contains($message, 'Allowed memory size')
+            || str_contains($message, 'memory exhausted')
+            || str_contains($message, 'bounded capture limit')
+            || str_contains($message, 'bounded parser result limit')
+            || str_contains($message, 'bounded string-token limit')
+            || str_contains($message, 'bounded structural limit')
+            || (str_contains($message, 'exceeded the ') && str_contains($message, '-second timeout'));
+    }
+
     /** @return array{symbols:list<array<string,mixed>>,relations:list<array<string,mixed>>} */
     private function parsePhp(string $content, string $path): array
     {
-        if (strlen($content) < self::PHP_PARSER_ISOLATION_BYTES && $this->hasInlineParserMemoryReserve()) {
+        $sourceBytes = strlen($content);
+        if ($sourceBytes < self::PHP_PARSER_ISOLATION_BYTES && $this->hasInlineParserMemoryReserve($sourceBytes)) {
             return $this->phpParser->parse($content, $path);
         }
 
@@ -1142,9 +1168,18 @@ final class ProjectIndexer
         return $this->phpParserResultDecoder->decode($result['stdout']);
     }
 
-    private function hasInlineParserMemoryReserve(): bool
+    private function hasInlineParserMemoryReserve(int $sourceBytes): bool
     {
-        return $this->hasMemoryReserve(self::PHP_PARSER_INLINE_MEMORY_RESERVE_BYTES);
+        // Small templates must not demand a full 64 MiB just to stay inline.
+        $required = max(
+            self::PHP_PARSER_INLINE_MEMORY_FLOOR_BYTES,
+            min(
+                self::PHP_PARSER_INLINE_MEMORY_RESERVE_BYTES,
+                max(0, $sourceBytes) * self::PHP_PARSER_INLINE_BYTES_PER_SOURCE_BYTE,
+            ),
+        );
+
+        return $this->hasMemoryReserve($required);
     }
 
     private function hasMemoryReserve(int $requiredBytes): bool

@@ -43,6 +43,10 @@ final class IntelligenceService
             'prepare_project' => $this->prepareProject($input),
             'repair_project_docs' => $this->repairProjectDocs($input),
             'set_session_directives' => $this->setSessionDirectives($input),
+            'submit_task_plan' => $this->submitTaskPlan($input),
+            'get_task_plan' => $this->getTaskPlan($input),
+            'update_task_plan_progress' => $this->updateTaskPlanProgress($input),
+            'review_task_plan' => $this->reviewTaskPlan($input),
             'resolve_deploy_plan' => $this->resolveDeployPlan($input),
             'project_index_status' => $this->projectIndexStatus($input),
             'index_project' => $this->indexProject($input),
@@ -97,6 +101,9 @@ final class IntelligenceService
             'post_tool_incremental_refresh' => (bool) $this->config->get('index.auto_refresh', true),
             'post_tool_refresh_strategy' => 'mutation_filtered_targeted_sidecar',
             'index_sidecar' => IndexSidecar::status($this->config),
+            'bound_repository' => RepositoryScope::boundRepository($this->config),
+            'bound_generation' => RepositoryScope::boundGeneration($this->config),
+            'data_dir' => $this->config->dataDir(),
             'refresh_interval_seconds' => $this->config->duration('index.refresh_interval'),
             'editing_enabled' => (bool) $this->config->get('editing.enabled', true),
             'config_runtime_migrations' => $this->config->runtimeMigrations(),
@@ -139,6 +146,38 @@ final class IntelligenceService
     {
         return $this->withProject($input, false, function (ProjectIndex $index) use ($input): array {
             return $this->readiness->setDirectives($index, $input);
+        });
+    }
+
+    /** @param array<string,mixed> $input */
+    private function submitTaskPlan(array $input): array
+    {
+        return $this->withProject($input, false, function (ProjectIndex $index) use ($input): array {
+            return $this->readiness->submitTaskPlan($index, $input);
+        });
+    }
+
+    /** @param array<string,mixed> $input */
+    private function getTaskPlan(array $input): array
+    {
+        return $this->withProject($input, false, function (ProjectIndex $index) use ($input): array {
+            return $this->readiness->getTaskPlan($index, $input);
+        });
+    }
+
+    /** @param array<string,mixed> $input */
+    private function updateTaskPlanProgress(array $input): array
+    {
+        return $this->withProject($input, false, function (ProjectIndex $index) use ($input): array {
+            return $this->readiness->updateTaskPlanProgress($index, $input);
+        });
+    }
+
+    /** @param array<string,mixed> $input */
+    private function reviewTaskPlan(array $input): array
+    {
+        return $this->withProject($input, false, function (ProjectIndex $index) use ($input): array {
+            return $this->readiness->reviewTaskPlan($index, $input);
         });
     }
 
@@ -495,6 +534,31 @@ final class IntelligenceService
                 ];
             }
             $sessionId = trim((string) ($input['client_session_id'] ?? ''));
+            $taskPlan = $this->readiness->taskPlan($index, $sessionId);
+            $taskPlanStatus = $taskPlan === null
+                ? TaskPlanGate::missingPlanEnvelope()
+                : array_merge(
+                    TaskPlanGate::publicStatus($taskPlan),
+                    ['review' => TaskPlanWorkflow::reviewCompleteness($taskPlan)],
+                );
+
+            $workflowContract = GuidanceWorkflowCatalog::contract();
+            $activeSurfaceIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds($task);
+            $workflowContract['active_surface_ids'] = $activeSurfaceIds;
+            $workflowContract['matched_surfaces'] = GuidanceWorkflowCatalog::resolveActiveSurfaces($task);
+            $workflowContract['task_plan_gate'] = [
+                'required_on' => ['every_user_requirement', 'before_get_edit_bundle', 'before_apply_compact_edit'],
+                'required_before' => ['get_edit_bundle', 'apply_compact_edit'],
+                'submit_tool' => 'submit_task_plan',
+                'get_tool' => 'get_task_plan',
+                'progress_tool' => 'update_task_plan_progress',
+                'review_tool' => 'review_task_plan',
+                'error_code' => TaskPlanGate::ERROR_PLAN_REQUIRED,
+                'hard_constraint' => 'user_requirement_full_workflow',
+                'plan_workflow' => TaskPlanWorkflow::blueprint(),
+                'closeout_requires' => 'review_task_plan.closeout_allowed=true',
+                'immediate_when_missing' => true,
+            ];
 
             return [
                 'schema_version' => 'guidance-bundle.v1',
@@ -511,6 +575,7 @@ final class IntelligenceService
                 'freshness' => $index->status()['freshness'] ?? 'unknown',
                 'task' => $task,
                 'session_directives' => $this->readiness->directives($index, $sessionId),
+                'task_plan' => $taskPlanStatus,
                 'rules' => $ruleSummaries,
                 'fragments' => $fragments,
                 'pinned_fragments' => $pinnedFragments,
@@ -528,7 +593,7 @@ final class IntelligenceService
                     'result_count' => count($fragments),
                     'warnings' => is_array($context['warnings'] ?? null) ? $context['warnings'] : [],
                 ],
-                'workflow_contract' => GuidanceWorkflowCatalog::contract(),
+                'workflow_contract' => $workflowContract,
                 'routing_contract' => [
                     'authoritative_sources' => 'Framework/doc and app/code/*/*/doc',
                     'use_get_edit_bundle_for_code' => true,
@@ -577,6 +642,11 @@ final class IntelligenceService
                 $defaultTokenBudget,
             ): array {
                 $sessionId = trim((string) ($input['client_session_id'] ?? ''));
+                // Production ToolService always binds client_session_id; empty session is
+                // reserved for direct IntelligenceService fixtures that predate session gates.
+                if ($sessionId !== '') {
+                    $this->readiness->assertTaskPlanForEdit($index, $sessionId, 'get_edit_bundle');
+                }
                 $sessionDirectives = $this->readiness->directives($index, $sessionId);
                 if ($sessionDirectives !== []) {
                     $taskContract['session_directives'] = $sessionDirectives;
@@ -879,13 +949,16 @@ final class IntelligenceService
                         : 0,
                 ];
                 $bundle['execution_run'] = $runs->completeBundle($runId, $index->projectId(), $bundle);
-                $bundle['workflow_contract'] = GuidanceWorkflowCatalog::contract();
+                $workflowContract = GuidanceWorkflowCatalog::contract();
+                $workflowContract['active_surface_ids'] = GuidanceWorkflowCatalog::resolveActiveSurfaceIds($task);
+                $workflowContract['matched_surfaces'] = GuidanceWorkflowCatalog::resolveActiveSurfaces($task);
+                $bundle['workflow_contract'] = $workflowContract;
                 $bundle['routing'] = array_replace(
                     is_array($bundle['routing'] ?? null) ? $bundle['routing'] : [],
                     [
                         'extension_point_selection_required' => true,
-                        'workflow_doc' => GuidanceWorkflowCatalog::contract()['authoritative_workflow_doc'],
-                        'mandatory_before_apply' => GuidanceWorkflowCatalog::contract()['mandatory_before_code'],
+                        'workflow_doc' => $workflowContract['authoritative_workflow_doc'],
+                        'mandatory_before_apply' => $workflowContract['mandatory_before_code'],
                     ],
                 );
 
@@ -1516,6 +1589,10 @@ final class IntelligenceService
             $bundleId,
             $operationCount,
         ): array {
+            $sessionId = trim((string) ($input['client_session_id'] ?? ''));
+            if ($sessionId !== '') {
+                $this->readiness->assertTaskPlanForEdit($index, $sessionId, 'apply_compact_edit');
+            }
             $runs = new ExecutionRunService($this->learningStore, $this->config);
             try {
             if ($operationCount > 50) {
@@ -2353,6 +2430,19 @@ final class IntelligenceService
         }
         $resolved = ProjectResolver::resolve($repository, false);
         $resolved['repository_source'] = $repositorySource;
+        try {
+            RepositoryScope::assertAllowed($this->config, (string) $resolved['repository']);
+        } catch (\RuntimeException $exception) {
+            throw new ToolException(
+                'PROJECT_SCOPE_VIOLATION',
+                $exception->getMessage(),
+                false,
+                [
+                    'bound_repository' => RepositoryScope::boundRepository($this->config),
+                    'requested_repository' => (string) $resolved['repository'],
+                ],
+            );
+        }
         $requestedProject = trim((string) ($input['project_id'] ?? ''));
         $actualProject = (string) $resolved['project']['id'];
         if ($requestedProject !== '' && $requestedProject !== $actualProject) {

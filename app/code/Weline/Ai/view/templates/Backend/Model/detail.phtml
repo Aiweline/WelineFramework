@@ -169,7 +169,7 @@
         btn.disabled = true;
         btn.innerHTML = '<w:icon name="circle" size="sm"></w:icon> <?= __('测试中...') ?>';
 
-        var url = '<?= $this->getBackendUrl('*/backend/model/testConnection') ?>';
+        var url = '@backend-url{'*/backend/model/testConnection'}';
         var opts = { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model_code: '<?= addslashes((string)$model->getModelCode()) ?>' }) };
         var req = window.Weline.Api.request(url, opts);
         req.then(function(res) {
