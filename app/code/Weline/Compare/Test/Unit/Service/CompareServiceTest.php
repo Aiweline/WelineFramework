@@ -56,8 +56,13 @@ final class CompareServiceTest extends TestCase
         self::assertTrue($service->add(2)['success']);
         self::assertTrue($service->add(3)['success']);
         self::assertTrue($service->add(4)['success']);
-        self::assertFalse($service->add(5)['success']);
-        self::assertSame(4, $service->list()['compare_count']);
+        self::assertTrue($service->add(5)['success']);
+        self::assertTrue($service->add(6)['success']);
+        self::assertTrue($service->add(7)['success']);
+        self::assertTrue($service->add(8)['success']);
+        self::assertFalse($service->add(9)['success']);
+        self::assertSame(8, $service->list()['compare_count']);
+        self::assertSame(8, $service->list()['max']);
     }
 
     public function testQuickViewUsesFallback(): void

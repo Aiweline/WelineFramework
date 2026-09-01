@@ -1,5 +1,8 @@
 <?php
 /**
+ * Compare sitewide floating chrome (quickview dialog + compare bar).
+ * CSS travels with this Compare-owned markup — not Theme layout globals.
+ *
  * @hook-priority 180
  * @hook-sort-order 5
  */
@@ -8,7 +11,7 @@ if ($isBackend) {
     return;
 }
 ?>
-<link rel="stylesheet" href="@static(Weline_Compare::css/product-shopper-chrome.css)?v=20260824-shopper1">
+<link rel="stylesheet" href="@static(Weline_Compare::css/product-shopper-chrome.css)&v=20260831-component-scope1" data-no-extract="true" data-weline-product-shopper-chrome="1">
 <dialog id="weline-product-quickview-dialog"
         class="w-dialog w-product-quickview"
         data-w-component="dialog"
@@ -32,17 +35,17 @@ if ($isBackend) {
         <div class="w-product-quickview__loading"><?= __('加载中…') ?></div>
     </div>
 </dialog>
-<aside class="w-compare-bar" data-compare-bar hidden aria-label="<?= __('对比栏') ?>">
+<aside class="w-compare-bar" data-compare-bar data-weline-load="compareShopper" data-i18n-compare-label="<?= htmlspecialchars((string)__('对比'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" data-compare-bar-remove-label="<?= htmlspecialchars((string)__('移除'), ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8') ?>" hidden aria-label="<?= __('对比栏') ?>">
     <div class="w-compare-bar__inner">
         <div class="w-compare-bar__summary">
-            <strong data-compare-bar-label"><?= __('对比') ?></strong>
-            <span data-compare-bar-count>0/4</span>
+            <strong data-compare-bar-label><?= __('对比') ?></strong>
+            <span data-compare-bar-count>0/8</span>
         </div>
         <div class="w-compare-bar__thumbs" data-compare-bar-thumbs></div>
         <div class="w-compare-bar__actions">
-            <button type="button" class="w-button" data-variant="outline" data-size="sm" data-compare-clear"><?= __('清空') ?></button>
-            <a href="/compare" class="w-button" data-variant="primary" data-size="sm"><?= __('开始对比') ?></a>
+            <button type="button" class="w-button" data-variant="outline" data-size="sm" data-compare-clear><?= __('清空') ?></button>
+            <a href="@url{'compare'}" class="w-button" data-variant="primary" data-size="sm"><?= __('开始对比') ?></a>
         </div>
     </div>
 </aside>
-<script src="@static(Weline_Compare::js/product-card-actions.js)?v=20260826-shopper3" defer></script>
+<?php // compareShopper：由对比栏 data-weline-load 声明，禁止 @static 直引 ?>
