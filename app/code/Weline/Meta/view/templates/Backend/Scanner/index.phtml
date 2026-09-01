@@ -4,9 +4,6 @@
  * @var \Weline\Framework\View\Template $this
  */
 
-$scanAction = $this->getBackendUrl('meta/backend/scanner/scan');
-$directAction = $this->getBackendUrl('meta/backend/scanner/scanDirect');
-$backToList = $this->getBackendUrl('meta/backend/meta');
 $request = $this->getRequest();
 $defaultPath = $request->getPost('scan_path', 'Weline_Theme::view/theme/frontend/components');
 $defaultNamespace = $request->getPost('namespace', 'theme');
@@ -26,7 +23,7 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
             <h4 style="--w-mb-sm:0;"><?= __('元数据扫描器') ?></h4>
             <div class="w-cluster">
                 <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><a href="<?= $backToList ?>"><?= __('元数据管理') ?></a></li>
+                    <li class="w-breadcrumb__item"><a href="@backend-url{'meta/backend/meta'}"><?= __('元数据管理') ?></a></li>
                     <li class="w-breadcrumb__item" data-state="active"><?= __('扫描器') ?></li>
                 </ol>
             </div>
@@ -103,7 +100,7 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
                     </div>
                     <span class="w-badge w-text" data-w-background="muted" data-tone="muted"><?= __('异步/队列友好') ?></span>
                 </div>
-                <w:form action="@var($scanAction)" method="post" class="w-form" novalidate>
+                <w:form action="@backend-url{'meta/backend/scanner/scan'}" method="post" class="w-form" novalidate>
                     <div style="--w-mb:var(--weline-space-4);">
                         <label class="w-field__label"><?= __('扫描路径') ?></label>
                         <input type="text" class="w-input" required name="scan_path" value="<?= htmlspecialchars($defaultPath) ?>" placeholder="Weline_Theme::view/theme/frontend/components">
@@ -126,7 +123,7 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
                         <button type="submit" class="w-button" data-tone="primary">
                             <w:icon name="search" size="sm"></w:icon><?= __('提交扫描任务') ?>
                         </button>
-                        <a href="<?= $backToList ?>" class="w-button w-text" data-tone="muted">
+                        <a href="@backend-url{'meta/backend/meta'}" class="w-button w-text" data-tone="muted">
                             <w:icon name="arrow-left" size="sm"></w:icon><?= __('返回列表') ?>
                         </a>
                     </div>
@@ -144,7 +141,7 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
                     </div>
                     <span class="w-badge w-text" data-w-background="success" data-tone="success"><?= __('实时结果') ?></span>
                 </div>
-                <w:form action="@var($directAction)" method="post" class="w-form" novalidate>
+                <w:form action="@backend-url{'meta/backend/scanner/scanDirect'}" method="post" class="w-form" novalidate>
                     <div style="--w-mb:var(--weline-space-4);">
                         <label class="w-field__label"><?= __('扫描路径') ?></label>
                         <input type="text" class="w-input" required name="scan_path" value="<?= htmlspecialchars($defaultPath) ?>">
@@ -173,7 +170,7 @@ $strictMode = (bool)$request->getPost('strict_mode', true);
                         <button type="submit" class="w-button" data-tone="success">
                             <w:icon name="play" size="sm"></w:icon><?= __('立即扫描') ?>
                         </button>
-                        <a href="<?= $backToList ?>" class="w-button w-text" data-tone="muted">
+                        <a href="@backend-url{'meta/backend/meta'}" class="w-button w-text" data-tone="muted">
                             <w:icon name="database" size="sm"></w:icon><?= __('查看元数据') ?>
                         </a>
                     </div>
