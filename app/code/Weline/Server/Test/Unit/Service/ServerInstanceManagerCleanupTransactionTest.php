@@ -193,6 +193,21 @@ final class ServerInstanceManagerCleanupTransactionTest extends TestCase
         }
     }
 
+    public function testTargetedCleanupRemovesOnlyTheRequestedOfflineInstance(): void
+    {
+        $target = $this->newInstanceName('targeted');
+        $sibling = $this->newInstanceName('sibling');
+        $this->writeEndpoint($target, $this->stoppedEndpoint($target, 32, 3_100));
+        $siblingEndpoint = $this->stoppedEndpoint($sibling, 33, 3_200);
+        $this->writeEndpoint($sibling, $siblingEndpoint);
+        $manager = $this->manager();
+
+        self::assertTrue($manager->cleanupInactiveInstance($target));
+        self::assertFileDoesNotExist($manager->getInstanceFile($target));
+        self::assertSame($siblingEndpoint, $manager->getRawInstanceData($sibling));
+        self::assertFalse($manager->cleanupInactiveInstance($target));
+    }
+
     public function testCleanupRetiresServingReferencesBeforeEndpointCommit(): void
     {
         $name = $this->newInstanceName('serving-retirement');

@@ -78,6 +78,46 @@ return [
     ],
 
     /**
+     * 本地托管域名注册完成事件
+     * WLS 将 *.weline.test / *.weline.localhost 等托管本地域名写入 hosts 后触发
+     */
+    'Weline_Server::domain::local_domain_registered' => [
+        'name' => __('本地托管域名注册完成'),
+        'description' => __('WLS 将托管本地域名写入 hosts 后触发，允许 Websites 等模块同步写入域名池。'),
+        'doc' => 'domain/local_domain_registered.md',
+        'version' => '1.0.0',
+        'type' => 'domain',
+        'data_contract' => [
+            'domain' => ['type' => 'string', 'required' => true, 'description' => '完整域名'],
+            'ip' => ['type' => 'string', 'required' => true, 'description' => 'hosts 映射 IP'],
+            'status' => ['type' => 'string', 'required' => true, 'description' => 'added/repaired/already_exists/external_satisfied'],
+            'is_new' => ['type' => 'boolean', 'required' => true, 'description' => '是否本次新写入（非已存在）'],
+            'is_standard_project_host' => ['type' => 'boolean', 'required' => false, 'description' => '是否为 p{hash}.weline.test 标准项目 Host'],
+            'source' => ['type' => 'string', 'required' => false, 'description' => '事件来源标识'],
+        ],
+    ],
+
+    /**
+     * WLS 启用域名事件
+     * WLS 启动或路由门禁确认某 Host 进入服务面时触发
+     */
+    'Weline_Server::domain::managed_domain_active' => [
+        'name' => __('WLS 域名启用'),
+        'description' => __('WLS 启用某域名提供服务时触发；Websites 可在域名池缺失时补写记录。'),
+        'doc' => 'domain/managed_domain_active.md',
+        'version' => '1.0.0',
+        'type' => 'domain',
+        'data_contract' => [
+            'domain' => ['type' => 'string', 'required' => true, 'description' => '启用的完整域名'],
+            'role' => ['type' => 'string', 'required' => true, 'description' => 'host/public_host/ssl_domain 等角色'],
+            'instance_name' => ['type' => 'string', 'required' => false, 'description' => 'WLS 实例名'],
+            'is_managed_local' => ['type' => 'boolean', 'required' => false, 'description' => '是否托管本地域'],
+            'is_standard_project_host' => ['type' => 'boolean', 'required' => false, 'description' => '是否标准项目 Host'],
+            'source' => ['type' => 'string', 'required' => false, 'description' => '事件来源标识'],
+        ],
+    ],
+
+    /**
      * 证书更新事件
      * 当证书续签或更新时触发
      */

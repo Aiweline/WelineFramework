@@ -9,10 +9,6 @@
  * @hook-solo false
  */
 // 快速链接 URL（动态生成，避免 404）
-$wlsDocsUrl = $this->getUrl('dev/tool/docs') . '?search=WLS';
-$serverDocsUrl = $this->getUrl('dev/tool/docs') . '?module=Weline_Server';
-$monitorUrl = $this->getBackendUrl('server/backend/server-monitor');
-$attackLogUrl = $this->getBackendUrl('server/backend/server-monitor/attack-log');
 $wlsPerformanceJsUrl = '/Weline/Server/view/statics/wls-performance-panel/panel.js?v=20260727-weline-panel-wls-http-1';
 $wlsPerformanceCssUrl = '/Weline/Server/view/statics/wls-performance-panel/panel.css?v=20260702-weline-panel-wls-detect-1';
 $wlsPerformanceEndpointUrl = '/server/test/wls-performance-panel';
@@ -1013,14 +1009,14 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
                 html += '<div class="wls-no-data"><w:icon name="server" size="sm"></w:icon><p><strong>WLS 可能正在运行</strong></p>';
                 html += '<p style="font-size: 12px; color: #999;">健康检查接口仅允许本机访问。您通过外网或 Nginx 反向代理访问时，此处无法获取详情。</p>';
                 html += '<div class="wls-doc-links" style="justify-content: center;">';
-                html += '<a href="<?= htmlspecialchars($wlsDocsUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="wls-doc-link"><w:icon name="circle" size="sm"></w:icon> WLS 使用指南</a>';
-                html += '<a href="<?= htmlspecialchars($serverDocsUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="wls-doc-link"><w:icon name="folder" size="sm"></w:icon> Server 模块文档</a></div></div>';
+                html += '<a href="@url{'dev/tool/docs'}" target="_blank" class="wls-doc-link"><w:icon name="circle" size="sm"></w:icon> WLS 使用指南</a>';
+                html += '<a href="@url{'dev/tool/docs'}" target="_blank" class="wls-doc-link"><w:icon name="folder" size="sm"></w:icon> Server 模块文档</a></div></div>';
             } else if (!info.isWls) {
                 html += '<div class="wls-no-data"><w:icon name="server" size="sm"></w:icon><p><strong>未检测到 WLS 服务</strong></p>';
                 html += '<p style="font-size: 12px; color: #999;">当前页面可能由 Apache/Nginx 或 PHP 内置服务器提供</p>';
                 html += '<div class="wls-doc-links" style="justify-content: center;">';
-                html += '<a href="<?= htmlspecialchars($wlsDocsUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="wls-doc-link"><w:icon name="circle" size="sm"></w:icon> WLS 使用指南</a>';
-                html += '<a href="<?= htmlspecialchars($serverDocsUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="wls-doc-link"><w:icon name="folder" size="sm"></w:icon> Server 模块文档</a></div></div>';
+                html += '<a href="@url{'dev/tool/docs'}" target="_blank" class="wls-doc-link"><w:icon name="circle" size="sm"></w:icon> WLS 使用指南</a>';
+                html += '<a href="@url{'dev/tool/docs'}" target="_blank" class="wls-doc-link"><w:icon name="folder" size="sm"></w:icon> Server 模块文档</a></div></div>';
             } else {
                 var workerLabel = info.workerId ? ('Worker #' + escapeHtml(info.workerId)) : '当前请求';
                 html += renderWlsSectionTabs(activeWlsSectionTab);
@@ -1079,12 +1075,12 @@ if (!\is_string($wlsPanelRuntimeConfigJson)) {
                 html += '</div>';
                 
                 html += '<div class="wls-section wls-section--links wls-tab-pane"' + wlsPaneAttrs('links', activeWlsSectionTab) + '><div class="wls-section-title"><w:icon name="link" size="sm"></w:icon> 快速链接</div><div class="wls-doc-links">';
-                html += '<a href="<?= htmlspecialchars($wlsDocsUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="wls-doc-link"><w:icon name="circle" size="sm"></w:icon> WLS 使用指南</a>';
-                html += '<a href="<?= htmlspecialchars($serverDocsUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="wls-doc-link"><w:icon name="folder" size="sm"></w:icon> Server 模块文档</a>';
+                html += '<a href="@url{'dev/tool/docs'}" target="_blank" class="wls-doc-link"><w:icon name="circle" size="sm"></w:icon> WLS 使用指南</a>';
+                html += '<a href="@url{'dev/tool/docs'}" target="_blank" class="wls-doc-link"><w:icon name="folder" size="sm"></w:icon> Server 模块文档</a>';
                 html += '<a href="' + (window.location.origin + '/_wls/health') + '" target="_blank" class="wls-doc-link" style="background: #6b7b6b;"><w:icon name="heart" size="sm"></w:icon> 健康检查</a>';
                 html += '<button type="button" class="wls-doc-link" id="wls-set-health-allow-cookie-btn" data-wls-action="set-health-allow-cookie" style="background: #6b7b6b; border: none; cursor: pointer;"><w:icon name="unlock" size="sm"></w:icon> <?= __("放行健康检查（开发模式）") ?></button>';
-                html += '<a href="<?= htmlspecialchars($monitorUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="wls-doc-link" style="background: #5a6b5a;"><w:icon name="grid" size="sm"></w:icon> 监控面板</a>';
-                html += '<a href="<?= htmlspecialchars($attackLogUrl, ENT_QUOTES, 'UTF-8') ?>" target="_blank" class="wls-doc-link" style="background: #8b5a5a;"><w:icon name="shield" size="sm"></w:icon> 攻击日志</a></div></div>';
+                html += '<a href="@backend-url{'server/backend/server-monitor'}" target="_blank" class="wls-doc-link" style="background: #5a6b5a;"><w:icon name="grid" size="sm"></w:icon> 监控面板</a>';
+                html += '<a href="@backend-url{'server/backend/server-monitor/attack-log'}" target="_blank" class="wls-doc-link" style="background: #8b5a5a;"><w:icon name="shield" size="sm"></w:icon> 攻击日志</a></div></div>';
             }
             html += renderWlsPerformanceSectionShell(activeWlsSectionTab, isWls);
             html += '</div>';

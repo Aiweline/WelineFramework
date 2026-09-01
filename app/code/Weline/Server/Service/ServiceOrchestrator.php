@@ -111,6 +111,9 @@ class ServiceOrchestrator
     private const GATEWAY_FALLBACK_COLD_START_PUBLICATION_SECONDS = 15.0;
     private const GATEWAY_PORT_LEASE_OPERATION_SECONDS = 3.0;
     private const WINDOWS_GATEWAY_PORT_LEASE_OPERATION_SECONDS = 30.0;
+    private const PUBLIC_EDGE_LEASE_CONFIRM_MAX_ATTEMPTS = 3;
+    private const PUBLIC_EDGE_LEASE_CONFIRM_RETRY_USEC = 50_000;
+    private const WLS_STATE_LOCK_TIMEOUT_MESSAGE = 'Timed out acquiring the WLS state lock.';
     private const GATEWAY_NATIVE_DRAIN_SECONDS = 300;
     private const GATEWAY_NATIVE_FINALIZE_GRACE_SECONDS = 15;
     private const MAX_PROVIDER_VENDORS = 256;
@@ -290,6 +293,9 @@ class ServiceOrchestrator
     /** @var array<int, array{running: bool, checkedAt: float}> */
     private array $processRunningCache = [];
     private float $processRunningCacheTtlSec = 5.0;
+    /** @var array<string, array{state: string, reason: string, checkedAt: float}> */
+    private array $managedIdentityProbeCache = [];
+    private float $managedIdentityProbeCacheTtlSec = 8.0;
 
     /**
      * 控制面排队操作。子进程协议消息（register/ready/disconnect 等）不进入该队列。
@@ -6362,7 +6368,7 @@ class ServiceOrchestrator
         return $lease;
     }
 
-    private function confirmPublicEdgeLease(
+    protected function confirmPublicEdgeLease(
         int $ownerPid,
         int $port,
         string $managedProcessName,
@@ -6402,6 +6408,58 @@ class ServiceOrchestrator
             );
         }
         $this->publicEdgeLeaseConfirmed = true;
+    }
+
+    private function confirmPublicEdgeLeaseWithTransientRetry(
+        int $ownerPid,
+        int $port,
+        string $managedProcessName,
+        string $ownerLaunchId,
+        string $authorizedProcessBirth,
+        string $authorizedPidNamespaceId,
+    ): void {
+        for ($attempt = 1; $attempt <= self::PUBLIC_EDGE_LEASE_CONFIRM_MAX_ATTEMPTS; $attempt++) {
+            try {
+                $this->confirmPublicEdgeLease(
+                    $ownerPid,
+                    $port,
+                    $managedProcessName,
+                    $ownerLaunchId,
+                    $authorizedProcessBirth,
+                    $authorizedPidNamespaceId,
+                );
+                return;
+            } catch (\Throwable $throwable) {
+                $retryable = $throwable instanceof \RuntimeException
+                    && \hash_equals(
+                        self::WLS_STATE_LOCK_TIMEOUT_MESSAGE,
+                        $throwable->getMessage(),
+                    );
+                if (!$retryable || $attempt >= self::PUBLIC_EDGE_LEASE_CONFIRM_MAX_ATTEMPTS) {
+                    throw $throwable;
+                }
+
+                WlsLogger::warning_(
+                    '[Orchestrator] WLS public listener READY lease confirmation '
+                    . 'hit transient state-lock contention; retrying '
+                    . ($attempt + 1) . '/' . self::PUBLIC_EDGE_LEASE_CONFIRM_MAX_ATTEMPTS,
+                );
+                $this->waitForPublicEdgeLeaseConfirmationRetry($attempt);
+            }
+        }
+
+        throw new \LogicException('Public edge lease confirmation retry ended without a terminal result.');
+    }
+
+    protected function waitForPublicEdgeLeaseConfirmationRetry(int $attempt): void
+    {
+        $boundedAttempt = \max(
+            1,
+            \min(self::PUBLIC_EDGE_LEASE_CONFIRM_MAX_ATTEMPTS - 1, $attempt),
+        );
+        SchedulerSystem::usleep(
+            self::PUBLIC_EDGE_LEASE_CONFIRM_RETRY_USEC * $boundedAttempt,
+        );
     }
 
     private function releasePublicEdgeLease(): void
@@ -14559,21 +14617,31 @@ class ServiceOrchestrator
     private function isInstanceServiceAlive(ServiceInstance $instance): bool
     {
         $managedPids = $instance->getManagedPids();
+        $pidAlive = false;
         foreach ($managedPids as $pid) {
             if ($pid > 0 && $this->isProcessRunning($pid)) {
-                return true;
+                $pidAlive = true;
+                break;
             }
         }
-        if ($managedPids !== []) {
+        if ($managedPids !== [] && !$pidAlive) {
+            return false;
+        }
+        if ($managedPids === []) {
+            $port = (int) ($instance->port ?? 0);
+            if ($port > 0 && Processer::isPortUsedByWeline($port)) {
+                return true;
+            }
+
+            return false;
+        }
+        if ($instance->role === ControlMessage::ROLE_WORKER
+            && !$this->isInstanceManagedIdentityHealthy($instance)
+        ) {
             return false;
         }
 
-        $port = (int) ($instance->port ?? 0);
-        if ($port > 0 && Processer::isPortUsedByWeline($port)) {
-            return true;
-        }
-
-        return false;
+        return true;
     }
 
     private function invalidateInstanceProcessRunningCache(
@@ -16044,6 +16112,7 @@ class ServiceOrchestrator
             'ha_mode' => $this->haMode,
             'epoch' => $this->context?->epoch ?? 0,
             'maintenance_mode' => $this->maintenanceMode,
+            'tls_serving_quarantined' => $this->tlsServingQuarantined,
             'rolling_restart_in_progress' => $this->rollingRestartInProgress,
             'worker_reload_capacity_transition_in_progress' =>
                 $this->workerReloadCapacityTransitionInProgress,
@@ -16134,6 +16203,7 @@ class ServiceOrchestrator
             'ha_mode' => $this->haMode,
             'epoch' => $this->context?->epoch ?? 0,
             'maintenance_mode' => $this->maintenanceMode,
+            'tls_serving_quarantined' => $this->tlsServingQuarantined,
             'rolling_restart_in_progress' => $this->rollingRestartInProgress,
             'worker_reload_capacity_transition_in_progress' =>
                 $this->workerReloadCapacityTransitionInProgress,
@@ -17534,7 +17604,7 @@ class ServiceOrchestrator
             }
             try {
                 $ownerIdentity = $this->authorizedInstanceProcessIdentity($instance);
-                $this->confirmPublicEdgeLease(
+                $this->confirmPublicEdgeLeaseWithTransientRetry(
                     $instance->getTrackingPid(),
                     $reportedPort,
                     $this->getInstanceProcessName($instance),
@@ -18613,7 +18683,200 @@ class ServiceOrchestrator
     }
 
     /**
-     * Worker 存活审计：死 PID 摘 IPC、僵尸注册表复活、零存活紧急拉起
+     * @return array<string, array{
+     *     pid:int,
+     *     expected_process_name:string,
+     *     expected_launch_id:string,
+     *     expected_pname:string
+     * }>|null
+     */
+    private function buildInstanceManagedIdentityProbeRequest(ServiceInstance $instance): ?array
+    {
+        $pid = (int)$instance->pid;
+        if ($pid <= 0) {
+            $pid = $this->getInstanceTrackingPid($instance);
+        }
+        $processName = \trim($this->getInstanceProcessName($instance));
+        $launchId = \trim($this->getInstanceLaunchId($instance));
+        $expectedIdentity = $this->buildExpectedResurrectionProcessIdentity($instance);
+        if ($pid <= 0 || $processName === '' || $launchId === '' || $expectedIdentity === '') {
+            return null;
+        }
+
+        return [
+            'pid' => $pid,
+            'expected_process_name' => $expectedIdentity,
+            'expected_launch_id' => $launchId,
+            'expected_pname' => '--name=' . $processName,
+        ];
+    }
+
+    private function isInstanceManagedIdentityHealthy(ServiceInstance $instance): bool
+    {
+        if ($this->buildInstanceManagedIdentityProbeRequest($instance) === null) {
+            return true;
+        }
+
+        $cacheKey = $instance->role . ':' . $instance->instanceId;
+        $cached = $this->managedIdentityProbeCache[$cacheKey] ?? null;
+        if ($cached === null) {
+            return true;
+        }
+        $checkedAt = (float)($cached['checkedAt'] ?? 0.0);
+        if ($checkedAt <= 0.0
+            || (self::monotonicSeconds() - $checkedAt) > $this->managedIdentityProbeCacheTtlSec
+        ) {
+            return true;
+        }
+
+        return (string)($cached['state'] ?? Processer::PROCESS_STATE_UNKNOWN)
+            === Processer::PROCESS_STATE_RUNNING;
+    }
+
+    /**
+     * @param array<string, array{
+     *     pid:int,
+     *     expected_process_name:string,
+     *     expected_launch_id:string,
+     *     expected_pname:string
+     * }> $requests
+     * @return array<string|int, array<string, mixed>>
+     */
+    protected function probeWorkerManagedProcessIdentities(array $requests): array
+    {
+        return Processer::probeManagedProcessIdentities($requests, true);
+    }
+
+    /**
+     * Worker 周期性身份审计：Registry 记录的 PID 必须仍占有该槽位的 launch identity。
+     * identity_mismatch 只释放旧租约，不向当前 PID 发信号。
+     */
+    private function reconcileWorkersWithStaleManagedIdentity(): void
+    {
+        if ($this->context === null || $this->controlServer === null || !$this->running || $this->isRecoverySuspended()) {
+            return;
+        }
+        if ($this->childServicesBootstrapInProgress
+            || $this->workerEmergencyRestartInProgress
+            || $this->rollingRestartInProgress
+        ) {
+            return;
+        }
+
+        $requests = [];
+        /** @var array<string, ServiceInstance> $instances */
+        $instances = [];
+        $lastYieldAt = self::monotonicSeconds();
+        foreach ($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER) as $inst) {
+            $this->cooperativeYieldIfNeeded($lastYieldAt);
+            if ($this->shouldYieldPeriodicWork(true)) {
+                return;
+            }
+            if (\in_array($inst->state, [
+                ServiceInstance::STATE_DRAINING,
+                ServiceInstance::STATE_STOPPING,
+                ServiceInstance::STATE_STOPPED,
+            ], true)) {
+                continue;
+            }
+            $request = $this->buildInstanceManagedIdentityProbeRequest($inst);
+            if ($request === null) {
+                continue;
+            }
+            $key = (string)$inst->instanceId;
+            $requests[$key] = $request;
+            $instances[$key] = $inst;
+        }
+        if ($requests === []) {
+            return;
+        }
+
+        $probes = $this->probeWorkerManagedProcessIdentities($requests);
+        $now = self::monotonicSeconds();
+        foreach ($instances as $key => $inst) {
+            $probe = \is_array($probes[$key] ?? null)
+                ? $probes[$key]
+                : [
+                    'state' => Processer::PROCESS_STATE_UNKNOWN,
+                    'reason' => 'batch_probe_result_missing',
+                ];
+            $state = (string)($probe['state'] ?? Processer::PROCESS_STATE_UNKNOWN);
+            $reason = (string)($probe['reason'] ?? 'probe_result_missing');
+            $cacheKey = ControlMessage::ROLE_WORKER . ':' . $inst->instanceId;
+            $this->managedIdentityProbeCache[$cacheKey] = [
+                'state' => $state,
+                'reason' => $reason,
+                'checkedAt' => $now,
+            ];
+            if ($inst->pid > 0) {
+                unset($this->processRunningCache[(int)$inst->pid]);
+            }
+
+            if ($state === Processer::PROCESS_STATE_RUNNING) {
+                continue;
+            }
+            if ($state !== Processer::PROCESS_STATE_IDENTITY_MISMATCH
+                && $state !== Processer::PROCESS_STATE_EXITED
+            ) {
+                continue;
+            }
+
+            $this->releaseStaleWorkerManagedIdentity($inst, $state . '/' . $reason);
+        }
+        if (\count($this->managedIdentityProbeCache) > 512) {
+            $this->managedIdentityProbeCache = [];
+        }
+    }
+
+    private function releaseStaleWorkerManagedIdentity(ServiceInstance $inst, string $detail): void
+    {
+        if (\in_array($inst->state, [
+            ServiceInstance::STATE_DRAINING,
+            ServiceInstance::STATE_STOPPING,
+            ServiceInstance::STATE_STOPPED,
+        ], true)) {
+            return;
+        }
+
+        WlsLogger::warning_(
+            "[Orchestrator] Worker#{$inst->instanceId} 管理身份失效（{$detail}），释放旧租约并触发复活"
+        );
+        WlsLogger::warning_(
+            "[Orchestrator] Worker#{$inst->instanceId} managed identity diagnostics="
+            . $this->formatInstanceRuntimeDiagnostics($inst)
+        );
+
+        $request = $this->buildInstanceManagedIdentityProbeRequest($inst);
+        if ($request !== null) {
+            Processer::terminateManagedProcessLease(
+                (int)$request['pid'],
+                (string)$request['expected_process_name'],
+                (string)$request['expected_launch_id'],
+                (string)$request['expected_pname'],
+                false
+            );
+        }
+
+        $cid = $inst->ipcClientId;
+        if ($cid !== null) {
+            $this->controlServer?->closeClient($cid);
+            $inst->ipcClientId = null;
+            $this->registry->updateInstance($inst);
+        }
+        $this->invalidateInstanceProcessRunningCache($inst);
+        unset($this->managedIdentityProbeCache[ControlMessage::ROLE_WORKER . ':' . $inst->instanceId]);
+
+        if (!\in_array($inst->state, [
+            ServiceInstance::STATE_DRAINING,
+            ServiceInstance::STATE_STOPPING,
+            ServiceInstance::STATE_STOPPED,
+        ], true)) {
+            $this->scheduleResurrectionWithDelay($inst, 1.0);
+        }
+    }
+
+    /**
+     * Worker 存活审计：死 PID 摘 IPC、身份错位释放租约、僵尸注册表复活、零存活紧急拉起
      */
     private function queueStaleWorkerRecoveries(): void
     {
@@ -18716,6 +18979,7 @@ class ServiceOrchestrator
             return;
         }
 
+        $this->reconcileWorkersWithStaleManagedIdentity();
         $this->queueStaleWorkerRecoveries();
 
         $alive = 0;
@@ -29045,7 +29309,13 @@ class ServiceOrchestrator
      * Future replacements are fenced to the new manifest first.
      *
      * @param array<int,array<string,mixed>> $acked
-     * @return array{committed:bool,contained:list<array<string,mixed>>,failures:list<array<string,mixed>>}
+     * @return array{
+     *     committed:bool,
+     *     quarantined:bool,
+     *     master_control_plane_preserved:bool,
+     *     contained:list<array<string,mixed>>,
+     *     failures:list<array<string,mixed>>
+     * }
      */
     private function containFailedSslCertReload(
         array $acked,
@@ -29056,6 +29326,8 @@ class ServiceOrchestrator
     ): array {
         $result = [
             'committed' => false,
+            'quarantined' => false,
+            'master_control_plane_preserved' => false,
             'contained' => [],
             'failures' => [],
         ];
@@ -29239,25 +29511,20 @@ class ServiceOrchestrator
             }
         }
         if ($result['failures'] !== []) {
-            // A shared listener can be withdrawn immediately. Per-process
-            // reuseport listeners are handled by the exact leases above; if
-            // any identity or post-condition remains unknown, stop the whole
-            // Master rather than serve an unverifiable certificate generation.
-            try {
-                $this->requestStop(
-                    'tls_reload_fail_stop_unverified',
-                    skipDrain: true,
-                );
-            } catch (\Throwable $throwable) {
-                $result['failures'][] = [
-                    'code' => 'containment_master_stop_request_failed',
-                    'error' => GatewayBoundedText::singleLine(
-                        $throwable->getMessage(),
-                        512,
-                        'TLS containment could not request Master stop.',
-                    ),
-                ];
+            // Keep the authenticated control plane online. Admission has
+            // already been withdrawn and every unproven exact lease has gone
+            // through bounded fail-stop handling above. Freeze all future TLS
+            // spawns/resurrections until an operator explicitly restarts the
+            // instance after repairing the certificate transaction.
+            $this->tlsServingQuarantined = true;
+            foreach ($targets as $target) {
+                unset($this->resurrectQueue[$target->getKey()]);
             }
+            $result['quarantined'] = true;
+            $result['master_control_plane_preserved'] = true;
+            WlsLogger::warning_(
+                '[Orchestrator] TLS reload containment is degraded; TLS serving remains quarantined while the Master control plane stays online.',
+            );
         }
 
         return $result;
@@ -29292,6 +29559,7 @@ class ServiceOrchestrator
             'instance_generation' => $instanceGeneration,
             'launch_id' => $launchId,
             'quarantined' => false,
+            'master_control_plane_preserved' => false,
             'zero_serving' => false,
             'eligible_workers' => [],
             'contained_workers' => [],
@@ -29344,6 +29612,7 @@ class ServiceOrchestrator
         }
 
         $this->tlsServingQuarantined = true;
+        $base['master_control_plane_preserved'] = true;
         foreach ([
             'direct' => $this->directSharedListener,
             'gateway_fallback' => $this->gatewayFallbackListener,
@@ -29558,24 +29827,13 @@ class ServiceOrchestrator
         $base['zero_serving'] = $base['remaining_workers'] === []
             && $base['failures'] === [];
         if (!$base['zero_serving']) {
-            // Keep all public admission withdrawn and stop the Master. The
-            // negative receipt never claims that an unverifiable reuse-port
-            // child has stopped.
-            try {
-                $this->requestStop(
-                    'tls_serving_quarantine_unverified',
-                    skipDrain: true,
-                );
-            } catch (\Throwable $throwable) {
-                $base['failures'][] = [
-                    'code' => 'quarantine_master_stop_request_failed',
-                    'error' => GatewayBoundedText::singleLine(
-                        $throwable->getMessage(),
-                        512,
-                        'TLS quarantine could not request Master stop.',
-                    ),
-                ];
-            }
+            // The negative receipt keeps every unverified target visible.
+            // Keep admission withdrawn and the spawn gate closed, but retain
+            // the authenticated Master so status, diagnosis and an explicit
+            // operator stop/restart remain available.
+            WlsLogger::warning_(
+                '[Orchestrator] TLS quarantine could not prove zero serving; the Master control plane remains online with TLS admission withdrawn.',
+            );
         } elseif ($this->context !== null) {
             try {
                 $this->persistServicesInfo($this->context);
@@ -29589,21 +29847,9 @@ class ServiceOrchestrator
                         'TLS quarantine state could not be persisted.',
                     ),
                 ];
-                try {
-                    $this->requestStop(
-                        'tls_serving_quarantine_unverified',
-                        skipDrain: true,
-                    );
-                } catch (\Throwable $stopThrowable) {
-                    $base['failures'][] = [
-                        'code' => 'quarantine_master_stop_request_failed',
-                        'error' => GatewayBoundedText::singleLine(
-                            $stopThrowable->getMessage(),
-                            512,
-                            'TLS quarantine could not request Master stop.',
-                        ),
-                    ];
-                }
+                WlsLogger::warning_(
+                    '[Orchestrator] TLS quarantine state persistence failed; the Master control plane remains online with TLS admission withdrawn.',
+                );
             }
         }
         return [

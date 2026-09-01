@@ -6,7 +6,6 @@
  * 
  * @var \Weline\Framework\View\Template $block
  */
-$apiUrl = $this->getBackendUrl('*/backend/optimization-guide/api-data');
 ?>
 
 <div class="optimization-guide" id="optimization-guide-container">
@@ -87,10 +86,8 @@ $apiUrl = $this->getBackendUrl('*/backend/optimization-guide/api-data');
 }
 </style>
 
-
-
 <script>
-const API_URL = '<?= $apiUrl ?>';
+const API_URL = '@backend-url{'*/backend/optimization-guide/api-data'}';
 
 // 页面加载时获取数据
 document.addEventListener('DOMContentLoaded', () => {

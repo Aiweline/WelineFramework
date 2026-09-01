@@ -132,6 +132,26 @@ final class WorkerResponseMemoryGuardCompactionTest extends TestCase
         );
     }
 
+    public function testCompactSkipsCycleCollectorAndRequestsDrainAtHardPressure(): void
+    {
+        $this->writeStaticProperty(WorkerResponseMemoryGuard::class, 'runtimeCacheThresholds', [
+            'soft' => 0.70,
+            'hard' => 0.85,
+        ]);
+
+        $result = $this->withMemoryPressure(
+            0.90,
+            static fn (): array => WorkerResponseMemoryGuard::compact()
+        );
+
+        self::assertTrue($result['cycle_collection_skipped']);
+        self::assertTrue($result['drain_requested']);
+        self::assertSame(
+            'memory_pressure_hard_before_gc',
+            WorkerResponseMemoryGuard::consumeDrainAfterResponseReason()
+        );
+    }
+
     public function testCompactIfPressureSkipsBelowThreshold(): void
     {
         $result = $this->withMemoryPressure(

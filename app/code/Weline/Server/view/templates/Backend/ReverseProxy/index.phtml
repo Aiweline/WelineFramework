@@ -48,7 +48,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
     <!-- 操作按钮 -->
     <div class="row mb-3">
         <div class="col-12">
-            <a href="<?php echo $this->getUrl('*/backend/reverse-proxy/edit'); ?>" class="btn btn-primary">
+            <a href="@url{'*/backend/reverse-proxy/edit'}" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> <lang>新建规则</lang>
             </a>
             <button type="button" class="btn btn-success" data-reverse-proxy-action="apply">
@@ -106,7 +106,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
                                             <?php endif; ?>
                                         </td>
                                         <td>
-                                            <a href="<?php echo $this->getUrl('*/backend/reverse-proxy/edit', ['proxy_id' => $proxy[ReverseProxy::schema_fields_ID]]); ?>" class="btn btn-sm btn-primary">
+                                            <a href="@url{'*/backend/reverse-proxy/edit'|['proxy_id' => $proxy[ReverseProxy::schema_fields_ID]]}" class="btn btn-sm btn-primary">
                                                 <i class="bi bi-pencil"></i> <lang>编辑</lang>
                                             </a>
                                             <button type="button" class="btn btn-sm btn-info"
@@ -170,12 +170,12 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JS
 })(window);
 </script>
 <script>
-const reverseProxyUrls = <?= json_encode([
-    'apply' => $this->getUrl('*/backend/reverse-proxy/apply'),
-    'toggleStatus' => $this->getUrl('*/backend/reverse-proxy/toggle-status'),
-    'delete' => $this->getUrl('*/backend/reverse-proxy/delete'),
-    'testConnection' => $this->getUrl('*/backend/reverse-proxy/test-connection'),
-], $jsonForScriptFlags) ?>;
+const reverseProxyUrls = {
+    apply: "@url{'*/backend/reverse-proxy/apply'}",
+    toggleStatus: "@url{'*/backend/reverse-proxy/toggle-status'}",
+    delete: "@url{'*/backend/reverse-proxy/delete'}",
+    testConnection: "@url{'*/backend/reverse-proxy/test-connection'}"
+};
 const reverseProxyMessages = <?= json_encode([
     'applyConfirm' => (string)__('确定要应用配置到 Gateway 吗？'),
     'deleteConfirm' => (string)__('确定要删除此规则吗？'),

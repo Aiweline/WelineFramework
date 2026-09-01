@@ -4846,6 +4846,40 @@ CNF;
             w_log_error('[SslCertificateService] ' . __('证书签发事件调度失败：%{1}', [$e->getMessage()]));
         }
     }
+
+    /**
+     * 复用已有证书时补发 certificate_issued，供 Websites 等模块同步域名池 HTTPS 状态。
+     */
+    public function publishCertificateIssuedNotification(string $domain): bool
+    {
+        $domain = self::normalizeCertificateStorageDomain($domain);
+        if ($domain === '') {
+            return false;
+        }
+
+        $cert = $this->certificateModel()->clearQuery()->loadByDomain($domain);
+        if (!$cert->getCertId() || !$cert->getHttpsEnabled()) {
+            return false;
+        }
+
+        $certPath = (string)$cert->getCertPath();
+        $keyPath = (string)$cert->getKeyPath();
+        if ($certPath === '' || $keyPath === '') {
+            return false;
+        }
+
+        $this->dispatchCertificateIssuedEvent(
+            $domain,
+            $cert->getCertId(),
+            $certPath,
+            $keyPath,
+            (string)$cert->getIssuer(),
+            (string)$cert->getExpiresAt(),
+            $cert->getCertType(),
+        );
+
+        return true;
+    }
     
     /**
      * 触发证书禁用事件

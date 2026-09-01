@@ -2080,7 +2080,7 @@ class Stop extends CommandAbstract
                 $data = @\fread($conn, 4096);
                 if ($data === false || $data === '') {
                     foreach ($this->flushTrailingIpcBufferLines($readBuffer) as $line) {
-                        $this->processStopProgressLine(
+                        $rejection = $this->processStopProgressLine(
                             $line,
                             $lastProgress,
                             $exitedPids,
@@ -2090,23 +2090,38 @@ class Stop extends CommandAbstract
                             $masterAboutToExit,
                             $stopAccepted
                         );
+                        if ($rejection !== null) {
+                            $this->ipcMsg($rejection, 'error');
+                            $this->ipcAppendStopTraceHint($instanceName);
+                            @\fclose($conn);
+                            return false;
+                        }
                     }
-                    // 连接断开 - Master 已关闭 IPC
-                    $this->ipcMsg("Master 已关闭连接 ✓", 'success');
+                    if (!$stopAccepted) {
+                        $this->ipcMsg('STOP 控制连接在 Master 确认命令前关闭，转为本地清理。', 'error');
+                        $this->ipcAppendStopTraceHint($instanceName);
+                        @\fclose($conn);
+                        return false;
+                    }
                     @\fclose($conn);
-                    
-                    return $this->finishCompletedIpcStopAfterFinalProgress(
+
+                    $completed = $this->finishCompletedIpcStopAfterFinalProgress(
                         $masterPid,
                         $masterAboutToExit,
                         $childrenFullyExited,
                         $observedStopStage
                     );
+                    if (!$completed) {
+                        return false;
+                    }
+                    $this->ipcMsg("Master 已关闭连接 ✓", 'success');
+                    return true;
                 }
 
                 $lastActivityAt = self::monotonicSeconds();
                 $readBuffer .= $data;
                 foreach ($this->extractCompleteIpcLines($readBuffer) as $line) {
-                    $this->processStopProgressLine(
+                    $rejection = $this->processStopProgressLine(
                         $line,
                         $lastProgress,
                         $exitedPids,
@@ -2116,6 +2131,12 @@ class Stop extends CommandAbstract
                         $masterAboutToExit,
                         $stopAccepted
                     );
+                    if ($rejection !== null) {
+                        $this->ipcMsg($rejection, 'error');
+                        $this->ipcAppendStopTraceHint($instanceName);
+                        @\fclose($conn);
+                        return false;
+                    }
                     if ($masterAboutToExit) {
                         break;
                     }
@@ -2307,17 +2328,20 @@ class Stop extends CommandAbstract
         bool &$childrenFullyExited,
         bool &$masterAboutToExit,
         bool &$stopAccepted
-    ): void {
+    ): ?string {
         $msg = \Weline\Server\IPC\ControlMessage::decode($line);
         if ($msg === null) {
-            return;
+            return null;
         }
 
         if (($msg['type'] ?? '') !== \Weline\Server\IPC\ControlMessage::TYPE_COMMAND_RESULT) {
-            return;
+            return null;
         }
 
         $message = (string) ($msg['message'] ?? '');
+        if (($msg['success'] ?? true) !== true) {
+            return $message !== '' ? $message : 'STOP rejected by Master';
+        }
         $dataPayload = \is_array($msg['data'] ?? null) ? $msg['data'] : [];
         $state = \strtolower((string) ($dataPayload['state'] ?? ''));
         if ($message === 'Stopping' || $state === 'stopping') {
@@ -2325,7 +2349,7 @@ class Stop extends CommandAbstract
         }
 
         if ($message === '' || $message === $lastProgress) {
-            return;
+            return null;
         }
 
         $this->ipcProgress($message);
@@ -2351,6 +2375,8 @@ class Stop extends CommandAbstract
         )) {
             $masterAboutToExit = true;
         }
+
+        return null;
     }
 
     protected function updateObservedStopStage(string $message, int $observedStopStage): int
