@@ -27,7 +27,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 <!-- 表单 -->
 <div class="w-card">
     <div class="w-card__body">
-        <w:form id="domainForm" method="post" action="@var($this->getBackendUrl('*/backend/domain/save'))" data-testid="cdn-domain-editor-form" data-state="idle" data-message="">
+        <w:form id="domainForm" method="post" action="@backend-url{'*/backend/domain/save'}" data-testid="cdn-domain-editor-form" data-state="idle" data-message="">
             <input type="hidden" name="id" value="<?= $domain && $domain->getId() ? (int)$domain->getId() : '' ?>">
             
             <div class="w-grid" style="--w-mb:var(--weline-space-4);">
@@ -119,7 +119,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
                     <button type="submit" class="w-button" data-testid="cdn-domain-editor-submit" data-tone="primary">
                         <w:icon name="save" size="sm"></w:icon> <?= __('保存') ?>
                     </button>
-                    <a href="<?= $this->getBackendUrl('*/backend/domain/index') ?>" class="w-button" data-tone="neutral">
+                    <a href="@backend-url{'*/backend/domain/index'}" class="w-button" data-tone="neutral">
                         <w:icon name="close" size="sm"></w:icon> <?= __('取消') ?>
                     </a>
                 </div>
@@ -132,7 +132,7 @@ $jsonForScriptFlags = JSON_UNESCAPED_UNICODE
 (function() {
     'use strict';
     
-    var indexUrl = '<?= $this->getBackendUrl('*/backend/domain/index') ?>';
+    var indexUrl = '@backend-url{'*/backend/domain/index'}';
     var accountsByAdapter = <?= json_encode($accounts, $jsonForScriptFlags) ?>;
     var currentDomainAccountId = <?= $domain && $domain->getData('account_id') ? (int)$domain->getData('account_id') : 'null' ?>;
     
