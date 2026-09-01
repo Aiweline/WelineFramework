@@ -10,6 +10,8 @@ final readonly class ResolvedFileImage
     public function __construct(
         public string $src,
         public string $html,
+        public string $alt = '',
+        public ?string $caption = null,
     ) {
         if (trim($src) === '' || trim($html) === '') {
             throw new \InvalidArgumentException((string)__('已解析图片结果无效。'));

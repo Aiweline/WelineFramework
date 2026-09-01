@@ -214,6 +214,13 @@ final class FileAssetLibraryBoundaryTest extends TestCase
             self::assertStringContainsString("'preview' => false", $tagSource);
         }
         self::assertStringContainsString("'lockPath' => false", $connector);
+        self::assertStringContainsString("'lockRoot' => false", $connector);
+        self::assertStringContainsString("'aspect_ratio' => false", $connector);
+        self::assertStringContainsString("'aspect_ratio_tolerance' => false", $connector);
+        self::assertStringContainsString("\$attributes['aspect_ratio'] = \$attributes['aspect_ratio'] ?? ''", $connector);
+        self::assertStringContainsString("\$attributes['lockRoot'] = trim(str_replace(", $connector);
+        $block = (string)file_get_contents(BP . '/app/code/Weline/FileManager/Api/Block/FileManager.php');
+        self::assertStringContainsString("'lockRoot' => \$this->getData('lockRoot')", $block);
         foreach ([$tag, $connector] as $tagSource) {
             self::assertStringContainsString('FILTER_VALIDATE_BOOL', $tagSource);
             self::assertStringContainsString('FILTER_NULL_ON_FAILURE', $tagSource);
