@@ -29,6 +29,14 @@ class CurrencyLocalDescriptionSeed
         ],
     ];
 
+    /** @var array<string, array{name:string,symbol:string,rate:float}> */
+    private const CATALOG_DEFAULTS = [
+        'CNY' => ['name' => '人民币', 'symbol' => '￥', 'rate' => 1.0],
+        'USD' => ['name' => '美元', 'symbol' => '$', 'rate' => 8.0],
+        'EUR' => ['name' => '欧元', 'symbol' => '€', 'rate' => 0.0],
+        'GBP' => ['name' => '英镑', 'symbol' => '£', 'rate' => 0.0],
+    ];
+
     public function seedDefaults(): void
     {
         if (!$this->storageReady()) {
@@ -44,7 +52,27 @@ class CurrencyLocalDescriptionSeed
                 ->fetch();
 
             if (!$currency->getId()) {
-                continue;
+                $meta = self::CATALOG_DEFAULTS[$code] ?? ['name' => $code, 'symbol' => '', 'rate' => 0.0];
+                $currency->clear()
+                    ->setCode($code)
+                    ->setName((string)$meta['name'])
+                    ->setRate((float)$meta['rate'])
+                    ->setSymbol((string)$meta['symbol'])
+                    ->setPosition('left')
+                    ->setFormat('1,0')
+                    ->setStatus(true)
+                    ->setIcon((string)$meta['symbol'])
+                    ->setThousandSeparator(',')
+                    ->setDecimalSeparator('.')
+                    ->setBaseCurrency('CNY')
+                    ->save();
+                $currency->clear()
+                    ->where(Currency::schema_fields_CODE, $code)
+                    ->find()
+                    ->fetch();
+                if (!$currency->getId()) {
+                    continue;
+                }
             }
 
             foreach ($names as $localeCode => $name) {
