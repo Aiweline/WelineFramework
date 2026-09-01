@@ -405,6 +405,10 @@ class PixelEventService
                 $info,
                 $meta
             ),
+            // 错误监控事故包：必须保留，否则 site_error 会丢失类型/邮箱/版本
+            'incident' => \is_array($info['incident'] ?? null)
+                ? $this->compactLooseArray($info['incident'], 3)
+                : [],
         ];
     }
 
@@ -625,9 +629,10 @@ class PixelEventService
     public function track(array $payload): array
     {
         $prepared = $this->prepare($payload);
-        $buffer = $this->hotBuffer()->buffer($prepared);
+        $eventName = (string)($prepared['data']['event'] ?? '');
+        $buffer = $eventName === 'site_error' ? null : $this->hotBuffer()->buffer($prepared);
         if ($buffer) {
-            return $this->successResponse([
+            $response = $this->successResponse([
                 'pixel_id' => null,
                 'pixel_additional_id' => null,
                 'buffered' => true,
@@ -635,13 +640,77 @@ class PixelEventService
                 'event' => $prepared['data']['event'] ?? '',
                 'hot_buffer' => $buffer,
             ]);
+            if ($eventName === 'site_error') {
+                $response = $this->attachSiteErrorIncident($response, $prepared);
+            }
+            return $response;
         }
 
         $responseData = $this->persistence()->persistPrepared($prepared['post'], $prepared['data']);
         $responseData['buffered'] = false;
         $responseData['event_id'] = $prepared['event_id'];
 
-        return $this->successResponse($responseData);
+        $response = $this->successResponse($responseData);
+        if ($eventName === 'site_error') {
+            $response = $this->attachSiteErrorIncident($response, $prepared, $responseData);
+        }
+
+        return $response;
+    }
+
+    /**
+     * @param array<string, mixed> $response
+     * @param array{post: array<string, mixed>, data: array<string, mixed>, event_id: string, received_at: int} $prepared
+     * @param array<string, mixed> $persistData
+     * @return array<string, mixed>
+     */
+    private function attachSiteErrorIncident(array $response, array $prepared, array $persistData = []): array
+    {
+        try {
+            $post = $prepared['post'];
+            $additional = \is_array($post['additionalInfo'] ?? null) ? $post['additionalInfo'] : [];
+            $incidentPayload = \is_array($additional['incident'] ?? null) ? $additional['incident'] : [];
+            $merged = \array_merge($incidentPayload, [
+                'website_id' => (int)($prepared['data']['website_id'] ?? 0),
+                'websiteId' => (int)($prepared['data']['website_id'] ?? 0),
+                'session_id' => (string)($prepared['data']['session_id'] ?? ''),
+                'user_id' => (int)($prepared['data']['user_id'] ?? 0),
+                'userId' => (int)($prepared['data']['user_id'] ?? 0),
+                'url' => (string)($prepared['data']['url'] ?? ''),
+                'page_url' => (string)($incidentPayload['page_url'] ?? $prepared['data']['url'] ?? ''),
+                'deploy_version' => (string)($incidentPayload['deploy_version'] ?? $additional['environment']['deploy_version'] ?? ''),
+                'deployVersion' => (string)($incidentPayload['deployVersion'] ?? $incidentPayload['deploy_version'] ?? ''),
+                'worker_build_id' => (string)($incidentPayload['worker_build_id'] ?? $additional['environment']['worker_build_id'] ?? ''),
+                'theme_published_version_id' => (string)($incidentPayload['theme_published_version_id'] ?? $additional['environment']['theme_published_version_id'] ?? ''),
+                'theme_published_version' => (string)($incidentPayload['theme_published_version'] ?? $additional['environment']['theme_published_version'] ?? ''),
+                'pixel_script_version' => (string)($incidentPayload['pixel_script_version'] ?? ''),
+                'dict_version' => (string)($incidentPayload['dict_version'] ?? ''),
+                'error_message' => (string)($incidentPayload['error_message'] ?? $incidentPayload['message'] ?? $post['name'] ?? 'site_error'),
+                'error_code' => (string)($incidentPayload['error_code'] ?? ''),
+                'error_type' => (string)($incidentPayload['error_type'] ?? $incidentPayload['type'] ?? ''),
+                'capture_source' => (string)($incidentPayload['capture_source'] ?? ''),
+                'error_stack' => (string)($incidentPayload['error_stack'] ?? $incidentPayload['stack'] ?? ''),
+                'http_status' => (int)($incidentPayload['http_status'] ?? 0),
+                'identity_email' => (string)($incidentPayload['identity_email'] ?? ''),
+                'step_path' => \is_array($incidentPayload['step_path'] ?? null) ? $incidentPayload['step_path'] : [],
+                'form_snapshot' => \is_array($incidentPayload['form_snapshot'] ?? null) ? $incidentPayload['form_snapshot'] : [],
+            ]);
+            // Strip email from marketing additional path — only incident service stores it.
+            unset($merged['email']);
+
+            /** @var PixelErrorIncidentService $incidentService */
+            $incidentService = ObjectManager::getInstance(PixelErrorIncidentService::class);
+            $incident = $incidentService->recordFromSiteError($merged, $persistData !== [] ? $persistData : [
+                'pixel_id' => $response['data']['pixel_id'] ?? null,
+            ]);
+            if (isset($response['data']) && \is_array($response['data'])) {
+                $response['data']['incident'] = $incident;
+            }
+        } catch (\Throwable $e) {
+            w_log_error('site_error incident attach failed: ' . $e->getMessage());
+        }
+
+        return $response;
     }
 
     /**

@@ -41,6 +41,14 @@
               icon="circle"
               order="30"/>
 
+        <menu source="Weline_Visitor::pixel_error_monitor"
+              name="visitor_pixel_error_monitor"
+              title="错误监控"
+              action="visitor/backend/pixel-error-monitor/index"
+              is_backend="1"
+              icon="warning"
+              order="35"/>
+
         <menu source="Weline_Visitor::traffic_channel"
               name="visitor_traffic_channel"
               title="流量渠道"

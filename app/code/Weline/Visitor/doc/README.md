@@ -49,6 +49,7 @@
 
 ## 本模块文档资产
 
+- `app/code/Weline/Visitor/doc/错误监控与订阅闭环.md`
 - `app/code/Weline/Visitor/doc/event/访客像素标签.md`
 - `app/code/Weline/Visitor/doc/像素拓展使用指南.md`
 - `app/code/Weline/Visitor/doc/功能完善总结-数据分析.md`
