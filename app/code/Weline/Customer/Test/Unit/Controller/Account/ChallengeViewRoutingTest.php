@@ -41,13 +41,14 @@ class ChallengeViewRoutingTest extends TestCase
             ->onlyMethods(['assign', 'fetch', 'redirect'])
             ->getMock();
         $assignCalls = 0;
-        $controller->expects($this->exactly(3))
+        $controller->expects($this->exactly(4))
             ->method('assign')
             ->willReturnCallback(function (string $key, mixed $value) use (&$assignCalls, $controller): Challenge {
                 $expectedKeys = [
                     'challenge_token',
                     'expires_at',
                     'title',
+                    'meta',
                 ];
                 TestCase::assertSame($expectedKeys[$assignCalls], $key);
                 $assignCalls++;
@@ -55,7 +56,7 @@ class ChallengeViewRoutingTest extends TestCase
             });
         $controller->expects($this->once())
             ->method('fetch')
-            ->with('Weline_Customer::templates/frontend/account/challenge.phtml')
+            ->with('Weline_Customer::templates/frontend/account/challenge-shell.phtml')
             ->willReturn('challenge-page');
         $controller->expects($this->never())->method('redirect');
 
@@ -64,6 +65,15 @@ class ChallengeViewRoutingTest extends TestCase
         $this->setProtectedProperty($controller, 'request', $request);
 
         $this->assertSame('challenge-page', $controller->getIndex());
+    }
+
+    public function testLayoutTypeIsAccountChallenge(): void
+    {
+        $reflection = new \ReflectionClass(Challenge::class);
+        $property = $reflection->getProperty('layoutType');
+        $property->setAccessible(true);
+        $controller = $reflection->newInstanceWithoutConstructor();
+        $this->assertSame('account.challenge', $property->getValue($controller));
     }
 
     private function setProtectedProperty(object $target, string $property, mixed $value): void

@@ -6,6 +6,7 @@ namespace Weline\Customer\Controller\Account;
 
 use Weline\Customer\Service\CustomerAccountService;
 use Weline\Customer\Service\CustomerAuthReturnUrlService;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
@@ -121,14 +122,16 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
             }
             $result = $this->customerAccountService->register($email, $password, $profileData);
             $this->customerAccountService->loginCustomer($result['customer']);
-            MessageManager::success(__('注册成功，欢迎加入。'));
-            $returnTarget = $this->authReturnUrlService->consume($this->session, $redirectUrl);
-            return (string) $this->redirect($this->authReturnUrlService->formatRedirect($returnTarget));
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $throwable) {
             MessageManager::error($throwable->getMessage());
+            return (string) $this->redirect($registerUrl);
         }
 
-        return (string) $this->redirect($registerUrl);
+        MessageManager::success(__('注册成功，欢迎加入。'));
+        $returnTarget = $this->authReturnUrlService->consume($this->session, $redirectUrl);
+        return (string) $this->redirect($this->authReturnUrlService->formatAuthSuccessRedirect($returnTarget));
     }
 
     private function readReferralCode(): string

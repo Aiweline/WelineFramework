@@ -56,21 +56,21 @@ export function register(UI) {
     UI.define('account-login', ({ element, listen }) => {
         const form = element.querySelector('[data-w-login-form]');
         const submitButton = element.querySelector('[data-w-login-submit]');
-        const spinner = element.querySelector('[data-w-login-spinner]');
         const idleLabel = element.querySelector('[data-w-login-idle-label]');
         const busyLabel = element.querySelector('[data-w-login-busy-label]');
         const feedback = element.querySelector('[data-w-login-feedback]');
         const username = element.querySelector('#username');
         const password = element.querySelector('#password');
-        let accountResource = null;
+        let submitting = false;
 
         const setBusy = (busy) => {
+            submitting = busy;
             if (submitButton instanceof HTMLButtonElement) {
                 submitButton.disabled = busy;
                 submitButton.classList.toggle('w-auth-login__submit--busy', busy);
+                // Foundation .w-button[aria-busy="true"]::after draws the only spinner.
                 submitButton.setAttribute('aria-busy', String(busy));
             }
-            if (spinner instanceof HTMLElement) spinner.hidden = !busy;
             if (idleLabel instanceof HTMLElement) idleLabel.hidden = busy;
             if (busyLabel instanceof HTMLElement) busyLabel.hidden = !busy;
         };
@@ -95,31 +95,35 @@ export function register(UI) {
             window.setTimeout(() => element.classList.remove('w-auth-login--shake'), 450);
         };
 
-        const resource = async () => {
-            if (accountResource) return accountResource;
-            if (typeof window.Weline?.load === 'function') await window.Weline.load('api');
-            if (typeof window.Weline?.Api?.resource !== 'function') {
-                throw new Error('Weline.Api is unavailable.');
+        const postLoginDocument = async () => {
+            if (!(form instanceof HTMLFormElement)) {
+                throw new Error('login_form_missing');
             }
-            accountResource = await Promise.resolve(window.Weline.Api.resource('account'));
-            return accountResource;
-        };
-
-        const canUseAccountApi = () => !!(
-            window.Weline
-            && (
-                (window.Weline.Api && typeof window.Weline.Api.resource === 'function')
-                || typeof window.Weline.load === 'function'
-            )
-        );
-
-        const formDataToObject = (formData) => {
-            const payload = Object.fromEntries(formData.entries());
-            delete payload.form_key;
-            if (Object.prototype.hasOwnProperty.call(payload, 'remember_duration')) {
-                payload.remember_duration = Number(payload.remember_duration || 0);
+            const action = form.getAttribute('action') || window.location.href;
+            const formData = new FormData(form);
+            if (!formData.get('username') && formData.get('email')) {
+                formData.set('username', String(formData.get('email')));
             }
-            return payload;
+            const response = await fetch(action, {
+                method: 'POST',
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: {
+                    Accept: 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest',
+                },
+                body: formData,
+            });
+            let raw = null;
+            try {
+                raw = await response.json();
+            } catch (_error) {
+                raw = null;
+            }
+            if (!response.ok && !raw) {
+                throw new Error(`login_http_${response.status}`);
+            }
+            return raw;
         };
 
         const handleLoginError = (message) => {
@@ -132,19 +136,10 @@ export function register(UI) {
         };
 
         const submit = async (event) => {
-            if (!canUseAccountApi()) {
-                if (
-                    username instanceof HTMLInputElement
-                    && password instanceof HTMLInputElement
-                    && username.value.trim()
-                    && password.value
-                ) {
-                    setBusy(true);
-                }
-                return;
-            }
-
+            // Always take over submit when this component is mounted: classic POST races
+            // lazy captcha and can double-prefix locale on failure redirects.
             event.preventDefault();
+            if (submitting) return;
             clearFeedback();
 
             if (!(username instanceof HTMLInputElement) || !(password instanceof HTMLInputElement)) return;
@@ -164,9 +159,9 @@ export function register(UI) {
             setBusy(true);
 
             try {
-                const client = await resource();
-                const body = formDataToObject(new FormData(form));
-                const response = await client.login(body, { silent: true });
+                // Document-level fetch (not QueryBin Worker): Set-Cookie must land in the
+                // page jar. Worker fetch has left Cursor/embedded browsers logged out.
+                const response = await postLoginDocument();
                 const payload = normalizeLoginPayload(response);
                 const ok = response && response.success !== false;
 
@@ -238,6 +233,73 @@ export function register(UI) {
 
         if (form instanceof HTMLFormElement) listen(form, 'submit', submit);
 
+        const storefrontChallengeUrl = (route, intent, formId) => {
+            const segments = window.location.pathname.split('/').filter(Boolean);
+            const maybeLocale = segments[0] || '';
+            const hasLocale = /^[a-z]{2}(_[A-Za-z0-9-]+)?$/i.test(maybeLocale);
+            const prefix = hasLocale ? `/${maybeLocale}` : '';
+            const clean = String(route || 'weline_captcha/frontend/challenge').replace(/^\/+/, '');
+            const params = new URLSearchParams({
+                intent: String(intent || 'customer.login'),
+                form_id: String(formId || 'loginForm'),
+                _: String(Date.now()),
+            });
+            return `${prefix}/${clean}?${params.toString()}`;
+        };
+
+        const ensureLoginCaptcha = async (force = false) => {
+            if (!(form instanceof HTMLFormElement)) return;
+            if (window.Weline?.Captcha?.ensure) {
+                const host = form.querySelector('[data-weline-captcha-lazy]');
+                const existing = form.querySelector('[data-weline-captcha-provider]');
+                const target = host || existing || form;
+                return window.Weline.Captcha.ensure(target, force);
+            }
+            const host = form.querySelector('[data-weline-captcha-lazy]');
+            const existing = form.querySelector('[data-weline-captcha-provider]');
+            if (!force && !host) return;
+            if (!force && host && host.getAttribute('data-loaded') === '1') return;
+            const anchor = host || existing?.closest('.weline-captcha') || existing;
+            if (!(anchor instanceof HTMLElement)) return;
+            const intent = anchor.getAttribute('data-intent')
+                || form.getAttribute('data-weline-form-intent')
+                || 'customer.login';
+            const formId = anchor.getAttribute('data-form-id') || form.id || 'loginForm';
+            const route = anchor.getAttribute('data-challenge-route') || 'weline_captcha/frontend/challenge';
+            const response = await fetch(storefrontChallengeUrl(route, intent, formId), {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+            });
+            if (!response.ok) throw new Error(`captcha_http_${response.status}`);
+            const payload = await response.json();
+            const html = String(payload?.html || payload?.data?.html || '');
+            if (!html) throw new Error('captcha_empty');
+            const wrap = document.createElement('div');
+            wrap.innerHTML = html.trim();
+            const node = wrap.firstElementChild;
+            if (!(node instanceof HTMLElement)) throw new Error('captcha_markup');
+            anchor.replaceWith(node);
+            if (window.Weline?.Form?.mount) window.Weline.Form.mount(form);
+        };
+
+        if (form instanceof HTMLFormElement) {
+            listen(form, 'click', (event) => {
+                const target = event.target;
+                if (!(target instanceof Element)) return;
+                const button = target.closest('[data-weline-captcha-refresh]');
+                if (!(button instanceof HTMLElement)) return;
+                event.preventDefault();
+                ensureLoginCaptcha(true).catch(() => {});
+            });
+            listen(form, 'weline:captcha:refresh-requested', () => {
+                ensureLoginCaptcha(true).catch(() => {});
+            });
+            ensureLoginCaptcha(false).catch(() => {});
+        }
+
         return { element };
     });
+
+    // Mirror Theme page bundle: account-register lazy alias must be defined here too.
+    UI.define('account-register', ({ element }) => ({ element }));
 }

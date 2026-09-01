@@ -79,6 +79,31 @@ class Customer extends Model implements AuthenticableInterface
         return is_string($email) && trim($email) !== '' ? $email : null;
     }
 
+    /**
+     * Short UI label for chrome greetings (never prefer full email).
+     * Prefer a non-email stored username; otherwise email / username local-part.
+     */
+    public function getDisplayName(): string
+    {
+        $stored = trim((string) ($this->getData(self::schema_fields_username) ?? ''));
+        if ($stored !== '' && filter_var($stored, FILTER_VALIDATE_EMAIL) === false) {
+            return $stored;
+        }
+
+        $email = $this->getEmail();
+        foreach ([$email, $stored] as $candidate) {
+            if ($candidate === '' || !str_contains($candidate, '@')) {
+                continue;
+            }
+            $local = trim((string) explode('@', $candidate, 2)[0]);
+            if ($local !== '') {
+                return $local;
+            }
+        }
+
+        return $stored !== '' ? $stored : $email;
+    }
+
     public function setUsername(string $username): static
     {
         $username = trim($username);

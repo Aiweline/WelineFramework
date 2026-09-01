@@ -11,16 +11,15 @@ final class AuthTemplateLocaleRedirectContractTest extends TestCase
     /**
      * @dataProvider authTemplateProvider
      */
-    public function testAuthApiRedirectsPreserveTheCurrentStorefrontPrefix(string $relativePath): void
+    public function testAuthTemplatesUseUrlTagsInsteadOfHardcodedCustomerPaths(string $relativePath): void
     {
         $template = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/frontend/account/' . $relativePath);
 
-        self::assertStringContainsString('resolveStorefrontRedirect', $template);
-        self::assertStringContainsString('window.location.pathname', $template);
-        self::assertStringContainsString('window.location.assign(resolveStorefrontRedirect(', $template);
-        self::assertStringNotContainsString("window.location.href = data.redirect || '/customer/account'", $template);
-        self::assertStringNotContainsString("window.location.href = (resp.redirect || '/customer/account')", $template);
-        self::assertStringNotContainsString('window.location.href = data.redirect', $template);
+        self::assertStringContainsString("@url{'customer/account/", $template);
+        self::assertStringNotContainsString("?? '/customer/account/", $template);
+        self::assertStringNotContainsString('href="/customer/account/', $template);
+        self::assertStringNotContainsString('action="/customer/account/', $template);
+        self::assertStringNotContainsString("action=\"@var(\$", $template);
     }
 
     public static function authTemplateProvider(): array
@@ -32,18 +31,30 @@ final class AuthTemplateLocaleRedirectContractTest extends TestCase
         ];
     }
 
-    public function testForgotPasswordTemplateConsumesControllerAssignedStorefrontUrls(): void
+    public function testForgotPasswordTemplateUsesUrlTagsForAllAddresses(): void
     {
         $template = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/templates/frontend/account/forgot-password.phtml'
         );
 
-        self::assertStringContainsString("\$this->getData('forgot_password_url')", $template);
-        self::assertStringContainsString("\$this->getData('reset_password_url')", $template);
-        self::assertStringContainsString("\$this->getData('login_url')", $template);
+        self::assertStringContainsString("@url{'customer/account/login'}", $template);
+        self::assertStringContainsString("@url{'customer/account/forgot-password'}", $template);
+        self::assertStringContainsString("@url{'customer/account/forgot-password/reset-password'}", $template);
         self::assertStringContainsString('name="reset_url"', $template);
-        self::assertStringContainsString('delete payload.redirect_url;', $template);
+        self::assertStringContainsString('data-login-url="@url{\'customer/account/login\'}"', $template);
         self::assertStringNotContainsString('action="/customer/account/forgot-password', $template);
         self::assertStringNotContainsString('href="/customer/account/login"', $template);
+    }
+
+    public function testLoginTemplateUsesUrlTagsForRegisterForgotAndSubmit(): void
+    {
+        $template = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/account/login.phtml'
+        );
+
+        self::assertStringContainsString("action=\"@url{'customer/account/login'}\"", $template);
+        self::assertStringContainsString("@url{'customer/account/register'}", $template);
+        self::assertStringContainsString("@url{'customer/account/forgot-password'}", $template);
+        self::assertStringContainsString("getFormKey('customer/account/login')", $template);
     }
 }
