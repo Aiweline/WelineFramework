@@ -139,6 +139,7 @@ final class CartQueryProviderV2SecurityTest extends TestCase
         self::assertSame(4, $v2->getCart($scope, customerId: 99)['item_count']);
     }
 
+
     public function testAuthenticatedMergeUsesCurrentCustomerAndFlatChannelScope(): void
     {
         [$v2, $offer] = $this->service();

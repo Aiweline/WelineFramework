@@ -1,0 +1,14 @@
+<?php
+/**
+ * Cart-owned product card add-to-cart button (Cart V2 addV2).
+ *
+ * 注册为 Hook 供文档/扩展点引用；卡片循环场景由 Theme partial 直接 fetch 本部件模板。
+ *
+ * @hook-priority 100
+ * @hook-sort-order 0
+ * @hook-solo true
+ */
+
+/** @var \Weline\Framework\View\Template $this */
+
+echo $this->fetch('Weline_Cart::templates/frontend/widgets/product-card-add-to-cart.phtml');

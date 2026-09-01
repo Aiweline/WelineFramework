@@ -1,0 +1,16 @@
+<?php
+/**
+ * @hook-priority 120
+ * @hook-sort-order 10
+ */
+$isBackend = str_contains(strtolower((string)($_SERVER['REQUEST_URI'] ?? '')), '/admin');
+if ($isBackend) {
+    return;
+}
+?>
+<?php
+// product-card-purchase-actions.css：Theme partials/product/add-to-cart 组件内联 emit
+// storefront-shopper-toast-amazon.css：加购/shopper-actions 组件自带
+// 禁止在 layout body-end 全局挂载购买区或 toast CSS
+?>
+<?php // cart JS：由加购/结账部件 data-weline-load="cart" 声明加载，禁止此处 @static 直引 ?>

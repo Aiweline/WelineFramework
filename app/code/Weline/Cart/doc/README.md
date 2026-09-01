@@ -8,6 +8,7 @@
 - Browser API: `Weline.Api.resource('cart')`
 - Core service: `Weline\Cart\Service\CartService`
 - Session storage: `Weline\Cart\Session\CartSession`
+- Discount preview must reuse an already-loaded cart summary when enriching V2 responses; never call `resolveStorefrontSummary()` again from `buildDiscountPreview()` in that path (recursive reload OOMs WLS workers and surfaces as Worker nonce errors on checkout).
 
 ## Item Resolution
 
