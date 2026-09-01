@@ -1,0 +1,30 @@
+<?php
+/**
+ * Local image CAPTCHA challenge markup.
+ * Label uses <lang> so storefront locale bake matches other form chrome.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+$token = (string)($this->getData('token') ?? '');
+$image = (string)($this->getData('image_html') ?? '');
+$inputId = (string)($this->getData('input_id') ?? 'weline-captcha-response');
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<div class="weline-captcha weline-captcha-local" data-weline-captcha-provider="local_image">
+    <input type="hidden" name="captcha_provider" value="local_image">
+    <input type="hidden" name="captcha_token" value="<?= $esc($token) ?>">
+    <div class="w-field">
+        <label class="w-field__label" for="<?= $esc($inputId) ?>"><lang>请输入图片中的验证码</lang></label>
+        <div class="weline-captcha-stack">
+            <div class="weline-captcha-visual weline-captcha-row">
+                <?= $image ?>
+                <button type="button" class="w-button weline-captcha-refresh" data-weline-captcha-refresh data-tone="quiet" data-size="sm" aria-label="<?= $esc((string)__('刷新验证码')) ?>" title="<?= $esc((string)__('刷新验证码')) ?>">
+                    <lang>刷新</lang>
+                </button>
+            </div>
+            <span class="weline-captcha-field">
+                <input class="w-input" id="<?= $esc($inputId) ?>" type="text" name="captcha_response" required maxlength="6" autocapitalize="characters" autocomplete="off" spellcheck="false" inputmode="text" aria-label="<?= $esc((string)__('请输入图片中的验证码')) ?>" placeholder="······">
+            </span>
+        </div>
+    </div>
+</div>

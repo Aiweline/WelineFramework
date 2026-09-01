@@ -8,8 +8,10 @@
 - `verifySubmission($submission, $intent, $hostname, $ip)`：业务写入前调用。
 
 `<w:form>` 的 `captcha` 默认值为 `off`，普通 GET/POST 表单都不注入挑战。只有显式设置
-`captcha="auto"` 或 `captcha="required"` 才会启用：`auto` 仅对 POST 注入，
-`required` 声明入口必须验证。启用后，默认优先 Google Enterprise；配置不完整或未显式关闭
+`captcha="auto"`、`captcha="required"` 或 `captcha="lazy"` 才会启用：`auto` 仅对 POST 注入，
+`required` / `lazy` / `auto` **只要注入验证码区域，一律输出 lazy 占位**并由模块运行时 `view/statics/js/captcha-lazy.js`（`Weline.Captcha`）拉取
+`weline_captcha/frontend/challenge`（挑战接口始终 private/no-store）——与属性名无关，禁止把一次性图码/token SSR 进共享 HTML。
+启用后，默认优先 Google Enterprise；配置不完整或未显式关闭
 Google 时必须使用 `local_image`，不能出现已经选择验证却静默跳过的状态。
 
 登录入口使用固定 intent：
