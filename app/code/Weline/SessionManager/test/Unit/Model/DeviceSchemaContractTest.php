@@ -30,9 +30,12 @@ final class DeviceSchemaContractTest extends TestCase
         }
         self::assertArrayHasKey('public_id', $columns);
         self::assertArrayHasKey('session_digest', $columns);
+        self::assertArrayHasKey('install_key_digest', $columns);
         self::assertArrayNotHasKey('session_id', $columns);
         self::assertSame(43, $columns['public_id']->length);
         self::assertSame(64, $columns['session_digest']->length);
+        self::assertSame(64, $columns['install_key_digest']->length);
+        self::assertTrue($columns['install_key_digest']->nullable);
 
         $indexes = [];
         foreach ($schema->indexes as $index) {
@@ -41,6 +44,10 @@ final class DeviceSchemaContractTest extends TestCase
         self::assertSame('UNIQUE', $indexes['uk_authenticated_device_public_id']->type);
         self::assertSame(['auth_area', 'session_digest'], $indexes['uk_authenticated_device_session']->columns);
         self::assertSame('UNIQUE', $indexes['uk_authenticated_device_session']->type);
+        self::assertSame(
+            ['auth_area', 'principal_id', 'install_key_digest'],
+            $indexes['idx_authenticated_device_install']->columns,
+        );
     }
 
     public function testRememberCredentialSchemaAllowsOnlyOneHashedCredentialPerDevice(): void

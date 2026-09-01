@@ -13,6 +13,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'uk_authenticated_device_public_id', columns: ['public_id'], type: 'UNIQUE', comment: '公开设备 ID 唯一')]
 #[Index(name: 'uk_authenticated_device_session', columns: ['auth_area', 'session_digest'], type: 'UNIQUE', comment: '认证区域 Session 绑定唯一')]
 #[Index(name: 'idx_authenticated_device_owner', columns: ['auth_area', 'principal_id', 'revoked_at', 'last_seen_at'], comment: '身份设备列表')]
+#[Index(name: 'idx_authenticated_device_install', columns: ['auth_area', 'principal_id', 'install_key_digest'], comment: '浏览器设备密钥合并查找')]
 #[Index(name: 'idx_authenticated_device_expiry', columns: ['session_expires_at', 'remembered_until'], comment: '过期设备清理')]
 class AuthenticatedDevice extends Model
 {
@@ -34,6 +35,9 @@ class AuthenticatedDevice extends Model
 
     #[Col('varchar', 64, nullable: false, comment: 'Session SHA-256 摘要')]
     public const schema_fields_SESSION_DIGEST = 'session_digest';
+
+    #[Col('varchar', 64, nullable: true, comment: '浏览器设备密钥 SHA-256 摘要')]
+    public const schema_fields_INSTALL_KEY_DIGEST = 'install_key_digest';
 
     #[Col('varchar', 160, nullable: false, default: '', comment: '设备显示名称')]
     public const schema_fields_DEVICE_NAME = 'device_name';
