@@ -12,7 +12,7 @@ $provider = $this->getData('provider');
 <div class="translation-record-view-page">
     <div class="page-header" style="--w-mb:var(--weline-space-6);">
         <h1><?= __('翻译记录详情') ?></h1>
-        <a href="<?= $this->getBackendUrl('*/backend/record') ?>" class="w-button" data-tone="neutral">
+        <a href="@backend-url{'*/backend/record'}" class="w-button" data-tone="neutral">
             <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
         </a>
     </div>
