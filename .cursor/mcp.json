@@ -8,6 +8,10 @@
                 "/Users/weline/.learning-mcp/config.yaml"
             ],
             "cwd": "/Users/weline/Project/Official/框架",
+            "env": {
+                "LEARNING_MCP_BOUND_REPOSITORY": "/Users/weline/Project/Official/框架",
+                "LEARNING_MCP_DATA_DIR": "/Users/weline/.learning-mcp/projects/f8cc2f4fbf9c0aa9850ba273edd80e2559c1068406d724baf048bb276a64e707"
+            },
             "startup_timeout_sec": 120,
             "tool_timeout_sec": 180
         }

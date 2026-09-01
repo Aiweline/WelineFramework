@@ -1,0 +1,30 @@
+---
+description: 验收 URL 交付：主链 Markdown http(s)、Host 优先、探活；与 Weline MCP 对齐
+alwaysApply: true
+---
+
+# 验收 URL 交付（短规则）
+
+冲突时以仓库 MCP 为准：`feature_delivery_urls`、`WebUI浏览器验收与交付地址门禁.md`。细节：`~/.cursor/skills/local-browser-urls/SKILL.md`。
+
+## 范围
+
+仅用户可点击的 `http(s)://` 验收/入口 URL。不适用于源码、仓库路径、文档路径、命令。
+
+## 必须
+
+1. **主链**：`[页面名](http(s)://完整URL)`。本机 WLS 常为 `http://*.weline.test`，勿伪造 https。
+2. **Host 优先**：有 `*.weline.test`（或其它实例 Host）用它；仅无 Host / 用户明确要求时才用 `127.0.0.1`。
+3. **探活**：写入最终回复前，对字面 URL（含 query）`curl`；接受 `200`/`302`/`401`/`403`。探活 URL = 交付字面 URL。
+4. **query**：`?`/`=`/`&` 保持字面量，禁止整段 `encodeURIComponent`；主键勿重复。
+5. **假 URL 禁止**：不得把 `app/code/.../*.php` 拼进 http URL。
+6. **仅主验收 URL** 可再 `open_resource(http)`；禁止对源码/文档/命令开 Browser。
+
+## 可选（仅 Cursor）
+
+可另附反引号复制行，或一行 Simple Browser opener 作**辅链**。  
+**禁止**把 `command:simpleBrowser.api.open?...` 当作唯一/主验收链接。
+
+## 交付汇报
+
+功能完成回复末尾须有「交付地址」小节（见 MCP `closeout_delivery_reminder`）。
