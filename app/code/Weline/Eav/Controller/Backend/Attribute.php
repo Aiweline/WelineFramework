@@ -154,13 +154,40 @@ class Attribute extends \Weline\Framework\App\Controller\BackendController
     public function add()
     {
         # 检测是否有锁定实体 entity_type
-        $entity_type = $this->request->getGet('entity_type');
+        $entity_type = trim((string)($this->request->getGet('entity_type') ?? ''));
+        $embed = $this->request->getGet('embed') === '1';
         $this->assign('entity_type', $entity_type);
+        $this->assign('embed', $embed ? 1 : 0);
         # 配置属性记录
         $attribute = $this->backendCurrentUserData()->getScope('attribute');
+        if (!is_array($attribute)) {
+            $attribute = [];
+        }
+        foreach (['eav_entity_id', 'set_id', 'group_id'] as $field) {
+            $value = $this->request->getGet($field);
+            if ($value !== null && $value !== '') {
+                $attribute[$field] = (int)$value;
+            }
+        }
+        if ($entity_type !== '' && empty($attribute['eav_entity_id'])) {
+            /** @var EavEntity $entityModel */
+            $entityModel = ObjectManager::getInstance(EavEntity::class);
+            $entityQuery = clone $entityModel;
+            $entityRow = $entityQuery->where('code', $entity_type)->find()->fetchArray();
+            if (!empty($entityRow['eav_entity_id'])) {
+                $attribute['eav_entity_id'] = (int)$entityRow['eav_entity_id'];
+            }
+        }
+        if ($embed && !empty($attribute['group_id'])) {
+            $attribute['progress'] = 'progress-attribute-details';
+        } elseif ($entity_type !== '') {
+            $attribute['progress'] = 'progress-select-set';
+        }
         # 属性配置项解析
         if (isset($attribute['options'])) {
-            $attribute['options'] = json_decode($attribute['options'], true);
+            $attribute['options'] = is_array($attribute['options'])
+                ? $attribute['options']
+                : (json_decode((string)$attribute['options'], true) ?: []);
         } else {
             $attribute['options'] = [];
         }

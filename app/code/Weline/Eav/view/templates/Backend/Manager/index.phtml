@@ -1,128 +1,43 @@
 <?php
 /**
- * EAV unified manager.
+ * EAV unified manager page.
  *
  * @var \Weline\Framework\View\Template $this
  */
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$config = [
-    'apiBase' => '@backend-url("eav/backend/manager")',
-    'types' => [
-        'entity' => (string)__('实体'),
-        'set' => (string)__('属性集'),
-        'group' => (string)__('属性组'),
-        'attribute' => (string)__('属性'),
-    ],
-    'fields' => [
-        'code' => (string)__('代码'),
-        'name' => (string)__('名称'),
-        'class' => (string)__('实体类'),
-        'eav_entity_id_field_type' => (string)__('主键字段类型'),
-        'eav_entity_id_field_length' => (string)__('主键字段长度'),
-        'type_id' => (string)__('属性类型'),
-        'basic_is_enable' => (string)__('启用'),
-        'frontend_is_filterable' => (string)__('可筛选'),
-        'frontend_is_searchable' => (string)__('可搜索'),
-        'frontend_is_visible' => (string)__('前台可见'),
-        'data_is_multiple' => (string)__('允许多值'),
-        'data_has_option' => (string)__('包含选项'),
-        'compare_mode' => (string)__('可比模式'),
-        'compare_mode_none' => (string)__('不参与对比'),
-        'compare_mode_diff' => (string)__('仅标差异'),
-        'compare_mode_higher_better' => (string)__('越大越好'),
-        'compare_mode_lower_better' => (string)__('越小越好'),
-    ],
-    'messages' => [
-        'loading' => (string)__('加载中...'),
-        'loadFailed' => (string)__('加载失败'),
-        'empty' => (string)__('暂无 EAV 数据'),
-        'selectContext' => (string)__('请先在树中选择所属节点'),
-        'save' => (string)__('保存'),
-        'saved' => (string)__('保存成功'),
-        'deleteTitle' => (string)__('删除 EAV 节点'),
-        'deleteMessage' => (string)__('该操作无法撤销，确定删除当前节点吗？'),
-        'deleted' => (string)__('删除成功'),
-        'confirm' => (string)__('确定'),
-        'cancel' => (string)__('取消'),
-        'required' => (string)__('请填写必填字段'),
-        'system' => (string)__('系统'),
-        'new' => (string)__('新建'),
-        'unknownError' => (string)__('未知错误'),
-    ],
-];
-$jsonFlags = JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE | JSON_INVALID_UTF8_SUBSTITUTE;
+/** @var array{code:string,entityId:int,name:string}|null $entityScope */
+$entityScope = is_array($this->getData('entityScope') ?? null) ? $this->getData('entityScope') : null;
+$entityScopeError = trim((string)($this->getData('entityScopeError') ?? ''));
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-eav-manager.css)">
 
-<section class="w-eav-manager w-stack" data-w-component="eav-manager">
-    <header class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-        <div class="w-stack" data-gap="sm">
-            <h1><w:icon name="tree" size="sm" /> <?= $escape(__('EAV 管理')) ?></h1>
-            <p class="w-text" data-tone="muted"><?= $escape(__('按实体、属性集、属性组和属性维护 EAV 结构')) ?></p>
-        </div>
-        <ol class="w-breadcrumb" aria-label="<?= $escape(__('面包屑导航')) ?>">
-            <li><span><?= $escape(__('系统配置')) ?></span></li>
-            <li aria-current="page"><?= $escape(__('EAV 管理')) ?></li>
-        </ol>
-    </header>
-
-    <div class="w-eav-manager__layout">
-        <aside class="w-card w-eav-manager__navigation" aria-labelledby="w-eav-tree-title">
-            <header class="w-card__header w-stack" data-gap="sm">
-                <h2 class="w-card__title" id="w-eav-tree-title"><?= $escape(__('EAV 结构')) ?></h2>
-                <label class="w-field">
-                    <span class="w-visually-hidden"><?= $escape(__('搜索已加载节点')) ?></span>
-                    <span class="w-field__control">
-                        <span class="w-field__addon" aria-hidden="true"><w:icon name="search" size="sm" /></span>
-                        <input class="w-input" type="search" data-w-eav-search placeholder="<?= $escape(__('搜索已加载节点...')) ?>" autocomplete="off">
-                    </span>
-                </label>
-            </header>
-
-            <div class="w-card__body w-eav-manager__tree-scroll">
-                <ul class="w-tree" role="tree" data-w-component="tree" data-w-eav-tree aria-label="<?= $escape(__('EAV 结构树')) ?>" aria-busy="true"></ul>
+<div class="w-stack w-eav-manager-page" data-gap="lg">
+    <?php if ($entityScope): ?>
+        <header class="w-eav-manager-page__hero">
+            <div class="w-eav-manager-page__hero-icon" aria-hidden="true">
+                <w:icon name="layers" size="lg" />
             </div>
-
-            <footer class="w-card__footer">
-                <div class="w-menu-root" data-w-component="menu" data-w-placement="top-start">
-                    <button class="w-button w-eav-manager__create-trigger" type="button" data-tone="primary" data-w-menu-trigger aria-haspopup="menu" aria-expanded="false">
-                        <w:icon name="plus" size="sm" /> <?= $escape(__('新建')) ?>
-                    </button>
-                    <div class="w-menu w-eav-manager__create-menu" data-w-menu-panel role="menu" hidden>
-                        <?php foreach ($config['types'] as $type => $label): ?>
-                            <button class="w-menu__item" type="button" role="menuitem" tabindex="-1" data-w-eav-create="<?= $escape($type) ?>">
-                                <w:icon name="<?= $type === 'attribute' ? 'tag' : ($type === 'entity' ? 'box' : 'folder') ?>" size="sm" />
-                                <?= $escape(__('新建 %1', $label)) ?>
-                            </button>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            </footer>
-        </aside>
-
-        <section class="w-card w-eav-manager__detail" aria-labelledby="w-eav-detail-title">
-            <header class="w-card__header w-eav-manager__detail-header" data-w-eav-detail-header hidden>
-                <div class="w-stack" data-gap="sm">
-                    <h2 class="w-card__title" id="w-eav-detail-title" data-w-eav-detail-title></h2>
-                    <p class="w-text" data-tone="muted" data-family="mono" data-w-eav-detail-subtitle></p>
-                </div>
-                <button class="w-button" type="button" data-tone="danger" data-variant="outline" data-size="sm" data-w-eav-delete hidden>
-                    <w:icon name="trash" size="sm" /> <?= $escape(__('删除')) ?>
-                </button>
-            </header>
-            <div class="w-card__body w-eav-manager__detail-body">
-                <div class="w-empty" data-w-eav-placeholder>
-                    <w:icon name="info" size="xl" />
-                    <div class="w-stack" data-gap="sm">
-                        <h2><?= $escape(__('选择左侧节点查看详情')) ?></h2>
-                        <p><?= $escape(__('展开结构树并选择节点，可在此查看或修改其配置。')) ?></p>
-                    </div>
-                </div>
-                <div class="w-eav-manager__form" data-w-eav-detail hidden></div>
+            <div class="w-eav-manager-page__hero-copy">
+                <h1><?= $escape((string)__('%{1} 属性管理', $entityScope['name'])) ?></h1>
+                <p><?= $escape((string)__('管理 %{1}（%{2}）的属性集、属性组与属性', [$entityScope['name'], $entityScope['code']])) ?></p>
             </div>
-        </section>
-    </div>
-</section>
+            <code class="w-eav-manager-page__hero-code"><?= $escape($entityScope['code']) ?></code>
+        </header>
+    <?php elseif ($entityScopeError !== ''): ?>
+        <p class="w-eav-manager-page__intro w-text" data-tone="danger">
+            <w:icon name="warning" size="sm" /> <?= $escape($entityScopeError) ?>
+        </p>
+    <?php else: ?>
+        <p class="w-eav-manager-page__intro w-text" data-tone="muted">
+            <?= $escape(__('按实体、属性集、属性组和属性维护 EAV 结构')) ?>
+        </p>
+    <?php endif; ?>
 
-<script type="application/json" data-w-eav-config><?= json_encode($config, $jsonFlags) ?: '{}' ?></script>
+    <?= $this->fetch('Weline_Eav::templates/Backend/Manager/surface.phtml', [
+        'entityScope' => $entityScope,
+        'entityScopeError' => $entityScopeError,
+        'compact' => true,
+    ]) ?>
+</div>
+
 <script type="module" src="@static(Weline_Theme::ui/pages/weline-eav-manager.js)"></script>
