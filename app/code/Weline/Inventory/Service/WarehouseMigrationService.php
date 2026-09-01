@@ -888,22 +888,8 @@ final class WarehouseMigrationService
     ): ?array {
         $websiteId = (int) $row['website_id'];
         $storeId = (int) $row['store_id'];
-        if ($storeId === 0) {
-            $candidates = $websiteDefaults[$websiteId . ':' . Warehouse::MODE_NORMAL] ?? [];
-            if (count($candidates) !== 1) {
-                $conflicts[] = [
-                    'code' => count($candidates) === 0
-                        ? 'default_warehouse_missing'
-                        : 'default_warehouse_ambiguous',
-                    'kind' => $kind,
-                    'identity' => $identity,
-                    'website_id' => $websiteId,
-                    'store_id' => $storeId,
-                ];
-                return null;
-            }
-            return $candidates[0];
-        }
+        // store_id=0 is Store::ID_DEFAULT (real default store), not a website-level warehouse sentinel.
+        unset($websiteDefaults);
 
         $candidates = $bindings[$this->storeKey($websiteId, $storeId)] ?? [];
         if (count($candidates) !== 1) {

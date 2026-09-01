@@ -61,7 +61,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                         placeholder="@lang(搜索站点名称或编码)"
                     />
                 </div>
-                <div style="--w-span-md:3;"><label class="w-field__label"><lang>Store ID</lang></label><input class="w-input" type="number" min="1" name="store_id" required></div>
+                <div style="--w-span-md:3;"><label class="w-field__label"><lang>Store ID</lang></label><input class="w-input" type="number" min="0" name="store_id" required></div>
                 <div style="--w-span-md:3;"><label class="w-field__label"><lang>Warehouse ID</lang></label><input class="w-input" type="number" min="1" name="warehouse_id" required></div>
                 <div style="--w-span-md:2;"><label class="w-field__label"><lang>默认逻辑仓</lang></label><select class="w-select" name="is_default"><option value="0">否</option><option value="1">是</option></select></div>
                 <div class="w-cluster" data-align="end" style="--w-span-md:2;"><button class="w-button" type="submit" data-w-width="full" data-tone="primary"><lang>授权</lang></button></div>
@@ -83,7 +83,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
                         placeholder="@lang(搜索站点名称或编码)"
                     />
                 </div>
-                <div style="--w-span-md:2;"><label class="w-field__label"><lang>Store ID</lang></label><input class="w-input" type="number" min="1" name="store_id" required></div>
+                <div style="--w-span-md:2;"><label class="w-field__label"><lang>Store ID</lang></label><input class="w-input" type="number" min="0" name="store_id" required></div>
                 <div style="--w-span-md:2;"><label class="w-field__label"><lang>Offer ID</lang></label><input class="w-input" type="number" min="1" name="offer_id" required></div>
                 <div style="--w-span-md:2;"><label class="w-field__label"><lang>在手库存</lang></label><input class="w-input" type="number" min="0" name="on_hand_minor" required></div>
                 <div style="--w-span-md:2;"><label class="w-field__label"><lang>命令 ID</lang></label><input class="w-input" name="command_id" maxlength="96" required></div>

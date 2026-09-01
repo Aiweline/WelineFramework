@@ -54,8 +54,8 @@ final class InventoryAdminMutationService
         bool $isDefault,
     ): array {
         $this->assertWebsiteId($websiteId);
-        if ($storeId <= 0 || $warehouseId <= 0) {
-            throw new \InvalidArgumentException(__('store_id 与 warehouse_id 必须是正整数'));
+        if ($storeId < 0 || $warehouseId <= 0) {
+            throw new \InvalidArgumentException(__('store_id 不能为负数，warehouse_id 必须是正整数'));
         }
 
         return $this->authorizations->bind([
@@ -76,7 +76,7 @@ final class InventoryAdminMutationService
     ): AvailabilityResult {
         $this->assertWebsiteId($websiteId);
         $commandId = trim($commandId);
-        if ($storeId <= 0 || $offerId <= 0 || $onHandMinor < 0) {
+        if ($storeId < 0 || $offerId <= 0 || $onHandMinor < 0) {
             throw new \InvalidArgumentException(__('库存调整 Scope 或数量无效'));
         }
         if ($commandId === '' || strlen($commandId) > 96 || !preg_match('/^[a-z0-9:_-]+$/i', $commandId)) {

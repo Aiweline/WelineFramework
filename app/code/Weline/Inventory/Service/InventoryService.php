@@ -27,6 +27,8 @@ final class InventoryService implements
     InventoryRefundCapabilityInterface,
     InventoryReservationCommitCapabilityInterface
 {
+    public const EVENT_STOCK_PROJECTION_CHANGED = 'Weline_Inventory::stock_projection_changed';
+
     private readonly InventoryAvailabilityCalculator $calculator;
 
     /** @var (\Closure(): InventoryStock)|null */
@@ -201,8 +203,9 @@ final class InventoryService implements
             return $this->getAvailability($websiteId, $storeId, $offerId);
         }
 
+        $didMutate = false;
         try {
-            return $this->runAtomically(function () use (
+            $result = $this->runAtomically(function () use (
                 $websiteId,
                 $storeId,
                 $offerId,
@@ -212,6 +215,7 @@ final class InventoryService implements
                 $strategy,
                 $oversellAllowance,
                 $preorderAllowance,
+                &$didMutate,
             ): AvailabilityResult {
                 $existing = $this->findLedgerEventByKey(
                     $idempotencyKey,
@@ -283,6 +287,7 @@ final class InventoryService implements
                             ['idempotency_key' => $idempotencyKey],
                         );
                     }
+                    $didMutate = true;
                     return $this->getAvailability($websiteId, $storeId, $offerId);
                 }
                 throw new InventoryConflictException(
@@ -308,6 +313,30 @@ final class InventoryService implements
                 $requestHash,
             );
             return $this->getAvailability($websiteId, $storeId, $offerId);
+        }
+        if ($didMutate) {
+            $this->notifyStockProjectionChanged($websiteId, $storeId, $offerId, 'stock_set');
+        }
+
+        return $result;
+    }
+
+    private function notifyStockProjectionChanged(
+        int $websiteId,
+        int $storeId,
+        int $offerId,
+        string $reason,
+    ): void {
+        try {
+            ObjectManager::getInstance(\Weline\Framework\Event\EventsManager::class)
+                ->dispatch(self::EVENT_STOCK_PROJECTION_CHANGED, [
+                    'website_id' => max(0, $websiteId),
+                    'store_id' => max(0, $storeId),
+                    'offer_id' => max(0, $offerId),
+                    'reason' => $reason,
+                ]);
+        } catch (Throwable) {
+            // Stock write already committed; cache invalidation is best-effort.
         }
     }
 
