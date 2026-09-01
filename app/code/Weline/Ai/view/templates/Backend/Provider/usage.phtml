@@ -33,7 +33,7 @@
                 <button type="button" class="w-button" id="weline-ai-export-data" data-tone="neutral">
                     <w:icon name="download" size="sm"></w:icon><lang>导出</lang>
                 </button>
-                <a href="<?= $this->getBackendUrl('*/backend/provider') ?>" class="w-button" data-tone="primary">
+                <a href="@backend-url{'*/backend/provider'}" class="w-button" data-tone="primary">
                     <w:icon name="arrow-left" size="sm"></w:icon><lang>返回列表</lang>
                 </a>
             </div>
@@ -477,7 +477,7 @@
                 params.append('account_id', this.accountId);
             }
             
-            window.location.href = '<?= $this->getBackendUrl('*/backend/provider/exportUsage') ?>?' + params;
+            window.location.href = '@backend-url{'*/backend/provider/exportUsage'}?' + params;
         }
     };
     

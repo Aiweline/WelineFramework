@@ -21,6 +21,7 @@ use LearningMcp\ToolException;
 use LearningMcp\ToolService;
 
 require dirname(__DIR__) . '/src/bootstrap.php';
+require_once dirname(__DIR__) . '/scripts/project-guidance-runtime-time.php';
 
 $root = dirname(__DIR__, 4);
 $mode = in_array('--full', $argv, true) ? 'full' : 'quick';
@@ -2218,7 +2219,7 @@ try {
     $tools = new ToolService($store, $config, new Analyzer($store, $config));
     $definitions = $tools->definitions();
     $names = array_column($definitions, 'name');
-    foreach (['resolve_deploy_plan', 'get_edit_bundle', 'apply_compact_edit', 'get_run_status', 'get_run_trace', 'validate_change'] as $name) {
+    foreach (['submit_task_plan', 'get_task_plan', 'update_task_plan_progress', 'review_task_plan', 'resolve_deploy_plan', 'get_edit_bundle', 'apply_compact_edit', 'get_run_status', 'get_run_trace', 'validate_change'] as $name) {
         check(in_array($name, $names, true), "compact tool surface exposes $name");
     }
     $getBundleDefinition = array_values(array_filter(
@@ -2242,9 +2243,12 @@ try {
         'get_edit_status exposes the sealed review cursor at the MCP boundary',
     );
     check(ToolService::VERSION === '0.13.2', 'tool service version is 0.13.2');
-    check(str_contains(substr(ToolService::INSTRUCTIONS, 0, 512), 'prepare_project'), 'first 512 instruction characters contain mandatory preparation');
-    check(str_contains(substr(ToolService::INSTRUCTIONS, 0, 512), 'readiness_id'), 'first 512 instruction characters require readiness binding');
-    check(str_contains(ToolService::INSTRUCTIONS, 'get_edit_bundle once'), 'instructions preserve one-bundle editing');
+    check(str_contains(substr(ToolService::instructions(), 0, 512), 'prepare_project'), 'first 512 instruction characters contain mandatory preparation');
+    check(str_contains(substr(ToolService::instructions(), 0, 512), 'readiness_id'), 'first 512 instruction characters require readiness binding');
+    check(str_contains(ToolService::instructions(), 'get_edit_bundle once'), 'instructions preserve one-bundle editing');
+    check(str_contains(ToolService::instructions(), 'submit_task_plan'), 'instructions require submit_task_plan before sealed edits');
+    check(str_contains(ToolService::instructions(), 'every user requirement'), 'instructions require plan on every user requirement');
+    check(str_contains(ToolService::instructions(), 'PLAN_REQUIRED'), 'instructions mention PLAN_REQUIRED');
 
     $ui = file_get_contents(dirname(__DIR__) . '/ui/execution-run-v1.html');
     check(is_string($ui) && str_contains($ui, 'window.openai.callTool'), 'MCP App performs host tool refresh');
@@ -2263,6 +2267,17 @@ try {
     );
 
     $runner = new ProcessRunner();
+    $destructiveGitBlocked = false;
+    try {
+        $runner->run(['git', 'reset', '--hard'], $root, '', 5);
+    } catch (RuntimeException $exception) {
+        $destructiveGitBlocked = str_contains($exception->getMessage(), 'MCP_WORKTREE_MUTATION_FORBIDDEN');
+    }
+    check($destructiveGitBlocked, 'process runner rejects destructive Git before spawning a child');
+    check(
+        welineGuidanceStartedEpochFromElapsed('04:00:00', 100_000) === 85_600,
+        'host generation time derives from elapsed duration without timezone drift',
+    );
     $deployFixture = $temporary . '/deploy-bridge-project';
     mkdir($deployFixture . '/bin', 0700, true);
     file_put_contents($deployFixture . '/bin/w', <<<'PHP'
@@ -2341,7 +2356,7 @@ PHP);
     check(
         $parserHighWater['exit_code'] === 0
             && ($parserHighWaterResult['rejected_before_decode'] ?? false) === true
-            && (int) ($parserHighWaterResult['usage_before'] ?? 0) >= 120 * 1_024 * 1_024
+            && (int) ($parserHighWaterResult['usage_before'] ?? 0) >= 124 * 1_024 * 1_024
             && (int) ($parserHighWaterResult['peak_bytes'] ?? PHP_INT_MAX) < 128 * 1_024 * 1_024,
         'parser payload decode is denied safely at the 128 MiB parent high-water mark',
     );
@@ -2358,7 +2373,7 @@ PHP);
     $parserIsolationResult = json_decode(trim($parserIsolation['stdout']), true);
     check(
         is_array($parserIsolationResult)
-            && ($parserIsolationResult['freshness'] ?? null) === 'partial'
+            && ($parserIsolationResult['freshness'] ?? null) === 'current'
             && ($parserIsolationResult['phase'] ?? null) === 'idle'
             && ($parserIsolationResult['previous_hash_retained'] ?? false) === true
             && ($parserIsolationResult['transport_survived'] ?? false) === true
@@ -2369,6 +2384,26 @@ PHP);
             && ($parserIsolationResult['truncated_output_rejected'] ?? false) === true
             && (int) ($parserIsolationResult['resource_bytes'] ?? 0) > 0,
         'isolated parser failure retains the index and keeps MCP App resources readable',
+    );
+    $moduleVersionGate = $runner->run(
+        [PHP_BINARY, __DIR__ . '/module-version-bump-gate.php'],
+        $root,
+        '',
+        30,
+    );
+    check(
+        $moduleVersionGate['exit_code'] === 0,
+        'module version bump gate rejects registration edits without version increase',
+    );
+    $taskPlanGate = $runner->run(
+        [PHP_BINARY, __DIR__ . '/task-plan-gate.php'],
+        $root,
+        '',
+        30,
+    );
+    check(
+        $taskPlanGate['exit_code'] === 0,
+        'task plan gate requires accepted task-plan.v1 before sealed edit',
     );
     $installConfig = $temporary . '/install/config.yaml';
     $marketplace = $temporary . '/marketplace';

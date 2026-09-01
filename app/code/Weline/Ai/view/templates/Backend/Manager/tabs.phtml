@@ -9,14 +9,6 @@ $h = static function ($s): string {
     return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 };
 
-$modelUrl = $h($this->getBackendUrl('ai/backend/model'));
-$adapterUrl = $h($this->getBackendUrl('ai/backend/adapter'));
-$agentUrl = $h($this->getBackendUrl('ai/backend/agent'));
-$skillUrl = $h($this->getBackendUrl('ai/backend/skill'));
-$styleUrl = $h($this->getBackendUrl('ai/backend/style'));
-$customVendorUrl = $h($this->getBackendUrl('ai/backend/customvendor'));
-$providerUrl = $h($this->getBackendUrl('ai/backend/provider'));
-
 $modelSelected = $activeTab === 'model' ? 'true' : 'false';
 $adapterSelected = $activeTab === 'adapter' ? 'true' : 'false';
 $agentSelected = $activeTab === 'agent' ? 'true' : 'false';
@@ -72,31 +64,31 @@ $accountLabel = $h(__('供应商账户'));
 }
 </style>
 <nav class="w-tabs__list weline-ai-manager-tabs" data-variant="soft" role="tablist" aria-label="<?= $tabsAriaLabel ?>" style="--w-mb:var(--weline-space-5);">
-    <a class="w-tabs__tab" href="<?= $modelUrl ?>" role="tab" aria-selected="<?= $modelSelected ?>" tabindex="<?= $modelTabIndex ?>">
+    <a class="w-tabs__tab" href="@backend-url{'ai/backend/model'}" role="tab" aria-selected="<?= $modelSelected ?>" tabindex="<?= $modelTabIndex ?>">
         <w:icon name="robot"></w:icon>
         <span><?= $modelLabel ?></span>
     </a>
-    <a class="w-tabs__tab" href="<?= $adapterUrl ?>" role="tab" aria-selected="<?= $adapterSelected ?>" tabindex="<?= $adapterTabIndex ?>">
+    <a class="w-tabs__tab" href="@backend-url{'ai/backend/adapter'}" role="tab" aria-selected="<?= $adapterSelected ?>" tabindex="<?= $adapterTabIndex ?>">
         <w:icon name="puzzle"></w:icon>
         <span><?= $adapterLabel ?></span>
     </a>
-    <a class="w-tabs__tab" href="<?= $agentUrl ?>" role="tab" aria-selected="<?= $agentSelected ?>" tabindex="<?= $agentTabIndex ?>">
+    <a class="w-tabs__tab" href="@backend-url{'ai/backend/agent'}" role="tab" aria-selected="<?= $agentSelected ?>" tabindex="<?= $agentTabIndex ?>">
         <w:icon name="sparkles"></w:icon>
         <span><?= $agentLabel ?></span>
     </a>
-    <a class="w-tabs__tab" href="<?= $skillUrl ?>" role="tab" aria-selected="<?= $skillSelected ?>" tabindex="<?= $skillTabIndex ?>">
+    <a class="w-tabs__tab" href="@backend-url{'ai/backend/skill'}" role="tab" aria-selected="<?= $skillSelected ?>" tabindex="<?= $skillTabIndex ?>">
         <w:icon name="bolt"></w:icon>
         <span><?= $skillLabel ?></span>
     </a>
-    <a class="w-tabs__tab" href="<?= $styleUrl ?>" role="tab" aria-selected="<?= $styleSelected ?>" tabindex="<?= $styleTabIndex ?>">
+    <a class="w-tabs__tab" href="@backend-url{'ai/backend/style'}" role="tab" aria-selected="<?= $styleSelected ?>" tabindex="<?= $styleTabIndex ?>">
         <w:icon name="palette"></w:icon>
         <span><?= $styleLabel ?></span>
     </a>
-    <a class="w-tabs__tab" href="<?= $customVendorUrl ?>" role="tab" aria-selected="<?= $customVendorSelected ?>" tabindex="<?= $customVendorTabIndex ?>">
+    <a class="w-tabs__tab" href="@backend-url{'ai/backend/customvendor'}" role="tab" aria-selected="<?= $customVendorSelected ?>" tabindex="<?= $customVendorTabIndex ?>">
         <w:icon name="server"></w:icon>
         <span><?= $customVendorLabel ?></span>
     </a>
-    <a class="w-tabs__tab" href="<?= $providerUrl ?>" role="tab" aria-selected="<?= $accountSelected ?>" tabindex="<?= $accountTabIndex ?>">
+    <a class="w-tabs__tab" href="@backend-url{'ai/backend/provider'}" role="tab" aria-selected="<?= $accountSelected ?>" tabindex="<?= $accountTabIndex ?>">
         <w:icon name="user"></w:icon>
         <span><?= $accountLabel ?></span>
     </a>

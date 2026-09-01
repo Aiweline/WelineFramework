@@ -69,6 +69,11 @@ AI翻译调用失败,"AI translation call failed"
 未发现新的AI模型,"No new AI models found"
 AI模块资源扫描完成,"AI module resource scanning completed"
 "AI模块资源扫描失败: %{error}","AI module resource scan failed: %{error}"
+"a, b","a, b"
+"支持 .ico, .png","支持 .ico, .png"
+"""a, b""","""a, b"""
+...,...
+…,…
 文章生成适配器,"Article generation adapter"
 "专为内容模块设计的 AI 文章生成适配器。支持多种文章类型、多语言、SEO 优化、自定义风格和长度。输出结构化 JSON 格式，包含标题、摘要、正文、SEO 元信息等。","AI article generation adapter designed for content modules. Supports multiple post types, multiple languages, SEO optimization, custom styles and lengths. Output in structured JSON format, including title, abstract, body, SEO meta information, etc."
 无效的文章类型：%{type},"Invalid article type: %{type}"

@@ -30,6 +30,9 @@ final class ProjectReadinessService
     /** @var array<string,list<string>> */
     private array $sessionDirectives = [];
 
+    /** @var array<string,array<string,mixed>> */
+    private array $sessionTaskPlans = [];
+
     public function __construct(
         private readonly Config $config,
         private readonly ProcessRunner $runner,
@@ -379,6 +382,208 @@ final class ProjectReadinessService
         return $this->sessionDirectives[$this->sessionKey($index, $sessionId)] ?? [];
     }
 
+    /**
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>
+     */
+    public function submitTaskPlan(ProjectIndex $index, array $input): array
+    {
+        $readiness = $this->assertReady($index, $input);
+        $planInput = $input['plan'] ?? null;
+        if (!is_array($planInput)) {
+            throw new ToolException(
+                TaskPlanGate::ERROR_PLAN_INVALID,
+                'plan object is required (task-plan.v1 fields).',
+            );
+        }
+
+        $normalized = TaskPlanGate::normalizeSubmission($planInput);
+        $sessionId = (string) $readiness['client_session_id'];
+        $planId = Ids::make('plan');
+        $normalized['plan_id'] = $planId;
+        $normalized['project_id'] = $index->projectId();
+        $normalized['client_session_id'] = $sessionId;
+        $normalized['readiness_id'] = $readiness['readiness_id'];
+        $normalized['submitted_at'] = gmdate('c');
+        $normalized['persisted'] = false;
+        $normalized['repository_written'] = false;
+
+        $this->sessionTaskPlans[$this->sessionKey($index, $sessionId)] = $normalized;
+        $this->trimSessionTaskPlans();
+
+        return [
+            'schema_version' => TaskPlanGate::SCHEMA,
+            'status' => 'accepted',
+            'plan_id' => $planId,
+            'project_id' => $index->projectId(),
+            'client_session_id' => $sessionId,
+            'readiness_id' => $readiness['readiness_id'],
+            'plan' => $normalized,
+            'edit_allowed' => true,
+            'review' => TaskPlanWorkflow::reviewCompleteness($normalized),
+            'plan_workflow' => TaskPlanWorkflow::blueprint(),
+            'next_tools' => ['get_edit_bundle', 'apply_compact_edit', 'update_task_plan_progress'],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>
+     */
+    public function updateTaskPlanProgress(ProjectIndex $index, array $input): array
+    {
+        $readiness = $this->assertReady($index, $input);
+        $sessionId = (string) $readiness['client_session_id'];
+        $plan = $this->taskPlan($index, $sessionId);
+        if ($plan === null) {
+            throw new ToolException(
+                TaskPlanGate::ERROR_PLAN_REQUIRED,
+                'No task plan to update; submit_task_plan first.',
+                false,
+                TaskPlanGate::planRequiredDetails('update_task_plan_progress'),
+            );
+        }
+
+        $patch = is_array($input['progress'] ?? null) ? $input['progress'] : $input;
+        unset($patch['repository'], $patch['client_session_id'], $patch['readiness_id'], $patch['project_id']);
+        $updated = TaskPlanWorkflow::applyProgressPatch($plan, $patch);
+        $this->sessionTaskPlans[$this->sessionKey($index, $sessionId)] = $updated;
+        $review = TaskPlanWorkflow::reviewCompleteness($updated);
+
+        return [
+            'schema_version' => TaskPlanGate::SCHEMA,
+            'status' => 'accepted',
+            'edit_allowed' => true,
+            'project_id' => $index->projectId(),
+            'client_session_id' => $sessionId,
+            'readiness_id' => $readiness['readiness_id'],
+            'plan' => $updated,
+            'summary' => TaskPlanGate::publicStatus($updated),
+            'review' => $review,
+            'next_tools' => (bool) ($review['closeout_allowed'] ?? false)
+                ? ['review_task_plan', 'module doc reconcile']
+                : ['update_task_plan_progress', 'review_task_plan'],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>
+     */
+    public function reviewTaskPlan(ProjectIndex $index, array $input): array
+    {
+        $readiness = $this->assertReady($index, $input);
+        $sessionId = (string) $readiness['client_session_id'];
+        $plan = $this->taskPlan($index, $sessionId);
+        if ($plan === null) {
+            throw new ToolException(
+                TaskPlanGate::ERROR_PLAN_REQUIRED,
+                'No task plan to review; submit_task_plan first.',
+                false,
+                TaskPlanGate::planRequiredDetails('review_task_plan'),
+            );
+        }
+
+        $review = TaskPlanWorkflow::reviewCompleteness($plan);
+        $gaps = is_array($review['gaps'] ?? null) ? $review['gaps'] : [];
+        $omissionNotes = trim((string) ($input['omission_notes'] ?? ''));
+        if ($omissionNotes !== '') {
+            if (mb_strlen($omissionNotes, 'UTF-8') > 2000) {
+                throw new ToolException(TaskPlanGate::ERROR_PLAN_INVALID, 'omission_notes cannot exceed 2000 characters.');
+            }
+            $existing = trim((string) ($plan['review_notes'] ?? ''));
+            $plan['review_notes'] = $existing === '' ? $omissionNotes : $existing . "\n" . $omissionNotes;
+            $plan['updated_at'] = gmdate('c');
+            $this->sessionTaskPlans[$this->sessionKey($index, $sessionId)] = $plan;
+            $review = TaskPlanWorkflow::reviewCompleteness($plan);
+            $gaps = is_array($review['gaps'] ?? null) ? $review['gaps'] : [];
+        }
+
+        return [
+            'schema_version' => 'task-plan-review.v1',
+            'project_id' => $index->projectId(),
+            'client_session_id' => $sessionId,
+            'readiness_id' => $readiness['readiness_id'],
+            'plan_id' => (string) ($plan['plan_id'] ?? ''),
+            'review' => $review,
+            'gaps' => $gaps,
+            'closeout_allowed' => (bool) ($review['closeout_allowed'] ?? false),
+            'completeness_ratio' => (float) ($review['completeness_ratio'] ?? 0),
+            'plan_workflow' => TaskPlanWorkflow::blueprint(),
+            'next_tools' => (bool) ($review['closeout_allowed'] ?? false)
+                ? ['module doc reconcile', 'feature_delivery_urls']
+                : ['update_task_plan_progress', 'submit_task_plan'],
+        ];
+    }
+
+    /**
+     * @param array<string,mixed> $input
+     * @return array<string,mixed>
+     */
+    public function getTaskPlan(ProjectIndex $index, array $input): array
+    {
+        $readiness = $this->assertReady($index, $input);
+        $sessionId = (string) $readiness['client_session_id'];
+        $plan = $this->taskPlan($index, $sessionId);
+        if ($plan === null) {
+            return array_merge(
+                [
+                    'project_id' => $index->projectId(),
+                    'client_session_id' => $sessionId,
+                    'readiness_id' => $readiness['readiness_id'],
+                ],
+                TaskPlanGate::missingPlanEnvelope(),
+            );
+        }
+
+        $review = TaskPlanWorkflow::reviewCompleteness($plan);
+
+        return [
+            'schema_version' => TaskPlanGate::SCHEMA,
+            'status' => 'accepted',
+            'edit_allowed' => true,
+            'project_id' => $index->projectId(),
+            'client_session_id' => $sessionId,
+            'readiness_id' => $readiness['readiness_id'],
+            'plan' => $plan,
+            'summary' => TaskPlanGate::publicStatus($plan),
+            'review' => $review,
+            'plan_workflow' => TaskPlanWorkflow::blueprint(),
+            'next_tools' => (bool) ($review['closeout_allowed'] ?? false)
+                ? ['review_task_plan']
+                : ['update_task_plan_progress', 'get_edit_bundle'],
+        ];
+    }
+
+    public function taskPlan(ProjectIndex $index, string $sessionId): ?array
+    {
+        $plan = $this->sessionTaskPlans[$this->sessionKey($index, $sessionId)] ?? null;
+
+        return is_array($plan) ? $plan : null;
+    }
+
+    /**
+     * @throws ToolException
+     */
+    public function assertTaskPlanForEdit(ProjectIndex $index, string $sessionId, string $tool): void
+    {
+        TaskPlanGate::assertAcceptedForEdit($this->taskPlan($index, $sessionId), $tool);
+    }
+
+    private function trimSessionTaskPlans(): void
+    {
+        if (count($this->sessionTaskPlans) <= self::MAX_SESSIONS) {
+            return;
+        }
+        $overflow = count($this->sessionTaskPlans) - self::MAX_SESSIONS;
+        foreach (array_keys($this->sessionTaskPlans) as $key) {
+            if ($overflow-- <= 0) {
+                break;
+            }
+            unset($this->sessionTaskPlans[$key]);
+        }
+    }
+
     /** @param array<string,mixed> $snapshot
      *  @param array<string,mixed> $indexResult
      *  @return array<string,mixed>
@@ -437,8 +642,17 @@ final class ProjectReadinessService
             'validated_at' => $record['validated_at'],
             'agent_guidance' => [
                 'session_startup_notices' => GuidanceWorkflowCatalog::sessionStartupNotices(),
-                'workflow_doc' => 'app/code/Weline/Ai/doc/AI工程交付流程.md',
-                'read_next' => ['resolve_task_context', 'workflow_contract.v1.session_startup_notices'],
+                'hard_constraints' => HardConstraintsCatalog::package(),
+                'feature_delivery_urls' => GuidanceWorkflowCatalog::featureDeliveryUrls(),
+                'closeout_delivery_reminder' => GuidanceWorkflowCatalog::closeoutDeliveryReminder(),
+                'workflow_doc' => HardConstraintsCatalog::AUTHORITATIVE_WORKFLOW_DOC,
+                'hard_rules_index' => HardConstraintsCatalog::AUTHORITATIVE_DOC,
+                'read_next' => [
+                    'agent_guidance.hard_constraints',
+                    'resolve_task_context',
+                    'agent_guidance.feature_delivery_urls',
+                    'agent_guidance.closeout_delivery_reminder',
+                ],
             ],
         ];
     }

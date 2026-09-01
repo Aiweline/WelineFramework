@@ -236,6 +236,14 @@ final class EditService
             );
         }
 
+        $pathToPost = [];
+        $pathToPre = [];
+        foreach ($files as $path => $file) {
+            $pathToPost[$path] = (string) $file['post_content'];
+            $pathToPre[$path] = (string) ($file['content'] ?? '');
+        }
+        ModuleVersionBumpGate::assertPlanSatisfies($pathToPost, $pathToPre);
+
         $transactionId = Ids::make('edit');
         $journalDirectory = $this->journalDirectory($transactionId);
         $snapshots = [];

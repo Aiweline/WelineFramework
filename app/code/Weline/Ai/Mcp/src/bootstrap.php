@@ -3,11 +3,14 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Support.php';
+require_once __DIR__ . '/HardConstraintsCatalog.php';
 require_once __DIR__ . '/GuidanceWorkflowCatalog.php';
 require_once __DIR__ . '/Config.php';
+require_once __DIR__ . '/RepositoryScope.php';
 require_once __DIR__ . '/SessionIdentity.php';
 require_once __DIR__ . '/ProjectResolver.php';
 require_once __DIR__ . '/Store.php';
+require_once __DIR__ . '/GitSafetyPolicy.php';
 require_once __DIR__ . '/ProcessRunner.php';
 require_once __DIR__ . '/DeployBridgeService.php';
 require_once __DIR__ . '/ProjectIndex.php';
@@ -22,6 +25,9 @@ require_once __DIR__ . '/FrameworkBranchGuard.php';
 require_once __DIR__ . '/ProjectReadinessService.php';
 require_once __DIR__ . '/CodexInvoker.php';
 require_once __DIR__ . '/LearningNoveltyService.php';
+require_once __DIR__ . '/ModuleVersionBumpGate.php';
+require_once __DIR__ . '/TaskPlanGate.php';
+require_once __DIR__ . '/TaskPlanWorkflow.php';
 require_once __DIR__ . '/EditService.php';
 require_once __DIR__ . '/ExecutionRunService.php';
 require_once __DIR__ . '/KnowledgeService.php';
