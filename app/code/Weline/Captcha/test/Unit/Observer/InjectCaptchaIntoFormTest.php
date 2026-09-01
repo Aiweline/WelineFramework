@@ -43,21 +43,20 @@ final class InjectCaptchaIntoFormTest extends TestCase
 
         $html = (string)$event->getData('html');
         self::assertStringContainsString('data-weline-captcha-lazy="1"', $html);
+        self::assertStringContainsString('data-challenge-route="weline_captcha/frontend/challenge"', $html);
         self::assertStringContainsString('data-intent="checkout.save_delivery_address"', $html);
         self::assertStringContainsString('data-form-id="checkout-delivery-quick-add-form"', $html);
+        self::assertStringContainsString('LazyCaptchaClientRuntime', (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Observer/InjectCaptchaIntoForm.php'
+        ));
+        self::assertFileExists(\dirname(__DIR__, 3) . '/view/statics/js/captcha-lazy.js');
+        self::assertFileExists(\dirname(__DIR__, 3) . '/Service/LazyCaptchaClientRuntime.php');
     }
 
     public function testRequiredModeInjectsChallengeWithFormContext(): void
     {
         $captcha = $this->createMock(CaptchaManagerInterface::class);
-        $captcha->expects(self::once())
-            ->method('renderChallenge')
-            ->with([
-                'form_id' => 'customer-login',
-                'intent' => 'customer.login',
-                'required' => true,
-            ])
-            ->willReturn('<div data-test-captcha></div>');
+        $captcha->expects(self::never())->method('renderChallenge');
         $observer = new InjectCaptchaIntoForm($captcha);
         $event = $this->formEvent([
             'id' => 'customer-login',
@@ -68,7 +67,27 @@ final class InjectCaptchaIntoFormTest extends TestCase
 
         $observer->execute($event);
 
-        self::assertSame('<div data-test-captcha></div>', $event->getData('html'));
+        $html = (string)$event->getData('html');
+        self::assertStringContainsString('data-weline-captcha-lazy="1"', $html);
+        self::assertStringContainsString('data-intent="customer.login"', $html);
+        self::assertStringContainsString('data-form-id="customer-login"', $html);
+        self::assertStringContainsString('data-captcha-mode="required"', $html);
+        self::assertStringNotContainsString('data-test-captcha', $html);
+    }
+
+    public function testRequiredModeAttachesCaptchaModuleBeforeRender(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Observer/InjectCaptchaIntoForm.php'
+        );
+
+        self::assertStringContainsString('LazyCaptchaClientRuntime::onceScriptHtml', $source);
+        self::assertStringContainsString('data-weline-captcha-lazy', $source);
+        self::assertStringContainsString('weline_captcha/frontend/challenge', $source);
+        self::assertStringNotContainsString('SharedResponseCachePolicy::forbid', $source);
+        self::assertStringNotContainsString('captcha_ssr_challenge', $source);
+        self::assertStringNotContainsString('renderChallenge', $source);
+        self::assertStringNotContainsString("addModule('Weline_Captcha')", $source);
     }
 
     public function testAsyncActionFormsSkipCaptchaEvenWhenRequired(): void
@@ -94,9 +113,7 @@ final class InjectCaptchaIntoFormTest extends TestCase
     public function testAutoModeOnPostStillInjectsWhenNotAsync(): void
     {
         $captcha = $this->createMock(CaptchaManagerInterface::class);
-        $captcha->expects(self::once())
-            ->method('renderChallenge')
-            ->willReturn('<div data-test-captcha-auto></div>');
+        $captcha->expects(self::never())->method('renderChallenge');
         $observer = new InjectCaptchaIntoForm($captcha);
         $event = $this->formEvent([
             'id' => 'meta-file-form',
@@ -107,7 +124,11 @@ final class InjectCaptchaIntoFormTest extends TestCase
 
         $observer->execute($event);
 
-        self::assertSame('<div data-test-captcha-auto></div>', $event->getData('html'));
+        $html = (string)$event->getData('html');
+        self::assertStringContainsString('data-weline-captcha-lazy="1"', $html);
+        self::assertStringContainsString('data-intent="meta.file"', $html);
+        self::assertStringContainsString('data-captcha-mode="auto"', $html);
+        self::assertStringNotContainsString('data-test-captcha-auto', $html);
     }
 
     /** @param array<string, mixed> $attributes */
