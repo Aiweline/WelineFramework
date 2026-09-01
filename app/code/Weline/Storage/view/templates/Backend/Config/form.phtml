@@ -20,7 +20,7 @@ $escape = static fn (mixed $value): string => htmlspecialchars((string)$value, E
     <w:slot:header>
         <div class="w-cluster" data-justify="between" data-align="center">
             <h5 style="--w-mb:0;"><?= $isEdit ? __('编辑存储配置') : __('新增存储配置') ?></h5>
-            <a href="<?= $this->getUrl('storage/backend/config') ?>" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
+            <a href="@url{'storage/backend/config'}" class="w-button" data-tone="neutral" data-variant="outline" data-size="sm">
                 <w:icon name="arrow-left" size="sm"></w:icon> <?= __('返回列表') ?>
             </a>
         </div>
@@ -161,7 +161,7 @@ form.addEventListener('submit', async function(e) {
     }
     
     try {
-        var saveUrl = '<?= $this->getUrl('storage/backend/config/save') ?>';
+        var saveUrl = '@url{'storage/backend/config/save'}';
         var saveOpts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() };
         var res = await Weline.adminRequest('storage', saveUrl, saveOpts);
         var data = (res && res.data) !== undefined ? res.data : res;
@@ -169,7 +169,7 @@ form.addEventListener('submit', async function(e) {
         if (data.code === 200) {
             Weline.UI.toast.success(data.msg);
             setTimeout(() => {
-                location.href = '<?= $this->getUrl('storage/backend/config') ?>';
+                location.href = '@url{'storage/backend/config'}';
             }, 1000);
         } else {
             Weline.UI.toast.error(data.msg);
@@ -190,7 +190,7 @@ document.getElementById('btn-test').addEventListener('click', async function() {
     this.innerHTML = '<span class="w-spinner" data-size="sm"></span> <?= __('测试中...') ?>';
     
     try {
-        var url = '<?= $this->getUrl('storage/backend/config/test') ?>';
+        var url = '@url{'storage/backend/config/test'}';
         var opts = { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: params.toString() };
         var res = await Weline.adminRequest('storage', url, opts);
         var data = (res && res.data) !== undefined ? res.data : res;
