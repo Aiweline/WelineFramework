@@ -12,11 +12,14 @@
  * @widget.position {["content"]}
  * @widget.page_layouts {["product"]}
  * @widget.supports {["layout-product-reviews","product-reviews","review","reviews"]}
- * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-reviews", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认评论容器", "config":{"title":"商品评论","intro":"支持文字、图片与视频，内容审核后公开。","page_size":10} }]}
+ * @widget.default_injections {[{ "layout_type":"product", "layout_option":"default", "slot":"product-reviews", "area":"content", "sort_order":0, "required":true, "reason":"商品详情默认评论容器", "config":{"title":"商品评论","intro":"支持文字、图片与视频，内容审核后公开。","page_size":10,"layout_mode":"stack","form_position":"right","form_collapsed":"1"} }]}
  *
  * @param title {default="商品评论",type="string",label="标题"}
  * @param intro {default="支持文字、图片与视频，内容审核后公开。",type="string",label="简介"}
  * @param page_size {default=10,type="number",label="列表每页条数"}
+ * @param layout_mode {default="stack",type="select",label="布局方式",options={stack:"上下布局",split:"左右布局"}}
+ * @param form_position {default="right",type="select",label="表单位置（左右布局）",options={right:"表单在右",left:"表单在左"}}
+ * @param form_collapsed {default="1",type="select",label="表单默认折叠",options={1:"点击写评论后展开",0:"始终显示表单"}}
  */
 
 use Weline\Framework\Env\WelineEnv;
@@ -58,6 +61,26 @@ if (preg_match('/^Weline_[A-Za-z0-9_]+$/', $introSource)) {
 }
 $widgetIntro = WidgetI18n::label($introSource, '支持文字、图片与视频，内容审核后公开。');
 $pageSize = max(1, min(50, (int)($this->getData('page_size') ?? 10)));
+$layoutMode = strtolower(trim((string)($this->getData('layout_mode') ?? 'stack')));
+if (!in_array($layoutMode, ['stack', 'split'], true)) {
+    $layoutMode = 'stack';
+}
+$formPosition = strtolower(trim((string)($this->getData('form_position') ?? 'right')));
+if (!in_array($formPosition, ['left', 'right'], true)) {
+    $formPosition = 'right';
+}
+$formCollapsedRaw = $this->getData('form_collapsed');
+$formCollapsed = $formCollapsedRaw === null || $formCollapsedRaw === ''
+    ? true
+    : !in_array(strtolower(trim((string)$formCollapsedRaw)), ['0', 'false', 'no', 'off'], true);
+$reviewRootClasses = trim(implode(' ', array_filter([
+    $wc,
+    'weline-review',
+    $isPreviewMode ? 'is-preview' : '',
+    'weline-review--layout-' . $layoutMode,
+    $layoutMode === 'split' && $formPosition === 'left' ? 'weline-review--form-left' : '',
+    $formCollapsed ? 'weline-review--form-collapsed' : '',
+])));
 
 $offer = $this->getData('storefront_offer');
 $offer = is_array($offer) ? $offer : [];
@@ -111,6 +134,22 @@ if ($offerUuid === '' && class_exists(\Weline\Product\Service\StorefrontCatalogV
 }
 
 if ($offerUuid === '' && !$isPreviewMode) {
+    // Keep a visible shell so DEV HTML health does not report empty_html on product-reviews.
+    ?>
+<link rel="stylesheet"
+      href="@static(Weline_Review::css/widgets/product-reviews.css)&v=20260826-review-dialog2"
+      data-no-extract="true">
+<section class="<?= $esc($wc) ?> weline-review weline-review--unavailable"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-testid="storefront-product-reviews-unavailable"
+         data-review-root
+         data-type-code="product"
+         data-entity-uuid=""
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <p class="weline-review__unavailable-message"><?= __('商品评论暂不可用') ?></p>
+</section>
+    <?php
     return;
 }
 
@@ -138,24 +177,33 @@ $messages = [
     'imageLimit' => __('最多选择 6 张图片，单张不超过 10 MB。'),
     'videoLimit' => __('最多选择 2 个视频，单个不超过 50 MB。'),
     'mediaInvalid' => __('所选媒体文件数量或大小超过限制。'),
-    'photo' => __('图片'),
+    'photo' => __('评论图片'),
     'video' => __('视频'),
     'remove' => __('移除'),
     'submit' => __('提交评论'),
     'ratingRequired' => __('请选择所有必填评分。'),
+    'writeReview' => __('写评论'),
+    'hideReviewForm' => __('收起评论表单'),
+    'viewPhoto' => __('查看图片'),
+    'playVideo' => __('播放视频'),
+    'closeLightbox' => __('关闭预览'),
+    'lightboxLabel' => __('评论媒体预览'),
 ];
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Review::css/widgets/product-reviews.css)&v=20260825-review3"
+      href="@static(Weline_Review::css/widgets/product-reviews.css)&v=20260826-review-dialog2"
       data-no-extract="true">
 
-<section class="<?= $esc($wc) ?> weline-review<?= $isPreviewMode ? ' is-preview' : '' ?>"
+<section class="<?= $esc($reviewRootClasses) ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-testid="storefront-product-reviews"
          data-review-root
+         data-weline-load="productReviews"
          data-type-code="product"
          data-entity-uuid="<?= $esc($offerUuid) ?>"
          data-page-size="<?= $esc((string)$pageSize) ?>"
+         data-layout-mode="<?= $esc($layoutMode) ?>"
+         data-form-collapsed="<?= $formCollapsed ? '1' : '0' ?>"
          data-preview-schema="<?= $esc($json($previewSchema)) ?>"
          data-review-messages="<?= $esc($json($messages)) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
@@ -183,10 +231,33 @@ $messages = [
             <div class="weline-review__items" data-review-items aria-live="polite">
                 <p class="weline-review__empty"><?= __('正在加载评论...') ?></p>
             </div>
+            <?php if ($formCollapsed): ?>
+                <button type="button"
+                        class="weline-review__write-toggle"
+                        data-review-write-toggle
+                        aria-expanded="false"
+                        aria-controls="weline-review-form-<?= $esc($scope->uid) ?>">
+                    <?= __('写评论') ?>
+                </button>
+            <?php endif; ?>
         </div>
-        <form class="weline-review__form" data-review-form novalidate>
+        <form class="weline-review__form"
+              id="weline-review-form-<?= $esc($scope->uid) ?>"
+              data-review-form
+              novalidate
+              <?= $formCollapsed ? 'hidden' : '' ?>>
             <p class="weline-review__form-kicker"><?= __('分享真实体验') ?></p>
-            <h3><?= __('撰写图文 / 视频评论') ?></h3>
+            <div class="weline-review__form-head">
+                <h3><?= __('撰写图文 / 视频评论') ?></h3>
+                <?php if ($formCollapsed): ?>
+                    <button type="button"
+                            class="weline-review__form-collapse"
+                            data-review-form-collapse
+                            aria-controls="weline-review-form-<?= $esc($scope->uid) ?>">
+                        <?= __('收起评论表单') ?>
+                    </button>
+                <?php endif; ?>
+            </div>
             <div class="weline-review__dynamic-fields" data-review-fields aria-live="polite">
                 <p class="weline-review__form-loading"><?= __('正在加载评论表单...') ?></p>
             </div>
@@ -196,8 +267,30 @@ $messages = [
             <p class="weline-review__message" data-review-message aria-live="polite"></p>
         </form>
     </div>
+
+    <dialog class="w-dialog w-review-media__dialog"
+            id="weline-review-media-<?= $esc($scope->uid) ?>"
+            data-w-component="dialog"
+            data-review-media-dialog
+            data-state="closed"
+            aria-labelledby="weline-review-media-title-<?= $esc($scope->uid) ?>">
+        <div class="w-dialog__surface">
+            <header class="w-dialog__header">
+                <h2 class="w-dialog__title"
+                    id="weline-review-media-title-<?= $esc($scope->uid) ?>"
+                    data-review-media-dialog-title><?= __('评论媒体预览') ?></h2>
+                <button type="button"
+                        class="w-button"
+                        data-w-action="dialog.close"
+                        data-tone="quiet"
+                        data-size="sm"
+                        aria-label="<?= $esc(__('关闭预览')) ?>">×</button>
+            </header>
+            <div class="w-dialog__body w-review-media__dialog-body"
+                 data-review-lightbox-stage
+                 aria-live="polite"></div>
+        </div>
+    </dialog>
 </section>
 
-<script src="@static(Weline_Review::js/widgets/product-reviews.js)&v=20260825-review3"
-        defer
-        data-no-extract="true"></script>
+<?php // productReviews：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

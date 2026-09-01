@@ -13,6 +13,7 @@
 查看所有评论,"View all reviews"
 审核评论,"Moderate reviews"
 通过或拒绝评论,"Approve or reject reviews"
+商品评论暂不可用,"Product reviews are unavailable"
 正在加载评论...,"Loading reviews..."
 评论加载失败，请稍后重试。,"Reviews could not be loaded. Please try again later."
 暂时还没有已审核的评论，欢迎分享第一条真实体验。,"No approved reviews yet. Be the first to share a real experience."
@@ -24,11 +25,17 @@
 "最多选择 6 张图片，单张不超过 10 MB。","Choose up to 6 photos, no more than 10 MB each."
 "最多选择 2 个视频，单个不超过 50 MB。","Choose up to 2 videos, no more than 50 MB each."
 所选媒体文件数量或大小超过限制。,"The selected media exceeds the file count or size limit."
-图片,Photo
+评论图片,"Review photo"
 视频,Video
 移除,Remove
 提交评论,"Submit review"
 请选择所有必填评分。,"Select every required rating."
+写评论,"Write a review"
+收起评论表单,"Hide review form"
+查看图片,"View photo"
+播放视频,"Play video"
+关闭预览,"Close preview"
+评论媒体预览,"Review media preview"
 商品评论,"Product reviews"
 支持的评论媒体,"Supported review media"
 "最多 6 张图片","Up to 6 photos"
@@ -49,7 +56,6 @@
 已拒绝,Rejected
 全部状态,"All statuses"
 无媒体,"No media"
-评论图片,"Review photo"
 通过,Approve
 拒绝,Reject
 查看详细内容,"View details"
@@ -113,14 +119,23 @@
 "先由 AI 审核 pending 评论；仅拿不准时转人工","AI reviews pending comments first; humans only when uncertain"
 "评论 AI 预审跳过：Weline_Ai 未启用","Review AI pre-moderation skipped: Weline_Ai is inactive"
 "评论 AI 预审完成：扫描 %{1}，通过 %{2}，拒绝 %{3}，转人工 %{4}，跳过 %{5}，错误 %{6}","Review AI pre-moderation done: scanned %{1}, approved %{2}, rejected %{3}, human %{4}, skipped %{5}, errors %{6}"
+图片,Photo
 展示商品的文字、图片与视频评论，并根据类型定义自动生成评论表单。,"Show product text, photo, and video reviews with a form generated from the type definition."
 商品评论大部件,"Product reviews widget"
 万能评论大部件：列表、星级表单与图文视频提交；默认注入商品详情评论容器。,"Universal reviews widget: listing, star form, and photo/video submit; default-injected into the product detail reviews slot."
 "车主反馈 / RIDER FEEDBACK","Customer reviews"
 商品图文视频评论,"Product reviews"
 支持文字、实拍图片与骑行视频，所有内容审核后公开。,"Share text, photos, and videos. All content is moderated before publication."
+支持文字、图片与视频，内容审核后公开。,"Supports text, photos, and videos. Content is published after review."
 "最多 6 张实拍图片","Up to 6 photos"
 "最多 2 个骑行视频","Up to 2 videos"
 待审核,Pending
 评分,Rating
 "%{1} 条评论","%{1} comments"
+文字评论,"Text comments"
+博客评论,"Blog Comments"
+分享您的阅读感受,"Share your thoughts on this article"
+一句话概括您的观点,"Summarize your point in one sentence"
+请填写评论内容。,"Please enter review content."
+预览模式：表单仅供排版查看，请到真实博客页提交。,"Preview only: the form is for layout. Submit on a real blog page."
+"请至少填写 10 个字符，分享您的阅读感受。","Enter at least 10 characters about your reading experience."

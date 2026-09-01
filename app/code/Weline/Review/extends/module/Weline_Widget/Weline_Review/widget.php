@@ -31,6 +31,9 @@ return [
                 'title' => '商品评论',
                 'intro' => '支持文字、图片与视频，内容审核后公开。',
                 'page_size' => 10,
+                'layout_mode' => 'stack',
+                'form_position' => 'right',
+                'form_collapsed' => '1',
             ],
         ]],
         'params' => [
@@ -48,6 +51,33 @@ return [
                 'default' => 10,
                 'type' => 'number',
                 'label' => '列表每页条数',
+            ],
+            'layout_mode' => [
+                'default' => 'stack',
+                'type' => 'select',
+                'label' => '布局方式',
+                'options' => [
+                    'stack' => '上下布局',
+                    'split' => '左右布局',
+                ],
+            ],
+            'form_position' => [
+                'default' => 'right',
+                'type' => 'select',
+                'label' => '表单位置（左右布局）',
+                'options' => [
+                    'right' => '表单在右',
+                    'left' => '表单在左',
+                ],
+            ],
+            'form_collapsed' => [
+                'default' => '1',
+                'type' => 'select',
+                'label' => '表单默认折叠',
+                'options' => [
+                    '1' => '点击写评论后展开',
+                    '0' => '始终显示表单',
+                ],
             ],
         ],
     ],
