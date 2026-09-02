@@ -239,6 +239,34 @@ final class PriceRepository extends AbstractWebsiteShardRepository
         return $rows;
     }
 
+    /** @param list<int> $offerIds */
+    public function purgeOfferIds(int $websiteId, array $offerIds): int
+    {
+        $this->assertWebsite($websiteId);
+        $offerIds = array_values(array_unique(array_filter(
+            array_map('intval', $offerIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        sort($offerIds, SORT_NUMERIC);
+        if ($offerIds === []) {
+            return 0;
+        }
+        $rows = $this->newModel($websiteId)
+            ->clear()
+            ->where(Price::schema_fields_OFFER_ID, $offerIds, 'IN')
+            ->select()
+            ->fetchArray();
+        if ($rows === []) {
+            return 0;
+        }
+        $this->newModel($websiteId)
+            ->clear()
+            ->where(Price::schema_fields_OFFER_ID, $offerIds, 'IN')
+            ->delete()
+            ->fetch();
+        return count($rows);
+    }
+
     protected function newModel(int $websiteId): AbstractWebsiteShardModel
     {
         if ($this->modelFactory !== null) {

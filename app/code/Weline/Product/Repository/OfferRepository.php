@@ -90,6 +90,45 @@ final class OfferRepository extends AbstractWebsiteShardRepository
         );
         return $rows;
     }
+    /**
+     * @param list<int> $productIds
+     * @return array{deleted:int,offer_ids:list<int>,offer_uuids:list<string>}
+     */
+    public function deleteByProductIds(int $websiteId, array $productIds): array
+    {
+        $this->assertWebsite($websiteId);
+        $productIds = array_values(array_unique(array_filter(
+            array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        sort($productIds, SORT_NUMERIC);
+        if ($productIds === []) {
+            return ['deleted' => 0, 'offer_ids' => [], 'offer_uuids' => []];
+        }
+        $rows = $this->listByProductIds($websiteId, $productIds);
+        if ($rows === []) {
+            return ['deleted' => 0, 'offer_ids' => [], 'offer_uuids' => []];
+        }
+        $offerIds = array_map(
+            static fn(array $row): int => (int)($row[Offer::schema_fields_ID] ?? 0),
+            $rows,
+        );
+        $offerUuids = array_values(array_filter(array_map(
+            static fn(array $row): string => trim((string)($row[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? '')),
+            $rows,
+        ), static fn(string $uuid): bool => $uuid !== ''));
+        $this->newModel($websiteId)
+            ->clear()
+            ->where(Offer::schema_fields_PRODUCT_ID, $productIds, 'IN')
+            ->delete()
+            ->fetch();
+        return [
+            'deleted' => count($rows),
+            'offer_ids' => $offerIds,
+            'offer_uuids' => $offerUuids,
+        ];
+    }
+
 
     /**
      * @param array<string, mixed> $data

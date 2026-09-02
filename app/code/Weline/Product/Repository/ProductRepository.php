@@ -365,6 +365,34 @@ final class ProductRepository extends AbstractWebsiteShardRepository
         return $updated;
     }
 
+    /** @param list<int> $productIds */
+    public function deleteByIds(int $websiteId, array $productIds): int
+    {
+        $this->assertWebsite($websiteId);
+        $productIds = array_values(array_unique(array_filter(
+            array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        sort($productIds, SORT_NUMERIC);
+        if ($productIds === []) {
+            return 0;
+        }
+        $rows = $this->newModel($websiteId)
+            ->clear()
+            ->where(Product::schema_fields_ID, $productIds, 'IN')
+            ->select()
+            ->fetchArray();
+        if ($rows === []) {
+            return 0;
+        }
+        $this->newModel($websiteId)
+            ->clear()
+            ->where(Product::schema_fields_ID, $productIds, 'IN')
+            ->delete()
+            ->fetch();
+        return count($rows);
+    }
+
     protected function newModel(int $websiteId): AbstractWebsiteShardModel
     {
         if ($this->modelFactory !== null) {
