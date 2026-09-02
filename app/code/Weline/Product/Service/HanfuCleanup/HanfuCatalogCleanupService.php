@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service\HanfuCleanup;
 
+use Weline\FileManager\Api\FileAssetManagerInterface;
+use Weline\FileManager\Model\FileAsset;
+use Weline\FileManager\Service\FileAssetReferenceIndexer;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Service\DatabaseTransactionRunnerInterface;
 use Weline\Framework\Manager\ObjectManager;
@@ -132,6 +135,11 @@ final class HanfuCatalogCleanupService
         $runId = $this->normalizeRunId($runId);
         $snapshot = $this->buildSnapshot($websiteId, $runId);
         $snapshot['selection_digest'] = $this->selection->digest($snapshot);
+        $this->writeRunArtifact(
+            $runId,
+            'quarantine-manifest.json',
+            (array)$snapshot['quarantine_manifest'],
+        );
         $this->writeRunArtifact($runId, 'cleanup-selection.json', $snapshot);
         return $snapshot;
     }
@@ -356,14 +364,22 @@ final class HanfuCatalogCleanupService
         $storeIds = $this->storeIds($websiteId);
         $mediaRepository = $this->repository(MediaRepository::class);
         $media = $mediaRepository->listByProductIds($websiteId, $productIds);
-        foreach ($media as &$row) {
-            $row['disk_code'] = StorageDiskCode::BUILTIN_LOCAL_MEDIA;
-            $row['object_key'] = $this->mediaObjectKey((string)($row[Media::schema_fields_PATH] ?? ''));
-        }
-        unset($row);
 
         $allProducts = $this->repository(ProductRepository::class)->listAll($websiteId);
         $allProductIds = $this->positiveIds(array_column($allProducts, Product::schema_fields_ID));
+        $allMedia = $mediaRepository->listByProductIds($websiteId, $allProductIds);
+        $assetMediaCounts = [];
+        foreach ($allMedia as $row) {
+            $assetId = strtolower(trim((string)($row[Media::schema_fields_ASSET_ID] ?? '')));
+            if ($assetId !== '') {
+                $assetMediaCounts[$assetId] = ($assetMediaCounts[$assetId] ?? 0) + 1;
+            }
+        }
+        foreach ($media as &$row) {
+            $row = $this->normalizeRuntimeMedia($row, $assetMediaCounts);
+        }
+        unset($row);
+
         $externalProductIds = array_values(array_diff($allProductIds, $productIds));
         $allOffers = $this->repository(OfferRepository::class)
             ->listByProductIds($websiteId, $externalProductIds);
@@ -385,13 +401,25 @@ final class HanfuCatalogCleanupService
             if ($blobKey === '') {
                 continue;
             }
-            $referenceIndex[$blobKey] = $this->mediaReferenceCounts(
+            $counts = $this->mediaReferenceCounts(
                 $websiteId,
                 $blobKey,
                 $objectKey,
                 $referenceRows,
                 $entityRows,
+                array_values(array_filter([
+                    $objectKey,
+                    trim((string)($row[Media::schema_fields_ASSET_ID] ?? '')) !== ''
+                        ? 'asset://' . trim((string)$row[Media::schema_fields_ASSET_ID])
+                        : '',
+                    trim((string)($row[Media::schema_fields_ASSET_ID] ?? '')),
+                ])),
             );
+            if (trim((string)($row[Media::schema_fields_ASSET_ID] ?? '')) !== '') {
+                $counts['media_count'] = (int)($row['asset_media_count'] ?? $counts['media_count']);
+                $counts['file_asset_references'] = (int)($row['file_asset_references'] ?? 0);
+            }
+            $referenceIndex[$blobKey] = $counts;
         }
 
         $prices = $this->repository(PriceRepository::class)
@@ -690,6 +718,62 @@ final class HanfuCatalogCleanupService
         ]);
     }
 
+    /**
+     * @param array<string,mixed> $row
+     * @param array<string,int> $assetMediaCounts
+     * @return array<string,mixed>
+     */
+    private function normalizeRuntimeMedia(array $row, array $assetMediaCounts): array
+    {
+        $path = trim((string)($row[Media::schema_fields_PATH] ?? ''));
+        $assetId = strtolower(trim((string)($row[Media::schema_fields_ASSET_ID] ?? '')));
+        $row['disk_code'] = StorageDiskCode::BUILTIN_LOCAL_MEDIA;
+        $row['object_key'] = $this->mediaObjectKey($path);
+        $row['media_storage_kind'] = 'legacy';
+        $row['asset_media_count'] = 0;
+        $row['file_asset_references'] = 0;
+
+        if ($assetId !== '') {
+            if (preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/D', $assetId) !== 1) {
+                throw new \RuntimeException('hanfu_cleanup_media_asset_id_invalid');
+            }
+            $row['asset_media_count'] = (int)($assetMediaCounts[$assetId] ?? 0);
+            try {
+                $asset = $this->repository(FileAssetManagerInterface::class)->get($assetId);
+            } catch (\RuntimeException) {
+                $row['media_storage_kind'] = 'missing';
+                $row['object_key'] = 'missing-assets/' . $assetId;
+                return $row;
+            }
+            $diskCode = trim($asset->getDiskCode());
+            $objectKey = trim($asset->getObjectKey());
+            if ($diskCode === '' || $objectKey === '') {
+                throw new \RuntimeException('hanfu_cleanup_media_asset_descriptor_invalid');
+            }
+            $row['disk_code'] = $diskCode;
+            $row['object_key'] = $objectKey;
+            $row['asset_sha256'] = strtolower(trim((string)$asset->getData(FileAsset::schema_fields_SHA256)));
+            $row['asset_revision'] = (int)$asset->getData(FileAsset::schema_fields_ASSET_REVISION);
+            if ($asset->isDeleted()) {
+                $row['media_storage_kind'] = 'missing';
+                return $row;
+            }
+            $row['media_storage_kind'] = 'managed';
+            $row['file_asset_references'] = $this->repository(FileAssetReferenceIndexer::class)
+                ->isReferenced($assetId) ? 1 : 0;
+            return $row;
+        }
+
+        $scheme = strtolower((string)parse_url($path, PHP_URL_SCHEME));
+        if (filter_var($path, FILTER_VALIDATE_URL) !== false
+            && in_array($scheme, ['http', 'https'], true)
+        ) {
+            $row['object_key'] = $path;
+            $row['media_storage_kind'] = 'external';
+        }
+        return $row;
+    }
+
     /** @return array<string,int> */
     private function mediaReferenceCounts(
         int $websiteId,
@@ -697,7 +781,13 @@ final class HanfuCatalogCleanupService
         string $objectKey,
         array $attributeRows,
         array $preservedEntityRows,
+        array $needles = [],
     ): array {
+        $needles[] = $objectKey;
+        $needles = array_values(array_unique(array_filter(array_map(
+            static fn(mixed $needle): string => trim((string)$needle),
+            $needles,
+        ))));
         $counts = [
             'media_count' => $this->repository(MediaRepository::class)
                 ->countByBlobKey($websiteId, $blobKey),
@@ -708,7 +798,7 @@ final class HanfuCatalogCleanupService
         ];
         foreach ($attributeRows as $row) {
             $encoded = json_encode($row['value'] ?? null, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            if (!is_string($encoded) || !str_contains($encoded, $objectKey)) {
+            if (!is_string($encoded) || !$this->containsAny($encoded, $needles)) {
                 continue;
             }
             $code = strtolower((string)($row['attribute_code'] ?? ''));
@@ -722,11 +812,22 @@ final class HanfuCatalogCleanupService
         }
         foreach ($preservedEntityRows as $row) {
             $encoded = json_encode($row, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-            if (is_string($encoded) && str_contains($encoded, $objectKey)) {
+            if (is_string($encoded) && $this->containsAny($encoded, $needles)) {
                 $counts['preserved_entity_references']++;
             }
         }
         return $counts;
+    }
+
+    /** @param list<string> $needles */
+    private function containsAny(string $haystack, array $needles): bool
+    {
+        foreach ($needles as $needle) {
+            if ($needle !== '' && str_contains($haystack, $needle)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** @return array<string,mixed> */

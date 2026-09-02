@@ -147,6 +147,68 @@ final class HanfuCatalogMediaQuarantineTest extends TestCase
         self::assertFalse($files->has($replanned['moves'][1]['to']));
     }
 
+    public function testExternalMissingReferencedAssetAndLegacyRowsAreClassifiedSafely(): void
+    {
+        $files = new FakeFileAssetLibrary();
+        $legacyKey = 'storefront-theme/theme-store-001.svg';
+        $managedKey = 'catalog/hanfu/r2/products/exclusive.webp';
+        $referencedKey = 'banner/shared.png';
+        $files->seed($legacyKey, hash('sha256', 'legacy'));
+        $files->seed($managedKey, hash('sha256', 'managed'));
+        $files->seed($referencedKey, hash('sha256', 'referenced'));
+
+        $external = $this->row(1, 'https://images.example.test/catalog.jpg', 'external');
+        $external['media_storage_kind'] = 'external';
+        $missing = $this->row(2, 'catalog/hanfu/test/already-gone.jpg', 'missing');
+        $missing['media_storage_kind'] = 'missing';
+        $legacy = $this->row(3, $legacyKey, 'legacy');
+        $legacy['media_storage_kind'] = 'legacy';
+        $managed = $this->row(4, $managedKey, 'managed');
+        $managed['media_storage_kind'] = 'managed';
+        $referenced = $this->row(5, $referencedKey, 'referenced');
+        $referenced['media_storage_kind'] = 'managed';
+
+        $service = $this->service($files, $this->legacyInspector($files));
+        $manifest = $service->plan('mixed-media-run', [
+            $external,
+            $missing,
+            $legacy,
+            $managed,
+            $referenced,
+        ], [
+            'external' => $this->references(),
+            'missing' => $this->references(),
+            'legacy' => $this->references(),
+            'managed' => $this->references(),
+            'referenced' => $this->references() + ['file_asset_references' => 1],
+        ]);
+
+        self::assertSame(
+            [$managedKey, $legacyKey],
+            array_column($manifest['moves'], 'from'),
+        );
+        self::assertSame(
+            ['managed', 'legacy'],
+            array_column($manifest['moves'], 'media_storage_kind'),
+        );
+        $reasons = [];
+        foreach ($manifest['preserved'] as $row) {
+            $reasons[(string)$row['blob_key']] = (string)$row['preserve_reason'];
+        }
+        self::assertSame('external_resource', $reasons['external']);
+        self::assertSame('already_missing', $reasons['missing']);
+        self::assertSame('external_reference', $reasons['referenced']);
+
+        $quarantined = $service->quarantine($manifest);
+        self::assertSame('quarantined', $quarantined['status']);
+        self::assertSame([2, 0], array_column($quarantined['completed'], 'quarantine_revision'));
+        $finalized = $service->finalize($quarantined);
+        self::assertSame('finalized', $finalized['status']);
+        self::assertSame(2, count($finalized['finalized']));
+        self::assertFalse($files->has($legacyKey));
+        self::assertFalse($files->has($managedKey));
+    }
+
     public function testInvalidPathsUnknownDisksAndDescriptorEscapeAreRejected(): void
     {
         $files = new FakeFileAssetLibrary();
@@ -270,7 +332,10 @@ final class HanfuCatalogMediaQuarantineTest extends TestCase
         ];
     }
 
-    private function service(FakeFileAssetLibrary $files): HanfuCatalogMediaQuarantine
+    private function service(
+        FakeFileAssetLibrary $files,
+        ?callable $legacyInspector = null,
+    ): HanfuCatalogMediaQuarantine
     {
         return new HanfuCatalogMediaQuarantine(
             $files,
@@ -281,7 +346,22 @@ final class HanfuCatalogMediaQuarantineTest extends TestCase
                 ['catalog_maintenance'],
                 'metadata_edit',
             ),
+            [self::DISK],
+            $legacyInspector,
         );
+    }
+
+    private function legacyInspector(FakeFileAssetLibrary $files): callable
+    {
+        return static function (string $diskCode, string $objectKey) use ($files): array {
+            $asset = $files->assets[$diskCode . '|' . $objectKey] ?? null;
+            return [
+                'exists' => is_array($asset),
+                'disk_code' => $diskCode,
+                'object_key' => $objectKey,
+                'sha256' => is_array($asset) ? (string)($asset['sha256'] ?? '') : '',
+            ];
+        };
     }
 }
 
