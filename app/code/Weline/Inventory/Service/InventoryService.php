@@ -11,6 +11,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Inventory\Api\Data\AvailabilityResult;
 use Weline\Inventory\Api\Data\ReservationResult;
 use Weline\Inventory\Api\InventoryCapabilityInterface;
+use Weline\Inventory\Api\InventoryCatalogMaintenanceInterface;
 use Weline\Inventory\Api\InventoryRefundCapabilityInterface;
 use Weline\Inventory\Api\InventoryReservationCommitCapabilityInterface;
 use Weline\Inventory\Model\InventoryLedger;
@@ -24,6 +25,7 @@ use Weline\Inventory\Model\Reservation;
  */
 final class InventoryService implements
     InventoryCapabilityInterface,
+    InventoryCatalogMaintenanceInterface,
     InventoryRefundCapabilityInterface,
     InventoryReservationCommitCapabilityInterface
 {
@@ -1028,6 +1030,231 @@ final class InventoryService implements
             ->select()
             ->fetchArray();
         return is_array($rows) ? $rows : [];
+    }
+
+    /**
+     * @param list<int> $offerIds
+     * @return array{
+     *   stock_items:int,
+     *   reservations:int,
+     *   ledger_events:int,
+     *   protected_references:list<array<string,mixed>>
+     * }
+     */
+    public function previewCatalogPurge(int $websiteId, array $offerIds): array
+    {
+        $offerIds = $this->normalizeCatalogOfferIds($websiteId, $offerIds);
+        if ($offerIds === []) {
+            return [
+                'stock_items' => 0,
+                'reservations' => 0,
+                'ledger_events' => 0,
+                'protected_references' => [],
+            ];
+        }
+
+        if ($this->memory !== null) {
+            $lookup = array_fill_keys($offerIds, true);
+            $stockRows = [];
+            $reservationRows = [];
+            $ledgerRows = [];
+            foreach ($this->memory as $bucket) {
+                $stock = $bucket['stock'] ?? [];
+                if ((int)($stock['website_id'] ?? -1) !== $websiteId
+                    || !isset($lookup[(int)($stock['offer_id'] ?? 0)])) {
+                    continue;
+                }
+                $stockRows[] = $stock;
+                foreach (($bucket['reservations'] ?? []) as $row) {
+                    $reservationRows[] = $row;
+                }
+                foreach (($bucket['ledger'] ?? []) as $row) {
+                    $ledgerRows[] = $row;
+                }
+            }
+        } else {
+            $stockRows = $this->newStock()
+                ->clear()
+                ->where(InventoryStock::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(InventoryStock::schema_fields_OFFER_ID, $offerIds, 'IN')
+                ->select()
+                ->fetchArray();
+            $reservationRows = $this->newReservation()
+                ->clear()
+                ->where(Reservation::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(Reservation::schema_fields_OFFER_ID, $offerIds, 'IN')
+                ->select()
+                ->fetchArray();
+            $ledgerRows = $this->newLedger()
+                ->clear()
+                ->where(InventoryLedger::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(InventoryLedger::schema_fields_OFFER_ID, $offerIds, 'IN')
+                ->select()
+                ->fetchArray();
+            $stockRows = is_array($stockRows) ? $stockRows : [];
+            $reservationRows = is_array($reservationRows) ? $reservationRows : [];
+            $ledgerRows = is_array($ledgerRows) ? $ledgerRows : [];
+        }
+
+        $protected = [];
+        foreach ($reservationRows as $row) {
+            $state = strtolower(trim((string)($row[Reservation::schema_fields_STATE] ?? '')));
+            if (in_array($state, [Reservation::STATE_RELEASED, Reservation::STATE_EXPIRED], true)) {
+                continue;
+            }
+            $referenceId = trim((string)($row[Reservation::schema_fields_RESERVATION_UUID] ?? ''));
+            if ($referenceId === '') {
+                $referenceId = trim((string)($row[Reservation::schema_fields_IDEMPOTENCY_KEY] ?? ''));
+            }
+            if ($referenceId === '') {
+                $referenceId = (string)($row[Reservation::schema_fields_ID] ?? '');
+            }
+            $protected[] = [
+                'reference_type' => 'order_reservation',
+                'reference_id' => $referenceId,
+                'website_id' => $websiteId,
+                'offer_id' => (int)($row[Reservation::schema_fields_OFFER_ID] ?? 0),
+                'state' => $state,
+            ];
+        }
+        foreach ($ledgerRows as $row) {
+            $referenceId = trim((string)($row[InventoryLedger::schema_fields_EVENT_UUID] ?? ''));
+            if ($referenceId === '') {
+                $referenceId = trim((string)($row[InventoryLedger::schema_fields_IDEMPOTENCY_KEY] ?? ''));
+            }
+            if ($referenceId === '') {
+                $referenceId = (string)($row[InventoryLedger::schema_fields_ID] ?? '');
+            }
+            $protected[] = [
+                'reference_type' => 'inventory_ledger',
+                'reference_id' => $referenceId,
+                'website_id' => $websiteId,
+                'offer_id' => (int)($row[InventoryLedger::schema_fields_OFFER_ID] ?? 0),
+                'state' => 'immutable',
+            ];
+        }
+        $priority = ['order_reservation' => 0, 'inventory_ledger' => 1];
+        usort($protected, static fn(array $left, array $right): int => [
+            $priority[(string)($left['reference_type'] ?? '')] ?? 99,
+            (int)($left['offer_id'] ?? 0),
+            (string)($left['reference_id'] ?? ''),
+        ] <=> [
+            $priority[(string)($right['reference_type'] ?? '')] ?? 99,
+            (int)($right['offer_id'] ?? 0),
+            (string)($right['reference_id'] ?? ''),
+        ]);
+
+        return [
+            'stock_items' => count($stockRows),
+            'reservations' => count($reservationRows),
+            'ledger_events' => count($ledgerRows),
+            'protected_references' => $protected,
+        ];
+    }
+
+    /**
+     * @param list<int> $offerIds
+     * @return array{stock_items:int,reservations:int,ledger_events:int}
+     */
+    public function purgeCatalogOffers(int $websiteId, array $offerIds): array
+    {
+        $offerIds = $this->normalizeCatalogOfferIds($websiteId, $offerIds);
+        if ($offerIds === []) {
+            return ['stock_items' => 0, 'reservations' => 0, 'ledger_events' => 0];
+        }
+
+        return $this->runAtomically(function () use ($websiteId, $offerIds): array {
+            $preview = $this->previewCatalogPurge($websiteId, $offerIds);
+            if ($preview['protected_references'] !== []) {
+                throw new \RuntimeException('hanfu_cleanup_protected_reference');
+            }
+
+            if ($this->memory !== null) {
+                $lookup = array_fill_keys($offerIds, true);
+                $stockItems = 0;
+                $reservations = 0;
+                foreach (array_keys($this->memory) as $key) {
+                    $bucket = $this->memory[$key] ?? [];
+                    $stock = $bucket['stock'] ?? [];
+                    if ((int)($stock['website_id'] ?? -1) !== $websiteId
+                        || !isset($lookup[(int)($stock['offer_id'] ?? 0)])) {
+                        continue;
+                    }
+                    $stockItems++;
+                    $reservations += count($bucket['reservations'] ?? []);
+                    unset($this->memory[$key]);
+                }
+                return [
+                    'stock_items' => $stockItems,
+                    'reservations' => $reservations,
+                    'ledger_events' => 0,
+                ];
+            }
+
+            return [
+                'stock_items' => $this->deleteCatalogStockRows($websiteId, $offerIds),
+                'reservations' => $this->deleteCatalogReservationRows($websiteId, $offerIds),
+                'ledger_events' => 0,
+            ];
+        });
+    }
+
+    /** @param list<int> $offerIds @return list<int> */
+    private function normalizeCatalogOfferIds(int $websiteId, array $offerIds): array
+    {
+        if ($websiteId < 0) {
+            throw new \InvalidArgumentException('hanfu_cleanup_website_invalid');
+        }
+        $offerIds = array_values(array_unique(array_filter(
+            array_map('intval', $offerIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        sort($offerIds, SORT_NUMERIC);
+        return $offerIds;
+    }
+
+    /** @param list<int> $offerIds */
+    private function deleteCatalogStockRows(int $websiteId, array $offerIds): int
+    {
+        $rows = $this->newStock()
+            ->clear()
+            ->where(InventoryStock::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(InventoryStock::schema_fields_OFFER_ID, $offerIds, 'IN')
+            ->select()
+            ->fetchArray();
+        $rows = is_array($rows) ? $rows : [];
+        if ($rows === []) {
+            return 0;
+        }
+        $this->newStock()
+            ->clear()
+            ->where(InventoryStock::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(InventoryStock::schema_fields_OFFER_ID, $offerIds, 'IN')
+            ->delete()
+            ->fetch();
+        return count($rows);
+    }
+
+    /** @param list<int> $offerIds */
+    private function deleteCatalogReservationRows(int $websiteId, array $offerIds): int
+    {
+        $rows = $this->newReservation()
+            ->clear()
+            ->where(Reservation::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(Reservation::schema_fields_OFFER_ID, $offerIds, 'IN')
+            ->select()
+            ->fetchArray();
+        $rows = is_array($rows) ? $rows : [];
+        if ($rows === []) {
+            return 0;
+        }
+        $this->newReservation()
+            ->clear()
+            ->where(Reservation::schema_fields_WEBSITE_ID, $websiteId)
+            ->where(Reservation::schema_fields_OFFER_ID, $offerIds, 'IN')
+            ->delete()
+            ->fetch();
+        return count($rows);
     }
 
     /** @return list<array<string, mixed>> */
