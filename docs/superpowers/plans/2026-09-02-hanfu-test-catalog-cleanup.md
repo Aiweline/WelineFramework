@@ -19,7 +19,7 @@
 - 数据库删除前先隔离本地文件；数据库事务或验证失败时恢复隔离文件。最终文件删除失败只记录待处理清单，不回滚已验证的数据库清理。
 - 不删除订单、订单行、审计流水或外部系统记录；若冻结 offer 被这些保留记录引用，清理在写入前失败并列出精确引用。
 - 不修改 `generated/`，不覆盖工作区已有 Blog 改动和未跟踪内容。
-- 本计划新增 Service/Repository/脚本，不新增 Controller、Model、Event、Hook、Interface 或注册入口，因此不触发模块版本号变更。
+- 本计划新增 Service/Repository/脚本，并在 `Weline_Inventory` 新增且仅新增 `InventoryCatalogMaintenanceInterface` 作为跨模块窄写契约；不新增 Controller、Model、Event、Hook 或注册入口，因此不触发模块版本号变更。
 - 每个实现任务遵循红灯测试 → 最小实现 → 绿灯测试 → 中文提交；真实数据库清理只在全部开发测试和 dry-run 验收通过后执行。
 - 每次提交只暂存当前任务列出的文件。
 
@@ -34,7 +34,8 @@
 | `Service/HanfuCleanup/HanfuCatalogMediaQuarantine.php` | 独占对象判定、隔离、恢复和最终删除 |
 | `Service/HanfuCleanup/HanfuCatalogCleanupService.php` | preview/apply/verify 编排和后置条件 |
 | Product repositories listed in Task 2 | 精确 ID 集合的从属行清理 |
-| `InventoryService.php` | 库存预检、受保护引用和精确 offer 清理 |
+| `Inventory/Api/InventoryCatalogMaintenanceInterface.php` | Product 可依赖的库存目录维护窄写契约 |
+| `InventoryService.php` | 实现库存预检、受保护引用和精确 offer 清理；不得由 Product 直接依赖 |
 | `scripts/cleanup-hanfu-test-catalog.php` | 三阶段 CLI、退出码和报告 |
 
 ## Frozen Runtime Contract
@@ -122,7 +123,7 @@ public function testDigestIgnoresAssociativeKeyOrderButNotCatalogDrift(): void
 - [ ] **Step 2: Run the focused test and confirm red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuTestCatalogSelectionTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuTestCatalogSelectionTest.php
 ```
 
 Expected: failure because `HanfuTestCatalogSelection` does not exist.
@@ -250,7 +251,7 @@ public function testSharedBlobCountIsNotExclusive(): void
 - [ ] **Step 2: Run the focused test and confirm red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Repository/HanfuCatalogPurgeRepositoryTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Repository/HanfuCatalogPurgeRepositoryTest.php
 ```
 
 Expected: failures for the seven missing methods.
@@ -303,8 +304,8 @@ The other bounded methods use these exact fields: `Product::schema_fields_ID`, `
 - [ ] **Step 4: Run focused and existing repository tests**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Repository/HanfuCatalogPurgeRepositoryTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/ProductAdminReadServiceCategoryCatalogContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Repository/HanfuCatalogPurgeRepositoryTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/ProductAdminReadServiceCategoryCatalogContractTest.php
 ```
 
 Expected: both commands exit `0`.
@@ -329,6 +330,7 @@ git commit -m "feat: 增加测试商品依赖清理仓储能力"
 
 **Files:**
 
+- Create: `app/code/Weline/Inventory/Api/InventoryCatalogMaintenanceInterface.php`
 - Modify: `app/code/Weline/Inventory/Service/InventoryService.php`
 - Create: `app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php`
 - Create: `app/code/Weline/Product/Service/HanfuCleanup/HanfuIdentityCleanupService.php`
@@ -337,12 +339,17 @@ git commit -m "feat: 增加测试商品依赖清理仓储能力"
 **Interfaces:**
 
 ```php
-// InventoryService
+// Weline\Inventory\Api\InventoryCatalogMaintenanceInterface
+interface InventoryCatalogMaintenanceInterface
+{
 /** @return array{stock_items:int,reservations:int,ledger_events:int,protected_references:list<array<string,mixed>>} */
 public function previewCatalogPurge(int $websiteId, array $offerIds): array;
 
 /** @return array{stock_items:int,reservations:int,ledger_events:int} */
 public function purgeCatalogOffers(int $websiteId, array $offerIds): array;
+}
+
+// InventoryService implements InventoryCatalogMaintenanceInterface
 private function deleteStockItems(int $websiteId, array $offerIds): int;
 private function deleteReservations(int $websiteId, array $offerIds): int;
 
@@ -393,13 +400,13 @@ public function testCrossWebsiteIdentityIsPreserved(): void
 - [ ] **Step 3: Run both tests and confirm red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Inventory/Test/Unit/bootstrap.php app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
 ```
 
 - [ ] **Step 4: Implement guarded purge behavior**
 
-The preview is authoritative. `purgeCatalogOffers()` re-runs protected-reference queries immediately before deletion and throws `hanfu_cleanup_protected_reference` if any result exists. Identity deletion happens only after all website shards show zero remaining product/offer references. Do not delete order or audit rows.
+The preview is authoritative. `InventoryService` implements `InventoryCatalogMaintenanceInterface`; `HanfuCatalogCleanupService` constructor-hints only the interface. `purgeCatalogOffers()` re-runs protected-reference queries immediately before deletion and throws `hanfu_cleanup_protected_reference` if any result exists. Identity deletion happens only after all website shards show zero remaining product/offer references. Do not delete order or audit rows.
 
 ```php
 public function purgeCatalogOffers(int $websiteId, array $offerIds): array
@@ -433,9 +440,9 @@ Any inventory ledger event is reported as a protected audit reference by `previe
 - [ ] **Step 5: Run focused and existing identity tests**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Model/ProductShardRegistryTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Inventory/Test/Unit/bootstrap.php app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Model/ProductShardRegistryTest.php
 ```
 
 Expected: all commands exit `0`.
@@ -443,7 +450,8 @@ Expected: all commands exit `0`.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add app/code/Weline/Inventory/Service/InventoryService.php \
+git add app/code/Weline/Inventory/Api/InventoryCatalogMaintenanceInterface.php \
+  app/code/Weline/Inventory/Service/InventoryService.php \
   app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php \
   app/code/Weline/Product/Service/HanfuCleanup/HanfuIdentityCleanupService.php \
   app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
@@ -504,7 +512,7 @@ public function testOnlyExclusiveUnreferencedObjectIsQuarantined(): void
 - [ ] **Step 2: Run the focused test and confirm red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuCatalogMediaQuarantineTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuCatalogMediaQuarantineTest.php
 ```
 
 - [ ] **Step 3: Implement with the existing FileManager API**
@@ -620,7 +628,7 @@ public function testDatabaseFailureRestoresQuarantine(): void
 - [ ] **Step 2: Run the focused test and confirm red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuCatalogCleanupServiceTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuCatalogCleanupServiceTest.php
 ```
 
 - [ ] **Step 3: Implement preview**
@@ -695,9 +703,9 @@ public function verify(int $websiteId, string $runId, string $selectionDigest): 
 - [ ] **Step 6: Run focused and adjacent tests**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/HanfuCleanup
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Repository/HanfuCatalogPurgeRepositoryTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/ProductAdminReadServiceCategoryCatalogContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Repository/HanfuCatalogPurgeRepositoryTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/ProductAdminReadServiceCategoryCatalogContractTest.php
 ```
 
 Expected: all commands exit `0`.
@@ -723,29 +731,25 @@ git commit -m "feat: 编排汉服测试目录安全清理"
 
 The script accepts exactly one of `--dry-run`, `--apply=<digest>` or `--verify=<digest>`, requires `--website=0` and a run ID matching `^[a-z0-9][a-z0-9-]{2,63}$`, writes JSON through a temporary sibling plus atomic rename and never prints credentials.
 
-- [ ] **Step 1: Write the failing script contract test**
+- [ ] **Step 1: Write the failing script behavior test**
 
-Assert all three modes, the exact exit-code map, ObjectManager resolution of `HanfuCatalogCleanupService`, atomic JSON rename and rejection of any website other than zero. Assert no cookie, localStorage, token extraction, order, message or contact behavior.
+Execute the real PHP script as a subprocess. Assert `--help` returns the three supported modes and exit-code map as JSON, a non-zero website exits `2` with `website_id_zero_required`, conflicting modes exit `2`, stdout contains no partial success record, and stderr contains no credential-shaped data. Service orchestration and atomic report writes are asserted through the real `HanfuCatalogCleanupService` tests, not by reading script source.
 
 ```php
-public function testScriptExposesOnlyGuardedCleanupModes(): void
+public function testScriptRejectsNonZeroWebsiteBeforeBootstrappingApplication(): void
 {
-    $source = file_get_contents(__DIR__ . '/../../../scripts/cleanup-hanfu-test-catalog.php');
+    $process = $this->runScript(['--website=1', '--dry-run', '--run-id=cleanup-test']);
 
-    self::assertStringContainsString("'dry-run'", $source);
-    self::assertStringContainsString("'apply'", $source);
-    self::assertStringContainsString("'verify'", $source);
-    self::assertStringContainsString('website_id_zero_required', $source);
-    self::assertStringContainsString('HanfuCatalogCleanupService::class', $source);
-    self::assertStringNotContainsString('Cookie:', $source);
-    self::assertStringNotContainsString('localStorage', $source);
+    self::assertSame(2, $process->exitCode);
+    self::assertSame('', $process->stdout);
+    self::assertStringContainsString('website_id_zero_required', $process->stderr);
 }
 ```
 
 - [ ] **Step 2: Run the focused test and confirm red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Script/HanfuTestCatalogCleanupScriptContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Script/HanfuTestCatalogCleanupScriptContractTest.php
 ```
 
 - [ ] **Step 3: Implement the CLI**
@@ -774,7 +778,7 @@ fwrite(STDOUT, json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE
 
 ```bash
 php -l app/code/Weline/Product/scripts/cleanup-hanfu-test-catalog.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Script/HanfuTestCatalogCleanupScriptContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Script/HanfuTestCatalogCleanupScriptContractTest.php
 ```
 
 Expected: lint has no syntax errors and PHPUnit exits `0`.
@@ -804,10 +808,10 @@ git commit -m "feat: 增加汉服测试目录清理命令"
 - [ ] **Step 1: Run all scoped tests**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/HanfuCleanup
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Repository/HanfuCatalogPurgeRepositoryTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Script/HanfuTestCatalogCleanupScriptContractTest.php
-php vendor/bin/phpunit app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Repository/HanfuCatalogPurgeRepositoryTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Script/HanfuTestCatalogCleanupScriptContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Inventory/Test/Unit/bootstrap.php app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php
 ```
 
 Expected: every command exits `0`.
