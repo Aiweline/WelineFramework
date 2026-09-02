@@ -91,7 +91,7 @@
 
 ## 5. 组件与边界
 
-实现保持在 `Weline_Product` 模块内，不新增 Event、Query、Hook、公开 Interface 或 Taglib 扩展点。
+业务编排保持在 `Weline_Product` 模块内，不新增 Event、Query、Hook 或 Taglib 扩展点。库存清理属于 `Weline_Inventory`，因此由该模块新增且仅新增窄写契约 `InventoryCatalogMaintenanceInterface`，`Weline_Product` 只依赖该接口，禁止跨模块依赖 `InventoryService` 具体类。
 
 计划新增两个 CLI 入口：
 
@@ -109,6 +109,8 @@
 - `--verify --run=<run-id>`：验证目标商品及从属记录为零、保留数据未变化、文件状态与报告一致。
 
 清理逻辑只接受 `website_id=0` 和预检冻结的 29 个商品 ID。商品级数据按依赖顺序移除；媒体行必须走 `MediaRepository::remove()` 维护 blob owner 与引用计数；共享身份数据走框架既有引用清理逻辑，禁止直接删掉仍有引用的全局身份。
+
+库存预检与精确 offer 清理通过 `Weline\Inventory\Api\InventoryCatalogMaintenanceInterface` 执行；接口实现归属 `Weline_Inventory`，Product 清理服务不得构造或类型提示 `InventoryService`。
 
 本地文件先移动到 `var/hanfu-1688/quarantine/<run-id>/`，数据库与页面验收通过后再按清单永久删除。若数据库阶段失败，可依据运行报告继续或恢复文件；在所有目标商品清理成功前不得进入正式导入。隔离区是失败恢复手段，不是最终状态；整个任务完成前，已验证无引用的目标文件必须从隔离区永久清除。
 
@@ -171,13 +173,13 @@
 - 商品类型：有完整可验证规格时使用 configurable，否则使用 simple；
 - 价格：使用页面公开的最低有效采购价，保留原始阶梯价证据；
 - 规格：只写入页面真实给出的选项，不推测颜色、尺码或库存；
-- 媒体：下载并验证 MIME、大小和哈希后，通过 FileAssetLibrary 与 MediaRepository 注册到 `pub/media/catalog/hanfu/1688/<offerId>/`。
+- 媒体：下载并验证 MIME、大小和哈希后，通过 FileAssetLibrary 与 MediaRepository 注册到 `pub/media/catalog/hanfu/1688/<source-code>/<offerId>/`。
 
 页面没有公开有效价格时仍可创建草稿 Product，但不创建可售报价或虚构价格，并在 `missing_price` 报告中列出；该商品在补齐真实价格前不能发布。
 
 写入流程先用 Product 主 SKU 查找 `offerId`：
 
-- 不存在：通过现有 `ProductAdminMutationService` 和仓储创建商品、报价、价格、媒体、Store 与分类关联。
+- 不存在：通过现有 `ProductAdminCommandInterface` 创建商品、报价、价格、媒体、Store 与分类关联。
 - 已存在且来源为同一 `offerId`：更新可变字段和媒体，不新增重复 Product。
 - 已存在但不是 1688 来源或来源冲突：停止该 offer，输出 `identity_conflict`，不得覆盖。
 
