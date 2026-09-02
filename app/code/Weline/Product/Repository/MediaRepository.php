@@ -71,6 +71,20 @@ final class MediaRepository extends AbstractWebsiteShardRepository
             ->fetch();
         return $model->getId() ? $model : null;
     }
+    public function countByBlobKey(int $websiteId, string $blobKey): int
+    {
+        $this->assertWebsite($websiteId);
+        $blobKey = trim($blobKey);
+        if ($blobKey === '') {
+            return 0;
+        }
+        return count($this->newModel($websiteId)
+            ->clear()
+            ->where(Media::schema_fields_BLOB_KEY, $blobKey)
+            ->select()
+            ->fetchArray());
+    }
+
 
     /**
      * Existing consumers receive Website media by default. Product admin can
