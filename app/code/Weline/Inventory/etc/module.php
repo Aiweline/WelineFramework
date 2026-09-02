@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Inventory',
-    'version' => '2.5.5',
+    'version' => '2.5.6',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Websites' => '*',
@@ -18,6 +18,8 @@ return [
         \Weline\Inventory\Api\InventoryReservationCommitCapabilityInterface::class
             => \Weline\Inventory\Service\InventoryService::class,
         \Weline\Inventory\Api\InventoryRefundCapabilityInterface::class
+            => \Weline\Inventory\Service\InventoryService::class,
+        \Weline\Inventory\Api\InventoryCatalogMaintenanceInterface::class
             => \Weline\Inventory\Service\InventoryService::class,
         \Weline\Inventory\Api\DefaultWarehouseResolverInterface::class
             => \Weline\Inventory\Service\DefaultLogicalWarehouseResolver::class,
