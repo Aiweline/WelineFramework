@@ -24,7 +24,7 @@
 - 图片保存到本地 FileManager 管理的 `catalog/hanfu/1688/<source-code>/<offerId>/`，禁止把远程热链作为最终媒体。
 - 不读取 Cookie、localStorage、sessionStorage、浏览器配置或登录令牌；不下单、不发消息、不收藏、不关注、不联系供应商。
 - 网络只允许公开 HTTPS 读取，限速至少 800ms/请求，重定向逐跳校验；媒体只允许受信 1688/阿里 CDN 主机。
-- 不修改 `generated/`，不覆盖工作区既有改动。只新增或修改 Service、Repository、脚本和文档，不新增 Controller、Model、Event、Hook、Interface 或注册入口，因此不触发模块版本号变更。
+- 不修改 `generated/`，不覆盖工作区既有改动。导入章节只新增或修改 Service、Repository、脚本和文档，不再新增 Controller、Model、Event、Hook、Interface 或注册入口；跨模块库存契约由前置清理计划在 `Weline_Inventory` 中定义，因此本章节不触发模块版本号变更。
 - 每个实现任务遵循红灯测试 → 最小实现 → 绿灯测试 → 中文提交；运行产物只写入 `var/hanfu-1688/<run-id>/`，不提交实时抓取内容。
 
 ---
@@ -43,7 +43,7 @@
 | `Service/Hanfu1688/MediaImporter.php` | 图片校验、哈希和 FileManager 本地化 |
 | `Service/Hanfu1688/ProductPayloadFactory.php` | ProductAdminCommand 的确定性草稿 payload |
 | `Service/Hanfu1688/CatalogImportService.php` | preview/apply/verify 和 offerId 幂等 |
-| `Service/Hanfu1688/SupplierSourceReconciler.php` | 店铺 URL 补齐、无法核验供应商禁用 |
+| `Service/Hanfu1688/SupplierSourceReconciler.php` | 店铺 URL 补齐、真实替代供应商创建/启用与品牌关联、无法核验供应商禁用 |
 | `Service/Hanfu1688/CatalogImportRunner.php` | CLI 各阶段的前置产物、摘要和服务编排 |
 | `scripts/import-1688-hanfu-catalog.php` | source/collect/preview/apply/verify 分阶段入口 |
 
@@ -164,8 +164,8 @@ public function testMissingLiveBrandFailsClosed(): void
 Run:
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/VerifiedSourceManifestTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/RunArtifactStoreTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/VerifiedSourceManifestTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/RunArtifactStoreTest.php
 ```
 
 Expected: both fail because the classes are absent.
@@ -280,8 +280,8 @@ Fixtures contain only required HTML and embedded JSON shapes, not full copied pa
 - [ ] **Step 2: Run tests and verify red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/FactoryPageParserTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/OfferDetailParserTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/FactoryPageParserTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/OfferDetailParserTest.php
 ```
 
 - [ ] **Step 3: Implement structured-state extraction**
@@ -448,8 +448,8 @@ Add failures for repeated next URL, fingerprint loop, captcha, ambiguous empty r
 - [ ] **Step 3: Run tests and verify red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/PublicHttpClientTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/CatalogCollectorTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/PublicHttpClientTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/CatalogCollectorTest.php
 ```
 
 - [ ] **Step 4: Implement the collector loop**
@@ -483,8 +483,8 @@ Fetch every unique offer detail once, sort by numeric offer ID, preserve cross-s
 - [ ] **Step 5: Run tests and commit**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/PublicHttpClientTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/CatalogCollectorTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/PublicHttpClientTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/CatalogCollectorTest.php
 git add app/code/Weline/Product/Service/Hanfu1688/PublicHttpClient.php \
   app/code/Weline/Product/Service/Hanfu1688/CatalogCollector.php \
   app/code/Weline/Product/Test/Unit/Service/Hanfu1688/PublicHttpClientTest.php \
@@ -541,7 +541,7 @@ Missing Hanfu root, unverified source or broken supplier-brand link fails.
 - [ ] **Step 2: Run and verify red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/SourceMapResolverTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/SourceMapResolverTest.php
 ```
 
 - [ ] **Step 3: Implement deterministic resolution**
@@ -565,7 +565,7 @@ Do not create categories. Specific mapping uses ordered existing Hanfu paths; fa
 - [ ] **Step 4: Run and commit**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/SourceMapResolverTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/SourceMapResolverTest.php
 git add app/code/Weline/Product/Service/Hanfu1688/SourceMapResolver.php \
   app/code/Weline/Product/Test/Unit/Service/Hanfu1688/SourceMapResolverTest.php
 git commit -m "feat: 解析1688商品品牌供应商与分类"
@@ -621,7 +621,7 @@ Add rejections for host spoofing, redirect escape, MIME/byte mismatch, SVG/scrip
 - [ ] **Step 2: Run and verify red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/MediaImporterTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/MediaImporterTest.php
 ```
 
 - [ ] **Step 3: Implement through FileManager**
@@ -657,7 +657,7 @@ Only `*.alicdn.com`, `*.1688.com` and `*.tbcdn.cn` media hosts are accepted afte
 - [ ] **Step 4: Run and commit**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/MediaImporterTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/MediaImporterTest.php
 git add app/code/Weline/Product/Service/Hanfu1688/MediaImporter.php \
   app/code/Weline/Product/Test/Unit/Service/Hanfu1688/MediaImporterTest.php
 git commit -m "feat: 本地化1688汉服商品媒体"
@@ -743,8 +743,8 @@ Add conflicts for one source ID bound to two products, stable SKU bound to anoth
 - [ ] **Step 3: Run and verify red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/ProductPayloadFactoryTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/CatalogImportServiceTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/ProductPayloadFactoryTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/CatalogImportServiceTest.php
 ```
 
 - [ ] **Step 4: Bootstrap exact source attributes**
@@ -794,9 +794,9 @@ Find existing products by exact `source_offer_id` EAV index first and `1688-<off
 - [ ] **Step 6: Run focused and adjacent tests**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/ProductAdminReadServiceCategoryCatalogContractTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Controller/Backend/ProductAdminSurfaceContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/ProductAdminReadServiceCategoryCatalogContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Controller/Backend/ProductAdminSurfaceContractTest.php
 ```
 
 Expected: all commands exit `0`.
@@ -852,23 +852,40 @@ public function testTerminalUnmatchedDisablesActiveSupplier(): void
     self::assertSame(['huaqianyuexia'], $result['disabled']);
     self::assertSame('disabled', $this->suppliers->findByCode(0, 'huaqianyuexia')->getData('status'));
 }
+
+public function testVerifiedReplacementCreatesSupplierAndLinksCanonicalBrand(): void
+{
+    $result = $this->reconciler->apply(0, $this->manifestWithVerifiedReplacement(
+        brandCode: 'zhl',
+        oldSupplierCode: 'unverified-zhl',
+        newSupplierCode: 'zhl-1688-verified',
+        storeUrl: 'https://shop76593h15d75v3.1688.com',
+    ));
+
+    self::assertSame(['zhl-1688-verified'], $result['created']);
+    self::assertSame('disabled', $this->suppliers->findByCode(0, 'unverified-zhl')->getData('status'));
+    self::assertContains(
+        $this->canonicalBrandId,
+        $this->supplierBrands->listBrandIdsForSupplier(0, $result['supplier_ids']['zhl-1688-verified']),
+    );
+}
 ```
 
-Explicitly classify all five previously missing codes. Reject any company name or URL absent from evidence.
+Explicitly classify all five previously missing codes. Reject any company name or URL absent from evidence. A replacement decision must contain verified company/shop evidence, a deterministic new supplier code and the canonical brand code.
 
 - [ ] **Step 2: Run and verify red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/SupplierSourceReconcilerTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/SupplierSourceReconcilerTest.php
 ```
 
-- [ ] **Step 3: Implement through the existing admin service**
+- [ ] **Step 3: Implement through the existing supplier and supplier-brand admin contracts**
 
 ```php
 $input = [
-    'supplier_id' => (int)$supplier->getId(),
-    'code' => (string)$supplier->getData('code'),
-    'name' => (string)$supplier->getData('name'),
+    'supplier_id' => $supplier === null ? null : (int)$supplier->getId(),
+    'code' => $supplier === null ? $decision['new_supplier_code'] : (string)$supplier->getData('code'),
+    'name' => $supplier === null ? $decision['company_name'] : (string)$supplier->getData('name'),
     'status' => $decision['status'],
     'store_url' => $decision['store_url'],
 ];
@@ -876,14 +893,19 @@ $saved = $this->supplierAdmin->save($websiteId, $input);
 if ((string)$saved['store_url'] !== (string)$decision['store_url']) {
     throw new \RuntimeException('hanfu_1688_supplier_readback_failed');
 }
+$this->syncCanonicalBrandLinks(
+    $websiteId,
+    (int)$saved['supplier_id'],
+    $decision['canonical_brand_ids'],
+);
 ```
 
-Preview emits exact before/after fields. Apply validates the source digest immediately before writes and preserves unrelated supplier fields.
+Preview emits exact before/after fields. Apply validates the source digest immediately before writes, preserves unrelated supplier fields, disables the superseded unverified record, and read-backs both the canonical URL and brand links. Use the repository's actual public admin/link methods discovered at implementation time; do not depend on a concrete cross-module service.
 
 - [ ] **Step 4: Run and commit**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/SupplierSourceReconcilerTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/SupplierSourceReconcilerTest.php
 git add app/code/Weline/Product/Service/Hanfu1688/SupplierSourceReconciler.php \
   app/code/Weline/Product/Test/Unit/Service/Hanfu1688/SupplierSourceReconcilerTest.php
 git commit -m "feat: 核验并补齐1688供应商店铺地址"
@@ -923,22 +945,20 @@ final class CatalogImportRunner
 }
 ```
 
-- [ ] **Step 1: Write the failing script contract test**
+- [ ] **Step 1: Write the failing script behavior test**
 
 ```php
-public function testScriptHasAllStagesAndNoExternalWriteBehavior(): void
+public function testScriptRejectsUnknownStageBeforeBootstrappingApplication(): void
 {
-    $source = file_get_contents(__DIR__ . '/../../../scripts/import-1688-hanfu-catalog.php');
+    $process = $this->runScript(['--website=0', '--stage=unknown', '--run-id=hanfu-test']);
 
-    foreach (['source-seed', 'source-record', 'source-check', 'collect', 'preview', 'apply', 'verify'] as $stage) {
-        self::assertStringContainsString("'$stage'", $source);
-    }
-    self::assertStringContainsString('website_id_zero_required', $source);
-    self::assertStringNotContainsString('Cookie:', $source);
-    self::assertStringNotContainsString('localStorage', $source);
-    self::assertStringNotContainsString('ACTION_PUBLISH', $source);
+    self::assertSame(2, $process->exitCode);
+    self::assertSame('', $process->stdout);
+    self::assertStringContainsString('hanfu_1688_stage_invalid', $process->stderr);
 }
 ```
+
+Also execute `--help` and assert the returned JSON lists exactly `source-seed`, `source-record`, `source-check`, `collect`, `preview`, `apply` and `verify`; execute `--website=1` and assert exit `2`. Do not inspect script source. Runner tests prove no write occurs in preview and that apply requires verified cleanup plus a complete snapshot; real runtime acceptance proves the script performs no publish or external write action.
 
 Also assert apply reads a successful cleanup verification artifact and requires a complete snapshot.
 
@@ -958,8 +978,8 @@ public function testApplyRequiresVerifiedCleanupAndCompleteSnapshot(): void
 - [ ] **Step 2: Run and verify red**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/CatalogImportRunnerTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Script/Hanfu1688CatalogImportScriptContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/CatalogImportRunnerTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Script/Hanfu1688CatalogImportScriptContractTest.php
 ```
 
 - [ ] **Step 3: Implement deterministic stage dispatch**
@@ -1005,9 +1025,9 @@ fwrite(STDOUT, json_encode($result, JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE
 
 ```bash
 php -l app/code/Weline/Product/scripts/import-1688-hanfu-catalog.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688/CatalogImportRunnerTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Script/Hanfu1688CatalogImportScriptContractTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688/CatalogImportRunnerTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Script/Hanfu1688CatalogImportScriptContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688
 ```
 
 Expected: lint succeeds and all tests exit `0`.
@@ -1163,10 +1183,10 @@ Open the configured product backend for `website_id=0` and inspect representativ
 - [ ] **Step 7: Run regression checks**
 
 ```bash
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Service/Hanfu1688
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Script/Hanfu1688CatalogImportScriptContractTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/Controller/Backend/ProductAdminSurfaceContractTest.php
-php vendor/bin/phpunit app/code/Weline/Product/Test/Unit/View/ProductBrandAdminContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/Hanfu1688
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Script/Hanfu1688CatalogImportScriptContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Controller/Backend/ProductAdminSurfaceContractTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/View/ProductBrandAdminContractTest.php
 git diff --check
 ```
 
