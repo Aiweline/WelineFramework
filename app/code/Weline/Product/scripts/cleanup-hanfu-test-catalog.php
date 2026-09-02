@@ -170,6 +170,9 @@ try {
     }
 
     $selectionDigest = (string)($result['selection_digest'] ?? $selectionDigest);
+    $quarantine = is_array($result['quarantine_manifest'] ?? null)
+        ? $result['quarantine_manifest']
+        : [];
     hanfuCleanupWriteJson(STDOUT, [
         'contract' => HANFU_CLEANUP_CLI_RESULT_CONTRACT,
         'run_id' => $runId,
@@ -178,6 +181,18 @@ try {
         'selection_digest' => $selectionDigest,
         'report_path' => $reportPath,
         'service_contract' => (string)($result['contract'] ?? ''),
+        'selected_product_count' => is_array($result['product_ids'] ?? null)
+            ? count($result['product_ids'])
+            : null,
+        'protected_reference_count' => is_array($result['protected_references'] ?? null)
+            ? count($result['protected_references'])
+            : null,
+        'media_move_count' => is_array($quarantine['moves'] ?? null)
+            ? count($quarantine['moves'])
+            : null,
+        'media_preserved_count' => is_array($quarantine['preserved'] ?? null)
+            ? count($quarantine['preserved'])
+            : null,
     ]);
     exit(0);
 } catch (Throwable $exception) {

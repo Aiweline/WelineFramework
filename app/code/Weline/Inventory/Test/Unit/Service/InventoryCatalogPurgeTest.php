@@ -35,7 +35,7 @@ use Weline\Inventory\Service\InventoryService;
 
 final class InventoryCatalogPurgeTest extends TestCase
 {
-    public function testProtectedReferencesBlockWritesAndReleasedRowsPurgeOnlyExactOffers(): void
+    public function testOnlyActiveReferencesBlockAndImmutableLedgerIsPreserved(): void
     {
         self::assertContains('sqlite', PDO::getAvailableDrivers());
         $missing = [];
@@ -78,6 +78,7 @@ final class InventoryCatalogPurgeTest extends TestCase
                 'reservations' => 0,
                 'ledger_events' => 0,
                 'protected_references' => [],
+                'preserved_audit_references' => [],
             ], $service->previewCatalogPurge(0, []));
             self::assertSame([
                 'stock_items' => 0,
@@ -91,22 +92,24 @@ final class InventoryCatalogPurgeTest extends TestCase
             self::assertSame(1, $preview['reservations']);
             self::assertSame(1, $preview['ledger_events']);
             self::assertSame(
-                ['ORDER-1', 'AUDIT-1'],
+                ['ORDER-1'],
                 array_column($preview['protected_references'], 'reference_id'),
+            );
+            self::assertSame(
+                ['AUDIT-1'],
+                array_column($preview['preserved_audit_references'], 'reference_id'),
             );
             self::assertSame($before, $this->counts($connector), 'Preview must never write.');
 
             try {
                 $service->purgeCatalogOffers(0, [9001]);
-                self::fail('Protected order/audit references must block inventory purge.');
+                self::fail('Active order references must block inventory purge.');
             } catch (\RuntimeException $exception) {
                 self::assertSame('hanfu_cleanup_protected_reference', $exception->getMessage());
             }
             self::assertSame($before, $this->counts($connector), 'Blocked apply must be zero-write.');
 
-            $connector->query(
-                'DELETE FROM ' . InventoryLedger::schema_table . ' WHERE offer_id = 9001'
-            )->fetch();
+            $auditBefore = $this->offerRows($connector, InventoryLedger::schema_table, 9001);
             $connector->query(
                 "UPDATE " . Reservation::schema_table
                 . " SET state = 'released' WHERE offer_id = 9001"
@@ -115,8 +118,12 @@ final class InventoryCatalogPurgeTest extends TestCase
             $ready = $service->previewCatalogPurge(0, [9001]);
             self::assertSame(1, $ready['stock_items']);
             self::assertSame(1, $ready['reservations']);
-            self::assertSame(0, $ready['ledger_events']);
+            self::assertSame(1, $ready['ledger_events']);
             self::assertSame([], $ready['protected_references']);
+            self::assertSame(
+                ['AUDIT-1'],
+                array_column($ready['preserved_audit_references'], 'reference_id'),
+            );
             self::assertSame([
                 'stock_items' => 1,
                 'reservations' => 1,
@@ -125,6 +132,11 @@ final class InventoryCatalogPurgeTest extends TestCase
 
             self::assertSame(0, $this->countOfferRows($connector, InventoryStock::schema_table, 9001));
             self::assertSame(0, $this->countOfferRows($connector, Reservation::schema_table, 9001));
+            self::assertSame(
+                $auditBefore,
+                $this->offerRows($connector, InventoryLedger::schema_table, 9001),
+                'Immutable audit rows must remain byte-for-byte equivalent after purge.',
+            );
             self::assertSame(1, $this->countOfferRows($connector, InventoryStock::schema_table, 9002));
             self::assertSame(1, $this->countOfferRows($connector, Reservation::schema_table, 9002));
 
@@ -137,6 +149,41 @@ final class InventoryCatalogPurgeTest extends TestCase
                 unlink($dbPath);
             }
         }
+    }
+
+    public function testMemoryPurgeKeepsAuditHistoryAndAllowsRecreation(): void
+    {
+        $service = InventoryService::forTesting();
+        $service->setOnHand(
+            0,
+            0,
+            9010,
+            1,
+            'catalog-set-9010',
+            hash('sha256', 'catalog-set-9010'),
+        );
+        $auditBefore = $service->listLedgerEvents(0, 0, 9010);
+        self::assertCount(1, $auditBefore);
+
+        $preview = $service->previewCatalogPurge(0, [9010]);
+        self::assertSame([], $preview['protected_references']);
+        self::assertCount(1, $preview['preserved_audit_references']);
+        self::assertSame([
+            'stock_items' => 1,
+            'reservations' => 0,
+            'ledger_events' => 0,
+        ], $service->purgeCatalogOffers(0, [9010]));
+
+        self::assertSame($auditBefore, $service->listLedgerEvents(0, 0, 9010));
+        $after = $service->previewCatalogPurge(0, [9010]);
+        self::assertSame(0, $after['stock_items']);
+        self::assertSame(1, $after['ledger_events']);
+        self::assertSame([], $after['protected_references']);
+        self::assertCount(1, $after['preserved_audit_references']);
+
+        $service->ensureStock(0, 0, 9010);
+        self::assertSame(1, $service->previewCatalogPurge(0, [9010])['stock_items']);
+        self::assertSame($auditBefore, $service->listLedgerEvents(0, 0, 9010));
     }
 
     /** @param class-string<Model> $class @return \Closure(): Model */
@@ -219,5 +266,14 @@ final class InventoryCatalogPurgeTest extends TestCase
             'SELECT COUNT(*) AS total FROM ' . $table . ' WHERE offer_id = ' . $offerId
         )->fetch();
         return (int)($rows[0]['total'] ?? 0);
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function offerRows(ConnectorInterface $connector, string $table, int $offerId): array
+    {
+        $rows = $connector->query(
+            'SELECT * FROM ' . $table . ' WHERE offer_id = ' . $offerId . ' ORDER BY 1 ASC'
+        )->fetch();
+        return is_array($rows) ? array_values($rows) : [];
     }
 }

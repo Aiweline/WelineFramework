@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Inventory\Service;
 
+use RuntimeException;
 use Throwable;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Service\DatabaseTransactionRunnerInterface;
@@ -117,7 +118,8 @@ final class InventoryService implements
         );
         if ($this->memory !== null) {
             $key = $this->stockKey($websiteId, $storeId, $offerId);
-            if (!isset($this->memory[$key])) {
+            if (!isset($this->memory[$key]) || ($this->memory[$key]['stock'] ?? []) === []) {
+                $preservedLedger = $this->memory[$key]['ledger'] ?? [];
                 $this->memory[$key] = [
                     'stock' => [
                         'website_id' => $websiteId,
@@ -132,7 +134,7 @@ final class InventoryService implements
                     ],
                     'reservations' => [],
                     'by_idem' => [],
-                    'ledger' => [],
+                    'ledger' => is_array($preservedLedger) ? array_values($preservedLedger) : [],
                 ];
             }
             return;
@@ -1038,7 +1040,8 @@ final class InventoryService implements
      *   stock_items:int,
      *   reservations:int,
      *   ledger_events:int,
-     *   protected_references:list<array<string,mixed>>
+     *   protected_references:list<array<string,mixed>>,
+     *   preserved_audit_references:list<array<string,mixed>>
      * }
      */
     public function previewCatalogPurge(int $websiteId, array $offerIds): array
@@ -1050,6 +1053,7 @@ final class InventoryService implements
                 'reservations' => 0,
                 'ledger_events' => 0,
                 'protected_references' => [],
+                'preserved_audit_references' => [],
             ];
         }
 
@@ -1060,15 +1064,18 @@ final class InventoryService implements
             $ledgerRows = [];
             foreach ($this->memory as $bucket) {
                 $stock = $bucket['stock'] ?? [];
-                if ((int)($stock['website_id'] ?? -1) !== $websiteId
-                    || !isset($lookup[(int)($stock['offer_id'] ?? 0)])) {
-                    continue;
-                }
-                $stockRows[] = $stock;
-                foreach (($bucket['reservations'] ?? []) as $row) {
-                    $reservationRows[] = $row;
+                if ((int)($stock['website_id'] ?? -1) === $websiteId
+                    && isset($lookup[(int)($stock['offer_id'] ?? 0)])) {
+                    $stockRows[] = $stock;
+                    foreach (($bucket['reservations'] ?? []) as $row) {
+                        $reservationRows[] = $row;
+                    }
                 }
                 foreach (($bucket['ledger'] ?? []) as $row) {
+                    if ((int)($row[InventoryLedger::schema_fields_WEBSITE_ID] ?? -1) !== $websiteId
+                        || !isset($lookup[(int)($row[InventoryLedger::schema_fields_OFFER_ID] ?? 0)])) {
+                        continue;
+                    }
                     $ledgerRows[] = $row;
                 }
             }
@@ -1117,6 +1124,15 @@ final class InventoryService implements
                 'state' => $state,
             ];
         }
+        usort($protected, static fn(array $left, array $right): int => [
+            (int)($left['offer_id'] ?? 0),
+            (string)($left['reference_id'] ?? ''),
+        ] <=> [
+            (int)($right['offer_id'] ?? 0),
+            (string)($right['reference_id'] ?? ''),
+        ]);
+
+        $preservedAudit = [];
         foreach ($ledgerRows as $row) {
             $referenceId = trim((string)($row[InventoryLedger::schema_fields_EVENT_UUID] ?? ''));
             if ($referenceId === '') {
@@ -1125,7 +1141,7 @@ final class InventoryService implements
             if ($referenceId === '') {
                 $referenceId = (string)($row[InventoryLedger::schema_fields_ID] ?? '');
             }
-            $protected[] = [
+            $preservedAudit[] = [
                 'reference_type' => 'inventory_ledger',
                 'reference_id' => $referenceId,
                 'website_id' => $websiteId,
@@ -1133,13 +1149,10 @@ final class InventoryService implements
                 'state' => 'immutable',
             ];
         }
-        $priority = ['order_reservation' => 0, 'inventory_ledger' => 1];
-        usort($protected, static fn(array $left, array $right): int => [
-            $priority[(string)($left['reference_type'] ?? '')] ?? 99,
+        usort($preservedAudit, static fn(array $left, array $right): int => [
             (int)($left['offer_id'] ?? 0),
             (string)($left['reference_id'] ?? ''),
         ] <=> [
-            $priority[(string)($right['reference_type'] ?? '')] ?? 99,
             (int)($right['offer_id'] ?? 0),
             (string)($right['reference_id'] ?? ''),
         ]);
@@ -1149,6 +1162,7 @@ final class InventoryService implements
             'reservations' => count($reservationRows),
             'ledger_events' => count($ledgerRows),
             'protected_references' => $protected,
+            'preserved_audit_references' => $preservedAudit,
         ];
     }
 
@@ -1166,7 +1180,7 @@ final class InventoryService implements
         return $this->runAtomically(function () use ($websiteId, $offerIds): array {
             $preview = $this->previewCatalogPurge($websiteId, $offerIds);
             if ($preview['protected_references'] !== []) {
-                throw new \RuntimeException('hanfu_cleanup_protected_reference');
+                throw new RuntimeException('hanfu_cleanup_protected_reference');
             }
 
             if ($this->memory !== null) {
@@ -1182,7 +1196,17 @@ final class InventoryService implements
                     }
                     $stockItems++;
                     $reservations += count($bucket['reservations'] ?? []);
-                    unset($this->memory[$key]);
+                    $ledger = $bucket['ledger'] ?? [];
+                    if (!is_array($ledger) || $ledger === []) {
+                        unset($this->memory[$key]);
+                        continue;
+                    }
+                    $this->memory[$key] = [
+                        'stock' => [],
+                        'reservations' => [],
+                        'by_idem' => [],
+                        'ledger' => array_values($ledger),
+                    ];
                 }
                 return [
                     'stock_items' => $stockItems,
