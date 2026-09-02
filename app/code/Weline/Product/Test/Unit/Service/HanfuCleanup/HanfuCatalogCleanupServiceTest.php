@@ -51,6 +51,16 @@ final class HanfuCatalogCleanupServiceTest extends TestCase
         $path = $this->artifactRoot . '/cleanup-20260902/cleanup-selection.json';
         self::assertFileExists($path);
         self::assertSame(0600, fileperms($path) & 0777);
+        $manifestPath = $this->artifactRoot . '/cleanup-20260902/quarantine-manifest.json';
+        self::assertFileExists($manifestPath);
+        self::assertSame(0600, fileperms($manifestPath) & 0777);
+        $manifest = json_decode(
+            (string)file_get_contents($manifestPath),
+            true,
+            512,
+            JSON_THROW_ON_ERROR,
+        );
+        self::assertSame('planned', $manifest['status'] ?? null);
     }
 
     public function testPreviewFailsWhenOneFrozenProductIsMissing(): void
@@ -99,6 +109,25 @@ final class HanfuCatalogCleanupServiceTest extends TestCase
 
         self::assertSame([], $fixture->files->moveCalls);
         self::assertSame([], $fixture->events);
+    }
+
+    public function testPreservedInventoryAuditRemainsVisibleWithoutBlockingPreview(): void
+    {
+        $fixture = new CleanupCatalogFixture();
+        $service = $this->service($fixture);
+
+        $selection = $service->preview(0, 'cleanup-20260902');
+
+        self::assertSame([], $selection['protected_references']);
+        self::assertSame([
+            [
+                'reference_type' => 'inventory_ledger',
+                'reference_id' => 'audit-101',
+                'website_id' => 0,
+                'offer_id' => 101,
+                'state' => 'immutable',
+            ],
+        ], $selection['inventory_preview']['preserved_audit_references']);
     }
 
     public function testApplyQuarantinesBeforeDeclaredDeletionOrderAndInvalidatesOnce(): void
@@ -431,8 +460,17 @@ final class CleanupInventoryMaintenance implements InventoryCatalogMaintenanceIn
         return [
             'stock_items' => count($offerIds),
             'reservations' => 0,
-            'ledger_events' => 0,
+            'ledger_events' => 1,
             'protected_references' => $this->protectedReferences,
+            'preserved_audit_references' => [
+                [
+                    'reference_type' => 'inventory_ledger',
+                    'reference_id' => 'audit-101',
+                    'website_id' => $websiteId,
+                    'offer_id' => 101,
+                    'state' => 'immutable',
+                ],
+            ],
         ];
     }
 
