@@ -22,7 +22,6 @@
  * @param form_collapsed {default="1",type="select",label="表单默认折叠",options={1:"点击写评论后展开",0:"始终显示表单"}}
  */
 
-use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
@@ -85,48 +84,23 @@ $reviewRootClasses = trim(implode(' ', array_filter([
 $offer = $this->getData('storefront_offer');
 $offer = is_array($offer) ? $offer : [];
 $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
+if ($offerUuid === '') {
+    // Reviews accept product uuid when offer uuid is intentionally cleared
+    // (configurable selection_required) or missing from page context.
+    $offerUuid = trim((string)($offer['global_product_uuid'] ?? $offer['product_uuid'] ?? ''));
+}
 
-// Slot widgets render on a cleared Template; resolve current PDP offer from the request when needed.
-if ($offerUuid === '' && class_exists(\Weline\Product\Service\StorefrontCatalogViewService::class)) {
+// Slot widgets render on a cleared Template. Prefer page-context offer; only
+// reload catalog when the PDP snapshot was not injected at all.
+if ($offer === [] && class_exists(\Weline\Product\Helper\StorefrontOfferResolver::class)) {
     try {
-        /** @var \Weline\Product\Service\StorefrontCatalogViewService $catalog */
-        $catalog = ObjectManager::getInstance(\Weline\Product\Service\StorefrontCatalogViewService::class);
-        $slug = '';
-        $productId = 0;
-        try {
-            $request = $this->getRequest();
-            $slug = strtolower(trim((string)$request->getParam('slug', '')));
-            $productId = (int)$request->getParam('id', 0);
-        } catch (\Throwable) {
-            $slug = '';
-            $productId = 0;
-        }
-        if ($slug === '' && $productId <= 0) {
-            $requestUri = (string)(WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-            $requestPath = (string)(parse_url($requestUri, PHP_URL_PATH) ?: '');
-            $pathParts = array_values(array_filter(
-                explode('/', trim($requestPath, '/')),
-                static fn(string $part): bool => $part !== '',
-            ));
-            $productPartIndex = array_search('product', $pathParts, true);
-            if ($productPartIndex !== false && isset($pathParts[$productPartIndex + 1])) {
-                $handle = strtolower(rawurldecode((string)$pathParts[$productPartIndex + 1]));
-                if (ctype_digit($handle)) {
-                    $productId = (int)$handle;
-                } else {
-                    $slug = $handle;
-                }
-            }
-        }
-        $resolved = null;
-        if ($slug !== '') {
-            $resolved = $catalog->publishedOfferBySlug($slug);
-        } elseif ($productId > 0) {
-            $resolved = $catalog->publishedOffer($productId);
-        }
-        if (is_array($resolved)) {
+        $resolved = \Weline\Product\Helper\StorefrontOfferResolver::resolve($this);
+        if (is_array($resolved) && $resolved !== []) {
             $offer = $resolved;
             $offerUuid = trim((string)($resolved['global_offer_uuid'] ?? ''));
+            if ($offerUuid === '') {
+                $offerUuid = trim((string)($resolved['global_product_uuid'] ?? $resolved['product_uuid'] ?? ''));
+            }
         }
     } catch (\Throwable) {
         // Optional Product dependency; keep empty when catalog is unavailable.
