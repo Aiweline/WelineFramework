@@ -6,7 +6,7 @@
  *
  * @widget.code {all-menu}
  * @widget.name {全部菜单}
- * @widget.description {Header「全部」按钮与抽屉导航树。配置为名字+URL+标签的嵌套数组（最多三级），页面/分类/自定义可交叉。}
+ * @widget.description {Header「全部」按钮与抽屉导航树；默认可在横向分类条前置「全部商品」入口（可关）。}
  * @widget.type {navigation}
  * @widget.area {frontend}
  * @widget.position {["header"]}
@@ -14,9 +14,12 @@
  * @widget.slot {all-menu}
  * @widget.supports {["layout-header-all-menu","all-menu","hamburger"]}
  * @widget.exclusive {true}
- * @widget.default_injections {[{"slot":"all-menu","page_layouts":["*"]}]}
+ * @widget.default_injections {[{"layout_type":"homepage","slot":"all-menu","area":"header","sort_order":0,"required":true,"reason":"全局 chrome 载体默认安装全部菜单；非首页继承合并"}]}
  *
  * @param label {default="全部",type="string",label="按钮文字"}
+ * @param show_all_products {default=true,type="bool",label="显示全部商品入口",description="在横向分类条最前插入全部商品链接（/products）；关闭后不再插入。"}
+ * @param all_products_label {default="全部商品",type="string",label="全部商品文案"}
+ * @param all_products_url {default="/products",type="string",label="全部商品链接"}
  * @param menu_tree {default=[],type="all_menu_tree",label="导航树"}
  */
 
@@ -33,6 +36,24 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $labelSource = trim((string)($this->getData('label') ?? '全部'));
 $label = WidgetI18n::label($labelSource !== '' ? $labelSource : '全部', '全部');
+
+$showAllProductsRaw = $this->getData('show_all_products');
+if ($showAllProductsRaw === null) {
+    $showAllProducts = true;
+} elseif (is_string($showAllProductsRaw)) {
+    $showAllProducts = !in_array(strtolower(trim($showAllProductsRaw)), ['0', 'false', 'no', 'off', ''], true);
+} else {
+    $showAllProducts = (bool)$showAllProductsRaw;
+}
+$allProductsLabel = trim((string)($this->getData('all_products_label') ?? '全部商品'));
+if ($allProductsLabel === '') {
+    $allProductsLabel = '全部商品';
+}
+$allProductsUrl = trim((string)($this->getData('all_products_url') ?? '/products'));
+if ($allProductsUrl === '' || $allProductsUrl === '#') {
+    $allProductsUrl = '/products';
+}
+AllMenuTreeRegistry::publishAllProductsNav($showAllProducts, $allProductsLabel, $allProductsUrl);
 
 $normalizer = new MenuTreeNormalizer();
 $rawTree = $this->getData('menu_tree');

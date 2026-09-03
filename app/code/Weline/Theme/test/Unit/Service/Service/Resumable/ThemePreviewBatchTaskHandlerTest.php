@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Theme\Test\Unit\Service\Resumable;
+namespace Weline\Theme\Test\Unit\Service\Service\Resumable;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Runtime\Resumable\ResumableTaskContextInterface;

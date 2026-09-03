@@ -35,9 +35,10 @@ $this->assign('title', $title);
         }
 
         .category-list-main {
-            width: min(var(--token-size-1200px), calc(100% - var(--size-control-md)));
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
             margin: 0 auto;
-            padding: var(--weline-layout-spacing-xl) 0 calc(var(--weline-layout-spacing-3xl) * 1.125);
+            padding: var(--weline-layout-spacing-xl) var(--weline-layout-content-padding-inline) calc(var(--weline-layout-spacing-3xl) * 1.125);
         }
 
         .category-list-container {
@@ -107,8 +108,10 @@ $this->assign('title', $title);
 
         @media (max-width: 900px) {
             .category-list-main {
-                width: min(100% - var(--size-control-xs), var(--token-size-1200px));
-                padding: var(--spacing-lg) 0 var(--size-control-2xl);
+                width: min(100%, var(--weline-layout-content-max-width));
+                max-width: 100%;
+            padding-block: var(--spacing-lg) var(--size-control-2xl);
+                padding-inline: var(--weline-layout-content-padding-inline);
             }
 
             .category-content-wrapper {

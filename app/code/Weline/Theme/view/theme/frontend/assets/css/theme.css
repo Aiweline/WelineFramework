@@ -141,7 +141,7 @@ html[data-dir="ltr"] {
     --weline-theme-border: var(--weline-theme-border-color);
     --weline-theme-surface-raised: var(--weline-theme-surface);
     --weline-theme-surface-hover: var(--color-surface-hover, var(--weline-theme-surface-muted));
-    --weline-theme-container-max: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
+    --weline-theme-container-max: var(--weline-layout-content-max-width);
     --weline-theme-primary-surface: var(--weline-theme-primary-subtle);
     --weline-theme-primary-light: var(--weline-theme-primary-subtle);
     --weline-theme-primary-emphasis: var(--weline-theme-primary-text-emphasis);
@@ -221,8 +221,12 @@ html[data-dir="ltr"] {
     --weline-layout-border-color: var(--weline-theme-border-color);
     --weline-layout-link-color: var(--weline-theme-link);
     --weline-layout-link-hover-color: var(--weline-theme-link-hover);
-    --weline-layout-content-max-width: var(--layout-max-width, var(--spacing-container-max-width, var(--container-max-width, var(--weshop-container-max-width, 1440px))));
-    --weline-layout-content-padding-inline: var(--spacing-container-padding, var(--weshop-container-padding, 1rem));
+    --weline-layout-content-max-width: var(--layout-max-width);
+    --weline-layout-content-padding-inline: clamp(
+        0px,
+        calc((var(--spacing-container-max-width) - 100vw) * 9999),
+        var(--spacing-container-padding)
+    );
     --weline-layout-z-index-dropdown: var(--z-index-dropdown, 1000);
     --weline-layout-z-index-modal: var(--z-index-modal, 1050);
     --weline-component-primary: var(--weline-theme-primary);
@@ -1712,7 +1716,7 @@ table.table tbody tr:hover {
 }
 
 [data-surface="inverse"] a:not([class*="w-button"]):not(.btn),
-[data-surface="inverse"] button:not(.w-button):not(.btn):not(.search-submit-btn),
+[data-surface="inverse"] button:not(.w-button):not(.btn):not(.search-submit-btn):not(.search-category-facade):not(.search-type-facade):not(.search-type-trigger),
 [data-surface="inverse"] .w-icon,
 [data-surface="inverse"] svg {
     color: inherit;

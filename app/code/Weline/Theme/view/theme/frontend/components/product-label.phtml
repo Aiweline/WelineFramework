@@ -40,10 +40,24 @@ if ($text === '') {
 $class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
 $icon = trim((string)($this->getData('icon') ?? $this->getData('meta.icon') ?? ''));
 $rootClass = trim('w-product-label ' . $wc . ($class !== '' ? ' ' . $class : ''));
+$backgroundColor = match ($kind) {
+    ProductLabelStyle::KIND_SALE => 'var(--w-product-label-sale-bg, var(--weline-product-label-sale-bg, var(--color-product-label-sale-bg)))',
+    ProductLabelStyle::KIND_DEMO => 'var(--w-product-label-demo-bg, var(--weline-product-label-demo-bg, var(--color-product-label-demo-bg)))',
+    default => 'var(--w-product-label-new-bg, var(--weline-product-label-new-bg, var(--color-product-label-new-bg)))',
+};
+$textColor = match ($kind) {
+    ProductLabelStyle::KIND_SALE => 'var(--w-product-label-sale-text, var(--weline-product-label-sale-text, var(--color-product-label-sale-text)))',
+    ProductLabelStyle::KIND_DEMO => 'var(--w-product-label-demo-text, var(--weline-product-label-demo-text, var(--color-product-label-demo-text)))',
+    default => 'var(--w-product-label-new-text, var(--weline-product-label-new-text, var(--color-product-label-new-text)))',
+};
+$inlineStyle = 'background: ' . $backgroundColor
+    . '; color: ' . $textColor
+    . '; box-shadow: inset 0 0 0 1px color-mix(in srgb, ' . $textColor . ' 12%, transparent);';
 ?>
 
 <span class="<?= $esc($rootClass) ?>"
       data-kind="<?= $esc($kind) ?>"
+      style="<?= $esc($inlineStyle) ?>"
       weline-code="<?= $esc($scope->code) ?>"
       data-uid="<?= $esc($scope->uid) ?>"
       data-js-ns="<?= $esc($scope->jsNs) ?>">
@@ -52,23 +66,3 @@ $rootClass = trim('w-product-label ' . $wc . ($class !== '' ? ' ' . $class : '')
     <?php endif; ?>
     <?= $esc($text) ?>
 </span>
-
-<style>
-.<?= $wc ?>[data-kind="new"] {
-    background: var(--w-product-label-new-bg, var(--weline-product-label-new-bg, var(--color-product-label-new-bg)));
-    color: var(--w-product-label-new-text, var(--weline-product-label-new-text, var(--color-product-label-new-text)));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--w-product-label-new-text, var(--weline-product-label-new-text, var(--color-product-label-new-text))) 12%, transparent);
-}
-
-.<?= $wc ?>[data-kind="sale"] {
-    background: var(--w-product-label-sale-bg, var(--weline-product-label-sale-bg, var(--color-product-label-sale-bg)));
-    color: var(--w-product-label-sale-text, var(--weline-product-label-sale-text, var(--color-product-label-sale-text)));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--w-product-label-sale-text, var(--weline-product-label-sale-text, var(--color-product-label-sale-text))) 12%, transparent);
-}
-
-.<?= $wc ?>[data-kind="demo"] {
-    background: var(--w-product-label-demo-bg, var(--weline-product-label-demo-bg, var(--color-product-label-demo-bg)));
-    color: var(--w-product-label-demo-text, var(--weline-product-label-demo-text, var(--color-product-label-demo-text)));
-    box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--w-product-label-demo-text, var(--weline-product-label-demo-text, var(--color-product-label-demo-text))) 12%, transparent);
-}
-</style>

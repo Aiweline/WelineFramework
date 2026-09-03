@@ -5262,6 +5262,10 @@
         console.log('收到 iframe 消息:', data);
 
         if (data.type === 'slot-selected') {
+            // 部件模式只触发部件，忽略插槽选中。
+            if (normalizeSelectionTarget(state.selectionTarget) === 'widget') {
+                return;
+            }
             if (isPreviewInteractionMode()) {
                 setInteractionMode('edit');
             }
@@ -5292,6 +5296,10 @@
 
         switch (data.type) {
             case 'widget-selected':
+                // 插槽模式不打开部件配置。
+                if (normalizeSelectionTarget(state.selectionTarget) === 'slot') {
+                    break;
+                }
                 // 预览页面中选中了部件
                 handlePreviewWidgetSelected(data);
                 break;
@@ -5526,6 +5534,13 @@
         const areaCode = normalizedSlot.area || inferAreaFromSlotId(slotId);
 
         console.log('[handleSlotSelected] slotId:', slotId, 'slot.area:', normalizedSlot.area, 'resolved areaCode:', areaCode);
+
+        // 按当前 slot 服务端全量拉取兼容部件（默认逛库仍分页）
+        setWidgetSlotFilter(
+            slotId || areaCode || null,
+            normalizedSlot.name || slotId || areaCode || '',
+            areaCode || null
+        );
 
         openWidgetPanelForSlotSelection(normalizedSlot);
         applySlotWidgetRecommendations(normalizedSlot);
@@ -7828,7 +7843,11 @@
     }
 
     function dataTemplateRefSelector(templateRef) {
-        return dataAttributeSelector('data-template-ref', templateRef);
+        const value = String(templateRef || '').trim();
+        if (!value) {
+            return '';
+        }
+        return dataAttributeSelector('data-template-ref', value);
     }
 
     function dataWidgetIdentitySelector(identity) {
@@ -8032,6 +8051,10 @@
     }
 
     function handleIframeWidgetElementClick(target) {
+        // 插槽模式只激活插槽，不点选/打开部件配置。
+        if (normalizeSelectionTarget(state.selectionTarget) === 'slot') {
+            return false;
+        }
         const widgetWrapper = target?.closest?.(
             `${WIDGET_WRAPPER_MATCH}, ${PREVIEW_OR_CODE_WIDGET_MATCH}`
         );
@@ -8944,13 +8967,17 @@
         if (state.editorArea) url.searchParams.set('editor_area', state.editorArea);
         appendWidgetLibraryFilterParams(url);
         appendLibraryTypeFilterParams(url, 'widgets');
-        url.searchParams.set('offset', String(lib.offset));
-        url.searchParams.set('limit', String(lib.limit));
-        if (lib.keyword) url.searchParams.set('keyword', lib.keyword);
+        // 默认逛库分页；选中 slot 时仍传 limit>0 走 items 通道，后端 slot_full 忽略切片一次返回全部
         if (lib.slot) {
+            url.searchParams.set('offset', '0');
+            url.searchParams.set('limit', String(Math.max(1, Number(lib.limit) || 50)));
             url.searchParams.set('slot_id', lib.slot);
             if (lib.slotArea) url.searchParams.set('area', lib.slotArea);
+        } else {
+            url.searchParams.set('offset', String(lib.offset));
+            url.searchParams.set('limit', String(lib.limit));
         }
+        if (lib.keyword) url.searchParams.set('keyword', lib.keyword);
         return url.toString();
     }
 
@@ -9848,11 +9875,12 @@
         if (options.reset) {
             lib.offset = 0;
             lib.total = 0;
-            lib.hasMore = true;
+            // slot 模式只打一枪；默认模式才继续无限滚动
+            lib.hasMore = !lib.slot;
             listEl.innerHTML = '<div class="widget-list-loading" id="widgetListLoading">'
                 + '<span class="w-spinner" role="status"><span class="w-visually-hidden">' + escapeHtml(translateUiText('加载中...')) + '</span></span>'
                 + '<span class="widget-list-loading-text">' + escapeHtml(translateUiText('部件库加载中...')) + '</span></div>';
-        } else if (!lib.hasMore) {
+        } else if (!lib.hasMore || lib.slot) {
             return;
         }
         lib.loading = true;
@@ -9869,7 +9897,14 @@
             }
             appendWidgetItems(items);
             lib.offset += items.length;
-            lib.hasMore = !!(result && result.has_more);
+            if (lib.slot || (result && Number(result.slot_full) === 1)) {
+                lib.hasMore = false;
+                if (typeof result.total === 'number') {
+                    lib.offset = result.total;
+                }
+            } else {
+                lib.hasMore = !!(result && result.has_more);
+            }
             if (lib.offset === 0 && items.length === 0) {
                 const emptyText = lib.slot
                     ? translateUiText('该插槽暂无可用部件')
@@ -9921,6 +9956,8 @@
         scroller.addEventListener('scroll', function () {
             const lib = getWidgetLibState();
             if (state.widgetLibraryTab === 'applications') return;
+            // 选中 slot 时一次拉齐兼容部件，禁止下滑分页
+            if (lib.slot) return;
             if (lib.loading || !lib.hasMore) return;
             if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 200) {
                 loadWidgetLibrary({ silent: true });
@@ -9940,6 +9977,11 @@
         }
         let hint = listEl.querySelector('.widget-load-more-hint');
         const lib = getWidgetLibState();
+        // slot 全量模式不展示分页提示
+        if (lib.slot) {
+            if (hint) hint.remove();
+            return;
+        }
         if (lib.total <= 0 || (lib.offset === 0)) {
             if (hint) hint.remove();
             return;
@@ -11903,8 +11945,8 @@
         // 插入新部件
         targetContainer.insertAdjacentHTML('beforeend', widgetHtml);
 
-        // 添加视觉反馈动画
-        const newWidget = targetContainer.querySelector(dataLayoutIdSelector(layoutId));
+        // 刚插入的节点即可做动画；勿对空 layoutId 调用 querySelector
+        const newWidget = targetContainer.lastElementChild;
         if (newWidget) {
             // 短暂延迟后移除 widget-new 类（动画效果）
             setTimeout(() => {
@@ -12618,6 +12660,10 @@
         doc.body._slotToolbarActionEventsBound = true;
 
         doc.body.addEventListener('click', function(e) {
+            // 部件模式不激活插槽工具条选择。
+            if (normalizeSelectionTarget(state.selectionTarget) === 'widget') {
+                return;
+            }
             const bar = e.target.closest('.widget-hover-actions[data-slot-hover-actions="1"]');
             if (!bar) {
                 return;
@@ -13062,6 +13108,10 @@
         // 使用事件委托 - 必须在最早阶段阻止冒泡
         doc.body.addEventListener('click', function(e) {
             if (isPreviewInteractionMode()) {
+                return;
+            }
+            // 插槽模式：部件本体与部件操作条都不触发部件配置。
+            if (normalizeSelectionTarget(state.selectionTarget) === 'slot') {
                 return;
             }
             // 购物控件等标记了 data-editor-interactive / data-mini-cart-* 的区域保持原生交互。
@@ -17603,7 +17653,7 @@
             '[data-qty-increase]',
             '[data-qty-input]',
             '[data-remove-item]',
-            '[data-action="add-v2"]',
+            '[data-action="add"]',
             '[data-action="add"]',
             '[data-action="wishlist-toggle"]',
             '[data-action="compare-toggle"]',

@@ -104,14 +104,52 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
         $this->assertFileExists($path);
         $content = (string) file_get_contents($path);
         $this->assertStringContainsString('.account-main-content {', $content);
+        // 与 foundation .w-container / header-container 同一版心公式
         $this->assertStringContainsString(
-            'max-width: var(--weline-layout-content-max-width, var(--layout-max-width, var(--container-max-width, 1440px)));',
+            'width: min(100%, var(--weline-layout-content-max-width));',
             $content
         );
+        $this->assertStringContainsString('padding-inline: var(--weline-layout-content-padding-inline);', $content);
+        $this->assertStringContainsString('margin-inline: auto;', $content);
         $this->assertStringNotContainsString('max-width: var(--layout-max-width, 1600px);', $content);
-        $this->assertStringContainsString('margin: 0 auto;', $content);
         $this->assertStringContainsString('<main class="account-main-content', $content);
         $this->assertStringNotContainsString('.account-dashboard__body {', $content);
+    }
+
+    public function testAccountMainPanelIsNotNestedWhiteCardShell(): void
+    {
+        $base = dirname(__DIR__, 2) . '/view/theme/frontend/layouts/account';
+        $cases = [
+            $base . '/dashboard.phtml' => '.account-main',
+            $base . '/default.phtml' => '.account-main-content',
+        ];
+
+        foreach ($cases as $path => $selector) {
+            $this->assertFileExists($path);
+            $content = (string) file_get_contents($path);
+            $this->assertMatchesRegularExpression(
+                '/' . preg_quote($selector, '/') . '\\s*\\{([^}]+)\\}/',
+                $content,
+                basename($path) . " 须声明 {$selector}"
+            );
+            preg_match('/' . preg_quote($selector, '/') . '\s*\{([^}]+)\}/', $content, $match);
+            $block = (string) ($match[1] ?? '');
+            $this->assertStringNotContainsString(
+                'weline-layout-surface-primary',
+                $block,
+                basename($path) . " {$selector} 禁止白底壳（避免套两层）"
+            );
+            $this->assertDoesNotMatchRegularExpression(
+                '/box-shadow\s*:\s*(?!none\b)/',
+                $block,
+                basename($path) . " {$selector} 禁止非 none 阴影壳"
+            );
+            $this->assertStringContainsString(
+                'background: transparent',
+                $block,
+                basename($path) . " {$selector} 须透明底"
+            );
+        }
     }
 
     public function testAccountLayoutsLargeScreenSpacingUsesThemeTokenFallbacks(): void
@@ -133,9 +171,9 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
                 $label . ' 大屏 gap 须带 spacing-xl/2rem fallback'
             );
             $this->assertStringContainsString(
-                'padding: var(--weline-layout-spacing-xl, var(--spacing-xl, 2rem));',
+                'padding-inline: var(--weline-layout-content-padding-inline);',
                 $content,
-                $label . ' 主内容 padding 须带 spacing-xl/2rem fallback'
+                $label . ' 版心水平 padding 须用 content-padding-inline'
             );
             $this->assertStringNotContainsString(
                 'gap: var(--weline-layout-spacing-xl);',

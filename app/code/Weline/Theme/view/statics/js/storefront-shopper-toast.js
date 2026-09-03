@@ -96,7 +96,8 @@
         host.style.insetBlockStart = '';
         host.style.insetInlineEnd = '';
         host.style.insetInlineStart = '';
-        host.style.width = 'min(22rem, calc(100dvw - 2rem))';
+        var noticeWidth = Math.min(22 * 16, Math.max(240, global.innerWidth - 32));
+        host.style.width = noticeWidth + 'px';
 
         var trigger = doc.querySelector('[data-mini-cart-trigger]');
         if (!(trigger instanceof HTMLElement)) {
@@ -110,6 +111,9 @@
         var gap = 8;
         var top = Math.max(8, rect.bottom + gap);
         var right = Math.max(16, global.innerWidth - rect.right);
+        if (right + noticeWidth > global.innerWidth - 16) {
+            right = Math.max(16, global.innerWidth - 16 - noticeWidth);
+        }
         host.style.top = top + 'px';
         host.style.right = right + 'px';
         host.style.left = 'auto';

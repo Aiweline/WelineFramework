@@ -212,8 +212,8 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'banner',
                     'config' => [
-                        'title' => '欢迎来到我们的商店',
-                        'subtitle' => '发现最新产品和优惠',
+                        'title' => '云裳汉服 · Hanfu Atelier',
+                        'subtitle' => '东方衣冠，为日常与礼仪而作 · Made for modern rituals',
                         'auto_play' => true,
                         'interval' => 5000,
                     ],
@@ -227,7 +227,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '特色产品',
+                        'title' => '本季精选 · Seasonal Edit',
                         'limit' => 8,
                         'columns' => 4,
                     ],
@@ -241,7 +241,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '新品上市',
+                        'title' => '新裳入藏 · New Arrivals',
                         'limit' => 8,
                         'columns' => 4,
                     ],
@@ -287,21 +287,21 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '相关产品',
+                        'title' => '同风格推荐 · You May Also Like',
                         'limit' => 4,
                         'columns' => 4,
                     ],
                     'sort_order' => 0,
                 ],
-                // 最近浏览
+                // 最近浏览（Weline_RecentlyViewed default_injections）
                 [
                     'area' => ThemeLayout::AREA_CONTENT,
                     'slot_id' => 'product-recently-viewed',
                     'widget_code' => 'recently-viewed',
-                    'widget_module' => 'Weline_Theme',
+                    'widget_module' => 'Weline_RecentlyViewed',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '最近浏览',
+                        'title' => '最近浏览 · Recently Viewed',
                         'limit' => 4,
                         'columns' => 4,
                     ],
@@ -315,7 +315,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '热销产品',
+                        'title' => '典藏热选 · Best Sellers',
                         'limit' => 4,
                         'columns' => 4,
                         'layout' => 'carousel',
@@ -333,7 +333,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '推荐产品',
+                        'title' => '为你推荐 · Recommended',
                         'limit' => 8,
                         'columns' => '4',
                         'layout' => 'grid',
@@ -352,7 +352,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '推荐产品',
+                        'title' => '按形制继续探索 · Explore More',
                         'limit' => 8,
                         'columns' => '4',
                         'layout' => 'grid',
@@ -371,7 +371,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Product',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '您可能还需要',
+                        'title' => '搭配成套 · Complete the Look',
                         'limit' => 4,
                         'columns' => 4,
                     ],
@@ -389,7 +389,7 @@ class DefaultLayoutSeeder
                     'widget_module' => 'Weline_Theme',
                     'widget_type' => 'product',
                     'config' => [
-                        'title' => '热门产品',
+                        'title' => '人气汉服 · Popular Hanfu',
                         'limit' => 8,
                         'columns' => 4,
                     ],

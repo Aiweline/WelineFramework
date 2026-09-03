@@ -17,6 +17,8 @@ final class SlotRendererPageContextContractTest extends TestCase
         self::assertStringContainsString('capturePageRenderContext', $source);
         self::assertStringContainsString("'storefront_offer'", $source);
         self::assertStringContainsString("'storefront_offers'", $source);
+        self::assertStringContainsString("'storefront_offers_unfiltered'", $source);
+        self::assertStringContainsString("'storefront_category'", $source);
         self::assertStringContainsString("\$config['preview_mode']", $source);
     }
 }

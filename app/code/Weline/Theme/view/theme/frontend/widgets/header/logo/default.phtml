@@ -16,7 +16,7 @@
  * @widget.exclusive {true}
  *
  * @param logo_image {default="",type="image",label="Logo图片",description="Logo图片URL，留空使用文字"}
- * @param logo_text {default="Weline",type="string",label="Logo文字"}
+ * @param logo_text {default="",type="string",label="Logo文字",description="留空使用当前网站名称"}
  * @param logo_link {default="/",type="string",label="Logo链接"}
  * @param logo_height {default=40,type="number",label="Logo高度(px)"}
  */
@@ -33,7 +33,20 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $logoImage = LegacyMediaUrl::sanitize($this->getData('logo_image') ?? '');
 $logoImageFileHtml = (string)($this->getData('logo_image_file_html') ?? '');
-$logoText = $this->getData('logo_text') ?? 'Weline';
+$configuredLogoText = trim((string)($this->getData('logo_text') ?? ''));
+$logoText = 'Weline';
+try {
+    $siteBrandForName = ObjectManager::getInstance(SiteBrand::class);
+    if ($siteBrandForName instanceof SiteBrand) {
+        $logoText = $siteBrandForName->resolveFrontendSiteName($configuredLogoText, '云裳 Hanfu Atelier');
+    } elseif ($configuredLogoText !== '') {
+        $logoText = $configuredLogoText;
+    }
+} catch (\Throwable) {
+    if ($configuredLogoText !== '') {
+        $logoText = $configuredLogoText;
+    }
+}
 $logoLink = LegacyMediaUrl::sanitize($this->getData('logo_link') ?? '/');
 if ($logoLink === '') {
     $logoLink = '/';

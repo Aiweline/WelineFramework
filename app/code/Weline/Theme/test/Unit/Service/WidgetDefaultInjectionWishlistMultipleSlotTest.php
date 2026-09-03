@@ -30,12 +30,12 @@ final class WidgetDefaultInjectionWishlistMultipleSlotTest extends TestCase
         self::assertStringContainsString('return $this->widgetExistsAsTemplateInline($themeId, $item, $componentArea);', $src);
     }
 
-    public function testWishlistWidgetTargetsUserAreaAsRecommend(): void
+    public function testWishlistWidgetTargetsUserAreaWithoutAppsDefaultInjection(): void
     {
         $widgetPhp = dirname(__DIR__, 4) . '/Wishlist/extends/module/Weline_Widget/Weline_Wishlist/widget.php';
         self::assertFileExists($widgetPhp);
         $src = (string)file_get_contents($widgetPhp);
         self::assertStringContainsString("'slot' => 'user-area'", $src);
-        self::assertStringContainsString("'required' => false", $src);
+        self::assertStringNotContainsString("'default_injections'", $src);
     }
 }

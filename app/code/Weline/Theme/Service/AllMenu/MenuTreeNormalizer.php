@@ -301,7 +301,7 @@ final class MenuTreeNormalizer
             $lang = '';
         }
         $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-        if ($requestUri !== '' && preg_match('#/(en_US|zh_Hans_CN|zh_CN)(?:/|$)#', $requestUri, $matches)) {
+        if ($requestUri !== '' && preg_match('#/(ar_SA|en_US|zh_Hans_CN|zh_CN)(?:/|$)#', $requestUri, $matches)) {
             return (string) $matches[1];
         }
 
@@ -329,7 +329,7 @@ final class MenuTreeNormalizer
         if (is_array($i18nMap)) {
             $localized = trim((string)($i18nMap[$locale] ?? ''));
             if ($localized !== '') {
-                return $localized;
+                $source = $localized;
             }
         }
 

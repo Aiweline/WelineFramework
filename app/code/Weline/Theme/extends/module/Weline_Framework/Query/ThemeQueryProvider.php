@@ -6,6 +6,8 @@ namespace Weline\Theme\Extends\Module\Weline_Framework\Query;
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Backend\Api\View\BackendThemeConfigInterface;
 use Weline\Eav\Api\Options\EavOptionsQueryInterface;
+use Weline\Framework\Context;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\FrontendWorkerBackendAuthorizationProviderInterface;
 use Weline\Framework\Runtime\RequestContext;
@@ -738,6 +740,15 @@ class ThemeQueryProvider implements QueryProviderInterface
         $requestParams = array_merge($queryParams, $bodyParams);
         $themeEditor = null;
 
+        // query-bin 下 meta.type=request 时，ThemeEditor::fetchJson 会抛 ResponseTerminateException。
+        // 与 AdminControllerBridge 一致：直调期间标记 admin_bridge，并吸收 2xx 终止体。
+        $context = Context::getCurrent();
+        $previousMetaType = null;
+        if ($context !== null) {
+            $previousMetaType = $context->get('meta.type');
+            $context->set('meta.type', 'admin_bridge');
+        }
+
         try {
             $response = match ($path) {
                 '/theme/backend/theme-editor/widgets' => ($themeEditor ??= $this->createDirectThemeEditor())->getWidgets(),
@@ -756,6 +767,9 @@ class ThemeQueryProvider implements QueryProviderInterface
                     ? ($themeEditor ??= $this->createDirectThemeEditor())->postScopedWorkspace()
                     : ($themeEditor ??= $this->createDirectThemeEditor())->getScopedWorkspace(),
                 '/theme/backend/theme-editor/publish-scoped-workspace' => ($themeEditor ??= $this->createDirectThemeEditor())->postPublishScopedWorkspace(),
+                '/theme/backend/theme-editor/brand-basics-identity' => $method === 'POST'
+                    ? ($themeEditor ??= $this->createDirectThemeEditor())->postBrandBasicsIdentity()
+                    : ($themeEditor ??= $this->createDirectThemeEditor())->getBrandBasicsIdentity(),
                 '/theme/backend/theme-editor/save-layout-selection' => ($themeEditor ??= $this->createDirectThemeEditor())->saveLayoutSelectionPayload(),
                 '/theme/backend/theme-editor/save-layout-config' => ($themeEditor ??= $this->createDirectThemeEditor())->saveLayoutConfigPayload(),
                 '/theme/backend/theme-editor/ai-translate-config' => ($themeEditor ??= $this->createDirectThemeEditor())->postAiTranslateConfig(),
@@ -767,6 +781,11 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/theme/backend/theme-editor/save-widget-config' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveWidgetConfig(),
                 '/theme/backend/theme-editor/update-sort' => ($themeEditor ??= $this->createDirectThemeEditor())->postUpdateSort(),
                 '/theme/backend/theme-editor/swap-widget-order' => ($themeEditor ??= $this->createDirectThemeEditor())->postSwapWidgetOrder(),
+                '/theme/backend/theme-editor/chrome-mode' => $method === 'POST'
+                    ? ($themeEditor ??= $this->createDirectThemeEditor())->postChromeMode()
+                    : ($themeEditor ??= $this->createDirectThemeEditor())->getChromeMode(),
+                '/theme/backend/theme-editor/detach-chrome' => ($themeEditor ??= $this->createDirectThemeEditor())->postDetachChrome(),
+                '/theme/backend/theme-editor/restore-chrome' => ($themeEditor ??= $this->createDirectThemeEditor())->postRestoreChrome(),
                 '/theme/backend/theme-editor/remove-orphan-widgets' => ($themeEditor ??= $this->createDirectThemeEditor())->postRemoveOrphanWidgets(),
                 '/theme/backend/theme-editor/move-widget' => ($themeEditor ??= $this->createDirectThemeEditor())->postMoveWidget(),
                 '/theme/backend/theme-editor/save-layout' => ($themeEditor ??= $this->createDirectThemeEditor())->postSaveLayout(),
@@ -817,11 +836,15 @@ class ThemeQueryProvider implements QueryProviderInterface
                 '/weline/eav/api/options/entities' => $this->eavOptionsQuery()->queryEntities(),
                 default => $this->dispatchThemeConfigController($path, $method, $requestParams),
             };
-        } catch (\Throwable $e) {
-            if (method_exists($e, 'getBody')) {
-                $response = (string)$e->getBody();
-            } else {
+        } catch (ResponseTerminateException $e) {
+            $status = $e->getStatusCode();
+            if ($status < 200 || $status >= 300) {
                 throw $e;
+            }
+            $response = $e->getBody();
+        } finally {
+            if ($context !== null) {
+                $context->set('meta.type', $previousMetaType);
             }
         }
 

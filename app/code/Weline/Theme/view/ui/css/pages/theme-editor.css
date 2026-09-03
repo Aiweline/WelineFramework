@@ -1664,6 +1664,21 @@ body:has(.theme-editor-container) .footer {
     background: var(--w-theme-editor-bg-card);
 }
 
+.preview-drop-bridge {
+    position: absolute;
+    inset: 0;
+    z-index: var(--weline-z-overlay);
+    display: none;
+    background: transparent;
+    cursor: copy;
+    pointer-events: none;
+}
+
+.preview-drop-bridge.is-active {
+    display: block;
+    pointer-events: auto;
+}
+
 .preview-iframe {
     width: 100%;
     height: 100%;
@@ -3001,6 +3016,17 @@ body:has(.theme-editor-container) .footer {
     background: var(--w-theme-editor-bg-hover);
     border: 1px solid var(--w-theme-editor-border);
     border-radius: var(--w-theme-editor-radius-md);
+}
+
+.widget-default-injection-item.widget-default-injection-locate-target {
+    cursor: pointer;
+    transition: border-color var(--weline-motion-fast), box-shadow var(--weline-motion-fast);
+}
+
+.widget-default-injection-item.widget-default-injection-locate-target:hover,
+.widget-default-injection-item.widget-default-injection-locate-target:focus-within {
+    border-color: var(--w-theme-editor-accent);
+    box-shadow: var(--w-theme-editor-shadow-sm);
 }
 
 .widget-default-injection-header {
@@ -4703,7 +4729,7 @@ textarea.auto-resize { height: var(--w-theme-editor-textarea-height, auto); }
 .editor-floating-panel-actions {
     position: absolute;
     inset: 0;
-    z-index: 100;
+    z-index: var(--weline-z-overlay);
     pointer-events: none;
 }
 
@@ -4801,6 +4827,12 @@ textarea.auto-resize { height: var(--w-theme-editor-textarea-height, auto); }
     pointer-events: none;
     border-left-color: transparent;
     box-shadow: none;
+}
+
+.theme-editor-container.panel-config-open .editor-config-panel,
+.theme-editor-container.panel-widget-open .editor-widget-panel {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .theme-editor-container .panel-close-widget {
@@ -5271,6 +5303,20 @@ textarea.auto-resize { height: var(--w-theme-editor-textarea-height, auto); }
 
 .w-theme-disk-appearance-tokens > .w-theme-disk-empty {
     width: min(100%, 18rem);
+}
+
+.w-theme-disk-token-group {
+    grid-column: 1 / -1;
+    margin: 0;
+    padding-block: var(--weline-space-2) var(--weline-space-1);
+    color: var(--w-theme-editor-text-secondary);
+    font-size: var(--weline-font-size-xs);
+    font-weight: 700;
+    line-height: 1.3;
+}
+
+.w-theme-disk-token-group:not(:first-child) {
+    margin-block-start: var(--weline-space-2);
 }
 
 .w-theme-disk-token {

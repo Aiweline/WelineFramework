@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Theme\Dto\ThemeComponentDefinition;
+use Weline\Theme\Dto\ThemeSlotDefinition;
 use Weline\Theme\Model\WelineTheme;
 
 class ThemeComponentCatalog
@@ -67,6 +68,67 @@ class ThemeComponentCatalog
         foreach ($this->getDefinitions($area, $theme) as $definition) {
             if ($definition->getIdentity() === $identity) {
                 return $definition;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Resolve slots owned by placeable container components, including external module widgets.
+     *
+     * @return array<string,mixed>|null
+     */
+    public function findSlot(
+        string $slotId,
+        string $area = 'frontend',
+        ?WelineTheme $theme = null,
+    ): ?array {
+        $slotId = trim($slotId);
+        if ($slotId === '') {
+            return null;
+        }
+
+        $area = strtolower($area) === 'backend' ? 'backend' : 'frontend';
+        foreach ($this->getDefinitions($area, $theme) as $definition) {
+            foreach ($definition->slots as $key => $rawSlot) {
+                $slot = is_array($rawSlot) ? $rawSlot : [];
+                $candidateId = is_string($key) ? trim($key) : trim((string)($slot['id'] ?? ''));
+                if ($candidateId !== $slotId) {
+                    continue;
+                }
+
+                $accept = $slot['accept'] ?? ($slot['accepts'] ?? []);
+                $accept = is_array($accept)
+                    ? array_values(array_filter(array_map(
+                        static fn(mixed $value): string => trim((string)$value),
+                        $accept
+                    )))
+                    : [];
+                $max = isset($slot['max']) && is_numeric($slot['max']) ? (int)$slot['max'] : null;
+                $exclusive = (bool)($slot['exclusive'] ?? false) || $max === 1;
+
+                return (new ThemeSlotDefinition(
+                    id: $slotId,
+                    name: trim((string)($slot['name'] ?? '')) ?: $slotId,
+                    area: $area,
+                    accept: $accept,
+                    exclusive: $exclusive,
+                    multiple: array_key_exists('multiple', $slot) ? (bool)$slot['multiple'] : !$exclusive,
+                    append: (bool)($slot['append'] ?? false),
+                    prepend: (bool)($slot['prepend'] ?? false),
+                    meta: [
+                        'position' => $slot['position'] ?? null,
+                        'reject' => is_array($slot['reject'] ?? null) ? $slot['reject'] : [],
+                        'max' => $max,
+                        'min' => isset($slot['min']) && is_numeric($slot['min']) ? (int)$slot['min'] : null,
+                        'required' => (bool)($slot['required'] ?? false),
+                        'has_template_widgets' => false,
+                        'template_widgets' => [],
+                        'component_identity' => $definition->getIdentity(),
+                    ],
+                    sourcePath: $definition->templatePath,
+                ))->toArray();
             }
         }
 

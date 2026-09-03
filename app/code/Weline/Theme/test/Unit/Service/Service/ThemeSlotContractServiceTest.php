@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Theme\Test\Unit\Service;
+namespace Weline\Theme\Test\Unit\Service\Service;
 
 use PHPUnit\Framework\MockObject\MockObject;
 use PHPUnit\Framework\TestCase;

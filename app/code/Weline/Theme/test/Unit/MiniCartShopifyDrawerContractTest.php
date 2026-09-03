@@ -38,16 +38,19 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('is-drawer-open', $source);
         self::assertStringContainsString('weshop:mini-cart:open', $source);
         self::assertStringContainsString('weshop:mini-cart:close', $source);
+        self::assertStringContainsString('Weline.MiniCart.open', $source);
+        self::assertStringContainsString('Weline.MiniCart.close', $source);
+        self::assertStringContainsString('weshop:mini-cart:open-request', $source);
         self::assertStringContainsString('loadDrawer', $source);
         self::assertStringContainsString('syncCartState', $source);
         self::assertStringContainsString('scheduleCartSync', $source);
         self::assertStringContainsString('waitForCartApi', $source);
-        self::assertStringContainsString('getV2Cart', $source);
+        self::assertStringContainsString('getCart', $source);
         self::assertStringContainsString('isDemoChromeOnly', $source);
         self::assertStringContainsString('withTimeout', $source);
         self::assertStringContainsString('miniItems', $source);
-        self::assertStringContainsString('updateV2', $source);
-        self::assertStringContainsString('removeV2', $source);
+        self::assertStringContainsString('update', $source);
+        self::assertStringContainsString('remove', $source);
         self::assertStringContainsString('mini-cart-drawer__line', $source);
         self::assertStringContainsString('beginDrawerBusy', $source);
         self::assertStringContainsString('runWithDrawerBusy', $source);
@@ -64,6 +67,8 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('bootMiniCartRoots', $source);
         self::assertStringContainsString('observeMiniCartRoots', $source);
         self::assertStringContainsString('__booted', $source);
+        self::assertStringContainsString('isDisplayableImageUrl', $source);
+        self::assertMatchesRegularExpression('#asset:\\\\?/\\\\?/#', $source);
     }
 
     public function testMiniCartExtrasTabsScriptBuildsHorizontalSwitcher(): void

@@ -34,10 +34,10 @@ $bodyClass = 'blog-category-layout__body' . ($showFilters ? ' blog-category-layo
             color: #0f1111;
         }
         .blog-category-layout__shell {
-            width: 100%;
-            max-width: var(--weline-layout-content-max-width, 90rem);
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
             margin: 0 auto;
-            padding: var(--weline-space-4, 1rem) var(--weline-layout-content-padding-inline, 1rem) var(--weline-space-8, 2rem);
+            padding: var(--weline-space-4, 1rem) var(--weline-layout-content-padding-inline) var(--weline-space-8, 2rem);
             box-sizing: border-box;
         }
         .blog-category-layout__body {
@@ -70,8 +70,48 @@ $bodyClass = 'blog-category-layout__body' . ($showFilters ? ' blog-category-layo
             display: grid;
             gap: 0.25rem;
         }
+        .amazon-blog-filter__list--nested {
+            margin-top: 0.15rem;
+            padding-left: 0.35rem;
+        }
+        .amazon-blog-filter__row {
+            display: flex;
+            align-items: center;
+            gap: 0.15rem;
+        }
+        .amazon-blog-filter__toggle,
+        .amazon-blog-filter__toggle-spacer {
+            flex: 0 0 1.1rem;
+            width: 1.1rem;
+            height: 1.1rem;
+        }
+        .amazon-blog-filter__toggle {
+            border: 0;
+            background: transparent;
+            padding: 0;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: #565959;
+        }
+        .amazon-blog-filter__toggle-icon {
+            width: 0;
+            height: 0;
+            border-top: 0.28rem solid transparent;
+            border-bottom: 0.28rem solid transparent;
+            border-left: 0.38rem solid currentColor;
+            transition: transform .12s ease;
+        }
+        .amazon-blog-filter__node.is-open > .amazon-blog-filter__row .amazon-blog-filter__toggle-icon {
+            transform: rotate(90deg);
+        }
+        .amazon-blog-filter__children[hidden] {
+            display: none;
+        }
         .amazon-blog-filter__option {
             display: block;
+            flex: 1 1 auto;
             padding: 0.45rem 0.6rem;
             border-radius: 4px;
             color: #0f1111;

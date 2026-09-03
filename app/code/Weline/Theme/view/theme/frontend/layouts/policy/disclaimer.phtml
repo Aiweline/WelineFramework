@@ -1,279 +1,363 @@
 <?php
 /**
- * 布局：免责声明页面
- *
- * 用于展示网站免责声明和责任限制
- * 字段
- * @meta.name {default="免责声明页面",name="免责声明页面",description="用于展示网站免责声明和责任限制"}
- * @meta.description {default="说明网站的责任限制和免责情形",name="免责声明说明",description="用于展示网站免责声明、责任限制、风险提示等内容"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
- * @param title {default="免责声明",name="页面标题",description="页面标题，用于设置页面标题"}
- * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），如不为空会直接渲染，覆盖默认示例条款"}
- * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
- * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
- * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
- *
- * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
- * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
- * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ * 布局：免责声明页面（亚马逊条款式）
+ * @meta.name {default="免责声明页面",name="免责声明页面",description="免责声明"}
+ * @meta.description {default="说明责任限制与免责情形",name="免责声明说明",description="免责声明"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录"}
+ * @param title {default="免责声明",name="页面标题",description="页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="非空时覆盖默认正文"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类"}
  */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\SiteContactInfo;
+
 $meta = $this->getData('meta') ?? [];
+$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$contact = [
+    'site_name' => 'Weline',
+];
+try {
+    $resolver = ObjectManager::getInstance(SiteContactInfo::class);
+    if ($resolver instanceof SiteContactInfo) {
+        $contact = array_merge($contact, $resolver->resolve());
+    }
+} catch (\Throwable) {
+}
+$siteName = (string)$contact['site_name'];
+$title = (string)($meta['title'] ?? __('免责声明'));
+$updatedAt = date('Y-m-d');
+$ariaNav = (string)__('免责声明目录');
+$ariaArticle = (string)__('免责声明正文');
+$toc = [
+    ['id' => 'disclaimer-s1', 'label' => __('一、服务中断与数据丢失')],
+    ['id' => 'disclaimer-s2', 'label' => __('二、信息内容免责')],
+    ['id' => 'disclaimer-s3', 'label' => __('三、交易风险免责')],
+    ['id' => 'disclaimer-s4', 'label' => __('四、第三方服务免责')],
+    ['id' => 'disclaimer-s5', 'label' => __('五、责任限制')],
+    ['id' => 'disclaimer-s6', 'label' => __('六、用户行为免责')],
+    ['id' => 'disclaimer-s7', 'label' => __('七、其他')],
+];
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy.disclaimer::head-after</w:hook>
+    <style>
+        body.amazon-policy-layout {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--color-text-primary, #0f1111);
+            background: var(--color-bg-canvas, #ffffff);
+            font-family: "Amazon Ember", Arial, sans-serif;
+        }
+        .amazon-policy.weline-page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: transparent;
+        }
+        .amazon-policy__main {
+            flex: 1 0 auto;
+            width: 100%;
+            background: linear-gradient(180deg, #eaeded 0, #f3f3f3 12rem);
+        }
+        .amazon-policy__stage {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+            padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+        }
+        .amazon-policy__hero {
+            margin: 0 0 1.25rem;
+            padding: clamp(1.35rem, 3vw, 1.85rem) clamp(1.15rem, 2.5vw, 1.75rem);
+            border-radius: 8px;
+            background:
+                radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
+                linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
+            color: #fff;
+            box-sizing: border-box;
+        }
+        .amazon-policy__eyebrow {
+            margin: 0 0 0.4rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #febd69;
+        }
+        .amazon-policy__hero h1 {
+            margin: 0;
+            font-size: clamp(1.55rem, 3.2vw, 2.1rem);
+            line-height: 1.2;
+            font-weight: 700;
+            color: #ffffff;
+        }
+        .amazon-policy__hero-lead {
+            margin: 0.75rem 0 0;
+            max-width: 46rem;
+            line-height: 1.65;
+            color: #dddddd;
+        }
+        .amazon-policy__meta {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem 1.25rem;
+            font-size: 0.9rem;
+            color: #febd69;
+        }
+        .amazon-policy__meta a { color: inherit; text-decoration: underline; }
+        .amazon-policy__panel {
+            display: grid;
+            grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+            gap: 0;
+            align-items: start;
+            background: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
+            overflow: hidden;
+        }
+        .amazon-policy__toc {
+            padding: 1.15rem 1rem 1.25rem;
+            border-right: 1px solid #e3e6e6;
+            background: #fafafa;
+            position: sticky;
+            top: 0.75rem;
+        }
+        .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
+        .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
+        .amazon-policy__toc a {
+            display: block;
+            padding: 0.4rem 0.55rem;
+            border-radius: 4px;
+            color: #007185;
+            text-decoration: none;
+            font-size: 0.9rem;
+            line-height: 1.35;
+        }
+        .amazon-policy__toc a:hover {
+            background: #f7fafa;
+            color: #c45500;
+            text-decoration: underline;
+        }
+        .amazon-policy__article {
+            padding: clamp(1.15rem, 2.5vw, 1.75rem) clamp(1.15rem, 2.5vw, 1.85rem) 1.85rem;
+        }
+        .amazon-policy__intro {
+            margin: 0 0 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e3e6e6;
+            color: #565959;
+            line-height: 1.7;
+        }
+        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 1rem; }
+        .amazon-policy__section h2 {
+            margin: 0 0 0.75rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-left: 4px solid #ff9900;
+            padding-left: 0.65rem;
+            color: #0f1111;
+        }
+        .amazon-policy__section p {
+            margin: 0 0 0.7rem;
+            line-height: 1.7;
+            font-size: 0.98rem;
+            color: #333;
+        }
+        .amazon-policy__section ul {
+            margin: 0.35rem 0 0.85rem;
+            padding-left: 1.35rem;
+        }
+        .amazon-policy__section li {
+            margin-bottom: 0.45rem;
+            line-height: 1.65;
+            color: #333;
+        }
+        .amazon-policy__footer-note {
+            margin-top: 1.75rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e3e6e6;
+            font-size: 0.9rem;
+            color: #565959;
+        }
+        .amazon-policy__related {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem 1rem;
+        }
+        .amazon-policy__related a {
+            color: #007185;
+            text-decoration: none;
+            font-size: 0.92rem;
+        }
+        .amazon-policy__related a:hover {
+            color: #c45500;
+            text-decoration: underline;
+        }
+        @media (max-width: 900px) {
+            .amazon-policy__panel { grid-template-columns: 1fr; }
+            .amazon-policy__toc {
+                position: static;
+                border-right: 0;
+                border-bottom: 1px solid #e3e6e6;
+            }
+            .amazon-policy__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) {
+            .amazon-policy__toc nav { grid-template-columns: 1fr; }
+        }
+    </style>
     <w:hook>seo::head</w:hook>
 </head>
-<body>
+<body class="amazon-policy-layout <?= $escape($meta['class'] ?? '') ?>">
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy.disclaimer::body-start</w:hook>
 
-    <div class="weline-page-wrapper weline-policy-page weline-disclaimer">
+    <div class="weline-page-wrapper amazon-policy weline-disclaimer" data-testid="storefront-disclaimer-page" data-layout="policy-disclaimer">
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
 
-        <div class="weline-main-content">
-            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
-
+        <main class="amazon-policy__main" id="main-content">
             <w:slot id="content"
                     name="内容区"
                     accept="layout-policy-disclaimer-content,layout-policy-content,layout-default-content,content,policy-content,disclaimer,cms-content,faq"
                     reject="header,footer"
                     multiple="true"
                     position="content"
-                    class="policy-disclaimer__content-root-slot">
-            <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> disclaimer" id="disclaimer-main" data-layout="policy-disclaimer">
+                    class="amazon-policy__content-root-slot">
+            <div class="policy-main <?= $escape($meta['class'] ?? '') ?>" data-layout="policy-disclaimer">
                 <w:slot id="policy-disclaimer-content"
                         name="免责声明正文"
                         accept="layout-policy-disclaimer-content,layout-policy-content,disclaimer,policy-content,content,faq"
                         reject="header,footer"
                         multiple="true"
                         position="content"
-                        class="policy-main__content-slot">
+                        class="amazon-policy__content-slot">
                 <if condition="meta.content">
                     {{meta.content}}
                 <else/>
-                    <div class="policy-default-content">
-                        <div class="w-container">
-                            <section class="policy-header" weline-code="theme.policy.section_1">
-                                <h1 class="policy-title">
-                                    <if condition="meta.title">
-                                        {{meta.title}}
-                                    <else/>
-                                        <lang>免责声明</lang>
-                                    </if>
-                                </h1>
-                                <p class="policy-description">
-                                    <lang>本免责声明说明了本网站在提供服务过程中的责任限制和免责情形。请您在使用本网站服务前仔细阅读本声明。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_2">
-                                <h2 class="section-title"><lang>一、服务中断与数据丢失</lang></h2>
-                                <p class="section-text">
-                                    <lang>1.1 本网站不对因以下原因导致的服务中断或数据丢失承担责任：</lang>
-                                </p>
-                                <ul class="policy-list">
-                                    <li><lang>（1）不可抗力因素，如自然灾害、战争、罢工、政府行为等；</lang></li>
-                                    <li><lang>（2）网络故障、系统维护、升级、故障等原因；</lang></li>
-                                    <li><lang>（3）黑客攻击、病毒入侵、恶意程序等安全威胁；</lang></li>
-                                    <li><lang>（4）用户操作不当或违反使用规范；</lang></li>
-                                    <li><lang>（5）其他超出我们合理控制范围的原因。</lang></li>
-                                </ul>
-                                <p class="section-text">
-                                    <lang>1.2 我们将尽力保障服务的稳定性和数据安全，但不对服务的绝对连续性、无中断性做出保证。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_3">
-                                <h2 class="section-title"><lang>二、信息内容免责</lang></h2>
-                                <p class="section-text">
-                                    <lang>2.1 本网站不对用户发布的信息的真实性、准确性、完整性、合法性负责。用户应自行判断并承担相应风险。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>2.2 本网站展示的商品信息由商家提供，我们不对商品信息的真实性、准确性、完整性负责。商品的实际质量、性能、规格等以实物为准。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>2.3 本网站可能包含第三方提供的内容或链接，我们不对第三方内容或链接的准确性、合法性、安全性负责。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_4">
-                                <h2 class="section-title"><lang>三、交易风险免责</lang></h2>
-                                <p class="section-text">
-                                    <lang>3.1 本网站仅为交易双方提供信息发布和交易撮合服务，不对交易双方之间的交易行为承担责任。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>3.2 交易双方应自行承担交易风险，包括但不限于商品质量、交付、支付等风险。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>3.3 如发生交易纠纷，交易双方应自行协商解决。本网站可提供必要的协助，但不承担任何责任。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_5">
-                                <h2 class="section-title"><lang>四、第三方服务免责</lang></h2>
-                                <p class="section-text">
-                                    <lang>4.1 本网站可能使用第三方提供的服务（如支付服务、物流服务、数据分析服务等），我们不对第三方服务的质量、安全性、可靠性负责。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>4.2 如因第三方服务导致的问题或损失，您应直接与第三方协商解决，我们可提供必要的协助。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_6">
-                                <h2 class="section-title"><lang>五、责任限制</lang></h2>
-                                <p class="section-text">
-                                    <lang>5.1 在法律允许的范围内，我们对因使用或无法使用本网站服务而产生的任何直接、间接、偶然、特殊或后果性损失不承担责任。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>5.2 我们的责任总额不超过您因使用本网站服务而向我们支付的费用总额。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>5.3 本免责声明不影响法律法规规定的强制性责任，也不影响因我们的故意或重大过失导致的责任。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_7">
-                                <h2 class="section-title"><lang>六、用户行为免责</lang></h2>
-                                <p class="section-text">
-                                    <lang>6.1 如因用户违反法律法规、本网站服务条款或使用规范导致的问题或损失，由用户自行承担责任。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>6.2 如因用户提供虚假信息、恶意操作、侵犯他人权益等行为导致的问题或损失，由用户自行承担责任，我们保留追究法律责任的权利。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_8">
-                                <h2 class="section-title"><lang>七、其他</lang></h2>
-                                <p class="section-text">
-                                    <lang>7.1 本免责声明构成服务条款的一部分，与服务条款具有同等法律效力。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>7.2 我们保留对本免责声明的最终解释权，并有权根据法律法规和业务发展需要对本声明进行修订。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>7.3 如本免责声明的任何条款被认定为无效或不可执行，不影响其他条款的效力。</lang>
-                                </p>
-                            </section>
+                        <div class="amazon-policy__stage">
+                        <header class="amazon-policy__hero" aria-labelledby="policy-disclaimer-title" weline-code="theme.policy.hero">
+                            
+                                <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
+                                <h1 id="policy-disclaimer-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><lang>免责声明</lang><?php endif; ?></h1>
+                                <p class="amazon-policy__hero-lead"><lang>本免责声明说明本网站在提供服务过程中的责任限制与免责情形。请在使用本网站服务前仔细阅读。</lang></p>
+                                <div class="amazon-policy__meta">
+                                    <span><lang>最后更新：</lang><?= $escape($updatedAt) ?></span>
+                                    <a href="@url{'terms'}"><lang>服务条款</lang></a>
+                                    <a href="@url{'privacy'}"><lang>隐私政策</lang></a>
+                                    <a href="@url{'help'}"><lang>帮助中心</lang></a>
                         </div>
-                    </div>
+                        </header>
+
+                        <div class="amazon-policy__panel">
+                                    <aside class="amazon-policy__toc" aria-label="<?= $escape($ariaNav) ?>">
+                                        <h2><lang>目录</lang></h2>
+                                        <nav>
+                                            <?php foreach ($toc as $item): ?>
+                                                <a href="#<?= $escape($item['id']) ?>"><?= $escape($item['label']) ?></a>
+                                            <?php endforeach; ?>
+                                        </nav>
+                                    </aside>
+
+                                    <article class="amazon-policy__article" aria-label="<?= $escape($ariaNav) ?>">
+                                        <p class="amazon-policy__intro"><lang>本声明构成服务条款的重要补充。请结合目录了解服务中断、信息内容、交易风险与责任限制等条款。</lang></p>
+
+                                        <section class="amazon-policy__section" id="disclaimer-s1" weline-code="theme.policy.section_2">
+                                            <h2><lang>一、服务中断与数据丢失</lang></h2>
+                                            <p><lang>1.1 本网站不对因以下原因导致的服务中断或数据丢失承担责任：</lang></p>
+                                            <ul>
+                                                <li><lang>（1）不可抗力因素，如自然灾害、战争、罢工、政府行为等；</lang></li>
+                                                <li><lang>（2）网络故障、系统维护、升级、故障等原因；</lang></li>
+                                                <li><lang>（3）黑客攻击、病毒入侵、恶意程序等安全威胁；</lang></li>
+                                                <li><lang>（4）用户操作不当或违反使用规范；</lang></li>
+                                                <li><lang>（5）其他超出我们合理控制范围的原因。</lang></li>
+                                            </ul>
+                                            <p><lang>1.2 我们将尽力保障服务的稳定性和数据安全，但不对服务的绝对连续性、无中断性做出保证。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="disclaimer-s2" weline-code="theme.policy.section_3">
+                                            <h2><lang>二、信息内容免责</lang></h2>
+                                            <p><lang>2.1 本网站不对用户发布的信息的真实性、准确性、完整性、合法性负责。用户应自行判断并承担相应风险。</lang></p>
+                                            <p><lang>2.2 本网站展示的商品信息由商家提供，我们不对商品信息的真实性、准确性、完整性负责。商品的实际质量、性能、规格等以实物为准。</lang></p>
+                                            <p><lang>2.3 本网站可能包含第三方提供的内容或链接，我们不对第三方内容或链接的准确性、合法性、安全性负责。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="disclaimer-s3" weline-code="theme.policy.section_4">
+                                            <h2><lang>三、交易风险免责</lang></h2>
+                                            <p><lang>3.1 本网站仅为交易双方提供信息发布和交易撮合服务，不对交易双方之间的交易行为承担责任。</lang></p>
+                                            <p><lang>3.2 交易双方应自行承担交易风险，包括但不限于商品质量、交付、支付等风险。</lang></p>
+                                            <p><lang>3.3 如发生交易纠纷，交易双方应自行协商解决。本网站可提供必要的协助，但不承担任何责任。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="disclaimer-s4" weline-code="theme.policy.section_5">
+                                            <h2><lang>四、第三方服务免责</lang></h2>
+                                            <p><lang>4.1 本网站可能使用第三方提供的服务（如支付服务、物流服务、数据分析服务等），我们不对第三方服务的质量、安全性、可靠性负责。</lang></p>
+                                            <p><lang>4.2 如因第三方服务导致的问题或损失，您应直接与第三方协商解决，我们可提供必要的协助。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="disclaimer-s5" weline-code="theme.policy.section_6">
+                                            <h2><lang>五、责任限制</lang></h2>
+                                            <p><lang>5.1 在法律允许的范围内，我们对因使用或无法使用本网站服务而产生的任何直接、间接、偶然、特殊或后果性损失不承担责任。</lang></p>
+                                            <p><lang>5.2 我们的责任总额不超过您因使用本网站服务而向我们支付的费用总额。</lang></p>
+                                            <p><lang>5.3 本免责声明不影响法律法规规定的强制性责任，也不影响因我们的故意或重大过失导致的责任。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="disclaimer-s6" weline-code="theme.policy.section_7">
+                                            <h2><lang>六、用户行为免责</lang></h2>
+                                            <p><lang>6.1 如因用户违反法律法规、本网站服务条款或使用规范导致的问题或损失，由用户自行承担责任。</lang></p>
+                                            <p><lang>6.2 如因用户提供虚假信息、恶意操作、侵犯他人权益等行为导致的问题或损失，由用户自行承担责任，我们保留追究法律责任的权利。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="disclaimer-s7" weline-code="theme.policy.section_8">
+                                            <h2><lang>七、其他</lang></h2>
+                                            <p><lang>7.1 本免责声明构成服务条款的一部分，与服务条款具有同等法律效力。</lang></p>
+                                            <p><lang>7.2 我们保留对本免责声明的最终解释权，并有权根据法律法规和业务发展需要对本声明进行修订。</lang></p>
+                                            <p><lang>7.3 如本免责声明的任何条款被认定为无效或不可执行，不影响其他条款的效力。</lang></p>
+                                        </section>
+
+                                        <div class="amazon-policy__footer-note">
+                                            <p><lang>如对本免责声明有疑问，请先阅读服务条款，或通过帮助中心联系我们。</lang></p>
+                                            <div class="amazon-policy__related">
+                                                <a href="@url{'terms'}"><lang>服务条款</lang></a>
+                                                <a href="@url{'privacy'}"><lang>隐私政策</lang></a>
+                                                <a href="@url{'refund'}"><lang>退款政策</lang></a>
+                                                <a href="@url{'help'}"><lang>帮助中心</lang></a>
+                                            </div>
+                                        </div>
+                                    </article>
+                                                                </div>
+                        </div>
                 </if>
                 </w:slot>
-            </main>
+            </div>
             </w:slot>
-
-            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
-        </div>
+        </main>
 
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
-            <footer class="weline-footer">
-                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
-            </footer>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
             <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
         </if>
     </div>
 
     <w:hook>Weline_Theme::frontend::layouts::policy.disclaimer::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
-
-    <style>
-    .disclaimer.policy-main {
-        width: 100%;
-        flex: 1;
-        padding: var(--weline-layout-spacing-xl) 0;
-    }
-
-    .policy-default-content {
-        width: 100%;
-        padding: var(--weline-layout-spacing-xl) 0 var(--weline-layout-spacing-2xl);
-    }
-
-    .policy-header {
-        text-align: left;
-        margin-bottom: var(--weline-layout-spacing-xl);
-    }
-
-    .policy-title {
-        font-size: var(--weline-layout-font-size-3xl);
-        font-weight: var(--weline-layout-font-weight-semibold);
-        color: var(--weline-layout-text-primary);
-        margin: 0 0 var(--weline-space-3) 0;
-    }
-
-    .policy-description {
-        font-size: var(--weline-layout-font-size-base);
-        line-height: var(--weline-layout-line-height-relaxed);
-        color: var(--weline-layout-text-secondary);
-        margin: 0;
-    }
-
-    .policy-section {
-        margin-top: var(--spacing-7);
-    }
-
-    .policy-section .section-title {
-        font-size: var(--weline-layout-font-size-xl);
-        font-weight: var(--weline-layout-font-weight-semibold);
-        color: var(--weline-layout-text-primary);
-        margin: 0 0 var(--weline-space-3) 0;
-    }
-
-    .policy-section .section-text {
-        font-size: var(--weline-layout-font-size-base);
-        color: var(--weline-layout-text-secondary);
-        line-height: var(--weline-layout-line-height-relaxed);
-        margin: 0 0 var(--weline-space-3) 0;
-    }
-
-    .policy-list {
-        margin: var(--weline-space-3) 0;
-        padding-left: var(--spacing-lg);
-        list-style-type: decimal;
-    }
-
-    .policy-list li {
-        font-size: var(--weline-layout-font-size-base);
-        color: var(--weline-layout-text-secondary);
-        line-height: var(--weline-layout-line-height-relaxed);
-        margin-bottom: var(--spacing-sm);
-    }
-
-    @media (max-width: 768px) {
-        .disclaimer.policy-main {
-            padding: var(--weline-layout-spacing-lg) 0;
-        }
-
-        .policy-default-content {
-            padding: var(--weline-layout-spacing-lg) 0 var(--weline-layout-spacing-xl);
-        }
-
-        .policy-title {
-            font-size: var(--weline-layout-font-size-2xl);
-        }
-
-        .policy-section .section-title {
-            font-size: var(--weline-layout-font-size-lg);
-        }
-
-        .policy-list {
-            padding-left: var(--weline-space-5);
-        }
-
-        .policy-list li {
-            font-size: var(--weline-layout-font-size-sm);
-        }
-    }
-    </style>
     <w:hook>seo::footer</w:hook>
 </body>
 </html>

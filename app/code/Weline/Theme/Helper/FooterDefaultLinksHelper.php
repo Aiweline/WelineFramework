@@ -170,8 +170,8 @@ final class FooterDefaultLinksHelper
     public static function defaultLinkGroups(): array
     {
         return [
-            ['key' => 'about', 'enabled' => true, 'title' => '了解我们'],
-            ['key' => 'partner', 'enabled' => true, 'title' => '合作信息'],
+            ['key' => 'about', 'enabled' => true, 'title' => '云裳志'],
+            ['key' => 'partner', 'enabled' => true, 'title' => '定制与合作'],
             ['key' => 'payment', 'enabled' => true, 'title' => '支付与账户'],
             ['key' => 'help', 'enabled' => true, 'title' => '帮助中心'],
         ];
@@ -245,10 +245,10 @@ final class FooterDefaultLinksHelper
     public static function defaultSocialItems(): array
     {
         return [
-            ['name' => '微信公众号', 'icon' => 'fab fa-weixin', 'url' => '#'],
-            ['name' => '微博', 'icon' => 'fab fa-weibo', 'url' => '#'],
-            ['name' => '抖音', 'icon' => 'fab fa-tiktok', 'url' => '#'],
-            ['name' => 'B站', 'icon' => 'fab fa-bilibili', 'url' => '#'],
+            ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => '#'],
+            ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => '#'],
+            ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => '#'],
+            ['name' => 'YouTube', 'icon' => 'fab fa-youtube', 'url' => '#'],
         ];
     }
 

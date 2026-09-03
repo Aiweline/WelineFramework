@@ -25,6 +25,7 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString('function resolveWriteLayoutType(', $src);
         self::assertStringContainsString('function detach(', $src);
         self::assertStringContainsString('function restore(', $src);
+        self::assertStringContainsString('function restoreNonCarrierLayouts(', $src);
         self::assertStringContainsString('ThemeLayout::PAGE_TYPE_HOME', $src);
         self::assertStringContainsString('withLayoutType(ThemeLayout::PAGE_TYPE_HOME)', $src);
     }
@@ -40,10 +41,22 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString('function postChromeMode(', $src);
         self::assertStringContainsString('function postDetachChrome(', $src);
         self::assertStringContainsString('function postRestoreChrome(', $src);
+        self::assertStringContainsString('restoreNonCarrierLayouts(', $src);
+        self::assertStringContainsString('all_non_carrier', $src);
         self::assertStringContainsString('function redirectChromeWritePayload(', $src);
         self::assertStringContainsString('resolveWriteLayoutType(', $src);
         self::assertStringContainsString('withLayoutType(ThemeLayout::PAGE_TYPE_HOME)', $src);
         self::assertStringContainsString('function resolveScopedDraftNode(', $src);
+
+        $provider = (string)file_get_contents(
+            dirname(__DIR__, 2) . '/extends/module/Weline_Framework/Query/ThemeQueryProvider.php'
+        );
+        self::assertStringContainsString("'/theme/backend/theme-editor/chrome-mode'", $provider);
+        self::assertStringContainsString("'/theme/backend/theme-editor/detach-chrome'", $provider);
+        self::assertStringContainsString("'/theme/backend/theme-editor/restore-chrome'", $provider);
+        self::assertStringContainsString('postChromeMode()', $provider);
+        self::assertStringContainsString('postDetachChrome()', $provider);
+        self::assertStringContainsString('postRestoreChrome()', $provider);
     }
 
     public function testThemeEditorContextSupportsWithLayoutType(): void
@@ -70,6 +83,24 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString('ensureSharedChromePanel(', $js);
         self::assertStringContainsString("translateUiText('改为本布局独立')", $js);
         self::assertStringContainsString("translateUiText('恢复全局继承')", $js);
+        self::assertStringContainsString("translateUiText('清空其它布局本地 chrome')", $js);
+        self::assertStringContainsString("translateUiText('恢复全部布局继承')", $js);
+        self::assertStringContainsString('all_non_carrier', $js);
         self::assertStringContainsString('SHARED_CHROME_CARRIER_PAGE_TYPE', $js);
+    }
+
+    public function testChromeDefaultInjectionsTargetHomepageCarrierOnly(): void
+    {
+        $footer = (string)file_get_contents(dirname(__DIR__, 2) . '/view/theme/frontend/widgets/container/footer/default.phtml');
+        $category = (string)file_get_contents(dirname(__DIR__, 2) . '/view/theme/frontend/widgets/navigation/category-menu/default.phtml');
+        $help = (string)file_get_contents(dirname(__DIR__, 2) . '/view/theme/frontend/widgets/footer/footer-help-center-link/default.phtml');
+        $integrity = (string)file_get_contents(dirname(__DIR__, 2) . '/Service/WidgetDefaultInjectionService.php');
+
+        self::assertStringContainsString('"layout_type":"homepage"', $footer);
+        self::assertStringNotContainsString('"layout_type":"*"', $footer);
+        self::assertStringContainsString('"layout_type":"homepage"', $category);
+        self::assertStringContainsString('"layout_type":"homepage"', $help);
+        self::assertStringContainsString('ThemeLayout::PAGE_TYPE_HOME', $integrity);
+        self::assertStringContainsString('非载体布局不得补齐本地 footer-container', $integrity);
     }
 }

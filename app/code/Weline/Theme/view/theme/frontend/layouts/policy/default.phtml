@@ -308,96 +308,93 @@ $meta = $this->getData('meta') ?? [];
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
     
     <style>
+    .weline-policy-page.weline-page-wrapper {
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        background: transparent;
+    }
+    .weline-policy-page .weline-main-content {
+        flex: 1 0 auto;
+        width: 100%;
+        background: linear-gradient(180deg, #eaeded 0, #f3f3f3 12rem);
+        padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+    }
     .policy-main {
         width: 100%;
         flex: 1;
-        padding: var(--weline-layout-spacing-xl) 0;
+        padding: 0;
     }
-    
     .policy-default-content {
         width: 100%;
-        padding: var(--weline-layout-spacing-xl) 0 var(--weline-layout-spacing-2xl);
+        padding: 0;
     }
-    
+    .policy-default-content > .w-container {
+        background: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 1px 2px rgba(15, 17, 17, .08);
+        padding: clamp(1.15rem, 2.5vw, 1.85rem);
+        box-sizing: border-box;
+    }
     .policy-header {
         text-align: left;
-        margin-bottom: var(--weline-layout-spacing-xl);
+        margin-bottom: var(--weline-space-5, 1.25rem);
+        padding-bottom: var(--weline-space-4, 1rem);
+        border-bottom: 1px solid #e3e6e6;
     }
-    
     .policy-title {
-        font-size: var(--weline-layout-font-size-3xl);
-        font-weight: var(--weline-layout-font-weight-semibold);
-        color: var(--weline-layout-text-primary);
-        margin: 0 0 var(--weline-space-3) 0;
+        font-size: clamp(1.55rem, 3vw, 2rem);
+        font-weight: 700;
+        color: var(--weline-layout-text-primary, #0f1111);
+        margin: 0 0 var(--weline-space-3, .75rem) 0;
     }
-    
     .policy-description {
-        font-size: var(--weline-layout-font-size-base);
-        line-height: var(--weline-layout-line-height-relaxed);
-        color: var(--weline-layout-text-secondary);
+        font-size: var(--weline-layout-font-size-base, 1rem);
+        line-height: 1.7;
+        color: var(--weline-layout-text-secondary, #565959);
         margin: 0;
     }
-    
-    .policy-section {
-        margin-top: var(--spacing-7);
-    }
-    
+    .policy-section { margin-top: 1.5rem; }
     .policy-section .section-title {
-        font-size: var(--weline-layout-font-size-xl);
-        font-weight: var(--weline-layout-font-weight-semibold);
-        color: var(--weline-layout-text-primary);
-        margin: 0 0 var(--weline-space-3) 0;
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--weline-layout-text-primary, #0f1111);
+        margin: 0 0 .7rem 0;
+        border-left: 4px solid #ff9900;
+        padding-left: .65rem;
     }
-    
     .policy-section .section-text {
-        font-size: var(--weline-layout-font-size-base);
-        color: var(--weline-layout-text-secondary);
-        line-height: var(--weline-layout-line-height-relaxed);
-        margin: 0 0 var(--weline-space-3) 0;
+        font-size: 1rem;
+        color: #333;
+        line-height: 1.7;
+        margin: 0 0 .7rem 0;
     }
-    
     .policy-list {
-        margin: var(--weline-space-3) 0;
-        padding-left: var(--spacing-lg);
+        margin: .35rem 0 .9rem;
+        padding-left: 1.3rem;
         list-style-type: decimal;
     }
-    
     .policy-list li {
-        font-size: var(--weline-layout-font-size-base);
-        color: var(--weline-layout-text-secondary);
-        line-height: var(--weline-layout-line-height-relaxed);
-        margin-bottom: var(--spacing-sm);
+        font-size: 1rem;
+        color: #333;
+        line-height: 1.7;
+        margin-bottom: .45rem;
     }
-    
     .policy-footer {
         margin-top: var(--weline-layout-spacing-2xl);
         padding-top: var(--weline-layout-spacing-xl);
         border-top: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-layout-border-color);
         text-align: center;
     }
-    
     .policy-update-time {
         font-size: var(--weline-layout-font-size-sm);
         color: var(--weline-layout-text-tertiary);
         margin: 0;
     }
-    
     @media (max-width: 768px) {
-        .policy-main {
-            padding: var(--weline-layout-spacing-lg) 0;
-        }
-        
-        .policy-default-content {
-            padding: var(--weline-layout-spacing-lg) 0 var(--weline-layout-spacing-xl);
-        }
-        
-        .policy-title {
-            font-size: var(--weline-layout-font-size-2xl);
-        }
-        
-        .policy-section .section-title {
-            font-size: var(--weline-layout-font-size-lg);
-        }
+        .policy-title { font-size: 1.45rem; }
+        .policy-section .section-title { font-size: 1.05rem; }
         
         .policy-list {
             padding-left: var(--weline-space-5);

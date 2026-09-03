@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Theme\Test\Unit\Service\Ui;
+namespace Weline\Theme\Test\Unit\Service\Service\Ui;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Service\Ui\AssetManifest;

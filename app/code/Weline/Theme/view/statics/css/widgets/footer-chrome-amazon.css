@@ -1,38 +1,48 @@
 /**
- * Amazon footer chrome — aligns with partials/footer $colors fallbacks.
+ * Hanfu atelier footer chrome.
+ *
+ * Visual values intentionally consume the active Theme palette so ink, dark and
+ * editor-scoped color overrides keep one semantic contract.
  */
 .weline-footer {
     margin-top: auto;
-    background-color: var(--weline-chrome-footer-bg, #232f3e);
-    color: var(--weline-chrome-text-light, #ffffff);
-    font-family: var(--weline-layout-font-family, var(--font-family-base, sans-serif));
-    font-size: var(--font-size-sm, 0.875rem);
-    line-height: 1.5;
+    background-color: var(--weline-chrome-bg-dark);
+    color: var(--weline-chrome-text-light);
+    font-family: var(--weline-layout-font-family, var(--font-family-base));
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
 }
 
 .weline-footer :is(h1, h2, h3, h4, h5, h6) {
-    color: var(--weline-chrome-text-light, #ffffff);
+    color: var(--weline-chrome-text-light);
 }
 
 .weline-footer a {
-    color: var(--weline-theme-footer-link, #dddddd);
+    color: var(--weline-chrome-text-light-secondary);
     text-decoration: none;
 }
 
 .weline-footer a:hover,
 .weline-footer a:focus-visible {
-    color: var(--weline-chrome-text-light, #ffffff);
+    color: var(--color-primary-light);
     text-decoration: underline;
 }
 
+.weline-footer a:focus-visible,
+.weline-footer button:focus-visible {
+    outline: var(--border-width-thin) solid var(--color-primary-light);
+    outline-offset: var(--weline-space-1);
+}
+
 .weline-footer .footer-nav {
-    padding: var(--weline-space-10, 2.5rem) 0;
-    background: var(--weline-chrome-footer-bg, #232f3e);
+    padding: var(--weline-space-10) 0;
+    background: var(--weline-chrome-bg-dark);
+    border-block: var(--border-width-thin) solid var(--color-on-dark-soft);
 }
 
 .weline-footer .footer-container {
     width: 100%;
-    max-width: var(--weline-theme-container-max, var(--weline-layout-content-max-width, var(--layout-max-width, 1440px)));
+    max-width: var(--weline-layout-content-max-width);
     margin: 0 auto;
     padding: 0 var(--weline-layout-content-padding-inline);
     box-sizing: border-box;
@@ -41,39 +51,39 @@
 .weline-footer .footer-content {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
-    gap: var(--weline-space-8, 2rem) var(--weline-space-6, 1.5rem);
+    gap: var(--weline-space-8) var(--weline-space-6);
 }
 
 .weline-footer .footer-section__title {
-    font-size: var(--font-size-base, 1rem);
-    font-weight: 700;
-    line-height: 1.3;
-    margin: 0 0 var(--spacing-4_5, 1.125rem);
+    margin: 0 0 var(--weline-space-5);
+    color: var(--weline-chrome-text-light);
+    font-family: var(--font-family-serif);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--letter-spacing-wide);
+    line-height: var(--line-height-tight);
 }
 
-.weline-footer .footer-section__links {
+.weline-footer .footer-section__links,
+.weline-footer .footer-section__extras {
     display: flex;
     flex-direction: column;
-    gap: var(--spacing-3_5, 0.875rem);
+    gap: var(--weline-space-3);
 }
 
-.weline-footer .footer-section__link {
-    font-size: var(--font-size-sm, 0.875rem);
-    line-height: 1.5;
-    color: var(--weline-theme-footer-link, #dddddd);
+.weline-footer .footer-section__link,
+.weline-footer .footer-section__extras a {
+    color: var(--weline-chrome-text-light-secondary);
+    font-size: var(--font-size-sm);
+    line-height: var(--line-height-normal);
 }
 
 .weline-footer .footer-section__extras {
-    /* Nested flex with same gap; hard links are sibling bare <a> in .footer-section__links */
-    display: flex;
-    flex-direction: column;
-    gap: var(--spacing-3_5, 0.875rem);
     margin-top: 0;
 }
 
 .weline-footer .footer-section__extras:empty {
     display: none;
-    margin-top: 0;
 }
 
 .weline-footer .footer-section__extras .widget-wrapper {
@@ -82,47 +92,39 @@
     padding: 0;
 }
 
-.weline-footer .footer-section__extras a {
-    font-size: var(--font-size-sm, 0.875rem);
-    line-height: 1.5;
-    color: var(--weline-theme-footer-link, #dddddd);
-}
-
 .weline-footer .footer-back-to-top {
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: var(--weline-space-2, 0.5rem);
+    gap: var(--weline-space-2);
     width: 100%;
+    min-height: var(--size-control-md);
     margin: 0;
-    padding: var(--weline-space-4, 1rem) var(--weline-space-6, 1.5rem);
-    min-height: var(--size-control-md, 2.5rem);
+    padding: var(--weline-space-4) var(--weline-space-6);
     border: 0;
-    background: var(--weline-chrome-footer-back-top-bg, #37475a);
-    color: var(--weline-chrome-text-light, #ffffff);
-    font-size: var(--font-size-sm, 0.875rem);
-    font-weight: 500;
-    line-height: 1.4;
+    background: var(--weline-chrome-bg-dark-secondary);
+    color: var(--weline-chrome-text-light);
+    font-size: var(--font-size-sm);
+    font-weight: var(--font-weight-medium);
+    line-height: var(--line-height-normal);
     cursor: pointer;
-    transition: background-color 0.15s ease, color 0.15s ease;
 }
 
 .weline-footer .footer-back-to-top__icon {
-    width: var(--weline-space-4, 1rem);
-    height: var(--weline-space-4, 1rem);
+    width: var(--weline-space-4);
+    height: var(--weline-space-4);
     flex-shrink: 0;
 }
 
 .weline-footer .footer-back-to-top:hover,
 .weline-footer .footer-back-to-top:focus-visible {
-    background: var(--weline-chrome-footer-back-top-bg-hover, #485769);
-    color: var(--weline-chrome-text-light, #ffffff);
-    outline: none;
+    background: var(--color-primary-dark);
+    color: var(--weline-chrome-text-light);
 }
 
 .weline-footer .footer-locale {
-    padding: var(--weline-space-8, 2rem) 0;
-    background: var(--weline-chrome-footer-bg, #232f3e);
+    padding: var(--weline-space-8) 0;
+    background: var(--weline-chrome-bg-dark);
 }
 
 .weline-footer .footer-locale__inner {
@@ -130,28 +132,55 @@
     align-items: center;
     justify-content: center;
     flex-wrap: wrap;
-    gap: var(--weline-space-5, 1.25rem) var(--weline-space-8, 2rem);
+    gap: var(--weline-space-5) var(--weline-space-8);
+}
+
+.weline-footer .footer-locale__logo {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--weline-space-3);
+    color: var(--weline-chrome-text-light);
+    font-family: var(--font-family-serif);
+    font-size: var(--font-size-base);
+    font-weight: var(--font-weight-semibold);
+    letter-spacing: var(--letter-spacing-wide);
+}
+
+.weline-footer .footer-locale__logo:hover,
+.weline-footer .footer-locale__logo:focus-visible {
+    color: var(--weline-chrome-text-light);
+    text-decoration: none;
+}
+
+.weline-footer .footer-locale__logo-mark {
+    display: grid;
+    place-items: center;
+    width: var(--size-control-md);
+    height: var(--size-control-md);
+    border: var(--border-width-thin) solid var(--color-primary-light);
+    border-radius: var(--border-radius-full);
+    color: var(--color-primary-light);
+    font-size: var(--font-size-lg);
 }
 
 .weline-footer .footer-locale__controls {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: var(--weline-space-4, 1rem);
+    gap: var(--weline-space-4);
 }
 
-/* footer-locale 为 inverse surface：语言/货币触发器须跟顶栏一样走浅色字 */
 .weline-footer .footer-locale .w-language-switcher__trigger,
 .weline-footer .footer-locale .w-currency-switcher__trigger {
-    color: var(--w-surface-fg, var(--weline-chrome-text-light, #ffffff));
+    color: var(--w-surface-fg, var(--weline-chrome-text-light));
     border-color: transparent;
     background: transparent;
 }
 
 .weline-footer .footer-locale .w-language-switcher__trigger:hover,
 .weline-footer .footer-locale .w-currency-switcher__trigger:hover {
-    background: var(--color-on-dark-soft, rgba(255, 255, 255, 0.08));
-    color: var(--w-surface-fg, var(--weline-chrome-text-light, #ffffff));
+    background: var(--color-on-dark-soft);
+    color: var(--w-surface-fg, var(--weline-chrome-text-light));
 }
 
 .weline-footer .footer-locale .w-language-switcher__trigger .w-icon,
@@ -160,17 +189,17 @@
 }
 
 .weline-footer .footer-locale__chip {
-    border-color: var(--weline-chrome-footer-locale-chip-border, #848688);
-    color: var(--w-surface-fg-muted, var(--weline-chrome-text-light-secondary, #dddddd));
+    border-color: var(--weline-chrome-text-light-secondary);
+    color: var(--w-surface-fg-muted, var(--weline-chrome-text-light-secondary));
 }
 
 .weline-footer .footer-bottom-band {
-    padding: var(--weline-space-8, 2rem) 0 var(--weline-space-10, 2.5rem);
-    background: var(--weline-chrome-footer-bg-deep, #131a22);
+    padding: var(--weline-space-8) 0 var(--weline-space-10);
+    background: var(--weline-chrome-bg-dark-secondary);
 }
 
 .weline-footer .footer-social-media {
-    margin-bottom: var(--weline-space-5, 1.25rem);
+    margin-bottom: var(--weline-space-5);
 }
 
 .weline-footer .footer-social-media__inner,
@@ -179,16 +208,16 @@
     justify-content: center;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--weline-space-4, 1rem) var(--weline-space-6, 1.5rem);
+    gap: var(--weline-space-4) var(--weline-space-6);
 }
 
 .weline-footer .footer-social-link,
 .weline-footer .footer-social-media .social-link {
     display: inline-flex;
     align-items: center;
-    gap: var(--spacing-1_5, 0.375rem);
-    font-size: var(--font-size-xs, 0.75rem);
-    line-height: 1.5;
+    gap: var(--weline-space-2);
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-normal);
     white-space: nowrap;
 }
 
@@ -197,20 +226,23 @@
     justify-content: center;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--weline-space-3, 0.75rem) var(--weline-space-5, 1.25rem);
-    margin-bottom: var(--weline-space-4, 1rem);
+    gap: var(--weline-space-3) var(--weline-space-5);
+    margin-bottom: var(--weline-space-4);
+}
+
+.weline-footer .footer-legal__links a,
+.weline-footer .footer-legal__copy {
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-normal);
 }
 
 .weline-footer .footer-legal__links a {
-    font-size: var(--font-size-xs, 0.75rem);
-    line-height: 1.5;
     white-space: nowrap;
 }
 
 .weline-footer .footer-legal__copy {
-    margin: var(--weline-space-4, 1rem) 0 0;
-    font-size: var(--font-size-xs, 0.75rem);
-    line-height: 1.6;
+    margin: var(--weline-space-4) 0 0;
+    color: var(--weline-chrome-text-light-secondary);
 }
 
 @media (max-width: 900px) {
@@ -221,10 +253,14 @@
 
 @media (max-width: 560px) {
     .weline-footer .footer-nav {
-        padding: var(--weline-space-8, 2rem) 0 var(--weline-space-6, 1.5rem);
+        padding: var(--weline-space-8) 0 var(--weline-space-6);
     }
 
     .weline-footer .footer-content {
         grid-template-columns: 1fr;
+    }
+
+    .weline-footer .footer-locale__inner {
+        flex-direction: column;
     }
 }

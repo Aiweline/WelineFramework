@@ -71,4 +71,44 @@ JS);
             @rmdir($directory);
         }
     }
+
+    public function testHeroSliderCopyKeepsReadableTokensAndAMobileSafeArea(): void
+    {
+        $template = file_get_contents(
+            __DIR__ . '/../../../../view/theme/frontend/widgets/banner/hero-slider/default.phtml'
+        );
+        self::assertNotFalse($template);
+
+        self::assertStringContainsString(
+            'background: color-mix(in srgb, var(--weline-theme-surface-raised) 92%, transparent);',
+            $template
+        );
+        self::assertStringContainsString('color: var(--weline-theme-text);', $template);
+        self::assertStringContainsString('color: var(--weline-theme-text-secondary);', $template);
+        self::assertStringContainsString('box-shadow: var(--weline-theme-shadow-lg);', $template);
+        self::assertMatchesRegularExpression(
+            '/@media \(max-width: 768px\).*?\.slide-content\s*\{.*?align-items:\s*flex-end;/s',
+            $template
+        );
+        self::assertStringContainsString(
+            'font-size: var(--weline-layout-font-size-2xl);',
+            $template
+        );
+        self::assertStringNotContainsString(
+            'font-size: var(--font-size-xl);',
+            $template
+        );
+        self::assertStringNotContainsString(
+            'font-size: var(--font-size-base);',
+            $template
+        );
+        self::assertStringNotContainsString(
+            'font-size: var(--font-size-4xl);',
+            $template
+        );
+        self::assertMatchesRegularExpression(
+            '/@media \(max-width: 768px\).*?\.slider-arrow\s*\{.*?top:\s*var\(--weline-space-8\);.*?transform:\s*none;/s',
+            $template
+        );
+    }
 }

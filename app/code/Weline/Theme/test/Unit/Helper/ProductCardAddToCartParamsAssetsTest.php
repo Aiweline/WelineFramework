@@ -33,11 +33,22 @@ final class ProductCardAddToCartParamsAssetsTest extends TestCase
         self::assertSame(2, $hits);
     }
 
-    public function testBuildPurchaseActionsStyleTagContainsMarkerAndRules(): void
+    public function testBuildPurchaseActionsStyleTagContainsMarkerAndThemeTokenRules(): void
     {
         $tag = ProductCardAddToCartParams::buildPurchaseActionsStyleTag();
+
         self::assertStringContainsString('data-weline-product-card-purchase-actions="1"', $tag);
         self::assertStringContainsString('.product-card-purchase-actions', $tag);
         self::assertStringContainsString('.btn-buy-now', $tag);
+        self::assertStringContainsString('var(--weline-theme-primary)', $tag);
+        self::assertStringContainsString('var(--weline-theme-surface-raised)', $tag);
+        self::assertStringContainsString('var(--weline-theme-success-surface)', $tag);
+        self::assertStringContainsString('.product-storefront__sku', $tag);
+        self::assertStringContainsString('text-overflow: ellipsis', $tag);
+        self::assertStringContainsString('white-space: nowrap', $tag);
+        self::assertStringNotContainsString('#ffd814', $tag);
+        self::assertStringNotContainsString('#ffa41c', $tag);
+        self::assertStringNotContainsString('px', $tag);
+        self::assertStringNotContainsString('rgb', $tag);
     }
 }
