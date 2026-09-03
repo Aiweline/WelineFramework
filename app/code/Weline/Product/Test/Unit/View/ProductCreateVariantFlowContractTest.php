@@ -52,6 +52,22 @@ final class ProductCreateVariantFlowContractTest extends TestCase
         );
     }
 
+    public function testEditPageUsesEavControlsWithoutVisibleAdvancedJsonEditors(): void
+    {
+        $edit = $this->read('view/templates/backend/catalog/edit.phtml');
+
+        self::assertStringNotContainsString('高级：完整属性行 JSON', $edit);
+        self::assertStringNotContainsString('高级：扩展字段兼容区', $edit);
+        self::assertMatchesRegularExpression(
+            '/<textarea[^>]+id="product-edit-attributes"[^>]+hidden/s',
+            $edit,
+        );
+        self::assertMatchesRegularExpression(
+            '/<textarea[^>]+data-provider-unknown[^>]+hidden/s',
+            $edit,
+        );
+    }
+
     public function testCreateAndEditShareVariantCombinationEngine(): void
     {
         $script = $this->read('view/statics/js/backend/product-admin.js');
@@ -91,9 +107,15 @@ final class ProductCreateVariantFlowContractTest extends TestCase
             'w-product-create__axis-chip',
             'w-product-create__axis-chip-grid',
             'w-product-create__variant-panel',
+            'w-product-variant__combo-chip',
+            'w-product-variant__axis-options',
+            'w-product-variant__axis-attr',
         ] as $marker) {
             self::assertStringContainsString($marker, $css);
         }
+        self::assertStringContainsString('data-variant-axis-option', $script);
+        self::assertStringContainsString('buildVariantCombinationChips', $script);
+        self::assertStringContainsString('listCatalogVariantAxisChoices', $script);
     }
 
     public function testProductLevelAttributesExcludeConfigurableVariantAxes(): void
@@ -490,9 +512,9 @@ final class ProductCreateVariantFlowContractTest extends TestCase
     {
         $service = $this->read('Service/ProductAdminCommandService.php');
         self::assertStringContainsString(
-            'Create wizard fields ship data-entity-id="0"',
+            '$this->writeAttributes($command->websiteId, $productId, [',
             $service,
-            'create 属性写入须纠正 entity_id=0',
+            'create 属性写入须把新建 productId 传给属性写入边界',
         );
         self::assertStringContainsString(
             'if ($entityId <= 0) {',

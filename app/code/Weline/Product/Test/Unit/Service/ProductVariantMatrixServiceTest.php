@@ -35,6 +35,24 @@ final class ProductVariantMatrixServiceTest extends TestCase
         self::assertCount(4, array_unique(array_column($rows, 'sku')));
     }
 
+    public function testGeneratedSkuCompactsLongOptionTokens(): void
+    {
+        $service = new ProductVariantMatrixService();
+        $longColor = 'lan-se-shang-yi-hei-se-ku-zi-tao-zhuang2307';
+        $rows = $service->generate(
+            [
+                ['code' => 'color', 'options' => [$longColor]],
+                ['code' => 'size', 'options' => ['xxxl130-140jin']],
+            ],
+            'ZHIZAOSI-9DFA4E25',
+        );
+
+        self::assertCount(1, $rows);
+        self::assertLessThanOrEqual(48, strlen($rows[0]['sku']));
+        self::assertStringStartsWith('ZHIZAOSI-9DFA4E25-', $rows[0]['sku']);
+        self::assertStringNotContainsString('TAO-ZHUANG2307', $rows[0]['sku']);
+    }
+
     public function testReconcilesCreateRenameAndDisableWithoutLosingExistingIdentity(): void
     {
         $service = new ProductVariantMatrixService();

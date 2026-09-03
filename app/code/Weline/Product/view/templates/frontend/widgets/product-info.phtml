@@ -154,6 +154,7 @@ if ($images === []) {
 }
 $shortDescription = trim((string)($offer['short_description'] ?? ''));
 $description = trim((string)($offer['description'] ?? ''));
+$descriptionHtml = trim((string)($offer['description_html'] ?? ''));
 $specifications = array_values(array_filter(
     (array)($offer['specifications'] ?? []),
     static fn(mixed $specification): bool => is_array($specification)
@@ -306,12 +307,20 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
-            <div class="product-native-detail__stage">
-                <img class="product-native-detail__primary-image"
-                     src="<?= $escape($image) ?>"
-                     alt="<?= $escape($name) ?>"
-                     data-storefront-img="1"
-                     data-fallback="<?= $escape($imageFallback) ?>">
+            <div class="product-native-detail__stage-wrap" data-image-zoom="1">
+                <div class="product-native-detail__stage">
+                    <img class="product-native-detail__primary-image"
+                         src="<?= $escape($image) ?>"
+                         alt="<?= $escape($name) ?>"
+                         data-storefront-img="1"
+                         data-fallback="<?= $escape($imageFallback) ?>">
+                    <div class="product-native-detail__zoom-lens" hidden aria-hidden="true"></div>
+                </div>
+                <div class="product-native-detail__zoom-result"
+                     hidden
+                     aria-hidden="true"
+                     role="presentation"
+                     data-testid="product-image-zoom-result"></div>
             </div>
         </div>
 
@@ -362,7 +371,7 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                         </a>
                     <?php endif; ?>
                     <span class="product-native-detail__meta-divider" aria-hidden="true">|</span>
-                    <span class="product-native-detail__sku">SKU: <?= $escape($offer['sku'] ?? '') ?></span>
+                    <span class="product-native-detail__sku" data-testid="product-sku" data-product-sku="1">SKU: <?= $escape($offer['sku'] ?? '') ?></span>
                 </div>
 
                 <hr class="product-native-detail__divider">
@@ -610,17 +619,8 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         </div>
     </div>
 
-    <?php if ($description !== '' || $specifications !== []): ?>
+    <?php if ($descriptionHtml !== '' || $description !== '' || $specifications !== []): ?>
         <div class="product-native-detail__detail-sections">
-            <?php if ($description !== ''): ?>
-                <section class="product-native-detail__description"
-                         data-testid="product-description"
-                         weline-code="product.frontend.detail.description">
-                    <h2><?= __('关于该商品') ?></h2>
-                    <div class="product-native-detail__description-body"><?= nl2br($escape($description), false) ?></div>
-                </section>
-            <?php endif; ?>
-
             <?php if ($specifications !== []): ?>
                 <section class="product-native-detail__specifications"
                          data-testid="product-specifications"
@@ -643,6 +643,17 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                         <?php endforeach; ?>
                         </tbody>
                     </table>
+                </section>
+            <?php endif; ?>
+
+            <?php if ($descriptionHtml !== '' || $description !== ''): ?>
+                <section class="product-native-detail__description"
+                         data-testid="product-description"
+                         weline-code="product.frontend.detail.description">
+                    <h2><?= __('关于该商品') ?></h2>
+                    <div class="product-native-detail__description-body" data-testid="product-description-body"><?=
+                        $descriptionHtml !== '' ? $descriptionHtml : nl2br($escape($description), false)
+                    ?></div>
                 </section>
             <?php endif; ?>
         </div>
@@ -668,12 +679,12 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         --amz-btn-cart-hover: #f7ca00;
         --amz-btn-buy: #ffa41c;
         --amz-btn-buy-hover: #fa8900;
-        width: 100%;
-        max-width: var(--weline-layout-content-max-width, var(--layout-max-width));
-        margin-inline: auto;
-        padding-inline: var(--weline-layout-content-padding-inline, var(--spacing-container-padding));
-        padding-block: var(--spacing-md, 1rem) var(--spacing-3xl, 4rem);
         box-sizing: border-box;
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
+        margin-inline: auto;
+        padding-inline: var(--weline-layout-content-padding-inline);
+        padding-block: var(--spacing-md, 1rem) var(--spacing-3xl, 4rem);
         color: var(--amz-text);
         font-size: 14px;
         line-height: 1.5;
@@ -701,9 +712,14 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         align-items: start;
     }
     .product-native-detail__gallery {
+        position: relative;
+        z-index: 1;
         display: flex;
         gap: 12px;
         align-items: flex-start;
+    }
+    .product-native-detail__gallery:has(.product-native-detail__zoom-result:not([hidden])) {
+        z-index: 50;
     }
     .product-native-detail__thumbs {
         display: flex;
@@ -727,19 +743,50 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         box-shadow: 0 0 0 1px #007185 inset;
     }
     .product-native-detail__thumb img { width: 100%; height: 100%; object-fit: contain; }
-    .product-native-detail__stage {
+    .product-native-detail__stage-wrap {
+        position: relative;
         flex: 1;
         min-width: 0;
+    }
+    .product-native-detail__stage {
+        position: relative;
         overflow: hidden;
         border: 1px solid var(--amz-border);
         border-radius: 8px;
         background: #fff;
         line-height: 0;
+        cursor: crosshair;
     }
     .product-native-detail__primary-image {
         display: block;
         width: 100%;
         height: auto;
+    }
+    .product-native-detail__zoom-lens {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 120px;
+        height: 120px;
+        border: 1px solid rgba(0, 113, 133, 0.55);
+        background: rgba(0, 113, 133, 0.14);
+        box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.35);
+        pointer-events: none;
+        z-index: 2;
+    }
+    .product-native-detail__zoom-result {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: min(440px, 42vw);
+        height: min(440px, 42vw);
+        border: 1px solid var(--amz-border);
+        border-radius: 8px;
+        background-color: #fff;
+        background-repeat: no-repeat;
+        box-shadow: 0 10px 28px rgba(15, 23, 42, 0.14);
+        pointer-events: none;
+        z-index: 1200;
     }
     .product-native-detail__buy-column {
         display: grid;
@@ -1164,6 +1211,14 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
     .product-native-detail__description-body {
         color: #0f1111;
         line-height: 1.7;
+        overflow-wrap: anywhere;
+    }
+    .product-native-detail__description-body img {
+        display: block;
+        inline-size: auto;
+        max-inline-size: 100%;
+        block-size: auto;
+        margin-inline: auto;
     }
     .product-native-detail__spec-table {
         width: 100%;
@@ -1187,6 +1242,9 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         .product-native-detail__hero-grid { grid-template-columns: 1fr; }
         .product-native-detail__buy-column { grid-template-columns: 1fr; }
         .product-native-detail__buybox { max-width: 360px; }
+        .product-native-detail__stage { cursor: default; }
+        .product-native-detail__zoom-lens,
+        .product-native-detail__zoom-result { display: none !important; }
     }
     @media (max-width: 640px) {
         .product-native-detail__gallery { flex-direction: column-reverse; }
@@ -1212,6 +1270,9 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         thumb.addEventListener('click', function () {
             if (!primaryImage) return;
             primaryImage.src = thumb.dataset.gallerySrc || primaryImage.src;
+            if (typeof syncImageZoomSource === 'function') {
+                syncImageZoomSource();
+            }
             root.querySelectorAll('[data-gallery-src]').forEach(function (item) {
                 const active = item === thumb;
                 item.classList.toggle('is-active', active);
@@ -1222,10 +1283,119 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
 
     root.querySelectorAll('[data-gallery-src]').forEach(bindGalleryThumb);
 
+    let syncImageZoomSource = null;
+    (function bindImageZoom() {
+        const wrap = root.querySelector('[data-image-zoom="1"]');
+        const stage = wrap ? wrap.querySelector('.product-native-detail__stage') : null;
+        const lens = wrap ? wrap.querySelector('.product-native-detail__zoom-lens') : null;
+        const result = wrap ? wrap.querySelector('.product-native-detail__zoom-result') : null;
+        if (!wrap || !stage || !primaryImage || !lens || !result) {
+            return;
+        }
+
+        const zoomFactor = 2.4;
+        let active = false;
+
+        syncImageZoomSource = function () {
+            const src = primaryImage.currentSrc || primaryImage.src || '';
+            result.style.backgroundImage = src ? ('url(' + JSON.stringify(src) + ')') : '';
+        };
+
+        function hideZoom() {
+            active = false;
+            lens.hidden = true;
+            result.hidden = true;
+        }
+
+        function canZoom() {
+            return !window.matchMedia('(max-width: 992px)').matches
+                && primaryImage.naturalWidth > 0
+                && primaryImage.clientWidth > 0;
+        }
+
+        function placeZoomResult() {
+            const gallery = root.querySelector('.product-native-detail__gallery') || wrap;
+            const galleryRect = gallery.getBoundingClientRect();
+            const stageRect = stage.getBoundingClientRect();
+            const gap = 16;
+            const margin = 12;
+            const spaceRight = window.innerWidth - galleryRect.right - gap - margin;
+            const spaceLeft = galleryRect.left - gap - margin;
+            let size = Math.min(440, Math.max(240, Math.round(window.innerWidth * 0.3)));
+            let left;
+
+            // Prefer the right of the whole gallery (over buy column). Never cover the stage/image.
+            if (spaceRight >= 220) {
+                size = Math.min(size, spaceRight);
+                left = galleryRect.right + gap;
+            } else if (spaceLeft >= 220) {
+                size = Math.min(size, spaceLeft);
+                left = galleryRect.left - gap - size;
+            } else {
+                // Shrink to remaining right space instead of flipping over the main image.
+                size = Math.max(180, Math.min(size, Math.max(spaceRight, 180)));
+                left = galleryRect.right + gap;
+                if (left + size > window.innerWidth - margin) {
+                    size = Math.max(180, window.innerWidth - margin - left);
+                }
+            }
+
+            let top = stageRect.top;
+            if (top + size > window.innerHeight - margin) {
+                top = Math.max(margin, window.innerHeight - size - margin);
+            }
+
+            result.style.width = size + 'px';
+            result.style.height = size + 'px';
+            result.style.left = left + 'px';
+            result.style.top = top + 'px';
+        }
+
+        function showZoom() {
+            if (!canZoom()) {
+                hideZoom();
+                return;
+            }
+            active = true;
+            syncImageZoomSource();
+            placeZoomResult();
+            lens.hidden = false;
+            result.hidden = false;
+        }
+
+        function moveZoom(event) {
+            if (!active && canZoom()) {
+                showZoom();
+            }
+            if (!active) {
+                return;
+            }
+
+            const rect = stage.getBoundingClientRect();
+            const imageWidth = primaryImage.clientWidth;
+            const imageHeight = primaryImage.clientHeight;
+            const lensWidth = lens.offsetWidth || 120;
+            const lensHeight = lens.offsetHeight || 120;
+            let x = event.clientX - rect.left - lensWidth / 2;
+            let y = event.clientY - rect.top - lensHeight / 2;
+            x = Math.max(0, Math.min(x, Math.max(0, imageWidth - lensWidth)));
+            y = Math.max(0, Math.min(y, Math.max(0, imageHeight - lensHeight)));
+            lens.style.transform = 'translate(' + x + 'px, ' + y + 'px)';
+            result.style.backgroundSize = (imageWidth * zoomFactor) + 'px ' + (imageHeight * zoomFactor) + 'px';
+            result.style.backgroundPosition = (-x * zoomFactor) + 'px ' + (-y * zoomFactor) + 'px';
+        }
+
+        stage.addEventListener('mouseenter', showZoom);
+        stage.addEventListener('mousemove', moveZoom);
+        stage.addEventListener('mouseleave', hideZoom);
+        primaryImage.addEventListener('load', syncImageZoomSource);
+        syncImageZoomSource();
+    })();
+
     const qtySelect = root.querySelector('[data-testid="product-qty"]');
     const syncPurchaseQty = function () {
         const qty = Math.max(1, Number(qtySelect && qtySelect.value ? qtySelect.value : 1) || 1);
-        root.querySelectorAll('[data-action="add-v2"], [data-action="buy-now"]').forEach(function (button) {
+        root.querySelectorAll('[data-action="add"], [data-action="buy-now"]').forEach(function (button) {
             button.dataset.qty = String(qty);
         });
     };
@@ -1609,6 +1779,9 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                 thumbs.remove();
             }
             primaryImage.src = images[0];
+            if (typeof syncImageZoomSource === 'function') {
+                syncImageZoomSource();
+            }
             return;
         }
 
@@ -1636,6 +1809,9 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
             thumbs.appendChild(button);
         });
         primaryImage.src = images[0];
+        if (typeof syncImageZoomSource === 'function') {
+            syncImageZoomSource();
+        }
         root.querySelectorAll('[data-gallery-src]').forEach(function (item) {
             const active = item.dataset.gallerySrc === images[0];
             item.classList.toggle('is-active', active);
@@ -1646,7 +1822,7 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
     function renderPurchaseButtons(offer) {
         const exactOffer = offer && findExactOffer(selection);
         const sellable = !!(exactOffer && isOfferSellable(exactOffer) && exactOffer.global_offer_uuid);
-        root.querySelectorAll('[data-action="add-v2"], [data-action="buy-now"]').forEach(function (button) {
+        root.querySelectorAll('[data-action="add"], [data-action="buy-now"]').forEach(function (button) {
             if (exactOffer) {
                 button.dataset.globalOfferUuid = exactOffer.global_offer_uuid || '';
                 button.dataset.productId = String(exactOffer.product_id || '');
@@ -1654,6 +1830,10 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
             }
             button.disabled = !sellable;
         });
+        const skuElement = root.querySelector('[data-product-sku]');
+        if (skuElement && exactOffer) {
+            skuElement.textContent = 'SKU: ' + (exactOffer.sku || '');
+        }
         syncPurchaseQty();
     }
 
@@ -1687,12 +1867,48 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
     function syncUrl(current) {
         const params = new URLSearchParams();
         Object.keys(normalizeSelection(current)).forEach(function (axisCode) {
-            params.set(axisCode, current[axisCode]);
+            params.set(axisCode, publicCodeFor(axisCode, current[axisCode]));
         });
         const nextUrl = basePath + (params.toString() ? ('?' + params.toString()) : '');
         if (window.location.pathname + window.location.search !== nextUrl) {
             window.history.replaceState(null, '', nextUrl);
         }
+    }
+
+    function publicCodeFor(axisCode, value) {
+        const token = String(value || '').trim();
+        if (token === '') {
+            return token;
+        }
+        const axis = axes.find(function (row) {
+            return String(row.code || '').trim() === axisCode;
+        });
+        if (!axis || !Array.isArray(axis.options)) {
+            return token;
+        }
+        const option = axis.options.find(function (row) {
+            return String(row.value || '').trim() === token;
+        });
+        const code = option ? String(option.code || '').trim() : '';
+        return code !== '' ? code : token;
+    }
+
+    function canonicalValueFor(axisCode, token) {
+        const value = String(token || '').trim();
+        if (value === '') {
+            return value;
+        }
+        const axis = axes.find(function (row) {
+            return String(row.code || '').trim() === axisCode;
+        });
+        if (!axis || !Array.isArray(axis.options)) {
+            return value;
+        }
+        const option = axis.options.find(function (row) {
+            return String(row.value || '').trim() === value
+                || String(row.code || '').trim() === value;
+        });
+        return option ? String(option.value || value).trim() : value;
     }
 
     function applySelection(nextSelection, options) {
@@ -1736,7 +1952,10 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
     const urlSelection = {};
     axes.forEach(function (axis) {
         const axisCode = String(axis.code || '').trim();
-        const axisValue = String(urlParams.get(axisCode) || '').trim();
+        const axisValue = canonicalValueFor(
+            axisCode,
+            String(urlParams.get(axisCode) || '').trim()
+        );
         if (axisCode !== '' && axisValue !== '') {
             urlSelection[axisCode] = axisValue;
         }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\Http\Url;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Product\Model\Shard\Product;
@@ -15,6 +16,7 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
  */
 final class StorefrontProductWidgetCatalog
 {
+    private const HANFU_SKU_PREFIX = 'HF-';
 
     public function __construct(
         private readonly StorefrontCatalogViewService $catalog,
@@ -48,14 +50,101 @@ final class StorefrontProductWidgetCatalog
         );
 
         $cards = [];
-        foreach ($offers as $index => $offer) {
-            $cards[] = $this->mapOffer($offer, $index);
+        $seenProductIds = [];
+        foreach ($offers as $offer) {
+            if (!$this->isHanfuOffer($offer)) {
+                continue;
+            }
+            $productId = max(0, (int)($offer['product_id'] ?? 0));
+            if ($productId <= 0 || isset($seenProductIds[$productId])) {
+                continue;
+            }
+            $seenProductIds[$productId] = true;
+            $cards[] = $this->mapOffer($offer, count($cards));
+            if (count($cards) >= $limit) {
+                return $cards;
+            }
+        }
+
+        // Imported catalogs do not always use the optional HF-* SKU convention.
+        // Preserve Hanfu-first ordering, then fill remaining slots from all
+        // published offers so customer-facing collections never collapse empty.
+        foreach ($offers as $offer) {
+            $fallbackProductId = max(0, (int)($offer['product_id'] ?? 0));
+            if ($fallbackProductId <= 0 || isset($seenProductIds[$fallbackProductId])) {
+                continue;
+            }
+            $seenProductIds[$fallbackProductId] = true;
+            $cards[] = $this->mapOffer($offer, count($cards));
             if (count($cards) >= $limit) {
                 break;
             }
         }
 
         return $cards;
+    }
+
+    /**
+     * Best-seller ranking cards for the storefront /best-sellers page.
+     *
+     * Uses published offer heat (rating × reviews) as a storefront ranking signal
+     * until durable sales analytics are wired; ranks and sales_count are derived.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function bestSellerCards(int $limit = 24): array
+    {
+        $limit = max(1, min(48, $limit));
+        // Prefer Hanfu-scoped widget cards; fall back to all published offers so the
+        // dedicated /best-sellers page is not empty when HF-* SKUs are absent.
+        $pool = $this->cards(max($limit * 2, 24));
+        if ($pool === []) {
+            $offers = $this->catalog->publishedOffers(max($limit * 3, 48));
+            usort(
+                $offers,
+                static fn(array $left, array $right): int => (int)($right['product_id'] ?? 0)
+                    <=> (int)($left['product_id'] ?? 0),
+            );
+            $seenProductIds = [];
+            foreach ($offers as $offer) {
+                $productId = max(0, (int)($offer['product_id'] ?? 0));
+                if ($productId <= 0 || isset($seenProductIds[$productId])) {
+                    continue;
+                }
+                $seenProductIds[$productId] = true;
+                $pool[] = $this->mapOffer($offer, count($pool));
+                if (count($pool) >= max($limit * 2, 24)) {
+                    break;
+                }
+            }
+        }
+
+        usort(
+            $pool,
+            static function (array $left, array $right): int {
+                $leftScore = ((float)($left['rating'] ?? 0.0) * 100.0)
+                    + (float)($left['review_count'] ?? 0)
+                    + ((int)($left['product_id'] ?? 0) % 17);
+                $rightScore = ((float)($right['rating'] ?? 0.0) * 100.0)
+                    + (float)($right['review_count'] ?? 0)
+                    + ((int)($right['product_id'] ?? 0) % 17);
+
+                return $rightScore <=> $leftScore;
+            },
+        );
+
+        $ranked = [];
+        foreach (array_slice($pool, 0, $limit) as $index => $card) {
+            $rank = $index + 1;
+            $card['rank'] = $rank;
+            $card['sales_count'] = max(
+                20,
+                (int)($card['review_count'] ?? 0) * 8 + ($rank * 37),
+            );
+            $ranked[] = $card;
+        }
+
+        return $ranked;
     }
 
     /**
@@ -94,44 +183,63 @@ final class StorefrontProductWidgetCatalog
             $createdAtByProductId[$productId] = $createdRaw;
         }
 
-        if ($createdAtByProductId === []) {
-            return [];
-        }
+        if ($createdAtByProductId !== []) {
+            \uasort(
+                $createdAtByProductId,
+                static fn(string $left, string $right): int => (\strtotime($right) ?: 0) <=> (\strtotime($left) ?: 0),
+            );
 
-        \uasort(
-            $createdAtByProductId,
-            static fn(string $left, string $right): int => (\strtotime($right) ?: 0) <=> (\strtotime($left) ?: 0),
-        );
+            $offers = $this->catalog->publishedOffersForProductIds(
+                \array_keys($createdAtByProductId),
+                \max($limit * 3, 48),
+            );
+            $offerByProductId = [];
+            foreach ($offers as $offer) {
+                if (!$this->isHanfuOffer($offer)) {
+                    continue;
+                }
+                $productId = (int)($offer['product_id'] ?? 0);
+                if ($productId > 0 && !isset($offerByProductId[$productId])) {
+                    $offerByProductId[$productId] = $offer;
+                }
+            }
+            // New-arrivals: prefer HF-* then fill non-HF published offers (import SKUs).
+            foreach ($offers as $offer) {
+                $fallbackProductId = (int)($offer['product_id'] ?? 0);
+                if ($fallbackProductId > 0 && !isset($offerByProductId[$fallbackProductId])) {
+                    $offerByProductId[$fallbackProductId] = $offer;
+                }
+            }
 
-        $offers = $this->catalog->publishedOffersForProductIds(
-            \array_keys($createdAtByProductId),
-            \max($limit * 3, 48),
-        );
-        $offerByProductId = [];
-        foreach ($offers as $offer) {
-            $productId = (int)($offer['product_id'] ?? 0);
-            if ($productId > 0 && !isset($offerByProductId[$productId])) {
-                $offerByProductId[$productId] = $offer;
+            $cards = [];
+            $index = 0;
+            foreach (\array_keys($createdAtByProductId) as $productId) {
+                if (!isset($offerByProductId[$productId])) {
+                    continue;
+                }
+                $card = $this->mapOffer($offerByProductId[$productId], $index);
+                $card['created_at'] = $createdAtByProductId[$productId];
+                $card['is_new'] = 1;
+                $cards[] = $card;
+                $index++;
+                if (\count($cards) >= $limit) {
+                    break;
+                }
+            }
+
+            if ($cards !== []) {
+                return $cards;
             }
         }
 
-        $cards = [];
-        $index = 0;
-        foreach (\array_keys($createdAtByProductId) as $productId) {
-            if (!isset($offerByProductId[$productId])) {
-                continue;
-            }
-            $card = $this->mapOffer($offerByProductId[$productId], $index);
-            $card['created_at'] = $createdAtByProductId[$productId];
+        // Day-window empty or no sellable offers: stable catalog fallback for widgets/page.
+        $fallback = [];
+        foreach ($this->cards($limit) as $card) {
             $card['is_new'] = 1;
-            $cards[] = $card;
-            $index++;
-            if (\count($cards) >= $limit) {
-                break;
-            }
+            $fallback[] = $card;
         }
 
-        return $cards;
+        return $fallback;
     }
 
     /**
@@ -163,12 +271,20 @@ final class StorefrontProductWidgetCatalog
         );
 
         $cards = [];
-        foreach ($offers as $index => $offer) {
+        $seenProductIds = [];
+        foreach ($offers as $offer) {
+            if (!$this->isHanfuOffer($offer)) {
+                continue;
+            }
             $productId = max(0, (int)($offer['product_id'] ?? 0));
             if ($excludeProductId > 0 && $productId === $excludeProductId) {
                 continue;
             }
-            $cards[] = $this->mapOffer($offer, $index);
+            if ($productId <= 0 || isset($seenProductIds[$productId])) {
+                continue;
+            }
+            $seenProductIds[$productId] = true;
+            $cards[] = $this->mapOffer($offer, count($cards));
             if (count($cards) >= $limit) {
                 break;
             }
@@ -189,11 +305,12 @@ final class StorefrontProductWidgetCatalog
 
         $seed = null;
         if ($seedProductId > 0) {
-            foreach ($this->cards(max(48, $companionLimit + 8)) as $card) {
-                if ((int)($card['product_id'] ?? 0) === $seedProductId) {
-                    $seed = $card;
-                    break;
+            foreach ($this->catalog->publishedOffersForProductIds([$seedProductId], 4) as $offer) {
+                if ((int)($offer['product_id'] ?? 0) !== $seedProductId) {
+                    continue;
                 }
+                $seed = $this->mapOffer($offer, 0);
+                break;
             }
         }
 
@@ -208,13 +325,6 @@ final class StorefrontProductWidgetCatalog
             $companion['selected'] = true;
             $bundle[] = $companion;
         }
-
-        foreach ($bundle as $index => &$item) {
-            $placeholder = StorefrontImagePlaceholder::url($index);
-            $item['image'] = $placeholder;
-            $item['image_fallback'] = $placeholder;
-        }
-        unset($item);
 
         return $bundle;
     }
@@ -261,8 +371,9 @@ final class StorefrontProductWidgetCatalog
         $image = $resolved['src'];
         $fallback = $resolved['fallback'];
 
-        // Root-relative so static 404 snapshots and nested paths stay host-agnostic.
-        $route = $slug !== '' ? '/product/' . $slug : '/product/' . $productId;
+        // Preserve the active locale while remaining host-agnostic.
+        $productPath = $slug !== '' ? '/product/' . $slug : '/product/' . $productId;
+        $route = rtrim(Url::getPrefix(), '/') . $productPath;
         $reviewCount = max(12, (($productId * 23) + (($index + 1) * 17)) % 320);
 
         return [
@@ -279,6 +390,15 @@ final class StorefrontProductWidgetCatalog
             'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
             'sellable' => !empty($offer['sellable']),
         ];
+    }
+
+    /** @param array<string, mixed> $offer */
+    private function isHanfuOffer(array $offer): bool
+    {
+        return str_starts_with(
+            strtoupper(trim((string)($offer['sku'] ?? ''))),
+            self::HANFU_SKU_PREFIX,
+        );
     }
 
     private function currentScope(): ScopeIdentity

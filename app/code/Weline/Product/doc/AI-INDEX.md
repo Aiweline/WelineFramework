@@ -10,7 +10,7 @@
 - Registry：`Model/ProductShardRegistry`
 - Provisioner：`Service/ProductShardProvisioner`
 - Schema provider：`extends/module/Weline_Framework/Schema/ProductShardSchemaProvider.php`
-- Catalog DDL：`Service/ProductShardSchemaCatalog`（SCHEMA_VERSION=4.0.0；九实体白名单；`category_link` 唯一索引 `uk_store_category_product`）
+- Catalog DDL：`Service/ProductShardSchemaCatalog`（SCHEMA_VERSION=4.6.0；九实体白名单；`category_link` 唯一索引 `uk_store_category_product`）
 - P2A-002 正式验收：PostgreSQL 双 Website 九表、幂等、数据保留、单站
   drift 隔离 + 编译后 `product.website` provider discovery；SQLite 用例只作
   一次性隔离开发/可移植性回归
@@ -60,7 +60,7 @@
     `product_copy_test_*` schema 隔离并清理
   - 后台 Query/ACL 验收：`Test/Unit/Query/ProductCopyQueryProviderTest.php`
     （scope 归属、墓碑拒绝、blank preview/commit、六操作显式 ACL）
-- Cart V2 Provider：`extends/module/Weline_Cart/CartItemSnapshotProviderV2/ProductCartItemSnapshotProvider.php`
+- Cart Provider：`extends/module/Weline_Cart/CartItemSnapshotProvider/ProductCartItemSnapshotProvider.php`
   + `ProductCatalogCartItemSnapshotResolver.php`；生产读取 durable
   Offer/Product/Store/EAV/Price/Media，harness catalog 仅测试使用
 - Shard status Query：`product_shard_status.current` 只读当前可信 Website

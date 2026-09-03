@@ -31,7 +31,7 @@ if ($handle === '') {
 }
 
 ObjectManager::getInstance(ProductShardProvisioner::class)->provisionWebsite($websiteId);
-ObjectManager::getInstance(ProductCatalogEavBootstrap::class)->ensureHanfuSchema();
+$hanfuEav = ObjectManager::getInstance(ProductCatalogEavBootstrap::class)->ensureHanfuSchema();
 
 /** @var ProductRepository $products */
 $products = ObjectManager::getInstance(ProductRepository::class);
@@ -93,79 +93,64 @@ if ($primarySku === '') {
     exit(1);
 }
 
-$typeConfigRaw = '';
-foreach ($attributes->listExplicitRows($websiteId, 'product', [$productId], [0]) as $row) {
-    if (strtolower(trim((string)($row['attribute_code'] ?? ''))) === 'type_configuration') {
-        $typeConfigRaw = trim((string)($row['value'] ?? ''));
-        break;
+$productAttributeRows = $attributes->listExplicitRows(
+    $websiteId,
+    'product',
+    [$productId],
+    [0],
+);
+$availableValues = [];
+foreach ($productAttributeRows as $row) {
+    if (strtolower(trim((string)($row['value_type'] ?? ''))) !== 'multiselect'
+        || !is_array($row['value'] ?? null)
+    ) {
+        continue;
+    }
+    $code = strtolower(trim((string)($row['attribute_code'] ?? '')));
+    if ($code !== '') {
+        $availableValues[$code] = $row['value'];
     }
 }
-
-$config = [];
-if ($typeConfigRaw !== '') {
-    try {
-        $decoded = json_decode($typeConfigRaw, true, 512, JSON_THROW_ON_ERROR);
-        $config = is_array($decoded) ? $decoded : [];
-    } catch (Throwable) {
-    }
-}
-
-$axisCodes = [];
-foreach ((array)($config['axes'] ?? []) as $axis) {
-    if (is_array($axis)) {
-        $code = strtolower(trim((string)($axis['code'] ?? '')));
-        if ($code !== '') {
-            $axisCodes[] = $code;
-        }
-    } elseif (is_string($axis) && trim($axis) !== '') {
-        $axisCodes[] = strtolower(trim($axis));
-    }
-}
-
-if ($axisCodes === []) {
-    fwrite(STDERR, "Product {$productId} has no type_configuration.axes\n");
+if ($availableValues === []) {
+    fwrite(STDERR, "Product {$productId} has no Product EAV multiselect variant values\n");
     exit(1);
 }
 
-$eavBootstrap = ObjectManager::getInstance(ProductCatalogEavBootstrap::class);
-$hanfuEav = $eavBootstrap->ensureHanfuSchema();
+$offerValues = [];
+foreach ($attributes->listExplicitRows($websiteId, 'offer', [$primaryOfferId], [0]) as $row) {
+    $code = strtolower(trim((string)($row['attribute_code'] ?? '')));
+    $value = $row['value'] ?? null;
+    if ($code === ''
+        || !isset($availableValues[$code])
+        || strtolower(trim((string)($row['value_type'] ?? ''))) !== 'select'
+        || !is_scalar($value)
+        || trim((string)$value) === ''
+    ) {
+        continue;
+    }
+    $offerValues[$code] = trim((string)$value);
+}
 
 $axisResolver = ObjectManager::getInstance(\Weline\Product\Service\StorefrontVariantAxisResolver::class);
-
-$axes = [];
-foreach ((array)($config['axes'] ?? []) as $axisConfig) {
-    if (!is_array($axisConfig)) {
-        continue;
-    }
-    $code = strtolower(trim((string)($axisConfig['code'] ?? '')));
-    if ($code === '') {
-        continue;
-    }
-    $built = $axisResolver->buildAxes(['axes' => [$axisConfig]], []);
-    if ($built !== []) {
-        $axes[] = $built[0];
-    }
-}
-if ($axes === [] && $axisCodes !== []) {
-    foreach ($axisCodes as $code) {
-        $built = $axisResolver->buildAxes(['axes' => [['code' => $code]]], []);
-        if ($built !== []) {
-            $axes[] = $built[0];
-        }
-    }
-}
-
-if ($axes === []) {
-    fwrite(STDERR, "Could not resolve EAV options for axes: " . implode(', ', $axisCodes) . "\n");
+$axes = $axisResolver->buildAxes($offerValues, $availableValues);
+$axisCodes = array_values(array_filter(array_map(
+    static fn(array $axis): string => strtolower(trim((string)($axis['code'] ?? ''))),
+    $axes,
+)));
+if ($axes === [] || $axisCodes === []) {
+    fwrite(STDERR, "Could not resolve Product EAV variant axes for product {$productId}\n");
     exit(1);
 }
 
 $defaults = [];
-foreach ($axisCodes as $code) {
-    foreach ($attributes->listExplicitRows($websiteId, 'product', [$productId], [0]) as $row) {
-        if (strtolower(trim((string)($row['attribute_code'] ?? ''))) === $code) {
-            $defaults[$code] = trim((string)($row['value'] ?? ''));
-        }
+foreach ($axes as $axis) {
+    $code = strtolower(trim((string)($axis['code'] ?? '')));
+    $selected = trim((string)($offerValues[$code] ?? ''));
+    if ($selected === '') {
+        $selected = trim((string)($axis['options'][0]['value'] ?? ''));
+    }
+    if ($code !== '' && $selected !== '') {
+        $defaults[$code] = $selected;
     }
 }
 

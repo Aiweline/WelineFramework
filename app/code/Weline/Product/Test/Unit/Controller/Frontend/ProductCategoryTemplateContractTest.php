@@ -22,6 +22,14 @@ final class ProductCategoryTemplateContractTest extends TestCase
         self::assertStringContainsString("assign('storefront_category_active_path_ids'", $controller);
         self::assertStringContainsString("setGet('path', \$routePath)", $controller);
         self::assertStringContainsString('$this->layoutType = \'category\'', $controller);
+        self::assertStringContainsString("\$productIds = \$page['product_ids'];", $controller);
+        self::assertStringContainsString('$productIds === []', $controller);
+        self::assertStringContainsString(
+            'publishedOffersForProductIds($productIds, 120)',
+            $controller,
+        );
+        self::assertStringContainsString('Weline_Product::storefront_offers_filter', $controller);
+        self::assertStringNotContainsString('ObjectManager', $controller);
     }
 
     public function testCategoryTemplateExposesToolbarAndGridContracts(): void
@@ -37,48 +45,35 @@ final class ProductCategoryTemplateContractTest extends TestCase
         self::assertStringContainsString('amz-card', $template);
         self::assertStringContainsString('class="amz-card__hit"', $template);
         self::assertStringContainsString('data-testid="storefront-category-product-card-link"', $template);
-        self::assertStringContainsString("\$this->getUrl('product/' . \$productId)", $template);
+        self::assertStringContainsString("\$productPath = 'product/' . \$productId", $template);
+        self::assertStringContainsString("StorefrontOfferDetailQuery::params", $template);
+        self::assertStringContainsString('href="@url{$productUrl|$productUrlParams}"', $template);
         self::assertStringContainsString('storefront_category_breadcrumbs', $template);
         self::assertStringContainsString('partials/product/add-to-cart.phtml', $template);
         self::assertStringContainsString('ProductCardAddToCartParams::fetchDictionaryFromOffer', $template);
-        self::assertStringContainsString('product-purchase-actions.js', $template);
         self::assertStringNotContainsString("button.textContent = '", $template);
         self::assertStringNotContainsString('ObjectManager', $template);
     }
 
-    public function testCategoryLayoutUsesRuntimeFiltersHookInsteadOfCompileBakedWidget(): void
+    public function testCategoryLayoutLeavesFiltersSlotForFiltersModuleInjection(): void
     {
         $layout = (string)file_get_contents(
             BP . 'app/code/Weline/Theme/view/theme/frontend/layouts/category/default.phtml',
         );
 
-        self::assertStringContainsString(
-            "getHook('Weline_Theme::frontend::layouts::category::filters-sidebar', true)",
+        self::assertStringContainsString('id="category-filters"', $layout);
+        self::assertStringContainsString('data-placeholder="category-filters"', $layout);
+        self::assertStringContainsString('由 Filters 部件默认注入', $layout);
+        self::assertStringNotContainsString(
+            "getHook('Weline_Theme::frontend::layouts::category::filters-sidebar'",
             $layout,
         );
         self::assertStringNotContainsString(
             '<w:widget type="sidebar" name="category-filters"/>',
             $layout,
         );
-    }
-
-    public function testFiltersSidebarPrefersAssignedCategoryData(): void
-    {
-        $hook = (string)file_get_contents(
+        self::assertFileDoesNotExist(
             BP . 'app/code/Weline/Product/view/hooks/Weline_Theme/frontend/layouts/category/filters-sidebar.phtml',
         );
-
-        self::assertStringContainsString("getData('storefront_category')", $hook);
-        self::assertStringContainsString('amz-filter', $hook);
-        self::assertStringContainsString('buildListingUrl', $hook);
-        self::assertStringContainsString('priceBucketsWithCounts', $hook);
-        self::assertStringContainsString('storefront-category-dept-root', $hook);
-        self::assertStringContainsString('storefront-category-dept-tree', $hook);
-        self::assertStringContainsString('storefront-category-dept-node', $hook);
-        self::assertStringContainsString("getData('storefront_category_tree')", $hook);
-        self::assertStringContainsString("getData('storefront_category_active_path_ids')", $hook);
-        self::assertStringContainsString('nestedRoots', $hook);
-        self::assertStringContainsString('/categories', $hook);
-        self::assertStringContainsString('$tree', $hook);
     }
 }

@@ -484,5 +484,6 @@
 
   .weline-product-fbt .wpf-cta {
     width: 100%;
+    overflow: hidden;
   }
 }

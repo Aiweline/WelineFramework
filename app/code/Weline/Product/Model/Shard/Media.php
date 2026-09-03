@@ -13,6 +13,7 @@ final class Media extends AbstractWebsiteShardModel
     public const schema_fields_SCOPE_STATE = 'scope_state';
     public const schema_fields_HIDDEN = 'hidden';
     public const schema_fields_ROLE = 'role';
+    public const schema_fields_COMBINATION_KEY = 'combination_key';
     public const schema_fields_ASSET_ID = 'asset_id';
     public const schema_fields_ASSET_VISIBILITY = 'asset_visibility';
     public const schema_fields_MIME_TYPE = 'mime_type';

@@ -11,10 +11,8 @@ use Weline\Eav\Api\Metadata\AttributeSetMetadata;
 use Weline\Product\Model\ProductCatalogAttributeEntity;
 
 /**
- * Builds storefront variant axes from product type_configuration + EAV option metadata.
- *
- * type_configuration.axes lists which EAV attributes participate in the matrix;
- * labels and option display text come from EAV unless the product narrows the option set.
+ * Builds storefront variant axes from Product EAV multiselect values, with the
+ * selected value supplied by Offer EAV select values or combination_key.
  */
 final class StorefrontVariantAxisResolver
 {
@@ -29,25 +27,45 @@ final class StorefrontVariantAxisResolver
     }
 
     /**
-     * @param array<string, mixed> $typeConfiguration
-     * @param array<string, string> $resolvedValues
+     * @param array<string, mixed> $resolvedValues
+     * @param array<string, mixed> $availableValues
      * @return list<array{code:string,label:string,value:string,value_label:string,options:list<array{value:string,label:string,swatch_color?:string,swatch_image?:string}>}>
      */
-    public function buildAxes(array $typeConfiguration, array $resolvedValues): array
-    {
-        $axisDefinitions = is_array($typeConfiguration['axes'] ?? null)
-            ? $typeConfiguration['axes']
-            : [];
-        if ($axisDefinitions === []) {
-            return [];
-        }
-
+    public function buildAxes(
+        array $resolvedValues,
+        array $availableValues = [],
+    ): array {
         $eavIndex = $this->attributesByCode();
-        $result = [];
-        foreach ($axisDefinitions as $axis) {
-            if (!is_array($axis)) {
+        $axisDefinitions = [];
+        foreach ($availableValues as $code => $rawValues) {
+            $code = strtolower(trim((string)$code));
+            $eav = $eavIndex[$code] ?? null;
+            if (!is_array($eav)
+                || empty($eav['multiple'])
+                || empty($eav['has_option'])
+            ) {
                 continue;
             }
+            $values = $this->axisValueList($rawValues);
+            if ($values === []) {
+                continue;
+            }
+            $options = [];
+            foreach ($values as $value) {
+                $options[] = [
+                    'value' => $value,
+                    'label' => $this->eavOptionLabel($eav, $value),
+                ];
+            }
+            $axisDefinitions[] = [
+                'code' => $code,
+                'label' => (string)($eav['name'] ?? $code),
+                'options' => $options,
+            ];
+        }
+
+        $result = [];
+        foreach ($axisDefinitions as $axis) {
             $code = strtolower(trim((string)($axis['code'] ?? '')));
             if ($code === '') {
                 continue;
@@ -61,10 +79,10 @@ final class StorefrontVariantAxisResolver
             if ($label === '') {
                 $label = $code;
             }
-            // 属性显示名走模块 i18n（CSV 源文多为中文），避免店面语言切换后仍输出种子原文。
             $label = (string)__($label);
 
-            $selected = trim((string)($resolvedValues[$code] ?? ''));
+            $selectedValues = $this->axisValueList($resolvedValues[$code] ?? '');
+            $selected = $selectedValues[0] ?? '';
             $options = $this->resolveAxisOptions($code, $axis, $eav);
 
             $result[] = [
@@ -77,6 +95,53 @@ final class StorefrontVariantAxisResolver
         }
 
         return $result;
+    }
+
+    /** @return list<string> */
+    private function axisValueList(mixed $value): array
+    {
+        if (is_string($value)) {
+            $trimmed = trim($value);
+            if ($trimmed === '') {
+                return [];
+            }
+            if (str_contains($trimmed, ',')) {
+                $value = preg_split('/\s*,\s*/', $trimmed) ?: [];
+            } else {
+                $value = [$trimmed];
+            }
+        }
+        if (!is_array($value)) {
+            return is_scalar($value) ? [trim((string)$value)] : [];
+        }
+        $result = [];
+        foreach ($value as $item) {
+            if (!is_scalar($item)) {
+                continue;
+            }
+            $item = trim((string)$item);
+            if ($item !== '') {
+                $result[$item] = $item;
+            }
+        }
+        return array_values($result);
+    }
+
+    /** @param array<string,mixed> $attribute */
+    private function eavOptionLabel(array $attribute, string $value): string
+    {
+        foreach (is_array($attribute['options'] ?? null) ? $attribute['options'] : [] as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            foreach (['id', 'code', 'value'] as $identityKey) {
+                if ($value === trim((string)($option[$identityKey] ?? ''))) {
+                    return (string)($option['label'] ?? $option['name'] ?? $value);
+                }
+            }
+        }
+
+        return $value;
     }
 
     /**
@@ -147,7 +212,11 @@ final class StorefrontVariantAxisResolver
                 $entry['swatch_color'] = $swatchColor;
             }
         }
-        // 全局 EAV 选项图板仅表示「可填图」能力；具体样本图只来自商品 type_configuration。
+        $optionCode = trim((string)($eavOption['code'] ?? ''));
+        if ($optionCode !== '' && trim((string)($entry['code'] ?? '')) === '') {
+            $entry['code'] = $optionCode;
+        }
+        // 全局 EAV 选项图板仅表示抽象选项；具体样本图只来自 Product/Offer 媒体关联。
 
         return $entry;
     }
@@ -162,9 +231,10 @@ final class StorefrontVariantAxisResolver
             if (!is_array($option)) {
                 continue;
             }
-            $code = trim((string)($option['code'] ?? $option['value'] ?? ''));
-            if ($code === $value) {
-                return $option;
+            foreach (['id', 'code', 'value'] as $identityKey) {
+                if ($value === trim((string)($option[$identityKey] ?? ''))) {
+                    return $option;
+                }
             }
         }
 
@@ -178,6 +248,10 @@ final class StorefrontVariantAxisResolver
     private function normalizeOptionEntry(string $value, string $label, array $option): array
     {
         $entry = ['value' => $value, 'label' => $label];
+        $optionCode = trim((string)($option['code'] ?? ''));
+        if ($optionCode !== '') {
+            $entry['code'] = $optionCode;
+        }
         $swatchColor = trim((string)($option['swatch_color'] ?? $option['swatch'] ?? ''));
         if ($swatchColor !== '') {
             $entry['swatch_color'] = $swatchColor;

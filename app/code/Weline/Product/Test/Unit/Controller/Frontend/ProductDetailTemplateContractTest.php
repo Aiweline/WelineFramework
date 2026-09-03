@@ -32,18 +32,18 @@ final class ProductDetailTemplateContractTest extends TestCase
                     ['code' => 'displacement', 'value' => '294.9 ml'],
                 ],
             ],
-        ]) {
+        ]) extends \Weline\Framework\View\Template {
             /** @param array<string, mixed> $data */
             public function __construct(private readonly array $data)
             {
             }
 
-            public function getData(string $key): mixed
+            public function getData(string $key = '', $index = null): mixed
             {
                 return $this->data[$key] ?? null;
             }
 
-            public function getUrl(string $path): string
+            public function getUrl(string $path, array $params = [], bool $merge_query = false): string
             {
                 return '/USD/' . ltrim($path, '/');
             }
@@ -75,6 +75,12 @@ final class ProductDetailTemplateContractTest extends TestCase
 
         self::assertStringContainsString("\$this->layoutType = 'product'", $controller);
         self::assertStringContainsString("setGet('page_type', 'product')", $controller);
+        self::assertStringContainsString("\$seoProduct['storefront_offers'] = \$offers", $controller);
+        self::assertStringContainsString("\$this->assign('product', \$seoProduct)", $controller);
+        self::assertStringContainsString("\$this->assign('seo', [", $controller);
+        self::assertStringContainsString("\$this->assign('meta_title', \$seoTitle)", $controller);
+        self::assertStringContainsString("\$this->assign('meta_description', \$seoDescription)", $controller);
+        self::assertStringContainsString("\$this->assign('meta_keywords', \$seoKeywords)", $controller);
         self::assertStringContainsString('publishedOffersForProduct($productId)', $controller);
         self::assertStringContainsString('publishedOffersBySlug($slug)', $controller);
         self::assertStringContainsString("\$this->getUrl('products')", $controller);
@@ -85,6 +91,26 @@ final class ProductDetailTemplateContractTest extends TestCase
     }
 
 
+    public function testDetailTemplateRendersOnlyProjectedDescriptionHtml(): void
+    {
+        $template = (string)file_get_contents(
+            dirname(__DIR__, 4) . '/view/templates/frontend/widgets/product-info.phtml',
+        );
+
+        self::assertStringContainsString('$descriptionHtml', $template);
+        self::assertStringContainsString('data-testid="product-description-body"', $template);
+        self::assertLessThan(
+            strpos($template, 'data-testid="product-description"'),
+            strpos($template, 'data-testid="product-specifications"'),
+            '技术细节区块须排在关于该商品/详情之前',
+        );
+        self::assertStringContainsString(
+            '$descriptionHtml !== \'\' ? $descriptionHtml : nl2br($escape($description), false)',
+            $template,
+        );
+        self::assertStringContainsString('.product-native-detail__description-body img', $template);
+    }
+
     public function testDetailTemplateUsesPublishedOfferIdentityThroughCartQueryBin(): void
     {
         $template = (string)file_get_contents(
@@ -92,6 +118,11 @@ final class ProductDetailTemplateContractTest extends TestCase
         );
 
         self::assertStringContainsString('data-testid="storefront-product-detail"', $template);
+        self::assertStringContainsString('data-image-zoom="1"', $template);
+        self::assertStringContainsString('product-native-detail__zoom-lens', $template);
+        self::assertStringContainsString('data-testid="product-image-zoom-result"', $template);
+        self::assertStringContainsString('bindImageZoom', $template);
+        self::assertStringContainsString('syncImageZoomSource', $template);
         self::assertStringContainsString('id="product-purchase-actions"', $template);
         self::assertStringContainsString('product-purchase-actions', $template);
         self::assertStringContainsString('@param show_brand', $template);
@@ -127,9 +158,18 @@ final class ProductDetailTemplateContractTest extends TestCase
         self::assertStringContainsString('请选择规格', $template);
         self::assertStringContainsString("getParam('offer', '')", $controller);
         self::assertStringContainsString('StorefrontVariantSelectionService', $controller);
+        self::assertStringContainsString('StorefrontEavLabelResolver', $controller);
+        self::assertStringContainsString('canonicalizeAxisQuery', $controller);
+        self::assertStringContainsString('publicOptionCode', $controller);
         self::assertStringContainsString("'variant_catalog'", $controller);
         self::assertStringContainsString('data-variant-interactive="1"', $template);
         self::assertStringContainsString('data-variant-option="1"', $template);
+        self::assertStringContainsString('publicCodeFor', $template);
+        self::assertStringContainsString('canonicalValueFor', $template);
+        self::assertStringContainsString('data-testid="product-sku"', $template);
+        self::assertStringContainsString('data-product-sku="1"', $template);
+        self::assertStringContainsString("root.querySelector('[data-product-sku]')", $template);
+        self::assertStringContainsString("exactOffer.sku || ''", $template);
         self::assertStringContainsString('is-out-of-stock', $template);
         self::assertStringContainsString('isOptionSellable', $template);
         self::assertStringContainsString('isOfferSellable', $template);

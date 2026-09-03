@@ -89,7 +89,7 @@
 | `Service/ProductProviderRegistry` | Product type Provider SPI |
 | `Api/ProductProviderInterface` | Provider 小接口 |
 | `Extends/.../ProductShardSchemaProvider` | setup:upgrade 枚举分片表 |
-| `Extends/.../ProductCatalogCartItemSnapshotResolver` | Cart V2 durable Product 快照 |
+| `Extends/.../ProductCatalogCartItemSnapshotResolver` | Cart durable Product 快照 |
 
 ## P2A-005：Product Provider capability SPI
 
@@ -129,11 +129,11 @@
 - `Weline_Inventory::stock_projection_changed`（Product 观察者 `InventoryStockProjectionChangedObserver`）在库存投影真正变更后调用 `StorefrontCatalogCacheCoordinator::notifyCatalogChanged`，含默认站 `website_id=0`。
 - `StorefrontCatalogCacheInvalidator` 对 `website_id=0` 同样清理主题 chrome/片段缓存，不得把 0 当成空值跳过。
 
-## P2E-001：Cart V2 Product 快照
+## P2E-001：Cart Product 快照
 
 - `ProductCartItemSnapshotProvider` 保留注入 catalog / resolver 的测试缝，
   正式请求由 `ProductCatalogCartItemSnapshotResolver` 读取 durable Website
-  shard，不再把 `CartV2HarnessCatalog` 当作生产目录
+  shard，不再把 `CartHarnessCatalog` 当作生产目录
 - Offer/Product 均须 `published`；Store/Channel Scope 通过公开
   `StoreCatalogInterface` 解析 Store ID、状态、生命周期和 `store_mode`
 - Store 选品使用 `StoreOfferRepository`；名称与 `product_type` 使用
@@ -248,7 +248,7 @@ shard 做隔离开发回归；正式矩阵必须注入任务独占、验收后�
 测试库。用例验证
 验证 Store overlay、跨站新 Category UUID、Product/Offer 去重、字段包、
 媒体、库存默认 0、receipt 重放/冲突、目录与库存共同失败回滚，以及
-Cart V2 Product durable 快照解析。
+Cart Product durable 快照解析。
 
 当前模块版本：`1.0.23`。V1 `ProductIdentityResolverInterface` 继续兼容读取，
 新 Product/Offer 身份、后台命令/读模型、五类 Provider 与 Search/Cart 等消费链

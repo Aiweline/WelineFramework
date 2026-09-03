@@ -24,7 +24,7 @@ use Weline\Product\Service\ProductShardSchemaCatalog;
 
 final class ProductShardProvisionerIntegrationTest extends TestCase
 {
-    public function testWebsiteZeroCreatesExactlyNineTablesAndRepeatPreservesDataWithoutDdl(): void
+    public function testWebsiteZeroCreatesEveryCatalogTableAndRepeatPreservesDataWithoutDdl(): void
     {
         self::assertContains(
             'sqlite',
@@ -49,6 +49,7 @@ final class ProductShardProvisionerIntegrationTest extends TestCase
         $registry->setConnection($connectionFactory);
         $registry->__init();
         $catalog = new ProductShardSchemaCatalog();
+        $expectedTableCount = count(ProductShardSchemaCatalog::ENTITIES);
         $provider = new ProductShardSchemaProvider($registry, $catalog);
         $familyRegistry = new ShardSchemaFamilyProviderRegistry(
             manualFamilyProviders: [ProductShardKey::FAMILY_CODE => $provider],
@@ -83,10 +84,10 @@ final class ProductShardProvisionerIntegrationTest extends TestCase
             self::assertSame(ProductShardRegistry::STATUS_READY, $registry->getStatus(0));
             self::assertSame(ProductShardSchemaCatalog::SCHEMA_VERSION, $registry->getSchemaVersion(0));
             self::assertTrue($provisioner->isWritable(0));
-            self::assertCount(9, $first->tableNames);
-            self::assertCount(9, $first->tableFingerprints);
-            self::assertCount(9, $first->ops);
-            self::assertSame(9, $ddlCount);
+            self::assertCount($expectedTableCount, $first->tableNames);
+            self::assertCount($expectedTableCount, $first->tableFingerprints);
+            self::assertCount($expectedTableCount, $first->ops);
+            self::assertSame($expectedTableCount, $ddlCount);
 
             $expectedTables = array_map(
                 static fn(string $entity): string => ProductShardKey::tableName('0', $entity),
@@ -105,7 +106,11 @@ final class ProductShardProvisionerIntegrationTest extends TestCase
             $second = $provisioner->provisionWebsite(0);
             self::assertTrue($second->isReady(), (string)$second->errorMessage);
             self::assertSame($first->fingerprint, $second->fingerprint);
-            self::assertSame(9, $ddlCount, 'Current ready schema must not execute DDL again.');
+            self::assertSame(
+                $expectedTableCount,
+                $ddlCount,
+                'Current ready schema must not execute DDL again.',
+            );
 
             $rows = $connector->query(
                 "SELECT sku FROM product_ws_0_product WHERE sku = 'P2A002-SKU'"

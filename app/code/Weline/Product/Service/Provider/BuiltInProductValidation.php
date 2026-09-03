@@ -19,7 +19,14 @@ final class BuiltInProductValidation
     ): ProductValidationResult {
         $errors = [];
         $warnings = [];
-        $offers = $context->offers;
+        $offers = array_values(array_filter(
+            $context->offers,
+            static fn(array $offer): bool => !in_array(
+                strtolower(trim((string)($offer['status'] ?? ''))),
+                ['disabled', 'archived'],
+                true,
+            ),
+        ));
         $count = count($offers);
         $stores = $context->storeIds === [] ? [0] : $context->storeIds;
 
@@ -132,53 +139,58 @@ final class BuiltInProductValidation
         }
 
         if ($definition->supportsVariants) {
-            $axes = $context->typeConfiguration['axes'] ?? [];
-            if (!is_array($axes) || $axes === []) {
-                $errors[] = self::issue(
-                    'variant_axes_required',
-                    __('多规格商品至少需要一个 EAV 规格轴'),
-                    'type_configuration.axes',
-                );
+            $allowedValuesByAxis = [];
+            foreach ($context->attributes as $row) {
+                if (!is_array($row)
+                    || strtolower(trim((string)($row['entity_type'] ?? ''))) !== 'product'
+                    || (int)($row['store_id'] ?? 0) !== 0
+                    || trim((string)($row['locale'] ?? '')) !== ''
+                    || !empty($row['cleared'])
+                    || strtolower(trim((string)($row['value_type'] ?? ''))) !== 'multiselect'
+                ) {
+                    continue;
+                }
+                $scopeState = strtolower(trim((string)($row['scope_state'] ?? '')));
+                if ($scopeState !== '' && $scopeState !== 'explicit') {
+                    continue;
+                }
+                $code = strtolower(trim((string)($row['attribute_code'] ?? '')));
+                $values = $row['value'] ?? null;
+                if ($code === '' || !is_array($values)) {
+                    continue;
+                }
+                foreach ($values as $value) {
+                    if (!is_scalar($value)) {
+                        continue;
+                    }
+                    $value = trim((string)$value);
+                    if ($value !== '') {
+                        $allowedValuesByAxis[$code][$value] = true;
+                    }
+                }
             }
-        }
 
-        if ($definition->supportsVariants) {
-            $rawAxes = $context->typeConfiguration['axes'] ?? [];
-            $axes = [];
-            $seenAxes = [];
-            foreach (is_array($rawAxes) ? $rawAxes : [] as $axisIndex => $axis) {
-                $code = is_array($axis)
-                    ? trim((string)($axis['code'] ?? ''))
-                    : trim((string)$axis);
-                $normalizedCode = strtolower($code);
-                if ($code === '') {
-                    $errors[] = self::issue(
-                        'variant_axis_invalid',
-                        __('规格轴必须使用有效的 EAV 属性代码'),
-                        'type_configuration.axes.' . $axisIndex,
-                    );
-                    continue;
+            $axes = array_keys($allowedValuesByAxis);
+            if ($axes === []) {
+                foreach ($offers as $offer) {
+                    foreach (array_keys(self::resolveCombination($offer)) as $code) {
+                        $code = strtolower(trim((string)$code));
+                        if ($code !== '') {
+                            $axes[$code] = $code;
+                        }
+                    }
                 }
-                if (isset($seenAxes[$normalizedCode])) {
-                    $errors[] = self::issue(
-                        'variant_axis_duplicate',
-                        __('规格轴不能重复：%{1}', [$code]),
-                        'type_configuration.axes.' . $axisIndex,
-                    );
-                    continue;
-                }
-                $seenAxes[$normalizedCode] = true;
-                $axes[] = $normalizedCode;
+                $axes = array_values($axes);
             }
             if ($axes === []) {
                 $errors[] = self::issue(
                     'variant_axes_required',
-                    __('多规格商品至少需要一个规格轴'),
-                    'type_configuration.axes',
+                    __('多规格商品至少需要一个 Product EAV 多选规格轴'),
+                    'attributes.variant_axes',
                 );
             } else {
                 sort($axes);
-                foreach ($context->offers as $offerIndex => $offer) {
+                foreach ($offers as $offerIndex => $offer) {
                     $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
                     $combination = self::resolveCombination($offer);
                     $normalizedCombination = [];
@@ -190,7 +202,7 @@ final class BuiltInProductValidation
                     if ($combinationAxes !== $axes) {
                         $errors[] = self::issue(
                             'variant_combination_axes_mismatch',
-                            __('每个规格组合必须且只能包含已选择的全部规格轴'),
+                            __('每个规格组合必须且只能包含 Product EAV 已选择的全部规格轴'),
                             'offers.' . $offerIndex . '.combination',
                             $offerUuid,
                         );
@@ -202,6 +214,18 @@ final class BuiltInProductValidation
                                 'variant_combination_value_required',
                                 __('规格组合中的每个规格轴都必须选择一个值'),
                                 'offers.' . $offerIndex . '.combination.' . $axisCode,
+                                $offerUuid,
+                            );
+                            continue;
+                        }
+                        $value = trim((string)$value);
+                        if (isset($allowedValuesByAxis[$axisCode])
+                            && !isset($allowedValuesByAxis[$axisCode][$value])
+                        ) {
+                            $errors[] = self::issue(
+                                'variant_combination_value_not_allowed',
+                                __('Offer 规格值不在 Product EAV 允许值中：%{1}=%{2}', [$axisCode, $value]),
+                                'attributes.' . $axisCode,
                                 $offerUuid,
                             );
                         }
@@ -582,8 +606,17 @@ final class BuiltInProductValidation
         if ($combination === []) {
             return '';
         }
-        ksort($combination);
-        return json_encode($combination, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '';
+        ksort($combination, SORT_STRING);
+        $segments = [];
+        foreach ($combination as $axis => $value) {
+            $axis = trim((string)$axis);
+            $value = trim((string)$value);
+            if ($axis === '' || $value === '') {
+                return '';
+            }
+            $segments[] = rawurlencode($axis) . '=' . rawurlencode($value);
+        }
+        return implode('|', $segments);
     }
 
     /**
@@ -595,19 +628,25 @@ final class BuiltInProductValidation
         if (is_array($offer['combination'] ?? null)) {
             return $offer['combination'];
         }
-        $raw = $offer['type_config_json'] ?? $offer['type_config'] ?? null;
-        if (is_array($raw) && is_array($raw['combination'] ?? null)) {
-            return $raw['combination'];
-        }
-        if (!is_string($raw) || trim($raw) === '') {
+        $key = trim((string)($offer['combination_key'] ?? ''));
+        if ($key === '') {
             return [];
         }
-        try {
-            $decoded = json_decode($raw, true, 512, JSON_THROW_ON_ERROR);
-            return is_array($decoded['combination'] ?? null) ? $decoded['combination'] : [];
-        } catch (\JsonException) {
-            return [];
+        $combination = [];
+        foreach (explode('|', $key) as $segment) {
+            if (!str_contains($segment, '=')) {
+                return [];
+            }
+            [$axis, $value] = explode('=', $segment, 2);
+            $axis = strtolower(trim(rawurldecode($axis)));
+            $value = trim(rawurldecode($value));
+            if ($axis === '' || $value === '') {
+                return [];
+            }
+            $combination[$axis] = $value;
         }
+        ksort($combination, SORT_STRING);
+        return $combination;
     }
 
     /** @return array<string, mixed> */

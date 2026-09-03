@@ -18,6 +18,7 @@ use Weline\Product\Repository\OfferRepository;
 use Weline\Product\Repository\PriceRepository;
 use Weline\Product\Repository\ProductRepository;
 use Weline\Product\Repository\StoreOfferRepository;
+use Weline\Product\Service\ProductAttributeMetadataCatalog;
 use Weline\Product\Service\ProductIdentityV2Service;
 use Weline\Product\Service\ProductShardProvisioner;
 use Weline\Product\Service\ProductVariantMatrixService;
@@ -29,6 +30,7 @@ require dirname(__DIR__, 5) . '/app/bootstrap.php';
 $websiteId = max(0, (int)($argv[1] ?? 0));
 
 ObjectManager::getInstance(ProductShardProvisioner::class)->provisionWebsite($websiteId);
+ObjectManager::getInstance(\Weline\Product\Service\ProductCatalogEavBootstrap::class)->ensureHanfuSchema();
 
 /** @var ProductRepository $products */
 $products = ObjectManager::getInstance(ProductRepository::class);
@@ -44,6 +46,9 @@ $storeOffers = ObjectManager::getInstance(StoreOfferRepository::class);
 $storeCatalog = ObjectManager::getInstance(StoreCatalogInterface::class);
 /** @var ProductVariantMatrixService $variantMatrix */
 $variantMatrix = ObjectManager::getInstance(ProductVariantMatrixService::class);
+/** @var ProductAttributeMetadataCatalog $attributeMetadata */
+$attributeMetadata = ObjectManager::getInstance(ProductAttributeMetadataCatalog::class);
+$axisResolver = ObjectManager::getInstance(\Weline\Product\Service\StorefrontVariantAxisResolver::class);
 /** @var ProductIdentityV2Service $identities */
 $identities = ObjectManager::getInstance(ProductIdentityV2Service::class);
 /** @var StorefrontCatalogCacheCoordinator $catalogCache */
@@ -64,12 +69,9 @@ $writeOfferAxisAttrs = static function (
     int $websiteId,
     int $offerId,
     array $combination,
-) use ($attributes): void {
-    foreach (['color', 'size', 'style_type'] as $axisCode) {
-        $value = trim((string)($combination[$axisCode] ?? ''));
-        if ($value === '') {
-            continue;
-        }
+) use ($attributes, $attributeMetadata): void {
+    $combination = $attributeMetadata->canonicalizeVariantCombination($combination);
+    foreach ($combination as $axisCode => $value) {
         $attributes->writeTyped(
             $websiteId,
             0,
@@ -100,11 +102,6 @@ $seedInventory = static function (int $websiteId, int $storeId, int $offerId, in
     } catch (Throwable) {
     }
 };
-
-$jsonEncode = static fn(array $payload): string => json_encode(
-    $payload,
-    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR,
-);
 
 $requestHash = hash('sha256', 'hanfu-variant-matrix:v1:' . $websiteId);
 $storeIds = $resolveStoreIds($websiteId);
@@ -147,23 +144,45 @@ foreach ($items as $item) {
         continue;
     }
 
-    $typeConfigRaw = $attributes->read($websiteId, 0, 'product', $productId, 'type_configuration')->value;
-    $typeConfig = is_array($typeConfigRaw)
-        ? $typeConfigRaw
-        : (is_string($typeConfigRaw) ? json_decode($typeConfigRaw, true) : null);
-    if (!is_array($typeConfig)) {
-        $summary[] = ['sku' => $primarySku, 'status' => 'skipped', 'reason' => 'type_configuration_missing'];
-        continue;
+    $availableValues = [];
+    foreach ($attributes->listExplicitRows($websiteId, 'product', [$productId], [0]) as $row) {
+        if (strtolower(trim((string)($row['value_type'] ?? ''))) !== 'multiselect'
+            || !is_array($row['value'] ?? null)
+        ) {
+            continue;
+        }
+        $code = strtolower(trim((string)($row['attribute_code'] ?? '')));
+        if ($code !== '') {
+            $availableValues[$code] = $row['value'];
+        }
     }
-
-    $axes = is_array($typeConfig['axes'] ?? null) ? $typeConfig['axes'] : [];
-    $skuPrefix = trim((string)($typeConfig['sku_prefix'] ?? $primarySku));
+    $axes = $attributeMetadata->canonicalizeVariantAxes(
+        $axisResolver->buildAxes([], $availableValues),
+    );
+    $skuPrefix = $primarySku;
     if ($axes === [] || $skuPrefix === '') {
-        $summary[] = ['sku' => $primarySku, 'status' => 'skipped', 'reason' => 'type_configuration_invalid'];
+        $summary[] = ['sku' => $primarySku, 'status' => 'skipped', 'reason' => 'product_eav_variant_axes_missing'];
         continue;
     }
 
-    $defaults = is_array($item['defaults'] ?? null) ? $item['defaults'] : [];
+    $requestedDefaults = is_array($item['defaults'] ?? null)
+        ? $attributeMetadata->canonicalizeVariantCombination($item['defaults'])
+        : [];
+    $defaults = [];
+    foreach ($axes as $axis) {
+        $code = strtolower(trim((string)($axis['code'] ?? '')));
+        $allowed = array_values(array_filter(array_map(
+            static fn(array $option): string => trim((string)($option['value'] ?? '')),
+            is_array($axis['options'] ?? null) ? $axis['options'] : [],
+        )));
+        $selected = trim((string)($requestedDefaults[$code] ?? ''));
+        if ($selected === '' || !in_array($selected, $allowed, true)) {
+            $selected = $allowed[0] ?? '';
+        }
+        if ($code !== '' && $selected !== '') {
+            $defaults[$code] = $selected;
+        }
+    }
     $defaultKey = $variantMatrix->combinationKey($defaults);
     $skuOverrides = [$defaultKey => $primarySku];
     $generated = $variantMatrix->generate($axes, $skuPrefix, $skuOverrides);
@@ -207,8 +226,12 @@ foreach ($items as $item) {
                 [
                     'combination_key' => $defaultKey,
                     'is_default' => 1,
-                    'type_config_json' => $jsonEncode(['combination' => $defaultRow['combination']]),
                 ],
+            );
+            $writeOfferAxisAttrs(
+                $websiteId,
+                (int)$bootstrapOffer->getId(),
+                $defaultRow['combination'],
             );
             $existingOffers = $offers->listByProductIds($websiteId, [$productId]);
         }
@@ -281,7 +304,6 @@ foreach ($items as $item) {
                 'combination_key' => (string)$row['combination_key'],
                 'is_default' => (string)$row['combination_key'] === $defaultKey ? 1 : 0,
                 'requires_shipping' => 1,
-                'type_config_json' => $jsonEncode(['combination' => $row['combination']]),
             ],
         );
         $prices->writeExplicit($websiteId, 0, (int)$local->getId(), 'CNY', (int)$item['price_minor']);
@@ -314,7 +336,6 @@ foreach ($items as $item) {
             'combination_key' => (string)$row['combination_key'],
             'is_default' => (string)$row['combination_key'] === $defaultKey ? 1 : 0,
             'requires_shipping' => 1,
-            'type_config_json' => $jsonEncode(['combination' => $row['combination']]),
         ]);
         $prices->writeExplicit($websiteId, 0, (int)$local->getId(), 'CNY', (int)$item['price_minor']);
         $writeOfferAxisAttrs($websiteId, (int)$local->getId(), $row['combination']);

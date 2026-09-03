@@ -136,7 +136,7 @@
 
     for (var i = 0; i < selected.length; i += 1) {
       var item = selected[i];
-      var result = await api.addV2({
+      var result = await api.add({
         provider_code: 'product',
         global_offer_uuid: item.offerUuid,
         legacy_product_id: Number(item.productId || 0),

@@ -76,6 +76,19 @@ final class StorefrontOfferResolver
             return $offer;
         }
 
+        // Detail clears uuid while configurable selection is still required.
+        // Slot widgets must not re-hydrate the catalog for every empty uuid.
+        if (!empty($offer['selection_required'])) {
+            return $offer;
+        }
+
+        // Already a hydrated PDP/card projection.
+        if (trim((string)($offer['name'] ?? '')) !== ''
+            || (isset($offer['images']) && is_array($offer['images']))
+        ) {
+            return $offer;
+        }
+
         if (!class_exists(StorefrontCatalogViewService::class)) {
             return $offer;
         }

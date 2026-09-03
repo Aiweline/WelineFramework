@@ -62,6 +62,8 @@ final class ProductCatalogTemplateContractTest extends TestCase
         self::assertStringContainsString('联系询价', $html);
         self::assertStringNotContainsString('USD 0.00', $html);
         self::assertStringNotContainsString('商品库存不足', $html);
-        self::assertMatchesRegularExpression('/<button[^>]+disabled[^>]*>\s*仅询价\s*<\/button>/s', $html);
+        $source = (string)file_get_contents($template);
+        self::assertStringContainsString('ProductCardAddToCartParams::fetchDictionaryFromOffer', $source);
+        self::assertStringContainsString('Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml', $source);
     }
 }

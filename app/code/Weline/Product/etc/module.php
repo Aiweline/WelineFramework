@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Product',
-    'version' => '1.0.53',
+    'version' => '1.0.97',
     'requires' => [
         'Weline_Catalog' => '*',
         'Weline_DataTable' => '*',
@@ -18,6 +18,7 @@ return [
         'Weline_Inventory' => '*',
         'Weline_MediaManager' => '*',
         'Weline_Order' => '*',
+        'Weline_Seo' => '*',
     ],
     'provides' => [
         \Weline\Product\Api\ProductAdminCommandInterface::class

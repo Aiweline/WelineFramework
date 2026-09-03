@@ -88,8 +88,31 @@ final class BuiltInProductValidationTest extends TestCase
                 'sku' => 'TEE-RED',
                 'combination' => ['color' => 'red'],
             ]],
+            attributes: [
+                [
+                    'entity_type' => 'product',
+                    'entity_id' => 1,
+                    'attribute_code' => 'color',
+                    'store_id' => 0,
+                    'locale' => '',
+                    'value_type' => 'multiselect',
+                    'value' => ['red'],
+                    'scope_state' => 'explicit',
+                    'cleared' => false,
+                ],
+                [
+                    'entity_type' => 'product',
+                    'entity_id' => 1,
+                    'attribute_code' => 'size',
+                    'store_id' => 0,
+                    'locale' => '',
+                    'value_type' => 'multiselect',
+                    'value' => ['m'],
+                    'scope_state' => 'explicit',
+                    'cleared' => false,
+                ],
+            ],
             prices: [['offer_id' => 1, 'store_id' => 0, 'amount_minor' => 100]],
-            typeConfiguration: ['axes' => ['size']],
         );
 
         $codes = array_column(
@@ -99,6 +122,64 @@ final class BuiltInProductValidationTest extends TestCase
 
         self::assertContains('variant_combination_axes_mismatch', $codes);
         self::assertContains('variant_combination_value_required', $codes);
+    }
+
+    public function testDisabledHistoricalOfferDoesNotBlockConfigurablePublish(): void
+    {
+        $context = new ProductValidationContext(
+            productType: 'configurable',
+            product: ['name' => 'Hanfu'],
+            offers: [
+                [
+                    'offer_id' => 1,
+                    'global_offer_uuid' => 'active-variant',
+                    'sku' => 'HF-NEW-S',
+                    'status' => 'draft',
+                    'combination' => ['color' => '75', 'size' => '57'],
+                ],
+                [
+                    'offer_id' => 2,
+                    'global_offer_uuid' => 'disabled-history',
+                    'sku' => 'HF-OLD-S',
+                    'status' => 'disabled',
+                    'combination' => ['color' => '48', 'size' => '57'],
+                ],
+            ],
+            attributes: [
+                [
+                    'entity_type' => 'product',
+                    'entity_id' => 1,
+                    'attribute_code' => 'color',
+                    'store_id' => 0,
+                    'locale' => '',
+                    'value_type' => 'multiselect',
+                    'value' => ['75'],
+                    'scope_state' => 'explicit',
+                    'cleared' => false,
+                ],
+                [
+                    'entity_type' => 'product',
+                    'entity_id' => 1,
+                    'attribute_code' => 'size',
+                    'store_id' => 0,
+                    'locale' => '',
+                    'value_type' => 'multiselect',
+                    'value' => ['57'],
+                    'scope_state' => 'explicit',
+                    'cleared' => false,
+                ],
+            ],
+            prices: [[
+                'offer_id' => 1,
+                'store_id' => 0,
+                'currency' => 'CNY',
+                'amount_minor' => 9000,
+            ]],
+        );
+
+        $result = (new ConfigurableProductProvider())->validateForPublish($context);
+
+        self::assertTrue($result->isValid(), json_encode($result->errors));
     }
 
     public function testVirtualRequiresValidUniqueServicePlans(): void
@@ -342,4 +423,45 @@ final class BuiltInProductValidationTest extends TestCase
         self::assertSame(5, $nameErrors[0]['store_id']);
         self::assertSame('zh_Hans_CN', $nameErrors[0]['locale']);
     }
+    public function testEmptyLocaleResolvesLanguageSpecificProductName(): void
+    {
+        $context = new ProductValidationContext(
+            productType: 'simple',
+            product: [],
+            offers: [[
+                'offer_id' => 1,
+                'global_offer_uuid' => 'offer-locale',
+                'sku' => 'LOCALE-1',
+                'quantity' => 1,
+                'requires_shipping' => true,
+            ]],
+            attributes: [[
+                'entity_type' => 'product',
+                'attribute_code' => 'name',
+                'store_id' => 0,
+                'locale' => 'zh_Hans_CN',
+                'value' => '中国风汉服',
+                'scope_state' => 'explicit',
+            ]],
+            prices: [[
+                'offer_id' => 1,
+                'global_offer_uuid' => 'offer-locale',
+                'store_id' => 0,
+                'currency' => 'CNY',
+                'amount_minor' => 100,
+            ]],
+            storeIds: [0],
+            locale: '',
+            currency: 'CNY',
+        );
+
+        $errors = (new DefaultProductProvider())->validateForPublish($context)->errors;
+        $nameErrors = array_values(array_filter(
+            $errors,
+            static fn(array $issue): bool => $issue['code'] === 'product_name_required',
+        ));
+
+        self::assertSame([], $nameErrors, json_encode($errors, JSON_UNESCAPED_UNICODE));
+    }
+
 }

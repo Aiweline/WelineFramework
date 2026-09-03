@@ -178,15 +178,20 @@ final class MediaRepository extends AbstractWebsiteShardRepository
             if (preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/', $assetId) !== 1) {
                 throw new \InvalidArgumentException('product_media_asset_id_invalid');
             }
-            if (isset($desired[$assetId])) {
+            $role = strtolower(trim((string)($row[Media::schema_fields_ROLE] ?? 'gallery')));
+            $combinationKey = trim((string)($row[Media::schema_fields_COMBINATION_KEY] ?? ''));
+            $identity = $combinationKey . "\0" . $assetId;
+            if (isset($desired[$identity])) {
                 throw new \InvalidArgumentException('product_media_asset_duplicate');
             }
-            $role = strtolower(trim((string)($row[Media::schema_fields_ROLE] ?? 'gallery')));
             $visibility = strtolower(trim((string)($row[Media::schema_fields_ASSET_VISIBILITY] ?? 'public')));
             $mimeType = strtolower(trim((string)($row[Media::schema_fields_MIME_TYPE] ?? '')));
             $policy = $row[Media::schema_fields_ACCESS_POLICY_JSON] ?? null;
             $position = (int)($row[Media::schema_fields_POSITION] ?? $index);
-            if (!in_array($role, ['main', 'gallery', 'file', 'download'], true)
+            if (!in_array($role, ['main', 'gallery', 'variant', 'file', 'download'], true)
+                || ($role === 'variant' && $combinationKey === '')
+                || ($role !== 'variant' && $combinationKey !== '')
+                || strlen($combinationKey) > 512
                 || !in_array($visibility, ['public', 'private'], true)
                 || $mimeType === ''
                 || strlen($mimeType) > 128
@@ -205,11 +210,12 @@ final class MediaRepository extends AbstractWebsiteShardRepository
                     throw new \InvalidArgumentException('product_media_access_policy_invalid');
                 }
             }
-            $desired[$assetId] = [
+            $desired[$identity] = [
                 Media::schema_fields_STORE_ID => $storeId,
                 Media::schema_fields_SCOPE_STATE => 'explicit',
                 Media::schema_fields_HIDDEN => !empty($row[Media::schema_fields_HIDDEN]) ? 1 : 0,
                 Media::schema_fields_ROLE => $role,
+                Media::schema_fields_COMBINATION_KEY => $combinationKey,
                 Media::schema_fields_ASSET_ID => $assetId,
                 Media::schema_fields_ASSET_VISIBILITY => $visibility,
                 Media::schema_fields_MIME_TYPE => $mimeType,
@@ -219,22 +225,25 @@ final class MediaRepository extends AbstractWebsiteShardRepository
         }
 
         $existing = $this->listByProductIds($websiteId, [$productId], [$storeId]);
-        $byAsset = [];
+        $byIdentity = [];
         $duplicates = [];
         foreach ($existing as $row) {
             $assetId = strtolower(trim((string)($row[Media::schema_fields_ASSET_ID] ?? '')));
             if ($assetId === '') {
                 continue;
             }
-            if (isset($byAsset[$assetId])) {
+            $combinationKey = trim((string)($row[Media::schema_fields_COMBINATION_KEY] ?? ''));
+            $identity = $combinationKey . "\0" . $assetId;
+            if (isset($byIdentity[$identity])) {
                 $duplicates[] = (int)($row[Media::schema_fields_ID] ?? 0);
                 continue;
             }
-            $byAsset[$assetId] = $row;
+            $byIdentity[$identity] = $row;
         }
 
-        foreach ($desired as $assetId => $fields) {
-            $existingRow = $byAsset[$assetId] ?? null;
+        foreach ($desired as $identity => $fields) {
+            $assetId = (string)$fields[Media::schema_fields_ASSET_ID];
+            $existingRow = $byIdentity[$identity] ?? null;
             if ($existingRow === null) {
                 $this->create($websiteId, array_merge($fields, [
                     Media::schema_fields_PRODUCT_ID => $productId,
@@ -245,6 +254,7 @@ final class MediaRepository extends AbstractWebsiteShardRepository
                             (string)$websiteId,
                             (string)$productId,
                             (string)$storeId,
+                            (string)$fields[Media::schema_fields_COMBINATION_KEY],
                             $assetId,
                             bin2hex(random_bytes(16)),
                         ]),
@@ -260,10 +270,10 @@ final class MediaRepository extends AbstractWebsiteShardRepository
                 $media->setData($field, $value);
             }
             $media->save();
-            unset($byAsset[$assetId]);
+            unset($byIdentity[$identity]);
         }
 
-        foreach ($byAsset as $row) {
+        foreach ($byIdentity as $row) {
             $this->remove($websiteId, (int)$row[Media::schema_fields_ID]);
         }
         foreach ($duplicates as $mediaId) {

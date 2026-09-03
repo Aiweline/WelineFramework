@@ -131,9 +131,19 @@ final class HanfuCatalogCleanupService
     /** @return array<string,mixed> */
     public function preview(int $websiteId, string $runId): array
     {
+        return $this->previewProductIds($websiteId, $runId, $this->selection->productIds());
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @return array<string,mixed>
+     */
+    public function previewProductIds(int $websiteId, string $runId, array $productIds): array
+    {
         $this->assertTargetWebsite($websiteId);
         $runId = $this->normalizeRunId($runId);
-        $snapshot = $this->buildSnapshot($websiteId, $runId);
+        $productIds = $this->normalizeProductIds($productIds);
+        $snapshot = $this->buildSnapshot($websiteId, $runId, $productIds);
         $snapshot['selection_digest'] = $this->selection->digest($snapshot);
         $this->writeRunArtifact(
             $runId,
@@ -155,7 +165,8 @@ final class HanfuCatalogCleanupService
             throw new \RuntimeException('hanfu_cleanup_digest_mismatch');
         }
 
-        $fresh = $this->buildSnapshot($websiteId, $runId);
+        $productIds = $this->normalizeProductIds($stored['product_ids'] ?? []);
+        $fresh = $this->buildSnapshot($websiteId, $runId, $productIds);
         $freshDigest = $this->selection->digest($fresh);
         if (!hash_equals($selectionDigest, $freshDigest)) {
             throw new \RuntimeException('hanfu_cleanup_selection_drift');
@@ -268,9 +279,9 @@ final class HanfuCatalogCleanupService
     }
 
     /** @return array<string,mixed> */
-    private function buildSnapshot(int $websiteId, string $runId): array
+    private function buildSnapshot(int $websiteId, string $runId, ?array $productIds = null): array
     {
-        $productIds = $this->selection->productIds();
+        $productIds = $this->normalizeProductIds($productIds ?? $this->selection->productIds());
         $raw = $this->snapshotLoader !== null
             ? ($this->snapshotLoader)($websiteId, $productIds)
             : $this->runtimeSnapshot($websiteId, $productIds);
@@ -345,6 +356,26 @@ final class HanfuCatalogCleanupService
         $snapshot['protected_references'] = $protected;
         $snapshot['quarantine_manifest'] = $quarantine;
         return $snapshot;
+    }
+
+    /** @param array<mixed> $productIds @return list<int> */
+    private function normalizeProductIds(array $productIds): array
+    {
+        $normalized = [];
+        foreach ($productIds as $productId) {
+            if ((!is_int($productId) && !(is_string($productId) && ctype_digit($productId)))
+                || (int)$productId <= 0
+            ) {
+                throw new \InvalidArgumentException('hanfu_cleanup_product_ids_invalid');
+            }
+            $normalized[(int)$productId] = true;
+        }
+        $normalized = array_keys($normalized);
+        sort($normalized, SORT_NUMERIC);
+        if ($normalized === []) {
+            throw new \InvalidArgumentException('hanfu_cleanup_product_ids_required');
+        }
+        return $normalized;
     }
 
     /** @return array<string,mixed> */

@@ -1,5 +1,6 @@
 <?php
 
+use Weline\Product\Helper\StorefrontOfferDetailQuery;
 use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 /**
@@ -26,14 +27,19 @@ $categoryImage = trim((string)($category['image'] ?? ''));
 $activePrice = trim((string)($this->getData('storefront_listing_price') ?? ''));
 $totalCount = max(0, (int)($this->getData('storefront_listing_total') ?? count($offers)));
 $visibleCount = max(0, (int)($this->getData('storefront_listing_count') ?? count($offers)));
+$page = max(1, (int)($this->getData('storefront_listing_page') ?? 1));
+$pageSize = max(1, (int)($this->getData('storefront_listing_page_size') ?? 24));
+$totalPages = max(1, (int)($this->getData('storefront_listing_total_pages') ?? 1));
+$pageOptions = $this->getData('storefront_listing_page_options') ?? [];
+$pageOptions = is_array($pageOptions) ? $pageOptions : [];
 $sortOptions = $this->getData('storefront_listing_sort_options') ?? [];
 $sortOptions = is_array($sortOptions) ? $sortOptions : [];
 $children = $this->getData('storefront_category_children') ?? [];
 $children = is_array($children) ? $children : [];
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
 
-$from = $visibleCount > 0 ? 1 : 0;
-$to = $visibleCount;
+$from = $visibleCount > 0 ? (($page - 1) * $pageSize) + 1 : 0;
+$to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
 ?>
 <section class="amz-plp"
          data-testid="storefront-category-catalog"
@@ -184,6 +190,7 @@ $productUrl = $productPath; // route path; render with @url
                     $productPath = 'product/' . $productId;
 $productUrl = $productPath; // route path; render with @url
                 }
+                $productUrlParams = StorefrontOfferDetailQuery::params(is_array($offer) ? $offer : []);
                 $imageResolved = StorefrontImagePlaceholder::resolve((string)($offer['image'] ?? ''), $productId);
                 $image = $imageResolved['src'];
                 $imageFallback = $imageResolved['fallback'];
@@ -194,7 +201,7 @@ $productUrl = $productPath; // route path; render with @url
                          data-global-offer-uuid="<?= $escape($uuid) ?>">
                     <?php if ($productUrl !== ''): ?>
                         <a class="amz-card__hit"
-                           href="@url{$productUrl}"
+                           href="@url{$productUrl|$productUrlParams}"
                            aria-label="<?= $escape($productName) ?>"
                            data-testid="storefront-category-product-card-link"></a>
                     <?php endif; ?>
@@ -234,6 +241,29 @@ $productUrl = $productPath; // route path; render with @url
                 </article>
             <?php endforeach; ?>
         </div>
+        <?php if ($totalPages > 1 && $pageOptions !== []): ?>
+            <nav class="amz-plp__pager"
+                 data-testid="storefront-category-pager"
+                 aria-label="<?= $escape(__('分页')) ?>">
+                <?php foreach ($pageOptions as $option): ?>
+                    <?php
+                    if (!is_array($option)) {
+                        continue;
+                    }
+                    $href = trim((string)($option['url'] ?? ''));
+                    $label = (string)($option['page'] ?? '');
+                    if ($href === '' || $label === '') {
+                        continue;
+                    }
+                    ?>
+                    <?php if (!empty($option['selected'])): ?>
+                        <span class="amz-plp__pager-item is-current" aria-current="page"><?= $escape($label) ?></span>
+                    <?php else: ?>
+                        <a class="amz-plp__pager-item" href="<?= $escape($href) ?>"><?= $escape($label) ?></a>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </nav>
+        <?php endif; ?>
     <?php endif; ?>
 </section>
 
@@ -547,6 +577,35 @@ $productUrl = $productPath; // route path; render with @url
     color: #565959;
     cursor: not-allowed;
     box-shadow: none;
+}
+.amz-plp__pager {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 18px 0 0;
+    align-items: center;
+    justify-content: center;
+}
+.amz-plp__pager-item {
+    min-width: 34px;
+    min-height: 34px;
+    padding: 0 10px;
+    border: 1px solid #d5d9d9;
+    border-radius: 8px;
+    background: #fff;
+    color: #0f1111;
+    font: inherit;
+    font-size: 13px;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.amz-plp__pager-item.is-current {
+    border-color: #0f1111;
+    background: #0f1111;
+    color: #fff;
 }
 .amz-plp__empty {
     padding: 28px 16px;
