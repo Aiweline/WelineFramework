@@ -41,6 +41,7 @@
             this.backendApiUser = this.readStoredUser(this.config.backendApiUserKey);
             this.apiPromise = null;
             this._authRefreshHandled = false;
+            this._authRefreshInFlight = null;
             this._keepaliveTimer = null;
             this._keepaliveRunning = false;
             this._keepaliveBound = false;
@@ -258,60 +259,100 @@
          * (FPC / cookie-name split can still render the guest shell without w_auth).
          */
         handleAuthRefreshSignal() {
-            if (this._authRefreshHandled) {
-                return Promise.resolve({ handled: false, reason: 'already_handled' });
+            return this.syncHeaderAccountChrome({ fromAuthSignal: true });
+        }
+
+        /**
+         * Align header shell + dual-rendered header-account-links with account.current.
+         * Covers FPC guest SSR, signed-in SSR with guest-cached hook fragments, and w_auth redirects.
+         */
+        syncHeaderAccountChrome(options = {}) {
+            const fromAuthSignal = !!options.fromAuthSignal;
+            const force = !!options.force;
+
+            if (this._authRefreshInFlight) {
+                return this._authRefreshInFlight;
             }
 
             const roots = document.querySelectorAll('[data-w-header-account="1"]');
             if (!roots.length) {
-                if (this.hasAuthRefreshSignal()) {
-                    this._authRefreshHandled = true;
+                if (fromAuthSignal && this.hasAuthRefreshSignal()) {
                     this.stripAuthRefreshSignal();
                 }
-                return Promise.resolve({ handled: true, refreshed: false });
+                return Promise.resolve({ synced: false, reason: 'no_roots' });
             }
 
-            const hasSignal = this.hasAuthRefreshSignal();
+            const hasSignal = fromAuthSignal && this.hasAuthRefreshSignal();
             const guestRoots = [];
+            let needsMenuReconcile = false;
             roots.forEach((root) => {
                 if (root.getAttribute('data-auth-state') === 'guest') {
                     guestRoots.push(root);
                 }
+                const desired = root.getAttribute('data-auth-state') === 'signed-in' ? 'signed-in' : 'guest';
+                if (this.headerMenuAuthMismatch(root, desired)) {
+                    needsMenuReconcile = true;
+                }
             });
 
-            // No auth signal and SSR already signed-in: nothing to do.
-            if (!hasSignal && guestRoots.length === 0) {
-                return Promise.resolve({ handled: false, reason: 'no_signal' });
+            if (!force && !hasSignal && guestRoots.length === 0 && !needsMenuReconcile) {
+                return Promise.resolve({ synced: false, reason: 'already_aligned' });
             }
 
-            this._authRefreshHandled = true;
-            const targets = hasSignal ? Array.from(roots) : guestRoots;
+            const targets = hasSignal ? Array.from(roots) : (guestRoots.length ? guestRoots : Array.from(roots));
 
-            return this.checkFrontendUserLogin()
+            this._authRefreshInFlight = this.checkFrontendUserLogin()
                 .then((status) => {
+                    const isLogin = !!(status && status.isLogin);
                     targets.forEach((root) => {
-                        if (status && status.isLogin) {
+                        if (isLogin) {
                             this.applyHeaderSignedIn(root, status.user || null);
-                        } else if (hasSignal) {
+                        } else {
                             this.applyHeaderGuest(root);
                         }
                     });
-                    if (status && status.isLogin) {
+                    if (isLogin) {
                         this.startOnlineKeepalive();
-                    } else {
+                        this._authRefreshHandled = true;
+                    } else if (hasSignal) {
                         this.stopOnlineKeepalive();
+                        this._authRefreshHandled = true;
                     }
-                    return { handled: true, refreshed: true, isLogin: !!(status && status.isLogin) };
+                    return { synced: true, refreshed: true, isLogin };
                 })
                 .catch((error) => {
-                    console.warn('[WelineApi.Account] auth refresh signal failed:', error);
-                    return { handled: true, refreshed: false, error };
+                    console.warn('[WelineApi.Account] header chrome sync failed:', error);
+                    this._authRefreshHandled = false;
+                    return { synced: false, refreshed: false, error };
                 })
                 .finally(() => {
+                    this._authRefreshInFlight = null;
                     if (hasSignal) {
                         this.stripAuthRefreshSignal();
                     }
                 });
+
+            return this._authRefreshInFlight;
+        }
+
+        headerMenuAuthMismatch(root, desiredState) {
+            if (!(root instanceof Element)) {
+                return false;
+            }
+            const mode = desiredState === 'signed-in' ? 'signed-in' : 'guest';
+            const items = root.querySelectorAll('[data-account-menu-auth]');
+            if (!items.length) {
+                return false;
+            }
+            for (let i = 0; i < items.length; i += 1) {
+                const el = items[i];
+                const forState = el.getAttribute('data-account-menu-auth');
+                const shouldHide = forState !== mode;
+                if (el.hidden !== shouldHide) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         hasAuthRefreshSignal() {
@@ -389,15 +430,16 @@
                 return;
             }
             const mode = state === 'signed-in' ? 'signed-in' : 'guest';
-            root.querySelectorAll('[data-account-menu-auth]').forEach((el) => {
+            const toggle = (el) => {
                 const forState = el.getAttribute('data-account-menu-auth');
-                el.hidden = forState !== mode;
-            });
+                const hide = forState !== mode;
+                el.hidden = hide;
+                el.classList.toggle('is-account-menu-hidden', hide);
+                el.setAttribute('aria-hidden', hide ? 'true' : 'false');
+            };
+            root.querySelectorAll('[data-account-menu-auth]').forEach(toggle);
             // Mobile "我的" menu also hosts the same hook outside the widget root.
-            document.querySelectorAll('.header-my-menu [data-account-menu-auth]').forEach((el) => {
-                const forState = el.getAttribute('data-account-menu-auth');
-                el.hidden = forState !== mode;
-            });
+            document.querySelectorAll('.header-my-menu [data-account-menu-auth]').forEach(toggle);
         }
 
         /**
@@ -561,6 +603,7 @@
         frontendUserRegister: (payload) => accountManager.frontendUserRegister(payload),
         frontendUserLogout: () => accountManager.frontendUserLogout(),
         handleAuthRefreshSignal: () => accountManager.handleAuthRefreshSignal(),
+        syncHeaderAccountChrome: (options) => accountManager.syncHeaderAccountChrome(options || {}),
         startOnlineKeepalive: () => accountManager.startOnlineKeepalive(),
         stopOnlineKeepalive: () => accountManager.stopOnlineKeepalive(),
         isOnlineKeepaliveActive: () => accountManager.isOnlineKeepaliveActive(),
@@ -590,13 +633,13 @@
     window.WelineAccountModule = AccountModule;
 
     // Header account widget declares data-weline-load="api,account": when this module
-    // arrives, apply w_auth chrome refresh and soft-reconcile guest SSR shells.
+    // arrives, reconcile header shell + dual-rendered menu with account.current.
     (function bootstrapHeaderAuthRefresh() {
         const run = () => {
             if (!document.querySelector('[data-w-header-account="1"]')) {
                 return;
             }
-            Promise.resolve(accountManager.handleAuthRefreshSignal()).catch(() => {});
+            Promise.resolve(accountManager.syncHeaderAccountChrome({ force: true })).catch(() => {});
         };
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', run, { once: true });
@@ -605,9 +648,32 @@
         }
     })();
 
+    // Immediate chrome refresh after in-page login/register (no full reload).
+    window.addEventListener('weline:account:frontend:login', (event) => {
+        const user = event && event.detail ? event.detail.user : null;
+        document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
+            accountManager.applyHeaderSignedIn(root, user || accountManager.frontendUser);
+        });
+        accountManager.startOnlineKeepalive();
+    });
+    window.addEventListener('weline:account:frontend:logout', () => {
+        document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
+            accountManager.applyHeaderGuest(root);
+        });
+        accountManager.stopOnlineKeepalive();
+    });
+
     // Keep storefront Session TTL sliding while the browser stays online.
     (function bootstrapOnlineKeepalive() {
         const startFromSignedInShell = () => {
+            document.querySelectorAll('[data-w-header-account="1"]').forEach((root) => {
+                if (root.getAttribute('data-auth-state') !== 'signed-in') {
+                    return;
+                }
+                if (accountManager.headerMenuAuthMismatch(root, 'signed-in')) {
+                    accountManager.applyHeaderMenuAuth(root, 'signed-in');
+                }
+            });
             if (document.querySelector('[data-w-header-account="1"][data-auth-state="signed-in"]')) {
                 accountManager.startOnlineKeepalive();
             }

@@ -254,29 +254,29 @@
                 let globalVarName = this.getGlobalVarName(moduleName);
 
                 if (moduleConfig) {
-                    if (!path && Array.isArray(moduleConfig.paths) && moduleConfig.paths.length > 0) {
-                        path = this.resolveStaticPath(moduleConfig.paths[0]);
-                    } else if (!path && typeof moduleConfig.paths === 'string') {
-                        path = this.resolveStaticPath(moduleConfig.paths);
-                    }
                     // 显式 null = 无全局变量校验（Worker / 纯 IIFE 部件脚本）
                     if (Object.prototype.hasOwnProperty.call(moduleConfig, 'globalVar')) {
                         globalVarName = moduleConfig.globalVar;
                     }
                 }
 
-                if (!path) {
+                let paths = [];
+                if (path) {
+                    paths = [this.resolveStaticPath(path)];
+                } else if (moduleConfig && Array.isArray(moduleConfig.paths) && moduleConfig.paths.length > 0) {
+                    paths = moduleConfig.paths.map((entry) => this.resolveStaticPath(entry));
+                } else if (moduleConfig && typeof moduleConfig.paths === 'string') {
+                    paths = [this.resolveStaticPath(moduleConfig.paths)];
+                } else {
                     const modulesBaseUrl = this.getModulesBaseUrl();
                     // 回退路径按调用名（api/account）拼，不按别名后的注册名
                     if (moduleName === 'api') {
-                        path = `${modulesBaseUrl}.js`;
+                        paths = [modulesBaseUrl + '.js'];
                     } else if (moduleName === 'account') {
-                        path = `${modulesBaseUrl}-account.js`;
+                        paths = [modulesBaseUrl + '-account.js'];
                     } else {
-                        path = `${modulesBaseUrl}-${moduleName}.js`;
+                        paths = [modulesBaseUrl + '-' + moduleName + '.js'];
                     }
-                } else {
-                    path = this.resolveStaticPath(path);
                 }
 
                 const requiresFullGlobal = globalVarName === 'WelineApiModule'
@@ -288,9 +288,9 @@
                     return module;
                 }
 
-                await new Promise((resolve, reject) => {
+                const appendScript = (scriptPath, validateGlobal) => new Promise((resolve, reject) => {
                     const script = document.createElement('script');
-                    script.src = this.getScriptUrl(path);
+                    script.src = this.getScriptUrl(scriptPath);
                     script.async = true;
                     // 同源不强制 CORS；跨域再设 anonymous
                     try {
@@ -302,17 +302,21 @@
                     }
 
                     script.onload = () => {
-                        if (!globalVarName || this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
-                            resolve();
+                        if (validateGlobal && globalVarName && !this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
+                            reject(new Error('[Weline] ' + __('模块 %{1} 加载失败：未找到 %{2}', { 1: moduleName, 2: globalVarName })));
                             return;
                         }
-                        reject(new Error(`[Weline] ${__('模块 %{1} 加载失败：未找到 %{2}', { 1: moduleName, 2: globalVarName })}`));
+                        resolve();
                     };
                     script.onerror = () => {
-                        reject(new Error(`[Weline] ${__('模块 %{1} 加载失败：无法加载 %{2}', { 1: moduleName, 2: path })}`));
+                        reject(new Error('[Weline] ' + __('模块 %{1} 加载失败：无法加载 %{2}', { 1: moduleName, 2: scriptPath })));
                     };
                     document.head.appendChild(script);
                 });
+
+                for (let index = 0; index < paths.length; index += 1) {
+                    await appendScript(paths[index], index === paths.length - 1);
+                }
 
                 const module = globalVarName ? window[globalVarName] : true;
                 this.loadedModules.set(moduleName, module);
