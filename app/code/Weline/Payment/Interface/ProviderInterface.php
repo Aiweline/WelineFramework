@@ -7,6 +7,7 @@ namespace Weline\Payment\Interface;
 use Throwable;
 use Weline\Payment\Api\Data\AuthorizeRequest;
 use Weline\Payment\Api\Data\AvailabilityRequest;
+use Weline\Payment\Api\Data\CancelRequest;
 use Weline\Payment\Api\Data\AvailabilityResult;
 use Weline\Payment\Api\Data\CallbackRequest;
 use Weline\Payment\Api\Data\CallbackResult;
@@ -63,6 +64,8 @@ interface ProviderInterface
     public function createPayment(PaymentRequest $request): PaymentResult;
 
     public function resumePayment(ResumeRequest $request): PaymentResult;
+
+    public function cancelPayment(CancelRequest $request): PaymentResult;
 
     public function authorize(AuthorizeRequest $request): PaymentResult;
 

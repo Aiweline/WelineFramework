@@ -2,7 +2,7 @@
 
 本文面向接入 `Weline_Payment` 万能支付壳的第三方支付模块。新支付方式不继承抽象类，只实现一个 Provider 接口类，并交付 checkout 模板和 SystemConfig 配置模板。
 
-**统一 URL（硬要求）**：浏览器 OAuth / 支付回跳只登记壳的 `payment/frontend/callback/return`；Webhook 用 `payment/frontend/callback/notify?endpoint_code={method}.{env}.default`。一键授权走 `payment/backend/connect/authorize?method_code=`。可选实现 `ProviderConnectInterface`；**禁止**为每个 Provider 再登记独立 Developer Return URL，也禁止改壳 `Callback.php`。
+**统一 URL（硬要求）**：Developer 登记唯一 `payment/frontend/callback/{method_code}?target_scope=...`（OAuth 白名单）；取消与 return 同路径，追加 `outcome=cancel`。**运行时** `createPayment` 注入的 return/cancel 须带 `shell_token`（解码得 `method_code`+`transaction_no`）或显式 `method_code`+`transaction_no`。Webhook 用 `payment/frontend/callback/notify?endpoint_code={method}.{env}.default`。
 
 壳边界、结账三层、NextAction/iframe、幂等表见 [payment-shell.md](payment-shell.md)。支付、退款、回调归一化和业务状态推进必须回到 `Weline_Payment`。
 
@@ -56,7 +56,7 @@ Provider 必须实现 `Weline\Payment\Interface\ProviderInterface`。接口函�
 
 - 授权：`payment/backend/connect/authorize?method_code={code}&environment=sandbox|live`
 - 测连 / 撤销：`payment/backend/connect/test|revoke?method_code=...`
-- 浏览器回跳：仅 `payment/frontend/callback/return`（`PaymentBrowserReturnDispatcher` 调度）
+- 浏览器回跳：唯一 `payment/frontend/callback/{method_code}`（`outcome=cancel` 走取消）
 
 内置样板：`fake_card`（无 Connect）与 `paypal`（实现 Connect，OAuth 私有服务经 Provider 封装）。
 

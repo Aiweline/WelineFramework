@@ -39,9 +39,9 @@ final class PayPalSandboxPublicOriginServiceTest extends TestCase
         }
 
         $service = new PayPalSandboxPublicOriginService();
-        $url = $service->buildFrontendPathUrl('payment/frontend/callback/return');
+        $url = $service->buildFrontendPathUrl('payment/frontend/callback/paypal');
 
-        self::assertStringContainsString('/payment/frontend/callback/return', $url);
+        self::assertStringContainsString('/payment/frontend/callback/paypal', $url);
         self::assertStringStartsWith('https://', $url);
     }
 

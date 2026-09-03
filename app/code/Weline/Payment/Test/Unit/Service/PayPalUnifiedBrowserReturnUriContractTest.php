@@ -16,24 +16,37 @@ use Weline\Payment\Service\PayPalSandboxRedirectUriCatalog;
  */
 final class PayPalUnifiedBrowserReturnUriContractTest extends TestCase
 {
-    public function testCatalogAndOauthShareSingleCallbackReturnRoute(): void
+    public function testCatalogAndOauthShareMethodScopedCallbackReturnRoute(): void
     {
-        self::assertSame('payment/frontend/callback/return', PaymentBrowserCallbackRoutes::RETURN);
+        self::assertSame(
+            'payment/frontend/callback/browser-return-entry',
+            PaymentBrowserCallbackRoutes::RETURN_DISPATCH,
+        );
+        self::assertSame(
+            'payment/frontend/callback/paypal',
+            PaymentBrowserCallbackRoutes::returnRoute('paypal'),
+        );
 
         $catalogSrc = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentRedirectUriCatalog.php');
-        self::assertStringContainsString('PaymentBrowserCallbackRoutes::RETURN', $catalogSrc);
+        self::assertStringContainsString('PaymentShellCallbackUrlCatalog', $catalogSrc);
         self::assertStringNotContainsString('payment/frontend/paypal/return', $catalogSrc);
         self::assertStringNotContainsString('getBackendUrl', $catalogSrc);
 
         $oauthSrc = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PayPalOAuthService.php');
         self::assertStringContainsString('function browserReturnUrl', $oauthSrc);
-        self::assertStringContainsString('PaymentBrowserCallbackRoutes::RETURN', $oauthSrc);
-        self::assertStringContainsString('withTargetScope', $oauthSrc);
+        self::assertStringContainsString('browserReturnRegister', $oauthSrc);
+        self::assertStringContainsString('PaymentShellCallbackUrlCatalog', $oauthSrc);
         self::assertStringContainsString('requireStorageScope', $oauthSrc);
 
         $routesSrc = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentBrowserCallbackRoutes.php');
         self::assertStringContainsString('QUERY_TARGET_SCOPE', $routesSrc);
-        self::assertStringContainsString('function withTargetScope', $routesSrc);
+        self::assertStringContainsString('returnRoute', $routesSrc);
+        self::assertStringContainsString('cancelRoute', $routesSrc);
+        self::assertStringContainsString('RETURN_DISPATCH', $routesSrc);
+        self::assertStringContainsString('QUERY_OUTCOME', $routesSrc);
+        self::assertStringContainsString('OUTCOME_CANCEL', $routesSrc);
+        self::assertStringNotContainsString('CANCEL_DISPATCH', $routesSrc);
+        self::assertStringNotContainsString("'payment/frontend/callback/return/'", $routesSrc);
 
         $connectSrc = (string) file_get_contents(dirname(__DIR__, 3) . '/Controller/Backend/Connect.php');
         self::assertStringContainsString('一键授权缺少显式配置范围', $connectSrc);
@@ -46,10 +59,13 @@ final class PayPalUnifiedBrowserReturnUriContractTest extends TestCase
         self::assertStringContainsString('已拒绝静默写入 Global', $dispatcherSrc);
 
         $callbackSrc = (string) file_get_contents(dirname(__DIR__, 3) . '/Controller/Frontend/Callback.php');
-        self::assertStringContainsString('function return()', $callbackSrc);
+        self::assertStringContainsString('function browserReturnEntry()', $callbackSrc);
         self::assertStringContainsString('PaymentBrowserReturnDispatcher', $callbackSrc);
         self::assertStringNotContainsString('PayPalOAuthService', $callbackSrc);
-        self::assertStringContainsString('function notify()', $callbackSrc);
+        self::assertStringContainsString('function browserCancelEntry()', $callbackSrc);
+        self::assertStringNotContainsString('function return()', $callbackSrc);
+        self::assertStringNotContainsString('function cancel()', $callbackSrc);
+        self::assertStringNotContainsString('function returnDispatch()', $callbackSrc);
 
         self::assertTrue(class_exists(PaymentRedirectUriCatalog::class));
         self::assertTrue(is_subclass_of(PayPalSandboxRedirectUriCatalog::class, PaymentRedirectUriCatalog::class));

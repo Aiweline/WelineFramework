@@ -12,6 +12,7 @@ use Weline\Payment\Api\Data\AvailabilityRequest;
 use Weline\Payment\Api\Data\AvailabilityResult;
 use Weline\Payment\Interface\ProviderInterface;
 use Weline\Payment\Model\PaymentMethod;
+use Weline\Payment\Service\PaymentCustomerGuideRegistry;
 use Weline\Payment\Service\PaymentGuideI18nService;
 use Weline\Payment\Service\PaymentMethodManager;
 use Weline\Payment\Service\PaymentObjectScopeService;
@@ -346,6 +347,11 @@ class PaymentQueryProvider implements QueryProviderInterface
         $code = (string)($metadata['method_code'] ?? $method->getData(PaymentMethod::schema_fields_CODE));
         $label = trim((string)($display['title'] ?? $display['label'] ?? $display['name'] ?? $method->getData(PaymentMethod::schema_fields_NAME) ?? $code));
         $description = trim((string)($display['description'] ?? ''));
+        $iconUrl = trim((string)($display['icon_url'] ?? $display['icon'] ?? ''));
+        /** @var PaymentCustomerGuideRegistry $guideRegistry */
+        $guideRegistry = $this->objectManager->getInstance(PaymentCustomerGuideRegistry::class);
+        $guideUrl = $guideRegistry->buildGuideUrl($code);
+        $hasGuide = $guideRegistry->getEntry($code) !== null;
 
         return [
             'code' => $code,
@@ -353,6 +359,10 @@ class PaymentQueryProvider implements QueryProviderInterface
             'name' => $label !== '' ? $label : $code,
             'title' => $label !== '' ? $label : $code,
             'description' => $description,
+            'icon_url' => $iconUrl,
+            'guide_url' => $guideUrl,
+            'guide_route' => $guideRegistry->buildGuideRoute($code),
+            'has_guide' => $hasGuide,
             'enabled' => $availability->isAvailable(),
             'is_default' => $this->toBool($runtimeConfig['is_default'] ?? false),
             'sort_order' => $availability->getSortWeight() > 0

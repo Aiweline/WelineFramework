@@ -3,8 +3,10 @@
 …,…
 本地测试支付,本地测试支付
 仅用于本地开发验证，不会产生真实扣款。,仅用于本地开发验证，不会产生真实扣款。
+"Fake payment cancelled.","Fake payment cancelled."
 PayPal,PayPal
 "使用 PayPal 账户或卡完成支付。","使用 PayPal 账户或卡完成支付。"
+"首次使用需完成 PayPal 沙箱平台应用一次性初始化（维护者操作，商户无需手填 Client ID/Secret）。","首次使用需完成 PayPal 沙箱平台应用一次性初始化（维护者操作，商户无需手填 Client ID/Secret）。"
 "Payment amount must be greater than zero.","Payment amount must be greater than zero."
 "PayPal credentials are not configured for the current environment.","当前环境尚未配置 PayPal 凭据。"
 "Currency is not supported by PayPal.","PayPal 不支持当前货币。"
@@ -13,6 +15,7 @@ PayPal,PayPal
 "PayPal order id is missing.","缺少 PayPal 订单 ID。"
 "PayPal payment completed.","PayPal 支付已完成。"
 "PayPal payment is still processing.","PayPal 支付仍在处理中。"
+"PayPal payment cancelled.","PayPal 支付已取消。"
 "PayPal authorize is not supported in this integration.","当前集成不支持 PayPal 预授权。"
 "PayPal capture is handled during resumePayment.","PayPal 捕获在 resumePayment 阶段处理。"
 "PayPal void is not supported in this integration.","当前集成不支持 PayPal 作废。"
@@ -49,10 +52,11 @@ Payment,支付
 "Payment transaction created.",付款交易已创建。
 "Create payment failed: %{message}",创建付款失败：%{message}
 支付结果,支付结果
+已取消,已取消
+已取消成功,已取消成功
 "Payment succeeded.",付款成功。
 "Payment failed or is still processing.",付款失败或仍在处理中。
 "Query payment status failed: %{message}",查询付款状态失败：%{message}
-"PayPal payment cancelled.","PayPal 支付已取消。"
 支付浏览器回跳入口,支付浏览器回跳入口
 缺少交易ID,缺少交易ID
 支付交易管理,支付交易管理
@@ -88,7 +92,6 @@ edit,编辑
 查看支付方式列表,查看支付方式列表
 编辑支付方式配置,编辑支付方式配置
 "缺少 method_code","缺少 method_code"
-"首次使用需完成 PayPal 沙箱平台应用一次性初始化（维护者操作，商户无需手填 Client ID/Secret）。","首次使用需完成 PayPal 沙箱平台应用一次性初始化（维护者操作，商户无需手填 Client ID/Secret）。"
 连接测试成功,连接测试成功
 连接测试失败,连接测试失败
 授权已撤销,授权已撤销
@@ -112,15 +115,7 @@ Webhook诊断,Webhook诊断
 "PayPal 平台沙箱初始化","PayPal 平台沙箱初始化"
 settings,settings
 "PayPal 平台沙箱 REST App 一次性初始化","PayPal 平台沙箱 REST App 一次性初始化"
-"PayPal 一键授权","PayPal 一键授权"
-"PayPal 沙箱/正式 OAuth 授权（兼容别名）","PayPal 沙箱/正式 OAuth 授权（兼容别名）"
-"PayPal OAuth 回调","PayPal OAuth 回调"
-login,login
-"PayPal OAuth 回调（已废弃，请用统一 callback/return）","PayPal OAuth 回调（已废弃，请用统一 callback/return）"
-"PayPal 连接测试","PayPal 连接测试"
-"PayPal 连接测试（兼容别名）","PayPal 连接测试（兼容别名）"
-"撤销 PayPal 授权","撤销 PayPal 授权"
-"撤销 PayPal OAuth 授权（兼容别名）","撤销 PayPal OAuth 授权（兼容别名）"
+正在确认订单,正在确认订单
 获取支付方式列表成功,获取支付方式列表成功
 缺少必需参数,缺少必需参数
 订单支付,订单支付
@@ -208,13 +203,48 @@ login,login
 第三方条款,第三方条款
 "除本协议外，您还须遵守 PayPal 用户协议、隐私声明及当地适用法律。若条款冲突，涉及 PayPal 账户与资金清算的部分以 PayPal 规则为准。","除本协议外，您还须遵守 PayPal 用户协议、隐私声明及当地适用法律。若条款冲突，涉及 PayPal 账户与资金清算的部分以 PayPal 规则为准。"
 全部支付方式,全部支付方式
+待处理,待处理
+处理中,处理中
+已支付,已支付
+已发货,已发货
+已完成,已完成
+已退款,已退款
+该支付已取消，无需再次操作。,该支付已取消，无需再次操作。
+支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。,支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。
 当前没有可查询的支付交易号。若刚从网关返回，请确认回跳参数完整。,当前没有可查询的支付交易号。若刚从网关返回，请确认回跳参数完整。
-您的订单已支付成功,您的订单已支付成功
-交易号,交易号
+感谢您的订购！,感谢您的订购！
+您的订单已支付成功，我们正在为您准备发货。,您的订单已支付成功，我们正在为您准备发货。
+支付网关正在确认交易，请稍候刷新本页或前往订单中心查看状态。,支付网关正在确认交易，请稍候刷新本页或前往订单中心查看状态。
+支付未完成,支付未完成
+支付未成功或已被取消，您可以返回结账页重新尝试。,支付未成功或已被取消，您可以返回结账页重新尝试。
+订单号,订单号
+确认信息将发送至,确认信息将发送至
+配送地址,配送地址
+支付信息,支付信息
 支付金额,支付金额
-支付失败,支付失败
-支付未完成，请重试,支付未完成，请重试
-返回首页,返回首页
+交易号,交易号
+支付时间,支付时间
+订单商品,订单商品
+配送方式,配送方式
+"预计 2–5 个工作日内发货","预计 2–5 个工作日内发货"
+数量,数量
+订单总额,订单总额
+订单信息,订单信息
+订单状态,订单状态
+支付摘要,支付摘要
+订单操作,订单操作
+查看或管理订单,查看或管理订单
+继续购物,继续购物
+返回结账,返回结账
+您的支付已完成。,您的支付已完成。
+确认进度,确认进度
+正在确认订单…,正在确认订单…
+支付已成功，我们正在同步订单信息。,支付已成功，我们正在同步订单信息。
+订单确认进度,订单确认进度
+支付已确认,支付已确认
+正在同步订单,正在同步订单
+即将跳转结果页,即将跳转结果页
+请稍候，请勿关闭本页,请稍候，请勿关闭本页
 "Credit Asset",信贷资产
 "Requires exchange ratio and payable permission before checkout.",结账前需要兑换比例和付款许可。
 "This asset is not enabled for payment.",该资产未启用支付功能。
@@ -227,8 +257,9 @@ login,login
 "Can partially deduct payable amount when enabled.",启用后可以部分扣除应付金额。
 "Current customer country is not supported.",不支持当前客户所在国家/地区。
 "Payment provider is not ready.",支付提供商尚未准备好。
+支付失败,支付失败
+支付未完成，请重试,支付未完成，请重试
 取消,取消
-已退款,已退款
 "Select a payment method to continue.",选择付款方式以继续。
 "Please agree to the payment terms before continuing.",请先同意付款条款，然后再继续。
 "Selected payment method:",选择的付款方式：
@@ -242,10 +273,12 @@ More,更多的
 "Continue to PayPal","前往 PayPal 支付"
 "PayPal checkout will open after you confirm payment.","确认支付后将打开 PayPal 结账页。"
 "【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开不会完成支付。生产环境空参访问会跳转首页。","【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开不会完成支付。生产环境空参访问会跳转首页。"
+返回首页,返回首页
+或使用下方结账,或使用下方结账
+"使用 PayPal 快捷支付","使用 PayPal 快捷支付"
 失败率,失败率
 "优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径","优先使用 attempt 口径；没有 attempt 数据时使用交易记录口径"
 未完成支付,未完成支付
-待处理,待处理
 "pending、processing、requires action 等非终态支付","pending、processing、requires action 等非终态支付"
 退款入口,退款入口
 退款,退款
@@ -256,7 +289,6 @@ More,更多的
 "需要 ledger checksum 与 reconciliation difference 模型",需要账本校验和对账差异模型
 按支付方式统计,按支付方式统计
 支付方式代码,支付方式代码
-数量,数量
 入口,入口
 暂无统计数据,暂无统计数据
 交易,交易
@@ -288,7 +320,6 @@ More,更多的
 交易号/订单ID,交易号/订单ID
 全部状态,全部状态
 待支付,待支付
-处理中,处理中
 搜索,搜索
 订单ID,订单ID
 创建时间,创建时间
@@ -410,6 +441,8 @@ More,更多的
 类型,类型
 是否必填,是否必填
 当前运行时配置摘要,当前运行时配置摘要
+交易ID,交易ID
+暂无支付记录,暂无支付记录
 "Payment Webhook Inbox 消费","支付 Webhook 收件箱 消费"
 "消费已验签的 Payment webhook inbox，并原子提交支付、库存和后续 effect","消费已验签的 Payment webhook inbox，并原子提交支付、库存和后续 effect"
 "Payment 资产终态消费","Payment 资产终态消费"
@@ -445,6 +478,13 @@ More,更多的
 "用户 Token 无效或已过期。","用户 Token 无效或已过期。"
 无效的后台用户。,无效的后台用户。
 "无法创建用户 API Token。","无法创建用户 API Token。"
+"Provider 未实现 %{action} 扩展入口。","Provider 未实现 %{action} 扩展入口。"
+商品小计,商品小计
+运费,运费
+税费,税费
+优惠,优惠
+"优惠券 (%1)","优惠券 (%1)"
+标准配送,标准配送
 "成功的支付尝试缺少后续 effect outbox","成功的支付尝试缺少后续 effect outbox"
 "已支付订单缺少发票 effect","已支付订单缺少发票 effect"
 成功支付交易对应的业务单据不存在或未进入已支付状态,成功支付交易对应的业务单据不存在或未进入已支付状态
@@ -486,6 +526,7 @@ More,更多的
 该支付方式不支持当前国家或地区。,该支付方式不支持当前国家或地区。
 当前业务标签不能使用该支付方式。,当前业务标签不能使用该支付方式。
 当前业务对象缺少该支付方式要求的业务标签。,当前业务对象缺少该支付方式要求的业务标签。
+"【开发环境提示】此地址是支付模块按支付码区分的浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回 shell_token / transaction_no / 网关参数；直接打开不会完成支付。生产环境空参访问会跳转首页。","【开发环境提示】此地址是支付模块按支付码区分的浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回 shell_token / transaction_no / 网关参数；直接打开不会完成支付。生产环境空参访问会跳转首页。"
 支付方式授权已完成，凭据已写入当前配置。,支付方式授权已完成，凭据已写入当前配置。
 授权完成,授权完成
 "Payment transaction number is required.",需要支付交易号码。
@@ -509,6 +550,10 @@ More,更多的
 "支付配置 scope 只能包含小写字母、数字、下划线、短横线，并且最多三个点分段。","支付配置 scope 只能包含小写字母、数字、下划线、短横线，并且最多三个点分段。"
 "Relay 事件不存在。","Relay 事件不存在。"
 "Relay 事件与会话不匹配。","Relay 事件与会话不匹配。"
+支付会话不存在或已过期。,支付会话不存在或已过期。
+未配置业务成功页。,未配置业务成功页。
+支付已成功，订单信息同步中。,支付已成功，订单信息同步中。
+订单已就绪，正在跳转…,订单已就绪，正在跳转…
 "当前环境不能绑定本地 Relay 会话。","当前环境不能绑定本地 Relay 会话。"
 "请提供 session_code 与 token。","请提供 session_code 与 token。"
 "Relay 会话不存在。","Relay 会话不存在。"
@@ -563,6 +608,18 @@ More,更多的
 "PayPal Developer Sandbox REST App Client ID","PayPal Developer Sandbox REST App Client ID"
 "PayPal Developer Sandbox REST App Secret","PayPal Developer Sandbox REST App Secret"
 仅检查平台沙箱凭据是否已就绪,仅检查平台沙箱凭据是否已就绪
+"缺少 method_code 或 shell_token","缺少 method_code 或 shell_token"
+"【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回 shell_token / method_code / 网关参数；直接打开不会完成支付。生产环境空参访问会跳转首页。","【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回 shell_token / method_code / 网关参数；直接打开不会完成支付。生产环境空参访问会跳转首页。"
+"PayPal 一键授权","PayPal 一键授权"
+"PayPal 沙箱/正式 OAuth 授权（兼容别名）","PayPal 沙箱/正式 OAuth 授权（兼容别名）"
+"PayPal OAuth 回调","PayPal OAuth 回调"
+login,login
+"PayPal OAuth 回调（已废弃，请用统一 callback/return）","PayPal OAuth 回调（已废弃，请用统一 callback/return）"
+"PayPal 连接测试","PayPal 连接测试"
+"PayPal 连接测试（兼容别名）","PayPal 连接测试（兼容别名）"
+"撤销 PayPal 授权","撤销 PayPal 授权"
+"撤销 PayPal OAuth 授权（兼容别名）","撤销 PayPal OAuth 授权（兼容别名）"
+您的订单已支付成功,您的订单已支付成功
 启用,启用
 禁用,禁用
 支付方式已启用,支付方式已启用
@@ -614,7 +671,7 @@ More,更多的
 支付指南导航,支付指南导航
 支付政策导航,支付政策导航
 支付供应商导航,支付供应商导航
-支付与账户,"Payments & Account"
+支付与账户,支付与账户
 "在 fake 模式下完成浏览器 端到端 冒烟测试。","在 fake 模式下完成浏览器端到端冒烟测试。"
 "请先在 PayPal 配置中填写 %{1} Client ID 和 Client Secret。","请先在 PayPal 配置中填写 %{1} Client ID 和 Client Secret。"
 """Payment query provider does not support operation: %{1}""",“支付查询提供商不支持操作：%{1}”
@@ -638,3 +695,6 @@ More,更多的
 正式一键授权,正式一键授权
 支付图标,支付图标
 "覆盖 Provider 默认图标。从图库选择图片，或留空使用 Provider 自带图标。","覆盖 Provider 默认图标。从图库选择图片，或留空使用 Provider 自带图标。"
+支付已取消,支付已取消
+您已取消本次支付，订单尚未完成付款。可返回结账页重新选择支付方式。,您已取消本次支付，订单尚未完成付款。可返回结账页重新选择支付方式。
+快捷支付,快捷支付

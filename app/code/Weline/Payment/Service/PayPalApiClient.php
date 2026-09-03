@@ -70,8 +70,14 @@ final class PayPalApiClient
                 ],
             ]],
             'application_context' => array_filter([
-                'return_url' => $returnUrl ?: (string) ($config['return_url'] ?? ''),
-                'cancel_url' => $cancelUrl ?: (string) ($config['cancel_url'] ?? ''),
+                'return_url' => $this->normalizeCallbackUrl(
+                    $returnUrl ?: (string) ($config['return_url'] ?? ''),
+                    $config,
+                ),
+                'cancel_url' => $this->normalizeCallbackUrl(
+                    $cancelUrl ?: (string) ($config['cancel_url'] ?? ''),
+                    $config,
+                ),
                 'user_action' => 'PAY_NOW',
             ]),
         ];
@@ -89,7 +95,7 @@ final class PayPalApiClient
         );
 
         if ($response['status'] < 200 || $response['status'] >= 300) {
-            throw new \RuntimeException($this->extractErrorMessage($response['body']));
+            throw new \RuntimeException($this->extractErrorMessage($response['body'], $response['status']));
         }
 
         $decoded = json_decode($response['body'], true);
@@ -133,7 +139,7 @@ final class PayPalApiClient
         );
 
         if ($response['status'] < 200 || $response['status'] >= 300) {
-            throw new \RuntimeException($this->extractErrorMessage($response['body']));
+            throw new \RuntimeException($this->extractErrorMessage($response['body'], $response['status']));
         }
 
         $decoded = json_decode($response['body'], true);
@@ -178,7 +184,7 @@ final class PayPalApiClient
         );
 
         if ($response['status'] < 200 || $response['status'] >= 300) {
-            throw new \RuntimeException($this->extractErrorMessage($response['body']));
+            throw new \RuntimeException($this->extractErrorMessage($response['body'], $response['status']));
         }
 
         $decoded = json_decode($response['body'], true);
@@ -251,7 +257,7 @@ final class PayPalApiClient
         );
 
         if ($response['status'] < 200 || $response['status'] >= 300) {
-            throw new \RuntimeException($this->extractErrorMessage($response['body']));
+            throw new \RuntimeException($this->extractErrorMessage($response['body'], $response['status']));
         }
 
         $decoded = json_decode($response['body'], true);
@@ -339,6 +345,46 @@ final class PayPalApiClient
     }
 
     /**
+     * PayPal Add Tracking — POST /v1/shipping/trackers-batch
+     *
+     * @param array<string, mixed> $config
+     * @param list<array<string, mixed>> $trackers
+     * @return array<string, mixed>
+     */
+    public function addTrackingBatch(array $config, array $trackers): array
+    {
+        $trackers = array_values(array_filter(
+            $trackers,
+            static fn(mixed $row): bool => \is_array($row)
+                && trim((string) ($row['transaction_id'] ?? '')) !== ''
+                && trim((string) ($row['tracking_number'] ?? '')) !== '',
+        ));
+        if ($trackers === []) {
+            throw new \InvalidArgumentException('PayPal trackers payload is empty.');
+        }
+
+        $token = $this->fetchAccessToken($config);
+        $response = $this->request(
+            $config,
+            'POST',
+            '/v1/shipping/trackers-batch',
+            [
+                'Authorization: Bearer ' . $token,
+                'Content-Type: application/json',
+            ],
+            json_encode(['trackers' => $trackers], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?: '{}',
+        );
+
+        if ($response['status'] < 200 || $response['status'] >= 300) {
+            throw new \RuntimeException($this->extractErrorMessage($response['body'], $response['status']));
+        }
+
+        $decoded = json_decode($response['body'], true);
+
+        return \is_array($decoded) ? $decoded : [];
+    }
+
+    /**
      * @param array<string, mixed> $config
      * @return array<string, mixed>
      */
@@ -357,7 +403,7 @@ final class PayPalApiClient
         );
 
         if ($response['status'] < 200 || $response['status'] >= 300) {
-            throw new \RuntimeException($this->extractErrorMessage($response['body']));
+            throw new \RuntimeException($this->extractErrorMessage($response['body'], $response['status']));
         }
 
         $decoded = json_decode($response['body'], true);
@@ -370,17 +416,26 @@ final class PayPalApiClient
      */
     private function fetchAccessToken(array $config): string
     {
+        $clientId = trim((string) ($config['client_id'] ?? ''));
+        $clientSecret = trim((string) ($config['client_secret'] ?? ''));
+        if ($clientId !== '' && $clientSecret !== '') {
+            // 服务端 REST（下单/捕获）优先 client_credentials；商户 OAuth token 会过期且非此场景必需。
+            return $this->fetchClientCredentialsToken($config, $clientId, $clientSecret);
+        }
+
         $oauthToken = trim((string) ($config['oauth_access_token'] ?? ''));
         if ($oauthToken !== '') {
             return $oauthToken;
         }
 
-        $clientId = trim((string) ($config['client_id'] ?? ''));
-        $clientSecret = trim((string) ($config['client_secret'] ?? ''));
-        if ($clientId === '' || $clientSecret === '') {
-            throw new \RuntimeException('PayPal client_id or client_secret is missing.');
-        }
+        throw new \RuntimeException('PayPal client_id or client_secret is missing.');
+    }
 
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function fetchClientCredentialsToken(array $config, string $clientId, string $clientSecret): string
+    {
         $response = $this->request(
             $config,
             'POST',
@@ -393,11 +448,14 @@ final class PayPalApiClient
         );
 
         if ($response['status'] < 200 || $response['status'] >= 300) {
-            throw new \RuntimeException($this->extractErrorMessage($response['body']));
+            throw new \RuntimeException($this->extractErrorMessage($response['body'], $response['status']));
         }
 
         $decoded = json_decode($response['body'], true);
         $token = trim((string) (\is_array($decoded) ? ($decoded['access_token'] ?? '') : ''));
+        if ($token === '') {
+            throw new \RuntimeException('PayPal access token is missing.');
+        }
 
         return $token;
     }
@@ -480,7 +538,7 @@ final class PayPalApiClient
         return '';
     }
 
-    private function extractErrorMessage(string $body): string
+    private function extractErrorMessage(string $body, int $httpStatus = 0): string
     {
         $decoded = json_decode($body, true);
         if (!\is_array($decoded)) {
@@ -488,21 +546,55 @@ final class PayPalApiClient
         }
 
         $message = trim((string) ($decoded['message'] ?? ''));
-        if ($message !== '') {
-            return $message;
+        $detailText = '';
+
+        foreach (['details', 'errors'] as $key) {
+            foreach ((array) ($decoded[$key] ?? []) as $detail) {
+                if (!\is_array($detail)) {
+                    continue;
+                }
+                $issue = trim((string) ($detail['issue'] ?? $detail['name'] ?? ''));
+                $description = trim((string) ($detail['description'] ?? $detail['message'] ?? ''));
+                if ($issue !== '' || $description !== '') {
+                    $detailText = trim($issue . ($description !== '' ? ': ' . $description : ''));
+                    break 2;
+                }
+            }
         }
 
-        foreach ((array) ($decoded['details'] ?? []) as $detail) {
-            if (!\is_array($detail)) {
-                continue;
-            }
-            $issue = trim((string) ($detail['issue'] ?? ''));
-            $description = trim((string) ($detail['description'] ?? ''));
-            if ($issue !== '' || $description !== '') {
-                return trim($issue . ': ' . $description);
-            }
+        $base = $message !== '' ? $message : ($detailText !== '' ? $detailText : 'PayPal request failed.');
+        if ($httpStatus === 403 && (stripos($base, 'NOT_AUTHORIZED') !== false || stripos($base, 'insufficient permissions') !== false)) {
+            return $base . '（请在 PayPal Developer Dashboard 的 Sandbox REST App 中开启 Shipping / Track shipments 权限后重试）';
         }
 
-        return 'PayPal request failed.';
+        return $base;
+    }
+
+    /**
+     * PayPal 要求完整 https URL；配置里 cancel_url 常为站内相对路径。
+     *
+     * @param array<string, mixed> $config
+     */
+    private function normalizeCallbackUrl(string $url, array $config): string
+    {
+        $url = trim($url);
+        if ($url === '' || preg_match('#^https?://#i', $url) === 1) {
+            return $url;
+        }
+
+        $base = trim((string) ($config['return_url'] ?? ''));
+        if ($base === '' || preg_match('#^https?://#i', $base) !== 1) {
+            return $url;
+        }
+
+        $parts = parse_url($base);
+        if (!\is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return $url;
+        }
+
+        $origin = $parts['scheme'] . '://' . $parts['host']
+            . (isset($parts['port']) ? ':' . $parts['port'] : '');
+
+        return $origin . (str_starts_with($url, '/') ? $url : '/' . $url);
     }
 }

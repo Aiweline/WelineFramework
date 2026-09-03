@@ -47,10 +47,23 @@ final class PaymentShellAntiLeakContractTest extends TestCase
         self::assertStringNotContainsString('PayPalOAuthService', $src);
     }
 
-    public function testLegacyPaymentProviderInterfaceIsDeprecated(): void
+    public function testLegacyPayPalControllersRemoved(): void
     {
-        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Interface/PaymentProviderInterface.php');
-        self::assertStringContainsString('@deprecated', $src);
-        self::assertStringContainsString('ProviderInterface', $src);
+        self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/Controller/Frontend/PayPal.php');
+        self::assertFileDoesNotExist(dirname(__DIR__, 3) . '/Controller/Backend/PayPal.php');
+    }
+
+    public function testPaymentServiceInjectsCatalogUrls(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentService.php');
+        self::assertStringContainsString('PaymentShellCallbackUrlCatalog', $src);
+        self::assertStringContainsString('buildBrowserCallbackUrls', $src);
+        self::assertStringContainsString('PaymentCheckoutSessionPersistenceService', $src);
+    }
+
+    public function testApiPaymentCreateDoesNotHandBuildCheckoutReturn(): void
+    {
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Controller/Api/Payment.php');
+        self::assertStringNotContainsString('frontend/checkout/return', $src);
     }
 }

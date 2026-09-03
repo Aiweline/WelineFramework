@@ -12,12 +12,12 @@ final class PaymentBrowserCallbackTargetScopeTest extends TestCase
     public function testWithTargetScopeAppendsQuery(): void
     {
         $url = PaymentBrowserCallbackRoutes::withTargetScope(
-            'https://shop.example.test/payment/frontend/callback/return',
+            'https://shop.example.test/payment/frontend/callback/paypal',
             'shop.cn.default',
         );
 
         self::assertSame(
-            'https://shop.example.test/payment/frontend/callback/return?target_scope=shop.cn.default',
+            'https://shop.example.test/payment/frontend/callback/paypal?target_scope=shop.cn.default',
             $url,
         );
     }
@@ -25,7 +25,7 @@ final class PaymentBrowserCallbackTargetScopeTest extends TestCase
     public function testWithTargetScopeOverwritesExistingTargetScope(): void
     {
         $url = PaymentBrowserCallbackRoutes::withTargetScope(
-            'https://shop.example.test/payment/frontend/callback/return?target_scope=default.default.default&x=1',
+            'https://shop.example.test/payment/frontend/callback/paypal?target_scope=default.default.default&x=1',
             'shop.default.default',
         );
 
@@ -38,7 +38,7 @@ final class PaymentBrowserCallbackTargetScopeTest extends TestCase
     {
         $this->expectException(\InvalidArgumentException::class);
         PaymentBrowserCallbackRoutes::withTargetScope(
-            'https://shop.example.test/payment/frontend/callback/return',
+            'https://shop.example.test/payment/frontend/callback/paypal',
             'default',
         );
     }

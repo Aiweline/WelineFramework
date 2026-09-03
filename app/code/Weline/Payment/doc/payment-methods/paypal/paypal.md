@@ -26,7 +26,23 @@ required_fields: client_id, client_secret, return_url, cancel_url
 - webhook_id：用于后续 Webhook 验签。
 
 ## Webhook/回调 URL
-在 Developer Dashboard > Webhooks 配置 WeShop 回调 URL，至少订阅 CHECKOUT.ORDER.APPROVED、PAYMENT.CAPTURE.COMPLETED。
+在 Developer Dashboard > Webhooks 配置 WeShop 回调 URL，建议至少订阅：
+
+- 支付：`CHECKOUT.ORDER.APPROVED`、`PAYMENT.CAPTURE.COMPLETED`、`PAYMENT.CAPTURE.PENDING`、`PAYMENT.CAPTURE.DENIED`
+- 退款/撤销：`PAYMENT.CAPTURE.REFUNDED`、`PAYMENT.CAPTURE.REVERSED`
+- 争议/风控：`CUSTOMER.DISPUTE.CREATED`、`CUSTOMER.DISPUTE.UPDATED`、`CUSTOMER.DISPUTE.RESOLVED`
+
+线上 URL 形态：`https://www.aiweline.com/payment/frontend/callback/notify?endpoint_code=paypal.sandbox.default`  
+本地开发通过 DevRelay 中继拉取并重放，见 [`doc/dev-webhook-relay.md`](../../dev-webhook-relay.md)。
+
+## 发货追踪回传 PayPal
+本地/后台发货后，框架会调用 PayPal Add Tracking API（`/v1/shipping/trackers-batch`）回传物流单号。
+
+手动补传：
+
+```bash
+php bin/w payment:paypal:sync-tracking --order-uuid=ORDER_UUID --tracking-number=SF1234567890 --carrier=SF
+```
 
 ## 签名/证书要求
 生产环境应使用 PayPal Webhook ID 验证回调签名。
