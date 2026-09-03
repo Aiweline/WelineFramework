@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Websites',
-    "version" => '1.8.2',
+    "version" => '1.8.3',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Admin' => '*',
@@ -27,6 +27,8 @@ return [
         \Weline\Websites\Api\Catalog\SalesChannelCatalogInterface::class => \Weline\Websites\Service\SalesChannelCatalog::class,
         'system_config.scope_identity_catalog.Weline_Websites'
             => \Weline\Websites\Integration\SystemConfig\ScopeIdentityCatalog::class,
+        'theme.brand_basics_identity.websites'
+            => \Weline\Websites\Service\ThemeBrandBasicsIdentityProvider::class,
         \Weline\Websites\Api\Localization\WebsiteCurrencyCatalogInterface::class => \Weline\Websites\Service\CurrentWebsiteCurrencyCatalog::class,
         \Weline\Websites\Api\Localization\WebsiteLanguageAssignmentInterface::class => \Weline\Websites\Service\Localization\WebsiteLanguageAssignment::class,
         \Weline\Framework\Runtime\StorefrontWebsiteCodeResolverInterface::class => \Weline\Websites\Observer\DetectWebsite::class,

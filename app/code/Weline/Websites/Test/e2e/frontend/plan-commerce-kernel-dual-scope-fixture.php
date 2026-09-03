@@ -17,8 +17,8 @@ declare(strict_types=1);
  * unchanged.
  */
 
-use Weline\Cart\Service\CartV2CacheStore;
-use Weline\Cart\Service\CartV2HarnessCatalog;
+use Weline\Cart\Service\CartCacheStore;
+use Weline\Cart\Service\CartHarnessCatalog;
 use Weline\Framework\Database\Schema\DbSchemaReader;
 use Weline\Framework\Database\Schema\IndexDefinitionContract;
 use Weline\Framework\Manager\ObjectManager;
@@ -545,8 +545,8 @@ function ck_cleanup_side(string $code, ?string $guestToken): void
     }
     if ($guestToken !== null && trim($guestToken) !== '') {
         try {
-            /** @var CartV2CacheStore $carts */
-            $carts = ObjectManager::getInstance(CartV2CacheStore::class);
+            /** @var CartCacheStore $carts */
+            $carts = ObjectManager::getInstance(CartCacheStore::class);
             $carts->delete($scope->canonicalKey() . '|guest:' . trim($guestToken));
         } catch (Throwable) {
         }
@@ -597,7 +597,7 @@ function ck_cleanup(string $token, ?string $guestToken = null): void
     ck_restore_rollout($token);
     ck_cleanup_side(ck_website_code($token, 'a'), $guestToken);
     ck_cleanup_side(ck_website_code($token, 'b'), $guestToken);
-    CartV2HarnessCatalog::delete(ck_offer_uuid($token));
+    CartHarnessCatalog::delete(ck_offer_uuid($token));
 }
 
 /** @return array<string, mixed> */
@@ -616,7 +616,7 @@ function ck_prepare(string $token, int $port): array
         ck_enable_rollout($token, $sideA, $sideB);
 
         $offerUuid = ck_offer_uuid($token);
-        CartV2HarnessCatalog::put($offerUuid, [
+        CartHarnessCatalog::put($offerUuid, [
             'name' => 'Commerce Kernel Dual Scope ' . $token,
             'sku' => 'ck-e2e-' . $token,
             'currency' => 'CNY',
