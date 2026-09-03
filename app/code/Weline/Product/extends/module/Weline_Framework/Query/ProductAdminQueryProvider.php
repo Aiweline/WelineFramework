@@ -69,7 +69,7 @@ final class ProductAdminQueryProvider implements QueryProviderInterface
                 $this->operation('snapshot', (string)__('读取商品完整编辑快照'), 'read', [
                     ['name' => 'website_id', 'type' => 'int', 'required' => true, 'min' => 0],
                     ['name' => 'global_product_uuid', 'type' => 'string', 'required' => true, 'max_length' => 36],
-                    ['name' => 'store_id', 'type' => 'int|null', 'required' => false, 'min' => 1],
+                    ['name' => 'store_id', 'type' => 'int|null', 'required' => false, 'min' => 0],
                     ['name' => 'locale', 'type' => 'string', 'required' => false, 'max_length' => 32],
                     ['name' => 'currency', 'type' => 'string', 'required' => false, 'max_length' => 8],
                 ]),

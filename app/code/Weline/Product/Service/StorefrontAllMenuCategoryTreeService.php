@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Product\Service;
 
 use Weline\Framework\App\State;
+use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Http\Url;
 use Weline\Theme\Service\AllMenu\MenuTreeNormalizer;
@@ -28,8 +29,8 @@ final class StorefrontAllMenuCategoryTreeService
 
     public static function logicalCacheKey(int $websiteId): string
     {
-        // v2: nav tree carries image/banner/summary/description for mega-menu intro.
-        return 'product.all_menu_category_tree.v2.' . max(0, $websiteId);
+        // v3: bust keys polluted when SWR rebuild used live State lang.
+        return 'product.all_menu_category_tree.v3.' . max(0, $websiteId);
     }
 
     public static function cachePool(): string
@@ -43,13 +44,22 @@ final class StorefrontAllMenuCategoryTreeService
     public function navTree(int $websiteId): array
     {
         $websiteId = max(0, $websiteId);
+        // Capture KeyBuilder lang at remember-time so PostResponse SWR cannot
+        // rebuild this scoped key with another request's State::getLangLocal().
+        $locale = trim((string)(KeyBuilder::storefrontDimensions(false)['lang'] ?? ''));
+        if ($locale === '') {
+            $locale = trim((string)State::getLangLocal());
+        }
+        if ($locale === '') {
+            $locale = 'zh_Hans_CN';
+        }
 
         /** @var list<array<string, mixed>> $tree */
         $tree = $this->hotCache->remember(
             self::CACHE_POOL,
             self::logicalCacheKey($websiteId),
             self::FRESH_TTL_SECONDS,
-            fn(): array => $this->build($websiteId),
+            fn(): array => $this->build($websiteId, $locale),
             ['website' => true, 'lang' => true, 'currency' => true],
             self::STALE_TTL_SECONDS,
         );
@@ -71,9 +81,13 @@ final class StorefrontAllMenuCategoryTreeService
     /**
      * @return list<array<string, mixed>>
      */
-    private function build(int $websiteId): array
+    private function build(int $websiteId, string $locale): array
     {
-        $rows = $this->catalog->flatRows($websiteId, (string)State::getLangLocal());
+        $locale = trim($locale);
+        if ($locale === '') {
+            $locale = 'zh_Hans_CN';
+        }
+        $rows = $this->catalog->flatRows($websiteId, $locale);
         if ($rows === []) {
             return [];
         }

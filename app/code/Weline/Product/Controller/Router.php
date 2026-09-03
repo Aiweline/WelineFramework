@@ -13,6 +13,8 @@ final class Router implements RouterInterface
     private const CATEGORY_ROUTE = 'weline_product/frontend/category';
     private const DETAIL_ROUTE = 'weline_product/frontend/detail';
     private const DOWNLOAD_ROUTE = 'weline_product/frontend/download';
+    private const BEST_SELLERS_ROUTE = 'weline_product/frontend/best-sellers';
+    private const NEW_ARRIVALS_ROUTE = 'weline_product/frontend/new-arrivals';
 
     /**
      * @inheritDoc
@@ -24,6 +26,12 @@ final class Router implements RouterInterface
         }
 
         $normalizedPath = strtolower(trim(str_replace('\\', '/', $path), '/'));
+        if (in_array($normalizedPath, ['new-arrivals', 'newarrivals', 'new_arrivals'], true)) {
+            $path = self::NEW_ARRIVALS_ROUTE;
+            $rule['module'] = 'Weline_Product';
+
+            return;
+        }
         if (preg_match(
             '#^product-download/([a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12})$#D',
             $normalizedPath,
@@ -40,6 +48,12 @@ final class Router implements RouterInterface
 
         if (in_array($normalizedPath, ['products', 'product-list'], true)) {
             $path = self::CATALOG_ROUTE;
+            $rule['module'] = 'Weline_Product';
+            return;
+        }
+
+        if (in_array($normalizedPath, ['best-sellers', 'bestsellers', 'best_sellers'], true)) {
+            $path = self::BEST_SELLERS_ROUTE;
             $rule['module'] = 'Weline_Product';
             return;
         }

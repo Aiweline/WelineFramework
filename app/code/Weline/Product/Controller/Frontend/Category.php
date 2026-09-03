@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Product\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Event\EventsManager;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontCategoryListingFilter;
 use Weline\Product\Service\StorefrontCategoryViewService;
@@ -15,6 +16,7 @@ final class Category extends FrontendController
         private readonly StorefrontCategoryViewService $categories,
         private readonly StorefrontCatalogViewService $catalog,
         private readonly StorefrontCategoryListingFilter $listingFilter,
+        private readonly EventsManager $events,
     ) {
     }
 
@@ -48,10 +50,20 @@ final class Category extends FrontendController
         // Keep path query aligned for layout hooks that resolve by request param.
         $this->request->setGet('path', $routePath);
 
-        $offers = $this->catalog->publishedOffersForProductIds($page['product_ids'], 120);
+        $productIds = $page['product_ids'];
+        $offers = $productIds === []
+            ? []
+            : $this->catalog->publishedOffersForProductIds($productIds, 120);
         $priceBucket = $this->listingFilter->normalizePriceBucket((string)$this->request->getParam('price', ''));
         $sort = $this->listingFilter->normalizeSort((string)$this->request->getParam('sort', ''));
         $filteredOffers = $this->listingFilter->apply($offers, $priceBucket, $sort);
+        $filterEvent = [
+            'offers' => $filteredOffers,
+            'query' => $this->request->getParams() ?: [],
+            'surface' => 'category',
+        ];
+        $this->events->dispatch('Weline_Product::storefront_offers_filter', $filterEvent);
+        $filteredOffers = is_array($filterEvent['offers'] ?? null) ? $filterEvent['offers'] : $filteredOffers;
 
         $categoryUrl = trim((string)($category['url'] ?? ''));
         if ($categoryUrl === '') {
@@ -60,6 +72,9 @@ final class Category extends FrontendController
             $pathOnly = (string)(parse_url($categoryUrl, PHP_URL_PATH) ?: $categoryUrl);
             $categoryUrl = (string)$this->getUrl(ltrim($pathOnly, '/'));
         }
+        $pageNum = $this->listingFilter->normalizePage($this->request->getParam('page', 1));
+        $paged = $this->listingFilter->paginate($filteredOffers, $pageNum);
+        $pageOffers = $paged['items'];
         $sortOptions = [];
         foreach ([
             StorefrontCategoryListingFilter::SORT_DEFAULT => __('默认排序'),
@@ -82,6 +97,27 @@ final class Category extends FrontendController
             ];
         }
 
+        $pageOptions = [];
+        if ($paged['total_pages'] > 1) {
+            for ($p = 1; $p <= $paged['total_pages']; $p++) {
+                $params = [];
+                if ($priceBucket !== '') {
+                    $params['price'] = $priceBucket;
+                }
+                if ($sort !== StorefrontCategoryListingFilter::SORT_DEFAULT) {
+                    $params['sort'] = $sort;
+                }
+                if ($p > 1) {
+                    $params['page'] = $p;
+                }
+                $pageOptions[] = [
+                    'page' => $p,
+                    'url' => $this->listingFilter->buildListingUrl($categoryUrl, $params),
+                    'selected' => $p === $paged['page'],
+                ];
+            }
+        }
+
         $this->assign('page_title', $name !== '' ? $name : __('分类'));
         $this->assign('storefront_category', $category);
         $this->assign('storefront_category_children', $page['children']);
@@ -90,12 +126,16 @@ final class Category extends FrontendController
         $this->assign('storefront_category_active_path_ids', $page['active_path_ids'] ?? []);
         $this->assign('storefront_category_breadcrumbs', $page['breadcrumbs']);
         $this->assign('storefront_offers_unfiltered', $offers);
-        $this->assign('storefront_offers', $filteredOffers);
+        $this->assign('storefront_offers', $pageOffers);
         $this->assign('storefront_category_path', $routePath);
         $this->assign('storefront_listing_price', $priceBucket);
         $this->assign('storefront_listing_sort', $sort);
         $this->assign('storefront_listing_total', count($offers));
-        $this->assign('storefront_listing_count', count($filteredOffers));
+        $this->assign('storefront_listing_count', $paged['total']);
+        $this->assign('storefront_listing_page', $paged['page']);
+        $this->assign('storefront_listing_page_size', $paged['page_size']);
+        $this->assign('storefront_listing_total_pages', $paged['total_pages']);
+        $this->assign('storefront_listing_page_options', $pageOptions);
         $this->assign('storefront_listing_sort_options', $sortOptions);
 
         return (string)$this->fetch('Weline_Product::templates/frontend/category/index.phtml');

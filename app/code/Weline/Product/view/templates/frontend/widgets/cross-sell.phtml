@@ -23,7 +23,6 @@
  * @param show_quickview {default=true,type="bool",label="显示快速查看"}
  */
 
-use Weline\Framework\Env\WelineEnv;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
@@ -51,30 +50,11 @@ if ($seedProductId <= 0 && is_array($offer)) {
     $seedProductId = (int)($offer['product_id'] ?? 0);
 }
 if ($seedProductId <= 0) {
-    $requestUri = (string)(WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-    $requestPath = (string)(parse_url($requestUri, PHP_URL_PATH) ?: '');
-    $pathParts = array_values(array_filter(
-        explode('/', trim($requestPath, '/')),
-        static fn(string $part): bool => $part !== '',
-    ));
-    $productPartIndex = array_search('product', $pathParts, true);
-    if ($productPartIndex !== false && isset($pathParts[$productPartIndex + 1])) {
-        $handle = strtolower(rawurldecode((string)$pathParts[$productPartIndex + 1]));
-        if (ctype_digit($handle)) {
-            $seedProductId = (int)$handle;
-        } else {
-            try {
-                foreach (ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)->cards(48) as $candidate) {
-                    $route = strtolower(trim((string)($candidate['url'] ?? '')));
-                    if ($route === 'product/' . $handle) {
-                        $seedProductId = (int)($candidate['product_id'] ?? $candidate['id'] ?? 0);
-                        break;
-                    }
-                }
-            } catch (\Throwable) {
-                $seedProductId = 0;
-            }
-        }
+    try {
+        $resolvedOffer = \Weline\Product\Helper\StorefrontOfferResolver::resolve($this);
+        $seedProductId = max(0, (int)($resolvedOffer['product_id'] ?? 0));
+    } catch (\Throwable) {
+        $seedProductId = 0;
     }
 }
 
@@ -102,6 +82,17 @@ foreach ($products as &$product) {
 unset($product);
 
 if (count($products) < 2) {
+    // Never return a blank string: DEV WidgetHtmlHealthInspector treats empty
+    // HTML as a warning toast. Keep visually hidden so storefront still "hides".
+    ?>
+<section class="<?= $esc($wc) ?> weline-product-fbt<?= $isPreviewMode ? ' is-preview' : '' ?> is-empty"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-testid="cross-sell-empty"
+         hidden
+         aria-hidden="true"></section>
+    <?php
     return;
 }
 
@@ -166,7 +157,7 @@ foreach ($products as $product) {
                             <span class="wpf-sr"><?= $esc($productName) ?></span>
                         </label>
                         <a class="wpf-media" href="<?= $esc($productUrl) ?>" aria-label="<?= $esc($productName) ?>">
-                            <img src="<?= $esc($imageFallback !== '' ? $imageFallback : $productImage) ?>"
+                            <img src="<?= $esc($productImage !== '' ? $productImage : $imageFallback) ?>"
                                  alt=""
                                  data-storefront-img="1"
                                  data-fallback="<?= $esc($imageFallback !== '' ? $imageFallback : $productImage) ?>"

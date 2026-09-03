@@ -8,6 +8,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 use Weline\Product\Service\StorefrontCatalogViewService;
+use Weline\Product\Service\StorefrontEavLabelResolver;
 use Weline\Product\Service\StorefrontVariantSelectionService;
 
 /**
@@ -67,7 +68,12 @@ final class StorefrontVariantContextResolver
 
         /** @var StorefrontVariantSelectionService $selection */
         $selection = ObjectManager::getInstance(StorefrontVariantSelectionService::class);
-        $query = $this->resolveQuery($template);
+        /** @var StorefrontEavLabelResolver $labels */
+        $labels = ObjectManager::getInstance(StorefrontEavLabelResolver::class);
+        $query = $labels->canonicalizeAxisQuery(
+            $this->resolveQuery($template),
+            $selection->collectAxisCodes($offers),
+        );
         $querySelected = $selection->resolveSelectedOffer($offers, $query);
         if ($querySelected !== null) {
             $selectedOffer = $querySelected;
@@ -79,6 +85,28 @@ final class StorefrontVariantContextResolver
         }
 
         $catalog = $selection->buildCatalog($offers, $selectedOffer);
+        foreach ($catalog['axes'] as $axisIndex => $axis) {
+            if (!is_array($axis)) {
+                continue;
+            }
+            $axisCode = strtolower(trim((string)($axis['code'] ?? '')));
+            if ($axisCode === '') {
+                continue;
+            }
+            foreach ((array)($axis['options'] ?? []) as $optionIndex => $option) {
+                if (!is_array($option)) {
+                    continue;
+                }
+                $value = trim((string)($option['value'] ?? ''));
+                if ($value === '' || trim((string)($option['code'] ?? '')) !== '') {
+                    continue;
+                }
+                $catalog['axes'][$axisIndex]['options'][$optionIndex]['code'] = $labels->publicOptionCode(
+                    $axisCode,
+                    $value,
+                );
+            }
+        }
         $catalog['selected_offer'] = $selectedOffer;
 
         return $catalog;

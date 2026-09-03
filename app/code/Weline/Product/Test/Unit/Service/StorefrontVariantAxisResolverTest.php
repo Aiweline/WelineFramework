@@ -27,6 +27,26 @@ final class StorefrontVariantAxisResolverTest extends TestCase
         self::assertStringContainsString('禁止把商品图同步到全局 EAV 选项', $previewPatch);
     }
 
+    public function testStorefrontBuildsVariantAxesFromProductAndOfferEav(): void
+    {
+        $resolver = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/Service/StorefrontVariantAxisResolver.php',
+        );
+        $projector = (string)file_get_contents(
+            BP . 'app/code/Weline/Product/Service/StorefrontProductDetailProjector.php',
+        );
+
+        self::assertStringContainsString('array $availableValues = []', $resolver);
+        self::assertStringContainsString("empty(\$eav['multiple'])", $resolver);
+        self::assertStringContainsString("empty(\$eav['has_option'])", $resolver);
+        self::assertStringContainsString('$productByCode', $projector);
+        self::assertStringContainsString('$availableValues', $projector);
+        self::assertStringNotContainsString(
+            'return trim((string)json_encode($value',
+            $projector,
+        );
+    }
+
     public function testProductTypeConfigurationKeepsVariantPreviewImages(): void
     {
         $resolver = (string)file_get_contents(

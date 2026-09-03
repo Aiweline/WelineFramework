@@ -10,6 +10,7 @@ use Weline\Framework\Setup\Data\Setup;
 use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Product\Model\Category\LocalDescription;
+use Weline\Product\Model\Product\LocalDescription as ProductLocalDescription;
 use Weline\Product\Model\CategoryAttributeEntity;
 use Weline\Product\Model\ProductCatalogAttributeEntity;
 use Weline\Product\Service\ProductCategoryEavBootstrap;
@@ -42,6 +43,11 @@ final class Upgrade implements UpgradeInterface
         $categoryLocal = ObjectManager::getInstance(LocalDescription::class);
         $modelSetup->putModel($categoryLocal);
         $categoryLocal->upgrade($modelSetup, $context);
+
+        /** @var ProductLocalDescription $productLocal */
+        $productLocal = ObjectManager::getInstance(ProductLocalDescription::class);
+        $modelSetup->putModel($productLocal);
+        $productLocal->upgrade($modelSetup, $context);
 
         $catalogBootstrap = ObjectManager::getInstance(ProductCatalogEavBootstrap::class);
         $catalog = $catalogBootstrap->ensureStorefrontSchema();

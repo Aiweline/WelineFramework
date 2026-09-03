@@ -156,6 +156,58 @@ final class StorefrontCategoryListingFilter
         return array_values($offers);
     }
 
+    public function defaultPageSize(): int
+    {
+        return 24;
+    }
+
+    public function normalizePage(int|string|null $raw): int
+    {
+        $page = (int)$raw;
+
+        return $page > 0 ? $page : 1;
+    }
+
+    public function normalizePageSize(int|string|null $raw): int
+    {
+        $size = (int)$raw;
+        if ($size <= 0) {
+            $size = $this->defaultPageSize();
+        }
+
+        return max(1, min(48, $size));
+    }
+
+    /**
+     * @param list<array<string, mixed>> $offers
+     * @return array{
+     *     items:list<array<string,mixed>>,
+     *     page:int,
+     *     page_size:int,
+     *     total:int,
+     *     total_pages:int
+     * }
+     */
+    public function paginate(array $offers, int|string|null $page, int|string|null $pageSize = null): array
+    {
+        $page = $this->normalizePage($page);
+        $pageSize = $this->normalizePageSize($pageSize);
+        $total = count($offers);
+        $totalPages = max(1, (int)ceil($total / $pageSize));
+        if ($page > $totalPages) {
+            $page = $totalPages;
+        }
+        $offset = ($page - 1) * $pageSize;
+
+        return [
+            'items' => array_slice(array_values($offers), $offset, $pageSize),
+            'page' => $page,
+            'page_size' => $pageSize,
+            'total' => $total,
+            'total_pages' => $totalPages,
+        ];
+    }
+
     /**
      * @param array<string, scalar|null> $params
      */
@@ -176,6 +228,9 @@ final class StorefrontCategoryListingFilter
             }
             $text = trim((string)$value);
             if ($text === '' || ($key === 'sort' && $text === self::SORT_DEFAULT)) {
+                continue;
+            }
+            if ($key === 'page' && (int)$text <= 1) {
                 continue;
             }
             $query[$key] = $text;

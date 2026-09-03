@@ -463,8 +463,10 @@ final class CatalogRepositoryIntegrationTest extends TestCase
         self::assertFalse($storeProducts->isSelected(0, 11, $productId));
         self::assertFalse($storeOffers->isSelected(0, 11, $offerId));
 
-        $this->expectInvalid(static fn() => $storeProducts->find(0, 0, $productId));
-        $this->expectInvalid(static fn() => $storeOffers->find(0, 0, $offerId));
+        self::assertNull($storeProducts->find(0, 0, $productId));
+        self::assertNull($storeOffers->find(0, 0, $offerId));
+        self::assertTrue($storeProducts->isSelected(0, 0, $productId));
+        self::assertTrue($storeOffers->isSelected(0, 0, $offerId));
     }
 
     private function assertOwnedPublishCas(

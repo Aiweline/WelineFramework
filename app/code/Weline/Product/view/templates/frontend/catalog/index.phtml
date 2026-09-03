@@ -1,10 +1,11 @@
 <?php
 
+use Weline\Product\Helper\StorefrontOfferDetailQuery;
 use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 /**
  * Durable Product catalog cards. Cart mutation is performed by the browser
- * through Weline.Api and the Cart V2 OfferIdentity boundary.
+ * through Weline.Api and the Cart OfferIdentity boundary.
  *
  * @var list<array<string,mixed>> $storefront_offers
  */
@@ -14,22 +15,31 @@ $cartGuestToken = trim((string)($this->getData('cart_guest_token') ?? ''));
 $activePrice = trim((string)($this->getData('storefront_listing_price') ?? ''));
 $totalCount = max(0, (int)($this->getData('storefront_listing_total') ?? count($offers)));
 $visibleCount = max(0, (int)($this->getData('storefront_listing_count') ?? count($offers)));
+$page = max(1, (int)($this->getData('storefront_listing_page') ?? 1));
+$pageSize = max(1, (int)($this->getData('storefront_listing_page_size') ?? 24));
+$totalPages = max(1, (int)($this->getData('storefront_listing_total_pages') ?? 1));
+$pageOptions = $this->getData('storefront_listing_page_options') ?? [];
+$pageOptions = is_array($pageOptions) ? $pageOptions : [];
 $sortOptions = $this->getData('storefront_listing_sort_options') ?? [];
 $sortOptions = is_array($sortOptions) ? $sortOptions : [];
+$heading = trim((string)($this->getData('storefront_heading') ?? __('全部商品')));
+$lede = trim((string)($this->getData('storefront_lede') ?? __('浏览当前网站已发布的商品，可按分类与价格筛选。')));
 $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$from = $visibleCount > 0 ? (($page - 1) * $pageSize) + 1 : 0;
+$to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
 ?>
 <section class="product-storefront"
          data-testid="storefront-product-catalog"
          weline-code="product.frontend.catalog.section_1">
     <header class="product-storefront__header">
-        <h1><?= __('全部商品') ?></h1>
-        <p class="product-storefront__lede"><?= __('浏览当前网站已发布的商品，可按分类与价格筛选。') ?></p>
+        <h1><?= $escape($heading) ?></h1>
+        <p class="product-storefront__lede"><?= $escape($lede) ?></p>
     </header>
 
     <div class="product-storefront__toolbar" data-testid="storefront-products-toolbar">
         <p class="product-storefront__count">
             <?php if ($visibleCount > 0): ?>
-                <?= __('共 %{1} 件商品', [$visibleCount]) ?>
+                <?= __('第 %{1}–%{2} 件，共 %{3} 件商品', [$from, $to, $visibleCount]) ?>
             <?php else: ?>
                 <?= __('0 件商品') ?>
             <?php endif; ?>
@@ -91,6 +101,7 @@ $productUrl = $productPath; // route path; render with @url
                     $productPath = 'product/' . $productId;
 $productUrl = $productPath; // route path; render with @url
                 }
+                $productUrlParams = StorefrontOfferDetailQuery::params(is_array($offer) ? $offer : []);
                 ?>
                 <article class="product-storefront__card product-card<?= $productUrl !== '' ? ' is-clickable' : '' ?>"
                          data-testid="storefront-product-card"
@@ -98,7 +109,7 @@ $productUrl = $productPath; // route path; render with @url
                          data-global-offer-uuid="<?= $escape($uuid) ?>">
                     <?php if ($productUrl !== ''): ?>
                         <a class="product-storefront__card-hit"
-                           href="@url{$productUrl}"
+                           href="@url{$productUrl|$productUrlParams}"
                            aria-label="<?= $escape($productName) ?>"
                            data-testid="storefront-product-card-link"></a>
                     <?php endif; ?>
@@ -137,6 +148,29 @@ $productUrl = $productPath; // route path; render with @url
                 </article>
             <?php endforeach; ?>
         </div>
+        <?php if ($totalPages > 1 && $pageOptions !== []): ?>
+            <nav class="product-storefront__pager"
+                 data-testid="storefront-products-pager"
+                 aria-label="<?= $escape(__('分页')) ?>">
+                <?php foreach ($pageOptions as $option): ?>
+                    <?php
+                    if (!is_array($option)) {
+                        continue;
+                    }
+                    $href = trim((string)($option['url'] ?? ''));
+                    $label = (string)($option['page'] ?? '');
+                    if ($href === '' || $label === '') {
+                        continue;
+                    }
+                    ?>
+                    <?php if (!empty($option['selected'])): ?>
+                        <span class="product-storefront__pager-item is-current" aria-current="page"><?= $escape($label) ?></span>
+                    <?php else: ?>
+                        <a class="product-storefront__pager-item" href="<?= $escape($href) ?>"><?= $escape($label) ?></a>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </nav>
+        <?php endif; ?>
     <?php endif; ?>
 
     <a class="product-storefront__cart" href="@url{'cart'}" data-testid="view-cart" hidden>
@@ -312,6 +346,35 @@ $productUrl = $productPath; // route path; render with @url
         text-decoration:none;
     }
     .product-storefront__cart[hidden] { display:none; }
+    .product-storefront__pager {
+        display:flex;
+        flex-wrap:wrap;
+        gap:8px;
+        margin:18px 0 0;
+        align-items:center;
+        justify-content:center;
+    }
+    .product-storefront__pager-item {
+        min-width:34px;
+        min-height:34px;
+        padding:0 10px;
+        border:1px solid #d5d9d9;
+        border-radius:8px;
+        background:#fff;
+        color:#0f1111;
+        font:inherit;
+        font-size:13px;
+        font-weight:600;
+        text-decoration:none;
+        display:inline-flex;
+        align-items:center;
+        justify-content:center;
+    }
+    .product-storefront__pager-item.is-current {
+        border-color:#0f1111;
+        background:#0f1111;
+        color:#fff;
+    }
     .product-storefront__empty {
         padding:28px 16px;
         border:1px dashed #d5d9d9;

@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\Product\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
+use Weline\Framework\Event\EventsManager;
 use Weline\Product\Service\StorefrontCatalogViewService;
+use Weline\Product\Service\StorefrontEavLabelResolver;
 use Weline\Product\Service\StorefrontVariantSelectionService;
 
 final class Detail extends FrontendController
@@ -13,6 +15,8 @@ final class Detail extends FrontendController
     public function __construct(
         private readonly StorefrontCatalogViewService $catalog,
         private readonly StorefrontVariantSelectionService $variantSelection,
+        private readonly StorefrontEavLabelResolver $variantLabels,
+        private readonly EventsManager $events,
     ) {
     }
 
@@ -44,7 +48,7 @@ final class Detail extends FrontendController
                 foreach ($this->variantSelection->collectAxisCodes($offers) as $axisCode) {
                     $axisValue = trim((string)$this->request->getParam($axisCode, ''));
                     if ($axisValue !== '') {
-                        $query[$axisCode] = $axisValue;
+                        $query[$axisCode] = $this->variantLabels->publicOptionCode($axisCode, $axisValue);
                     }
                 }
             }
@@ -56,7 +60,10 @@ final class Detail extends FrontendController
 
         $selectedOffer = $this->variantSelection->resolveSelectedOffer(
             $offers,
-            $this->request->getParams(),
+            $this->variantLabels->canonicalizeAxisQuery(
+                $this->request->getParams(),
+                $this->variantSelection->collectAxisCodes($offers),
+            ),
         );
         $displayOffer = $selectedOffer ?? $offers[0];
         $requiresExplicitSelection = count($offers) > 1
@@ -81,7 +88,31 @@ final class Detail extends FrontendController
         $this->request->setGet('page_type', 'product');
         $this->request->setGet('theme_public_route', $publicRoute);
         $this->request->setGet('theme_page_title', $name !== '' ? $name : (string)__('商品详情'));
+        $seoTitle = trim((string)($displayOffer['meta_name'] ?? '')) ?: ($name !== '' ? $name : (string)__('商品详情'));
+        $seoDescription = trim((string)($displayOffer['meta_description'] ?? ''));
+        if ($seoDescription === '') {
+            $seoDescription = trim((string)($displayOffer['short_description'] ?? $displayOffer['description'] ?? ''));
+        }
+        $seoKeywords = trim((string)($displayOffer['meta_keywords'] ?? ''));
+        $seoImage = trim((string)($displayOffer['image'] ?? ''));
+
         $this->assign('page_title', $name !== '' ? $name : __('商品详情'));
+        // Head rendering uses a separate template instance. Keep the body-local product
+        // assignment, and publish the same EAV projection through the shared SEO profile.
+        $seoProduct = $displayOffer;
+        $seoProduct['storefront_offers'] = $offers;
+        $this->assign('product', $seoProduct);
+        $this->assign('seo', [
+            'page_type' => 'product',
+            'title' => $seoTitle,
+            'description' => $seoDescription,
+            'keywords' => $seoKeywords,
+            'image' => $seoImage,
+            'product' => $seoProduct,
+        ]);
+        $this->assign('meta_title', $seoTitle);
+        $this->assign('meta_description', $seoDescription);
+        $this->assign('meta_keywords', $seoKeywords);
         $this->assign('storefront_offer', $displayOffer);
         $this->assign('storefront_offers', $offers);
         $this->assign(
@@ -90,8 +121,16 @@ final class Detail extends FrontendController
         );
         $this->assign(
             'variant_catalog',
-            $this->variantSelection->buildCatalog($offers, $displayOffer),
+            $this->enrichCatalogOptionCodes(
+                $this->variantSelection->buildCatalog($offers, $displayOffer),
+            ),
         );
+
+        $productIdForView = max(0, (int)($displayOffer['product_id'] ?? 0));
+        if ($productIdForView > 0) {
+            $viewedEvent = ['product_id' => $productIdForView];
+            $this->events->dispatch('Weline_Product::product_viewed', $viewedEvent);
+        }
 
         // Product main info is rendered by the product-info widget (default_injections → product-main).
         return (string)$this->fetch('Weline_Product::templates/frontend/catalog/detail-shell.phtml');
@@ -107,5 +146,39 @@ final class Detail extends FrontendController
         }
 
         return false;
+    }
+
+    /**
+     * @param array{axes:list<array<string,mixed>>,offers:list<array<string,mixed>>,selected:array<string,string>} $catalog
+     * @return array{axes:list<array<string,mixed>>,offers:list<array<string,mixed>>,selected:array<string,string>}
+     */
+    private function enrichCatalogOptionCodes(array $catalog): array
+    {
+        foreach ($catalog['axes'] as $axisIndex => $axis) {
+            if (!is_array($axis)) {
+                continue;
+            }
+            $axisCode = strtolower(trim((string)($axis['code'] ?? '')));
+            if ($axisCode === '') {
+                continue;
+            }
+            $options = [];
+            foreach ((array)($axis['options'] ?? []) as $option) {
+                if (!is_array($option)) {
+                    continue;
+                }
+                $value = trim((string)($option['value'] ?? ''));
+                if ($value === '') {
+                    continue;
+                }
+                if (trim((string)($option['code'] ?? '')) === '') {
+                    $option['code'] = $this->variantLabels->publicOptionCode($axisCode, $value);
+                }
+                $options[] = $option;
+            }
+            $catalog['axes'][$axisIndex]['options'] = $options;
+        }
+
+        return $catalog;
     }
 }

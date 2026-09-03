@@ -1,0 +1,164 @@
+.weline-textile-heritage {
+    padding: var(--weline-space-10) 0;
+    color: var(--weline-theme-text);
+}
+
+.weline-textile-heritage .brands-header {
+    text-align: center;
+    margin-bottom: var(--weline-space-8);
+}
+
+.weline-textile-heritage .brands-title {
+    font-size: var(--weline-font-size-2xl);
+    font-weight: 600;
+    margin: 0;
+    color: var(--weline-theme-text);
+}
+
+.weline-textile-heritage .brands-container {
+    position: relative;
+}
+
+.weline-textile-heritage .brands-grid {
+    display: grid;
+    gap: var(--weline-space-5);
+    align-items: stretch;
+}
+
+.weline-textile-heritage .brands-grid.columns-4 { grid-template-columns: repeat(4, 1fr); }
+.weline-textile-heritage .brands-grid.columns-5 { grid-template-columns: repeat(5, 1fr); }
+.weline-textile-heritage .brands-grid.columns-6 { grid-template-columns: repeat(6, 1fr); }
+.weline-textile-heritage .brands-grid.columns-8 { grid-template-columns: repeat(8, 1fr); }
+
+.weline-textile-heritage .brand-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-5);
+    background: var(--weline-theme-surface-subtle);
+    border-radius: var(--weline-radius-lg);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    transition: all var(--weline-theme-transition-base);
+    text-decoration: none;
+    color: inherit;
+    min-height: 100%;
+}
+
+.weline-textile-heritage .brand-item:hover {
+    box-shadow: var(--weline-theme-shadow-md);
+}
+
+.weline-textile-heritage .brand-logo,
+.weline-textile-heritage .brand-logo-media img {
+    width: 100%;
+    max-width: 7.5rem;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: var(--weline-radius-md);
+    transition: filter var(--weline-theme-transition-base),
+                transform var(--weline-theme-transition-base);
+}
+
+.weline-textile-heritage .brand-copy {
+    display: grid;
+    justify-items: center;
+    gap: var(--weline-space-1);
+    text-align: center;
+}
+
+.weline-textile-heritage .brand-name {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--weline-theme-text);
+    font-family: var(--weline-layout-font-family-display);
+    font-size: var(--weline-font-size-sm);
+    font-weight: 600;
+}
+
+.weline-textile-heritage .brand-caption {
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-xs);
+    line-height: var(--weline-layout-line-height-relaxed);
+}
+
+.weline-textile-heritage.is-grayscale .brand-logo,
+.weline-textile-heritage.is-grayscale .brand-logo-media img {
+    filter: grayscale(100%);
+    opacity: 0.85;
+}
+
+.weline-textile-heritage.is-grayscale.has-hover-color .brand-item:hover .brand-logo,
+.weline-textile-heritage.is-grayscale.has-hover-color .brand-item:hover .brand-logo-media img {
+    filter: grayscale(0%);
+    opacity: 1;
+    transform: scale(1.04);
+}
+
+.weline-textile-heritage.layout-carousel .brands-wrapper {
+    overflow: hidden;
+}
+
+.weline-textile-heritage.layout-carousel .brands-grid {
+    display: flex;
+    gap: var(--weline-space-5);
+    transition: transform var(--weline-theme-transition-base);
+}
+
+.weline-textile-heritage.layout-carousel .brand-item {
+    flex: 0 0 auto;
+    width: calc((100% - var(--token-size-100px)) / 6);
+}
+
+.weline-textile-heritage .carousel-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: var(--size-control-md);
+    height: var(--size-control-md);
+    background: var(--weline-theme-surface-raised);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: 50%;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    color: var(--weline-theme-text);
+    transition: all var(--weline-theme-transition-base);
+}
+
+.weline-textile-heritage .carousel-arrow:hover {
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+    border-color: var(--weline-theme-primary);
+}
+
+.weline-textile-heritage .carousel-prev { left: var(--token-size-20px); }
+.weline-textile-heritage .carousel-next { right: var(--token-size-20px); }
+
+.widget-preview-canvas .weline-textile-heritage,
+.weline-textile-heritage.is-preview {
+    padding: var(--weline-space-5) 0;
+}
+
+@media (max-width: 992px) {
+    .weline-textile-heritage .brands-grid.columns-6,
+    .weline-textile-heritage .brands-grid.columns-8 {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .weline-textile-heritage .brands-grid {
+        grid-template-columns: repeat(3, 1fr) !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .weline-textile-heritage .brands-grid {
+        grid-template-columns: repeat(2, 1fr) !important;
+    }
+}

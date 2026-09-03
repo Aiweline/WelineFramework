@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="320" height="320" viewBox="0 0 320 320" role="img" aria-label="苏绣">
+  <defs>
+    <pattern id="p" width="40" height="40" patternUnits="userSpaceOnUse">
+      <rect width="40" height="40" fill="#14532d"/>
+      <path d="M0 20 H40 M20 0 V40" stroke="#86efac" stroke-width="1.2" opacity="0.55"/>
+      <circle cx="20" cy="20" r="5" fill="none" stroke="#86efac" stroke-width="1.4" opacity="0.75"/>
+      <path d="M8 8 L20 2 L32 8 L20 14 Z" fill="#86efac" opacity="0.35"/>
+    </pattern>
+  </defs>
+  <rect width="320" height="320" fill="url(#p)"/>
+  <rect x="18" y="18" width="284" height="284" fill="none" stroke="#86efac" stroke-width="2" opacity="0.65"/>
+  <rect x="36" y="36" width="248" height="248" fill="#14532d" opacity="0.22"/>
+</svg>

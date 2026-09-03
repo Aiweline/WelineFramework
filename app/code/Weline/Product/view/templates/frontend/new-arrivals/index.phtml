@@ -1,0 +1,286 @@
+<?php
+/**
+ * International storefront new-arrivals collection.
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+$items = $this->getData('storefront_new_arrivals');
+$items = is_array($items) ? array_values($items) : [];
+$count = (int)($this->getData('storefront_new_arrivals_count') ?? count($items));
+$pageTitle = trim((string)($this->getData('page_title') ?? ''));
+$pageTitle = $pageTitle !== '' ? $pageTitle : (string)__('新品上架');
+
+$escape = static fn(mixed $value): string => htmlspecialchars(
+    (string)$value,
+    ENT_QUOTES | ENT_SUBSTITUTE,
+    'UTF-8',
+);
+$pick = static function (array $item, array $keys, mixed $fallback = ''): mixed {
+    foreach ($keys as $key) {
+        if (array_key_exists($key, $item) && $item[$key] !== null && $item[$key] !== '') {
+            return $item[$key];
+        }
+    }
+
+    return $fallback;
+};
+?>
+<section class="new-arrivals-page"
+         data-testid="storefront-new-arrivals"
+         weline-code="product.frontend.new_arrivals.section_1">
+    <header class="new-arrivals-page__hero">
+        <p class="new-arrivals-page__eyebrow"><?= $escape(__('新作入藏')) ?></p>
+        <h1 class="new-arrivals-page__title"><?= $escape($pageTitle) ?></h1>
+        <p class="new-arrivals-page__lede">
+            <?= $escape(__('甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。')) ?>
+        </p>
+        <p class="new-arrivals-page__count" data-testid="storefront-new-arrivals-count">
+            <?= $escape(__('共 %{1} 件新品', [$count])) ?>
+        </p>
+    </header>
+
+    <?php if ($items !== []): ?>
+        <div class="new-arrivals-page__grid" role="list" aria-label="<?= $escape(__('新品汉服')) ?>">
+            <?php foreach ($items as $index => $item): ?>
+                <?php
+                if (!is_array($item)) {
+                    continue;
+                }
+                $productId = (int)$pick($item, ['product_id', 'id'], 0);
+                $name = trim((string)$pick($item, ['name', 'title'], __('汉服商品')));
+                $url = trim((string)$pick($item, ['url', 'product_url', 'detail_url', 'link'], '/products'));
+                $image = trim((string)$pick($item, ['image_url', 'image', 'thumbnail_url', 'thumbnail'], ''));
+                $price = trim((string)$pick($item, ['formatted_price', 'price_label', 'price'], ''));
+                $sku = trim((string)$pick($item, ['sku', 'offer_sku'], ''));
+                ?>
+                <article class="new-arrivals-page__card"
+                         role="listitem"
+                         data-testid="storefront-new-arrivals-card"
+                         data-arrival-index="<?= $index + 1 ?>"
+                         <?php if ($productId > 0): ?>data-product-id="<?= $productId ?>"<?php endif; ?>>
+                    <?php if ($image !== ''): ?>
+                        <a class="new-arrivals-page__media" href="<?= $escape($url) ?>" aria-label="<?= $escape($name) ?>">
+                            <img src="<?= $escape($image) ?>"
+                                 alt="<?= $escape($name) ?>"
+                                 loading="<?= $index < 4 ? 'eager' : 'lazy' ?>"
+                                 decoding="async">
+                        </a>
+                    <?php endif; ?>
+                    <div class="new-arrivals-page__body">
+                        <div class="new-arrivals-page__meta">
+                            <span class="new-arrivals-page__badge"><?= $escape(__('新品')) ?></span>
+                            <?php if ($sku !== ''): ?>
+                                <span class="new-arrivals-page__sku"><?= $escape($sku) ?></span>
+                            <?php endif; ?>
+                        </div>
+                        <h2 class="new-arrivals-page__name">
+                            <a href="<?= $escape($url) ?>"><?= $escape($name) ?></a>
+                        </h2>
+                        <?php if ($price !== ''): ?>
+                            <p class="new-arrivals-page__price"><?= $escape($price) ?></p>
+                        <?php endif; ?>
+                        <a class="new-arrivals-page__action" href="<?= $escape($url) ?>">
+                            <?= $escape(__('查看商品')) ?>
+                        </a>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    <?php else: ?>
+        <div class="new-arrivals-page__empty" data-testid="storefront-new-arrivals-empty">
+            <h2><?= $escape(__('新品正在整理')) ?></h2>
+            <a class="new-arrivals-page__action" href="/products"><?= $escape(__('浏览全部商品')) ?></a>
+        </div>
+    <?php endif; ?>
+</section>
+
+<style data-weline-product-new-arrivals="1">
+.new-arrivals-page {
+    display: grid;
+    gap: var(--weline-space-8);
+    padding-block: var(--weline-space-7) var(--weline-space-10);
+    color: var(--weline-theme-text);
+}
+.new-arrivals-page__hero {
+    display: grid;
+    max-width: 48rem;
+    gap: var(--weline-space-3);
+}
+.new-arrivals-page__eyebrow,
+.new-arrivals-page__title,
+.new-arrivals-page__lede,
+.new-arrivals-page__count,
+.new-arrivals-page__name,
+.new-arrivals-page__price {
+    margin: 0;
+}
+.new-arrivals-page__eyebrow {
+    color: var(--weline-theme-primary-text-emphasis);
+    font-size: var(--weline-font-size-sm);
+    font-weight: var(--weline-font-weight-semibold);
+    letter-spacing: .14em;
+    text-transform: uppercase;
+}
+.new-arrivals-page__title {
+    color: var(--weline-theme-heading);
+    font-family: var(--weline-font-family-heading);
+    font-size: clamp(2rem, 5vw, 3.75rem);
+    line-height: 1.08;
+}
+.new-arrivals-page__lede {
+    max-width: 42rem;
+    color: var(--weline-theme-text-muted);
+    font-size: var(--weline-font-size-lg);
+    line-height: 1.75;
+}
+.new-arrivals-page__count,
+.new-arrivals-page__sku {
+    color: var(--weline-theme-text-subtle);
+    font-size: var(--weline-font-size-sm);
+}
+.new-arrivals-page__grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--weline-space-6);
+}
+.new-arrivals-page__card {
+    display: grid;
+    min-width: 0;
+    overflow: hidden;
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
+    background: var(--weline-theme-surface-raised);
+    box-shadow: var(--weline-theme-shadow-sm);
+    transition: transform var(--weline-theme-transition-fast), box-shadow var(--weline-theme-transition-fast);
+}
+.new-arrivals-page__card:hover {
+    transform: translateY(calc(var(--weline-space-1) * -1));
+    box-shadow: var(--weline-theme-shadow-md);
+}
+.new-arrivals-page__media {
+    display: block;
+    aspect-ratio: 4 / 5;
+    overflow: hidden;
+    background: var(--weline-theme-surface);
+}
+.new-arrivals-page__media img {
+    display: block;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: transform var(--weline-theme-transition-slow);
+}
+.new-arrivals-page__card:hover .new-arrivals-page__media img {
+    transform: scale(1.025);
+}
+.new-arrivals-page__body {
+    display: grid;
+    align-content: start;
+    gap: var(--weline-space-3);
+    padding: var(--weline-space-5);
+}
+.new-arrivals-page__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--weline-space-3);
+}
+.new-arrivals-page__badge {
+    display: inline-flex;
+    width: max-content;
+    padding: var(--weline-space-1) var(--weline-space-3);
+    border-radius: var(--weline-radius-pill);
+    background: var(--weline-theme-primary-surface);
+    color: var(--weline-theme-primary-text-emphasis);
+    font-size: var(--weline-font-size-xs);
+    font-weight: var(--weline-font-weight-semibold);
+}
+.new-arrivals-page__sku {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+.new-arrivals-page__name {
+    min-height: 3em;
+    color: var(--weline-theme-heading);
+    font-size: var(--weline-font-size-base);
+    line-height: 1.5;
+}
+.new-arrivals-page__name a {
+    color: inherit;
+    text-decoration: none;
+}
+.new-arrivals-page__name a:hover {
+    color: var(--weline-theme-primary-hover);
+}
+.new-arrivals-page__price {
+    color: var(--weline-theme-primary-text-emphasis);
+    font-size: var(--weline-font-size-lg);
+    font-weight: var(--weline-font-weight-semibold);
+}
+.new-arrivals-page__action {
+    display: inline-flex;
+    width: max-content;
+    min-height: var(--weline-theme-control-height-sm);
+    align-items: center;
+    justify-content: center;
+    padding-inline: var(--weline-space-4);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-primary);
+    border-radius: var(--weline-radius-md);
+    background: var(--weline-theme-primary);
+    color: var(--weline-theme-on-primary);
+    font-weight: var(--weline-font-weight-semibold);
+    text-decoration: none;
+    transition: background var(--weline-theme-transition-fast), border-color var(--weline-theme-transition-fast);
+}
+.new-arrivals-page__action:hover {
+    border-color: var(--weline-theme-primary-hover);
+    background: var(--weline-theme-primary-hover);
+    color: var(--weline-theme-on-primary);
+}
+.new-arrivals-page__action:focus-visible {
+    outline: var(--weline-theme-border-width-2) var(--weline-theme-border-style) var(--weline-theme-focus-outline);
+    outline-offset: var(--weline-space-1);
+}
+.new-arrivals-page__empty {
+    display: grid;
+    justify-items: start;
+    gap: var(--weline-space-4);
+    padding: var(--weline-space-8);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
+    border-radius: var(--weline-radius-lg);
+    background: var(--weline-theme-surface-raised);
+}
+:dir(rtl) .new-arrivals-page__hero,
+:dir(rtl) .new-arrivals-page__body,
+:dir(rtl) .new-arrivals-page__empty {
+    text-align: right;
+}
+@media (max-width: 68rem) {
+    .new-arrivals-page__grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+@media (max-width: 48rem) {
+    .new-arrivals-page__grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--weline-space-4);
+    }
+}
+@media (max-width: 32rem) {
+    .new-arrivals-page__grid {
+        grid-template-columns: 1fr;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .new-arrivals-page__card,
+    .new-arrivals-page__media img {
+        transition: none;
+    }
+    .new-arrivals-page__card:hover,
+    .new-arrivals-page__card:hover .new-arrivals-page__media img {
+        transform: none;
+    }
+}
+</style>

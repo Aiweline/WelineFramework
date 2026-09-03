@@ -92,7 +92,66 @@ final readonly class ProductValidationContext
             ];
         }
 
+        // Publish diagnostics often use empty locale while content is stored under a concrete language.
+        if ($this->localeCode() === '') {
+            $fallback = $this->attributeAnyLocaleFallback($rows, $storeId);
+            if ($fallback !== null) {
+                return $fallback;
+            }
+        }
+
         return ['found' => false, 'cleared' => false, 'value' => null, 'store_id' => null, 'locale' => ''];
+    }
+
+    /**
+     * @param array<string, array<string, mixed>> $rows
+     * @return array{found:bool,cleared:bool,value:mixed,store_id:?int,locale:string}|null
+     */
+    private function attributeAnyLocaleFallback(array $rows, int $storeId): ?array
+    {
+        $storeOrder = $storeId > 0 ? [$storeId, 0] : [0];
+        $preferredLocales = ['zh_Hans_CN', 'zh_CN', 'en_US'];
+        foreach ($storeOrder as $scopeStoreId) {
+            $candidates = [];
+            foreach ($rows as $key => $row) {
+                $parts = explode('|', $key, 2);
+                $rowStoreId = (int)($parts[0] ?? 0);
+                $rowLocale = (string)($parts[1] ?? '');
+                if ($rowStoreId !== $scopeStoreId || $rowLocale === '') {
+                    continue;
+                }
+                $state = strtolower(trim((string)($row['scope_state'] ?? 'explicit')));
+                if ($state === 'inherit' || $state === 'cleared' || (int)($row['cleared'] ?? 0) === 1) {
+                    continue;
+                }
+                $value = $this->attributeRowValue($row);
+                if (!is_string($value) || trim($value) === '') {
+                    if ($value === null || $value === '') {
+                        continue;
+                    }
+                }
+                $candidates[$rowLocale] = [
+                    'found' => true,
+                    'cleared' => false,
+                    'value' => $value,
+                    'store_id' => $scopeStoreId,
+                    'locale' => $rowLocale,
+                ];
+            }
+            if ($candidates === []) {
+                continue;
+            }
+            foreach ($preferredLocales as $preferred) {
+                if (isset($candidates[$preferred])) {
+                    return $candidates[$preferred];
+                }
+            }
+            ksort($candidates);
+
+            return reset($candidates) ?: null;
+        }
+
+        return null;
     }
 
     public function localeCode(): string
