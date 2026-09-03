@@ -91,6 +91,33 @@ final class LanguageInjectLocalesContractTest extends TestCase
         self::assertSame('zz_QQ', (string)($items[2]['name'] ?? ''));
     }
 
+    public function testRepeatedLanguageSwitcherRenderKeepsInstanceIdsUniqueAndAriaLinked(): void
+    {
+        LanguageSwitcher::clearProcessCaches();
+        $attributes = [
+            'allowed_values' => ['zh_Hans_CN', 'en_US'],
+            'current' => 'zh_Hans_CN',
+            'navigation' => 'emit',
+        ];
+        $first = LanguageSwitcher::render($attributes);
+        $second = LanguageSwitcher::render($attributes);
+
+        preg_match('/data-i18n-switcher-id="([^"]+)"/', $first, $firstMatch);
+        preg_match('/data-i18n-switcher-id="([^"]+)"/', $second, $secondMatch);
+        $firstId = (string)($firstMatch[1] ?? '');
+        $secondId = (string)($secondMatch[1] ?? '');
+
+        self::assertNotSame('', $firstId);
+        self::assertNotSame('', $secondId);
+        self::assertNotSame($firstId, $secondId);
+        foreach ([[$first, $firstId], [$second, $secondId]] as [$html, $id]) {
+            self::assertStringContainsString('id="' . $id . '-toggle"', $html);
+            self::assertStringContainsString('aria-controls="' . $id . '-panel"', $html);
+            self::assertStringContainsString('id="' . $id . '-panel"', $html);
+            self::assertStringContainsString('aria-labelledby="' . $id . '-toggle"', $html);
+        }
+    }
+
     public function testLanguageSwitcherAttrDocumentsLocalesCurrentNavigation(): void
     {
         $attrs = LanguageSwitcher::attr();
