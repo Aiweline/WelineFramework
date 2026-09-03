@@ -24,6 +24,8 @@ class Category extends Model
     public const schema_fields_SLUG = 'slug';
     #[Col('varchar', 255, nullable: false, comment: '分类名称')]
     public const schema_fields_NAME = 'name';
+    #[Col('int', nullable: false, default: 0, comment: '父分类 ID（0=顶级；限深 2）')]
+    public const schema_fields_PARENT_ID = 'parent_id';
     #[Col('int', nullable: false, default: 0, comment: '排序')]
     public const schema_fields_SORT_ORDER = 'sort_order';
     #[Col('datetime', nullable: false, comment: '创建时间')]

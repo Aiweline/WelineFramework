@@ -3,10 +3,44 @@
 declare(strict_types=1);
 
 /**
- * Blog 前台部件：评论容器 + 页脚了解我们扩展（博客/新闻中心链接）。
+ * Blog 前台部件：评论容器 + 页脚了解我们扩展（博客/新闻中心链接）+ 页头导航扩展。
  * Theme layouts/partials 禁止内嵌本模块 <w:widget>；靠 default_injections / 拖入补空槽。
  */
 return [
+    'header-blog-link' => [
+        'name' => '页头博客链接',
+        'description' => '页头导航扩展槽：博客列表入口；默认注入 header-nav-extensions（分类后方）。',
+        'type' => 'navigation',
+        'code' => 'header-blog-link',
+        'area' => 'frontend',
+        'template' => 'Weline_Blog::templates/frontend/widgets/header-blog-link.phtml',
+        'page_layouts' => ['*'],
+        'position' => ['header'],
+        'slot' => 'header-nav-extensions',
+        'supports' => [
+            'header-blog-link',
+            'header-nav-link',
+            'layout-header-nav-extensions',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'homepage',
+            'slot' => 'header-nav-extensions',
+            'area' => 'header',
+            'sort_order' => 0,
+            'required' => true,
+            'reason' => '页头分类后方默认展示博客入口',
+            'config' => [
+                'label' => '博客',
+            ],
+        ]],
+        'params' => [
+            'label' => [
+                'default' => '博客',
+                'type' => 'string',
+                'label' => '链接文字',
+            ],
+        ],
+    ],
     'blog-reviews' => [
         'name' => '博客评论',
         'description' => '万能评论大部件：博客文章评论列表与图文提交；默认注入博客详情评论容器。',
@@ -100,7 +134,7 @@ return [
             'layout-footer-about-links',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'footer-about-links',
             'area' => 'footer',
             'sort_order' => 0,
@@ -133,7 +167,7 @@ return [
             'layout-footer-about-links',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'footer-about-links',
             'area' => 'footer',
             'sort_order' => 10,

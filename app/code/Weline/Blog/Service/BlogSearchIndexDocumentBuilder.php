@@ -79,16 +79,18 @@ final class BlogSearchIndexDocumentBuilder
             return null;
         }
 
-        $slug = trim(strtolower((string)($row[Post::schema_fields_SLUG] ?? '')));
-        if ($slug === '') {
+        $storageSlug = trim(strtolower((string)($row[Post::schema_fields_SLUG] ?? '')));
+        if ($storageSlug === '') {
             return null;
         }
+        $locale = (string)($row[Post::schema_fields_LOCALE] ?? '');
+        $slug = $this->resolver->publicSlugForLocale($storageSlug, $locale);
 
         $categoryId = (int)($row[Post::schema_fields_CATEGORY_ID] ?? 0);
         $article = new BlogArticle(
             contentKind: BlogArticle::KIND_POST,
             websiteId: (int)($row[Post::schema_fields_WEBSITE_ID] ?? 0),
-            locale: (string)($row[Post::schema_fields_LOCALE] ?? ''),
+            locale: $locale,
             slug: $slug,
             identifier: BlogNamespace::identifierFromSlug($slug),
             title: (string)($row[Post::schema_fields_TITLE] ?? ''),
@@ -103,6 +105,7 @@ final class BlogSearchIndexDocumentBuilder
             sourceRef: [
                 'kind' => BlogArticle::KIND_POST,
                 'post_id' => (int)($row[Post::schema_fields_ID] ?? 0),
+                'storage_slug' => $storageSlug,
                 'category_id' => $categoryId,
             ],
             keywords: (string)($row[Post::schema_fields_KEYWORDS] ?? '') ?: null,

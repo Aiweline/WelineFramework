@@ -6,6 +6,9 @@ declare(strict_types=1);
  * Incremental seed: China 56 ethnic dress categories + Hanfu menswear.
  * Does NOT purge existing blog data. Idempotent (skip existing codes).
  *
+ * Blog space supports parent_id depth ≤ 2. china-ethnic-dress is the hub;
+ * ethnic-cn-* children are remounted under it after upsert.
+ *
  * Usage: php app/code/Weline/Blog/data/seed-china-ethnic-categories.php
  */
 
@@ -259,4 +262,38 @@ foreach ($groups as $g) {
     ++$sort;
 }
 
+remountEthnicChildren($existing);
+
 echo "done. categories_total=" . count(existingCategoryMap()) . "\n";
+
+/**
+ * @param array<string,int> $existing
+ */
+function remountEthnicChildren(array $existing): void
+{
+    $hubId = (int)($existing['china-ethnic-dress'] ?? 0);
+    if ($hubId <= 0) {
+        $existing = existingCategoryMap();
+        $hubId = (int)($existing['china-ethnic-dress'] ?? 0);
+    }
+    if ($hubId <= 0) {
+        echo "! skip remount: china-ethnic-dress missing\n";
+
+        return;
+    }
+
+    $admin = ObjectManager::getInstance(BlogCategoryAdminService::class);
+    $position = 1;
+    foreach ($existing as $code => $categoryId) {
+        if (!is_string($code) || !str_starts_with($code, 'ethnic-cn-')) {
+            continue;
+        }
+        $categoryId = (int)$categoryId;
+        if ($categoryId <= 0) {
+            continue;
+        }
+        $admin->reorder(WEBSITE_ID, $categoryId, $hubId, 2, $position);
+        echo "~ remount #{$categoryId} {$code} -> china-ethnic-dress #{$hubId}\n";
+        ++$position;
+    }
+}

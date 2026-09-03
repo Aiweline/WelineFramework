@@ -56,7 +56,14 @@ final class HanfuR2ContentRemediationContractTest extends TestCase
         $script = (string)file_get_contents(
             dirname(__DIR__, 3) . '/data/remediate-hanfu-content-r2.php',
         );
+        $editorial = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/data/hanfu-r2-ethnic-editorial.php',
+        );
 
+        self::assertStringContainsString(
+            "require_once __DIR__ . '/hanfu-r2-ethnic-editorial.php';",
+            $script,
+        );
         foreach ([
             'FileAssetLibraryInterface',
             'BlogPostAdminService',
@@ -74,17 +81,33 @@ final class HanfuR2ContentRemediationContractTest extends TestCase
             '--dry-run',
             '--apply',
             '--verify',
+            '--cleanup',
+            'substr($sourceSha, 0, 12)',
+            "['asset_ready']",
+            'hanfu_r2_cleanup_allowlist_invalid',
+            'hanfu_r2_cleanup_post_reference_mismatch',
+            'deleteObject',
             '160',
             '320',
             'cover_url_not_unique',
             'paragraph',
+            'hanfuR2IsEnglish($locale) ? 330 : 620',
         ] as $required) {
             self::assertStringContainsString($required, $script);
         }
+        foreach ([
+            'Museum records, community accounts and dated field photographs are stronger together than an anonymous sales caption.',
+            'The illustration for this article is editorial and must not be cited as field evidence.',
+            '博物馆藏品、社区口述与有日期的田野照片互相印证',
+            '本文图片属于编辑性说明图，不可引用为田野证据。',
+        ] as $required) {
+            self::assertStringContainsString($required, $editorial);
+        }
 
-        self::assertStringNotContainsString('不是简单的“看起来像”', $script);
-        self::assertStringNotContainsString('这个问题看似简单', $script);
-        self::assertStringNotContainsString('<img ', $script);
+        $combinedSource = $script . $editorial;
+        self::assertStringNotContainsString('不是简单的“看起来像”', $combinedSource);
+        self::assertStringNotContainsString('这个问题看似简单', $combinedSource);
+        self::assertStringNotContainsString('<img ', $combinedSource);
     }
 
     public function testImagePolicyRequiresUniqueTopicCoversAndReviewedMetadata(): void

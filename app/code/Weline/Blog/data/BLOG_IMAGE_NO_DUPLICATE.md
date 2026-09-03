@@ -39,4 +39,13 @@ php app/code/Weline/Blog/data/remediate-hanfu-content-r2.php --apply
 php app/code/Weline/Blog/data/remediate-hanfu-content-r2.php --verify
 ```
 
+验收不再以“URL 不同、SHA256 不同”代替视觉去重：
+
+1. 同一民族的“概览”和“场合”图不得复用同一人物、服装、背景或同一母图裁切，不得再使用重复双联图。
+2. 图片必须支持标题中的服饰对象；形制、领型、上下装关系、头饰或场合无法辨认时不得上线。
+3. 原创建图标为“编辑配图 / editorial illustration”，不得伪称藏品、历史照片或田野记录。
+4. 每项资产保存生成/来源方式、日期、裁切说明和最终 SHA256；文件管理器同步写入 `zh_Hans_CN`、`en_US` 的名称、替代文本、标题、描述、图注、关键词、署名、来源与授权。
+5. 旧文件只在数据库、正文、分类和代码引用均为零后删除；迁移失败时禁止先删旧图。
+6. 正文验收覆盖 56 个民族 × 2 个主题 × 2 个语言，要求正文和导语唯一、标题结构至少 64 组、五类资料字段完整、同民族双主题不再高度相似。
+
 旧版 `enrich-blog-r1-images.php`、`redistribute-blog-r1-photos-strict.php`、`rewrite-blog-r1-substance.php` 仅保留历史追溯，不得用于 R2 文章回写。
