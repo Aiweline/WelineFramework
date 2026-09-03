@@ -21,6 +21,6 @@ final class CartJsPendingCouponContractTest extends TestCase
         self::assertStringContainsString('Weline_Cart::js/cart.js', $modules);
         self::assertStringContainsString("'renewGuestSession'", $provider);
         self::assertStringContainsString('function renewGuestSession', $provider);
-        self::assertStringContainsString('touchGuestCart', (string)\file_get_contents($root . '/Service/CartV2Service.php'));
+        self::assertStringContainsString('touchGuestCart', (string)\file_get_contents($root . '/Service/CartService.php'));
     }
 }

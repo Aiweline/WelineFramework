@@ -8,19 +8,18 @@ use PHPUnit\Framework\TestCase;
 use Weline\Cart\Api\Data\OfferIdentity;
 use Weline\Cart\Extends\Module\Weline_Framework\Query\CartQueryProvider;
 use Weline\Cart\Service\CartCurrentCustomerResolver;
-use Weline\Cart\Service\CartItemSnapshotProviderV2Registry;
+use Weline\Cart\Service\CartItemSnapshotProviderRegistry;
 use Weline\Cart\Service\CartScopeResolver;
 use Weline\Cart\Service\CartService;
-use Weline\Cart\Service\CartV2Service;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2\ProductCartItemSnapshotProvider;
+use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider\ProductCartItemSnapshotProvider;
 
-final class CartQueryProviderV2SecurityTest extends TestCase
+final class CartQueryProviderSecurityTest extends TestCase
 {
     public function testFrontendDescriptorDoesNotExposeCustomerCartOwner(): void
     {
         $query = new CartQueryProvider(
-            $this->createMock(CartService::class),
+            CartService::forTesting(CartItemSnapshotProviderRegistry::forTesting()),
             new CartScopeResolver(),
             new CartCurrentCustomerResolver(static fn(): ?int => null),
         );
@@ -29,34 +28,39 @@ final class CartQueryProviderV2SecurityTest extends TestCase
             $operations[(string)$operation['name']] = $operation;
         }
 
-        foreach (['add', 'addV2', 'mergeGuest', 'getV2Cart', 'updateV2', 'removeV2'] as $operationName) {
+        foreach (['add', 'mergeGuest', 'getCart', 'update', 'remove', 'clear'] as $operationName) {
+            self::assertArrayHasKey($operationName, $operations, $operationName . ' missing');
             self::assertArrayNotHasKey(
                 'customer_id',
                 $operations[$operationName]['params'],
                 $operationName . ' must not expose customer_id to the browser',
             );
         }
-        foreach (['addV2', 'mergeGuest', 'getV2Cart', 'updateV2', 'removeV2'] as $operationName) {
+        foreach (['add', 'mergeGuest', 'getCart', 'update', 'remove', 'clear'] as $operationName) {
             self::assertArrayHasKey('store_code', $operations[$operationName]['params']);
             self::assertArrayHasKey('channel_code', $operations[$operationName]['params']);
             self::assertArrayHasKey('scope', $operations[$operationName]['params']);
         }
-        self::assertSame('write', $operations['updateV2']['mode']);
-        self::assertSame('write', $operations['removeV2']['mode']);
+        self::assertSame('write', $operations['update']['mode']);
+        self::assertSame('write', $operations['remove']['mode']);
+        foreach ($operations as $operationName => $operation) {
+            self::assertTrue(
+                ($operation['external'] ?? false) === true,
+                $operationName . ' must set external=true for frontend worker exposure',
+            );
+        }
     }
 
-    public function testV2MutationUsesTrustedGuestIdentityAndScope(): void
+    public function testMutationUsesTrustedGuestIdentityAndScope(): void
     {
-        [$v2, $offer] = $this->service();
+        [$cart, $offer] = $this->service();
         $scope = $this->channelScope();
-        $guestToken = $v2->issueGuestToken();
-        $added = $v2->add($scope, $offer, [], 3, $guestToken);
+        $guestToken = $cart->issueGuestToken();
+        $added = $cart->add($scope, $offer, [], 3, $guestToken);
         $itemId = (string)$added['items'][0]['item_id'];
 
-        $cartService = $this->createMock(CartService::class);
-        $cartService->method('cartV2')->willReturn($v2);
         $query = new CartQueryProvider(
-            $cartService,
+            $cart,
             new CartScopeResolver(),
             new CartCurrentCustomerResolver(static fn(): ?int => null),
         );
@@ -67,57 +71,49 @@ final class CartQueryProviderV2SecurityTest extends TestCase
             'customer_id' => 999,
         ];
 
-        $updated = $query->execute('updateV2', $params);
+        $updated = $query->execute('update', $params);
         self::assertTrue($updated['success']);
         self::assertSame(1, $updated['item_count']);
-        self::assertSame(CartV2Service::OWNER_GUEST, $updated['owner_kind']);
+        self::assertSame(CartService::OWNER_GUEST, $updated['owner_kind']);
 
-        $removed = $query->execute('removeV2', $params);
+        $removed = $query->execute('remove', $params);
         self::assertTrue($removed['success']);
         self::assertTrue($removed['is_empty']);
     }
 
-    public function testAddV2ReplacesBrowserCustomerIdWithAuthenticatedIdentity(): void
+    public function testAddReplacesBrowserCustomerIdWithAuthenticatedIdentity(): void
     {
-        $cartService = $this->createMock(CartService::class);
-        $cartService->expects(self::once())
-            ->method('add')
-            ->with(self::callback(static function (array $params): bool {
-                return ($params['customer_id'] ?? null) === 77
-                    && ($params['provider_code'] ?? null) === 'product';
-            }))
-            ->willReturn([
-                'success' => true,
-                'message' => 'ok',
-                'item_count' => 1,
-            ]);
+        [$cart, $offer] = $this->service();
+        $guestToken = $cart->issueGuestToken();
         $query = new CartQueryProvider(
-            $cartService,
+            $cart,
             new CartScopeResolver(),
             new CartCurrentCustomerResolver(static fn(): ?int => 77),
         );
-
-        $result = $query->execute('addV2', [
-            'global_offer_uuid' => '61616161-6161-4616-8616-616161616161',
+        $result = $query->execute('add', $this->flatScopeParams() + [
+            'provider_code' => 'product',
+            'global_offer_uuid' => $offer->globalOfferUuid,
+            'legacy_product_id' => $offer->legacyProductId,
+            'guest_token' => $guestToken,
+            'qty' => 1,
             'customer_id' => 999,
         ]);
-
-        self::assertTrue($result['success']);
+        self::assertTrue($result['success'], (string)($result['message'] ?? ''));
+        self::assertSame(CartService::OWNER_CUSTOMER, $result['owner_kind']);
+        self::assertSame('77', $result['owner_id']);
         self::assertSame(1, $result['item_count']);
     }
 
     public function testGuestCannotReadOrMergeCustomerCartBySupplyingCustomerId(): void
     {
-        [$v2, $offer] = $this->service();
+        [$cart, $offer] = $this->service();
         $scope = $this->channelScope();
-        $guestToken = $v2->issueGuestToken();
-        $v2->add($scope, $offer, [], 2, $guestToken);
-        $v2->add($scope, $offer, [], 4, customerId: 99);
+        $guestToken = $cart->issueGuestToken();
+        $cart->add($scope, $offer, [], 2, $guestToken);
+        $cart->add($scope, $offer, [], 4, customerId: 99);
 
-        $cartService = $this->createMock(CartService::class);
-        $cartService->method('cartV2')->willReturn($v2);
         $query = new CartQueryProvider(
-            $cartService,
+            $cart,
             new CartScopeResolver(),
             new CartCurrentCustomerResolver(static fn(): ?int => null),
         );
@@ -126,32 +122,29 @@ final class CartQueryProviderV2SecurityTest extends TestCase
             'customer_id' => 99,
         ];
 
-        $read = $query->execute('getV2Cart', $params);
+        $read = $query->execute('getCart', $params);
         self::assertTrue($read['success']);
-        self::assertSame(CartV2Service::OWNER_GUEST, $read['owner_kind']);
+        self::assertSame(CartService::OWNER_GUEST, $read['owner_kind']);
         self::assertSame(2, $read['item_count']);
         self::assertSame($scope->canonicalKey(), $read['scope_key']);
 
         $merge = $query->execute('mergeGuest', $params);
         self::assertFalse($merge['success']);
         self::assertSame(CartCurrentCustomerResolver::ERROR_AUTH_REQUIRED, $merge['error_code']);
-        self::assertSame(2, $v2->getCart($scope, $guestToken)['item_count']);
-        self::assertSame(4, $v2->getCart($scope, customerId: 99)['item_count']);
+        self::assertSame(2, $cart->getCart($scope, $guestToken)['item_count']);
+        self::assertSame(4, $cart->getCart($scope, customerId: 99)['item_count']);
     }
-
 
     public function testAuthenticatedMergeUsesCurrentCustomerAndFlatChannelScope(): void
     {
-        [$v2, $offer] = $this->service();
+        [$cart, $offer] = $this->service();
         $scope = $this->channelScope();
-        $guestToken = $v2->issueGuestToken();
-        $v2->add($scope, $offer, ['size' => 'M'], 2, $guestToken);
-        $v2->add($scope, $offer, ['size' => 'M'], 1, customerId: 77);
+        $guestToken = $cart->issueGuestToken();
+        $cart->add($scope, $offer, ['size' => 'M'], 2, $guestToken);
+        $cart->add($scope, $offer, ['size' => 'M'], 1, customerId: 77);
 
-        $cartService = $this->createMock(CartService::class);
-        $cartService->method('cartV2')->willReturn($v2);
         $query = new CartQueryProvider(
-            $cartService,
+            $cart,
             new CartScopeResolver(),
             new CartCurrentCustomerResolver(static fn(): ?int => 77),
         );
@@ -162,15 +155,15 @@ final class CartQueryProviderV2SecurityTest extends TestCase
 
         $merged = $query->execute('mergeGuest', $params);
         self::assertTrue($merged['success']);
-        self::assertSame(CartV2Service::OWNER_CUSTOMER, $merged['owner_kind']);
+        self::assertSame(CartService::OWNER_CUSTOMER, $merged['owner_kind']);
         self::assertSame('77', $merged['owner_id']);
         self::assertSame(3, $merged['item_count']);
         self::assertSame($scope->canonicalKey(), $merged['scope_key']);
-        self::assertTrue($v2->getCart($scope, $guestToken)['is_empty']);
+        self::assertTrue($cart->getCart($scope, $guestToken)['is_empty']);
     }
 
     /**
-     * @return array{CartV2Service, OfferIdentity}
+     * @return array{CartService, OfferIdentity}
      */
     private function service(): array
     {
@@ -184,9 +177,9 @@ final class CartQueryProviderV2SecurityTest extends TestCase
                 'sellable' => true,
             ],
         ]);
-        $registry = CartItemSnapshotProviderV2Registry::forTesting([$provider]);
+        $registry = CartItemSnapshotProviderRegistry::forTesting([$provider]);
         return [
-            CartV2Service::forTesting($registry),
+            CartService::forTesting($registry),
             new OfferIdentity('product', $offerUuid, legacyProductId: 62),
         ];
     }

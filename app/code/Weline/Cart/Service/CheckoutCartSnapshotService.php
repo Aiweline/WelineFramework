@@ -10,7 +10,7 @@ use Weline\Cart\Api\Data\OfferIdentity;
 use Weline\Framework\Runtime\ScopeIdentity;
 
 /**
- * Converts the current Cart V2 state into server-authoritative Checkout lines.
+ * Converts the current Cart state into server-authoritative Checkout lines.
  */
 final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
 {
@@ -23,7 +23,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
     public const ERROR_CURRENCY = 'checkout_cart_currency_conflict';
 
     public function __construct(
-        private readonly CartV2Service $cart,
+        private readonly CartService $cart,
     ) {
     }
 
@@ -35,14 +35,14 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
         $customerId = $customerId !== null && $customerId > 0 ? $customerId : null;
         $summary = $this->cart->getCart($scope, $guestToken, $customerId);
         if ((string)($summary['scope_key'] ?? '') !== $scope->canonicalKey()) {
-            throw new CartV2ConflictException(
+            throw new CartConflictException(
                 self::ERROR_SCOPE,
                 __('当前购物车与结账 Scope 不一致'),
             );
         }
         $expectedOwner = $customerId === null ? (string)$guestToken : (string)$customerId;
         if (!hash_equals((string)($summary['owner_id'] ?? ''), $expectedOwner)) {
-            throw new CartV2ConflictException(
+            throw new CartConflictException(
                 self::ERROR_IDENTITY,
                 __('当前购物车身份与结账身份不一致'),
             );
@@ -51,7 +51,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
         $cartCurrency = strtoupper(trim((string)($summary['currency'] ?? '')));
         $cartLines = is_array($summary['items'] ?? null) ? $summary['items'] : [];
         if ($cartLines === []) {
-            throw new CartV2ConflictException(
+            throw new CartConflictException(
                 self::ERROR_EMPTY,
                 __('购物车为空，无法结账'),
             );
@@ -60,7 +60,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
         $lines = [];
         foreach ($cartLines as $index => $line) {
             if (!is_array($line) || !is_array($line['offer'] ?? null)) {
-                throw new CartV2ConflictException(
+                throw new CartConflictException(
                     self::ERROR_LINE,
                     __('购物车行缺少 Offer 身份：%{1}', [$index]),
                 );
@@ -73,7 +73,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
                 $selection,
             );
             if (!hash_equals($serverSelectionHash, (string)($line['selection_hash'] ?? ''))) {
-                throw new CartV2ConflictException(
+                throw new CartConflictException(
                     self::ERROR_LINE,
                     __('购物车 selection hash 已失效，请重新加入商品'),
                     ['line_index' => $index],
@@ -82,7 +82,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
 
             $snapshot = $this->cart->registry()->resolve($offer, $scope, $selection);
             if (!$snapshot->found || !$snapshot->sellable) {
-                throw new CartV2ConflictException(
+                throw new CartConflictException(
                     self::ERROR_SELLABILITY,
                     $snapshot->message !== '' ? $snapshot->message : __('商品已不可售'),
                     ['global_offer_uuid' => $offer->globalOfferUuid],
@@ -90,7 +90,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
             }
             $quantity = (int)($line['qty'] ?? 0);
             if ($quantity <= 0 || ($snapshot->stock !== null && $quantity > $snapshot->stock)) {
-                throw new CartV2ConflictException(
+                throw new CartConflictException(
                     self::ERROR_QUANTITY,
                     __('购物车数量超过当前可售数量'),
                     [
@@ -102,7 +102,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
             }
             $lineCurrency = strtoupper(trim($snapshot->currency));
             if ($lineCurrency === '' || ($cartCurrency !== '' && $cartCurrency !== $lineCurrency)) {
-                throw new CartV2ConflictException(
+                throw new CartConflictException(
                     self::ERROR_CURRENCY,
                     __('购物车币种与当前商品币种不一致'),
                     [

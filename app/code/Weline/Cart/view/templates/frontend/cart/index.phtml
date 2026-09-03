@@ -27,7 +27,7 @@ $copy = [
 ];
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260827-cart-amazon1">
+      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260903-cart-summary-minicart2">
 
 <section class="weline-cart-shell weline-cart-shell--amazon"
          data-cart-content="1"
@@ -65,18 +65,45 @@ $copy = [
             <div class="weline-cart-shell__list" data-cart-items></div>
         </div>
 
-        <aside class="weline-cart-shell__summary" aria-label="<?= $escape(__('订单摘要')) ?>">
+        <aside class="weline-cart-shell__summary"
+               aria-label="<?= $escape(__('订单摘要')) ?>"
+               data-i18n-discount-coupon="<?= $escape(__('优惠券')) ?>"
+               data-i18n-discount-automatic="<?= $escape(__('自动优惠')) ?>"
+               data-i18n-discount-stack="<?= $escape(__('叠加优惠')) ?>">
             <h2><?= __('订单摘要') ?></h2>
+            <w:slot id="cart-summary-discount"
+                    name="<?= __('购物车优惠券') ?>"
+                    accept="cart-summary-discount,cart-coupon,checkout-coupon,marketing"
+                    multiple="false"
+                    position="content"
+                    class="weline-cart-shell__coupon-slot"
+                    weline-code="cart.cart.coupon_slot">
+            </w:slot>
+            <w:slot id="cart-summary-note"
+                    name="<?= __('购物车订单留言') ?>"
+                    accept="cart-summary-note,order-notice,order"
+                    multiple="false"
+                    position="content"
+                    class="weline-cart-shell__note-slot"
+                    weline-code="cart.cart.note_slot">
+            </w:slot>
+            <div class="weline-cart-shell__totals" data-cart-discount-breakdown hidden>
+                <div class="weline-cart-shell__summary-row weline-cart-shell__summary-row--goods">
+                    <span><?= __('商品小计') ?></span>
+                    <span data-cart-goods-subtotal>--</span>
+                </div>
+                <div class="weline-cart-shell__discount-lines" data-cart-discount-lines></div>
+            </div>
             <div class="weline-cart-shell__summary-list">
-                <div class="weline-cart-shell__summary-row total">
+                <div class="weline-cart-shell__summary-row weline-cart-shell__summary-row--payable">
                     <span data-cart-subtotal-label><?= $escape($copy['subtotal']) ?></span>
                     <strong data-cart-grand-total>--</strong>
                 </div>
             </div>
+            <p class="weline-cart-shell__summary-note"><?= $escape($copy['shippingNote']) ?></p>
             <a class="weline-cart-shell__checkout" href="@url{'checkout'}"><?= __('去结算') ?></a>
             <a class="weline-cart-shell__continue weline-cart-shell__summary-continue"
                href="@url{'products'}"><?= __('继续购物') ?></a>
-            <p class="weline-cart-shell__summary-note"><?= $escape($copy['shippingNote']) ?></p>
         </aside>
     </div>
 </section>
@@ -96,32 +123,138 @@ $copy = [
     const subtitleNode = root.querySelector('[data-cart-subtitle]');
     const subtotalLabelNode = root.querySelector('[data-cart-subtotal-label]');
     const grandTotalNode = root.querySelector('[data-cart-grand-total]');
+    const goodsSubtotalNode = root.querySelector('[data-cart-goods-subtotal]');
+    const discountBreakdownNode = root.querySelector('[data-cart-discount-breakdown]');
+    const discountLinesNode = root.querySelector('[data-cart-discount-lines]');
     const errorNode = root.querySelector('[data-cart-error]');
     const messageNode = root.querySelector('[data-cart-message]');
     const retryButton = root.querySelector('[data-cart-retry]');
+    const summaryRoot = root.querySelector('.weline-cart-shell__summary');
     const guestTokenStorageKey = 'weline.cart.guest_token';
     let cartApi = null;
     let guestToken = '';
+
+    function discountPreview(summary) {
+        if (!summary || typeof summary !== 'object' || !summary.discount_preview) {
+            return null;
+        }
+        return summary.discount_preview;
+    }
+
+    function discountAmountMajor(summary) {
+        const preview = discountPreview(summary);
+        if (!preview) {
+            return 0;
+        }
+        const minor = Number(preview.amount_minor || 0);
+        if (minor <= 0) {
+            return 0;
+        }
+        const precision = Number(preview.currency_precision == null ? 2 : preview.currency_precision);
+        return minor / Math.pow(10, precision);
+    }
+
+    function discountKindLabel(kind) {
+        if (kind === 'stack') {
+            return text(summaryRoot && summaryRoot.getAttribute('data-i18n-discount-stack') || '叠加优惠');
+        }
+        if (kind === 'coupon') {
+            return text(summaryRoot && summaryRoot.getAttribute('data-i18n-discount-coupon') || '优惠券');
+        }
+        return text(summaryRoot && summaryRoot.getAttribute('data-i18n-discount-automatic') || '自动优惠');
+    }
+
+    function renderDiscountBreakdown(summary, currency, goodsSubtotal) {
+        if (!discountBreakdownNode || !discountLinesNode) {
+            return;
+        }
+        const preview = discountPreview(summary);
+        const items = preview && Array.isArray(preview.items) ? preview.items : [];
+        const precision = Number(preview && preview.currency_precision != null ? preview.currency_precision : 2);
+
+        discountLinesNode.textContent = '';
+        if (!items.length) {
+            discountBreakdownNode.hidden = true;
+            return;
+        }
+
+        discountBreakdownNode.hidden = false;
+        setText(goodsSubtotalNode, money(goodsSubtotal, currency));
+
+        items.forEach(function (item) {
+            if (!item || typeof item !== 'object') {
+                return;
+            }
+            const minor = Number(item.amount_minor || 0);
+            if (minor <= 0) {
+                return;
+            }
+            const row = document.createElement('div');
+            row.className = 'weline-cart-shell__discount-line';
+            if (item.stackable || item.kind === 'stack') {
+                row.classList.add('weline-cart-shell__discount-line--stack');
+            }
+
+            const label = document.createElement('span');
+            const kind = String(item.kind || (item.source === 'coupon' ? 'coupon' : 'automatic'));
+            const name = String(item.label || item.coupon_code || '').trim();
+            label.textContent = discountKindLabel(kind) + (name ? ' ' + name : '');
+
+            const amount = document.createElement('strong');
+            amount.textContent = '-' + money(minor / Math.pow(10, precision), currency);
+
+            row.appendChild(label);
+            row.appendChild(amount);
+            discountLinesNode.appendChild(row);
+        });
+    }
+
+    function readStoredGuestToken() {
+        if (window.WelineCart && typeof window.WelineCart.getGuestSession === 'function') {
+            const session = window.WelineCart.getGuestSession();
+            const sessionToken = session && session.token ? String(session.token).trim() : '';
+            if (sessionToken) {
+                return sessionToken;
+            }
+        }
+        try {
+            return String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
+        } catch (error) {
+            return '';
+        }
+    }
+
     try {
-        guestToken = String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
+        guestToken = readStoredGuestToken();
     } catch (error) {
         // Storage can be unavailable in privacy-restricted browser contexts.
     }
 
     async function ensureGuestToken() {
+        try {
+            await Weline.load('cart');
+            guestToken = readStoredGuestToken();
+        } catch (error) {
+            // The API fallback below can still establish a new guest session.
+        }
         if (guestToken) {
             return guestToken;
         }
+
         const result = await (await getCartApi()).issueGuestToken({});
         const payload = result && result.data && typeof result.data === 'object' ? result.data : result;
         guestToken = String((payload && payload.guest_token) || (result && result.guest_token) || '').trim();
         if (!guestToken) {
             throw new Error(copy.guestTokenIssueFailed);
         }
-        try {
-            window.sessionStorage.setItem(guestTokenStorageKey, guestToken);
-        } catch (error) {
-            // The current cart request still owns the token even if storage is unavailable.
+        if (window.WelineCart && typeof window.WelineCart.rememberGuestSession === 'function') {
+            window.WelineCart.rememberGuestSession(guestToken);
+        } else {
+            try {
+                window.sessionStorage.setItem(guestTokenStorageKey, guestToken);
+            } catch (error) {
+                // The current cart request still owns the token even if storage is unavailable.
+            }
         }
         return guestToken;
     }
@@ -297,13 +430,17 @@ $copy = [
         });
 
         const count = Number(summary && (summary.cart_count ?? summary.item_count)) || 0;
-        const grandTotal = amountFromMinor(summary, 'grand_total_minor', 'grand_total');
+        const goodsSubtotal = amountFromMinor(summary, 'subtotal_minor', 'subtotal');
+        const fallbackGrand = amountFromMinor(summary, 'grand_total_minor', 'grand_total');
+        const discountMajor = discountAmountMajor(summary);
+        const payable = Math.max(0, (goodsSubtotal || fallbackGrand) - discountMajor);
         if (subtitleNode) {
             setText(subtitleNode, subtotalItemsLabel(count));
             subtitleNode.hidden = false;
         }
-        setText(subtotalLabelNode, subtotalItemsLabel(count));
-        setText(grandTotalNode, money(grandTotal, currency));
+        setText(subtotalLabelNode, copy.subtotal);
+        setText(grandTotalNode, money(payable, currency));
+        renderDiscountBreakdown(summary, currency, goodsSubtotal || fallbackGrand);
         showState('ready');
     }
 
@@ -319,17 +456,23 @@ $copy = [
         return cartApi;
     }
 
-    async function loadCart() {
-        showState('loading');
+    async function loadCart(options) {
+        const soft = !!(options && options.soft);
+        if (!soft) {
+            showState('loading');
+        }
         try {
             const cart = await getCartApi();
-            const result = await cart.getV2Cart(await cartIdentity());
+            const result = await cart.getCart(await cartIdentity());
             const summary = result && result.data && typeof result.data === 'object' ? result.data : result;
             if (!summary || summary.success === false) {
                 throw new Error(text(summary && summary.message) || copy.loadFailed);
             }
             render(summary);
         } catch (error) {
+            if (soft) {
+                return;
+            }
             setText(errorNode, error && error.message ? error.message : copy.loadFailed);
             showState('error');
         }
@@ -343,8 +486,8 @@ $copy = [
             const cart = await getCartApi();
             const params = Object.assign(await cartIdentity(), { item_id: itemId });
             const result = action === 'remove'
-                ? await cart.removeV2(params)
-                : await cart.updateV2(Object.assign(params, { qty: Math.max(1, Number(qty) || 1) }));
+                ? await cart.remove(params)
+                : await cart.update(Object.assign(params, { qty: Math.max(1, Number(qty) || 1) }));
             const summary = result && result.data && typeof result.data === 'object' ? result.data : result;
             if (!summary || summary.success === false) {
                 throw new Error(text(summary && summary.message) || copy.mutationFailed);
@@ -363,6 +506,10 @@ $copy = [
     if (retryButton) {
         retryButton.addEventListener('click', loadCart);
     }
+
+    window.addEventListener('weline:cart-updated', function () {
+        loadCart({ soft: true });
+    });
 
     root.addEventListener('click', async function (event) {
         const button = event.target.closest('[data-cart-action], [data-qty-decrease], [data-qty-increase]');

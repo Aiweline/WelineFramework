@@ -1,0 +1,13 @@
+<?php
+/**
+ * 购物车页模块槽位目录（发现用）。
+ *
+ * 真实槽位仍在 `view/templates/frontend/cart/index.phtml`；
+ * 本部件仅向 ThemeComponentCatalog 声明嵌套槽，供 required default_injections
+ * 通过 findSlot 发现，避免 layout_slot_missing。
+ *
+ * @widget.code {cart-storefront-slots}
+ * @var \Weline\Framework\View\Template $this
+ */
+?>
+<!-- cart-storefront-slots: discovery-only placeable; do not place on cart layout -->

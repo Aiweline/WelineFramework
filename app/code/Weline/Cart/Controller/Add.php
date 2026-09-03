@@ -9,17 +9,11 @@ use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 
+/**
+ * Legacy form POST entry. Prefer Weline.Api.resource('cart').add(...).
+ */
 class Add extends FrontendController
 {
-    private const SOURCE_CONTEXT_STRING_LIMITS = [
-        'source_app' => 80,
-        'source_module' => 100,
-        'business_module' => 100,
-        'business_code' => 100,
-        'business_name' => 160,
-        'product_type' => 80,
-    ];
-
     public function index(): string
     {
         if (\strtoupper((string) $this->request->getMethod()) !== 'POST') {
@@ -28,11 +22,17 @@ class Add extends FrontendController
         }
 
         try {
-            $data = $this->cartService()->add([
-                'product_id' => (int) $this->request->getPost('product_id', 0),
+            $data = $this->cartService()->addFromParams([
+                'provider_code' => (string) $this->request->getPost('provider_code', 'product'),
+                'global_offer_uuid' => (string) $this->request->getPost(
+                    'global_offer_uuid',
+                    $this->request->getPost('offer_uuid', ''),
+                ),
+                'legacy_product_id' => (int) $this->request->getPost('product_id', 0),
                 'qty' => (int) $this->request->getPost('qty', 1),
-                'selected_options' => $this->request->getPost('selected_options', []),
-            ] + $this->sourceContextFromPost());
+                'selection' => $this->request->getPost('selection', $this->request->getPost('selected_options', [])),
+                'guest_token' => (string) $this->request->getPost('guest_token', ''),
+            ]);
 
             $success = (bool) ($data['success'] ?? false);
             $message = (string) ($data['message'] ?? '');
@@ -56,43 +56,13 @@ class Add extends FrontendController
         return ObjectManager::getInstance(CartService::class);
     }
 
-    /**
-     * @return array<string, string>
-     */
-    private function sourceContextFromPost(): array
-    {
-        $context = [];
-        foreach (self::SOURCE_CONTEXT_STRING_LIMITS as $key => $limit) {
-            $rawValue = $this->request->getPost($key, '');
-            if (!\is_scalar($rawValue)) {
-                continue;
-            }
-            $value = $this->limitString((string) $rawValue, $limit);
-            if ($value !== '') {
-                $context[$key] = $value;
-            }
-        }
-
-        return $context;
-    }
-
     private function resolveRedirectUrl(): string
     {
-        $redirect = \trim((string) $this->request->getPost('redirect', ''));
-        if ($redirect === '' || \str_contains($redirect, 'weshop/cart')) {
-            return '/cart';
+        $redirect = trim((string) $this->request->getPost('redirect', ''));
+        if ($redirect !== '' && str_starts_with($redirect, '/')) {
+            return $redirect;
         }
 
-        return $redirect;
-    }
-
-    private function limitString(string $value, int $length): string
-    {
-        $value = \trim($value);
-        if (\strlen($value) <= $length) {
-            return $value;
-        }
-
-        return \substr($value, 0, $length);
+        return '/cart';
     }
 }

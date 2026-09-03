@@ -4,9 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Observer;
 
-use Weline\Cart\Service\CartService;
 use Weline\Cart\Service\CartScopeResolver;
-use Weline\Cart\Service\CartV2Service;
+use Weline\Cart\Service\CartService;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
@@ -47,29 +46,24 @@ class LoginMergeGuestCart implements ObserverInterface
             return;
         }
 
-        $v2 = $this->cartService->cartV2();
-        if (!$v2 instanceof CartV2Service) {
-            return;
-        }
-
         try {
             $scope = $this->resolveScope($data->getData('request'));
-            $v2->mergeGuestIntoCustomer($scope, $guestToken, $customerId);
-            Cookie::set(CartV2Service::GUEST_TOKEN_COOKIE, '', -3600, [
+            $this->cartService->mergeGuestIntoCustomer($scope, $guestToken, $customerId);
+            Cookie::set(CartService::GUEST_TOKEN_COOKIE, '', -3600, [
                 'path' => '/',
                 'httponly' => true,
                 'samesite' => 'Lax',
             ]);
         } catch (\Throwable $e) {
             if (function_exists('w_log_warning')) {
-                w_log_warning('Cart V2 login mergeGuest failed: ' . $e->getMessage());
+                w_log_warning('Cart login mergeGuest failed: ' . $e->getMessage());
             }
         }
     }
 
     private function resolveGuestToken(mixed $request): string
     {
-        $fromCookie = trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE));
+        $fromCookie = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
         if ($fromCookie !== '') {
             return $fromCookie;
         }

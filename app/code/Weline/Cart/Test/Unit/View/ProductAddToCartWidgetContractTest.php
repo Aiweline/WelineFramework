@@ -26,13 +26,13 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertSame('product', $injection['layout_type'] ?? null);
     }
 
-    public function testWidgetTemplateUsesCartV2PurchaseActionsScript(): void
+    public function testWidgetTemplateUsesCartPurchaseActionsScript(): void
     {
         $template = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-add-to-cart.phtml',
         );
         self::assertStringContainsString('data-testid="product-add-to-cart"', $template);
-        self::assertStringContainsString('data-action="add-v2"', $template);
+        self::assertStringContainsString('data-action="add"', $template);
         self::assertStringContainsString('data-weline-load="cart"', $template);
         self::assertStringNotContainsString('@static(Weline_Cart::js/widgets/product-purchase-actions.js)', $template);
         self::assertStringContainsString('data-purchase-loading', $template);
@@ -52,5 +52,16 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('notifyCartUpdated', $script);
         self::assertStringContainsString('weline:cart-updated', $script);
         self::assertStringContainsString('weline:cart:update', $script);
+    }
+
+    public function testPurchaseActionsSubmitSelectedEavVariantValues(): void
+    {
+        $script = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/js/widgets/product-purchase-actions.js',
+        );
+
+        self::assertStringContainsString('function readEavSelection(button)', $script);
+        self::assertStringContainsString("'[data-variant-option].is-selected'", $script);
+        self::assertStringContainsString('selection: readEavSelection(button)', $script);
     }
 }

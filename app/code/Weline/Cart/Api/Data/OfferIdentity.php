@@ -5,7 +5,7 @@ declare(strict_types=1);
 namespace Weline\Cart\Api\Data;
 
 /**
- * Catalog offer identity for Cart V2（REQ-009）.
+ * Catalog offer identity for Cart（REQ-009）.
  */
 final class OfferIdentity
 {

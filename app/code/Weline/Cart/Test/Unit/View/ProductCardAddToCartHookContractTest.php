@@ -47,13 +47,13 @@ final class ProductCardAddToCartHookContractTest extends TestCase
         self::assertStringNotContainsString('product-purchase-actions.js', $content);
     }
 
-    public function testCardWidgetUsesCartV2AddAction(): void
+    public function testCardWidgetUsesCartAddAction(): void
     {
         $template = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-card-add-to-cart.phtml',
         );
         self::assertStringContainsString('data-testid="product-card-add-to-cart"', $template);
-        self::assertStringContainsString('data-action="add-v2"', $template);
+        self::assertStringContainsString('data-action="add"', $template);
         self::assertStringContainsString('data-weline-load="cart"', $template);
         self::assertStringContainsString('weline-cart-product-card-add-to-cart', $template);
         self::assertStringContainsString('StorefrontOfferResolver::resolve', $template);
@@ -77,9 +77,12 @@ final class ProductCardAddToCartHookContractTest extends TestCase
             dirname(__DIR__, 3) . '/view/statics/js/widgets/product-purchase-actions.js',
         );
         self::assertStringContainsString('weline-cart-product-card-add-to-cart', $script);
+        self::assertStringContainsString('[data-action="add"]', $script);
+        self::assertStringNotContainsString('[data-action="add-v2"]', $script);
         self::assertStringContainsString('markCardButtonAdded', $script);
         self::assertStringContainsString('showFloatingToast', $script);
         self::assertStringContainsString('showAmazonCartAddedNotice', $script);
+        self::assertStringNotContainsString('openMiniCartDrawer', $script);
         self::assertStringContainsString('showCartAddedNotice', $script);
         self::assertStringContainsString('w-amz-cart-added', $script);
         self::assertStringContainsString('guestTokenPromise', $script);
@@ -91,5 +94,12 @@ final class ProductCardAddToCartHookContractTest extends TestCase
         ));
         self::assertStringContainsString('storefront-category-catalog', $script);
         self::assertStringContainsString('data-mini-cart-trigger', $script);
+
+        $registrySrc = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/CartItemSnapshotProviderRegistry.php',
+        );
+        self::assertStringContainsString('relative_path', $registrySrc);
+        self::assertStringContainsString("extends/module/", $registrySrc);
+        self::assertStringNotContainsString('$extension[\'file\']', $registrySrc);
     }
 }

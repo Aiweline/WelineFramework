@@ -7,16 +7,15 @@ namespace Weline\Cart\Test\Unit\Observer;
 use PHPUnit\Framework\TestCase;
 use Weline\Cart\Api\Data\OfferIdentity;
 use Weline\Cart\Observer\LoginMergeGuestCart;
-use Weline\Cart\Service\CartItemSnapshotProviderV2Registry;
+use Weline\Cart\Service\CartItemSnapshotProviderRegistry;
 use Weline\Cart\Service\CartScopeResolver;
 use Weline\Cart\Service\CartService;
-use Weline\Cart\Service\CartV2Service;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2\ProductCartItemSnapshotProvider;
+use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider\ProductCartItemSnapshotProvider;
 
 final class LoginMergeGuestCartTest extends TestCase
 {
@@ -116,7 +115,7 @@ final class LoginMergeGuestCartTest extends TestCase
         self::assertTrue($service->getCart($websiteScope, customerId: 77)['is_empty']);
     }
 
-    /** @return array{CartV2Service, OfferIdentity} */
+    /** @return array{CartService, OfferIdentity} */
     private function service(): array
     {
         $offerUuid = '71717171-7171-4717-8717-717171717171';
@@ -129,19 +128,17 @@ final class LoginMergeGuestCartTest extends TestCase
                 'sellable' => true,
             ],
         ]);
-        $registry = CartItemSnapshotProviderV2Registry::forTesting([$provider]);
+        $registry = CartItemSnapshotProviderRegistry::forTesting([$provider]);
 
         return [
-            CartV2Service::forTesting($registry),
+            CartService::forTesting($registry),
             new OfferIdentity('product', $offerUuid, legacyProductId: 71),
         ];
     }
 
-    private function cartService(CartV2Service $service): CartService
+    private function cartService(CartService $service): CartService
     {
-        $cartService = $this->createMock(CartService::class);
-        $cartService->method('cartV2')->willReturn($service);
-        return $cartService;
+        return $service;
     }
 
     /** @param array<string, mixed> $params */

@@ -4,19 +4,19 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Api\Development;
 
-use Weline\Cart\Service\CartV2HarnessCatalog as CartV2HarnessCatalogService;
+use Weline\Cart\Service\CartHarnessCatalog as CartHarnessCatalogService;
 
 /**
- * Public development/E2E bridge for cross-process Cart V2 offer fixtures.
+ * Public development/E2E bridge for cross-process Cart offer fixtures.
  */
-final class CartV2HarnessCatalog
+final class CartHarnessCatalog
 {
     /**
      * @param array<string, mixed> $row
      */
     public static function put(string $globalOfferUuid, array $row): void
     {
-        CartV2HarnessCatalogService::put($globalOfferUuid, $row);
+        CartHarnessCatalogService::put($globalOfferUuid, $row);
     }
 
     /**
@@ -24,11 +24,11 @@ final class CartV2HarnessCatalog
      */
     public static function get(string $globalOfferUuid): ?array
     {
-        return CartV2HarnessCatalogService::get($globalOfferUuid);
+        return CartHarnessCatalogService::get($globalOfferUuid);
     }
 
     public static function delete(string $globalOfferUuid): void
     {
-        CartV2HarnessCatalogService::delete($globalOfferUuid);
+        CartHarnessCatalogService::delete($globalOfferUuid);
     }
 }
