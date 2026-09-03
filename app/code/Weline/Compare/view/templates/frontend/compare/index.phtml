@@ -56,10 +56,10 @@ $labels = [
 }
 .storefront-compare {
     box-sizing: border-box;
-    width: 100%;
-    max-width: var(--weline-layout-content-max-width, var(--weline-theme-container-max, 1400px));
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
     margin-inline: auto;
-    padding-inline: var(--weline-layout-content-padding-inline, 1.5rem);
+    padding-inline: var(--weline-layout-content-padding-inline);
     min-width: 0;
     color: var(--weline-theme-body-text, #0f1111);
 }
