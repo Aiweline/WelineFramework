@@ -29,7 +29,7 @@ if (!is_string($accountLogoutConfigJson) || $accountLogoutConfigJson === '') { $
             <?php if ($email): ?>
                 <p class="account-sidebar__email"><?= htmlspecialchars($email) ?></p>
             <?php endif; ?>
-            <?php if ($user instanceof \Weline\Customer\Model\Customer): ?>
+            <?php if ($user instanceof \Weline\Customer\Model\Customer && (int)$user->getId() > 0): ?>
                 <p class="account-sidebar__login-status" data-account-login-status="signed-in">
                     <span class="account-sidebar__login-status-dot" aria-hidden="true"></span>
                     <lang>已登录</lang>

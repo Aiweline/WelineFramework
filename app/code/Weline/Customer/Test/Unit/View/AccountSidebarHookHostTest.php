@@ -194,6 +194,11 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString("@url{'customer/account/index'}#delivery-address", $sidebar);
         $this->assertStringContainsString('#shipping-address"', $sidebar);
         $this->assertStringContainsString('#delivery-address"', $sidebar);
+        $this->assertLessThan(
+            strpos($sidebar, 'data-section="shipping-address"'),
+            strpos($sidebar, 'data-section="delivery-address"'),
+            '收货地址入口须排在发货地址之前，对齐顶部配送地址'
+        );
         $this->assertStringContainsString('data-account-nav-link="true"', $sidebar);
         $this->assertStringContainsString('data-section="shipping-address"', $sidebar);
         $this->assertStringContainsString('data-section="delivery-address"', $sidebar);
@@ -203,6 +208,12 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringNotContainsString('shipping/delivery/index', $sidebar);
         $this->assertStringContainsString('id="shipping-address-section"', $content);
         $this->assertStringContainsString('id="delivery-address-section"', $content);
+        $this->assertLessThan(
+            strpos($content, 'id="shipping-address-section"'),
+            strpos($content, 'id="delivery-address-section"'),
+            '收货地址内容区须排在发货地址之前'
+        );
+        $this->assertStringContainsString('去收货地址查看顶部配送地址', $content);
         $this->assertStringContainsString('data-account-section="shipping-address"', $content);
         $this->assertStringContainsString('data-account-section="delivery-address"', $content);
         $this->assertStringNotContainsString('<dd>', $content);

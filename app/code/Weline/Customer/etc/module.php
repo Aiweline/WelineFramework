@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Customer',
-    "version" => '1.0.14',
+    "version" => '1.0.19',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '^2.4',
@@ -10,12 +10,15 @@ return [
     ],
     "optional" => [
         'Weline_Captcha' => '*',
+        'Weline_Checkout' => '*',
         'Weline_Currency' => '*',
         'Weline_I18n' => '*',
         'Weline_Order' => '*',
+        'Weline_Payment' => '*',
         'Weline_Seo' => '*',
         'Weline_Shipping' => '*',
         'Weline_Theme' => '*',
+        'Weline_Widget' => '*',
     ],
     "provides" => [
         \Weline\Customer\Api\Auth\CustomerAccountFacadeInterface::class => \Weline\Customer\Service\CustomerAccountFacade::class,

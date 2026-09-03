@@ -28,6 +28,9 @@ final class AccountModuleFullContractTest extends TestCase
         self::assertStringContainsString('user.display_name', $content);
         self::assertStringContainsString('applyHeaderMenuAuth', $content);
         self::assertStringContainsString('data-account-menu-auth', $content);
+        self::assertStringContainsString('syncHeaderAccountChrome', $content);
+        self::assertStringContainsString('headerMenuAuthMismatch', $content);
+        self::assertStringContainsString('weline:account:frontend:login', $content);
     }
 
     public function testFrontendWelineAccountProxyExposesAuthRefreshSignal(): void
