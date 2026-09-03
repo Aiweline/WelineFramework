@@ -122,6 +122,26 @@ final class AuthenticatedDeviceRegistry implements
         $this->revokeDevice($device, $reason);
     }
 
+    public function rebindToCurrentSession(AuthenticatedDeviceContext $context): AuthenticatedDeviceValidation
+    {
+        $area = $this->requiredArea($context->area);
+        $deviceId = $context->deviceId !== null ? trim($context->deviceId) : '';
+        if ($deviceId === '') {
+            return AuthenticatedDeviceValidation::invalid('device_binding_missing');
+        }
+        $device = $this->repository->findDeviceByPublicId($area, $deviceId);
+        if ($device === null || !$this->sameOwner($device, $context->principalId) || $this->isRevoked($device)) {
+            return AuthenticatedDeviceValidation::invalid('device_binding_missing');
+        }
+        $device = $this->rebindDevice(
+            $area,
+            $context,
+            $device,
+            $this->currentInstallKeyDigest($area),
+        );
+        return AuthenticatedDeviceValidation::valid((string)$device['public_id']);
+    }
+
     public function issueCredential(
         AuthenticatedDeviceContext $context,
         int $expiresAt,
