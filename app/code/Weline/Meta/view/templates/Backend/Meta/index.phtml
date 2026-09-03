@@ -16,11 +16,11 @@ $searchKeyword = trim((string)$request->getGet('search', ''));
 $namespaceOptions = [];
 $typeOptions = [];
 foreach ($metas as $metaRow) {
-    if (!empty($metaRow[MetaModel::fields_NAMESPACE] ?? null)) {
-        $namespaceOptions[$metaRow[MetaModel::fields_NAMESPACE]] = true;
+    if (!empty($metaRow[MetaModel::schema_fields_NAMESPACE] ?? null)) {
+        $namespaceOptions[$metaRow[MetaModel::schema_fields_NAMESPACE]] = true;
     }
-    if (!empty($metaRow[MetaModel::fields_META_TYPE] ?? null)) {
-        $typeOptions[$metaRow[MetaModel::fields_META_TYPE]] = true;
+    if (!empty($metaRow[MetaModel::schema_fields_META_TYPE] ?? null)) {
+        $typeOptions[$metaRow[MetaModel::schema_fields_META_TYPE]] = true;
     }
 }
 
@@ -50,7 +50,7 @@ $hasResults = $metaTotal > 0;
         font-size: 12px;
     }
 
-    .meta-list .weline-badge-space {
+    .meta-list .weline-weline-badge-space {
         text-transform: none;
         font-size: 12px;
     }
@@ -78,7 +78,7 @@ $hasResults = $metaTotal > 0;
             <h4 style="--w-mb-sm:0;"><?= __('元数据管理') ?></h4>
             <div class="w-cluster">
                 <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
+                    <li class="w-breadcrumb__item"><a href="@backend-url{'admin/index/index'}"><?= __('系统') ?></a></li>
                     <li class="w-breadcrumb__item" data-state="active"><?= __('元数据管理') ?></li>
                 </ol>
             </div>
@@ -213,10 +213,18 @@ $hasResults = $metaTotal > 0;
         </div>
 
         <?php if (!$hasResults): ?>
-            <div class="w-empty">
+            <div class="w-empty" style="--w-py:var(--weline-space-10);">
                 <w:icon name="search" size="xl"></w:icon>
                 <h5 style="--w-mt:var(--weline-space-6);"><?= __('暂无匹配的元数据') ?></h5>
-                <p class="w-text" data-tone="muted"><?= __('尝试调整筛选条件或重新扫描。') ?></p>
+                <p class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-4);"><?= __('尝试调整筛选条件，或先扫描模块规约文件生成记录。') ?></p>
+                <div class="w-cluster" data-justify="center" style="--w-gap:var(--weline-space-2);">
+                    <a href="@backend-url{'meta/backend/scanner'}" class="w-button" data-tone="primary">
+                        <w:icon name="search" size="sm"></w:icon><?= __('去扫描') ?>
+                    </a>
+                    <a href="@backend-url{'meta/backend/meta/edit'}" class="w-button" data-tone="neutral" data-variant="outline">
+                        <w:icon name="plus" size="sm"></w:icon><?= __('手动新增') ?>
+                    </a>
+                </div>
             </div>
         <?php else: ?>
             <div class="w-table-wrap">
@@ -234,14 +242,14 @@ $hasResults = $metaTotal > 0;
                     <tbody>
                     <?php foreach ($metas as $metaRow): ?>
                         <?php
-                        $namespace = $metaRow[MetaModel::fields_NAMESPACE] ?? '-';
-                        $type = $metaRow[MetaModel::fields_META_TYPE] ?? '-';
-                        $identify = $metaRow[MetaModel::fields_META_IDENTIFY] ?? '-';
-                        $area = $metaRow[MetaModel::fields_AREA] ?? '';
-                        $category = $metaRow[MetaModel::fields_CATEGORY] ?? '';
-                        $filePath = $metaRow[MetaModel::fields_FILE_PATH] ?? '';
-                        $fullPath = $metaRow[MetaModel::fields_FILE_FULL_PATH] ?? '';
-                        $metaDataRaw = $metaRow[MetaModel::fields_META_DATA] ?? '';
+                        $namespace = $metaRow[MetaModel::schema_fields_NAMESPACE] ?? '-';
+                        $type = $metaRow[MetaModel::schema_fields_META_TYPE] ?? '-';
+                        $identify = $metaRow[MetaModel::schema_fields_META_IDENTIFY] ?? '-';
+                        $area = $metaRow[MetaModel::schema_fields_AREA] ?? '';
+                        $category = $metaRow[MetaModel::schema_fields_CATEGORY] ?? '';
+                        $filePath = $metaRow[MetaModel::schema_fields_FILE_PATH] ?? '';
+                        $fullPath = $metaRow[MetaModel::schema_fields_FILE_FULL_PATH] ?? '';
+                        $metaDataRaw = $metaRow[MetaModel::schema_fields_META_DATA] ?? '';
                         $metaDataDecoded = json_decode($metaDataRaw, true) ?: [];
                         $info = $metaDataDecoded['info'] ?? [];
                         $displayName = $info['name'] ?? __('未命名组件');
@@ -258,21 +266,21 @@ $hasResults = $metaTotal > 0;
                             'scope' => $namespace
                         ];
                         $jsonForAttr = htmlspecialchars($metaDataRaw ?: '{}', ENT_QUOTES, 'UTF-8');
-                        $settingRaw = $metaRow[MetaModel::fields_SETTING] ?? '';
+                        $settingRaw = $metaRow[MetaModel::schema_fields_SETTING] ?? '';
                         $settingPreview = $settingRaw ? htmlspecialchars($settingRaw, ENT_QUOTES, 'UTF-8') : '';
                         ?>
                         <tr>
-                            <td class="w-text" data-weight="strong" data-tone="muted">#<?= (int)$metaRow[MetaModel::fields_ID] ?></td>
+                            <td class="w-text" data-weight="strong" data-tone="muted">#<?= (int)$metaRow[MetaModel::schema_fields_ID] ?></td>
                             <td>
                                 <div class="w-stack" style="--w-gap:var(--weline-space-1);">
                                     <span class="meta-name"><?= htmlspecialchars($namespace) ?></span>
                                     <div class="w-cluster" data-wrap="true" style="--w-gap:var(--weline-space-1);">
-                                        <span class="w-badge w-text badge-space" data-w-background="primary" data-tone="primary"><?= htmlspecialchars($type) ?></span>
+                                        <span class="w-badge w-text weline-badge-space" data-w-background="primary" data-tone="primary"><?= htmlspecialchars($type) ?></span>
                                         <?php if ($area): ?>
-                                            <span class="w-badge w-text badge-space" data-w-background="info" data-tone="info"><?= htmlspecialchars($area) ?></span>
+                                            <span class="w-badge w-text weline-badge-space" data-w-background="info" data-tone="info"><?= htmlspecialchars($area) ?></span>
                                         <?php endif; ?>
                                         <?php if ($category): ?>
-                                            <span class="w-badge w-text badge-space" data-w-background="muted" data-tone="muted"><?= htmlspecialchars($category) ?></span>
+                                            <span class="w-badge w-text weline-badge-space" data-w-background="muted" data-tone="muted"><?= htmlspecialchars($category) ?></span>
                                         <?php endif; ?>
                                     </div>
                                 </div>
@@ -301,14 +309,14 @@ $hasResults = $metaTotal > 0;
                                     <span class="w-text" data-tone="muted" data-size="sm"><?= __('暂无描述') ?></span>
                                 <?php endif; ?>
                                 <?php if ($settingRaw): ?>
-                                    <span class="w-badge w-text badge-space" title="<?= $settingPreview ?>" data-w-background="muted">
+                                    <span class="w-badge w-text weline-badge-space" title="<?= $settingPreview ?>" data-w-background="muted">
                                         <?= __('带自定义设置') ?>
                                     </span>
                                 <?php endif; ?>
                             </td>
                             <td>
                                 <div class="w-button-group" role="group">
-                                    <a class="w-button" href="@backend-url{'meta/backend/meta/edit'|['id' => $metaRow[MetaModel::fields_ID]]}" data-tone="primary" data-variant="outline">
+                                    <a class="w-button" href="@backend-url{'meta/backend/meta/edit'|['id' => $metaRow[MetaModel::schema_fields_ID]]}" data-tone="primary" data-variant="outline">
                                         <w:icon name="edit" size="sm"></w:icon><?= __('编辑') ?>
                                     </a>
                                     <button type="button" class="w-button js-meta-json" data-meta-json="<?= $jsonForAttr ?>" data-meta-title="<?= htmlspecialchars($displayName) ?>" data-tone="neutral" data-variant="outline">

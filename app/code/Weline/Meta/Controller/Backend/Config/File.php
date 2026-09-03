@@ -196,12 +196,9 @@ class File extends BackendController
         $metaModel = ObjectManager::getInstance(MetaModel::class);
         $metaModel->reset()->where(MetaModel::schema_fields_NAMESPACE, $namespace);
         
-        // 只查询非 field 类型的记录（文件类型）
+        // 只查询非 field 类型的记录（field 是字段定义，不是可配置节点）
         $metaModel->where(MetaModel::schema_fields_META_TYPE, 'field', '!=');
-        
-        // 只查询文件路径不为空的记录（文件类型）
-        $metaModel->where(MetaModel::schema_fields_FILE_PATH, null, 'IS NOT NULL');
-        $metaModel->where(MetaModel::schema_fields_FILE_PATH, '', '!=');
+        // file_path 可为空：theme variables 等按 meta_identify 建树（buildTree 已回退）
 
         if ($area) {
             $metaModel->where(MetaModel::schema_fields_AREA, $area);
