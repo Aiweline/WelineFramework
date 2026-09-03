@@ -33,6 +33,9 @@ class Customer extends Model implements AuthenticableInterface
     #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: 'Sandbox flag')]
     public const schema_fields_is_sandbox = 'is_sandbox';
 
+    #[Col(type: 'smallint', length: 1, nullable: false, default: 0, comment: 'Must set password after guest convert')]
+    public const schema_fields_must_set_password = 'must_set_password';
+
     public const schema_primary_key = 'customer_id';
     public const schema_primary_keys = ['customer_id'];
 
@@ -174,6 +177,16 @@ class Customer extends Model implements AuthenticableInterface
     public function setSandboxAccount(bool $flag): static
     {
         return $this->setData(self::schema_fields_is_sandbox, $flag ? 1 : 0);
+    }
+
+    public function mustSetPassword(): bool
+    {
+        return (int)$this->getData(self::schema_fields_must_set_password) === 1;
+    }
+
+    public function setMustSetPassword(bool $flag): static
+    {
+        return $this->setData(self::schema_fields_must_set_password, $flag ? 1 : 0);
     }
 
     public function getAuthIdentifier(): int|string

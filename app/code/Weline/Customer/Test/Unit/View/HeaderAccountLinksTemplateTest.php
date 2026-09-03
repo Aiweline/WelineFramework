@@ -31,5 +31,7 @@ final class HeaderAccountLinksTemplateTest extends TestCase
         $this->assertStringContainsString("@url{'customer/account/register'}", $content);
         $this->assertStringContainsString('data-account-menu-auth="signed-in"', $content);
         $this->assertStringContainsString('data-account-menu-auth="guest"', $content);
+        $this->assertStringNotContainsString('$session->isLoggedIn()', $content);
+        $this->assertStringNotContainsString('createFrontendSession', $content);
     }
 }

@@ -5,5 +5,6 @@
     <!-- 前端控制器初始化之前自动登录 -->
     <event name="Weline_Framework_FrontendController::init_before">
         <observer name="Weline_Customer::auto_login" instance="Weline\Customer\Observer\AutoLogin" disabled="false" shared="true" sort="0"/>
+        <observer name="Weline_Customer::must_set_password_gate" instance="Weline\Customer\Observer\MustSetPasswordGate" disabled="false" shared="true" sort="20"/>
     </event>
 </config>

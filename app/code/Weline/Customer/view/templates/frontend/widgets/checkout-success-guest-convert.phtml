@@ -1,0 +1,196 @@
+<?php
+/**
+ * Checkout success guest → customer convert (Customer-owned).
+ *
+ * Hides itself when the order is already bound to a customer_id.
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {checkout-success-guest-convert}
+ * @widget.name {结账成功访客转化}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.slot {checkout-success-guest-account}
+ * @widget.page_layouts {["checkout"]}
+ * @widget.supports {["checkout-success-guest-account","guest-account-convert","layout-checkout-success-guest-account","checkout-success-guest-convert"]}
+ * @widget.default_injections {[{ "layout_type":"checkout", "layout_option":"default", "slot":"checkout-success-guest-account", "area":"content", "sort_order":0, "required":true, "reason":"结账成功页默认提供访客账户转化入口", "config":{"convert_label":"登录并保存订单","login_label":"去登录"} }]}
+ *
+ * @param convert_label {default="登录并保存订单",type="string",label="转化按钮文案"}
+ * @param login_label {default="去登录",type="string",label="已有账户登录文案"}
+ */
+
+use Weline\Customer\Service\GuestCheckoutConvertService;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\SessionFactory;
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('checkout-success-guest-convert');
+$wc = $scope->cssClass;
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$session = ObjectManager::getInstance(SessionFactory::class)->createFrontendSession();
+$skipReason = '';
+if ($session->isLoggedIn()) {
+    $skipReason = 'logged_in';
+} else {
+    /** @var Request $request */
+    $request = ObjectManager::getInstance(Request::class);
+    $params = $request->getParams();
+    if (!is_array($params)) {
+        $params = [];
+    }
+    if (
+        class_exists(\Weline\Payment\Service\PaymentBrowserCallbackRoutes::class)
+        && \Weline\Payment\Service\PaymentBrowserCallbackRoutes::isCancelOutcome($params)
+    ) {
+        $skipReason = 'payment_cancel';
+    } else {
+        $orderUuid = trim((string)$request->getParam('order_uuid', ''));
+        $checkoutToken = trim((string)$request->getParam('checkout_token', ''));
+        if ($orderUuid === '' || $checkoutToken === '') {
+            $skipReason = 'missing_params';
+        } else {
+            $inspection = ObjectManager::getInstance(GuestCheckoutConvertService::class)
+                ->inspect($checkoutToken, $orderUuid);
+            $outcome = (string)($inspection['outcome'] ?? 'unavailable');
+            if (in_array($outcome, ['unavailable', 'already_bound'], true)) {
+                // Customer module recognizes bound/unavailable orders and keeps the slot visually empty.
+                $skipReason = $outcome;
+            }
+        }
+    }
+}
+
+if ($skipReason !== '') {
+    // Never return a blank string: DEV WidgetHtmlHealthInspector treats empty
+    // HTML as a warning toast. Keep visually hidden so storefront still "hides".
+    ?>
+<section class="checkout-success-guest-convert <?= $esc($wc) ?> is-empty"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-testid="checkout-success-guest-convert-empty"
+         data-skip-reason="<?= $esc($skipReason) ?>"
+         hidden
+         aria-hidden="true"></section>
+    <?php
+    return;
+}
+
+/** @var Request $request */
+$request = ObjectManager::getInstance(Request::class);
+$orderUuid = trim((string)$request->getParam('order_uuid', ''));
+$checkoutToken = trim((string)$request->getParam('checkout_token', ''));
+$inspection = ObjectManager::getInstance(GuestCheckoutConvertService::class)
+    ->inspect($checkoutToken, $orderUuid);
+$outcome = (string)($inspection['outcome'] ?? 'unavailable');
+
+$convertLabel = WidgetI18n::label(
+    trim((string)($this->getData('convert_label') ?? '')) ?: '登录并保存订单',
+    '登录并保存订单',
+);
+$loginLabel = WidgetI18n::label(
+    trim((string)($this->getData('login_label') ?? '')) ?: '去登录',
+    '去登录',
+);
+$email = trim((string)($inspection['email'] ?? ''));
+$loginUrl = '@url{\'customer/account/login\'}';
+?>
+<section class="checkout-success-guest-convert <?= $esc($wc) ?>"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-testid="checkout-success-guest-convert"
+         data-outcome="<?= $esc($outcome) ?>"
+         data-order-uuid="<?= $esc($orderUuid) ?>"
+         data-checkout-token="<?= $esc($checkoutToken) ?>">
+    <div class="checkout-success-guest-convert__copy">
+        <strong><?= $esc((string)__('保存订单到我的账户')) ?></strong>
+        <?php if ($email !== ''): ?>
+        <p><?= $esc((string)__('将使用结账邮箱')) ?> <em><?= $esc($email) ?></em></p>
+        <?php endif; ?>
+        <?php if ($outcome === 'login_required'): ?>
+        <p><?= $esc((string)__('该邮箱已有账户，请登录后查看订单。')) ?></p>
+        <?php else: ?>
+        <p><?= $esc((string)__('一键创建账户并保存本单，随后请设置密码。')) ?></p>
+        <?php endif; ?>
+    </div>
+    <div class="checkout-success-guest-convert__actions">
+        <?php if ($outcome === 'login_required'): ?>
+        <a class="amz-order-confirm__btn amz-order-confirm__btn--primary w-button"
+           data-tone="primary"
+           data-testid="guest-convert-login"
+           href="<?= $loginUrl ?>"><?= $esc($loginLabel) ?></a>
+        <?php else: ?>
+        <button type="button"
+                class="amz-order-confirm__btn amz-order-confirm__btn--primary w-button"
+                data-tone="primary"
+                data-testid="guest-convert-submit"
+                data-guest-convert-submit>
+            <?= $esc($convertLabel) ?>
+        </button>
+        <?php endif; ?>
+    </div>
+    <p class="checkout-success-guest-convert__status" data-guest-convert-status hidden></p>
+</section>
+<style>
+.checkout-success-guest-convert {
+    margin: 0 0 16px;
+    padding: 16px 18px;
+    border: 1px solid #d5d9d9;
+    border-radius: 8px;
+    background: #fff;
+    display: grid;
+    gap: 12px;
+}
+.checkout-success-guest-convert__copy p { margin: 6px 0 0; color: #565959; font-size: 14px; }
+.checkout-success-guest-convert__copy em { font-style: normal; color: #0f1111; }
+.checkout-success-guest-convert__status { margin: 0; color: #b12704; font-size: 13px; }
+</style>
+<script>
+(function () {
+    var root = document.currentScript && document.currentScript.previousElementSibling;
+    if (!root || !root.matches || !root.matches('[data-testid="checkout-success-guest-convert"]')) {
+        root = document.querySelector('[data-testid="checkout-success-guest-convert"][data-uid="<?= $esc($scope->uid) ?>"]');
+    }
+    if (!root) return;
+    var button = root.querySelector('[data-guest-convert-submit]');
+    var status = root.querySelector('[data-guest-convert-status]');
+    if (!button) return;
+    button.addEventListener('click', async function () {
+        button.disabled = true;
+        if (status) { status.hidden = true; status.textContent = ''; }
+        try {
+            if ((!window.Weline || !window.Weline.Api) && window.Weline && typeof window.Weline.load === 'function') {
+                await window.Weline.load('api');
+            }
+            if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                throw new Error(<?= json_encode((string)__('账户接口不可用'), JSON_UNESCAPED_UNICODE) ?>);
+            }
+            var api = await window.Weline.Api.resource('account');
+            if (!api || typeof api.convertGuestCheckout !== 'function') {
+                throw new Error(<?= json_encode((string)__('账户接口不可用'), JSON_UNESCAPED_UNICODE) ?>);
+            }
+            var result = await api.convertGuestCheckout({
+                checkout_token: root.getAttribute('data-checkout-token') || '',
+                order_uuid: root.getAttribute('data-order-uuid') || ''
+            }, {silent: true});
+            var outcome = (result && (result.outcome || (result.data && result.data.outcome))) || '';
+            var redirect = (result && (result.redirect || (result.data && result.data.redirect))) || '';
+            if (redirect && (outcome === 'converted' || outcome === 'login_required' || outcome === 'password_required')) {
+                window.location.href = redirect;
+                return;
+            }
+            throw new Error((result && result.message) || <?= json_encode((string)__('转化失败'), JSON_UNESCAPED_UNICODE) ?>);
+        } catch (error) {
+            if (status) {
+                status.hidden = false;
+                status.textContent = (error && error.message) ? error.message : <?= json_encode((string)__('转化失败'), JSON_UNESCAPED_UNICODE) ?>;
+            }
+            button.disabled = false;
+        }
+    });
+})();
+</script>

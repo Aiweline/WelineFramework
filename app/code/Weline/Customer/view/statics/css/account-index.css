@@ -16,7 +16,7 @@
 } .account-index__email i { font-size: 1rem;
 } .account-index__welcome { margin: 0.5rem 0 0; font-size: 0.875rem; color: var(--color-text-dark); opacity: 0.8;
 } .account-index__section { margin-bottom: var(--ai-gutter);
-} .account-card { background: var(--color-bg-primary); border: 1px solid var(--color-border-light); border-radius: var(--ai-border-radius); overflow: hidden;
+} .account-card { background: var(--color-bg-primary); border: 1px solid var(--color-border-light); border-radius: var(--ai-border-radius); overflow: hidden; box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.06));
 } .account-card__header { padding: 1.25rem var(--ai-gutter); background: var(--color-bg-secondary); border-bottom: 1px solid var(--color-border-light);
 } .account-card__title { font-size: 1.125rem; font-weight: 700; color: var(--color-text-primary); margin: 0;
 } .account-card__body { padding: var(--ai-gutter);

@@ -3,8 +3,8 @@
 declare(strict_types=1);
 
 /**
- * Customer 前台部件：页脚帮助中心扩展（我的账户 / 我的订单）。
- * Theme layouts/partials 禁止内嵌本模块 <w:widget>；靠 default_injections / 拖入补空槽。
+ * Customer storefront widgets. Theme layouts must not hard-code these widgets;
+ * default_injections fill empty slots.
  */
 return [
     'footer-my-account-link' => [
@@ -22,7 +22,7 @@ return [
             'layout-footer-help-links',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'footer-help-links',
             'area' => 'footer',
             'sort_order' => 0,
@@ -55,7 +55,7 @@ return [
             'layout-footer-help-links',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'footer-help-links',
             'area' => 'footer',
             'sort_order' => 10,
@@ -70,6 +70,48 @@ return [
                 'default' => '我的订单',
                 'type' => 'string',
                 'label' => '链接文字',
+            ],
+        ],
+    ],
+    'checkout-success-guest-convert' => [
+        'name' => '结账成功访客转化',
+        'description' => '结账成功页访客转化：新邮箱建户登录并强制设密，已有邮箱引导登录；订单已绑定则不渲染。',
+        'type' => 'content',
+        'code' => 'checkout-success-guest-convert',
+        'area' => 'frontend',
+        'template' => 'Weline_Customer::templates/frontend/widgets/checkout-success-guest-convert.phtml',
+        'page_layouts' => ['checkout'],
+        'position' => ['content'],
+        'slot' => 'checkout-success-guest-account',
+        'supports' => [
+            'checkout-success-guest-account',
+            'guest-account-convert',
+            'layout-checkout-success-guest-account',
+            'checkout-success-guest-convert',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'checkout',
+            'layout_option' => 'default',
+            'slot' => 'checkout-success-guest-account',
+            'area' => 'content',
+            'sort_order' => 0,
+            'required' => true,
+            'reason' => '结账成功页默认提供访客账户转化入口（Customer 应用部件）',
+            'config' => [
+                'convert_label' => '登录并保存订单',
+                'login_label' => '去登录',
+            ],
+        ]],
+        'params' => [
+            'convert_label' => [
+                'default' => '登录并保存订单',
+                'type' => 'string',
+                'label' => '转化按钮文案',
+            ],
+            'login_label' => [
+                'default' => '去登录',
+                'type' => 'string',
+                'label' => '已有账户登录文案',
             ],
         ],
     ],
