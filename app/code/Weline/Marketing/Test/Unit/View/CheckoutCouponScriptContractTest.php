@@ -26,5 +26,8 @@ final class CheckoutCouponScriptContractTest extends TestCase
         self::assertStringContainsString('weshop:mini-cart:busy', $source);
         self::assertStringContainsString('is-loading', $source);
         self::assertStringContainsString('notifyCartDiscountChanged', $source);
+        self::assertStringContainsString('buildQuotePayload', $source);
+        self::assertStringContainsString('amount_minor', $source);
+        self::assertStringContainsString("applyCoupon({ coupon_code: normalized }", $source);
     }
 }

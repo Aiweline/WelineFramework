@@ -39,6 +39,7 @@ final class CheckoutCouponWidgetContractTest extends TestCase
         self::assertStringNotContainsString('w-marketing-checkout-coupon__header', $template);
         self::assertStringContainsString('data-marketing-coupon-tags', $template);
         self::assertStringContainsString('data-marketing-coupon-entry', $template);
-        self::assertStringContainsString('checkout-coupon.js)?v=20260827-coupon-tags2', $template);
+        self::assertStringContainsString('checkout-coupon.css)?v=20260903-coupon-customer1', $template);
+        self::assertStringContainsString('data-weline-load="checkoutCoupon"', $template);
     }
 }

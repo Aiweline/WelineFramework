@@ -21,7 +21,7 @@ final class FooterCampaignLinkWidgetContractTest extends TestCase
             $widget['template'] ?? null
         );
         $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('*', $injection['layout_type'] ?? null);
+        self::assertSame('homepage', $injection['layout_type'] ?? null);
         self::assertSame('footer-payment-account-links', $injection['slot'] ?? null);
         self::assertSame(10, (int)($injection['sort_order'] ?? -1));
         self::assertSame('活动', $injection['config']['label'] ?? null);
@@ -36,5 +36,6 @@ final class FooterCampaignLinkWidgetContractTest extends TestCase
         self::assertStringContainsString("@url{'promotion/deals'}", $template);
         self::assertStringNotContainsString("@url{'marketing/campaign'}", $template);
         self::assertStringContainsString('活动', $template);
+        self::assertStringContainsString('WidgetI18n::label($labelSource', $template);
     }
 }
