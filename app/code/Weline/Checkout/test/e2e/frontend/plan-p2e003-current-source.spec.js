@@ -98,7 +98,7 @@ async function seedTrustedCart(page, prepared) {
     sameSite: 'Lax',
   }]);
   const offer = prepared.offers.physical_a;
-  const added = await api(page, 'cart', 'addV2', {
+  const added = await api(page, 'cart', 'add', {
     provider_code: 'product',
     global_offer_uuid: offer.uuid,
     legacy_product_id: offer.product_id,
@@ -127,7 +127,7 @@ function pageIssues(page) {
 }
 
 function cleanup(page, prepared, quoteTokens = [], groupUuids = []) {
-  return api(page, 'cart', 'clearV2')
+  return api(page, 'cart', 'clear')
     .catch(() => null)
     .finally(() => fixture('cleanup', {
       fixture: prepared,
@@ -169,7 +169,7 @@ moduleDescribe(test, MODULE, 'P2E-003 Checkout server UI current-source', () => 
   moduleCase(
     test,
     { module: MODULE, id: 'TEST-BROWSER-01' },
-    '可信 addV2 → Cart → Checkout → pending Orders 全程只走 Weline.Api',
+    '可信 add → Cart → Checkout → pending Orders 全程只走 Weline.Api',
     async ({ page }) => {
       const prepared = fixture('prepare').fixture;
       const issues = pageIssues(page);
@@ -180,7 +180,7 @@ moduleDescribe(test, MODULE, 'P2E-003 Checkout server UI current-source', () => 
         const offer = await seedTrustedCart(page, prepared);
 
         await open(page, '/cart');
-        const current = dataOf(await api(page, 'cart', 'getV2Cart'));
+        const current = dataOf(await api(page, 'cart', 'getCart'));
         expect(Number(current.item_count || 0)).toBe(1);
 
         await open(page, '/checkout');

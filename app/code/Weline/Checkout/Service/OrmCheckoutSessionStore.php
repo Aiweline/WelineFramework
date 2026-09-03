@@ -33,18 +33,19 @@ final class OrmCheckoutSessionStore implements CheckoutSessionStoreInterface
         if (!$row->getId()) {
             $row->setData(CheckoutSession::schema_fields_CREATED_AT, $now);
         }
+        $state = (string)($payload['state'] ?? CheckoutSession::STATE_QUOTED);
         $row->setData([
             CheckoutSession::schema_fields_QUOTE_TOKEN => $token,
             CheckoutSession::schema_fields_REQUEST_HASH => (string)($payload['request_hash'] ?? ''),
             CheckoutSession::schema_fields_CURRENCY => (string)($payload['currency'] ?? 'CNY'),
             CheckoutSession::schema_fields_CONFIG_VERSION => (string)($payload['config_version'] ?? '1'),
-            CheckoutSession::schema_fields_STATE => (string)($payload['state'] ?? CheckoutSession::STATE_QUOTED),
+            CheckoutSession::schema_fields_STATE => $state,
             CheckoutSession::schema_fields_IDEMPOTENCY_KEY => $payload['idempotency_key'] ?? null,
             CheckoutSession::schema_fields_SUBMITTED_RESULT_JSON => $this->encodeSubmittedResult(
                 $payload['submitted_result'] ?? null,
             ),
             CheckoutSession::schema_fields_PAYLOAD_JSON => $json,
-            CheckoutSession::schema_fields_EXPIRES_AT => $expiresAt ?? gmdate('Y-m-d H:i:s', time() + 1800),
+            CheckoutSession::schema_fields_EXPIRES_AT => $expiresAt ?? $this->defaultExpiresAt($state),
         ])->save();
     }
 
@@ -58,8 +59,12 @@ final class OrmCheckoutSessionStore implements CheckoutSessionStoreInterface
         if (!$row->getId()) {
             return null;
         }
+        $state = (string)$row->getData(CheckoutSession::schema_fields_STATE);
         $expires = (string)$row->getData(CheckoutSession::schema_fields_EXPIRES_AT);
-        if ($expires !== '' && strtotime($expires . ' UTC') !== false && strtotime($expires . ' UTC') < time()) {
+        $expired = $expires !== ''
+            && strtotime($expires . ' UTC') !== false
+            && strtotime($expires . ' UTC') < time();
+        if ($expired && !$this->withinSubmittedSuccessGrace($row, $state)) {
             $this->delete($token);
 
             return null;
@@ -80,8 +85,12 @@ final class OrmCheckoutSessionStore implements CheckoutSessionStoreInterface
         if (!$row->getId()) {
             return null;
         }
+        $state = (string)$row->getData(CheckoutSession::schema_fields_STATE);
         $expires = (string)$row->getData(CheckoutSession::schema_fields_EXPIRES_AT);
-        if ($expires !== '' && strtotime($expires . ' UTC') !== false && strtotime($expires . ' UTC') < time()) {
+        $expired = $expires !== ''
+            && strtotime($expires . ' UTC') !== false
+            && strtotime($expires . ' UTC') < time();
+        if ($expired && !$this->withinSubmittedSuccessGrace($row, $state)) {
             return null;
         }
         $decoded = json_decode((string)$row->getData(CheckoutSession::schema_fields_PAYLOAD_JSON), true);
@@ -140,5 +149,28 @@ final class OrmCheckoutSessionStore implements CheckoutSessionStoreInterface
         }
 
         return $json;
+    }
+
+    private function defaultExpiresAt(string $state): string
+    {
+        $ttl = $state === CheckoutSession::STATE_SUBMITTED
+            ? CheckoutSession::TTL_SUBMITTED_SUCCESS_SECONDS
+            : CheckoutSession::TTL_QUOTED_SECONDS;
+
+        return gmdate('Y-m-d H:i:s', time() + $ttl);
+    }
+
+    private function withinSubmittedSuccessGrace(CheckoutSession $row, string $state): bool
+    {
+        if ($state !== CheckoutSession::STATE_SUBMITTED) {
+            return false;
+        }
+        $created = (string)$row->getData(CheckoutSession::schema_fields_CREATED_AT);
+        $createdTs = $created !== '' ? strtotime($created . ' UTC') : false;
+        if ($createdTs === false) {
+            return false;
+        }
+
+        return ($createdTs + CheckoutSession::TTL_SUBMITTED_SUCCESS_SECONDS) >= time();
     }
 }

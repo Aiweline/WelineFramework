@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Checkout\Api\CheckoutSessionStoreInterface;
 use Weline\Checkout\Model\CheckoutSession;
 use Weline\Checkout\Service\CheckoutSessionAccessService;
+use Weline\Checkout\Service\InMemoryCheckoutSessionStore;
 
 final class CheckoutSessionAccessServiceTest extends TestCase
 {
@@ -66,6 +67,20 @@ final class CheckoutSessionAccessServiceTest extends TestCase
         self::assertFalse($service->canReadOrder(42, 7, false));
         self::assertTrue($service->canReadOrder(null, null, true));
         self::assertFalse($service->canReadOrder(null, null, false));
+    }
+
+    public function testSubmittedSessionDefaultTtlOutlivesPaymentReturnRevisit(): void
+    {
+        $store = new InMemoryCheckoutSessionStore();
+        $store->put('qt_submitted_ttl', [
+            'state' => CheckoutSession::STATE_SUBMITTED,
+            'customer_id' => null,
+            'submitted_result' => ['order_uuids' => ['order-1']],
+        ]);
+        $service = new CheckoutSessionAccessService($store);
+
+        self::assertGreaterThanOrEqual(7 * 24 * 3600, CheckoutSession::TTL_SUBMITTED_SUCCESS_SECONDS);
+        self::assertTrue($service->canAccess('qt_submitted_ttl', 'order-1', null));
     }
 
     /** @param array<string, mixed>|null $session */

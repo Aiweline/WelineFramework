@@ -22,9 +22,6 @@ use Weline\Framework\Manager\ObjectManager;
  */
 class Checkout extends FrontendController
 {
-    private const CART_PATH = '/cart';
-    private const ORDER_LIST_PATH = '/checkout/frontend/order/list';
-
     private CheckoutService $checkoutService;
     private PaymentService $paymentService;
     private CheckoutIdentityService $checkoutIdentityService;
@@ -141,7 +138,7 @@ class Checkout extends FrontendController
                 'data' => [
                     'order_id' => $order->getId(),
                     'order_number' => $order->getOrderNumber(),
-                    'redirect_url' => $this->getUrl('checkout/success-page', ['order_id' => $order->getId()])
+                    'redirect_url' => $this->getUrl('checkout/success', ['order_id' => $order->getId()])
                 ]
             ]);
         } catch (\Exception $e) {
@@ -150,44 +147,6 @@ class Checkout extends FrontendController
                 'message' => __('订单创建失败：%{1}', $e->getMessage())
             ]);
         }
-    }
-
-    /**
-     * 结账成功页面
-     * 
-     * @return string
-     */
-    public function successPage(): string
-    {
-        $orderId = (int)$this->request->getParam('order_id');
-        
-        if (!$orderId) {
-            return $this->redirect(self::CART_PATH);
-        }
-
-        /** @var \Weline\Checkout\Service\OrderService $orderService */
-        $orderService = ObjectManager::getInstance(\Weline\Checkout\Service\OrderService::class);
-        $order = $orderService->getOrder($orderId);
-
-        if (!$order) {
-            return $this->redirect(self::ORDER_LIST_PATH);
-        }
-
-        // 验证订单所有权
-        if ($this->isLoggedIn()) {
-            $customerId = $this->getLoginUserId();
-            if ($order->getCustomerId() != $customerId) {
-                return $this->redirect(self::ORDER_LIST_PATH);
-            }
-        }
-
-        $this->request->setGet('theme_page_title', (string)__('结账成功'));
-        $this->assign('page_title', __('结账成功'));
-        $this->assign('title', __('结账成功'));
-        $this->assign('order', $order);
-        $this->layoutType = 'checkout';
-        
-        return $this->fetch('Weline_Checkout::frontend/checkout/success.phtml');
     }
 
     /**

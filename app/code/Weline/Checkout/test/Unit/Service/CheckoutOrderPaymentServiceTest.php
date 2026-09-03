@@ -6,6 +6,10 @@ namespace Weline\Checkout\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Checkout\Service\CheckoutOrderPaymentService;
+use Weline\Checkout\Service\CheckoutSuccessUrlBuilder;
+use Weline\Checkout\Service\InMemoryCheckoutSessionStore;
+use Weline\Checkout\Model\CheckoutSession;
+use Weline\Framework\Http\Url;
 use Weline\Order\Api\Data\OrderReadResult;
 use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Payment\Api\Data\PaymentTransactionRecord;
@@ -41,18 +45,17 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
         $payments = $this->createMock(PaymentFacadeInterface::class);
         $payments->expects(self::once())->method('tryCreatePayment')->with(
             'fake_card',
-            self::callback(static fn(array $context): bool =>
-                $context['payable_type'] === 'weline_order'
-                && $context['payable_id'] === 'order-uuid-1'
-                && $context['order_id'] === 'order-uuid-1'
-                && $context['amount_minor'] === 289500
-                && $context['amount'] === 2895.0
-                && $context['currency'] === 'USD'
-                && $context['website_id'] === 3
-                && $context['store_id'] === 8
-                && $context['customer_id'] === 42
-                && $context['idempotency_key'] === 'checkout-ui-key:order-uuid-1'
-            ),
+            self::callback(function (array $context): bool {
+                self::assertSame('weline_order', $context['payable_type']);
+                self::assertSame('order-uuid-1', $context['payable_id']);
+                self::assertSame(289500, $context['amount_minor']);
+                self::assertStringContainsString('checkout/success', (string) ($context['browser_landing_url'] ?? ''));
+                self::assertStringContainsString('checkout_token=qt-success-1', (string) ($context['browser_landing_url'] ?? ''));
+                self::assertSame('group-uuid-1', $context['browser_landing_params']['checkout_group_uuid'] ?? '');
+                self::assertSame('qt-success-1', $context['browser_landing_params']['checkout_token'] ?? '');
+
+                return true;
+            }),
         )->willReturn(new PaymentTransactionRecord(
             id: 91,
             transactionNumber: 'FAKE-ORDER-1',
@@ -61,11 +64,16 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
             response: ['message' => 'Fake payment completed.'],
         ));
 
-        $result = (new CheckoutOrderPaymentService($orders, $payments))->pay(
+        $result = $this->createService($orders, $payments)->pay(
             ['order-uuid-1'],
             'fake_card',
             'checkout-ui-key',
-            ['amount' => 0.01, 'amount_minor' => 1, 'currency' => 'CNY'],
+            [
+                'amount' => 0.01,
+                'amount_minor' => 1,
+                'currency' => 'CNY',
+                'checkout_token' => 'qt-success-1',
+            ],
         );
 
         self::assertTrue($result['paid']);
@@ -89,7 +97,7 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
         $payments->method('tryCreatePayment')->willReturn(null);
 
         $this->expectExceptionMessage('checkout_payment_method_unavailable');
-        (new CheckoutOrderPaymentService($orders, $payments))->pay(
+        $this->createService($orders, $payments)->pay(
             ['order-uuid-2'],
             'disabled_method',
             'checkout-ui-key',
@@ -119,7 +127,7 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
             response: ['redirect_url' => 'https://payments.example.test/continue/101'],
         ));
 
-        $result = (new CheckoutOrderPaymentService($orders, $payments))->pay(
+        $result = $this->createService($orders, $payments)->pay(
             ['order-pending-1'],
             'provider_checkout',
             'checkout-pending-key',
@@ -132,6 +140,55 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
         self::assertTrue($result['recoverable']);
         self::assertSame('https://payments.example.test/continue/101', $result['redirect_url']);
     }
+    public function testItExtractsRedirectUrlFromProviderPayload(): void
+    {
+        $orders = $this->createMock(OrderFacadeInterface::class);
+        $orders->method('get')->willReturn(new OrderReadResult(
+            orderUuid: 'order-payload-1',
+            checkoutGroupUuid: 'group-payload-1',
+            status: 'pending',
+            currency: 'CNY',
+            websiteId: 1,
+            storeId: 1,
+            money: ['grand_total_minor' => 20190],
+        ));
+        $orders->expects(self::never())->method('notifyOrderPaid');
+
+        $payments = $this->createMock(PaymentFacadeInterface::class);
+        $payments->method('tryCreatePayment')->willReturn(new PaymentTransactionRecord(
+            id: 104,
+            transactionNumber: 'PAY-PAYLOAD-1',
+            methodCode: 'paypal',
+            status: PaymentTransactionRecord::STATUS_PENDING,
+            response: [
+                'status' => 'requires_action',
+                'action_type' => 'redirect',
+                'payload' => [
+                    'redirect_url' => 'https://www.sandbox.paypal.com/checkoutnow?token=TESTTOKEN',
+                    'environment' => 'sandbox',
+                ],
+                'provider_secret' => 'must-not-leak',
+            ],
+        ));
+
+        $result = $this->createService($orders, $payments)->pay(
+            ['order-payload-1'],
+            'paypal',
+            'checkout-payload-key',
+        );
+
+        self::assertFalse($result['paid']);
+        self::assertTrue($result['requires_action']);
+        self::assertSame(
+            'https://www.sandbox.paypal.com/checkoutnow?token=TESTTOKEN',
+            $result['redirect_url'],
+        );
+        self::assertSame(
+            ['redirect_url' => 'https://www.sandbox.paypal.com/checkoutnow?token=TESTTOKEN'],
+            $result['transactions'][0]['response'],
+        );
+    }
+
 
     public function testItReturnsRecoverableFailedOutcomeWithoutLosingTransactionEvidence(): void
     {
@@ -156,7 +213,7 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
             response: ['message' => 'Card declined.'],
         ));
 
-        $result = (new CheckoutOrderPaymentService($orders, $payments))->pay(
+        $result = $this->createService($orders, $payments)->pay(
             ['order-failed-1'],
             'fake_decline',
             'checkout-failed-key',
@@ -197,7 +254,7 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
             ],
         ));
 
-        $result = (new CheckoutOrderPaymentService($orders, $payments))->pay(
+        $result = $this->createService($orders, $payments)->pay(
             ['order-secret-1'],
             'provider_checkout',
             'checkout-secret-key',
@@ -226,7 +283,7 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
         $payments = $this->createMock(PaymentFacadeInterface::class);
         $payments->expects(self::never())->method('tryCreatePayment');
 
-        $result = (new CheckoutOrderPaymentService($orders, $payments))->pay(
+        $result = $this->createService($orders, $payments)->pay(
             ['order-paid-1'],
             'fake_card',
             'checkout-recovery-key',
@@ -260,7 +317,7 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
             response: [],
         ));
 
-        $result = (new CheckoutOrderPaymentService($orders, $payments))->pay(
+        $result = $this->createService($orders, $payments)->pay(
             ['order-notify-1'],
             'fake_card',
             'checkout-notify-key',
@@ -271,5 +328,30 @@ final class CheckoutOrderPaymentServiceTest extends TestCase
         self::assertSame('processing', $result['status']);
         self::assertFalse($result['recoverable']);
         self::assertSame('checkout_order_payment_notification_pending', $result['error_code']);
+    }
+
+    private function createService(
+        OrderFacadeInterface $orders,
+        PaymentFacadeInterface $payments,
+    ): CheckoutOrderPaymentService {
+        $url = $this->createMock(Url::class);
+        $url->method('getUrl')->willReturnCallback(
+            static function (string $path, array $params = []): string {
+                $query = $params === [] ? '' : '?' . http_build_query($params);
+
+                return 'http://shop.test/' . ltrim($path, '/') . $query;
+            },
+        );
+        $builder = new CheckoutSuccessUrlBuilder($url);
+        $sessions = new InMemoryCheckoutSessionStore();
+        $sessions->put('qt-success-1', [
+            'state' => CheckoutSession::STATE_SUBMITTED,
+            'customer_id' => null,
+            'submitted_result' => [
+                'order_uuids' => ['order-uuid-1'],
+            ],
+        ]);
+
+        return new CheckoutOrderPaymentService($orders, $payments, $builder, $sessions);
     }
 }

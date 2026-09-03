@@ -1,0 +1,13 @@
+<?php
+/**
+ * 结账页模块槽位目录（发现用）。
+ *
+ * 真实槽位仍在 `view/frontend/checkout/index.phtml` / `success.phtml`；
+ * 本部件仅向 ThemeComponentCatalog 声明嵌套槽，供 required default_injections
+ * 通过 findSlot 发现，避免 layout_slot_missing。
+ *
+ * @widget.code {checkout-storefront-slots}
+ * @var \Weline\Framework\View\Template $this
+ */
+?>
+<!-- checkout-storefront-slots: discovery-only placeable; do not place on checkout layout -->

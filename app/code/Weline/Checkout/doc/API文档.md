@@ -62,7 +62,7 @@
     "data": {
         "order_id": 1,
         "order_number": "ORD20250101123456",
-        "redirect_url": "/weline_checkout/frontend/checkout/success-page?order_id=1"
+        "redirect_url": "/checkout/success?order_id=1"
     }
 }
 ```

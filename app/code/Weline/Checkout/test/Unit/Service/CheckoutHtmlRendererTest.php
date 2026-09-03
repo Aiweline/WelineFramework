@@ -50,12 +50,40 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringContainsString('checked', $html);
     }
 
+    public function testPaymentMethodOptionsIncludeLogoIntroAndGuideLink(): void
+    {
+        $r = new CheckoutHtmlRenderer();
+        $html = $r->renderPaymentMethodOptions([
+            [
+                'code' => 'paypal',
+                'label' => 'PayPal',
+                'description' => '使用 PayPal 账户或卡完成支付。<script>alert(1)</script>',
+                'icon_url' => '/Weline/Payment/view/statics/img/payment/paypal.svg',
+                'guide_url' => '/guide/payment/paypal',
+                'has_guide' => true,
+            ],
+        ]);
+        self::assertStringContainsString('weline-checkout__option--payment', $html);
+        self::assertStringContainsString('weline-checkout__payment-logo', $html);
+        self::assertStringContainsString('/Weline/Payment/view/statics/img/payment/paypal.svg', $html);
+        self::assertStringContainsString('data-payment-intro-toggle', $html);
+        self::assertStringContainsString('data-payment-details', $html);
+        self::assertStringContainsString('href="/guide/payment/paypal"', $html);
+        self::assertStringContainsString('&lt;script&gt;', $html);
+        self::assertStringNotContainsString('<script>alert', $html);
+        self::assertStringContainsString('name="payment_method"', $html);
+        self::assertStringContainsString('value="paypal"', $html);
+    }
+
     public function testCheckoutIndexPhtmlDoesNotCreateElementForItems(): void
     {
         $path = dirname(__DIR__, 3) . '/view/frontend/checkout/index.phtml';
         self::assertFileExists($path);
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('applyServerHtml', $src);
+        self::assertStringContainsString('enhancePaymentMethodIntros', $src);
+        self::assertStringContainsString('data-payment-intro-toggle', $src);
+        self::assertStringContainsString('weline-checkout__option--payment', $src);
         self::assertStringContainsString('frontend/checkout/partials/items.phtml', $src);
         self::assertStringContainsString('frontend::partials::checkout::cart-items', $src);
         self::assertStringContainsString('data-checkout-items-hook', $src);
@@ -68,5 +96,16 @@ final class CheckoutHtmlRendererTest extends TestCase
         self::assertStringNotContainsString('XMLHttpRequest', $src);
         self::assertStringNotContainsString('axios', $src);
         self::assertStringNotContainsString('/api/framework/query-bin', $src);
+    }
+
+    public function testCheckoutQueryProviderRendersRichPaymentMethodHtml(): void
+    {
+        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Framework/Query/CheckoutQueryProvider.php';
+        self::assertFileExists($path);
+        $src = (string)file_get_contents($path);
+        self::assertStringContainsString('renderPaymentMethodOptions', $src);
+        self::assertStringContainsString("'icon_url'", $src);
+        self::assertStringContainsString("'guide_url'", $src);
+        self::assertStringContainsString('/guide/payment/', $src);
     }
 }

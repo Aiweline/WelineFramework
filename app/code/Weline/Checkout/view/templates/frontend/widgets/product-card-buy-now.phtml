@@ -7,6 +7,7 @@
  */
 
 use Weline\Product\Helper\StorefrontOfferResolver;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('product-card-buy-now');
@@ -15,6 +16,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars(
     ENT_QUOTES | ENT_SUBSTITUTE,
     'UTF-8'
 );
+$localize = static fn(string $source): string => WidgetI18n::label($source);
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
     || (bool)($this->getData('editor_mode') ?? false);
 
@@ -35,7 +37,7 @@ if ($quoteOnly || (!$isPreviewMode && (!$sellable || $offerUuid === ''))) {
 $variant = trim((string)($this->getData('card_add_to_cart_variant') ?? $this->getData('card_buy_now_variant') ?? 'cta'));
 $extraClass = trim((string)($this->getData('card_buy_now_button_class') ?? ''));
 $labelOverride = trim((string)($this->getData('card_buy_now_label') ?? ''));
-$buttonLabel = $labelOverride !== '' ? $labelOverride : __('立即购买');
+$buttonLabel = WidgetI18n::label($labelOverride, '立即购买');
 
 if ($variant === 'storefront') {
     $buttonClass = 'product-storefront__buy-now weline-pixel::buy-now';
@@ -53,9 +55,9 @@ if ($extraClass !== '') {
      data-widget-module="Weline_Checkout"
      data-widget-code="product-card-buy-now"
      data-uid="<?= $escape($scope->uid) ?>"
-     data-purchase-loading="<?= $escape(__('正在前往结账...')) ?>"
-     data-purchase-success="<?= $escape(__('正在前往结账...')) ?>"
-     data-purchase-error="<?= $escape(__('结账准备失败')) ?>"
+     data-purchase-loading="<?= $escape($localize('正在前往结账...')) ?>"
+     data-purchase-success="<?= $escape($localize('正在前往结账...')) ?>"
+     data-purchase-error="<?= $escape($localize('结账准备失败')) ?>"
      weline-code="<?= $escape($scope->code) ?>">
     <button type="button"
             class="<?= $escape(trim($buttonClass)) ?>"

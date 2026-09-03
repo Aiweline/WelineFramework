@@ -149,8 +149,8 @@ async function addOffers(page, prepared, keys, token = '') {
     if (token) {
       params.guest_token = token;
     }
-    const added = await api(page, 'cart', 'addV2', params);
-    expect(successOf(added), `cart.addV2 ${key}: ${JSON.stringify(added)}`).toBeTruthy();
+    const added = await api(page, 'cart', 'add', params);
+    expect(successOf(added), `cart.add ${key}: ${JSON.stringify(added)}`).toBeTruthy();
   }
 }
 
@@ -159,7 +159,7 @@ async function assertTrustedCartVisible(page, token, expectedItemCount) {
   const guestCookie = cookies.find((cookie) => cookie.name === 'weline_cart_guest_token');
   expect(guestCookie && guestCookie.value).toBe(token);
 
-  const current = dataOf(await api(page, 'cart', 'getV2Cart'));
+  const current = dataOf(await api(page, 'cart', 'getCart'));
   expect(Number(current.item_count || 0), JSON.stringify(current)).toBe(expectedItemCount);
   expect(String(current.owner_id || ''), JSON.stringify(current)).toBe(token);
   expect(String(current.scope_key || ''), JSON.stringify(current)).toMatch(/^channel\|/);
@@ -174,8 +174,8 @@ async function freeze(page, prepared, extra = {}) {
 }
 
 async function clearCart(page) {
-  const cleared = await api(page, 'cart', 'clearV2');
-  expect(successOf(cleared), `cart.clearV2: ${JSON.stringify(cleared)}`).toBeTruthy();
+  const cleared = await api(page, 'cart', 'clear');
+  expect(successOf(cleared), `cart.clear: ${JSON.stringify(cleared)}`).toBeTruthy();
 }
 
 function cleanup(prepared, quoteTokens, groupUuids) {

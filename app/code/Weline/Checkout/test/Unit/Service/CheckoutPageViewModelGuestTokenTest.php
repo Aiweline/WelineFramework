@@ -50,7 +50,7 @@ namespace Weline\Checkout\Test\Unit\Service {
             CheckoutPageViewModelQuerySpy::$calls = [];
         }
 
-        public function testCurrentCartForwardsGuestTokenToCartV2Boundary(): void
+        public function testCurrentCartForwardsGuestTokenToCartBoundary(): void
         {
             $cart = (new CheckoutPageViewModel())->currentCart('guest-token-123');
 
@@ -58,7 +58,7 @@ namespace Weline\Checkout\Test\Unit\Service {
             self::assertSame('Trusted guest cart item', $cart['items'][0]['name']);
             self::assertSame([[
                 'provider' => 'cart',
-                'operation' => 'getV2Cart',
+                'operation' => 'getCart',
                 'params' => ['guest_token' => 'guest-token-123'],
             ]], CheckoutPageViewModelQuerySpy::$calls);
         }

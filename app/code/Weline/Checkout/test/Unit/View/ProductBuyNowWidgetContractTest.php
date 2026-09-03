@@ -26,7 +26,7 @@ final class ProductBuyNowWidgetContractTest extends TestCase
         self::assertSame('product', $injection['layout_type'] ?? null);
     }
 
-    public function testWidgetTemplateRedirectsToCheckoutAfterCartV2Add(): void
+    public function testWidgetTemplateRedirectsToCheckoutAfterCartAdd(): void
     {
         $template = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/templates/frontend/widgets/product-buy-now.phtml',

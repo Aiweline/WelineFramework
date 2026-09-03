@@ -127,6 +127,7 @@ final class CheckoutGroupSubmitService
         string $cartHash = '',
         ?string $couponCode = null,
         ?string $paymentMethod = null,
+        ?array $billingAddress = null,
     ): array {
         $this->rejectClientAuthority($clientHints);
         if ($lines === []) {
@@ -227,7 +228,9 @@ final class CheckoutGroupSubmitService
             'customer_id' => $customerId,
             'scope' => $scope,
             'address' => $address,
+            'billing_address' => $billingAddress !== null && $billingAddress !== [] ? $billingAddress : $address,
             'service_code' => $serviceCode,
+            'lines' => $lines,
             'orders' => $orders,
             'allocation' => $alloc,
             'quote' => $quote->toArray(),
@@ -510,6 +513,9 @@ final class CheckoutGroupSubmitService
                 'shipping_quote' => $session['quote'],
                 'owner_item_shipping_minor' => $session['allocation']['owner_item_shipping_minor'],
                 'inventory_reservations' => $reservations,
+                'billing_address' => is_array($session['billing_address'] ?? null)
+                    ? $session['billing_address']
+                    : $session['address'],
             ],
         );
 
@@ -821,19 +827,25 @@ final class CheckoutGroupSubmitService
         }
 
         $couponCode = (string)($session['coupon_code'] ?? '');
+        $discount = $session['discount'];
+        // freezeQuote 时可能尚未选定支付方式；校验折扣 token 须用冻结时的 paymentMethod，
+        // 否则 submit 换 PayPal 等会误报「折扣报价已失效」。支付相关优惠另在下方校验。
+        $frozenPaymentMethod = trim((string)($session['payment_method'] ?? $discount['payment_method'] ?? '')) ?: null;
+        $discountLines = is_array($session['lines'] ?? null) && $session['lines'] !== []
+            ? $session['lines']
+            : $this->flattenOrderLines($session['orders']);
         $discountRequest = new DiscountQuoteRequest(
             scope: $session['scope'],
             address: $session['address'],
-            lines: $this->flattenOrderLines($session['orders']),
+            lines: $discountLines,
             orders: $session['orders'],
             currency: (string)$session['currency'],
             customerId: isset($session['customer_id']) ? (int)$session['customer_id'] : null,
             shippingAmountMinor: (int)($session['quote']['amount_minor'] ?? 0),
             couponCode: $couponCode !== '' ? $couponCode : null,
-            paymentMethod: trim((string)($paymentMethod ?? $session['payment_method'] ?? '')) ?: null,
+            paymentMethod: $frozenPaymentMethod,
             cartHash: (string)($session['cart_hash'] ?? ''),
         );
-        $discount = $session['discount'];
         $discountQuote = new DiscountQuote(
             discountQuoteToken: (string)($discount['discount_quote_token'] ?? ''),
             amountMinor: (int)($discount['amount_minor'] ?? 0),
