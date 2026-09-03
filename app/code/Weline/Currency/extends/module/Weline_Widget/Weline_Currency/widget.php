@@ -18,7 +18,7 @@ return [
             'layout-footer-payment-account-links',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'footer-payment-account-links',
             'area' => 'footer',
             'sort_order' => 20,
