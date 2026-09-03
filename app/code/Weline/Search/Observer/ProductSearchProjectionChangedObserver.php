@@ -109,7 +109,7 @@ final class ProductSearchProjectionChangedObserver implements AsyncObserverInter
             );
         }
         $storeId = (int)($after['store_id'] ?? 0);
-        $store = $storeId > 0 ? $this->stores->byId($storeId) : null;
+        $store = $this->stores->byId($storeId);
         if ($store === null || $store->websiteId !== $websiteId) {
             throw new NonRetryableAsyncEventException(
                 'search_projection_store_scope_invalid',
