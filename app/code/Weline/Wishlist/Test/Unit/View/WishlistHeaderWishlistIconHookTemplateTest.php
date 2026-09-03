@@ -21,7 +21,7 @@ final class WishlistHeaderWishlistIconHookTemplateTest extends TestCase
         );
     }
 
-    public function testThemeHeaderPartialDoesNotInlineWishlistWidget(): void
+    public function testThemeHeaderPartialUsesHookNotInlineWishlistWidget(): void
     {
         $path = dirname(__DIR__, 3) . '/../Theme/view/theme/frontend/partials/header/default.phtml';
         self::assertFileExists($path);
@@ -39,5 +39,14 @@ final class WishlistHeaderWishlistIconHookTemplateTest extends TestCase
         self::assertNotFalse($accountPos);
         // 顶栏顺序：货币槽之后 → 收藏 → 账户 → 订单 → 购物车
         self::assertLessThan($accountPos, $wishlistPos);
+    }
+
+    public function testWishlistIconHasNoDefaultInjectionsForAppsTab(): void
+    {
+        $path = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Wishlist/widget.php';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString("'code' => 'wishlist-icon'", $source);
+        self::assertStringNotContainsString("'default_injections'", $source);
     }
 }

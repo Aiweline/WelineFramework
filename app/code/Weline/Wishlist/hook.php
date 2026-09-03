@@ -11,7 +11,7 @@ return [
     ],
     'header-wishlist-icon' => [
         'name' => \__('页头收藏夹图标'),
-        'description' => \__('在页头 user-area 展示收藏入口；Theme partial 经 Hook 交付，避免内嵌非 Theme 部件。'),
+        'description' => \__('在页头 user-area 展示收藏入口；默认店面经 Hook 交付，不走应用 Tab 默认注入。'),
         'doc' => 'header-wishlist-icon.md',
     ],
 ];
