@@ -46,8 +46,16 @@ final class ProductAdminSurfaceContractTest extends TestCase
             );
         }
 
-        self::assertStringContainsString('销售规格（高级维护）', $menu);
-        self::assertStringContainsString('SKU 身份（高级维护）', $menu);
+        self::assertMatchesRegularExpression(
+            '/source="Weline_Product::commerce:catalog:offers"[^>]*title="销售规格"'
+            . '[^>]*parent="Weline_Backend::commerce:catalog:advanced-group"/s',
+            $menu,
+        );
+        self::assertMatchesRegularExpression(
+            '/source="Weline_Product::commerce:catalog:sku-registry"[^>]*title="SKU 身份"'
+            . '[^>]*parent="Weline_Backend::commerce:catalog:advanced-group"/s',
+            $menu,
+        );
     }
 
     public function testUniversalProductPagesUseThePublicAdminContracts(): void
@@ -161,11 +169,13 @@ final class ProductAdminSurfaceContractTest extends TestCase
             'data-eav-field',
             'data-eav-state',
             'data-eav-input',
-            'data-testid="product-eav-advanced"',
+            '<textarea id="product-edit-attributes" hidden aria-hidden="true">',
             "'multiselect', 'multi_select', 'multiple'",
         ] as $contract) {
             self::assertStringContainsString($contract, $edit);
         }
+        self::assertStringNotContainsString('data-testid="product-eav-advanced"', $edit);
+        self::assertStringNotContainsString('高级：完整属性行 JSON', $edit);
         foreach ([
             'function collectVisualAttributes',
             'function mergeAdvancedAttributeRows',
@@ -196,9 +206,63 @@ final class ProductAdminSurfaceContractTest extends TestCase
             'data-product-variant-rows',
             'data-product-variant-impact',
             'data-can-edit-structure',
+            'data-variant-axis-option',
+            'data-variant-axis-option-grid',
+            'w-product-variant__combo-chips',
+            'w-product-create__axis-chip',
+            'w-product-variant__axis-attr',
+            'data-variant-axis-attr',
         ] as $marker) {
             self::assertStringContainsString($marker, $edit);
         }
+        self::assertStringContainsString('data-variant-axis-option', $script);
+        self::assertStringContainsString('buildVariantCombinationChips', $script);
+        self::assertStringContainsString('renderVariantAxisOptionGrid', $script);
+        self::assertStringContainsString('listCatalogVariantAxisChoices', $script);
+        self::assertStringNotContainsString('规格值，以逗号分隔', $edit);
+        self::assertStringNotContainsString('规格轴代码，例如 color', $edit);
+        self::assertStringContainsString(
+            '<textarea id="product-edit-attributes" hidden aria-hidden="true">',
+            $edit,
+        );
+        self::assertStringNotContainsString('高级：完整属性行 JSON', $edit);
+        self::assertStringNotContainsString('高级数据维护迁移值', $script);
+        self::assertStringContainsString('data-variant-offer-image', $edit);
+        self::assertStringContainsString('data-variant-image-placeholder', $edit);
+        self::assertStringContainsString('data-variant-offer-image-placeholder', $edit);
+        self::assertStringNotContainsString('data-variant-offer-image-empty', $edit);
+        self::assertStringContainsString('data-product-variant-media-preserve', $edit);
+        self::assertStringContainsString('<lang>产品图片</lang>', $edit);
+        self::assertStringContainsString('buildVariantOfferImageCell', $script);
+        self::assertStringContainsString('variantImagePlaceholderUrl', $script);
+        self::assertStringContainsString('resolveCombinationPreview', $script);
+        self::assertStringContainsString("role: 'variant'", $script);
+        self::assertStringContainsString('image_url', $readService);
+        self::assertStringContainsString('image_is_placeholder', $readService);
+        self::assertStringContainsString('withInventoryOfferImages', $readService);
+        self::assertStringContainsString('data-inventory-offer-image', $edit);
+        self::assertStringContainsString('w-product-inventory__offer', $edit);
+        self::assertStringContainsString('variantImageByKey', $readService);
+        self::assertStringContainsString('StorefrontImagePlaceholder', $readService);
+        self::assertStringNotContainsString('fallbackProductImagePath', $readService);
+        self::assertStringContainsString('is-placeholder', $this->read(
+            'app/code/Weline/Product/view/statics/css/backend/product-admin.css'
+        ));
+        self::assertStringContainsString('pathToMediaUrl($path, 192, 192)', $this->read(
+            'app/code/Weline/Product/Service/ProductAdminMediaPresenter.php'
+        ));
+        self::assertStringContainsString('w-product-variant__image-cell .w-product-create__variant-preview-thumb:hover', $this->read(
+            'app/code/Weline/Product/view/statics/css/backend/product-admin.css'
+        ));
+        self::assertStringContainsString('resolveAssetReference', $this->read(
+            'app/code/Weline/Product/Service/ProductAdminMediaPresenter.php'
+        ));
+        self::assertStringContainsString('product_variant_media', $this->read(
+            'app/code/Weline/Product/Service/ProductAdminCommandService.php'
+        ));
+        self::assertStringContainsString('hasVariantPayload', $this->read(
+            'app/code/Weline/Product/Service/ProductAdminCommandService.php'
+        ));
         self::assertStringContainsString('collectOfferMatrix', $script);
         self::assertStringContainsString('buildVariantCombinations', $script);
         self::assertStringContainsString('offer_matrix: collectOfferMatrix', $script);
@@ -233,6 +297,13 @@ final class ProductAdminSurfaceContractTest extends TestCase
         ] as $marker) {
             self::assertStringContainsString($marker, $edit);
         }
+        self::assertStringContainsString('w:catalog:category:select', $edit);
+        self::assertStringContainsString('id="product-edit-categories"', $edit);
+        self::assertStringContainsString('space="product"', $edit);
+        self::assertStringContainsString("window.WelineCatalogCategorySelect", $script);
+        self::assertStringContainsString("product-edit-categories", $script);
+        self::assertStringNotContainsString('data-product-category-row', $edit);
+        self::assertStringNotContainsString('data-product-category-search', $edit);
         foreach ([
             'collectCategoryAssignments',
             'collectMediaAssignments',
@@ -262,8 +333,32 @@ final class ProductAdminSurfaceContractTest extends TestCase
         }
         self::assertStringNotContainsString('name="media_path"', $edit);
         self::assertStringNotContainsString('name="blob_key"', $edit);
+        self::assertStringContainsString('w-product-media-thumb', $edit);
+        self::assertStringContainsString('data-product-media-asset-open', $edit);
+        self::assertStringContainsString('w-product-media-asset-open', $edit);
+        self::assertStringContainsString("pickerUrl.searchParams.set('asset_id', focusAssetId)", $script);
+        self::assertStringContainsString('openProductMediaPicker({assetId: focusAssetId})', $script);
+        self::assertStringContainsString('data-preview-url', $edit);
+        self::assertStringContainsString('w-product-media-asset', $edit);
+        self::assertStringContainsString('presentAssignment', $readService);
+        self::assertStringContainsString("resolveMediaPickerFileUrl(file) || safePickerPreview(file.preview_url)", $script);
+        self::assertStringContainsString('w-product-media-asset__meta', $script);
         self::assertStringNotContainsString('fetch' . '(', $script);
         self::assertStringNotContainsString('XMLHttpRequest', $script);
+    }
+
+    public function testDefaultStoreZeroSurvivesCreateAndSavePayloadCollection(): void
+    {
+        $script = $this->read('app/code/Weline/Product/view/statics/js/backend/product-admin.js');
+
+        self::assertStringContainsString(
+            'return Number.isInteger(value) && value >= 0;',
+            $script,
+        );
+        self::assertStringNotContainsString(
+            'return Number.isInteger(value) && value > 0;',
+            $script,
+        );
     }
 
     public function testBackendBrowserUsesAclProtectedProductAdminResourceWithoutInlineRequests(): void
@@ -295,8 +390,18 @@ final class ProductAdminSurfaceContractTest extends TestCase
         self::assertStringContainsString("scope_state = 'cleared'", $script);
         self::assertStringNotContainsString('fetch' . '(', $script);
         self::assertStringNotContainsString('XMLHttpRequest', $script);
-        self::assertSame(1, substr_count($index, '<script type="application/json"'));
-        self::assertSame(1, substr_count($edit, '<script type="application/json"'));
+        preg_match_all(
+            '/<script\s+type="application\/json"[^>]*\bid="([^"]+)"/',
+            $index,
+            $indexJsonScripts,
+        );
+        self::assertSame([
+            'product-admin-state',
+            'product-create-supplier-brand-map',
+            'product-catalog-local-rows',
+            'product-catalog-category-options',
+        ], $indexJsonScripts[1] ?? []);
+        self::assertSame(1, substr_count($edit, 'id="product-admin-state"'));
         self::assertSame(1, substr_count($index, '<script src='));
         self::assertSame(1, substr_count($edit, '<script src='));
         self::assertDoesNotMatchRegularExpression(
@@ -517,9 +622,16 @@ final class ProductAdminSurfaceContractTest extends TestCase
             '$canPublish = in_array',
             '$canArchive = in_array',
             'data-edit-business',
+            'data-testid="product-edit-name-local"',
+            'Weline\\Product\\Model\\Product\\LocalDescription',
+            'id="product-edit-meta-name"',
+            'id="product-edit-short-description"',
         ] as $contract) {
             self::assertStringContainsString($contract, $edit);
         }
+        self::assertStringContainsString('attributeAnyLocaleFallback', $context);
+        self::assertStringContainsString('meta_name:', $script);
+        self::assertStringContainsString('short_description:', $script);
         foreach ([
             'function renderDiagnosticGroup',
             'diagnostics.groups',

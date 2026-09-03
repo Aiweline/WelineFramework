@@ -76,6 +76,10 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertStringContainsString('function newArrivalCards(int $limit = 8, int $days = 30)', $source);
         self::assertStringContainsString('Product::schema_fields_CREATED_AT', $source);
         self::assertStringContainsString('publishedOffersForProductIds', $source);
+        self::assertStringContainsString('New-arrivals: prefer HF-* then fill non-HF published offers', $source);
+        self::assertStringContainsString('$fallbackProductId', $source);
+        self::assertStringContainsString('Day-window empty or no sellable offers: stable catalog fallback', $source);
+        self::assertStringContainsString('$this->cards($limit)', $source);
     }
 
     public function testWidgetRegistrationPinsDefaultInjectionSlot(): void
@@ -138,9 +142,18 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('data-testid="storefront-related-products"', $source);
         self::assertStringContainsString('Weline_Product::css/widgets/related-products.css', $source);
-        self::assertStringContainsString('Weline_Product::js/widgets/related-products.js', $source);
+        self::assertStringContainsString('data-weline-load="relatedProducts"', $source);
         self::assertStringNotContainsString('<script>', $source);
         self::assertStringContainsString('relatedCards(', $source);
+
+        $modulesPath = dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js';
+        self::assertFileExists($modulesPath);
+        $modulesSource = (string)file_get_contents($modulesPath);
+        self::assertStringContainsString('relatedProducts:', $modulesSource);
+        self::assertStringContainsString(
+            'Weline_Product::js/widgets/related-products.js',
+            $modulesSource,
+        );
     }
 
     public function testRecommendedProductsRegistrationAndTemplateContract(): void
@@ -166,12 +179,17 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertStringContainsString('->cards($limit)', $source);
         self::assertStringContainsString('Url::getPrefix()', $source);
         self::assertStringNotContainsString('$this->getUrl(ltrim($route', $source);
-        self::assertStringContainsString('data-action="add-v2"', $source);
-        self::assertStringContainsString('weline-cart-product-card-add-to-cart', $source);
+        self::assertStringContainsString('ProductCardAddToCartParams::fetchDictionary', $source);
+        self::assertStringContainsString('Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml', $source);
+        self::assertStringContainsString("'button_class' => 'wpc-cta'", $source);
+        self::assertStringContainsString("'buy_now_enabled' => false", $source);
         self::assertStringContainsString('Weline_Product::css/widgets/recommended-products.css', $source);
-        self::assertStringContainsString('Weline_Product::js/widgets/recommended-products.js', $source);
+        self::assertStringContainsString('data-weline-load="recommendedProducts"', $source);
         self::assertFileExists(dirname(__DIR__, 3) . '/view/statics/css/widgets/recommended-products.css');
         self::assertFileExists(dirname(__DIR__, 3) . '/view/statics/js/widgets/recommended-products.js');
+        $modulesSrc = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js');
+        self::assertStringContainsString('recommendedProducts', $modulesSrc);
+        self::assertStringContainsString('Weline_Product::js/widgets/recommended-products.js', $modulesSrc);
 
         $css = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/css/widgets/recommended-products.css');
         self::assertStringContainsString('max-width: var(--weline-layout-content-max-width', $css);

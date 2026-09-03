@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__, 4) . '/Service/TextileHeritageCatalog.php';
+
+use Weline\Product\Service\TextileHeritageCatalog;
+
+$textileHeritageConfig = TextileHeritageCatalog::widgetConfig();
+
 return [
     'product-info' => [
         'name' => '产品主要信息',
@@ -280,6 +286,71 @@ return [
                     'grid' => '网格',
                     'carousel' => '轮播',
                 ],
+            ],
+        ],
+    ],
+    'textile-heritage' => [
+        'name' => '织艺谱系',
+        'description' => '汉服织艺谱系目录：默认六项含配图与搜索链接，注入首页品牌槽。',
+        'type' => 'content',
+        'code' => 'textile-heritage',
+        'area' => 'frontend',
+        'template' => 'Weline_Product::templates/frontend/widgets/textile-heritage.phtml',
+        'page_layouts' => ['homepage', 'cms_page'],
+        'position' => ['content'],
+        'supports' => [
+            'layout-homepage-brands',
+            'layout-cms-content',
+            'layout-default-content',
+            'brand-list',
+            'brands',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'homepage',
+            'layout_option' => 'default',
+            'slot' => 'homepage-brands',
+            'area' => 'content',
+            'sort_order' => 0,
+            'required' => true,
+            'reason' => '首页品牌槽默认展示 Product 织艺谱系（含图与搜索链接）',
+            'config' => $textileHeritageConfig,
+        ]],
+        'params' => [
+            'title' => [
+                'default' => TextileHeritageCatalog::TITLE,
+                'type' => 'string',
+                'label' => '标题',
+            ],
+            'brands' => [
+                'default' => $textileHeritageConfig['brands'],
+                'type' => 'brand_logo_items',
+                'label' => '谱系项',
+                'description' => '每项包含名称、说明、图片与链接；默认写入部件数据',
+            ],
+            'columns' => [
+                'default' => '6',
+                'type' => 'select',
+                'label' => '每行列数',
+                'options' => [
+                    '4' => '4列',
+                    '5' => '5列',
+                    '6' => '6列',
+                    '8' => '8列',
+                ],
+            ],
+            'layout' => [
+                'default' => 'grid',
+                'type' => 'select',
+                'label' => '布局',
+                'options' => [
+                    'grid' => '网格',
+                    'carousel' => '轮播',
+                ],
+            ],
+            'grayscale' => [
+                'default' => false,
+                'type' => 'bool',
+                'label' => '灰度效果',
             ],
         ],
     ],

@@ -22,6 +22,7 @@ use Weline\Product\Repository\PriceRepository;
 use Weline\Product\Repository\ProductRepository;
 use Weline\Product\Repository\StoreOfferRepository;
 use Weline\Product\Repository\StoreProductRepository;
+use Weline\Theme\Helper\StorefrontImagePlaceholder;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 
 final class ProductAdminReadService implements ProductAdminReadInterface
@@ -145,7 +146,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface
                 'skus' => $skus,
                 'offer_count' => count($offers),
                 'prices' => $priceRows,
-                'main_media' => $this->mediaPresenter->presentMainMedia($mediaRows[0] ?? null),
+                'main_media' => $this->mediaPresenter->presentMainMedia($mediaRows[0] ?? null, $websiteId),
                 'selected_store_ids' => $selectedStores,
                 'updated_at' => (string)($product['updated_at'] ?? ''),
                 'identity_version' => $identity?->version ?? 0,
@@ -451,9 +452,10 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             static fn(array $row): bool => (int)($row['store_id'] ?? 0) > 0,
         ));
 
+        $rawMediaRows = $this->media->listByProductIds($websiteId, [$productId], $scopeStoreIds);
         $mediaRows = array_map(
-            fn(array $row): array => $this->adminMediaRow($row),
-            $this->media->listByProductIds($websiteId, [$productId], $scopeStoreIds),
+            fn(array $row): array => $this->adminMediaRow($row, $websiteId),
+            $rawMediaRows,
         );
         $mediaAssignments = array_values(array_filter(
             $mediaRows,
@@ -544,6 +546,7 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             'transfer' => $isOwner && !$isArchived,
         ];
         $offerMatrix = $this->offerMatrix(
+            $productId,
             $identity->productType,
             $identity->productCode,
             $offers,
@@ -551,12 +554,18 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             $typeConfiguration,
             $currency,
             $isOwner,
+            $rawMediaRows,
+            $websiteId,
         );
         $inventory = $this->inventorySnapshot(
             $websiteId,
             $storeRows,
             $offers,
             !empty($providerDefinition['capabilities']['inventory']),
+        );
+        $inventory = $this->withInventoryOfferImages(
+            $inventory,
+            is_array($offerMatrix['rows'] ?? null) ? $offerMatrix['rows'] : [],
         );
 
         return [
@@ -619,22 +628,24 @@ final class ProductAdminReadService implements ProductAdminReadInterface
     }
 
     /** @param array<string,mixed> $row @return array<string,mixed> */
-    private function adminMediaRow(array $row): array
+    private function adminMediaRow(array $row, int $websiteId = 0): array
     {
-        return [
+        return $this->mediaPresenter->presentAssignment([
             'media_id' => (int)($row['media_id'] ?? 0),
             'product_id' => (int)($row['product_id'] ?? 0),
             'store_id' => (int)($row['store_id'] ?? 0),
             'scope_state' => (string)($row['scope_state'] ?? 'explicit'),
             'hidden' => (int)($row['hidden'] ?? 0) === 1,
             'role' => (string)($row['role'] ?? 'gallery'),
+            'combination_key' => trim((string)($row['combination_key'] ?? '')),
             'asset_id' => trim((string)($row['asset_id'] ?? '')),
             'asset_visibility' => (string)($row['asset_visibility'] ?? 'public'),
             'mime_type' => (string)($row['mime_type'] ?? ''),
             'access_policy_json' => $row['access_policy_json'] ?? null,
+            'path' => trim((string)($row['path'] ?? '')),
             'position' => (int)($row['position'] ?? 0),
             'legacy' => trim((string)($row['asset_id'] ?? '')) === '',
-        ];
+        ], $websiteId);
     }
 
     /**
@@ -675,19 +686,36 @@ final class ProductAdminReadService implements ProductAdminReadInterface
         if (is_array($offer['combination'] ?? null)) {
             return $offer['combination'];
         }
-        $configuration = $this->offerTypeConfiguration($offer);
-        return is_array($configuration['combination'] ?? null)
-            ? $configuration['combination']
-            : [];
+        $key = trim((string)($offer['combination_key'] ?? ''));
+        if ($key === '') {
+            return [];
+        }
+        $combination = [];
+        foreach (explode('|', $key) as $segment) {
+            if (!str_contains($segment, '=')) {
+                return [];
+            }
+            [$code, $value] = explode('=', $segment, 2);
+            $code = strtolower(trim(rawurldecode($code)));
+            $value = trim(rawurldecode($value));
+            if ($code === '' || $value === '') {
+                return [];
+            }
+            $combination[$code] = $value;
+        }
+        ksort($combination, SORT_STRING);
+        return $combination;
     }
 
     /**
      * @param list<array<string,mixed>> $offers
      * @param list<array<string,mixed>> $prices
      * @param array<string,mixed> $typeConfiguration
+     * @param list<array<string,mixed>> $mediaRows
      * @return array<string,mixed>
      */
     private function offerMatrix(
+        int $productId,
         string $productType,
         string $productCode,
         array $offers,
@@ -695,6 +723,8 @@ final class ProductAdminReadService implements ProductAdminReadInterface
         array $typeConfiguration,
         string $currency,
         bool $canEditStructure,
+        array $mediaRows = [],
+        int $websiteId = 0,
     ): array {
         if ($productType !== 'configurable') {
             return [
@@ -718,29 +748,107 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             $priceByOfferId[(int)($price['offer_id'] ?? 0)] = $price;
         }
 
+        $variantImageByKey = [];
+        $variantSwatchByAxis = [];
+        foreach ($mediaRows as $media) {
+            if (!is_array($media)) {
+                continue;
+            }
+            if ((int)($media['store_id'] ?? 0) !== 0) {
+                continue;
+            }
+            $path = trim((string)($media['path'] ?? ''));
+            if ($path === '') {
+                $assetId = trim((string)($media['asset_id'] ?? ''));
+                if ($assetId !== '') {
+                    $path = 'asset://' . $assetId;
+                }
+            }
+            if ($path === '') {
+                continue;
+            }
+            $role = strtolower(trim((string)($media['role'] ?? '')));
+            if ($role !== 'variant') {
+                continue;
+            }
+            $mediaKey = trim((string)($media['combination_key'] ?? ''));
+            if ($mediaKey === '') {
+                continue;
+            }
+            if (!isset($variantImageByKey[$mediaKey])) {
+                $variantImageByKey[$mediaKey] = $path;
+            }
+            foreach ($this->offerCombination(['combination_key' => $mediaKey]) as $axis => $value) {
+                $axisCode = strtolower(trim((string)$axis));
+                $optionValue = trim((string)$value);
+                if ($axisCode === '' || $axisCode === 'size' || $optionValue === '') {
+                    continue;
+                }
+                if (!isset($variantSwatchByAxis[$axisCode][$optionValue])) {
+                    $variantSwatchByAxis[$axisCode][$optionValue] = $path;
+                }
+            }
+        }
+
+        $axisValues = [];
         $rows = [];
         foreach ($offers as $offer) {
-            $configuration = $this->offerTypeConfiguration($offer);
-            $combination = is_array($configuration['combination'] ?? null)
-                ? $configuration['combination']
-                : $this->offerCombination($offer);
+            $combination = $this->offerCombination($offer);
+            foreach ($combination as $code => $value) {
+                $axisValues[(string)$code][(string)$value] = true;
+            }
             $price = $priceByOfferId[(int)($offer['offer_id'] ?? 0)] ?? null;
             $scopeState = $price === null
                 ? 'cleared'
                 : (string)($price['scope_state']
                     ?? (!empty($price['cleared']) ? 'cleared' : 'explicit'));
+            $combinationKey = (string)($offer['combination_key'] ?? '');
+            if ($combinationKey === '' && $combination !== []) {
+                $segments = [];
+                foreach ($combination as $axis => $value) {
+                    $segments[] = rawurlencode((string)$axis) . '=' . rawurlencode((string)$value);
+                }
+                $combinationKey = implode('|', $segments);
+            }
+            $imagePath = $variantImageByKey[$combinationKey] ?? '';
+            if ($imagePath === '') {
+                foreach ($combination as $axis => $value) {
+                    $axisCode = strtolower(trim((string)$axis));
+                    $optionValue = trim((string)$value);
+                    if ($axisCode === '' || $axisCode === 'size' || $optionValue === '') {
+                        continue;
+                    }
+                    $imagePath = trim((string)($variantSwatchByAxis[$axisCode][$optionValue] ?? ''));
+                    if ($imagePath !== '') {
+                        break;
+                    }
+                }
+            }
+            $imageIsPlaceholder = false;
+            if ($imagePath === '') {
+                $imageUrl = StorefrontImagePlaceholder::url();
+                $imageIsPlaceholder = true;
+            } else {
+                $imageUrl = $this->mediaPresenter->displayableImageUrl($imagePath, $websiteId);
+            }
             $row = [
                 'offer_id' => (int)($offer['offer_id'] ?? 0),
                 'global_offer_uuid' => (string)($offer['global_offer_uuid'] ?? ''),
                 'sku' => (string)($offer['sku'] ?? ''),
                 'combination' => $combination,
-                'combination_key' => (string)($offer['combination_key'] ?? ''),
+                'combination_key' => $combinationKey,
                 'offer_version' => (int)($offer['publish_version'] ?? 0),
                 'identity_version' => (int)($offer['identity_version'] ?? 0),
                 'status' => (string)($offer['status'] ?? 'draft'),
                 'identity_status' => (string)($offer['identity_status'] ?? 'active'),
                 'scope_state' => $scopeState,
                 'currency' => $currency,
+                'image' => $imagePath,
+                'image_url' => $imageUrl,
+                'image_is_placeholder' => $imageIsPlaceholder,
+                'image_asset_id' => str_starts_with(strtolower($imagePath), 'asset://')
+                    ? substr($imagePath, strlen('asset://'))
+                    : '',
             ];
             if ($price !== null
                 && $scopeState === 'explicit'
@@ -752,13 +860,106 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             $rows[] = $row;
         }
 
-        $axes = is_array($typeConfiguration['axes'] ?? null)
-            ? array_values($typeConfiguration['axes'])
-            : [];
-        $skuPrefix = trim((string)($typeConfiguration['sku_prefix'] ?? $productCode));
+        $metadata = [];
+        foreach ($this->attributeMetadata->editorCatalog($productId) as $set) {
+            foreach (is_array($set['groups'] ?? null) ? $set['groups'] : [] as $group) {
+                foreach (is_array($group['attributes'] ?? null) ? $group['attributes'] : [] as $attribute) {
+                    $code = strtolower(trim((string)($attribute['code'] ?? '')));
+                    if ($code !== '') {
+                        $metadata[$code] = $attribute;
+                    }
+                }
+            }
+        }
+        $axes = [];
+        foreach ($axisValues as $code => $values) {
+            $attribute = is_array($metadata[$code] ?? null) ? $metadata[$code] : [];
+            $optionMetadata = is_array($attribute['options'] ?? null) ? $attribute['options'] : [];
+            $options = [];
+            foreach (array_keys($values) as $value) {
+                $entry = ['value' => $value, 'label' => $value];
+                foreach ($optionMetadata as $option) {
+                    if (!is_array($option)) {
+                        continue;
+                    }
+                    if ($value === (string)($option['value'] ?? '')
+                        || $value === (string)($option['code'] ?? '')
+                        || $value === (string)($option['option_id'] ?? '')
+                    ) {
+                        $label = trim((string)($option['label'] ?? $option['name'] ?? $value));
+                        $entry = ['value' => $value, 'label' => $label !== '' ? $label : $value];
+                        $swatchColor = trim((string)($option['swatch_color'] ?? $option['swatch'] ?? ''));
+                        $swatchImage = trim((string)($option['swatch_image'] ?? ''));
+                        if ($swatchColor !== '') {
+                            $entry['swatch_color'] = $swatchColor;
+                            $entry['swatch'] = $swatchColor;
+                        }
+                        if ($swatchImage !== '') {
+                            $entry['swatch_image'] = $swatchImage;
+                        }
+                        break;
+                    }
+                }
+                $axisCode = strtolower(trim((string)$code));
+                if ($axisCode !== 'size') {
+                    $variantSwatch = trim((string)($variantSwatchByAxis[$axisCode][(string)$value] ?? ''));
+                    if ($variantSwatch !== '') {
+                        $resolved = $this->mediaPresenter->displayableImageUrl($variantSwatch, $websiteId);
+                        if ($resolved !== '') {
+                            $entry['swatch_image'] = $resolved;
+                        } elseif (trim((string)($entry['swatch_image'] ?? '')) === '') {
+                            $entry['swatch_image'] = $variantSwatch;
+                        }
+                    } elseif (trim((string)($entry['swatch_image'] ?? '')) !== '') {
+                        $resolved = $this->mediaPresenter->displayableImageUrl(
+                            (string)$entry['swatch_image'],
+                            $websiteId,
+                        );
+                        if ($resolved !== '') {
+                            $entry['swatch_image'] = $resolved;
+                        }
+                    }
+                }
+                $options[] = $entry;
+            }
+            $axes[] = [
+                'code' => $code,
+                'label' => (string)($attribute['name'] ?? match ($code) {
+                    'color' => '颜色',
+                    'size' => '尺码',
+                    'style_type' => '类型',
+                    default => $code,
+                }),
+                'options' => $options,
+            ];
+        }
+
+        $skuPrefix = '';
+        $firstRow = $rows[0] ?? null;
+        if (is_array($firstRow)) {
+            $firstSku = trim((string)($firstRow['sku'] ?? ''));
+            $suffix = [];
+            foreach ((array)($firstRow['combination'] ?? []) as $value) {
+                $part = strtoupper(trim((string)preg_replace('/[^A-Z0-9]+/i', '-', (string)$value), '-'));
+                if ($part !== '') {
+                    $suffix[] = $part;
+                }
+            }
+            $suffixText = $suffix === [] ? '' : '-' . implode('-', $suffix);
+            if ($suffixText !== ''
+                && strlen($firstSku) > strlen($suffixText)
+                && strcasecmp(substr($firstSku, -strlen($suffixText)), $suffixText) === 0
+            ) {
+                $skuPrefix = substr($firstSku, 0, -strlen($suffixText));
+            }
+        }
+        if ($skuPrefix === '') {
+            $skuPrefix = trim($productCode);
+        }
         if ($skuPrefix === '') {
             $skuPrefix = 'PRODUCT';
         }
+
         return [
             'enabled' => true,
             'axes' => $axes,
@@ -990,6 +1191,54 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             'rows' => $rows,
             'errors' => $errors,
         ];
+    }
+
+    /**
+     * Attach Offer variant thumbnails onto inventory matrix rows for admin recognition.
+     *
+     * @param array<string,mixed> $inventory
+     * @param list<array<string,mixed>> $matrixRows
+     * @return array<string,mixed>
+     */
+    private function withInventoryOfferImages(array $inventory, array $matrixRows): array
+    {
+        $rows = is_array($inventory['rows'] ?? null) ? $inventory['rows'] : [];
+        if ($rows === []) {
+            return $inventory;
+        }
+
+        $imagesByOfferId = [];
+        foreach ($matrixRows as $matrixRow) {
+            if (!is_array($matrixRow)) {
+                continue;
+            }
+            $offerId = (int)($matrixRow['offer_id'] ?? 0);
+            if ($offerId <= 0) {
+                continue;
+            }
+            $imagesByOfferId[$offerId] = [
+                'image_url' => (string)($matrixRow['image_url'] ?? ''),
+                'image_is_placeholder' => !empty($matrixRow['image_is_placeholder']),
+            ];
+        }
+
+        $placeholder = StorefrontImagePlaceholder::url();
+        foreach ($rows as &$row) {
+            $offerId = (int)($row['offer_id'] ?? 0);
+            $image = $imagesByOfferId[$offerId] ?? null;
+            $imageUrl = is_array($image) ? trim((string)($image['image_url'] ?? '')) : '';
+            $isPlaceholder = is_array($image) ? !empty($image['image_is_placeholder']) : true;
+            if ($imageUrl === '') {
+                $imageUrl = $placeholder;
+                $isPlaceholder = true;
+            }
+            $row['image_url'] = $imageUrl;
+            $row['image_is_placeholder'] = $isPlaceholder;
+        }
+        unset($row);
+        $inventory['rows'] = $rows;
+
+        return $inventory;
     }
 
     private function inventory(): ?InventoryCatalogCopyCapabilityInterface

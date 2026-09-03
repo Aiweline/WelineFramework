@@ -12,7 +12,7 @@ final class StorefrontAllMenuCategoryTreeServiceTest extends TestCase
     public function testLogicalCacheKeyIsWebsiteScoped(): void
     {
         self::assertSame(
-            'product.all_menu_category_tree.v2.3',
+            'product.all_menu_category_tree.v3.3',
             StorefrontAllMenuCategoryTreeService::logicalCacheKey(3),
         );
         self::assertSame(
@@ -28,7 +28,8 @@ final class StorefrontAllMenuCategoryTreeServiceTest extends TestCase
         );
         self::assertStringContainsString('ProductCatalogQueryConsumer', $source);
         self::assertStringContainsString('flatRows', $source);
-        self::assertStringContainsString('State::getLangLocal()', $source);
+        self::assertStringContainsString('KeyBuilder::storefrontDimensions', $source);
+        self::assertStringContainsString('build($websiteId, $locale)', $source);
         self::assertStringContainsString('Url', $source);
         self::assertStringContainsString('getFrontendUrl', $source);
         self::assertStringContainsString("'lang' => true, 'currency' => true", $source);

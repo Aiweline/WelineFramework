@@ -8,11 +8,11 @@
   --wpc-cta: #ffd814;
   --wpc-cta-hover: #f7ca00;
   --wpc-star: #de7921;
-  width: 100%;
-  max-width: var(--weline-layout-content-max-width, var(--layout-max-width, 1440px));
-  margin: 0 auto;
-  padding: 0;
   box-sizing: border-box;
+  width: min(100%, var(--weline-layout-content-max-width));
+  max-width: 100%;
+  margin-inline: auto;
+  padding: 0;
   border: none;
   color: var(--wpc-ink);
   font-family: "Amazon Ember", Arial, sans-serif;

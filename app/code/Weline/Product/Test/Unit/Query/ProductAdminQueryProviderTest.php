@@ -26,7 +26,6 @@ final class ProductAdminQueryProviderTest extends TestCase
         $descriptor = $provider->getDescriptor();
 
         self::assertSame('product_admin', $descriptor['provider']);
-        self::assertCount(7, $descriptor['operations']);
         foreach ($descriptor['operations'] as $operation) {
             self::assertTrue($operation['frontend']);
             self::assertTrue($operation['backend']);
@@ -37,9 +36,19 @@ final class ProductAdminQueryProviderTest extends TestCase
                 $operation['backend_acl']['source_id'],
             );
         }
-        $modes = array_column($descriptor['operations'], 'mode', 'name');
-        self::assertSame('read', $modes['search']);
-        self::assertSame('write', $modes['command']);
+        $operations = array_column($descriptor['operations'], null, 'name');
+        self::assertSame([
+            'search' => 'read',
+            'creationContext' => 'read',
+            'snapshot' => 'read',
+            'attributeCatalog' => 'read',
+            'checkSlug' => 'read',
+            'bulkCommand' => 'write',
+            'bulkAssignCategories' => 'write',
+            'command' => 'write',
+        ], array_column($descriptor['operations'], 'mode', 'name'));
+        $snapshotParams = array_column($operations['snapshot']['params'], null, 'name');
+        self::assertSame(0, $snapshotParams['store_id']['min']);
     }
 
     public function testDelegatesReadsAndNormalizesCommand(): void

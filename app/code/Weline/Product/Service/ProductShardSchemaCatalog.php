@@ -16,7 +16,7 @@ use Weline\Product\Model\ProductShardKey;
 final class ProductShardSchemaCatalog
 {
     /** Schema generation for overlay/cleared/COW, media CAS, brand/supplier images. */
-    public const SCHEMA_VERSION = '4.5.0';
+    public const SCHEMA_VERSION = '4.6.0';
 
     /** @var list<string> */
     public const ENTITIES = ProductShardKey::ENTITY_CODES;
@@ -297,7 +297,8 @@ final class ProductShardSchemaCatalog
                     new ColumnDefinition('store_id', 'int', 11, false, false, false, 0, 'Store ID (0=website)'),
                     new ColumnDefinition('scope_state', 'varchar', 16, false, false, false, 'explicit', 'explicit/cleared/inherit'),
                     new ColumnDefinition('hidden', 'tinyint', 1, false, false, false, 0, 'Hidden at scope'),
-                    new ColumnDefinition('role', 'varchar', 32, false, false, false, 'gallery', 'main/gallery/file role'),
+                    new ColumnDefinition('role', 'varchar', 32, false, false, false, 'gallery', 'main/gallery/variant/file role'),
+                    new ColumnDefinition('combination_key', 'varchar', 512, false, false, false, '', 'Canonical Offer variant combination'),
                     new ColumnDefinition('asset_id', 'varchar', 128, true, false, false, null, 'FileManager/Storage asset ID'),
                     new ColumnDefinition('asset_visibility', 'varchar', 16, false, false, false, 'public', 'public/private'),
                     new ColumnDefinition('mime_type', 'varchar', 128, true, false, false, null, 'Asset MIME type'),
@@ -311,6 +312,7 @@ final class ProductShardSchemaCatalog
                 ],
                 indexes: [
                     new IndexDefinition('idx_product_position', ['store_id', 'product_id', 'position']),
+                    new IndexDefinition('idx_product_combination_position', ['store_id', 'product_id', 'combination_key', 'position']),
                     new IndexDefinition('idx_blob_key', ['blob_key']),
                 ],
             ),

@@ -8,7 +8,7 @@ use Weline\Cart\Api\Data\OfferIdentity;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2\ProductCatalogCartItemSnapshotResolver;
+use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider\ProductCatalogCartItemSnapshotResolver;
 use Weline\Product\Model\Shard\AttributeValue;
 use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Product;
@@ -20,12 +20,13 @@ use Weline\Product\Repository\OfferRepository;
 use Weline\Product\Repository\ProductRepository;
 use Weline\Product\Repository\ProductSupplierRepository;
 use Weline\Product\Repository\SupplierRepository;
+use Weline\Websites\Data\WebsiteData;
 
 /**
  * Read projection for the first-party storefront catalog.
  *
  * It deliberately delegates price, overlay and sellability resolution to the
- * same durable Product provider used by Cart V2, so the card and add-to-cart
+ * same durable Product provider used by Cart, so the card and add-to-cart
  * command cannot disagree about the selected Offer.
  */
 final class StorefrontCatalogViewService
@@ -50,6 +51,7 @@ final class StorefrontCatalogViewService
         private readonly StorefrontCatalogCacheCoordinator $catalogCache,
         private readonly ProductSupplierRepository $productSuppliers,
         private readonly SupplierRepository $suppliers,
+        private readonly StorefrontProductMediaUrlResolver $mediaUrls,
     ) {
     }
 
@@ -88,13 +90,18 @@ final class StorefrontCatalogViewService
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
         $logicalKey = $this->catalogCache->catalogOffersLogicalKey($websiteId);
+        $locale = \trim((string)RequestContext::getWelineUserLang());
 
         /** @var list<array<string, mixed>> $rows */
         $rows = $this->hotCache->remember(
             self::CACHE_POOL,
             $logicalKey,
             self::OFFERS_FRESH_TTL_SECONDS,
-            fn(): array => $this->buildPublishedOffers($websiteId, $scope, []),
+            fn(): array => $this->mediaUrls->resolveOffers(
+                $this->buildPublishedOffers($websiteId, $scope, []),
+                $scope,
+                $locale,
+            ),
             ['website' => true, 'lang' => true, 'currency' => true],
             self::OFFERS_STALE_TTL_SECONDS,
         );
@@ -103,7 +110,7 @@ final class StorefrontCatalogViewService
     }
 
     /**
-     * Published offers with fresh stock/sellability from Cart V2 snapshot resolver.
+     * Published offers with fresh stock/sellability from Cart snapshot resolver.
      *
      * Bypasses {@see rememberPublishedOffers()} hot cache so CDN-cached pages can
      * reconcile live availability without rebuilding the full catalog projection.
@@ -220,15 +227,18 @@ final class StorefrontCatalogViewService
         }
 
         $locale = \trim((string)RequestContext::getWelineUserLang());
+        $localeFallbacks = $this->localeFallbacks($locale);
         foreach ($rows as $index => $row) {
             $productId = (int)($row['product_id'] ?? 0);
-            $rows[$index] = $this->detailProjector->project(
+            $projected = $this->detailProjector->project(
                 $row,
                 $attributeRowsByProduct[$productId] ?? [],
                 [],
                 $storeId,
                 $locale,
+                $localeFallbacks,
             );
+            $rows[$index] = $this->mediaUrls->resolveOffer($projected, $scope, $locale);
         }
 
         return $rows;
@@ -293,6 +303,7 @@ final class StorefrontCatalogViewService
         $websiteId = (int)$scope->websiteId;
         $storeId = max(0, RequestContext::getWelineStoreId());
         $storeIds = \array_values(\array_unique([0, $storeId]));
+        $locale = \trim((string)RequestContext::getWelineUserLang());
 
         $projected = $this->detailProjector->project(
             $offer,
@@ -304,7 +315,14 @@ final class StorefrontCatalogViewService
             ),
             $this->media->listByProductIds($websiteId, [$productId]),
             $storeId,
-            \trim((string)RequestContext::getWelineUserLang()),
+            $locale,
+            $this->localeFallbacks($locale),
+        );
+
+        $projected = $this->mediaUrls->resolveOffer(
+            $projected,
+            $scope,
+            $locale,
         );
 
         return $this->attachPrimarySupplier($projected, $websiteId, $productId);
@@ -359,6 +377,47 @@ final class StorefrontCatalogViewService
         }
 
         return $offer;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function localeFallbacks(string $locale): array
+    {
+        $locale = \trim($locale);
+        $normalizedLocale = \strtolower(\str_replace('-', '_', $locale));
+        $candidates = [];
+        if ($normalizedLocale !== ''
+            && !\str_starts_with($normalizedLocale, 'zh')
+            && !\str_starts_with($normalizedLocale, 'en')
+        ) {
+            $candidates[] = 'en_US';
+        }
+
+        try {
+            $websiteDefault = \trim((string)WebsiteData::getDefaultLanguage());
+        } catch (\Throwable) {
+            $websiteDefault = '';
+        }
+        $candidates[] = $websiteDefault !== '' ? $websiteDefault : 'zh_Hans_CN';
+        $candidates[] = '';
+
+        $fallbacks = [];
+        $seen = [];
+        foreach ($candidates as $candidate) {
+            $candidate = \trim($candidate);
+            if (\strcasecmp($candidate, $locale) === 0) {
+                continue;
+            }
+            $key = \strtolower(\str_replace('-', '_', $candidate));
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $fallbacks[] = $candidate;
+        }
+
+        return $fallbacks;
     }
 
     private function currentScope(): ScopeIdentity

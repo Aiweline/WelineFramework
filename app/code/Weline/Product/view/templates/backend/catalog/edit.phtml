@@ -83,6 +83,59 @@ foreach ($categoryAssignments as $assignment) {
         $categoryPositions[$categoryId] = (int)($assignment['position'] ?? 0);
     }
 }
+$productEditCategoryOptions = [];
+foreach ($categories as $category) {
+    if (!is_array($category)) {
+        continue;
+    }
+    $categoryId = (int)($category['category_id'] ?? $category['id'] ?? 0);
+    if ($categoryId <= 0) {
+        continue;
+    }
+    $productEditCategoryOptions[] = [
+        'value' => (string)$categoryId,
+        'label' => (string)($category['name'] ?? ('#' . $categoryId)),
+        'meta' => (string)($category['path'] ?? ''),
+        'parent_id' => (string)max(0, (int)($category['parent_id'] ?? $category['pid'] ?? 0)),
+    ];
+}
+$productEditCategoryOptionsJson = json_encode(
+    $productEditCategoryOptions,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+) ?: '[]';
+$assignedOrdered = [];
+foreach ($categoryAssignments as $assignment) {
+    if (!is_array($assignment)) {
+        continue;
+    }
+    $categoryId = (int)($assignment['category_id'] ?? 0);
+    if ($categoryId > 0 && !empty($assignment['selected'])) {
+        $assignedOrdered[] = [
+            'category_id' => $categoryId,
+            'position' => (int)($assignment['position'] ?? 0),
+        ];
+    }
+}
+usort(
+    $assignedOrdered,
+    static fn(array $left, array $right): int => ($left['position'] <=> $right['position'])
+        ?: ($left['category_id'] <=> $right['category_id'])
+);
+$productEditCategoryValue = implode(
+    ',',
+    array_map(static fn(array $row): string => (string)$row['category_id'], $assignedOrdered)
+);
+$productEditCategoryEmpty = (string)__('未选择分类');
+$productEditCategoryPlaceholder = (string)__('搜索分类名称或路径');
+$productEditCategoryWebsiteId = (int)$website_id;
+$positionMapForJson = [];
+foreach ($categoryPositions as $categoryId => $position) {
+    $positionMapForJson[(string)(int)$categoryId] = (int)$position;
+}
+$productEditCategoryPositionMapJson = json_encode(
+    $positionMapForJson,
+    JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+) ?: '{}';
 $categoryOverridesByStore = [];
 foreach ($storeCategoryOverrides as $override) {
     $storeId = (int)($override['store_id'] ?? 0);
@@ -147,24 +200,88 @@ $variantRows = is_array($offerMatrix['rows'] ?? null) ? $offerMatrix['rows'] : [
 $isConfigurable = (string)($identity['product_type'] ?? '') === 'configurable';
 $canEditStructure = !empty($permissions['edit_structure'])
     && !empty($offerMatrix['can_edit_structure']);
-$name = '';
-$typeConfiguration = [];
-foreach ($attributes as $row) {
-    if ((string)($row['entity_type'] ?? '') !== 'product'
-        || (int)($row['store_id'] ?? 0) !== 0
-        || !empty($row['cleared'])
-    ) {
+$variantImagePlaceholderUrl = \Weline\Theme\Helper\StorefrontImagePlaceholder::url();
+$attributeOptionsByCode = [];
+$attributeMetaByCode = [];
+foreach ($catalogSets as $attributeSet) {
+    if (!is_array($attributeSet)) {
         continue;
     }
-    if ((string)($row['attribute_code'] ?? '') === 'name' && $name === '') {
-        $name = (string)($row['value'] ?? '');
-    }
-    if ((string)($row['attribute_code'] ?? '') === 'type_configuration'
-        && is_array($row['value'] ?? null)
-    ) {
-        $typeConfiguration = $row['value'];
+    foreach (is_array($attributeSet['groups'] ?? null) ? $attributeSet['groups'] : [] as $group) {
+        if (!is_array($group)) {
+            continue;
+        }
+        foreach (is_array($group['attributes'] ?? null) ? $group['attributes'] : [] as $attribute) {
+            if (!is_array($attribute)) {
+                continue;
+            }
+            $attrCode = strtolower(trim((string)($attribute['code'] ?? $attribute['attribute_code'] ?? '')));
+            if ($attrCode === '' || isset($attributeOptionsByCode[$attrCode])) {
+                continue;
+            }
+            $attributeOptionsByCode[$attrCode] = is_array($attribute['options'] ?? null)
+                ? $attribute['options']
+                : [];
+            $attrLabel = trim((string)($attribute['name'] ?? $attribute['label'] ?? $attrCode));
+            $attributeMetaByCode[$attrCode] = [
+                'code' => $attrCode,
+                'label' => $attrLabel !== '' ? $attrLabel : $attrCode,
+            ];
+        }
     }
 }
+$axisOptionLookup = [];
+foreach ($variantAxes as $axisMeta) {
+    if (!is_array($axisMeta)) {
+        continue;
+    }
+    $axisCodeKey = strtolower(trim((string)($axisMeta['code'] ?? '')));
+    if ($axisCodeKey === '') {
+        continue;
+    }
+    foreach (is_array($axisMeta['options'] ?? null) ? $axisMeta['options'] : [] as $axisOption) {
+        if (!is_array($axisOption)) {
+            continue;
+        }
+        $optionValue = trim((string)($axisOption['value'] ?? ''));
+        if ($optionValue === '') {
+            continue;
+        }
+        $axisOptionLookup[$axisCodeKey][$optionValue] = $axisOption;
+    }
+}
+$basicFieldCodes = ['name', 'short_description', 'meta_name', 'meta_description', 'meta_keywords'];
+$basicFields = array_fill_keys($basicFieldCodes, '');
+foreach ([true, false] as $emptyLocaleOnly) {
+    foreach ($attributes as $row) {
+        if (!is_array($row)
+            || (string)($row['entity_type'] ?? '') !== 'product'
+            || (int)($row['store_id'] ?? 0) !== 0
+            || !empty($row['cleared'])
+        ) {
+            continue;
+        }
+        $code = (string)($row['attribute_code'] ?? '');
+        if (!isset($basicFields[$code]) || $basicFields[$code] !== '') {
+            continue;
+        }
+        $rowLocale = trim((string)($row['locale'] ?? ''));
+        if ($emptyLocaleOnly && $rowLocale !== '') {
+            continue;
+        }
+        if (!$emptyLocaleOnly && $rowLocale === '') {
+            continue;
+        }
+        $basicFields[$code] = (string)($row['value'] ?? '');
+    }
+}
+$name = $basicFields['name'];
+$shortDescription = $basicFields['short_description'];
+$metaName = $basicFields['meta_name'];
+$metaDescription = $basicFields['meta_description'];
+$metaKeywords = $basicFields['meta_keywords'];
+$showProductBasicsLocal = $productEntityId > 0;
+$localTriggerLabelEsc = $escape((string)__('多语言'));
 $priceByOffer = [];
 foreach ($prices as $priceRow) {
     if ((int)($priceRow['store_id'] ?? 0) !== 0) {
@@ -193,7 +310,7 @@ $statusLabelMap = [
 ];
 $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
 ?>
-<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260901-editor-crumb1">
+<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260903-media-asset-open">
 <div class="w-backend-page w-product-admin w-product-editor"
      data-product-admin="editor"
      data-edit-business="<?= $canEditBusiness ? '1' : '0' ?>"
@@ -316,16 +433,69 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
         <div class="w-product-editor__panel" data-product-panel="basic" hidden>
             <div class="w-card"><div class="w-card__body w-product-form-grid">
                 <div class="w-field w-product-form-grid__wide">
-                    <label class="w-field__label" for="product-edit-name"><lang>商品名称</lang></label>
+                    <div class="w-field__label-row w-cluster" data-align="center" data-justify="between" data-gap="sm">
+                        <label class="w-field__label" for="product-edit-name"><lang>商品名称</lang></label>
+                        <?php if ($showProductBasicsLocal): ?>
+                            <span class="w-product-local-label__trigger" style="--product-local-label: '<?= $localTriggerLabelEsc ?>'" data-testid="product-edit-name-local">
+                                <local model="Weline\Product\Model\Product\LocalDescription" field="name" id="productEntityId" name="product-edit-name-local"><?= $escape($name) ?></local>
+                            </span>
+                        <?php else: ?>
+                            <span class="w-field__hint" data-size="sm"><lang>保存后可翻译多语言</lang></span>
+                        <?php endif; ?>
+                    </div>
                     <input class="w-input" id="product-edit-name" name="name" maxlength="255" value="<?= $escape($name) ?>" required>
+                </div>
+                <div class="w-field w-product-form-grid__wide">
+                    <div class="w-field__label-row w-cluster" data-align="center" data-justify="between" data-gap="sm">
+                        <label class="w-field__label" for="product-edit-short-description"><lang>短描述</lang></label>
+                        <?php if ($showProductBasicsLocal): ?>
+                            <span data-testid="product-edit-short-description-local">
+                                <local model="Weline\Product\Model\Product\LocalDescription" field="short_description" id="productEntityId" name="product-edit-short-description-local"><?= $escape($shortDescription) ?></local>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <textarea class="w-input" id="product-edit-short-description" name="short_description" rows="2" maxlength="2000"><?= $escape($shortDescription) ?></textarea>
                 </div>
                 <div class="w-field">
                     <label class="w-field__label" for="product-edit-locale"><lang>语言</lang></label>
-                    <input class="w-input" id="product-edit-locale" name="locale" maxlength="32" placeholder="zh_Hans_CN">
+                    <input class="w-input" id="product-edit-locale" name="locale" maxlength="32" placeholder="zh_Hans_CN" value="zh_Hans_CN">
                 </div>
                 <div class="w-field">
                     <label class="w-field__label" for="product-edit-currency"><lang>币种</lang></label>
                     <input class="w-input" id="product-edit-currency" name="currency" value="CNY" maxlength="8" required>
+                </div>
+                <div class="w-field w-product-form-grid__wide">
+                    <div class="w-field__label-row w-cluster" data-align="center" data-justify="between" data-gap="sm">
+                        <label class="w-field__label" for="product-edit-meta-name"><lang>SEO 标题</lang></label>
+                        <?php if ($showProductBasicsLocal): ?>
+                            <span data-testid="product-edit-meta-name-local">
+                                <local model="Weline\Product\Model\Product\LocalDescription" field="meta_name" id="productEntityId" name="product-edit-meta-name-local"><?= $escape($metaName) ?></local>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <input class="w-input" id="product-edit-meta-name" name="meta_name" maxlength="255" value="<?= $escape($metaName) ?>" placeholder="@lang(留空时前台可回退到商品名称)">
+                </div>
+                <div class="w-field w-product-form-grid__wide">
+                    <div class="w-field__label-row w-cluster" data-align="center" data-justify="between" data-gap="sm">
+                        <label class="w-field__label" for="product-edit-meta-description"><lang>SEO 描述</lang></label>
+                        <?php if ($showProductBasicsLocal): ?>
+                            <span data-testid="product-edit-meta-description-local">
+                                <local model="Weline\Product\Model\Product\LocalDescription" field="meta_description" id="productEntityId" name="product-edit-meta-description-local"><?= $escape($metaDescription) ?></local>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <textarea class="w-input" id="product-edit-meta-description" name="meta_description" rows="2" maxlength="2000"><?= $escape($metaDescription) ?></textarea>
+                </div>
+                <div class="w-field w-product-form-grid__wide">
+                    <div class="w-field__label-row w-cluster" data-align="center" data-justify="between" data-gap="sm">
+                        <label class="w-field__label" for="product-edit-meta-keywords"><lang>SEO 关键词</lang></label>
+                        <?php if ($showProductBasicsLocal): ?>
+                            <span data-testid="product-edit-meta-keywords-local">
+                                <local model="Weline\Product\Model\Product\LocalDescription" field="meta_keywords" id="productEntityId" name="product-edit-meta-keywords-local"><?= $escape($metaKeywords) ?></local>
+                            </span>
+                        <?php endif; ?>
+                    </div>
+                    <textarea class="w-input" id="product-edit-meta-keywords" name="meta_keywords" rows="2" maxlength="2000" placeholder="@lang(逗号分隔)"><?= $escape($metaKeywords) ?></textarea>
                 </div>
             </div></div>
         </div>
@@ -356,10 +526,7 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                 <div class="w-product-eav" id="product-eav-editor" data-testid="product-eav-editor" data-product-id="<?= $escape($productEntityId) ?>">
                     <?php if ($catalogSets !== []): ?>
                         <?php
-                        $firstSet = reset($catalogSets);
-                        $selectedSetId = is_array($firstSet)
-                            ? (string)($firstSet['attribute_set_id'] ?? $firstSet['set_id'] ?? $firstSet['id'] ?? $firstSet['code'] ?? '0')
-                            : '0';
+                        $selectedSetId = $selectedAttributeSetId;
                         ?>
                         <div class="w-product-eav__toolbar">
                             <div class="w-field">
@@ -379,7 +546,7 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                             </div>
                             <p class="w-field__help"><?= $lockAttributeSet
                                 ? $escape(__('编辑中的商品不可更换属性集，仍可在当前集下添加属性组/属性，或使用自由属性。'))
-                                : $escape(__('切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。')) ?></p>
+                                : $escape(__('切换属性集只改变当前可视化区域；未显示的属性值仍会保留。')) ?></p>
                         </div>
 
                         <?php foreach ($catalogSets as $setIndex => $attributeSet): ?>
@@ -491,17 +658,10 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                             </div>
                         <?php endforeach; ?>
                     <?php else: ?>
-                        <div class="w-alert" data-tone="warning"><lang>当前没有可用属性集。请先在 EAV 属性管理中启用属性定义，或使用下方高级数据维护迁移值。</lang></div>
+                        <div class="w-alert" data-tone="warning"><lang>当前没有可用属性集。请先在 EAV 属性管理中启用属性定义。</lang></div>
                     <?php endif; ?>
 
-                    <details class="w-product-eav__advanced" data-testid="product-eav-advanced">
-                        <summary><lang>高级：完整属性行 JSON</lang></summary>
-                        <div class="w-product-eav__advanced-body">
-                            <label class="w-field__label" for="product-edit-attributes"><lang>属性行 JSON</lang></label>
-                            <textarea class="w-textarea w-code-input" id="product-edit-attributes" rows="18"><?= $escape($attributesJson) ?></textarea>
-                            <p class="w-field__help"><lang>这里保留未知属性、Offer 属性以及 Store/locale 覆盖。保存时只合并当前可视化属性，不会自动删除其他行。</lang></p>
-                        </div>
-                    </details>
+                    <textarea id="product-edit-attributes" hidden aria-hidden="true"><?= $escape($attributesJson) ?></textarea>
                 </div>
             </div></div>
         </div>
@@ -510,6 +670,7 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
             <?php if ($isConfigurable): ?>
                 <div class="w-card w-product-variant"
                      data-product-offer-matrix
+                     data-variant-image-placeholder="<?= $escape($variantImagePlaceholderUrl) ?>"
                      data-can-edit-structure="<?= $canEditStructure ? '1' : '0' ?>">
                     <div class="w-card__header">
                         <div>
@@ -544,24 +705,147 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                         <div class="w-product-variant__axes" data-product-variant-axes>
                             <?php foreach ($variantAxes as $axis): ?>
                                 <?php
-                                $optionValues = [];
+                                $axisCode = strtolower(trim((string)($axis['code'] ?? '')));
+                                $selectedOptions = [];
                                 foreach (($axis['options'] ?? []) as $option) {
-                                    $optionValues[] = is_array($option)
-                                        ? (string)($option['value'] ?? '')
-                                        : (string)$option;
+                                    if (is_array($option)) {
+                                        $optionValue = trim((string)($option['value'] ?? ''));
+                                        if ($optionValue === '') {
+                                            continue;
+                                        }
+                                        $selectedOptions[$optionValue] = [
+                                            'value' => $optionValue,
+                                            'label' => trim((string)($option['label'] ?? $optionValue)),
+                                            'swatch_color' => trim((string)($option['swatch_color'] ?? $option['swatch'] ?? '')),
+                                            'swatch_image' => trim((string)($option['swatch_image'] ?? '')),
+                                        ];
+                                    } else {
+                                        $optionValue = trim((string)$option);
+                                        if ($optionValue === '') {
+                                            continue;
+                                        }
+                                        $selectedOptions[$optionValue] = [
+                                            'value' => $optionValue,
+                                            'label' => $optionValue,
+                                            'swatch_color' => '',
+                                            'swatch_image' => '',
+                                        ];
+                                    }
+                                }
+                                $chipOptions = [];
+                                $seenChipValues = [];
+                                foreach (is_array($attributeOptionsByCode[$axisCode] ?? null)
+                                    ? $attributeOptionsByCode[$axisCode]
+                                    : [] as $catalogOption) {
+                                    if (!is_array($catalogOption)) {
+                                        continue;
+                                    }
+                                    $optionValue = trim((string)(
+                                        $catalogOption['value']
+                                            ?? $catalogOption['code']
+                                            ?? $catalogOption['option_id']
+                                            ?? ''
+                                    ));
+                                    if ($optionValue === '' || isset($seenChipValues[$optionValue])) {
+                                        continue;
+                                    }
+                                    $seenChipValues[$optionValue] = true;
+                                    $selectedMeta = $selectedOptions[$optionValue] ?? null;
+                                    $chipOptions[] = [
+                                        'value' => $optionValue,
+                                        'label' => trim((string)(
+                                            $catalogOption['label']
+                                                ?? $catalogOption['name']
+                                                ?? ($selectedMeta['label'] ?? $optionValue)
+                                        )),
+                                        'swatch_color' => trim((string)(
+                                            $catalogOption['swatch_color']
+                                                ?? $catalogOption['swatch']
+                                                ?? ($selectedMeta['swatch_color'] ?? '')
+                                        )),
+                                        'swatch_image' => trim((string)(
+                                            $catalogOption['swatch_image']
+                                                ?? ($selectedMeta['swatch_image'] ?? '')
+                                        )),
+                                        'selected' => isset($selectedOptions[$optionValue]),
+                                    ];
+                                }
+                                foreach ($selectedOptions as $optionValue => $selectedMeta) {
+                                    if (isset($seenChipValues[$optionValue])) {
+                                        continue;
+                                    }
+                                    $seenChipValues[$optionValue] = true;
+                                    $chipOptions[] = [
+                                        'value' => $optionValue,
+                                        'label' => (string)($selectedMeta['label'] ?? $optionValue),
+                                        'swatch_color' => (string)($selectedMeta['swatch_color'] ?? ''),
+                                        'swatch_image' => (string)($selectedMeta['swatch_image'] ?? ''),
+                                        'selected' => true,
+                                    ];
                                 }
                                 ?>
                                 <div class="w-product-variant__axis" data-product-variant-axis>
-                                    <input class="w-input"
-                                           data-variant-axis-code
-                                           value="<?= $escape($axis['code'] ?? '') ?>"
-                                           placeholder="@lang(规格轴代码，例如 color)"
-                                           <?= $canEditStructure ? '' : 'readonly' ?>>
-                                    <input class="w-input"
-                                           data-variant-axis-options
-                                           value="<?= $escape(implode(', ', array_filter($optionValues))) ?>"
-                                           placeholder="@lang(规格值，以逗号分隔)"
-                                           <?= $canEditStructure ? '' : 'readonly' ?>>
+                                    <?php
+                                    $axisDisplayLabel = trim((string)($axis['label'] ?? ''));
+                                    if ($axisDisplayLabel === '' || strtolower($axisDisplayLabel) === $axisCode) {
+                                        $axisDisplayLabel = (string)($attributeMetaByCode[$axisCode]['label'] ?? $axisCode);
+                                    }
+                                    if ($axisDisplayLabel === '') {
+                                        $axisDisplayLabel = $axisCode !== '' ? $axisCode : (string)__('规格属性');
+                                    }
+                                    ?>
+                                    <div class="w-product-variant__axis-attr"
+                                         data-variant-axis-attr
+                                         title="<?= $escape($axisCode) ?>">
+                                        <input type="hidden"
+                                               data-variant-axis-code
+                                               value="<?= $escape($axisCode) ?>">
+                                        <span class="w-product-variant__axis-attr-label"
+                                              data-variant-axis-attr-label><?= $escape($axisDisplayLabel) ?></span>
+                                        <?php if ($axisCode !== '' && strtolower($axisDisplayLabel) !== $axisCode): ?>
+                                            <code class="w-product-variant__axis-attr-code"
+                                                  data-variant-axis-attr-code><?= $escape($axisCode) ?></code>
+                                        <?php endif; ?>
+                                    </div>
+                                    <div class="w-product-variant__axis-options">
+                                        <div class="w-product-create__axis-chip-grid"
+                                             data-variant-axis-option-grid>
+                                            <?php foreach ($chipOptions as $chipIndex => $chip): ?>
+                                                <?php
+                                                $chipId = 'product-edit-axis-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $axisCode . '-' . $chipIndex);
+                                                $swatchColor = (string)($chip['swatch_color'] ?? '');
+                                                $swatchImage = (string)($chip['swatch_image'] ?? '');
+                                                ?>
+                                                <label class="w-product-create__axis-chip" for="<?= $escape($chipId) ?>">
+                                                    <input type="checkbox"
+                                                           id="<?= $escape($chipId) ?>"
+                                                           data-variant-axis-option
+                                                           value="<?= $escape($chip['value'] ?? '') ?>"
+                                                           data-option-label="<?= $escape($chip['label'] ?? '') ?>"
+                                                           data-option-code="<?= $escape($chip['value'] ?? '') ?>"
+                                                           <?= $swatchColor !== '' ? 'data-option-swatch-color="' . $escape($swatchColor) . '"' : '' ?>
+                                                           <?= $swatchImage !== '' ? 'data-option-swatch-image="' . $escape($swatchImage) . '"' : '' ?>
+                                                           <?= !empty($chip['selected']) ? 'checked' : '' ?>
+                                                           <?= $canEditStructure ? '' : 'disabled' ?>>
+                                                    <?php if ($swatchImage !== ''): ?>
+                                                        <img class="w-product-create__axis-chip-image"
+                                                             src="<?= $escape($swatchImage) ?>"
+                                                             alt="">
+                                                    <?php elseif ($swatchColor !== ''): ?>
+                                                        <span class="w-product-create__axis-chip-swatch"
+                                                              style="background:<?= $escape($swatchColor) ?>"></span>
+                                                    <?php endif; ?>
+                                                    <span><?= $escape($chip['label'] ?? $chip['value'] ?? '') ?></span>
+                                                </label>
+                                            <?php endforeach; ?>
+                                        </div>
+                                        <?php if ($canEditStructure): ?>
+                                            <input class="w-input"
+                                                   data-variant-axis-option-custom
+                                                   placeholder="@lang(自定义规格值，回车添加)">
+                                        <?php endif; ?>
+                                        <span class="w-field__help"><lang>勾选规格值生成矩阵；有色块时显示颜色胶囊。</lang></span>
+                                    </div>
                                     <button class="w-button" type="button"
                                             data-product-variant-axis-remove
                                             <?= $canEditStructure ? '' : 'disabled' ?>><lang>移除</lang></button>
@@ -578,7 +862,7 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
 
                         <div class="w-table-wrap">
                             <table class="w-table" data-testid="product-edit-offers">
-                                <thead><tr><th><lang>规格组合</lang></th><th>SKU</th><th><lang>状态</lang></th><th><lang>基础价（分）</lang></th></tr></thead>
+                                <thead><tr><th><lang>产品图片</lang></th><th><lang>规格组合</lang></th><th>SKU</th><th><lang>状态</lang></th><th><lang>基础价（分）</lang></th></tr></thead>
                                 <tbody data-product-variant-rows>
                                 <?php foreach ($variantRows as $row): ?>
                                     <?php
@@ -596,6 +880,31 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                                         && array_key_exists('amount_minor', $row)
                                         ? $row['amount_minor']
                                         : '';
+                                    $rowIsPlaceholder = !empty($row['image_is_placeholder']);
+                                    $rowImageUrl = trim((string)($row['image_url'] ?? ''));
+                                    if ($rowImageUrl === '' || $rowIsPlaceholder) {
+                                        foreach ($combination as $comboAxis => $comboValue) {
+                                            $comboAxisKey = strtolower(trim((string)$comboAxis));
+                                            if ($comboAxisKey === 'size') {
+                                                continue;
+                                            }
+                                            $comboValueKey = trim((string)$comboValue);
+                                            $comboMeta = is_array($axisOptionLookup[$comboAxisKey][$comboValueKey] ?? null)
+                                                ? $axisOptionLookup[$comboAxisKey][$comboValueKey]
+                                                : [];
+                                            $candidate = trim((string)($comboMeta['swatch_image'] ?? ''));
+                                            if ($candidate !== '') {
+                                                $rowImageUrl = $candidate;
+                                                $rowIsPlaceholder = false;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    if ($rowImageUrl === '') {
+                                        $rowImageUrl = $variantImagePlaceholderUrl;
+                                        $rowIsPlaceholder = true;
+                                    }
+                                    $rowImageAssetId = trim((string)($row['image_asset_id'] ?? ''));
                                     ?>
                                     <tr data-variant-offer-row
                                         data-combination="<?= $escape($combinationJson) ?>"
@@ -603,8 +912,77 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                                         data-global-offer-uuid="<?= $escape($offerUuid) ?>"
                                         data-offer-version="<?= $escape($row['offer_version'] ?? 0) ?>"
                                         data-identity-version="<?= $escape($row['identity_version'] ?? 0) ?>"
-                                        data-existing-status="<?= $escape($row['status'] ?? 'draft') ?>">
-                                        <td><strong><?= $escape(implode(' / ', $combinationParts)) ?></strong><small><?= $escape($row['combination_key'] ?? '') ?></small></td>
+                                        data-existing-status="<?= $escape($row['status'] ?? 'draft') ?>"
+                                        data-variant-image-url="<?= $escape($rowImageUrl) ?>"
+                                        data-variant-image-is-placeholder="<?= $rowIsPlaceholder ? '1' : '0' ?>"
+                                        data-variant-image-asset-id="<?= $escape($rowImageAssetId) ?>">
+                                        <td class="w-product-variant__image-cell" data-variant-offer-image-cell>
+                                            <img class="w-product-create__variant-preview-thumb<?= $rowIsPlaceholder ? ' is-placeholder' : '' ?>"
+                                                 data-variant-offer-image
+                                                 <?= $rowIsPlaceholder ? 'data-variant-offer-image-placeholder' : '' ?>
+                                                 src="<?= $escape($rowImageUrl) ?>"
+                                                 alt="">
+                                        </td>
+                                        <td>
+                                            <div class="w-product-variant__combo-chips">
+                                                <?php foreach ($combination as $comboAxis => $comboValue): ?>
+                                                    <?php
+                                                    $comboAxisKey = strtolower(trim((string)$comboAxis));
+                                                    $comboValueKey = trim((string)$comboValue);
+                                                    $comboMeta = is_array($axisOptionLookup[$comboAxisKey][$comboValueKey] ?? null)
+                                                        ? $axisOptionLookup[$comboAxisKey][$comboValueKey]
+                                                        : [];
+                                                    if (is_array($attributeOptionsByCode[$comboAxisKey] ?? null)) {
+                                                        foreach ($attributeOptionsByCode[$comboAxisKey] as $catalogOption) {
+                                                            if (!is_array($catalogOption)) {
+                                                                continue;
+                                                            }
+                                                            $candidate = trim((string)(
+                                                                $catalogOption['value']
+                                                                    ?? $catalogOption['code']
+                                                                    ?? $catalogOption['option_id']
+                                                                    ?? ''
+                                                            ));
+                                                            if ($candidate !== $comboValueKey) {
+                                                                continue;
+                                                            }
+                                                            $catalogLabel = trim((string)($catalogOption['label'] ?? $catalogOption['name'] ?? ''));
+                                                            $axisLabel = trim((string)($comboMeta['label'] ?? $comboMeta['name'] ?? ''));
+                                                            if ($catalogLabel !== '' && ($axisLabel === '' || $axisLabel === $comboValueKey)) {
+                                                                $comboMeta['label'] = $catalogLabel;
+                                                            }
+                                                            $catalogSwatch = trim((string)($catalogOption['swatch_color'] ?? $catalogOption['swatch'] ?? ''));
+                                                            $catalogImage = trim((string)($catalogOption['swatch_image'] ?? ''));
+                                                            if ($catalogSwatch !== '' && trim((string)($comboMeta['swatch_color'] ?? $comboMeta['swatch'] ?? '')) === '') {
+                                                                $comboMeta['swatch_color'] = $catalogSwatch;
+                                                                $comboMeta['swatch'] = $catalogSwatch;
+                                                            }
+                                                            if ($catalogImage !== '' && trim((string)($comboMeta['swatch_image'] ?? '')) === '') {
+                                                                $comboMeta['swatch_image'] = $catalogImage;
+                                                            }
+                                                            break;
+                                                        }
+                                                    }
+                                                    $comboLabel = trim((string)($comboMeta['label'] ?? $comboMeta['name'] ?? $comboValueKey));
+                                                    $comboSwatch = trim((string)($comboMeta['swatch_color'] ?? $comboMeta['swatch'] ?? ''));
+                                                    $comboImage = trim((string)($comboMeta['swatch_image'] ?? ''));
+                                                    ?>
+                                                    <span class="w-product-variant__combo-chip"
+                                                          title="<?= $escape((string)$comboAxis . '=' . $comboValueKey) ?>">
+                                                        <?php if ($comboImage !== ''): ?>
+                                                            <img class="w-product-create__axis-chip-image"
+                                                                 src="<?= $escape($comboImage) ?>"
+                                                                 alt="">
+                                                        <?php elseif ($comboSwatch !== ''): ?>
+                                                            <span class="w-product-create__axis-chip-swatch"
+                                                                  style="background:<?= $escape($comboSwatch) ?>"></span>
+                                                        <?php endif; ?>
+                                                        <span><?= $escape(($comboLabel !== '' ? $comboLabel : $comboValueKey)) ?></span>
+                                                    </span>
+                                                <?php endforeach; ?>
+                                            </div>
+                                            <small><?= $escape($row['combination_key'] ?? '') ?></small>
+                                        </td>
                                         <td>
                                             <input class="w-input" data-variant-sku
                                                    value="<?= $escape($row['sku'] ?? '') ?>"
@@ -665,47 +1043,29 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                             <h2><lang>Website 分类</lang></h2>
                             <p><lang>这里是本站目录事实。Store 默认继承，只在下面保存加入或排除差异。</lang></p>
                         </div>
-                        <?php if ($categories !== []): ?>
-                            <label class="w-product-inline-search">
-                                <span class="w-field__label"><lang>查找分类</lang></span>
-                                <input class="w-input" type="search" data-product-category-search placeholder="@lang(输入名称或路径)">
-                            </label>
-                        <?php endif; ?>
                     </div>
                     <div class="w-card__body">
-                        <div class="w-product-category-list" data-product-category-assignments>
-                            <?php foreach ($categories as $category): ?>
-                                <?php
-                                $categoryId = (int)($category['category_id'] ?? 0);
-                                $categoryName = (string)($category['name'] ?? $category['path'] ?? ('#' . $categoryId));
-                                $categoryPath = (string)($category['path'] ?? '');
-                                ?>
-                                <div class="w-product-category-row"
-                                     data-product-category-row
-                                     data-search-text="<?= $escape(strtolower($categoryName . ' ' . $categoryPath)) ?>">
-                                    <label class="w-product-check">
-                                        <input type="checkbox"
-                                               data-product-category-id="<?= $escape($categoryId) ?>"
-                                               <?= isset($assignedCategoryIds[$categoryId]) ? 'checked' : '' ?>>
-                                        <span>
-                                            <strong><?= $escape($categoryName) ?></strong>
-                                            <small><?= $escape($categoryPath !== '' ? $categoryPath : ('ID ' . $categoryId)) ?></small>
-                                        </span>
-                                    </label>
-                                    <label class="w-product-position">
-                                        <span><lang>排序</lang></span>
-                                        <input class="w-input" type="number" min="0" step="1"
-                                               data-product-category-position
-                                               value="<?= $escape($categoryPositions[$categoryId] ?? 0) ?>">
-                                    </label>
-                                </div>
-                            <?php endforeach; ?>
-                            <?php if ($categories === []): ?>
-                                <div class="w-alert" data-tone="warning">
-                                    <lang>当前 Website 还没有分类。请先建立分类目录，再回到商品选择。</lang>
-                                </div>
-                            <?php endif; ?>
+                        <div class="w-product-category-select"
+                             data-product-category-assignments
+                             data-product-category-position-map="<?= $escape($productEditCategoryPositionMapJson) ?>"
+                             data-testid="product-edit-categories">
+                            <w:catalog:category:select
+                                id="product-edit-categories"
+                                name="category_ids"
+                                value="productEditCategoryValue"
+                                options="productEditCategoryOptionsJson"
+                                empty-label="productEditCategoryEmpty"
+                                placeholder="productEditCategoryPlaceholder"
+                                website-id="productEditCategoryWebsiteId"
+                                space="product"
+                                allow-create="true"
+                            />
                         </div>
+                        <?php if ($productEditCategoryOptions === []): ?>
+                            <div class="w-alert" data-tone="warning" style="margin-top:0.75rem">
+                                <lang>当前 Website 还没有分类。可在上方快速新建，或先到万能分类建立目录后再回填选择。</lang>
+                            </div>
+                        <?php endif; ?>
                     </div>
                 </div>
 
@@ -785,20 +1145,41 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                                 </thead>
                                 <tbody data-product-media-rows>
                                 <?php foreach ($media as $item): ?>
-                                    <?php $assetId = (string)($item['asset_id'] ?? ''); ?>
-                                    <?php if ($assetId !== ''): ?>
+                                    <?php
+                                    $assetId = (string)($item['asset_id'] ?? '');
+                                    $mediaRole = strtolower(trim((string)($item['role'] ?? 'gallery')));
+                                    if ($assetId === '' || $mediaRole === 'variant') {
+                                        continue;
+                                    }
+                                    $previewUrl = trim((string)($item['preview_url'] ?? $item['display_url'] ?? ''));
+                                    ?>
                                         <tr data-product-media-row
                                             data-asset-id="<?= $escape($assetId) ?>"
                                             data-mime-type="<?= $escape($item['mime_type'] ?? '') ?>"
-                                            data-asset-visibility="<?= $escape($item['asset_visibility'] ?? '') ?>">
-                                            <td>
-                                                <strong class="w-product-asset-name"><?= $escape($assetId) ?></strong>
-                                                <small><?= $escape($item['mime_type'] ?? '') ?> · <?= $escape($item['asset_visibility'] ?? '') ?></small>
+                                            data-asset-visibility="<?= $escape($item['asset_visibility'] ?? '') ?>"
+                                            data-preview-url="<?= $escape($previewUrl) ?>">
+                                            <td class="w-product-media-asset">
+                                                <button class="w-product-media-asset-open"
+                                                        type="button"
+                                                        data-product-media-asset-open
+                                                        title="@lang(在文件管理器中编辑)">
+                                                    <?php if ($previewUrl !== ''): ?>
+                                                        <img class="w-product-media-thumb"
+                                                             src="<?= $escape($previewUrl) ?>"
+                                                             alt=""
+                                                             loading="lazy"
+                                                             decoding="async">
+                                                    <?php endif; ?>
+                                                    <span class="w-product-media-asset__meta">
+                                                        <strong class="w-product-asset-name"><?= $escape($assetId) ?></strong>
+                                                        <small><?= $escape($item['mime_type'] ?? '') ?> · <?= $escape($item['asset_visibility'] ?? '') ?></small>
+                                                    </span>
+                                                </button>
                                             </td>
                                             <td>
                                                 <select class="w-select" data-product-media-role aria-label="@lang(媒体角色)">
-                                                    <option value="gallery"<?= ($item['role'] ?? 'gallery') === 'gallery' ? ' selected' : '' ?>><lang>图集</lang></option>
-                                                    <option value="main"<?= ($item['role'] ?? '') === 'main' ? ' selected' : '' ?>><lang>主图</lang></option>
+                                                    <option value="gallery"<?= $mediaRole === 'gallery' ? ' selected' : '' ?>><lang>图集</lang></option>
+                                                    <option value="main"<?= $mediaRole === 'main' ? ' selected' : '' ?>><lang>主图</lang></option>
                                                 </select>
                                             </td>
                                             <td>
@@ -813,12 +1194,39 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                                                 </button>
                                             </td>
                                         </tr>
-                                    <?php endif; ?>
                                 <?php endforeach; ?>
                                 </tbody>
                             </table>
                         </div>
-                        <p class="w-text" data-tone="muted" data-product-media-empty<?= count(array_filter($media, static fn(array $row): bool => (string)($row['asset_id'] ?? '') !== '')) > 0 ? ' hidden' : '' ?>>
+                        <?php
+                        $variantMediaPreserve = [];
+                        foreach ($media as $item) {
+                            if (!is_array($item)
+                                || strtolower(trim((string)($item['role'] ?? ''))) !== 'variant'
+                            ) {
+                                continue;
+                            }
+                            $assetId = strtolower(trim((string)($item['asset_id'] ?? '')));
+                            $combinationKey = trim((string)($item['combination_key'] ?? ''));
+                            if ($assetId === '' || $combinationKey === '') {
+                                continue;
+                            }
+                            $variantMediaPreserve[] = [
+                                'asset_id' => $assetId,
+                                'role' => 'variant',
+                                'combination_key' => $combinationKey,
+                                'hidden' => !empty($item['hidden']),
+                                'scope_state' => (string)($item['scope_state'] ?? 'explicit'),
+                                'position' => (int)($item['position'] ?? 0),
+                            ];
+                        }
+                        $variantMediaPreserveJson = json_encode(
+                            $variantMediaPreserve,
+                            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+                        ) ?: '[]';
+                        ?>
+                        <script type="application/json" data-product-variant-media-preserve><?= $variantMediaPreserveJson ?></script>
+                        <p class="w-text" data-tone="muted" data-product-media-empty<?= count(array_filter($media, static fn(array $row): bool => (string)($row['asset_id'] ?? '') !== '' && strtolower(trim((string)($row['role'] ?? ''))) !== 'variant')) > 0 ? ' hidden' : '' ?>>
                             <lang>暂无 FileAsset 图片。可先保存没有图片的草稿。</lang>
                         </p>
                         <?php if (array_filter($media, static fn(array $row): bool => !empty($row['legacy'])) !== []): ?>
@@ -986,9 +1394,28 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                                                 <strong><?= $escape($row['store_name'] ?? '') ?></strong>
                                                 <small><?= $escape($row['store_code'] ?? '') ?> · #<?= $escape($row['store_id'] ?? '') ?></small>
                                             </td>
-                                            <td>
-                                                <strong><?= $escape($row['sku'] ?? '') ?></strong>
-                                                <small>#<?= $escape($row['offer_id'] ?? '') ?></small>
+                                            <td class="w-product-inventory__offer-cell">
+                                                <?php
+                                                $inventoryImageUrl = trim((string)($row['image_url'] ?? ''));
+                                                $inventoryImagePlaceholder = !empty($row['image_is_placeholder']);
+                                                if ($inventoryImageUrl === '') {
+                                                    $inventoryImageUrl = $variantImagePlaceholderUrl;
+                                                    $inventoryImagePlaceholder = true;
+                                                }
+                                                ?>
+                                                <div class="w-product-inventory__offer">
+                                                    <span class="w-product-variant__image-cell">
+                                                        <img class="w-product-create__variant-preview-thumb<?= $inventoryImagePlaceholder ? ' is-placeholder' : '' ?>"
+                                                             data-inventory-offer-image
+                                                             <?= $inventoryImagePlaceholder ? 'data-inventory-offer-image-placeholder' : '' ?>
+                                                             src="<?= $escape($inventoryImageUrl) ?>"
+                                                             alt="">
+                                                    </span>
+                                                    <span class="w-product-inventory__offer-meta">
+                                                        <strong><?= $escape($row['sku'] ?? '') ?></strong>
+                                                        <small>#<?= $escape($row['offer_id'] ?? '') ?></small>
+                                                    </span>
+                                                </div>
                                             </td>
                                             <td><code data-inventory-strategy><?= $escape($row['strategy'] ?? '') ?></code></td>
                                             <td>
@@ -1147,17 +1574,10 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                             </div>
                         <?php endif; ?>
 
-                        <details class="w-product-provider__advanced"<?= $providerUnknownFields !== [] ? ' open' : '' ?>>
-                            <summary><lang>高级：扩展字段兼容区</lang></summary>
-                            <div class="w-product-provider__advanced-body">
-                                <label class="w-field__label" for="product-edit-type-config"><lang>未声明的扩展字段 JSON</lang></label>
-                                <textarea class="w-textarea w-code-input"
-                                          id="product-edit-type-config"
-                                          rows="12"
-                                          data-provider-unknown><?= $escape($providerUnknownFieldsJson) ?></textarea>
-                                <p class="w-field__help"><lang>这里只保存 Provider schema 未声明的兼容字段；上方可视化字段会在保存时安全合并，不会删除扩展数据。</lang></p>
-                            </div>
-                        </details>
+                        <textarea id="product-edit-type-config"
+                                  data-provider-unknown
+                                  hidden
+                                  aria-hidden="true"><?= $escape($providerUnknownFieldsJson) ?></textarea>
                     </div>
                 </div>
             </div>
@@ -1446,4 +1866,4 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
     </form>
 </div>
 <script type="module" src="@static(Weline_Theme::ui/pages/weline-eav-manager.js)"></script>
-<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260826-eav" defer data-no-extract="true"></script>
+<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260903-media-asset-open" defer data-no-extract="true"></script>

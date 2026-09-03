@@ -8,7 +8,7 @@ namespace Weline\Product\Service;
  * Live variant availability for CDN-cached product detail shells.
  *
  * Spec axes and option labels come from the embedded variant catalog snapshot;
- * stock and sellability must be reconciled against the authoritative Cart V2
+ * stock and sellability must be reconciled against the authoritative Cart
  * snapshot resolver on every browser session.
  */
 final class StorefrontVariantAvailabilityService

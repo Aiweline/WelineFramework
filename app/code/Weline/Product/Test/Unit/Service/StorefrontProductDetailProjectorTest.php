@@ -140,7 +140,7 @@ final class StorefrontProductDetailProjectorTest extends TestCase
 
     public function testItHidesInternalConfigurationAndResolvesEavOptionLabels(): void
     {
-        $resolver = new class extends StorefrontEavLabelResolver {
+        $labels = new class extends StorefrontEavLabelResolver {
             public function __construct()
             {
             }
@@ -155,27 +155,138 @@ final class StorefrontProductDetailProjectorTest extends TestCase
                 };
             }
         };
-        $projector = new StorefrontProductDetailProjector(new CatalogOverlayResolver(), $resolver);
+        $option = static fn(
+            int $id,
+            string $code,
+            string $label,
+        ): \Weline\Eav\Api\Metadata\AttributeOptionMetadata => new \Weline\Eav\Api\Metadata\AttributeOptionMetadata(
+            id: $id,
+            value: $label,
+            code: $code,
+            label: $label,
+            sortOrder: $id,
+        );
+        $attribute = static fn(
+            int $id,
+            string $code,
+            string $name,
+            \Weline\Eav\Api\Metadata\AttributeOptionMetadata $attributeOption,
+        ): \Weline\Eav\Api\Metadata\AttributeMetadata => new \Weline\Eav\Api\Metadata\AttributeMetadata(
+            id: $id,
+            entityId: 1,
+            code: $code,
+            name: $name,
+            typeCode: 'varchar',
+            fieldType: 'multiselect',
+            element: 'select',
+            setId: 1,
+            groupId: 1,
+            required: false,
+            multiple: true,
+            enabled: true,
+            hasOption: true,
+            sortOrder: $id,
+            options: [$attributeOption],
+        );
+        $set = new \Weline\Eav\Api\Metadata\AttributeSetMetadata(
+            id: 1,
+            entityId: 1,
+            code: 'hanfu',
+            name: '汉服',
+            sortOrder: 1,
+            groups: [
+                new \Weline\Eav\Api\Metadata\AttributeGroupMetadata(
+                    id: 1,
+                    entityId: 1,
+                    setId: 1,
+                    code: 'hanfu_variants',
+                    name: '汉服规格',
+                    sortOrder: 1,
+                    attributes: [
+                        $attribute(1, 'color', '颜色', $option(1, 'm-white', '米白色')),
+                        $attribute(2, 'size', '尺码', $option(2, 'm', 'M')),
+                        $attribute(3, 'style_type', '类型', $option(3, 'set', '套装（上衣+马面裙）')),
+                    ],
+                ),
+            ],
+        );
+        $metadata = new class([$set]) implements \Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface {
+            public function __construct(private readonly array $sets)
+            {
+            }
+
+            public function catalog(\Weline\Eav\Api\Entity\EntityDefinitionInterface $entity): array
+            {
+                return $this->sets;
+            }
+
+            public function catalogForProduct(
+                \Weline\Eav\Api\Entity\EntityDefinitionInterface $entity,
+                int $productId,
+                string $freeSetCode = '__product_free',
+            ): array {
+                return $this->sets;
+            }
+
+            public function attributeIndexByEntityCode(string $entityCode): array
+            {
+                return [];
+            }
+        };
+        $entity = (new \ReflectionClass(\Weline\Product\Model\ProductCatalogAttributeEntity::class))
+            ->newInstanceWithoutConstructor();
+        $variantAxes = new \Weline\Product\Service\StorefrontVariantAxisResolver(
+            $metadata,
+            $entity,
+            $labels,
+        );
+        $projector = new StorefrontProductDetailProjector(
+            new CatalogOverlayResolver(),
+            $labels,
+            $variantAxes,
+        );
 
         $detail = $projector->project(
-            ['product_id' => 26, 'name' => '桃园清梦', 'image' => ''],
+            [
+                'product_id' => 26,
+                'name' => '桃园清梦',
+                'image' => '',
+                'combination' => ['color' => 'm-white', 'size' => 'm', 'style_type' => 'set'],
+                'combination_key' => 'color=m-white|size=m|style_type=set',
+            ],
             [
                 $this->attribute(0, 'name', '', '桃园清梦'),
                 $this->attribute(0, 'brand', '', '醉欢楼'),
                 $this->attribute(0, 'material', '', '聚酯纤维100%'),
                 $this->attribute(0, 'product_type', '', 'configurable'),
                 $this->attribute(0, 'reference_source', '', '淘宝参考价'),
-                $this->attribute(0, 'color', '', 'm-white'),
-                $this->attribute(0, 'size', '', 'm'),
-                $this->attribute(0, 'style_type', '', 'set'),
-                $this->attribute(
-                    0,
-                    'type_configuration',
-                    '',
-                    '{"axes":[{"code":"color","label":"颜色","options":[{"value":"m-white","label":"米白色"}]},{"code":"size","label":"尺码","options":[{"value":"m","label":"M"}]},{"code":"style_type","label":"类型","options":[{"value":"set","label":"套装（上衣+马面裙）"}]}]}',
-                ),
+                $this->attribute(0, 'color', '', ['m-white'], false, 'multiselect'),
+                $this->attribute(0, 'size', '', ['m'], false, 'multiselect'),
+                $this->attribute(0, 'style_type', '', ['set'], false, 'multiselect'),
             ],
-            [],
+            [
+                [
+                    'media_id' => 1,
+                    'path' => '/media/m-white-set.jpg',
+                    'role' => 'variant',
+                    'combination_key' => 'color=m-white|size=m|style_type=set',
+                    'position' => 0,
+                ],
+                [
+                    'media_id' => 2,
+                    'path' => '/media/red-set.jpg',
+                    'role' => 'variant',
+                    'combination_key' => 'color=red|size=m|style_type=set',
+                    'position' => 0,
+                ],
+                [
+                    'media_id' => 3,
+                    'path' => '/media/base.jpg',
+                    'role' => 'main',
+                    'combination_key' => '',
+                    'position' => 1,
+                ],
+            ],
             0,
             '',
         );
@@ -197,7 +308,11 @@ final class StorefrontProductDetailProjectorTest extends TestCase
                     'label' => '颜色',
                     'value' => 'm-white',
                     'value_label' => '米白色',
-                    'options' => [['value' => 'm-white', 'label' => '米白色']],
+                    'options' => [[
+                        'value' => 'm-white',
+                        'label' => '米白色',
+                        'swatch_image' => '/media/m-white-set.jpg',
+                    ]],
                 ],
                 [
                     'code' => 'size',
@@ -211,11 +326,20 @@ final class StorefrontProductDetailProjectorTest extends TestCase
                     'label' => '类型',
                     'value' => 'set',
                     'value_label' => '套装（上衣+马面裙）',
-                    'options' => [['value' => 'set', 'label' => '套装（上衣+马面裙）']],
+                    'options' => [[
+                        'value' => 'set',
+                        'label' => '套装（上衣+马面裙）',
+                        'swatch_image' => '/media/m-white-set.jpg',
+                    ]],
                 ],
             ],
             $detail['variant_axes'],
         );
+        self::assertSame(
+            ['/media/m-white-set.jpg', '/media/base.jpg'],
+            $detail['images'],
+        );
+        self::assertSame('/media/m-white-set.jpg', $detail['image']);
     }
 
     /** @return array<string, mixed> */
@@ -223,8 +347,9 @@ final class StorefrontProductDetailProjectorTest extends TestCase
         int $storeId,
         string $code,
         string $locale,
-        ?string $value,
+        mixed $value,
         bool $cleared = false,
+        string $valueType = 'string',
     ): array {
         return [
             'store_id' => $storeId,
@@ -232,12 +357,12 @@ final class StorefrontProductDetailProjectorTest extends TestCase
             'entity_id' => 9,
             'attribute_code' => $code,
             'locale' => $locale,
+            'value_type' => $valueType,
             'value' => $value,
             'cleared' => $cleared,
             'is_required' => false,
         ];
     }
-
     private function projector(?StorefrontEavLabelResolver $labels = null): StorefrontProductDetailProjector
     {
         return new StorefrontProductDetailProjector(

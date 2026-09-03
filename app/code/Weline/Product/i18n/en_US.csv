@@ -1,4 +1,6 @@
-﻿供应商名称与编码不能为空,"Supplier name and code are required"
+﻿商品详情已浏览,商品详情已浏览
+前台商品详情成功解析报价后派发，供最近浏览、联盟等监听。,前台商品详情成功解析报价后派发，供最近浏览、联盟等监听。
+供应商名称与编码不能为空,"Supplier name and code are required"
 供应商编码已存在：%{1},"Supplier code already exists: %{1}"
 供应商创建后无法回读：%{1},"Supplier could not be reloaded after create: %{1}"
 供应商不存在：%{1},"Supplier not found: %{1}"
@@ -173,7 +175,9 @@ id属性不能为空,id属性不能为空
 价格从低到高,"Price: Low to High"
 价格从高到低,"Price: High to Low"
 "名称 A-Z","Name: A-Z"
+热销榜,"Best Sellers"
 商品未找到,商品未找到
+新品上架,"New Arrivals"
 商品不存在或当前不可用。,"The product does not exist or is currently unavailable."
 请选择规格后再加入购物车。,请选择规格后再加入购物车。
 商品详情,"Product details"
@@ -284,12 +288,10 @@ play,play
 未找到属性集目录，请重新选择属性集。,未找到属性集目录，请重新选择属性集。
 "多选规格值后将按笛卡尔积生成子 SKU。","多选规格值后将按笛卡尔积生成子 SKU。"
 当前属性集没有可填写的商品属性（非规格组）。,当前属性集没有可填写的商品属性（非规格组）。
-清除筛选条件,"Clear filters"
-部门,Department
-全部类目,"Any Department"
-价格,Price
-全部商品,全部商品
-浏览全部分类,浏览全部分类
+"织艺谱系 · Textile Heritage","织艺谱系 · Textile Heritage"
+上一组,上一组
+下一组,下一组
+热销榜内容由控制器渲染,"Best-seller content is rendered by the controller"
 面包屑,Breadcrumb
 首页,Home
 "第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
@@ -300,11 +302,29 @@ play,play
 当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
 该分类下暂无已发布商品。,该分类下暂无已发布商品。
 联系询价,"Contact for quote"
+分页,分页
+全部商品,全部商品
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-"共 %{1} 件商品","%{1} products"
+"第 %{1}–%{2} 件，共 %{3} 件商品","第 %{1}–%{2} 件，共 %{3} 件商品"
 "0 件商品","0 件商品"
 当前网站暂无已发布商品。,"There are currently no products published on the website."
 查看购物车,"View cart"
+新作入藏,"New to the Collection"
+甄选近期上架的汉服、马面裙与传统配饰，循时序发现新的东方衣冠。,"Discover newly listed Hanfu, mamian skirts, and traditional accessories in arrival order."
+"共 %{1} 件新品","%{1} new arrivals"
+新品汉服,"New Hanfu Arrivals"
+汉服商品,汉服商品
+新品,New
+查看商品,"View product"
+新品正在整理,"New arrivals are being curated"
+浏览全部商品,"Shop all Hanfu"
+本站人气排行,"Store popularity ranking"
+按店面热度排序的热销商品，帮你快速找到大家都在买的好物。,"Ranked by storefront popularity so you can quickly find what shoppers buy most."
+暂无热销商品,"No best sellers yet"
+当前网站暂无已发布的热销商品。,"This storefront has no published best sellers yet."
+"共 %{1} 件热销商品","%{1} best-selling products"
+排名,排名
+"已售 %{1}","%{1} sold"
 请至少选择一个商品,请至少选择一个商品
 已添加,已添加
 已加入购物车,已加入购物车
@@ -315,12 +335,7 @@ play,play
 当前商品,当前商品
 总价,总价
 精选好物，为你推荐,精选好物，为你推荐
-上一组,上一组
-加入购物车,"Add to Cart"
-已加入,"Added to cart"
-前往购物车,前往购物车
 查看详情,查看详情
-下一组,下一组
 商品信息暂不可用,"Product information is unavailable"
 商品类型,"Product type"
 属性集,"Attribute set"
@@ -379,6 +394,7 @@ DPI,DPI
 "平均 %{1} 星","Average %{1} stars"
 "%{1} 条评价","%{1} ratings"
 查看买家评价,"See customer reviews"
+价格,Price
 规格,Options
 请选择规格,"Select an option"
 暂不可购买,"Not available for this option"
@@ -392,10 +408,11 @@ DPI,DPI
 购买数量,Quantity
 购买操作,"Purchase actions"
 仅询价,"Quote only"
+加入购物车,"Add to Cart"
 立即结账,"Proceed to checkout"
 安全交易保障,"Secure transaction"
-关于该商品,"About this item"
 技术细节,"Technical details"
+关于该商品,"About this item"
 "Customers also viewed","Customers also viewed"
 Website,Website
 切换,切换
@@ -612,6 +629,7 @@ ID,ID
 销售规格,销售规格
 "可见 Store","可见 Store"
 媒体,媒体
+保存后可翻译多语言,保存后可翻译多语言
 语言,Language
 商品属性值,商品属性值
 "EAV 管理属性定义；这里填写本商品的实际值和继承方式。","EAV 管理属性定义；这里填写本商品的实际值和继承方式。"
@@ -620,26 +638,24 @@ ID,ID
 继承默认,继承默认
 请选择,Select
 本站填写会保存当前值；清空和继承不会把零值误判为缺失。,本站填写会保存当前值；清空和继承不会把零值误判为缺失。
-"当前没有可用属性集。请先在 EAV 属性管理中启用属性定义，或使用下方高级数据维护迁移值。","当前没有可用属性集。请先在 EAV 属性管理中启用属性定义，或使用下方高级数据维护迁移值。"
-"高级：完整属性行 JSON","高级：完整属性行 JSON"
-"属性行 JSON","属性行 JSON"
-"这里保留未知属性、Offer 属性以及 Store/locale 覆盖。保存时只合并当前可视化属性，不会自动删除其他行。","这里保留未知属性、Offer 属性以及 Store/locale 覆盖。保存时只合并当前可视化属性，不会自动删除其他行。"
+"当前没有可用属性集。请先在 EAV 属性管理中启用属性定义。","当前没有可用属性集。请先在 EAV 属性管理中启用属性定义。"
 "多规格 Offer 矩阵","多规格 Offer 矩阵"
 "规格轴决定组合；移除规格值会在保存时停用对应 Offer，SKU 与历史身份不会删除。","规格轴决定组合；移除规格值会在保存时停用对应 Offer，SKU 与历史身份不会删除。"
 "SKU 前缀","SKU 前缀"
 "新组合将按“前缀-规格值”生成人类可读 SKU，可在矩阵中逐条修改。","新组合将按“前缀-规格值”生成人类可读 SKU，可在矩阵中逐条修改。"
 添加规格轴,添加规格轴
 重新生成矩阵,重新生成矩阵
+勾选规格值生成矩阵；有色块时显示颜色胶囊。,勾选规格值生成矩阵；有色块时显示颜色胶囊。
 "当前变更不会停用已有 Offer。","当前变更不会停用已有 Offer。"
 "个 Offer 组合；显式零价有效，留空表示清除基础价。","个 Offer 组合；显式零价有效，留空表示清除基础价。"
+产品图片,"Product image"
 规格组合,规格组合
 基础价（分）,基础价（分）
 "Offer 与基础价","Offer 与基础价"
 "SKU 和规格结构仅归属站可改；显式零价有效。","SKU 和规格结构仅归属站可改；显式零价有效。"
 "Website 分类","Website 分类"
 "这里是本站目录事实。Store 默认继承，只在下面保存加入或排除差异。","这里是本站目录事实。Store 默认继承，只在下面保存加入或排除差异。"
-查找分类,查找分类
-"当前 Website 还没有分类。请先建立分类目录，再回到商品选择。","当前 Website 还没有分类。请先建立分类目录，再回到商品选择。"
+"当前 Website 还没有分类。可在上方快速新建，或先到万能分类建立目录后再回填选择。","当前 Website 还没有分类。可在上方快速新建，或先到万能分类建立目录后再回填选择。"
 "Store 分类差异","Store 分类差异"
 "“继承”不会保存覆盖；“加入/排除”只影响对应 Store。","“继承”不会保存覆盖；“加入/排除”只影响对应 Store。"
 "继承 Website","继承 Website"
@@ -685,9 +701,6 @@ Store,Store
 必填,Required
 是,是
 否,否
-高级：扩展字段兼容区,"Advanced: extension field compatibility"
-"未声明的扩展字段 JSON","Undeclared extension fields JSON"
-"这里只保存 Provider schema 未声明的兼容字段；上方可视化字段会在保存时安全合并，不会删除扩展数据。","Only fields not declared by the Provider schema are stored here. Visual fields above are merged safely without deleting extension data."
 发布诊断,发布诊断
 "当前数据通过 Provider 发布校验。","当前数据通过 Provider 发布校验。"
 跨站分享与归属,跨站分享与归属
@@ -735,6 +748,7 @@ Store,Store
 "授权 Website 复制","授权 Website 复制"
 "撤销 Website 复制授权","撤销 Website 复制授权"
 发起归属转让,发起归属转让
+多语言,多语言
 未命名商品草稿,未命名商品草稿
 已发布,Published
 已下架,Disabled
@@ -747,9 +761,10 @@ Store,Store
 选择属性,选择属性
 自由属性,自由属性
 编辑中的商品不可更换属性集，仍可在当前集下添加属性组/属性，或使用自由属性。,编辑中的商品不可更换属性集，仍可在当前集下添加属性组/属性，或使用自由属性。
-切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。,切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。
+切换属性集只改变当前可视化区域；未显示的属性值仍会保留。,切换属性集只改变当前可视化区域；未显示的属性值仍会保留。
 归属站可编辑,归属站可编辑
 复制站结构只读,复制站结构只读
+规格属性,规格属性
 库存暂时不可用,库存暂时不可用
 不限,不限
 商品级诊断,"Product-level diagnostics"
@@ -857,12 +872,10 @@ Store,Store
 规格组合不能重复,规格组合不能重复
 该商品类型不能要求配送,该商品类型不能要求配送
 库存模块当前不可用，商品可发布但前台不可购买,"Inventory is unavailable; the product can be published but cannot be purchased."
-"多规格商品至少需要一个 EAV 规格轴","多规格商品至少需要一个 EAV 规格轴"
-"规格轴必须使用有效的 EAV 属性代码","规格轴必须使用有效的 EAV 属性代码"
-规格轴不能重复：%{1},规格轴不能重复：%{1}
-多规格商品至少需要一个规格轴,多规格商品至少需要一个规格轴
-每个规格组合必须且只能包含已选择的全部规格轴,每个规格组合必须且只能包含已选择的全部规格轴
+"多规格商品至少需要一个 Product EAV 多选规格轴","多规格商品至少需要一个 Product EAV 多选规格轴"
+"每个规格组合必须且只能包含 Product EAV 已选择的全部规格轴","每个规格组合必须且只能包含 Product EAV 已选择的全部规格轴"
 规格组合中的每个规格轴都必须选择一个值,规格组合中的每个规格轴都必须选择一个值
+"Offer 规格值不在 Product EAV 允许值中：%{1}=%{2}","Offer 规格值不在 Product EAV 允许值中：%{1}=%{2}"
 虚拟/服务商品至少需要一个服务方案,虚拟/服务商品至少需要一个服务方案
 服务方案必须包含代码和名称,服务方案必须包含代码和名称
 服务方案代码不能重复：%{1},服务方案代码不能重复：%{1}
@@ -1023,6 +1036,28 @@ Store,Store
 "必须与当前 env 配置一致的 mig_clone_* 数据库","必须与当前 env 配置一致的 mig_clone_* 数据库"
 "cutover/rollback 必填的切换状态版本","cutover/rollback 必填的切换状态版本"
 "rollback 目标：dual_read（默认）或 legacy","rollback 目标：dual_read（默认）或 legacy"
+"共 %{1} 件商品","%{1} products"
+查找分类,查找分类
+"当前 Website 还没有分类。请先建立分类目录，再回到商品选择。","当前 Website 还没有分类。请先建立分类目录，再回到商品选择。"
+全部类目,"Any Department"
+清除筛选条件,"Clear filters"
+部门,Department
+浏览全部分类,浏览全部分类
+"规格轴必须使用有效的 EAV 属性代码","规格轴必须使用有效的 EAV 属性代码"
+规格轴不能重复：%{1},规格轴不能重复：%{1}
+多规格商品至少需要一个规格轴,多规格商品至少需要一个规格轴
+每个规格组合必须且只能包含已选择的全部规格轴,每个规格组合必须且只能包含已选择的全部规格轴
+"当前没有可用属性集。请先在 EAV 属性管理中启用属性定义，或使用下方高级数据维护迁移值。","当前没有可用属性集。请先在 EAV 属性管理中启用属性定义，或使用下方高级数据维护迁移值。"
+"高级：完整属性行 JSON","高级：完整属性行 JSON"
+"属性行 JSON","属性行 JSON"
+"这里保留未知属性、Offer 属性以及 Store/locale 覆盖。保存时只合并当前可视化属性，不会自动删除其他行。","这里保留未知属性、Offer 属性以及 Store/locale 覆盖。保存时只合并当前可视化属性，不会自动删除其他行。"
+高级：扩展字段兼容区,"Advanced: extension field compatibility"
+"未声明的扩展字段 JSON","Undeclared extension fields JSON"
+"这里只保存 Provider schema 未声明的兼容字段；上方可视化字段会在保存时安全合并，不会删除扩展数据。","Only fields not declared by the Provider schema are stored here. Visual fields above are merged safely without deleting extension data."
+切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。,切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。
+"多规格商品至少需要一个 EAV 规格轴","多规格商品至少需要一个 EAV 规格轴"
+已加入,"Added to cart"
+前往购物车,前往购物车
 返回商品列表,"Return to product list"
 从品牌目录选择；可在「品牌管理」中维护。,"Choose from the brand catalog. Manage brands separately."
 从供应商目录选择；可在「供应商管理」中维护。,"Choose from the supplier catalog. Manage suppliers separately."

@@ -345,11 +345,15 @@ final class StorefrontVariantSelectionService
 
     /**
      * @param array<string, mixed> $option
-     * @return array{value:string,label:string,swatch_color?:string,swatch_image?:string,gallery_images?:list<string>}
+     * @return array{value:string,label:string,code?:string,swatch_color?:string,swatch_image?:string,gallery_images?:list<string>}
      */
     private function normalizeCatalogOption(string $value, string $label, array $option): array
     {
         $entry = ['value' => $value, 'label' => $label];
+        $optionCode = trim((string)($option['code'] ?? ''));
+        if ($optionCode !== '') {
+            $entry['code'] = $optionCode;
+        }
         $swatchColor = trim((string)($option['swatch_color'] ?? $option['swatch'] ?? ''));
         if ($swatchColor !== '') {
             $entry['swatch_color'] = $swatchColor;

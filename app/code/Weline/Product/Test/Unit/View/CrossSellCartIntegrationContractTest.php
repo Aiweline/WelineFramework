@@ -20,12 +20,12 @@ final class CrossSellCartIntegrationContractTest extends TestCase
         self::assertStringContainsString('data-global-offer-uuid', $template);
     }
 
-    public function testCrossSellScriptUsesCartV2BinQueryAndDispatchesCartUpdated(): void
+    public function testCrossSellScriptUsesCartBinQueryAndDispatchesCartUpdated(): void
     {
         $script = $this->script();
 
         self::assertStringContainsString("resource('cart')", $script);
-        self::assertStringContainsString('addV2', $script);
+        self::assertStringContainsString('add', $script);
         self::assertStringContainsString('issueGuestToken', $script);
         self::assertStringContainsString('weline:cart-updated', $script);
         self::assertStringContainsString('weline:cart:update', $script);

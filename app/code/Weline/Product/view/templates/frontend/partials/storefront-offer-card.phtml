@@ -1,5 +1,6 @@
 <?php
 
+use Weline\Product\Helper\StorefrontOfferDetailQuery;
 use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 
@@ -26,6 +27,7 @@ $productUrl = $productPath; // route path; render with @url
     $productPath = 'product/' . $productId;
 $productUrl = $productPath; // route path; render with @url
 }
+$productUrlParams = StorefrontOfferDetailQuery::params($offer);
 $imageResolved = StorefrontImagePlaceholder::resolve((string)($offer['image'] ?? ''), $productId);
 ?>
 <article class="product-storefront__card product-card<?= $productUrl !== '' ? ' is-clickable' : '' ?>"
@@ -34,7 +36,7 @@ $imageResolved = StorefrontImagePlaceholder::resolve((string)($offer['image'] ??
          data-global-offer-uuid="<?= $escape($uuid) ?>">
     <?php if ($productUrl !== ''): ?>
         <a class="product-storefront__card-hit"
-           href="@url{$productUrl}"
+           href="@url{$productUrl|$productUrlParams}"
            aria-label="<?= $escape($productName) ?>"
            data-testid="storefront-product-card-link"></a>
     <?php endif; ?>

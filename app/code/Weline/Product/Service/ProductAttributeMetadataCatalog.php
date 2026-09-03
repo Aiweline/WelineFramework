@@ -164,6 +164,75 @@ final class ProductAttributeMetadataCatalog
     }
 
     /**
+     * Convert configurable axes from option codes or IDs to the canonical EAV
+     * option values stored by Product and Offer attribute rows.
+     *
+     * @param list<array{code:string,label?:string,options:list<mixed>}> $axes
+     * @return list<array{code:string,label:string,options:list<array{value:string,label:string}>}>
+     */
+    public function canonicalizeVariantAxes(array $axes): array
+    {
+        $metadata = $this->metadataIndex();
+        $result = [];
+        foreach ($axes as $axis) {
+            if (!is_array($axis)) {
+                throw new \InvalidArgumentException('variant_axes_invalid');
+            }
+            $code = strtolower(trim((string)($axis['code'] ?? '')));
+            $definition = $metadata[$code] ?? null;
+            if ($code === '' || !is_array($definition)) {
+                throw new \InvalidArgumentException('product_attribute_unknown');
+            }
+            $options = [];
+            foreach (is_array($axis['options'] ?? null) ? $axis['options'] : [] as $option) {
+                $input = is_array($option)
+                    ? trim((string)($option['value'] ?? $option['code'] ?? ''))
+                    : trim((string)$option);
+                if ($input === '') {
+                    throw new \InvalidArgumentException('variant_option_invalid');
+                }
+                $canonical = $this->canonicalOption($input, $definition);
+                $label = is_array($option)
+                    ? trim((string)($option['label'] ?? $option['name'] ?? ''))
+                    : '';
+                $options[] = [
+                    'value' => $canonical,
+                    'label' => $label !== '' ? $label : $canonical,
+                ];
+            }
+            $result[] = [
+                'code' => $code,
+                'label' => trim((string)($axis['label'] ?? $definition['label'] ?? $code)),
+                'options' => $options,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param array<string,mixed> $combination
+     * @return array<string,string>
+     */
+    public function canonicalizeVariantCombination(array $combination): array
+    {
+        $metadata = $this->metadataIndex();
+        $result = [];
+        foreach ($combination as $code => $value) {
+            $code = strtolower(trim((string)$code));
+            $definition = $metadata[$code] ?? null;
+            if ($code === '' || !is_array($definition)) {
+                throw new \InvalidArgumentException('product_attribute_unknown');
+            }
+            $input = $this->scalarValue($value, 'product_attribute_option_invalid');
+            $result[$code] = $this->canonicalOption($input, $definition);
+        }
+        ksort($result, SORT_STRING);
+
+        return $result;
+    }
+
+    /**
      * @param array<string, mixed> $attribute
      * @return array{color:bool,image:bool,text:bool}
      */

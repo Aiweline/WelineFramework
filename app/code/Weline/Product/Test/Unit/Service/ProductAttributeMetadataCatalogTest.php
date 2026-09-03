@@ -22,6 +22,7 @@ final class ProductAttributeMetadataCatalogTest extends TestCase
     protected function setUp(): void
     {
         $option = new AttributeOptionMetadata(7, '7', 'red', '红色', 7);
+        $sizeOption = new AttributeOptionMetadata(8, '8', 'xxl', 'XXL', 8);
         $attributes = [
             new AttributeMetadata(11, 3, 'color', '颜色', 'varchar', 'varchar', 'select', 5, 6, true, false, true, true, 11, [$option]),
             new AttributeMetadata(12, 3, 'weight', '重量', 'decimal', 'decimal', 'input', 5, 6, false, false, true, false, 12),
@@ -29,6 +30,7 @@ final class ProductAttributeMetadataCatalogTest extends TestCase
             new AttributeMetadata(14, 3, 'tags', '标签', 'varchar', 'varchar', 'select', 5, 6, false, true, true, true, 14, [$option]),
             new AttributeMetadata(15, 3, 'brand', '品牌', 'varchar', 'varchar', 'input', 5, 6, false, false, true, false, 15),
             new AttributeMetadata(16, 3, 'brand_code', '品牌编码', 'varchar', 'varchar', 'input', 5, 6, false, false, true, false, 16),
+            new AttributeMetadata(17, 3, 'size', '尺码', 'varchar', 'varchar', 'select', 5, 6, false, true, true, true, 17, [$sizeOption]),
         ];
         $set = new AttributeSetMetadata(
             5,
@@ -48,7 +50,7 @@ final class ProductAttributeMetadataCatalogTest extends TestCase
     {
         $attributes = $this->catalog->editorCatalog()[0]['groups'][0]['attributes'];
 
-        self::assertSame(['select', 'number', 'boolean', 'multiselect'], array_column($attributes, 'value_type'));
+        self::assertSame(['select', 'number', 'boolean', 'multiselect', 'multiselect'], array_column($attributes, 'value_type'));
         self::assertSame(['explicit', 'cleared', 'inherit'], $attributes[0]['scope_states']);
         self::assertNotContains('brand', array_column($attributes, 'code'));
         self::assertNotContains('brand_code', array_column($attributes, 'code'));
@@ -76,6 +78,27 @@ final class ProductAttributeMetadataCatalogTest extends TestCase
         self::assertSame('legacy_blob', $rows[4]['value_type']);
         self::assertSame(['keep' => true], $rows[4]['value']);
         self::assertSame('manual', $rows[4]['migration_conflict']);
+    }
+
+    public function testVariantAxesAndCombinationsUseCanonicalEavOptionValues(): void
+    {
+        $axesFromCodes = $this->catalog->canonicalizeVariantAxes([
+            ['code' => 'color', 'label' => '颜色', 'options' => [['value' => 'red', 'label' => '红色']]],
+            ['code' => 'size', 'label' => '尺码', 'options' => [['value' => 'xxl', 'label' => 'XXL']]],
+        ]);
+        $axesFromIds = $this->catalog->canonicalizeVariantAxes([
+            ['code' => 'color', 'options' => [['value' => '7']]],
+            ['code' => 'size', 'options' => [['value' => '8']]],
+        ]);
+
+        self::assertSame('7', $axesFromCodes[0]['options'][0]['value']);
+        self::assertSame('8', $axesFromCodes[1]['options'][0]['value']);
+        self::assertSame('7', $axesFromIds[0]['options'][0]['value']);
+        self::assertSame('8', $axesFromIds[1]['options'][0]['value']);
+        self::assertSame(
+            ['color' => '7', 'size' => '8'],
+            $this->catalog->canonicalizeVariantCombination(['size' => 'xxl', 'color' => 'red']),
+        );
     }
 
     public function testClearedAndInheritRemainDistinct(): void

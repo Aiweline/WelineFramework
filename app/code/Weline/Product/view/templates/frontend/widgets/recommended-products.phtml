@@ -26,6 +26,7 @@
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
+use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 use Weline\Theme\Helper\WidgetI18n;
@@ -68,12 +69,27 @@ foreach ($products as &$product) {
         // Root-relative (+ locale/currency prefix): safe for static 404 HTML on any host.
         $path = '/' . ltrim($route, '/');
         $prefix = rtrim(Url::getPrefix(), '/');
-        $product['url'] = ($prefix !== '' ? $prefix : '') . $path;
+        $hasCurrentPrefix = $prefix !== ''
+            && ($path === $prefix || str_starts_with($path, $prefix . '/'));
+        $product['url'] = $hasCurrentPrefix
+            ? $path
+            : ($prefix !== '' ? $prefix : '') . $path;
     }
 }
 unset($product);
 
 if ($products === []) {
+    // Never return a blank string: DEV WidgetHtmlHealthInspector treats empty
+    // HTML as a warning toast. Keep visually hidden so storefront still "hides".
+    ?>
+<section class="<?= $esc($wc) ?> weline-product-recommended<?= $isPreviewMode ? ' is-preview' : '' ?> is-empty"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-testid="recommended-products-empty"
+         hidden
+         aria-hidden="true"></section>
+    <?php
     return;
 }
 ?>
@@ -148,28 +164,14 @@ if ($products === []) {
                                 <span class="wpc-price-now">¥<?= number_format($price, 2) ?></span>
                             </div>
                             <?php if ($sellable && $offerUuid !== ''): ?>
-                                <?php $addLabel = (string)__('加入购物车'); ?>
-                                <div class="weline-cart-product-card-add-to-cart"
-                                     data-widget-module="Weline_Cart"
-                                     data-widget-code="product-card-add-to-cart"
-                                     data-purchase-loading="<?= $esc((string)__('正在加入购物车...')) ?>"
-                                     data-purchase-success="<?= $esc((string)__('已加入购物车')) ?>"
-                                     data-purchase-error="<?= $esc((string)__('加入购物车失败')) ?>"
-                                     data-purchase-mark-added="<?= $esc((string)__('已加入')) ?>"
-                                     data-cart-url="@url{'cart'}"
-                                     data-cart-link-text="<?= $esc((string)__('前往购物车')) ?>">
-                                    <button type="button"
-                                            class="wpc-cta weline-pixel::add_to_cart"
-                                            data-action="add-v2"
-                                            data-testid="product-card-add-to-cart"
-                                            data-default-label="<?= $esc($addLabel) ?>"
-                                            data-provider-code="product"
-                                            data-product-id="<?= $productId ?>"
-                                            data-global-offer-uuid="<?= $esc($offerUuid) ?>"
-                                            data-qty="1">
-                                        <span class="weline-pixel::add_to_cart" data-card-add-label="1"><?= $esc($addLabel) ?></span>
-                                    </button>
-                                </div>
+                                <?= $this->fetch(
+                                    'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
+                                    ProductCardAddToCartParams::fetchDictionary($product, [
+                                    'wrapper_class' => 'wpc-cta-wrap',
+                                    'button_class' => 'wpc-cta',
+                                    'buy_now_enabled' => false,
+                                ])
+                                ) ?>
                             <?php else: ?>
                                 <a class="wpc-cta wpc-cta--link" href="<?= $esc($productUrl) ?>"><?= $esc((string)__('查看详情')) ?></a>
                             <?php endif; ?>

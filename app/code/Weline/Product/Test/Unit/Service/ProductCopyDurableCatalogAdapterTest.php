@@ -25,8 +25,8 @@ use Weline\Inventory\Api\Data\AvailabilityResult;
 use Weline\Inventory\Api\InventoryCapabilityInterface;
 use Weline\Inventory\Api\InventoryCatalogCopyCapabilityInterface;
 use Weline\Product\Api\Data\CopyDraft;
-use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2\ProductCatalogCartItemSnapshotResolver;
-use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2\ProductCartItemSnapshotProvider;
+use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider\ProductCatalogCartItemSnapshotResolver;
+use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider\ProductCartItemSnapshotProvider;
 use Weline\Product\Extends\Module\Weline_Framework\Schema\ProductShardSchemaProvider;
 use Weline\Product\Model\ProductCopyOperation;
 use Weline\Product\Model\ProductShardKey;
@@ -62,7 +62,7 @@ use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 
 final class ProductCopyDurableCatalogAdapterTest extends TestCase
 {
-    public function testCartV2ProviderResolvesDurableStoreOverlaySnapshot(): void
+    public function testCartProviderResolvesDurableStoreOverlaySnapshot(): void
     {
         $environment = $this->environment();
         try {
