@@ -77,6 +77,47 @@ final class AuthenticatedDeviceRegistryTest extends TestCase
         self::assertTrue($page['items'][0]['is_current']);
     }
 
+    public function testSharedSessionRotationRebindsFrontendDeviceInsteadOfReboundLogout(): void
+    {
+        $this->installKeys->nextRaw = 'shared-browser';
+        $before = $this->context('frontend', '47', 'session-before-backend-login');
+        $binding = $this->registry->register($before);
+        self::assertTrue($binding->valid);
+
+        // Backend login regenerates the shared Session id; AuthenticatedSession
+        // then calls rebindToCurrentSession for surviving sibling device ids.
+        $after = $this->context('frontend', '47', 'session-after-backend-login')
+            ->withDeviceId((string)$binding->deviceId);
+        $this->installKeys->nextRaw = 'shared-browser';
+        $rebinding = $this->registry->rebindToCurrentSession($after);
+
+        self::assertTrue($rebinding->valid);
+        self::assertSame($binding->deviceId, $rebinding->deviceId);
+        self::assertTrue($this->registry->validate($after)->valid);
+        self::assertFalse($this->registry->validate($before->withDeviceId((string)$binding->deviceId))->valid);
+        $device = $this->repository->findDeviceByPublicId('frontend', (string)$binding->deviceId);
+        self::assertNotNull($device);
+        self::assertSame(
+            hash('sha256', 'session-after-backend-login'),
+            (string)($device['session_digest'] ?? ''),
+        );
+    }
+
+    public function testValidateKeepsSessionReboundWithoutExplicitRebind(): void
+    {
+        $this->installKeys->nextRaw = 'browser-a';
+        $before = $this->context('frontend', '47', 'session-old');
+        $binding = $this->registry->register($before);
+
+        $stranger = $this->context('frontend', '47', 'session-stranger')
+            ->withDeviceId((string)$binding->deviceId);
+        $this->installKeys->nextRaw = 'browser-a';
+        $validation = $this->registry->validate($stranger);
+
+        self::assertFalse($validation->valid);
+        self::assertSame('session_rebound', $validation->reason);
+    }
+
     public function testPasswordLoginReplacedRevokesCredentialOnly(): void
     {
         $this->installKeys->nextRaw = 'keep-device-row';

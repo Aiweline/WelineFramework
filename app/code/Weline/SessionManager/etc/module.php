@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_SessionManager',
-    "version" => '1.2.0',
+    "version" => '1.2.1',
     "requires" => [
         'Weline_Framework' => '^2.4',
         'Weline_Backend' => '*',
