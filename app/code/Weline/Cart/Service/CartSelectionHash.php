@@ -34,7 +34,7 @@ final class CartSelectionHash
         $safe = [];
         foreach ($selection as $key => $value) {
             if (!is_scalar($value) && $value !== null) {
-                throw new CartV2ConflictException(
+                throw new CartConflictException(
                     self::ERROR_INVALID_SELECTION,
                     __('非法 selection 值类型：%{1}', [(string)$key]),
                 );
@@ -60,7 +60,7 @@ final class CartSelectionHash
         $normalized = self::normalizeSelection($selection);
         $json = json_encode($normalized, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if ($json === false) {
-            throw new CartV2ConflictException(
+            throw new CartConflictException(
                 self::ERROR_INVALID_SELECTION,
                 __('selection JSON 编码失败'),
             );
@@ -80,7 +80,7 @@ final class CartSelectionHash
             return; // client may omit; server is authority
         }
         if (!hash_equals($serverHash, $clientHash)) {
-            throw new CartV2ConflictException(
+            throw new CartConflictException(
                 self::ERROR_HASH_MISMATCH,
                 __('客户端 selection_hash 与服务端不一致（已忽略客户端，请使用服务端值）'),
                 ['server_selection_hash' => $serverHash],

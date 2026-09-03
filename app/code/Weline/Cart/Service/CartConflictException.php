@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Service;
 
-final class CartV2ConflictException extends \RuntimeException
+final class CartConflictException extends \RuntimeException
 {
     /**
      * @param array<string, mixed> $context

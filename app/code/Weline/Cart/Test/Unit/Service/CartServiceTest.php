@@ -7,20 +7,19 @@ namespace Weline\Cart\Test\Unit\Service;
 use PHPUnit\Framework\TestCase;
 use Weline\Cart\Api\Data\CartItemSnapshot;
 use Weline\Cart\Api\Data\OfferIdentity;
-use Weline\Cart\Api\CartItemSnapshotProviderV2Interface;
-use Weline\Cart\Service\CartItemSnapshotProviderV2Registry;
+use Weline\Cart\Api\CartItemSnapshotProviderInterface;
+use Weline\Cart\Service\CartItemSnapshotProviderRegistry;
 use Weline\Cart\Service\CartSelectionHash;
 use Weline\Cart\Service\CheckoutCartSnapshotService;
-use Weline\Cart\Service\CartV2ConflictException;
-use Weline\Cart\Service\CartV2Service;
-use Weline\Cart\Service\LegacyCartItemSnapshotProviderV2Adapter;
+use Weline\Cart\Service\CartConflictException;
+use Weline\Cart\Service\CartService;
 use Weline\Framework\Runtime\ScopeIdentity;
-use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2\ProductCartItemSnapshotProvider;
+use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider\ProductCartItemSnapshotProvider;
 
 /**
  * TEST-P2E-01 / TEST-P2E-02 / TEST-P2E-03.
  */
-final class CartV2ServiceTest extends TestCase
+final class CartServiceTest extends TestCase
 {
     private function scopeA(): ScopeIdentity
     {
@@ -32,11 +31,11 @@ final class CartV2ServiceTest extends TestCase
         return ScopeIdentity::store(0, 'default', 'b', ScopeIdentity::MODE_NORMAL);
     }
 
-    private function service(array $catalog): CartV2Service
+    private function service(array $catalog): CartService
     {
         $provider = ProductCartItemSnapshotProvider::forTesting($catalog);
-        $registry = CartItemSnapshotProviderV2Registry::forTesting([$provider]);
-        return CartV2Service::forTesting($registry);
+        $registry = CartItemSnapshotProviderRegistry::forTesting([$provider]);
+        return CartService::forTesting($registry);
     }
 
     public function testScopeIsolationDoesNotLeakAcrossCarts(): void
@@ -72,6 +71,85 @@ final class CartV2ServiceTest extends TestCase
         self::assertSame(0, $svc->cartCountForScope($this->scopeA()));
         self::assertSame(1, $svc->cartCountForScope($this->scopeB()));
     }
+    public function testGetCartStripsAssetProtocolImagesFromSummary(): void
+    {
+        $offerUuid = '22222222-2222-4222-8222-222222222222';
+        $svc = $this->service([
+            $offerUuid => [
+                'name' => 'Asset Image Offer',
+                'sku' => 'SKU-ASSET',
+                'image' => 'asset://8855f766-343c-4ce2-8a0c-c10bd4ec0c21',
+                'unit_price_minor' => 13800,
+                'currency' => 'CNY',
+                'stock' => 10,
+                'sellable' => true,
+            ],
+        ]);
+        $offer = new OfferIdentity('product', $offerUuid, legacyProductId: 26);
+        $guest = $svc->issueGuestToken();
+
+        $added = $svc->add($this->scopeA(), $offer, [], 1, $guest);
+        self::assertSame('', (string)($added['items'][0]['image'] ?? 'missing'));
+
+        $cart = $svc->getCart($this->scopeA(), $guest);
+        self::assertSame('', (string)($cart['items'][0]['image'] ?? 'missing'));
+        self::assertStringNotContainsString('asset://', json_encode($cart, JSON_UNESCAPED_UNICODE));
+    }
+
+    public function testAddMergeRefreshesImageFromLatestSnapshot(): void
+    {
+        $offerUuid = '33333333-3333-4333-8333-333333333333';
+        $state = [
+            'image' => 'asset://aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
+        ];
+        $provider = new ProductCartItemSnapshotProvider(
+            [],
+            static function (
+                OfferIdentity $offer,
+                ScopeIdentity $scope,
+                array $selection,
+            ) use (&$state, $offerUuid): ?CartItemSnapshot {
+                if ($offer->globalOfferUuid !== $offerUuid) {
+                    return null;
+                }
+
+                return new CartItemSnapshot(
+                    offer: $offer,
+                    name: 'Merge Image Offer',
+                    sku: 'SKU-MERGE',
+                    image: (string)$state['image'],
+                    currency: 'CNY',
+                    unitPriceMinor: 1000,
+                    found: true,
+                    sellable: true,
+                    stock: 10,
+                    selection: CartSelectionHash::normalizeSelection($selection),
+                    productType: 'simple',
+                    sourceModule: 'Weline_Product',
+                    sourceApp: 'Weline',
+                    offerId: 33,
+                    productId: 33,
+                );
+            },
+        );
+        $svc = CartService::forTesting(
+            CartItemSnapshotProviderRegistry::forTesting([$provider]),
+        );
+        $offer = new OfferIdentity('product', $offerUuid, legacyProductId: 33);
+        $guest = $svc->issueGuestToken();
+
+        $first = $svc->add($this->scopeA(), $offer, [], 1, $guest);
+        self::assertSame('', (string)($first['items'][0]['image'] ?? 'missing'));
+
+        $state['image'] = '/pub/media/catalog/hanfu/r2/taoyuan.webp';
+        $second = $svc->add($this->scopeA(), $offer, [], 1, $guest);
+        self::assertSame(2, (int)$second['item_count']);
+        self::assertSame(
+            '/pub/media/catalog/hanfu/r2/taoyuan.webp',
+            (string)($second['items'][0]['image'] ?? ''),
+        );
+    }
+
     public function testGetCartWithoutGuestTokenReturnsEmptySummary(): void
     {
         $offerUuid = '11111111-1111-4111-8111-111111111111';
@@ -88,7 +166,7 @@ final class CartV2ServiceTest extends TestCase
         self::assertTrue($summary['success']);
         self::assertTrue($summary['is_empty']);
         self::assertSame(0, $summary['item_count']);
-        self::assertSame(CartV2Service::OWNER_GUEST, $summary['owner_kind']);
+        self::assertSame(CartService::OWNER_GUEST, $summary['owner_kind']);
         self::assertSame('', (string)$summary['owner_id']);
         self::assertNull($summary['guest_token']);
 
@@ -101,8 +179,8 @@ final class CartV2ServiceTest extends TestCase
                 null,
             );
             self::fail('guest add without token must fail');
-        } catch (CartV2ConflictException $e) {
-            self::assertSame(CartV2Service::ERROR_GUEST_TOKEN, $e->errorCode());
+        } catch (CartConflictException $e) {
+            self::assertSame(CartService::ERROR_GUEST_TOKEN, $e->errorCode());
         }
     }
 
@@ -144,7 +222,7 @@ final class CartV2ServiceTest extends TestCase
         self::assertNotSame($scopeA->canonicalKey(), $scopeB->canonicalKey());
     }
 
-    public function testGuestCanUpdateAndRemoveOnlyItemsFromItsOwnV2Cart(): void
+    public function testGuestCanUpdateAndRemoveOnlyItemsFromItsOwnCart(): void
     {
         $offerUuid = '16161616-1616-4161-8161-161616161616';
         $svc = $this->service([
@@ -172,8 +250,8 @@ final class CartV2ServiceTest extends TestCase
         try {
             $svc->updateItem($scope, $itemId, 2, $otherToken);
             self::fail('another guest token must not mutate the owner cart');
-        } catch (CartV2ConflictException $exception) {
-            self::assertSame(CartV2Service::ERROR_NOT_FOUND, $exception->errorCode());
+        } catch (CartConflictException $exception) {
+            self::assertSame(CartService::ERROR_NOT_FOUND, $exception->errorCode());
         }
         self::assertSame(1, $svc->getCart($scope, $ownerToken)['item_count']);
 
@@ -236,14 +314,14 @@ final class CartV2ServiceTest extends TestCase
         try {
             $svc->add($this->scopeA(), $offer, $selection, 1, $guest, clientSelectionHash: 'deadbeef');
             self::fail('forged hash must fail');
-        } catch (CartV2ConflictException $e) {
+        } catch (CartConflictException $e) {
             self::assertSame(CartSelectionHash::ERROR_HASH_MISMATCH, $e->errorCode());
         }
 
         try {
             $svc->add($this->scopeA(), $offer, ['bad' => ['nested']], 1, $guest);
             self::fail('nested selection must fail');
-        } catch (CartV2ConflictException $e) {
+        } catch (CartConflictException $e) {
             self::assertSame(CartSelectionHash::ERROR_INVALID_SELECTION, $e->errorCode());
         }
     }
@@ -288,8 +366,8 @@ final class CartV2ServiceTest extends TestCase
         try {
             $svc->mergeGuestIntoCustomer($scope, $guestToken, 9);
             self::fail('cross-currency merge must fail');
-        } catch (CartV2ConflictException $exception) {
-            self::assertSame(CartV2Service::ERROR_CROSS_CURRENCY, $exception->errorCode());
+        } catch (CartConflictException $exception) {
+            self::assertSame(CartService::ERROR_CROSS_CURRENCY, $exception->errorCode());
         }
 
         $guestAfter = $svc->getCart($scope, $guestToken);
@@ -300,33 +378,16 @@ final class CartV2ServiceTest extends TestCase
         self::assertSame('USD', $customerAfter['currency']);
     }
 
-    public function testDuplicateProviderCodeFailsClosedAndLegacyAdapterFallback(): void
+    public function testDuplicateProviderCodeFailsClosed(): void
     {
         $a = ProductCartItemSnapshotProvider::forTesting();
         $b = ProductCartItemSnapshotProvider::forTesting(['x' => ['name' => 'x', 'unit_price_minor' => 1]]);
         try {
-            CartItemSnapshotProviderV2Registry::forTesting([$a, $b]);
+            CartItemSnapshotProviderRegistry::forTesting([$a, $b]);
             self::fail('duplicate code');
-        } catch (CartV2ConflictException $e) {
-            self::assertSame(CartItemSnapshotProviderV2Registry::ERROR_CODE_DUPLICATE, $e->errorCode());
+        } catch (CartConflictException $e) {
+            self::assertSame(CartItemSnapshotProviderRegistry::ERROR_CODE_DUPLICATE, $e->errorCode());
         }
-
-        $legacy = LegacyCartItemSnapshotProviderV2Adapter::forTesting(
-            static function (int $productId, array $params): array {
-                return [
-                    'name' => 'Legacy #' . $productId,
-                    'price' => 12.34,
-                    'sellable' => true,
-                    'stock' => 3,
-                ];
-            }
-        );
-        $registry = CartItemSnapshotProviderV2Registry::forTesting([], $legacy);
-        // unknown provider code but legacyProductId present → adapter
-        $offer = new OfferIdentity('missing_provider', '44444444-4444-4444-8444-444444444444', 42);
-        $snap = $registry->resolve($offer, $this->scopeA(), []);
-        self::assertSame('Legacy #42', $snap->name);
-        self::assertSame(1234, $snap->unitPriceMinor);
     }
 
     public function testCheckoutFreezeRepricesAndExportsOnlyCurrentProviderFacts(): void
@@ -340,7 +401,7 @@ final class CartV2ServiceTest extends TestCase
                 'digital_download' => ['schema_version' => 'cart-v1'],
             ],
         ];
-        $provider = new class($offerUuid, $current) implements CartItemSnapshotProviderV2Interface {
+        $provider = new class($offerUuid, $current) implements CartItemSnapshotProviderInterface {
             /** @var array<string, mixed> */
             public array $current;
 
@@ -388,8 +449,8 @@ final class CartV2ServiceTest extends TestCase
                 );
             }
         };
-        $registry = CartItemSnapshotProviderV2Registry::forTesting([$provider]);
-        $cart = CartV2Service::forTesting($registry);
+        $registry = CartItemSnapshotProviderRegistry::forTesting([$provider]);
+        $cart = CartService::forTesting($registry);
         $scope = $this->scopeA();
         $guest = $cart->issueGuestToken();
         $cart->add(
@@ -434,7 +495,7 @@ final class CartV2ServiceTest extends TestCase
         try {
             (new CheckoutCartSnapshotService($cart))->freeze($scope, $guest);
             self::fail('current unsellable provider fact must block checkout');
-        } catch (CartV2ConflictException $e) {
+        } catch (CartConflictException $e) {
             self::assertSame(CheckoutCartSnapshotService::ERROR_SELLABILITY, $e->errorCode());
         }
     }

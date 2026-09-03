@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2;
+namespace Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider;
 
 use Weline\Cart\Api\CartSelectionHash;
 use Weline\Cart\Api\Data\CartItemSnapshot;
@@ -23,10 +23,11 @@ use Weline\Product\Repository\PriceRepository;
 use Weline\Product\Repository\ProductRepository;
 use Weline\Product\Repository\StoreOfferRepository;
 use Weline\Product\Service\ProductCurrentCustomerResolver;
+use Weline\Product\Service\StorefrontProductMediaUrlResolver;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 
 /**
- * Resolves Product Cart V2 snapshots from the durable Website shard.
+ * Resolves Product Cart snapshots from the durable Website shard.
  */
 final class ProductCatalogCartItemSnapshotResolver
 {
@@ -60,6 +61,7 @@ final class ProductCatalogCartItemSnapshotResolver
         ?callable $availabilityResolver = null,
         private readonly ?FileAssetManagerInterface $fileAssets = null,
         ?callable $customerResolver = null,
+        private readonly ?StorefrontProductMediaUrlResolver $mediaUrls = null,
     ) {
         $this->currencyResolver = $currencyResolver === null
             ? null
@@ -113,7 +115,11 @@ final class ProductCatalogCartItemSnapshotResolver
         if ($product === null) {
             return $this->notFound($identity, $selection, (string)__('Offer 对应商品不存在'));
         }
-        $sku = trim((string)$product->getData(Product::schema_fields_SKU));
+        $productSku = trim((string)$product->getData(Product::schema_fields_SKU));
+        $sku = trim((string)$offer->getData(Offer::schema_fields_SKU));
+        if ($sku === '') {
+            $sku = $productSku;
+        }
         if (strtolower(trim((string)$product->getData(Product::schema_fields_STATUS)))
             !== Product::STATUS_PUBLISHED
         ) {
@@ -215,7 +221,7 @@ final class ProductCatalogCartItemSnapshotResolver
                 offer: $identity,
                 name: $name,
                 sku: $sku,
-                image: $this->image($websiteId, $productId),
+                image: $this->image($websiteId, $productId, $scope, $locale),
                 currency: $currency,
                 unitPriceMinor: max(0, (int)$price->value),
                 found: true,
@@ -236,7 +242,7 @@ final class ProductCatalogCartItemSnapshotResolver
             offer: $identity,
             name: $name,
             sku: $sku,
-            image: $this->image($websiteId, $productId),
+            image: $this->image($websiteId, $productId, $scope, $locale),
             currency: $currency,
             unitPriceMinor: max(0, (int)$price->value),
             found: true,
@@ -346,10 +352,34 @@ final class ProductCatalogCartItemSnapshotResolver
         }
     }
 
-    private function image(int $websiteId, int $productId): string
+    private function image(int $websiteId, int $productId, ScopeIdentity $scope, string $locale): string
     {
         $rows = $this->media->listByProductIds($websiteId, [$productId]);
-        return trim((string)($rows[0][Media::schema_fields_PATH] ?? ''));
+        $reference = trim((string)($rows[0][Media::schema_fields_PATH] ?? ''));
+        if ($reference === '') {
+            return '';
+        }
+
+        // Cart API / mini-cart set img.src from this field — never emit FileManager asset://.
+        $resolver = $this->mediaUrls;
+        if ($resolver === null) {
+            try {
+                $candidate = ObjectManager::getInstance(StorefrontProductMediaUrlResolver::class);
+                $resolver = $candidate instanceof StorefrontProductMediaUrlResolver ? $candidate : null;
+            } catch (\Throwable) {
+                $resolver = null;
+            }
+        }
+        if ($resolver === null) {
+            return str_starts_with(strtolower($reference), 'asset://') ? '' : $reference;
+        }
+
+        $localeCode = trim($locale);
+        if ($localeCode === '') {
+            $localeCode = 'zh_Hans_CN';
+        }
+
+        return $resolver->resolveReference($reference, $scope, $localeCode);
     }
 
     private function productType(int $websiteId, int $storeId, int $productId, string $locale): string

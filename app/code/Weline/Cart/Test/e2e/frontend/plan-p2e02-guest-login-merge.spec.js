@@ -1,10 +1,10 @@
 /**
  * 万能商城内核计划：guest→login 同 Scope 合车（TEST-P2E-02）
  *
- * - 浏览器先登录并 addV2（customer qty=2），随后退出
- * - issueGuestToken + addV2（guest qty=4）
+ * - 浏览器先登录并 add（customer qty=2），随后退出
+ * - issueGuestToken + add（guest qty=4）
  * - 再次 account.login → 自动 mergeGuest（Cookie guest_token）
- * - getV2Cart：由服务端当前登录身份读取 customer cart，item_count=5（stock 截断）
+ * - getCart：由服务端当前登录身份读取 customer cart，item_count=5（stock 截断）
  * - fixture 跨进程检查 guest cart 已清空
  *
  * @weline-e2e-spec { module: Weline_Cart, type: plan, layer: frontend }
@@ -149,11 +149,11 @@ moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
         });
         expect(isSuccess(firstLogin), `首次 account.login 失败：${JSON.stringify(firstLogin)}`).toBeTruthy();
 
-        const customerSeed = await runResourceApi(page, 'cart', 'addV2', {
+        const customerSeed = await runResourceApi(page, 'cart', 'add', {
           ...offerParams,
           qty: fixture.customer_pre_qty,
         });
-        expect(isSuccess(customerSeed), `customer addV2 失败：${JSON.stringify(customerSeed)}`).toBeTruthy();
+        expect(isSuccess(customerSeed), `customer add 失败：${JSON.stringify(customerSeed)}`).toBeTruthy();
         expect(Number(pickData(customerSeed).item_count || 0)).toBe(fixture.customer_pre_qty);
         expect(String(pickData(customerSeed).owner_id || '')).toBe(String(fixture.customer_id));
 
@@ -176,12 +176,12 @@ moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
           },
         ]);
 
-        const guestAdd = await runResourceApi(page, 'cart', 'addV2', {
+        const guestAdd = await runResourceApi(page, 'cart', 'add', {
           ...offerParams,
           guest_token: guestToken,
           qty: fixture.guest_qty,
         });
-        expect(isSuccess(guestAdd), `guest addV2 失败：${JSON.stringify(guestAdd)}`).toBeTruthy();
+        expect(isSuccess(guestAdd), `guest add 失败：${JSON.stringify(guestAdd)}`).toBeTruthy();
         expect(Number(pickData(guestAdd).item_count || 0)).toBe(fixture.guest_qty);
         const guestCookie = (await page.context().cookies(origin))
           .find((cookie) => cookie.name === 'weline_cart_guest_token');
@@ -194,8 +194,8 @@ moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
         });
         expect(isSuccess(login), `account.login 失败：${JSON.stringify(login)}`).toBeTruthy();
 
-        const customerCart = await runResourceApi(page, 'cart', 'getV2Cart', scope);
-        expect(isSuccess(customerCart), `getV2Cart customer 失败：${JSON.stringify(customerCart)}`).toBeTruthy();
+        const customerCart = await runResourceApi(page, 'cart', 'getCart', scope);
+        expect(isSuccess(customerCart), `getCart customer 失败：${JSON.stringify(customerCart)}`).toBeTruthy();
         const customerData = pickData(customerCart);
         expect(
           Number(customerData.item_count || 0),
@@ -222,7 +222,7 @@ moduleDescribe(test, MODULE, '计划 P2E-02 guest/login 合车', () => {
           const guestPage = await guestContext.newPage();
           await gotoFrontend(guestPage, '/', { timeout: 60000, settleMs: 500, ...DIRECT });
           await ensureApi(guestPage);
-          const guestCart = await runResourceApi(guestPage, 'cart', 'getV2Cart', {
+          const guestCart = await runResourceApi(guestPage, 'cart', 'getCart', {
             ...scope,
             guest_token: guestToken,
           });

@@ -1,127 +1,204 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Weline\Cart\Service;
 
-use Weline\Cart\Session\CartSession;
-use Weline\Framework\App\State;
+use Weline\Cart\Api\CartStoreInterface;
+use Weline\Cart\Api\Data\CartItemSnapshot;
+use Weline\Cart\Api\Data\OfferIdentity;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 
-class CartService
+/**
+ * Cart service：Scope 隔离、guest token、同 Scope 合车、服务端 selection hash.
+ */
+final class CartService
 {
-    private const CART_COUNT_COOKIE = 'weline_cart_item_count';
-    private const ITEM_SOURCE_STRING_LIMITS = [
-        'source_app' => 80,
-        'source_module' => 100,
-        'business_module' => 100,
-        'business_code' => 100,
-        'business_name' => 160,
-        'product_type' => 80,
-    ];
+    public const ERROR_SCOPE_MISMATCH = 'cart_scope_mismatch';
+    public const ERROR_CROSS_CURRENCY = 'cart_cross_currency_forbidden';
+    public const ERROR_NOT_SELLABLE = 'cart_item_not_sellable';
+    public const ERROR_NOT_FOUND = 'cart_item_not_found';
+    public const ERROR_GUEST_TOKEN = 'cart_guest_token_required';
 
-    private readonly CartItemSnapshotProviderRegistry $snapshotProviderRegistry;
+    public const OWNER_GUEST = 'guest';
+    public const OWNER_CUSTOMER = 'customer';
 
-    private readonly ?CartV2Service $cartV2;
+    public const GUEST_TOKEN_COOKIE = 'weline_cart_guest_token';
 
-    private readonly CartPriceSellabilityGate $sellabilityGate;
-
-    private readonly CartScopeResolver $scopeResolver;
-
-    private readonly CartCurrentCustomerResolver $currentCustomerResolver;
+    private readonly CartStoreInterface $store;
 
     public function __construct(
-        private readonly CartSession $cartSession,
-        ?CartItemSnapshotProviderRegistry $snapshotProviderRegistry = null,
-        ?CartV2Service $cartV2 = null,
-        ?CartPriceSellabilityGate $sellabilityGate = null,
-        ?CartScopeResolver $scopeResolver = null,
-        ?CartCurrentCustomerResolver $currentCustomerResolver = null,
+        private readonly CartItemSnapshotProviderRegistry $registry,
+        ?CartStoreInterface $store = null,
     ) {
-        $this->snapshotProviderRegistry = $snapshotProviderRegistry
-            ?? ObjectManager::getInstance(CartItemSnapshotProviderRegistry::class);
-        $this->cartV2 = $cartV2 ?? ObjectManager::getInstance(CartV2Service::class);
-        $this->sellabilityGate = $sellabilityGate
-            ?? ObjectManager::getInstance(CartPriceSellabilityGate::class);
-        $this->scopeResolver = $scopeResolver ?? new CartScopeResolver();
-        $this->currentCustomerResolver = $currentCustomerResolver ?? new CartCurrentCustomerResolver();
+        $this->store = $store ?? ObjectManager::getInstance(CartCacheStore::class);
     }
 
-    public function cartV2(): ?CartV2Service
+    public static function forTesting(CartItemSnapshotProviderRegistry $registry): self
     {
-        return $this->cartV2;
+        return new self($registry, new CartMemoryStore());
+    }
+
+    public function registry(): CartItemSnapshotProviderRegistry
+    {
+        return $this->registry;
+    }
+
+    public function issueGuestToken(): string
+    {
+        return bin2hex(random_bytes(16));
     }
 
     /**
-     * @return array<int, array<string, mixed>>
-     */
-    public function getItems(): array
-    {
-        $items = $this->cartSession->getItems();
-        if (!\is_array($items)) {
-            return [];
-        }
-
-        $normalized = [];
-        foreach ($items as $item) {
-            if (!\is_array($item)) {
-                continue;
-            }
-            $normalizedItem = $this->normalizeItem($item);
-            if ((int)$normalizedItem['product_id'] <= 0 || (int)$normalizedItem['qty'] <= 0) {
-                continue;
-            }
-            $normalized[] = $normalizedItem;
-        }
-
-        return $normalized;
-    }
-
-    /**
+     * Query / controller entry: build OfferIdentity + Scope from flat params.
+     *
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
-    public function add(array $params): array
+    public function addFromParams(array $params): array
     {
-        // V2 path：显式 OfferIdentity 时走 CartV2Service（若已注入）
-        if ($this->cartV2 !== null && $this->isV2AddParams($params)) {
-            return $this->addV2($params);
-        }
-
-        $productId = (int)($params['product_id'] ?? $params['id'] ?? 0);
-        $qty = $this->normalizeQty($params['qty'] ?? 1);
-        if ($productId <= 0) {
-            return $this->summary(false, (string)__('请选择要加入购物车的商品。'));
-        }
-
-        $sellability = $this->sellabilityGate->assertOrAllow($params + ['product_id' => $productId]);
-        if (($sellability['ok'] ?? true) === false) {
-            $blocked = $this->summary(
-                false,
-                (string)($sellability['message'] ?? __('该商品暂不可售。')),
+        try {
+            $scopeResolver = ObjectManager::getInstance(CartScopeResolver::class);
+            $scope = $scopeResolver instanceof CartScopeResolver
+                ? $scopeResolver->fromParams($params)
+                : ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL);
+            $offer = OfferIdentity::fromArray($params);
+            $selection = $params['selection'] ?? $params['selected_options'] ?? $params['options'] ?? [];
+            $selection = \is_array($selection) ? $selection : [];
+            $qty = max(1, min(999, (int)($params['qty'] ?? 1)));
+            $result = $this->add(
+                scope: $scope,
+                offer: $offer,
+                selection: $selection,
+                qty: $qty,
+                guestToken: isset($params['guest_token']) ? (string)$params['guest_token'] : null,
+                customerId: isset($params['customer_id']) ? (int)$params['customer_id'] : null,
+                clientSelectionHash: isset($params['selection_hash']) ? (string)$params['selection_hash'] : null,
+                currency: isset($params['currency']) ? (string)$params['currency'] : null,
             );
-            $errorCode = (string)($sellability['error_code'] ?? 'price_not_sellable');
-            $blocked['error_code'] = $errorCode;
-            $blocked['code'] = $errorCode;
-            if (isset($sellability['detail']) && \is_array($sellability['detail'])) {
-                $blocked['error_detail'] = $sellability['detail'];
-            }
+            $result['subtotal'] = round(((int)($result['subtotal_minor'] ?? 0)) / 100, 2);
+            $result['grand_total'] = round(((int)($result['grand_total_minor'] ?? 0)) / 100, 2);
 
-            return $blocked;
+            return $result;
+        } catch (CartConflictException $e) {
+            return [
+                'success' => false,
+                'message' => $e->getMessage(),
+                'error_code' => $e->errorCode(),
+                'error_context' => $e->context(),
+                'items' => [],
+                'cart_count' => 0,
+                'item_count' => 0,
+                'distinct_count' => 0,
+                'is_empty' => true,
+                'subtotal' => 0.0,
+                'grand_total' => 0.0,
+                'subtotal_minor' => 0,
+                'grand_total_minor' => 0,
+            ];
+        }
+    }
+
+    /**
+     * Storefront HTML bootstrap: read the trusted cart for the current browser owner.
+     *
+     * @return array<string, mixed>
+     */
+    public function storefrontSummary(): array
+    {
+        $customerResolver = ObjectManager::getInstance(CartCurrentCustomerResolver::class);
+        $scopeResolver = ObjectManager::getInstance(CartScopeResolver::class);
+        $customerId = $customerResolver instanceof CartCurrentCustomerResolver
+            ? $customerResolver->currentCustomerId()
+            : null;
+        $guestToken = $customerId === null
+            ? \trim((string)Cookie::get(self::GUEST_TOKEN_COOKIE))
+            : null;
+        if ($customerId === null && ($guestToken === null || $guestToken === '')) {
+            return [
+                'success' => true,
+                'message' => '',
+                'items' => [],
+                'cart_count' => 0,
+                'item_count' => 0,
+                'distinct_count' => 0,
+                'is_empty' => true,
+                'subtotal' => 0.0,
+                'grand_total' => 0.0,
+                'subtotal_minor' => 0,
+                'grand_total_minor' => 0,
+            ];
         }
 
-        $selectedOptions = $params['selected_options'] ?? $params['options'] ?? [];
-        $selectedOptions = \is_array($selectedOptions) ? $this->sanitizeOptions($selectedOptions) : [];
-        $snapshot = $this->resolveItemSnapshot($productId, $params);
-        if (($snapshot['found'] ?? true) === false) {
-            return $this->summary(false, (string)($snapshot['message'] ?? __('商品不存在或已下架。')));
-        }
-        if (($snapshot['sellable'] ?? true) === false) {
-            $stockName = trim((string)($snapshot['name'] ?? ''));
-            if ($stockName === '') {
-                $stockName = (string)__('该商品');
+        $scope = $scopeResolver instanceof CartScopeResolver
+            ? $scopeResolver->fromParams([])
+            : ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL);
+        $summary = $this->getCart($scope, $guestToken, $customerId);
+        $items = \is_array($summary['items'] ?? null) ? $summary['items'] : [];
+        foreach ($items as &$item) {
+            if (!\is_array($item)) {
+                continue;
             }
-            $message = trim((string)($snapshot['message'] ?? ''));
+            $item['price'] = \round(((int)($item['unit_price_minor'] ?? 0)) / 100, 2);
+            $item['row_total'] = \round(((int)($item['row_total_minor'] ?? 0)) / 100, 2);
+        }
+        unset($item);
+        $summary['items'] = $items;
+        $summary['subtotal'] = \round(((int)($summary['subtotal_minor'] ?? 0)) / 100, 2);
+        $summary['grand_total'] = \round(((int)($summary['grand_total_minor'] ?? 0)) / 100, 2);
+
+        return $summary;
+    }
+
+    /**
+     * Extend guest cart TTL (+ cookie) without rotating the token.
+     */
+    public function touchGuestCart(ScopeIdentity $scope, string $guestToken): bool
+    {
+        $guestToken = \trim($guestToken);
+        if ($guestToken === '') {
+            return false;
+        }
+        $key = $this->cartKey($scope, $guestToken, null);
+
+        return $this->store->touch($key);
+    }
+
+    /**
+     * @param array<string, scalar|null> $selection
+     * @return array<string, mixed>
+     */
+    public function add(
+        ScopeIdentity $scope,
+        OfferIdentity $offer,
+        array $selection = [],
+        int $qty = 1,
+        ?string $guestToken = null,
+        ?int $customerId = null,
+        ?string $clientSelectionHash = null,
+        ?string $currency = null,
+    ): array {
+        $qty = max(1, min(999, $qty));
+        $selection = CartSelectionHash::normalizeSelection($selection);
+        $serverHash = CartSelectionHash::compute(
+            $offer->globalOfferUuid,
+            $offer->selectionSchemaVersion,
+            $selection,
+        );
+        CartSelectionHash::assertClientHashOrIgnore($clientSelectionHash, $serverHash);
+
+        $snapshot = $this->registry->resolve($offer, $scope, $selection);
+        if (!$snapshot->found) {
+            throw new CartConflictException(
+                self::ERROR_NOT_FOUND,
+                $snapshot->message !== '' ? $snapshot->message : __('商品不存在或已下架'),
+            );
+        }
+        if (!$snapshot->sellable) {
+            $stockName = $snapshot->name !== '' ? $snapshot->name : (string)__('该商品');
+            $message = trim($snapshot->message);
             $genericCandidates = [
                 (string)__('商品库存不足'),
                 '商品库存不足',
@@ -130,507 +207,495 @@ class CartService
             if ($message === '' || in_array($message, $genericCandidates, true)) {
                 $message = (string)__('「%{1}」库存不足', [$stockName]);
             }
-
-            return $this->summary(false, $message !== '' ? $message : (string)__('该商品暂不可售。'));
+            throw new CartConflictException(
+                self::ERROR_NOT_SELLABLE,
+                $message !== '' ? $message : (string)__('该商品暂不可售'),
+            );
         }
 
-        $requestedQty = $qty;
-        $stock = array_key_exists('stock', $snapshot) ? \max(0, (int)$snapshot['stock']) : null;
-        if (array_key_exists('qty', $snapshot)) {
-            $qty = $this->normalizeQty($snapshot['qty']);
-        } elseif ($stock !== null) {
-            if ($stock <= 0) {
-                $stockName = trim((string)($snapshot['name'] ?? ''));
-                if ($stockName === '') {
-                    $stockName = (string)__('该商品');
-                }
-                $message = trim((string)($snapshot['message'] ?? ''));
-                $genericCandidates = [
-                    (string)__('商品库存不足'),
-                    '商品库存不足',
-                    'Out of stock',
-                ];
-                if ($message === '' || in_array($message, $genericCandidates, true)) {
-                    $message = (string)__('「%{1}」库存不足', [$stockName]);
-                }
+        $cartKey = $this->cartKey($scope, $guestToken, $customerId);
+        $cart = $this->store->get($cartKey) ?? $this->newCart($scope, $guestToken, $customerId, $currency ?? $snapshot->currency);
+        if ($cart['currency'] !== '' && $cart['currency'] !== $snapshot->currency) {
+            throw new CartConflictException(
+                self::ERROR_CROSS_CURRENCY,
+                __('跨币种购物车不可合并'),
+                ['cart_currency' => $cart['currency'], 'item_currency' => $snapshot->currency],
+            );
+        }
+        $cart['currency'] = $snapshot->currency;
 
-                return $this->summary(false, $message !== '' ? $message : (string)__('该商品暂时缺货。'));
+        $adjusted = false;
+        $requested = $qty;
+        if ($snapshot->stock !== null) {
+            $existingQty = 0;
+            foreach ($cart['items'] as $row) {
+                if ((string)$row['selection_hash'] === $serverHash) {
+                    $existingQty = (int)$row['qty'];
+                    break;
+                }
             }
-            $qty = \min($qty, $stock);
+            $room = max(0, $snapshot->stock - $existingQty);
+            if ($room <= 0) {
+                throw new CartConflictException(
+                    self::ERROR_NOT_SELLABLE,
+                    __('「%{1}」库存不足，购物车中该商品数量已达到当前可售库存。', [$snapshot->name !== '' ? $snapshot->name : (string)__('该商品')]),
+                );
+            }
+            if ($qty > $room) {
+                $qty = $room;
+                $adjusted = true;
+            }
         }
 
-        $itemKey = $this->buildItemKey($productId, $selectedOptions);
-        $items = $this->getItems();
-        $found = false;
-
-        foreach ($items as &$item) {
-            if ((string)($item['item_id'] ?? '') !== $itemKey) {
+        $merged = false;
+        foreach ($cart['items'] as &$row) {
+            if ((string)$row['selection_hash'] !== $serverHash) {
                 continue;
             }
-            if ($stock !== null) {
-                $availableQty = $stock - (int)$item['qty'];
-                if ($availableQty <= 0) {
-                    $stockName = trim((string)($item['name'] ?? $snapshot['name'] ?? ''));
-                    return $this->summary(false, (string)__('「%{1}」库存不足，购物车中该商品数量已达到当前可售库存。', [$stockName !== '' ? $stockName : (string)__('该商品')]));
-                }
-                $qty = \min($qty, $availableQty);
-            }
-            $cartItemData = \array_replace($params, $snapshot);
-            foreach (['name', 'sku', 'image', 'price'] as $key) {
-                if (array_key_exists($key, $cartItemData)) {
-                    $item[$key] = $key === 'price'
-                        ? $this->normalizePrice($cartItemData[$key])
-                        : $this->limitString((string)$cartItemData[$key], $key === 'image' ? 512 : ($key === 'name' ? 160 : 80));
-                }
-            }
-            foreach ($this->sourceFieldsFrom($cartItemData) as $key => $value) {
-                $item[$key] = $value;
-            }
-            $item['qty'] = $this->normalizeQty((int)$item['qty'] + $qty);
-            $item['row_total'] = $this->rowTotal($item);
-            $found = true;
+            $row['qty'] = (int)$row['qty'] + $qty;
+            $row['unit_price_minor'] = $snapshot->unitPriceMinor;
+            $row['name'] = $snapshot->name;
+            $row['sku'] = $snapshot->sku;
+            // Refresh presentation fields so stale asset:// snapshots do not stick after re-add.
+            $row['image'] = $snapshot->image;
+            $row['row_total_minor'] = (int)$row['qty'] * (int)$row['unit_price_minor'];
+            $merged = true;
             break;
         }
-        unset($item);
+        unset($row);
 
-        if (!$found) {
-            $cartItemData = \array_replace($params, $snapshot);
-            $items[] = $this->normalizeItem([
-                'item_id' => $itemKey,
-                'product_id' => $productId,
-                'name' => trim((string)($cartItemData['name'] ?? '')) ?: (string)__('商品 #%{1}', $productId),
-                'sku' => trim((string)($cartItemData['sku'] ?? '')),
-                'image' => trim((string)($cartItemData['image'] ?? '')),
-                'price' => $this->normalizePrice($cartItemData['price'] ?? 0),
-                'qty' => $qty,
-                'selected_options' => $selectedOptions,
-            ] + $this->sourceFieldsFrom($cartItemData));
+        if (!$merged) {
+            $cart['items'][] = $this->lineFromSnapshot($snapshot, $selection, $serverHash, $qty);
         }
 
-        $this->setItems($items);
+        $this->store->set($cartKey, $cart);
+        return $this->summary($cart, true, $adjusted
+            ? (string)__('「%{1}」库存不足，已按当前可售数量加入购物车。', [$snapshot->name !== '' ? $snapshot->name : (string)__('该商品')])
+            : (string)__('已加入购物车。'), [
+            'quantity_adjusted' => $adjusted,
+            'requested_quantity' => $requested,
+            'adjusted_quantity' => $qty,
+            'selection_hash' => $serverHash,
+        ]);
+    }
 
-        $summary = $this->summary(true, (string)__('已加入购物车。'));
-        if ($qty !== $requestedQty) {
-            $summary['quantity_adjusted'] = true;
-            $summary['requested_quantity'] = $requestedQty;
-            $summary['adjusted_quantity'] = $qty;
-            $adjustedName = trim((string)($snapshot['name'] ?? ''));
-            $summary['message'] = (string)__('「%{1}」库存不足，已按当前可售数量加入购物车。', [$adjustedName !== '' ? $adjustedName : (string)__('该商品')]);
+    /**
+     * Merge guest cart into customer cart within the same Scope only（TEST-P2E-02）.
+     *
+     * @return array<string, mixed>
+     */
+    public function mergeGuestIntoCustomer(
+        ScopeIdentity $scope,
+        string $guestToken,
+        int $customerId,
+    ): array {
+        if (trim($guestToken) === '') {
+            throw new CartConflictException(self::ERROR_GUEST_TOKEN, __('guest_token 不能为空'));
+        }
+        if ($customerId <= 0) {
+            throw new \InvalidArgumentException(__('customer_id 须 >0'));
         }
 
+        $guestKey = $this->cartKey($scope, $guestToken, null);
+        $customerKey = $this->cartKey($scope, null, $customerId);
+        $guest = $this->store->get($guestKey);
+        $customer = $this->store->get($customerKey);
+
+        $truncateNotes = [];
+        if ($guest !== null) {
+            if ($guest['scope_key'] !== $scope->canonicalKey()) {
+                throw new CartConflictException(self::ERROR_SCOPE_MISMATCH, __('游客车 Scope 不匹配'));
+            }
+            if ($customer !== null && $customer['scope_key'] !== $scope->canonicalKey()) {
+                throw new CartConflictException(self::ERROR_SCOPE_MISMATCH, __('客户车 Scope 不匹配'));
+            }
+            $guestCurrency = $this->validatedCartCurrency($guest, self::OWNER_GUEST);
+            $customerCurrency = $customer === null
+                ? ''
+                : $this->validatedCartCurrency($customer, self::OWNER_CUSTOMER);
+            if ($guestCurrency !== ''
+                && $customerCurrency !== ''
+                && $guestCurrency !== $customerCurrency
+            ) {
+                throw new CartConflictException(
+                    self::ERROR_CROSS_CURRENCY,
+                    __('跨币种购物车不可合并'),
+                    [
+                        'guest_currency' => $guestCurrency,
+                        'customer_currency' => $customerCurrency,
+                    ],
+                );
+            }
+            $mergedCurrency = $customerCurrency !== '' ? $customerCurrency : $guestCurrency;
+            $customer ??= $this->newCart($scope, null, $customerId, $mergedCurrency);
+            $customer['currency'] = $mergedCurrency;
+
+            foreach ($guest['items'] as $line) {
+                $hash = (string)$line['selection_hash'];
+                $merged = false;
+                foreach ($customer['items'] as &$crow) {
+                    if ((string)$crow['selection_hash'] !== $hash) {
+                        continue;
+                    }
+                    $nextQty = (int)$crow['qty'] + (int)$line['qty'];
+                    $stock = $crow['stock'] ?? null;
+                    if ($stock !== null && $nextQty > (int)$stock) {
+                        $trunc = (int)$stock;
+                        $truncateNotes[] = [
+                            'selection_hash' => $hash,
+                            'requested_qty' => $nextQty,
+                            'capped_qty' => $trunc,
+                        ];
+                        $nextQty = $trunc;
+                    }
+                    $crow['qty'] = $nextQty;
+                    $crow['row_total_minor'] = $nextQty * (int)$crow['unit_price_minor'];
+                    $merged = true;
+                    break;
+                }
+                unset($crow);
+                if (!$merged) {
+                    $addQty = (int)$line['qty'];
+                    $stock = $line['stock'] ?? null;
+                    if ($stock !== null && $addQty > (int)$stock) {
+                        $truncateNotes[] = [
+                            'selection_hash' => $hash,
+                            'requested_qty' => $addQty,
+                            'capped_qty' => (int)$stock,
+                        ];
+                        $addQty = (int)$stock;
+                    }
+                    if ($addQty > 0) {
+                        $line['qty'] = $addQty;
+                        $line['row_total_minor'] = $addQty * (int)$line['unit_price_minor'];
+                        $customer['items'][] = $line;
+                    }
+                }
+            }
+            $this->store->delete($guestKey);
+        }
+
+        $customer ??= $this->newCart($scope, null, $customerId, '');
+        $this->store->set($customerKey, $customer);
+        $summary = $this->summary(
+            $customer,
+            true,
+            $truncateNotes === []
+                ? (string)__('游客购物车已合并。')
+                : (string)__('游客购物车已合并；部分数量因可售上限被截断。'),
+        );
+        $summary['truncated_notes'] = $truncateNotes;
+        $summary['quantity_truncated'] = $truncateNotes !== [];
         return $summary;
     }
 
     /**
-     * @param array<string, mixed> $params
-     * @return array<string, mixed>
+     * Validate all line currencies before merge mutates either cart.
+     *
+     * @param array<string, mixed> $cart
      */
-    public function update(array $params): array
+    private function validatedCartCurrency(array $cart, string $ownerKind): string
     {
-        $target = $this->targetFromParams($params);
-        $qty = $this->normalizeQty($params['qty'] ?? 1, allowZero: true);
-        if ($target === '') {
-            return $this->summary(false, (string)__('请选择要更新的购物车商品。'));
-        }
-
-        $items = $this->getItems();
-        $updated = false;
-        foreach ($items as $index => &$item) {
-            if (!$this->itemMatchesTarget($item, $target)) {
+        $currency = strtoupper(trim((string)($cart['currency'] ?? '')));
+        foreach ($cart['items'] ?? [] as $line) {
+            $lineCurrency = strtoupper(trim((string)($line['currency'] ?? '')));
+            if ($lineCurrency === '') {
                 continue;
             }
-            if ($qty <= 0) {
-                unset($items[$index]);
-            } else {
-                $item['qty'] = $qty;
-                $item['row_total'] = $this->rowTotal($item);
+            if ($currency === '') {
+                $currency = $lineCurrency;
+                continue;
             }
+            if ($currency !== $lineCurrency) {
+                throw new CartConflictException(
+                    self::ERROR_CROSS_CURRENCY,
+                    __('购物车包含跨币种商品，禁止合并'),
+                    [
+                        'owner_kind' => $ownerKind,
+                        'cart_currency' => $currency,
+                        'line_currency' => $lineCurrency,
+                    ],
+                );
+            }
+        }
+        return $currency;
+    }
+
+    /** @return array<string, mixed> */
+    public function getCart(ScopeIdentity $scope, ?string $guestToken = null, ?int $customerId = null): array
+    {
+        // Read-only: mini-cart / storefront may poll before issueGuestToken.
+        if (($customerId === null || $customerId <= 0) && trim((string)$guestToken) === '') {
+            return $this->summary($this->newCart($scope, null, null, ''));
+        }
+        $key = $this->cartKey($scope, $guestToken, $customerId);
+        $cart = $this->store->get($key) ?? $this->newCart($scope, $guestToken, $customerId, '');
+        return $this->summary($cart);
+    }
+
+    /** @return array<string, mixed> */
+    public function updateItem(
+        ScopeIdentity $scope,
+        string $itemId,
+        int $qty,
+        ?string $guestToken = null,
+        ?int $customerId = null,
+    ): array {
+        $itemId = trim($itemId);
+        if ($itemId === '') {
+            throw new CartConflictException(self::ERROR_NOT_FOUND, __('请选择要更新的购物车商品。'));
+        }
+
+        $key = $this->cartKey($scope, $guestToken, $customerId);
+        $cart = $this->store->get($key);
+        if ($cart === null) {
+            throw new CartConflictException(self::ERROR_NOT_FOUND, __('未找到要更新的购物车商品。'));
+        }
+
+        $requestedQty = max(1, min(999, $qty));
+        $adjustedQty = $requestedQty;
+        $updated = false;
+        foreach ($cart['items'] as &$item) {
+            if ((string)($item['item_id'] ?? '') !== $itemId) {
+                continue;
+            }
+            $stock = $item['stock'] ?? null;
+            if ($stock !== null) {
+                $adjustedQty = min($adjustedQty, max(0, (int)$stock));
+            }
+            if ($adjustedQty <= 0) {
+                throw new CartConflictException(self::ERROR_NOT_SELLABLE, __('该商品暂不可售'));
+            }
+            $item['qty'] = $adjustedQty;
+            $item['row_total_minor'] = $adjustedQty * (int)($item['unit_price_minor'] ?? 0);
             $updated = true;
             break;
         }
         unset($item);
 
         if (!$updated) {
-            return $this->summary(false, (string)__('未找到要更新的购物车商品。'));
+            throw new CartConflictException(self::ERROR_NOT_FOUND, __('未找到要更新的购物车商品。'));
         }
 
-        $this->setItems(\array_values($items));
-
-        return $this->summary(true, (string)__('购物车已更新。'));
-    }
-
-    /**
-     * @param array<string, mixed> $params
-     * @return array<string, mixed>
-     */
-    public function remove(array $params): array
-    {
-        $target = $this->targetFromParams($params);
-        if ($target === '') {
-            return $this->summary(false, (string)__('请选择要移除的购物车商品。'));
-        }
-
-        $next = [];
-        $removed = false;
-        foreach ($this->getItems() as $item) {
-            if ($this->itemMatchesTarget($item, $target)) {
-                $removed = true;
-                continue;
-            }
-            $next[] = $item;
-        }
-
-        if (!$removed) {
-            return $this->summary(false, (string)__('未找到要移除的购物车商品。'));
-        }
-
-        $this->setItems($next);
-
-        return $this->summary(true, (string)__('商品已从购物车移除。'));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function clear(): array
-    {
-        $this->cartSession->clearCart();
-        $this->syncCountCookie(0);
-
-        return $this->summary(true, (string)__('购物车已清空。'));
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    public function summary(bool $success = true, string $message = ''): array
-    {
-        $items = $this->getItems();
-        $subtotal = 0.0;
-        $count = 0;
-
-        foreach ($items as &$item) {
-            $item['row_total'] = $this->rowTotal($item);
-            $subtotal += (float)$item['row_total'];
-            $count += (int)$item['qty'];
-        }
-        unset($item);
-
-        $summary = [
-            'success' => $success,
-            'message' => $message,
-            'items' => $items,
-            'cart_count' => $count,
-            'item_count' => $count,
-            'distinct_count' => \count($items),
-            'subtotal' => \round($subtotal, 2),
-            'grand_total' => \round($subtotal, 2),
-            'currency' => (string)State::getCurrency(),
-            'is_empty' => $items === [],
-        ];
-
-        $this->syncCountCookie($count);
-
-        return $summary;
-    }
-
-    /**
-     * Read the browser owner's current cart for the storefront page.
-     *
-     * Cart V2 is the durable OfferIdentity cart used by the product catalog and
-     * checkout. Keep the legacy session summary as a compatibility fallback,
-     * but never let the cart page report empty after a successful V2 add.
-     *
-     * @return array<string, mixed>
-     */
-    public function storefrontSummary(): array
-    {
-        $legacy = $this->summary();
-        if ($this->cartV2 === null) {
-            return $legacy;
-        }
-
-        try {
-            $customerId = $this->currentCustomerResolver->currentCustomerId();
-            $guestToken = $customerId === null
-                ? \trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE))
-                : null;
-            if ($customerId === null && $guestToken === '') {
-                return $legacy;
-            }
-
-            $summary = $this->cartV2->getCart(
-                $this->scopeResolver->fromParams([]),
-                $guestToken,
-                $customerId,
-            );
-            if (($summary['is_empty'] ?? true) && !($legacy['is_empty'] ?? true)) {
-                return $legacy;
-            }
-
-            $items = \is_array($summary['items'] ?? null) ? $summary['items'] : [];
-            foreach ($items as &$item) {
-                if (!\is_array($item)) {
-                    continue;
-                }
-                $item['price'] = \round(((int)($item['unit_price_minor'] ?? 0)) / 100, 2);
-                $item['row_total'] = \round(((int)($item['row_total_minor'] ?? 0)) / 100, 2);
-            }
-            unset($item);
-
-            $summary['items'] = $items;
-            $summary['subtotal'] = \round(((int)($summary['subtotal_minor'] ?? 0)) / 100, 2);
-            $summary['grand_total'] = \round(((int)($summary['grand_total_minor'] ?? 0)) / 100, 2);
-            $this->syncCountCookie((int)($summary['cart_count'] ?? 0));
-
-            return $summary;
-        } catch (\Throwable $throwable) {
-            if (\function_exists('w_log_error')) {
-                w_log_error('Storefront Cart V2 summary failed: ' . $throwable->getMessage());
-            }
-
-            return $legacy;
-        }
-    }
-
-    /**
-     * @param array<int, array<string, mixed>> $items
-     */
-    private function setItems(array $items): void
-    {
-        $normalized = [];
-        foreach ($items as $item) {
-            $normalizedItem = $this->normalizeItem($item);
-            if ((int)$normalizedItem['product_id'] <= 0 || (int)$normalizedItem['qty'] <= 0) {
-                continue;
-            }
-            $normalized[] = $normalizedItem;
-        }
-
-        $this->cartSession->setItems($normalized);
-        $this->syncCountCookie(\array_sum(\array_map(static fn(array $item): int => (int)$item['qty'], $normalized)));
-    }
-
-    /**
-     * @param array<string, mixed> $params
-     * @return array<string, mixed>
-     */
-    private function resolveItemSnapshot(int $productId, array $params): array
-    {
-        try {
-            $snapshot = $this->snapshotProviderRegistry->resolve($productId, $params);
-        } catch (\Throwable $throwable) {
-            if (function_exists('w_log_error')) {
-                w_log_error('购物车商品快照解析失败：' . $throwable->getMessage());
-            }
-
-            return [];
-        }
-
-        return \is_array($snapshot) ? $snapshot : [];
-    }
-
-    /**
-     * @param array<string, mixed> $item
-     * @return array<string, mixed>
-     */
-    private function normalizeItem(array $item): array
-    {
-        $productId = (int)($item['product_id'] ?? $item['id'] ?? 0);
-        $options = $item['selected_options'] ?? [];
-        $options = \is_array($options) ? $this->sanitizeOptions($options) : [];
-        $itemId = trim((string)($item['item_id'] ?? ''));
-        if ($itemId === '' && $productId > 0) {
-            $itemId = $this->buildItemKey($productId, $options);
-        }
-
-        $normalized = [
-            'item_id' => $itemId,
-            'product_id' => $productId,
-            'name' => $this->limitString((string)($item['name'] ?? ''), 160),
-            'sku' => $this->limitString((string)($item['sku'] ?? ''), 80),
-            'image' => $this->limitString((string)($item['image'] ?? ''), 512),
-            'price' => $this->normalizePrice($item['price'] ?? 0),
-            'qty' => $this->normalizeQty($item['qty'] ?? 1),
-            'selected_options' => $options,
-        ];
-        if ($normalized['name'] === '' && $productId > 0) {
-            $normalized['name'] = (string)__('商品 #%{1}', $productId);
-        }
-        $normalized += $this->sourceFieldsFrom($item);
-        $normalized['row_total'] = $this->rowTotal($normalized);
-
-        return $normalized;
-    }
-
-    /**
-     * @param array<string, mixed> $item
-     * @return array<string, string>
-     */
-    private function sourceFieldsFrom(array $item): array
-    {
-        $fields = [];
-        foreach (self::ITEM_SOURCE_STRING_LIMITS as $key => $limit) {
-            if (!array_key_exists($key, $item)) {
-                continue;
-            }
-            $value = $this->limitString((string)$item[$key], $limit);
-            if ($value !== '') {
-                $fields[$key] = $value;
-            }
-        }
-
-        return $fields;
-    }
-
-    /**
-     * @param array<string, mixed> $options
-     * @return array<string, scalar|null>
-     */
-    private function sanitizeOptions(array $options): array
-    {
-        $safe = [];
-        foreach ($options as $key => $value) {
-            if (!\is_scalar($value) && $value !== null) {
-                continue;
-            }
-            $safe[$this->limitString((string)$key, 80)] = \is_string($value)
-                ? $this->limitString($value, 160)
-                : $value;
-            if (\count($safe) >= 50) {
+        $this->store->set($key, $cart);
+        $updatedName = '';
+        foreach ($cart['items'] as $row) {
+            if ((string)($row['item_id'] ?? '') === $itemId) {
+                $updatedName = trim((string)($row['name'] ?? ''));
                 break;
             }
         }
-
-        return $safe;
+        return $this->summary(
+            $cart,
+            true,
+            $adjustedQty === $requestedQty
+                ? (string)__('购物车已更新。')
+                : (string)__('「%{1}」库存不足，已按当前可售数量更新购物车。', [$updatedName !== '' ? $updatedName : (string)__('该商品')]),
+            [
+                'quantity_adjusted' => $adjustedQty !== $requestedQty,
+                'requested_quantity' => $requestedQty,
+                'adjusted_quantity' => $adjustedQty,
+            ],
+        );
     }
 
-    /**
-     * @param array<string, mixed> $selectedOptions
-     */
-    private function buildItemKey(int $productId, array $selectedOptions): string
-    {
-        \ksort($selectedOptions);
-        $optionHash = \md5(\json_encode($selectedOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '');
-
-        return 'p' . $productId . '-' . \substr($optionHash, 0, 12);
-    }
-
-    /**
-     * @param array<string, mixed> $params
-     */
-    private function targetFromParams(array $params): string
-    {
-        $target = trim((string)($params['item_id'] ?? $params['cart_item_id'] ?? ''));
-        if ($target !== '') {
-            return $target;
+    /** @return array<string, mixed> */
+    public function removeItem(
+        ScopeIdentity $scope,
+        string $itemId,
+        ?string $guestToken = null,
+        ?int $customerId = null,
+    ): array {
+        $itemId = trim($itemId);
+        if ($itemId === '') {
+            throw new CartConflictException(self::ERROR_NOT_FOUND, __('请选择要移除的购物车商品。'));
         }
 
-        $productId = (int)($params['product_id'] ?? $params['id'] ?? 0);
-        return $productId > 0 ? 'product:' . $productId : '';
+        $key = $this->cartKey($scope, $guestToken, $customerId);
+        $cart = $this->store->get($key);
+        if ($cart === null) {
+            throw new CartConflictException(self::ERROR_NOT_FOUND, __('未找到要移除的购物车商品。'));
+        }
+
+        $before = count($cart['items']);
+        $cart['items'] = array_values(array_filter(
+            $cart['items'],
+            static fn(array $item): bool => (string)($item['item_id'] ?? '') !== $itemId,
+        ));
+        if (count($cart['items']) === $before) {
+            throw new CartConflictException(self::ERROR_NOT_FOUND, __('未找到要移除的购物车商品。'));
+        }
+
+        $this->store->set($key, $cart);
+        return $this->summary($cart, true, (string)__('商品已从购物车移除。'));
+    }
+
+    /** @return array<string, mixed> */
+    public function clearCart(
+        ScopeIdentity $scope,
+        ?string $guestToken = null,
+        ?int $customerId = null,
+    ): array {
+        $key = $this->cartKey($scope, $guestToken, $customerId);
+        $this->store->delete($key);
+
+        return $this->summary(
+            $this->newCart($scope, $guestToken, $customerId, ''),
+            true,
+            (string)__('购物车已清空。'),
+        );
+    }
+
+    /** @internal tests */
+    public function cartCountForScope(ScopeIdentity $scope): int
+    {
+        $n = 0;
+        foreach ($this->store->listByScopeKey($scope->canonicalKey()) as $cart) {
+            $n += count($cart['items'] ?? []);
+        }
+        return $n;
+    }
+
+    private function cartKey(ScopeIdentity $scope, ?string $guestToken, ?int $customerId): string
+    {
+        if ($customerId !== null && $customerId > 0) {
+            return $scope->canonicalKey() . '|customer:' . $customerId;
+        }
+        $token = trim((string)$guestToken);
+        if ($token === '') {
+            throw new CartConflictException(self::ERROR_GUEST_TOKEN, __('游客加购需要 guest_token'));
+        }
+        return $scope->canonicalKey() . '|guest:' . $token;
     }
 
     /**
-     * @param array<string, mixed> $item
+     * @return array{
+     *   scope_key:string,
+     *   currency:string,
+     *   owner_kind:string,
+     *   owner_id:string,
+     *   guest_token:?string,
+     *   items:list<array<string,mixed>>
+     * }
      */
-    private function itemMatchesTarget(array $item, string $target): bool
+    private function newCart(ScopeIdentity $scope, ?string $guestToken, ?int $customerId, string $currency): array
     {
-        if (\str_starts_with($target, 'product:')) {
-            return (int)$item['product_id'] === (int)\substr($target, 8);
-        }
-
-        return (string)($item['item_id'] ?? '') === $target;
-    }
-
-    private function normalizeQty(mixed $qty, bool $allowZero = false): int
-    {
-        $qty = (int)$qty;
-        $min = $allowZero ? 0 : 1;
-
-        return \max($min, \min(999, $qty));
-    }
-
-    private function normalizePrice(mixed $price): float
-    {
-        return \round(\max(0.0, (float)$price), 2);
-    }
-
-    /**
-     * @param array<string, mixed> $item
-     */
-    private function rowTotal(array $item): float
-    {
-        return \round((float)($item['price'] ?? 0) * (int)($item['qty'] ?? 1), 2);
-    }
-
-    private function limitString(string $value, int $length): string
-    {
-        $value = \trim($value);
-        if (\strlen($value) <= $length) {
-            return $value;
-        }
-
-        return \substr($value, 0, $length);
-    }
-
-    private function syncCountCookie(int $count): void
-    {
-        Cookie::set(self::CART_COUNT_COOKIE, (string)\max(0, $count), 3600 * 24 * 30, [
-            'path' => '/',
-            'httponly' => false,
-            'samesite' => 'Lax',
-        ]);
-    }
-
-    /** @param array<string, mixed> $params */
-    private function isV2AddParams(array $params): bool
-    {
-        $offer = trim((string)($params['global_offer_uuid'] ?? $params['offer_uuid'] ?? ''));
-        $provider = trim((string)($params['provider_code'] ?? ''));
-        return $offer !== '' && $provider !== '';
-    }
-
-    /**
-     * @param array<string, mixed> $params
-     * @return array<string, mixed>
-     */
-    private function addV2(array $params): array
-    {
-        if ($this->cartV2 === null) {
-            return $this->summary(false, (string)__('Cart V2 未启用'));
-        }
-        try {
-            $scope = $this->scopeFromParams($params);
-            $offer = \Weline\Cart\Api\Data\OfferIdentity::fromArray($params);
-            $selection = $params['selection'] ?? $params['selected_options'] ?? $params['options'] ?? [];
-            $selection = \is_array($selection) ? $selection : [];
-            $result = $this->cartV2->add(
-                scope: $scope,
-                offer: $offer,
-                selection: $selection,
-                qty: $this->normalizeQty($params['qty'] ?? 1),
-                guestToken: isset($params['guest_token']) ? (string)$params['guest_token'] : null,
-                customerId: isset($params['customer_id']) ? (int)$params['customer_id'] : null,
-                clientSelectionHash: isset($params['selection_hash']) ? (string)$params['selection_hash'] : null,
-                currency: isset($params['currency']) ? (string)$params['currency'] : null,
-            );
-            // Bridge V2 minor totals into legacy float summary shape for API clients
-            $result['subtotal'] = round(((int)($result['subtotal_minor'] ?? 0)) / 100, 2);
-            $result['grand_total'] = round(((int)($result['grand_total_minor'] ?? 0)) / 100, 2);
-            return $result;
-        } catch (CartV2ConflictException $e) {
-            return $this->summary(false, $e->getMessage()) + [
-                'error_code' => $e->errorCode(),
-                'error_context' => $e->context(),
+        if ($customerId !== null && $customerId > 0) {
+            return [
+                'scope_key' => $scope->canonicalKey(),
+                'currency' => $currency,
+                'owner_kind' => self::OWNER_CUSTOMER,
+                'owner_id' => (string)$customerId,
+                'guest_token' => null,
+                'items' => [],
             ];
         }
+        return [
+            'scope_key' => $scope->canonicalKey(),
+            'currency' => $currency,
+            'owner_kind' => self::OWNER_GUEST,
+            'owner_id' => (string)$guestToken,
+            'guest_token' => $guestToken,
+            'items' => [],
+        ];
     }
 
     /**
-     * @param array<string, mixed> $params
+     * @param array<string, scalar|null> $selection
+     * @return array<string, mixed>
      */
-    private function scopeFromParams(array $params): \Weline\Framework\Runtime\ScopeIdentity
+    private function lineFromSnapshot(
+        CartItemSnapshot $snapshot,
+        array $selection,
+        string $selectionHash,
+        int $qty,
+    ): array {
+        $line = [
+            'item_id' => 'v2-' . substr($selectionHash, 0, 16),
+            'selection_hash' => $selectionHash,
+            'selection' => $selection,
+            'offer' => $snapshot->offer->toArray(),
+            'name' => $snapshot->name,
+            'sku' => $snapshot->sku,
+            'image' => $snapshot->image,
+            'currency' => $snapshot->currency,
+            'unit_price_minor' => $snapshot->unitPriceMinor,
+            'qty' => $qty,
+            'stock' => $snapshot->stock,
+            'product_type' => $snapshot->productType,
+            'source_module' => $snapshot->sourceModule,
+            'source_app' => $snapshot->sourceApp,
+            'offer_id' => $snapshot->offerId ?? $snapshot->offer->legacyProductId ?? 0,
+            'product_id' => $snapshot->productId ?? $snapshot->offer->legacyProductId ?? 0,
+            'split_key' => trim($snapshot->splitKey) ?: 'default',
+            'legal_entity' => trim($snapshot->legalEntity) ?: 'default',
+            'requires_shipping' => $snapshot->requiresShipping,
+            'weight_minor' => max(0, $snapshot->weightMinor),
+            'volume_minor' => max(0, $snapshot->volumeMinor),
+            'tax_class_code' => trim($snapshot->taxClassCode) ?: 'standard',
+            'row_total_minor' => $qty * $snapshot->unitPriceMinor,
+        ];
+        if ($snapshot->fulfillmentMetadata !== []) {
+            $line['fulfillment_metadata'] = $snapshot->fulfillmentMetadata;
+        }
+        return $line;
+    }
+
+    /**
+     * @param array<string, mixed> $cart
+     * @param array<string, mixed> $extra
+     * @return array<string, mixed>
+     */
+    private function summary(array $cart, bool $success = true, string $message = '', array $extra = []): array
     {
-        return $this->scopeResolver->fromParams($params);
+        $count = 0;
+        $subtotal = 0;
+        $items = [];
+        foreach ($cart['items'] as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $count += (int)$item['qty'];
+            $subtotal += (int)$item['row_total_minor'];
+            $item['image'] = $this->presentableImage(trim((string)($item['image'] ?? '')));
+            $items[] = $item;
+        }
+        return [
+            'success' => $success,
+            'message' => $message,
+            'scope_key' => $cart['scope_key'],
+            'currency' => $cart['currency'],
+            'owner_kind' => $cart['owner_kind'],
+            'owner_id' => $cart['owner_id'],
+            'guest_token' => $cart['guest_token'],
+            'items' => $items,
+            'cart_count' => $count,
+            'item_count' => $count,
+            'distinct_count' => count($items),
+            'subtotal_minor' => $subtotal,
+            'grand_total_minor' => $subtotal,
+            'is_empty' => $items === [],
+        ] + $extra;
+    }
+
+    /**
+     * Storefront / mini-cart set img.src from this field — never emit FileManager asset://
+     * or other non-browser-displayable schemes from persisted cart lines.
+     */
+    private function presentableImage(string $image): string
+    {
+        if ($image === '') {
+            return '';
+        }
+        if (str_starts_with(strtolower($image), 'asset://')) {
+            return '';
+        }
+        if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $image) === 1
+            && preg_match('#^(https?:)?//#i', $image) !== 1
+        ) {
+            return '';
+        }
+
+        return $image;
     }
 }

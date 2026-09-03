@@ -4,12 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Service;
 
-use Weline\Cart\Api\CartV2CartStoreInterface;
+use Weline\Cart\Api\CartStoreInterface;
 
 /**
  * 进程内车篮（单测 / harness）。
  */
-final class CartV2MemoryStore implements CartV2CartStoreInterface
+final class CartMemoryStore implements CartStoreInterface
 {
     /** @var array<string, array<string, mixed>> */
     private array $carts = [];

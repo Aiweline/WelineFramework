@@ -5,9 +5,9 @@ declare(strict_types=1);
 namespace Weline\Cart\Api;
 
 /**
- * Cart V2 跨请求车篮存储（guest_token / customer_id 键）。
+ * Cart 跨请求车篮存储（guest_token / customer_id 键）。
  */
-interface CartV2CartStoreInterface
+interface CartStoreInterface
 {
     /**
      * @return array{
