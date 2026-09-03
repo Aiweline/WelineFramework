@@ -8,48 +8,21 @@ use Weline\Framework\Http\Url;
 
 /**
  * Shell-unified browser Return URL catalog for Developer App registration.
- * Providers must not register private Return URL paths.
  */
 class PaymentRedirectUriCatalog
 {
     public function __construct(
-        private readonly Url $url,
-        private readonly PayPalSandboxPublicOriginService $publicOrigin,
+        private readonly PaymentShellCallbackUrlCatalog $shellCatalog,
     ) {
     }
 
     /**
-     * @param string|null $storageScope 三段 storage_scope；空则默认 Global，仍带 target_scope query。
-     * @return list<string> At most one URI for the shell callback/return route (with target_scope).
+     * @param string|null $storageScope 三段 storage_scope
+     * @return list<string>
      */
-    public function suggestedRedirectUris(?string $storageScope = null): array
+    public function suggestedRedirectUris(?string $storageScope = null, string $methodCode = 'paypal'): array
     {
-        $storageScope = strtolower(trim((string) $storageScope));
-        if ($storageScope === '') {
-            $storageScope = \Weline\SystemConfig\Model\SystemConfig::SCOPE_GLOBAL;
-        }
-        if (!PaymentBrowserCallbackRoutes::isStorageScope($storageScope)) {
-            return [];
-        }
-
-        $candidates = [
-            $this->publicOrigin->buildFrontendPathUrl(PaymentBrowserCallbackRoutes::RETURN),
-            $this->url->getUrl(PaymentBrowserCallbackRoutes::RETURN),
-        ];
-        foreach ($candidates as $candidate) {
-            $candidate = trim((string) $candidate);
-            if ($candidate === '' || str_contains($candidate, 'localhost')) {
-                continue;
-            }
-
-            try {
-                return [PaymentBrowserCallbackRoutes::withTargetScope($candidate, $storageScope)];
-            } catch (\InvalidArgumentException) {
-                continue;
-            }
-        }
-
-        return [];
+        return $this->shellCatalog->suggestedRedirectUris($storageScope, $methodCode);
     }
 
     /**
@@ -58,6 +31,6 @@ class PaymentRedirectUriCatalog
      */
     public function suggestedSandboxRedirectUris(): array
     {
-        return $this->suggestedRedirectUris();
+        return $this->suggestedRedirectUris(null, 'paypal');
     }
 }

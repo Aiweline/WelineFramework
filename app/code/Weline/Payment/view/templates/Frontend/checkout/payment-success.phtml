@@ -1,0 +1,86 @@
+<?php
+/** L1 支付成功终端页（与 L3 共用 amz-order-confirm 视觉壳） */
+$transaction = $transaction ?? null;
+$paymentMethodLabel = trim((string) ($payment_method_label ?? ''));
+$paymentPaidAtLabel = trim((string) ($payment_paid_at_label ?? ''));
+$orderV2DisplayNumber = trim((string) ($order_v2_display_number ?? ''));
+$transactionNo = $transaction ? (string) $transaction->getData('transaction_no') : '';
+$transactionAmountLabel = '';
+if ($transaction) {
+    $transactionAmountLabel = trim(sprintf(
+        '%s %s',
+        (string) $transaction->getData('amount'),
+        (string) $transaction->getData('currency')
+    ));
+}
+$escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$pixelValue = $transaction ? (string) $transaction->getData('amount') : '';
+$pixelCurrency = $transaction ? (string) $transaction->getData('currency') : '';
+?>
+<main class="amz-order-confirm amz-order-confirm--success weline-pixel::payment_success"
+    weline-code="payment.checkout_success_l1"
+    data-testid="payment-success"
+    data-pixel-event="payment_success"
+    data-transaction-id="<?= $escape($transactionNo) ?>"
+    data-pixel-value="<?= $escape($pixelValue) ?>"
+    data-pixel-currency="<?= $escape($pixelCurrency) ?>">
+    <header class="amz-order-confirm__banner">
+        <div class="amz-order-confirm__banner-inner">
+            <span class="amz-order-confirm__check" aria-hidden="true">✓</span>
+            <div class="amz-order-confirm__banner-copy">
+                <h1><?= $escape(__('支付成功')) ?></h1>
+                <p><?= $escape(__('您的支付已完成。')) ?></p>
+                <?php if ($transactionNo !== ''): ?>
+                    <p class="amz-order-confirm__order-no">
+                        <?= $escape(__('交易号')) ?>：
+                        <strong><?= $escape($transactionNo) ?></strong>
+                    </p>
+                <?php endif; ?>
+                <?php if ($orderV2DisplayNumber !== ''): ?>
+                    <p class="amz-order-confirm__order-no">
+                        <?= $escape(__('订单号')) ?>：
+                        <strong><?= $escape($orderV2DisplayNumber) ?></strong>
+                    </p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </header>
+    <section class="amz-order-confirm__panel" weline-code="payment.checkout_success_l1.panel">
+        <div class="amz-order-confirm__meta-grid">
+            <div class="amz-order-confirm__meta-block">
+                <h2><?= $escape(__('支付信息')) ?></h2>
+                <?php if ($paymentMethodLabel !== ''): ?>
+                    <p><span class="amz-order-confirm__meta-label"><?= $escape(__('支付方式')) ?></span> <?= $escape($paymentMethodLabel) ?></p>
+                <?php endif; ?>
+                <?php if ($transactionAmountLabel !== ''): ?>
+                    <p><span class="amz-order-confirm__meta-label"><?= $escape(__('支付金额')) ?></span> <?= $escape($transactionAmountLabel) ?></p>
+                <?php endif; ?>
+                <?php if ($paymentPaidAtLabel !== ''): ?>
+                    <p><span class="amz-order-confirm__meta-label"><?= $escape(__('支付时间')) ?></span> <?= $escape($paymentPaidAtLabel) ?></p>
+                <?php endif; ?>
+            </div>
+        </div>
+    </section>
+</main>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof window.WelinePixel === 'undefined' || !<?= json_encode($transactionNo !== '') ?>) {
+        return;
+    }
+    var dedupeKey = 'weline_pixel_dedupe:payment_success:' + <?= json_encode($transactionNo, JSON_UNESCAPED_UNICODE) ?>;
+    try {
+        if (window.sessionStorage.getItem(dedupeKey)) {
+            return;
+        }
+    } catch (e) {}
+    window.WelinePixel.track('payment_success', {
+        transaction_id: <?= json_encode($transactionNo, JSON_UNESCAPED_UNICODE) ?>,
+        value: <?= json_encode($pixelValue, JSON_UNESCAPED_UNICODE) ?>,
+        currency: <?= json_encode($pixelCurrency, JSON_UNESCAPED_UNICODE) ?>,
+        payment_method: <?= json_encode($paymentMethodLabel, JSON_UNESCAPED_UNICODE) ?>
+    });
+    try {
+        window.sessionStorage.setItem(dedupeKey, '1');
+    } catch (e) {}
+});
+</script>

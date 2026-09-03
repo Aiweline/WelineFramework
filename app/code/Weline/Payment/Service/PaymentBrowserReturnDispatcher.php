@@ -7,6 +7,7 @@ namespace Weline\Payment\Service;
 use Weline\Framework\App\Env;
 use Weline\Framework\Manager\MessageManager;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Payment\Api\Data\PaymentOperationRequest;
 use Weline\Payment\Api\Data\PaymentResult;
 use Weline\Payment\Api\Data\ResumeRequest;
@@ -15,20 +16,22 @@ use Weline\Payment\Model\PaymentTransaction;
 
 /**
  * Shell browser return entry: OAuth Connect.complete or Provider resumePayment.
- * Must not hardcode a gateway OAuth service.
  */
 final class PaymentBrowserReturnDispatcher
 {
     public function __construct(
         private readonly PaymentConnectDispatcher $connectDispatcher,
         private readonly PaymentMethodManager $methodManager,
+        private readonly PaymentBrowserReturnLandingOrchestrator $landingOrchestrator,
+        private readonly PaymentBrowserReturnContextResolver $returnContext,
+        private readonly PaymentShellCallbackUrlCatalog $urlCatalog,
         private readonly ObjectManager $objectManager,
     ) {
     }
 
     /**
      * @param array<string, mixed> $params
-     * @return array{redirect_path:string,redirect_params:array<string,mixed>}
+     * @return array<string, mixed>
      */
     public function dispatch(array $params): array
     {
@@ -38,12 +41,11 @@ final class PaymentBrowserReturnDispatcher
             return $this->dispatchOAuth($params);
         }
 
-        $token = trim((string) ($params['token'] ?? $params['order_id'] ?? ''));
-        if ($token !== '') {
-            return $this->dispatchResume($params, $token);
+        $context = $this->returnContext->resolve($params);
+        if ($context !== null && $context['method_code'] !== '' && $context['transaction_no'] !== '') {
+            return $this->dispatchResume($params, $context);
         }
 
-        // 生产：空参 / 无效裸访问直接回首页。开发：停留落地页说明情况（探活用）。
         if ($this->isProductionLive()) {
             return [
                 'redirect_path' => '/',
@@ -58,7 +60,7 @@ final class PaymentBrowserReturnDispatcher
             'status' => 'ready',
             'title' => (string) __('支付浏览器回跳入口'),
             'message' => (string) __(
-                '【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回参数；直接打开不会完成支付。生产环境空参访问会跳转首页。'
+                '【开发环境提示】此地址是支付模块按支付码区分的浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回 shell_token / transaction_no / 网关参数；直接打开不会完成支付。生产环境空参访问会跳转首页。'
             ),
         ];
     }
@@ -80,7 +82,7 @@ final class PaymentBrowserReturnDispatcher
 
     /**
      * @param array<string, mixed> $params
-     * @return array{redirect_path:string,redirect_params:array<string,mixed>}
+     * @return array<string, mixed>
      */
     private function dispatchOAuth(array $params): array
     {
@@ -113,41 +115,39 @@ final class PaymentBrowserReturnDispatcher
                 ];
             }
 
-            return [
-                'redirect_path' => 'payment/frontend/checkout/return',
-                'redirect_params' => [],
-            ];
+            return $this->statusRedirect([]);
         }
     }
 
     /**
      * @param array<string, mixed> $params
-     * @return array{redirect_path:string,redirect_params:array<string,mixed>}
+     * @param array{
+     *   method_code:string,
+     *   transaction_no:string,
+     *   target_scope:string,
+     *   gateway_token:string,
+     *   source:string
+     * } $context
+     * @return array<string, mixed>
      */
-    private function dispatchResume(array $params, string $token): array
+    private function dispatchResume(array $params, array $context): array
     {
-        /** @var PaymentTransaction $transaction */
-        $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
-        $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $token);
-        if (!$transaction->getId()) {
+        $transaction = $this->loadTransaction($context);
+        if ($transaction === null || !$transaction->getId()) {
             MessageManager::add_error((string) __('Payment transaction number is required.'));
 
-            return [
-                'redirect_path' => 'payment/frontend/checkout/return',
-                'redirect_params' => [],
-            ];
+            return $this->statusRedirect([
+                'transaction_no' => $context['transaction_no'],
+            ]);
         }
 
         if ($transaction->isSuccess()) {
-            return [
-                'redirect_path' => 'payment/frontend/checkout/return',
-                'redirect_params' => ['transaction_no' => $token],
-            ];
+            return $this->landingOrchestrator->decide($transaction);
         }
 
         $methodCode = trim((string) $transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE));
         if ($methodCode === '') {
-            $methodCode = strtolower(trim((string) ($params['method_code'] ?? '')));
+            $methodCode = $context['method_code'];
         }
 
         /** @var PaymentMethod $paymentMethod */
@@ -156,10 +156,9 @@ final class PaymentBrowserReturnDispatcher
         if (!$paymentMethod->getId()) {
             MessageManager::add_error((string) __('支付方式不存在'));
 
-            return [
-                'redirect_path' => 'payment/frontend/checkout/return',
-                'redirect_params' => [],
-            ];
+            return $this->statusRedirect([
+                'transaction_no' => (string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO),
+            ]);
         }
 
         $requestData = $transaction->getRequestData();
@@ -168,19 +167,28 @@ final class PaymentBrowserReturnDispatcher
         if ($provider === null) {
             MessageManager::add_error((string) __('支付 Provider 实例不可用。'));
 
-            return [
-                'redirect_path' => 'payment/frontend/checkout/return',
-                'redirect_params' => [],
-            ];
+            return $this->statusRedirect([
+                'transaction_no' => (string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO),
+            ]);
+        }
+
+        $providerReference = $context['gateway_token'] !== ''
+            ? $context['gateway_token']
+            : $context['transaction_no'];
+        $responseData = $transaction->getResponseData();
+        $storedProviderRef = trim((string) ($responseData[PaymentResult::FIELD_PROVIDER_REFERENCE] ?? ''));
+        if ($providerReference === $context['transaction_no'] && $storedProviderRef !== '') {
+            $providerReference = $storedProviderRef;
         }
 
         $runtimeConfig = $this->methodManager->getRuntimeConfig($paymentMethod, $scope);
+        $internalRef = (string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO);
         $result = $provider->resumePayment(ResumeRequest::fromArray([
-            PaymentOperationRequest::FIELD_INTENT_CODE => $token,
-            PaymentOperationRequest::FIELD_ATTEMPT_CODE => $token . '-1',
+            PaymentOperationRequest::FIELD_INTENT_CODE => $internalRef,
+            PaymentOperationRequest::FIELD_ATTEMPT_CODE => $internalRef . '-1',
             PaymentOperationRequest::FIELD_METHOD_CODE => $methodCode,
             PaymentOperationRequest::FIELD_PROVIDER_CODE => $provider->getProviderCode(),
-            PaymentOperationRequest::FIELD_PROVIDER_REFERENCE => $token,
+            PaymentOperationRequest::FIELD_PROVIDER_REFERENCE => $providerReference,
             PaymentOperationRequest::FIELD_SCOPE => $scope['scope'],
             PaymentOperationRequest::FIELD_AMOUNT_MINOR => (int) round(((float) $transaction->getData(PaymentTransaction::schema_fields_AMOUNT)) * 100),
             PaymentOperationRequest::FIELD_CURRENCY_CODE => (string) $transaction->getData(PaymentTransaction::schema_fields_CURRENCY),
@@ -188,6 +196,8 @@ final class PaymentBrowserReturnDispatcher
                 'runtime_config' => $runtimeConfig,
                 'scope' => $scope['scope'],
                 'environment' => $scope['environment'],
+                'browser_return_params' => $params,
+                'browser_return_context' => $context,
             ]),
         ]));
 
@@ -198,21 +208,92 @@ final class PaymentBrowserReturnDispatcher
                     ? PaymentTransaction::STATUS_SUCCESS
                     : PaymentTransaction::STATUS_PROCESSING,
             );
-        if ($result->getProviderReference()) {
-            $transaction->setData(PaymentTransaction::schema_fields_TRANSACTION_NO, $result->getProviderReference());
-        }
         if ($result->getStatus() === PaymentResult::STATUS_PAID) {
             $transaction->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'));
         }
         $transaction->save();
 
-        $redirectReference = trim((string) ($result->getPayload()['capture_id'] ?? $result->getProviderReference() ?? $token));
+        if ($result->getStatus() !== PaymentResult::STATUS_PAID) {
+            $redirectReference = trim((string) (
+                $result->getPayload()['capture_id']
+                ?? $result->getProviderReference()
+                ?? $internalRef
+            ));
 
+            return $this->statusRedirect([
+                'transaction_no' => $redirectReference !== '' ? $redirectReference : $internalRef,
+            ]);
+        }
+
+        $this->notifyOrderPaidFromTransaction($transaction);
+
+        return $this->landingOrchestrator->decide($transaction);
+    }
+
+    private function notifyOrderPaidFromTransaction(PaymentTransaction $transaction): void
+    {
+        $orderUuid = trim((string) $transaction->getData(PaymentTransaction::schema_fields_ORDER_ID));
+        if ($orderUuid === '') {
+            return;
+        }
+
+        try {
+            /** @var OrderFacadeInterface $orders */
+            $orders = $this->objectManager->getInstance(OrderFacadeInterface::class);
+            $orders->notifyOrderPaid($orderUuid, [
+                'payment_method' => (string) $transaction->getData(PaymentTransaction::schema_fields_METHOD_CODE),
+                'payment_transaction_id' => (int) $transaction->getId(),
+                'payment_transaction_no' => (string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO),
+            ]);
+        } catch (\Throwable) {
+            // Capture already succeeded; leave order for reconciliation rather than
+            // failing the browser return path and risking a double-charge retry.
+        }
+    }
+
+    /**
+     * @param array{
+     *   method_code:string,
+     *   transaction_no:string,
+     *   target_scope:string,
+     *   gateway_token:string,
+     *   source:string
+     * } $context
+     */
+    private function loadTransaction(array $context): ?PaymentTransaction
+    {
+        /** @var PaymentTransaction $transaction */
+        $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
+        $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $context['transaction_no']);
+        if ($transaction->getId()) {
+            return $transaction;
+        }
+
+        if ($context['gateway_token'] !== '' && $context['gateway_token'] !== $context['transaction_no']) {
+            $transaction = $this->objectManager->getInstance(PaymentTransaction::class);
+            $transaction->load(PaymentTransaction::schema_fields_TRANSACTION_NO, $context['gateway_token']);
+            if ($transaction->getId()) {
+                return $transaction;
+            }
+        }
+
+        if ($context['method_code'] === '') {
+            return null;
+        }
+
+        return null;
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function statusRedirect(array $params): array
+    {
         return [
-            'redirect_path' => 'payment/frontend/checkout/return',
-            'redirect_params' => [
-                'transaction_no' => $redirectReference !== '' ? $redirectReference : $token,
-            ],
+            'redirect_path' => $this->urlCatalog->transactionStatusPath(),
+            'redirect_params' => $params,
+            'absolute' => false,
         ];
     }
 

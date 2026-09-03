@@ -14,39 +14,52 @@ namespace Weline\Payment\Controller\Frontend;
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Api\Webhook\WebhookReceiveResult;
+use Weline\Payment\Service\PaymentBrowserCallbackRoutes;
+use Weline\Payment\Service\PaymentBrowserCancelDispatcher;
 use Weline\Payment\Service\PaymentBrowserReturnDispatcher;
 use Weline\Payment\Service\PaymentCallbackReceiver;
+use Weline\Payment\Service\PaymentShellCallbackUrlCatalog;
 
 /**
  * 支付统一回调入口：
- * - return：浏览器 OAuth / Provider 回跳（Developer Return URL 只登记一条）
+ * - browser-return-entry：浏览器 OAuth / Provider 回跳（公网路径 callback/{method_code}）
  * - notify：服务端 Webhook Inbox（MOD-P2F-003）
  */
 class Callback extends FrontendController
 {
     private PaymentCallbackReceiver $receiver;
     private PaymentBrowserReturnDispatcher $browserReturn;
+    private PaymentBrowserCancelDispatcher $browserCancel;
 
     public function __construct(
         ObjectManager $objectManager
     ) {
         $this->receiver = $objectManager->getInstance(PaymentCallbackReceiver::class);
         $this->browserReturn = $objectManager->getInstance(PaymentBrowserReturnDispatcher::class);
+        $this->browserCancel = $objectManager->getInstance(PaymentBrowserCancelDispatcher::class);
     }
 
     /**
-     * 统一浏览器回跳（OAuth code/state 或 Provider token）。
+     * 统一浏览器回跳（OAuth / Provider / cancel via outcome=cancel）。
      *
      * @Cdn cache=false description="支付浏览器回跳入口禁止全页缓存"
      */
-    public function return(): string
+    public function browserReturnEntry(): string
     {
-        $params = $this->request->getParams();
-        if (!\is_array($params)) {
-            $params = [];
+        $params = $this->browserCallbackParams();
+
+        if (trim((string) ($params[PaymentBrowserCallbackRoutes::QUERY_METHOD_CODE] ?? '')) === '') {
+            $this->noRouter();
+        }
+
+        if (PaymentBrowserCallbackRoutes::isCancelOutcome($params)) {
+            return $this->dispatchCancel($params);
         }
 
         $dispatched = $this->browserReturn->dispatch($params);
+        if (!empty($dispatched['no_router'])) {
+            $this->request->getResponse()->noRouter(401, 'payment_callback_context_required');
+        }
         if (!empty($dispatched['render'])) {
             // 统一 Return URL 探活页：独立文档，避免商城 default/checkout 壳把状态卡淹没。
             $this->layoutType = null;
@@ -59,7 +72,42 @@ class Callback extends FrontendController
             return $this->fetch((string) ($dispatched['template'] ?? 'browser-return'));
         }
 
-        $path = (string) ($dispatched['redirect_path'] ?? 'payment/frontend/checkout/return');
+        return $this->redirectDispatched($dispatched);
+    }
+
+    /**
+     * @deprecated 公网已合并到 browserReturnEntry + outcome=cancel；保留内部兼容。
+     *
+     * @Cdn cache=false description="支付浏览器取消回跳入口禁止全页缓存"
+     */
+    public function browserCancelEntry(): string
+    {
+        return $this->dispatchCancel($this->browserCallbackParams());
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function dispatchCancel(array $params): string
+    {
+        if (trim((string) ($params[PaymentBrowserCallbackRoutes::QUERY_METHOD_CODE] ?? '')) === '') {
+            $this->noRouter();
+        }
+
+        $dispatched = $this->browserCancel->dispatch($params);
+        if (!empty($dispatched['no_router'])) {
+            $this->request->getResponse()->noRouter(401, 'payment_callback_context_required');
+        }
+
+        return $this->redirectDispatched($dispatched);
+    }
+
+    /**
+     * @param array<string, mixed> $dispatched
+     */
+    private function redirectDispatched(array $dispatched): string
+    {
+        $path = (string) ($dispatched['redirect_path'] ?? ObjectManager::getInstance(PaymentShellCallbackUrlCatalog::class)->transactionStatusPath());
         $redirectParams = \is_array($dispatched['redirect_params'] ?? null)
             ? $dispatched['redirect_params']
             : [];
@@ -141,6 +189,47 @@ class Callback extends FrontendController
         }
 
         return '';
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function browserCallbackParams(): array
+    {
+        $params = $this->request->getParams();
+        if (!\is_array($params)) {
+            $params = [];
+        }
+
+        $methodCode = trim((string) ($params[PaymentBrowserCallbackRoutes::QUERY_METHOD_CODE] ?? ''));
+        if ($methodCode === '') {
+            $fromRule = $this->request->getData(PaymentBrowserCallbackRoutes::QUERY_METHOD_CODE);
+            $methodCode = trim((string) ($fromRule ?? ''));
+        }
+        if ($methodCode === '') {
+            $methodCode = trim((string) (\Weline\Framework\Context::current()->get('input.query.method_code') ?? ''));
+        }
+        if ($methodCode === '') {
+            $uri = (string) $this->request->getUrlPath();
+            if ($uri === '') {
+                $uri = (string) ($this->request->getServer('WELINE_ORIGIN_REQUEST_URI')
+                    ?? $this->request->getServer('REQUEST_URI')
+                    ?? '');
+            }
+            if ($uri !== ''
+                && preg_match('#/callback/([a-z0-9][a-z0-9_.-]*)(?:/|\?|$)#i', $uri, $match) === 1
+            ) {
+                $candidate = strtolower((string) $match[1]);
+                if ($candidate !== '' && !PaymentBrowserCallbackRoutes::isReservedCallbackSegment($candidate)) {
+                    $methodCode = $candidate;
+                }
+            }
+        }
+        if ($methodCode !== '') {
+            $params[PaymentBrowserCallbackRoutes::QUERY_METHOD_CODE] = $methodCode;
+        }
+
+        return $params;
     }
 
     /**

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Payment\Service;
 
 use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Session\SessionFactory;
 use Weline\SystemConfig\Api\ConfigStore;
@@ -253,9 +254,10 @@ final class PayPalOAuthService
             $this->writeConfig('return_url', $canonicalReturn, $storageScope, false);
         }
         if ($this->readConfig('cancel_url', $storageScope) === '') {
+            $catalog = ObjectManager::getInstance(PaymentShellCallbackUrlCatalog::class);
             $this->writeConfig(
                 'cancel_url',
-                $this->url->getUrl('payment/frontend/paypal/cancel'),
+                $catalog->browserCancel($storageScope, 'paypal'),
                 $storageScope,
                 false,
             );
@@ -279,8 +281,14 @@ final class PayPalOAuthService
             return false;
         }
 
-        $pathOk = str_contains($path, PaymentBrowserCallbackRoutes::RETURN)
-            || str_ends_with(rtrim($path, '/'), '/payment/frontend/callback/return');
+        $pathOk = preg_match(
+            '#/payment/frontend/callback/([a-z0-9][a-z0-9_.-]*)/?$#D',
+            rtrim($path, '/'),
+            $pathMatch
+        ) === 1
+            && isset($pathMatch[1])
+            && !str_ends_with((string) $pathMatch[1], '.cancel')
+            && !PaymentBrowserCallbackRoutes::isReservedCallbackSegment((string) $pathMatch[1]);
         if (!$pathOk) {
             return false;
         }
@@ -313,10 +321,9 @@ final class PayPalOAuthService
     public function browserReturnUrl(?string $storageScope = null): string
     {
         $storageScope = $this->requireStorageScope($storageScope);
-        $fixed = $this->publicOrigin->buildFrontendPathUrl(PaymentBrowserCallbackRoutes::RETURN);
-        $base = $fixed !== '' ? $fixed : $this->url->getUrl(PaymentBrowserCallbackRoutes::RETURN);
 
-        return PaymentBrowserCallbackRoutes::withTargetScope($base, $storageScope);
+        return ObjectManager::getInstance(PaymentShellCallbackUrlCatalog::class)
+            ->browserReturnRegister($storageScope, 'paypal');
     }
 
     private function requireStorageScope(?string $storageScope): string

@@ -14,8 +14,9 @@ final class PayPalAuthorizeCallbackPathContractTest extends TestCase
             dirname(__DIR__, 3) . '/extends/module/Weline_SystemConfig/Config/backend/paypal.phtml'
         );
         self::assertStringContainsString('code="paypal.sandbox.authorize"', $src);
-        self::assertStringContainsString('callback-path="payment/frontend/callback/return"', $src);
+        self::assertStringContainsString('callback-path="payment/frontend/callback/paypal"', $src);
         self::assertStringContainsString('code="paypal.live.authorize"', $src);
-        self::assertSame(2, substr_count($src, 'callback-path="payment/frontend/callback/return"'));
+        self::assertSame(2, substr_count($src, 'callback-path="payment/frontend/callback/paypal"'));
+        self::assertStringNotContainsString('callback/return/paypal', $src);
     }
 }

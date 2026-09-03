@@ -11,7 +11,7 @@
 | 职责 | 说明 |
 |---|---|
 | 身份路由 | `method_code`，或可还原的 `endpoint_code` / OAuth `state` |
-| 统一 URL | 浏览器 `payment/frontend/callback/return?target_scope={storage_scope}`；Webhook `payment/frontend/callback/notify` |
+| 统一 URL | 浏览器唯一 `payment/frontend/callback/{method_code}?target_scope={storage_scope}`（取消加 `outcome=cancel`）；Webhook `payment/frontend/callback/notify` |
 | 编排与状态 | Intent / Attempt / Transaction / Refund / Ledger / Inbox |
 | 配置托管 | 通用字段 + `payment/method/{method_code}/*` |
 | 连接入口 | `payment/backend/connect/*?method_code=` |
@@ -36,16 +36,21 @@
 
 ## 2. 统一 URL
 
-| 用途 | 路径 |
+| 用途 | 路径 / query |
 |---|---|
-| 浏览器 OAuth / 支付回跳 | `https://{public_origin}/payment/frontend/callback/return?target_scope={website.store.channel}` |
-| Webhook | `https://{public_origin}/payment/frontend/callback/notify?endpoint_code={method_code}.{env}.default` |
+| Developer 登记 Return | `.../callback/{method_code}?target_scope={storage_scope}` |
+| 运行时 Return | `.../callback/{method_code}?target_scope=...&transaction_no=...&shell_token=...` |
+| 浏览器取消 | 同路径 + `outcome=cancel`（+ transaction_no / shell_token）→ 有 `browser_landing_url` / `order_uuid` 直达 Checkout L3 `/checkout/success?outcome=cancel`；否则 status 页带 `outcome=cancel` 展示「支付已取消」 |
+| Webhook | `.../callback/notify?endpoint_code={method_code}.{env}.default` |
 | 一键授权 | `payment/backend/connect/authorize?method_code={code}&environment=sandbox\|live` |
-| 连接测试 | `payment/backend/connect/test?method_code={code}&environment=...` |
 
-常量：`Weline\Payment\Service\PaymentBrowserCallbackRoutes`。
+常量：`PaymentBrowserCallbackRoutes`；**唯一 URL 生成**：`PaymentShellCallbackUrlCatalog`（`browserReturnRegister` / `browserReturn` / `browserCancel` / `webhookNotify` / `browserFailure`）。创建支付时由 `PaymentService::createPayment` 注入带 `shell_token` 的运行时 URL，禁止 Controller 手拼。
 
-浏览器 return：state（或查询）含 `method_code` → `PaymentBrowserReturnDispatcher` → Connect.complete 或 `resumePayment`。
+### shell_token
+
+HMAC 签名 token（`PaymentBrowserCallbackTokenService`），解码得 `method_code`、`transaction_no`、`target_scope`。Dispatcher 优先读 token，其次读显式 `method_code`+`transaction_no`，再读网关异构 param（`token`/`session_id`/`out_trade_no` 等）。
+
+浏览器 return：`shell_token` 或显式支付码 → `PaymentBrowserReturnContextResolver` → 按 `method_code` 实例化 Provider → `resumePayment`（网关 reference 单独传入）。OAuth 仍走 `code+state`。
 
 ## 3. 第三方最小交付
 
