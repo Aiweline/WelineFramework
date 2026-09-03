@@ -50,6 +50,8 @@ class ShippingAddressService
      */
     public function getList(array $filters = []): array
     {
+        $this->ensureSoleDefault();
+
         $model = $this->getModel()->reset();
         
         // 应用过滤条件
@@ -99,6 +101,10 @@ class ShippingAddressService
     {
         $data = $this->addressFormatter->normalize($data);
         $this->validate($data);
+
+        if ($this->countAll() === 0) {
+            $data[ShippingAddress::schema_fields_IS_DEFAULT] = 1;
+        }
         
         $model = $this->getModel()->reset();
         $model->setData($data);
@@ -155,6 +161,7 @@ class ShippingAddressService
         }
         
         $model->delete()->fetch();
+        $this->ensureSoleDefault();
         return true;
     }
 
@@ -235,6 +242,33 @@ class ShippingAddressService
         }
         
         $model->update([ShippingAddress::schema_fields_IS_DEFAULT => 0])->fetch();
+    }
+
+    private function countAll(): int
+    {
+        $collection = $this->getModel()->reset()->select()->fetch();
+
+        return count($collection->getItems());
+    }
+
+    /**
+     * 仅剩一条发货地址时强制为默认。
+     */
+    private function ensureSoleDefault(): void
+    {
+        $items = $this->getModel()->reset()->select()->fetch()->getItems();
+        if (count($items) !== 1) {
+            return;
+        }
+
+        /** @var ShippingAddress $only */
+        $only = $items[0];
+        if ($only->isDefault()) {
+            return;
+        }
+
+        $only->setData(ShippingAddress::schema_fields_IS_DEFAULT, 1);
+        $only->save();
     }
 
     /**

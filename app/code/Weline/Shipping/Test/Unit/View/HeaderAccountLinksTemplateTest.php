@@ -22,7 +22,14 @@ final class HeaderAccountLinksTemplateTest extends TestCase
         $this->assertStringNotContainsString("\$this->getFrontendUrl('shipping/", $content);
         $this->assertStringContainsString("@url{'customer/account/index'}#shipping-address", $content);
         $this->assertStringContainsString("@url{'customer/account/index'}#delivery-address", $content);
+        $this->assertLessThan(
+            strpos($content, "#shipping-address"),
+            strpos($content, "#delivery-address"),
+            '账户菜单收货地址须排在发货地址之前'
+        );
         $this->assertStringContainsString('data-account-menu-auth="signed-in"', $content);
         $this->assertStringNotContainsString('if ($isLoggedIn)', $content);
+        $this->assertStringNotContainsString('$session->isLoggedIn()', $content);
+        $this->assertStringNotContainsString('createFrontendSession', $content);
     }
 }
