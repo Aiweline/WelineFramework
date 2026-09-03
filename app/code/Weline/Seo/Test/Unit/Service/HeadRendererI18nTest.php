@@ -5,8 +5,20 @@ declare(strict_types=1);
 namespace Weline\Seo\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Seo\Service\Head\HeadRenderer;
 use Weline\Seo\Service\Head\PageSeoContextResolver;
+
+if (!defined('BP')) {
+    define('BP', dirname(__DIR__, 7) . DIRECTORY_SEPARATOR);
+}
+require_once BP . 'app/autoload.php';
+if (!defined('CLI')) {
+    define('CLI', true);
+}
+if (!defined('PROD')) {
+    define('PROD', false);
+}
 
 class HeadRendererI18nTest extends TestCase
 {
@@ -43,6 +55,41 @@ class HeadRendererI18nTest extends TestCase
         self::assertStringContainsString('<meta property="og:locale:alternate" content="zh_Hans_CN">', $html);
         self::assertStringContainsString('"inLanguage": "en-US"', $html);
         self::assertStringContainsString('"availableLanguage": [', $html);
+    }
+
+    public function testRendersHeadOnlyOnceAcrossTemplateObjectsWithinARequest(): void
+    {
+        $resolver = $this->getMockBuilder(PageSeoContextResolver::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['resolve'])
+            ->getMock();
+        $resolver->expects(self::exactly(2))->method('resolve')->willReturn([
+            'title' => 'Example',
+            'canonical_url' => 'https://example.com/',
+            'url' => 'https://example.com/',
+            'site_name' => 'Example',
+            'organization' => ['name' => 'Example', 'url' => 'https://example.com/'],
+        ]);
+        $renderer = new HeadRenderer($resolver);
+
+        RequestContext::init();
+        try {
+            $first = $renderer->render(new HeadRendererTemplateStub());
+            $duplicate = $renderer->render(new HeadRendererTemplateStub());
+
+            self::assertSame(1, substr_count($first, '<link rel="canonical"'));
+            self::assertSame('', $duplicate);
+        } finally {
+            RequestContext::cleanup();
+        }
+
+        RequestContext::init();
+        try {
+            $nextRequest = $renderer->render(new HeadRendererTemplateStub());
+            self::assertSame(1, substr_count($nextRequest, '<link rel="canonical"'));
+        } finally {
+            RequestContext::cleanup();
+        }
     }
 }
 

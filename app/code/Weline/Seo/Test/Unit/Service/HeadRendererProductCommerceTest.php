@@ -104,7 +104,7 @@ class HeadRendererProductCommerceTest extends TestCase
         self::assertStringContainsString('"hasMerchantReturnPolicy": {', $html);
         self::assertStringContainsString('"mainEntity": {', $html);
         self::assertStringContainsString('"aggregateRating": {', $html);
-        self::assertStringContainsString('"review": {', $html);
+        self::assertStringContainsString('"review": [', $html);
         self::assertStringContainsString('"reviewBody": "Comfortable linen dress with accurate sizing."', $html);
         self::assertStringContainsString('"ratingValue": "4.6"', $html);
         self::assertStringContainsString('"reviewCount": 27', $html);
