@@ -21,7 +21,7 @@ $orderId = $orderData[Order::schema_fields_ID] ?? 0;
             <div class="w-cluster">
                 <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
                     <li class="w-breadcrumb__item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
-                    <li class="w-breadcrumb__item"><a href="@backend-url{'weline_order/backend/order/index'}"><?= __('订单管理') ?></a></li>
+                    <li class="w-breadcrumb__item"><a href="@backend-url{'order/backend/order/index'}"><?= __('订单管理') ?></a></li>
                     <li class="w-breadcrumb__item" data-state="active"><?= $isEdit ? __('编辑订单') : __('新建订单') ?></li>
                 </ol>
             </div>
@@ -40,7 +40,7 @@ $orderId = $orderData[Order::schema_fields_ID] ?? 0;
                 <h5 class="w-card__title" style="--w-mb:0;"><?= $isEdit ? __('编辑订单') : __('新建订单') ?></h5>
             </div>
             <div class="w-card__body">
-                <w:form method="post" action="@backend-url{'weline_order/backend/order/save'}">
+                <w:form method="post" action="@backend-url{'order/backend/order/save'}">
                     <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                     <?php if ($isEdit): ?>
                         <input type="hidden" name="order_id" value="<?= $orderId ?>">
@@ -130,7 +130,7 @@ $orderId = $orderData[Order::schema_fields_ID] ?? 0;
                     </div>
                     
                     <div class="w-text" data-align="end">
-                        <a href="@backend-url{'weline_order/backend/order/index'}" class="w-button" data-tone="neutral"><?= __('取消') ?></a>
+                        <a href="@backend-url{'order/backend/order/index'}" class="w-button" data-tone="neutral"><?= __('取消') ?></a>
                         <button type="submit" class="w-button" data-tone="primary"><?= __('保存') ?></button>
                     </div>
                 </w:form>

@@ -43,4 +43,14 @@ interface OrderFacadeInterface
      *        implementation reloads frozen scope/money/display identity.
      */
     public function notifyOrderPaid(string $orderUuid, array $context = []): void;
+
+    /**
+     * Attach a storefront customer to guest orders (empty/null customer_id only).
+     *
+     * @param list<string> $orderUuids
+     * @return list<string> Order UUIDs that were attached (or already owned by the same customer)
+     *
+     * @throws OrderFacadeConflictException
+     */
+    public function attachCustomerToGuestOrders(int $customerId, array $orderUuids): array;
 }

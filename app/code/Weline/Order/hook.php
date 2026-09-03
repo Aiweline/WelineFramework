@@ -19,6 +19,16 @@ return [
         'description' => \__('在订单详情页内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。'),
         'doc' => 'backend/order/view/after.md',
     ],
+    'Weline_Order::backend::order::view::payment-records' => [
+        'name' => \__('订单详情支付记录槽'),
+        'description' => \__('订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。'),
+        'doc' => 'backend/order/view/payment-records.md',
+    ],
+    'Weline_Order::backend::order::view::payment-records' => [
+        'name' => \__('订单详情支付记录槽'),
+        'description' => \__('订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。'),
+        'doc' => 'backend/order/view/payment-records.md',
+    ],
     'Weline_Order::backend::order::list::filters' => [
         'name' => \__('订单列表筛选器'),
         'description' => \__('在订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。'),
