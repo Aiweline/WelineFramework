@@ -11,7 +11,7 @@ use Weline\Blog\Service\BlogCategoryAttributeService;
 use Weline\Catalog\Api\CatalogSpaceProviderInterface;
 
 /**
- * Blog category space — flat list delegated to BlogCategoryAdminService.
+ * Blog category space — two-level tree delegated to BlogCategoryAdminService.
  */
 final class BlogCatalogSpaceProvider implements CatalogSpaceProviderInterface
 {
@@ -103,6 +103,7 @@ final class BlogCatalogSpaceProvider implements CatalogSpaceProviderInterface
             $optional($payload, 'banner'),
             $optional($payload, 'summary'),
             $optional($payload, 'description'),
+            max(0, (int)($payload['parent_id'] ?? $payload['pid'] ?? 0)),
         );
 
         return ['success' => true] + $result;
@@ -329,8 +330,16 @@ final class BlogCatalogSpaceProvider implements CatalogSpaceProviderInterface
             }
             $name = mb_strtolower(trim((string)($node['name'] ?? '')));
             $code = mb_strtolower(trim((string)($node['code'] ?? '')));
-            if (str_contains($name, $query) || str_contains($code, $query)) {
-                $matches[] = $node;
+            $childMatches = $this->filterTreeNodes(
+                is_array($node['nodes'] ?? null) ? $node['nodes'] : [],
+                $query,
+            );
+            if (str_contains($name, $query) || str_contains($code, $query) || $childMatches !== []) {
+                $copy = $node;
+                if ($childMatches !== []) {
+                    $copy['nodes'] = $childMatches;
+                }
+                $matches[] = $copy;
             }
         }
 

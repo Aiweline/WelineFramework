@@ -16,6 +16,7 @@ final class BlogContentResolver
         private readonly Category $categoryModel,
         private readonly CmsBlogPageAdapter $cmsAdapter,
         private readonly BlogCategoryAttributeService $categoryAttributes,
+        private readonly BlogCategoryAdminService $categoryAdmin,
     ) {
     }
 
@@ -27,6 +28,12 @@ final class BlogContentResolver
         }
 
         $post = $this->findPublishedPost($websiteId, $locale, $slug);
+        if ($post === null) {
+            $storageSlug = $this->storageSlugForLocale($slug, $locale);
+            if ($storageSlug !== $slug) {
+                $post = $this->findPublishedPost($websiteId, $locale, $storageSlug);
+            }
+        }
         if ($post !== null) {
             return $this->postToArticle($post, $baseUrl);
         }
@@ -95,47 +102,37 @@ final class BlogContentResolver
      */
     public function listCategories(int $websiteId = 0, string $locale = ''): array
     {
-        $model = clone $this->categoryModel;
-        $query = $model->clearData()->reset();
-        $query->where(Category::schema_fields_WEBSITE_ID, BlogWebsiteScope::websiteIdsForQuery($websiteId), 'IN');
-        $rows = $query
-            ->order(Category::schema_fields_SORT_ORDER, 'ASC')
-            ->order(Category::schema_fields_ID, 'ASC')
-            ->select()
-            ->fetchArray();
-        if (!is_array($rows)) {
-            return [];
-        }
+        $tree = $this->categoryAdmin->tree($websiteId, $locale);
 
-        $ids = array_values(array_filter(array_map(
-            static fn($row): int => is_array($row) ? (int)($row[Category::schema_fields_ID] ?? 0) : 0,
-            $rows,
-        )));
-        $localizedNames = $this->categoryAttributes->readNameMap($websiteId, $ids, $locale);
-
-        $out = [];
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
+        $map = function (array $nodes) use (&$map): array {
+            $out = [];
+            foreach ($nodes as $node) {
+                if (!is_array($node)) {
+                    continue;
+                }
+                $id = (int)($node['category_id'] ?? 0);
+                $slug = trim((string)($node['slug'] ?? $node['code'] ?? ''));
+                if ($id <= 0 || $slug === '') {
+                    continue;
+                }
+                $children = $map(is_array($node['nodes'] ?? null) ? $node['nodes'] : []);
+                $out[] = [
+                    'category_id' => $id,
+                    'parent_id' => max(0, (int)($node['parent_id'] ?? 0)),
+                    'name' => (string)($node['name'] ?? $slug),
+                    'slug' => $slug,
+                    'url' => BlogNamespace::categoryPublicPath($slug),
+                    'sort_order' => (int)($node['sort_order'] ?? $node['position'] ?? 0),
+                    'level' => (int)($node['level'] ?? 1),
+                    'children' => $children,
+                    'nodes' => $children,
+                ];
             }
-            $id = (int)($row[Category::schema_fields_ID] ?? 0);
-            $slug = trim((string)($row[Category::schema_fields_SLUG] ?? ''));
-            if ($id <= 0 || $slug === '') {
-                continue;
-            }
-            $fallbackName = (string)($row[Category::schema_fields_NAME] ?? $slug);
-            $displayName = $localizedNames[$id]
-                ?? $this->categoryAttributes->resolveDisplayName($websiteId, $id, $locale, $fallbackName);
-            $out[] = [
-                'category_id' => $id,
-                'name' => $displayName,
-                'slug' => $slug,
-                'url' => BlogNamespace::categoryPublicPath($slug),
-                'sort_order' => (int)($row[Category::schema_fields_SORT_ORDER] ?? 0),
-            ];
-        }
 
-        return $out;
+            return $out;
+        };
+
+        return $map($tree);
     }
 
     /**
@@ -168,6 +165,7 @@ final class BlogContentResolver
 
         return [
             'category_id' => $categoryId,
+            'parent_id' => max(0, (int)($row[Category::schema_fields_PARENT_ID] ?? 0)),
             'name' => $displayName,
             'slug' => (string)($row[Category::schema_fields_SLUG] ?? $slug),
             'url' => BlogNamespace::categoryPublicPath((string)($row[Category::schema_fields_SLUG] ?? $slug)),
@@ -209,6 +207,31 @@ final class BlogContentResolver
         return array_slice($articles, 0, $limit);
     }
 
+    private function storageSlugForLocale(string $slug, string $locale): string
+    {
+        if (!$this->isEnglishLocale($locale) || str_ends_with($slug, '-en')) {
+            return $slug;
+        }
+
+        return $slug . '-en';
+    }
+
+    public function publicSlugForLocale(string $slug, string $locale): string
+    {
+        if ($this->isEnglishLocale($locale) && str_ends_with($slug, '-en')) {
+            return substr($slug, 0, -3);
+        }
+
+        return $slug;
+    }
+
+    private function isEnglishLocale(string $locale): bool
+    {
+        $locale = strtolower(str_replace('-', '_', trim($locale)));
+
+        return $locale === 'en' || str_starts_with($locale, 'en_');
+    }
+
     /**
      * @return array<string, mixed>|null
      */
@@ -223,8 +246,14 @@ final class BlogContentResolver
             $query->where(Post::schema_fields_LOCALE, $locale);
         }
         $row = $query->find()->fetchArray();
+        if (!is_array($row)
+            || $row === []
+            || (int)($row[Post::schema_fields_ID] ?? 0) <= 0
+        ) {
+            return null;
+        }
 
-        return is_array($row) ? $row : null;
+        return $row;
     }
 
     /**
@@ -240,7 +269,11 @@ final class BlogContentResolver
             $query->where(Post::schema_fields_LOCALE, $locale);
         }
         if ($categoryId > 0) {
-            $query->where(Post::schema_fields_CATEGORY_ID, $categoryId);
+            $categoryIds = $this->categoryAdmin->selfAndDescendantIds($websiteId, $categoryId);
+            if ($categoryIds === []) {
+                $categoryIds = [$categoryId];
+            }
+            $query->where(Post::schema_fields_CATEGORY_ID, $categoryIds, 'IN');
         }
         $rows = $query->order(Post::schema_fields_PUBLISHED_AT, 'DESC')
             ->limit($limit)
@@ -255,16 +288,18 @@ final class BlogContentResolver
      */
     private function postToArticle(array $row, string $baseUrl): BlogArticle
     {
-        $slug = (string)($row[Post::schema_fields_SLUG] ?? '');
+        $storageSlug = (string)($row[Post::schema_fields_SLUG] ?? '');
+        $locale = (string)($row[Post::schema_fields_LOCALE] ?? '');
+        $slug = $this->publicSlugForLocale($storageSlug, $locale);
         $path = BlogNamespace::publicPath($slug);
         $absolute = $this->absoluteUrl($path, $baseUrl);
         $categoryId = (int)($row[Post::schema_fields_CATEGORY_ID] ?? 0);
-        $categoryMeta = $this->resolveCategoryMeta($categoryId, (int)($row[Post::schema_fields_WEBSITE_ID] ?? 0), (string)($row[Post::schema_fields_LOCALE] ?? ''));
+        $categoryMeta = $this->resolveCategoryMeta($categoryId, (int)($row[Post::schema_fields_WEBSITE_ID] ?? 0), $locale);
 
         return new BlogArticle(
             contentKind: BlogArticle::KIND_POST,
             websiteId: (int)($row[Post::schema_fields_WEBSITE_ID] ?? 0),
-            locale: (string)($row[Post::schema_fields_LOCALE] ?? ''),
+            locale: $locale,
             slug: $slug,
             identifier: BlogNamespace::identifierFromSlug($slug),
             title: (string)($row[Post::schema_fields_TITLE] ?? ''),
@@ -279,6 +314,7 @@ final class BlogContentResolver
             sourceRef: [
                 'kind' => BlogArticle::KIND_POST,
                 'post_id' => (int)($row[Post::schema_fields_ID] ?? 0),
+                'storage_slug' => $storageSlug,
                 'category_id' => $categoryId,
                 'category_slug' => (string)($categoryMeta['slug'] ?? ''),
                 'category_url' => (string)($categoryMeta['url'] ?? ''),

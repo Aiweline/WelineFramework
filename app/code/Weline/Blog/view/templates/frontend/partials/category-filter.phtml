@@ -1,6 +1,6 @@
 <?php
 /**
- * Blog category sidebar filter (Amazon-style left nav).
+ * Blog category sidebar filter (Amazon-style left nav) — expandable 2-level tree.
  *
  * @var list<array<string,mixed>> $blog_categories
  * @var int $blog_active_category_id
@@ -8,6 +8,88 @@
 $categories = is_array($blog_categories ?? null) ? $blog_categories : [];
 $activeId = (int)($blog_active_category_id ?? 0);
 $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$containsId = static function (array $nodes, int $id) use (&$containsId): bool {
+    foreach ($nodes as $node) {
+        if (!is_array($node)) {
+            continue;
+        }
+        if ((int)($node['category_id'] ?? 0) === $id) {
+            return true;
+        }
+        $children = is_array($node['children'] ?? null)
+            ? $node['children']
+            : (is_array($node['nodes'] ?? null) ? $node['nodes'] : []);
+        if ($children !== [] && $containsId($children, $id)) {
+            return true;
+        }
+    }
+
+    return false;
+};
+
+$renderNodes = static function (
+    array $nodes,
+    int $activeId,
+    int $depth,
+    callable $escape,
+    callable $containsId,
+) use (&$renderNodes): void {
+    foreach ($nodes as $category) {
+        if (!is_array($category)) {
+            continue;
+        }
+        $id = (int)($category['category_id'] ?? 0);
+        $label = trim((string)($category['name'] ?? ''));
+        $url = trim((string)($category['url'] ?? ''));
+        if ($id <= 0 || $label === '' || $url === '') {
+            continue;
+        }
+        $children = is_array($category['children'] ?? null)
+            ? $category['children']
+            : (is_array($category['nodes'] ?? null) ? $category['nodes'] : []);
+        $hasChildren = $children !== [];
+        $isActive = $id === $activeId;
+        $isAncestor = $hasChildren && $activeId > 0 && $containsId($children, $activeId);
+        $isOpen = $isActive || $isAncestor;
+        $itemId = 'blog-cat-node-' . $id;
+        ?>
+        <li class="amazon-blog-filter__node<?= $hasChildren ? ' has-children' : '' ?><?= $isOpen ? ' is-open' : '' ?>"
+            data-blog-filter-node
+            data-state="<?= $isOpen ? 'open' : 'closed' ?>">
+            <div class="amazon-blog-filter__row">
+                <?php if ($hasChildren): ?>
+                    <button type="button"
+                            class="amazon-blog-filter__toggle"
+                            data-blog-filter-toggle
+                            aria-expanded="<?= $isOpen ? 'true' : 'false' ?>"
+                            aria-controls="<?= $escape($itemId) ?>"
+                            title="<?= $escape((string)__('展开/收起')) ?>">
+                        <span class="amazon-blog-filter__toggle-icon" aria-hidden="true"></span>
+                    </button>
+                <?php else: ?>
+                    <span class="amazon-blog-filter__toggle-spacer" aria-hidden="true"></span>
+                <?php endif; ?>
+                <a class="amazon-blog-filter__option<?= $isActive ? ' is-active' : '' ?>"
+                   href="<?= $escape($url) ?>"
+                   <?= $isActive ? 'aria-current="page"' : '' ?>>
+                    <?= $escape($label) ?>
+                </a>
+            </div>
+            <?php if ($hasChildren): ?>
+                <div class="amazon-blog-filter__children"
+                     id="<?= $escape($itemId) ?>"
+                     data-blog-filter-children
+                     <?= $isOpen ? '' : 'hidden' ?>>
+                    <ul class="amazon-blog-filter__list amazon-blog-filter__list--nested" role="list">
+                        <?php $renderNodes($children, $activeId, $depth + 1, $escape, $containsId); ?>
+                    </ul>
+                </div>
+            <?php endif; ?>
+        </li>
+        <?php
+    }
+};
 ?>
 <div class="amazon-blog-filter"
      data-testid="blog-category-filter"
@@ -21,26 +103,31 @@ $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES
                 <lang>全部文章</lang>
             </a>
         </li>
-        <?php foreach ($categories as $category): ?>
-            <?php
-            if (!is_array($category)) {
-                continue;
-            }
-            $id = (int)($category['category_id'] ?? 0);
-            $label = trim((string)($category['name'] ?? ''));
-            $url = trim((string)($category['url'] ?? ''));
-            if ($id <= 0 || $label === '' || $url === '') {
-                continue;
-            }
-            $isActive = $id === $activeId;
-            ?>
-            <li>
-                <a class="amazon-blog-filter__option<?= $isActive ? ' is-active' : '' ?>"
-                   href="<?= $escape($url) ?>"
-                   <?= $isActive ? 'aria-current="page"' : '' ?>>
-                    <?= $escape($label) ?>
-                </a>
-            </li>
-        <?php endforeach; ?>
+        <?php $renderNodes($categories, $activeId, 1, $escape, $containsId); ?>
     </ul>
 </div>
+<script>
+(function () {
+    var root = document.currentScript && document.currentScript.previousElementSibling;
+    if (!root || !root.getAttribute || root.getAttribute('data-blog-category-filter') === null) {
+        root = document.querySelector('[data-blog-category-filter]');
+    }
+    if (!root) return;
+    root.addEventListener('click', function (event) {
+        var toggle = event.target && event.target.closest ? event.target.closest('[data-blog-filter-toggle]') : null;
+        if (!toggle || !root.contains(toggle)) return;
+        event.preventDefault();
+        var node = toggle.closest('[data-blog-filter-node]');
+        if (!node) return;
+        var children = node.querySelector('[data-blog-filter-children]');
+        var open = node.getAttribute('data-state') !== 'open';
+        node.setAttribute('data-state', open ? 'open' : 'closed');
+        node.classList.toggle('is-open', open);
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        if (children) {
+            if (open) children.removeAttribute('hidden');
+            else children.setAttribute('hidden', '');
+        }
+    });
+})();
+</script>

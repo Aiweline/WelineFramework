@@ -42,6 +42,32 @@ final class BlogFrontendTemplateContractTest extends TestCase
         self::assertSame('blog-reviews', $injection['slot'] ?? null);
     }
 
+    public function testHeaderBlogLinkWidgetRegistersDefaultInjection(): void
+    {
+        $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';
+        $widgets = require $widgetFile;
+        self::assertArrayHasKey('header-blog-link', $widgets);
+        $widget = $widgets['header-blog-link'];
+        self::assertSame('header-nav-extensions', $widget['slot'] ?? null);
+        self::assertSame(
+            'Weline_Blog::templates/frontend/widgets/header-blog-link.phtml',
+            $widget['template'] ?? null
+        );
+        $injection = $widget['default_injections'][0] ?? [];
+        self::assertSame('*', $injection['layout_type'] ?? null);
+        self::assertSame('header-nav-extensions', $injection['slot'] ?? null);
+        self::assertSame('header', $injection['area'] ?? null);
+        self::assertSame(0, (int)($injection['sort_order'] ?? -1));
+        self::assertSame('博客', $injection['config']['label'] ?? null);
+
+        $template = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/widgets/header-blog-link.phtml'
+        );
+        self::assertStringContainsString('data-testid="header-blog-link"', $template);
+        self::assertStringContainsString("@url{'blog'}", $template);
+        self::assertStringContainsString('@widget.slot {header-nav-extensions}', $template);
+    }
+
     public function testFooterBlogLinkWidgetRegistersDefaultInjection(): void
     {
         $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Blog/widget.php';

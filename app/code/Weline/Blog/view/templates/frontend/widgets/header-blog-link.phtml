@@ -1,0 +1,35 @@
+<?php
+/**
+ * 页头导航扩展：博客入口链接（默认注入 header-nav-extensions，跟在分类条后）。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {header-blog-link}
+ * @widget.name {页头博客链接}
+ * @widget.description {页头导航扩展槽：博客列表入口；默认注入 header-nav-extensions（分类后方）。}
+ * @widget.type {navigation}
+ * @widget.area {frontend}
+ * @widget.position {["header"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.slot {header-nav-extensions}
+ * @widget.supports {["header-blog-link","header-nav-link","layout-header-nav-extensions"]}
+ * @widget.default_injections {[{ "layout_type":"homepage", "slot":"header-nav-extensions", "area":"header", "sort_order":0, "required":true, "reason":"页头分类后方默认展示博客入口", "config":{"label":"博客"} }]}
+ *
+ * @param label {default="博客",type="string",label="链接文字"}
+ */
+
+use Weline\Theme\Helper\WidgetI18n;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('header-blog-link');
+$wc = $scope->cssClass;
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$labelSource = trim((string)($this->getData('label') ?? '')) ?: '博客';
+$label = WidgetI18n::label($labelSource, '博客');
+?>
+<a class="header-nav-extension-link header-blog-link <?= $esc($wc) ?>"
+   weline-code="<?= $esc($scope->code) ?>"
+   data-uid="<?= $esc($scope->uid) ?>"
+   data-js-ns="<?= $esc($scope->jsNs) ?>"
+   data-testid="header-blog-link"
+   href="@url{'blog'}"><?= $esc($label) ?></a>
