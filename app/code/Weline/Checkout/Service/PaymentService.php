@@ -22,6 +22,9 @@ use Weline\Payment\Api\PaymentFacadeInterface;
 
 /**
  * 支付服务（基础接口，供支付模块扩展）
+ *
+ * @deprecated Use {@see CheckoutOrderPaymentService} + {@see \Weline\Payment\Api\PaymentFacadeInterface}.
+ *             Legacy checkout transaction model bypasses Payment shell landing (GAP-PAY-007).
  */
 class PaymentService
 {

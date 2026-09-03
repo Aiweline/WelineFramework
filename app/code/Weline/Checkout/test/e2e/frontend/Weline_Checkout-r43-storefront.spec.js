@@ -57,11 +57,11 @@ async function clearGuestCartViaBrowser(page) {
       return { success: false, error_code: 'weline_api_unavailable' };
     }
     const cart = await apiClient.resource('cart');
-    if (!cart || typeof cart.clearV2 !== 'function') {
+    if (!cart || typeof cart.clear !== 'function') {
       return { success: false, error_code: 'cart_clear_v2_unavailable' };
     }
     try {
-      return await cart.clearV2({}, { useProxy: false });
+      return await cart.clear({}, { useProxy: false });
     } catch (error) {
       return { success: false, error_code: String(error && (error.message || error)) };
     }
@@ -102,7 +102,7 @@ moduleDescribe(test, MODULE, 'R4.3 真实商城纵切', () => {
         await expect(card).toContainText(fixture.name);
         await expect(card).toContainText('CNY 129.00');
 
-        await card.locator('[data-action="add-v2"]').click();
+        await card.locator('[data-action="add"]').click();
         const viewCart = catalog.locator('[data-testid="view-cart"]');
         await expect(viewCart).toBeVisible({ timeout: 20000 });
         await expect(catalog.locator('[data-testid="catalog-message"]')).toContainText('已加入');
@@ -134,7 +134,7 @@ moduleDescribe(test, MODULE, 'R4.3 真实商城纵切', () => {
         await expect(checkout.locator('[data-submit]')).toBeEnabled();
         await checkout.locator('[data-submit]').click();
 
-        await expect(page).toHaveURL(/\/checkout\/success-page\?/, { timeout: 60000 });
+        await expect(page).toHaveURL(/\/checkout\/success\?/, { timeout: 60000 });
         const success = page.locator('[data-testid="checkout-success"]');
         await expect(success).toBeVisible();
         orderUuid = (await success.getAttribute('data-order-uuid')) || '';

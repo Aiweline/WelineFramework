@@ -22,6 +22,15 @@ class CheckoutSession extends Model
     public const STATE_SUBMITTING = 'submitting';
     public const STATE_SUBMITTED = 'submitted';
 
+    /** Quote freeze window while the shopper is still on checkout. */
+    public const TTL_QUOTED_SECONDS = 1800;
+
+    /**
+     * Success-page capability window after submit/payment return.
+     * Must outlive PayPal (and similar) browser round-trips and email link revisits.
+     */
+    public const TTL_SUBMITTED_SUCCESS_SECONDS = 604800;
+
     public const schema_table = 'weline_checkout_session';
     public const schema_primary_key = 'session_id';
     public string $_primary_key = 'session_id';

@@ -24,7 +24,7 @@ final class CheckoutDeliveryQuickAddHookContractTest extends TestCase
         $this->assertStringNotContainsString('<input name="city"', $content);
         $this->assertStringContainsString('WelineThemeAddress.applyValues', $content);
         $this->assertStringContainsString('@widget.default_injections', $content);
-        $this->assertStringContainsString('"layout_type":"*"', $content);
+        $this->assertStringContainsString('"layout_type":"homepage"', $content);
         $this->assertStringContainsString('"slot":"delivery"', $content);
         $this->assertStringContainsString("(string)__(trim((string)(\$this->getData('title') ?? '配送至')))", $content);
     }
@@ -41,7 +41,7 @@ final class CheckoutDeliveryQuickAddHookContractTest extends TestCase
         $this->assertSame('delivery', $entry['slot'] ?? null);
         $this->assertNotEmpty($entry['default_injections'] ?? []);
         $injection = $entry['default_injections'][0];
-        $this->assertSame('*', $injection['layout_type'] ?? null);
+        $this->assertSame('homepage', $injection['layout_type'] ?? null);
         $this->assertSame('delivery', $injection['slot'] ?? null);
         $this->assertSame('header', $injection['area'] ?? null);
 

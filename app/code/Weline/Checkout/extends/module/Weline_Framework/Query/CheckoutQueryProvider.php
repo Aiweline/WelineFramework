@@ -6,8 +6,8 @@ namespace Weline\Checkout\Extends\Module\Weline_Framework\Query;
 
 use Weline\Cart\Api\CartScopeResolverInterface;
 use Weline\Cart\Api\CheckoutCartSnapshotInterface;
-use Weline\Cart\Service\CartV2ConflictException;
-use Weline\Cart\Service\CartV2Service;
+use Weline\Cart\Service\CartConflictException;
+use Weline\Cart\Service\CartService;
 use Weline\Checkout\Service\CheckoutDeliveryContextService;
 use Weline\Checkout\Service\CheckoutGroupSubmitService;
 use Weline\Checkout\Service\CheckoutIdentityService;
@@ -107,7 +107,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             if ($customerId === null) {
                 $guestToken = trim((string)($params['guest_token'] ?? ''));
                 if ($guestToken === '') {
-                    $guestToken = trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE));
+                    $guestToken = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
                 }
             }
             $cart = $this->cartSnapshots()->freeze($scopeIdentity, $guestToken, $customerId);
@@ -136,6 +136,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 cartHash: (string)$cart['cart_hash'],
                 couponCode: $this->resolveFreezeCouponCode($params),
                 paymentMethod: trim((string)($params['payment_method'] ?? '')) ?: null,
+                billingAddress: \is_array($params['billing_address'] ?? null) ? $params['billing_address'] : null,
             );
 
             return [
@@ -145,7 +146,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'currency' => (string)($payload['currency'] ?? ''),
                 'data' => $payload,
             ];
-        } catch (CartV2ConflictException|CheckoutV2ConflictException $e) {
+        } catch (CartConflictException|CheckoutV2ConflictException $e) {
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
@@ -204,6 +205,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                         'country_code' => (string)($params['country_code'] ?? ''),
                         'locale' => (string)($params['locale'] ?? ''),
                         'environment' => (string)($params['environment'] ?? 'sandbox'),
+                        'quote_token' => $quoteToken,
+                        'checkout_token' => $quoteToken,
                     ],
                 );
                 $payment = $this->recordPaymentState($quoteToken, $idempotencyKey, $payment);
@@ -214,7 +217,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
             // follow-up and must never turn a successfully created order into
             // a client-visible submit failure.
             try {
-                w_query('cart', 'clearV2', [
+                w_query('cart', 'clear', [
                     'guest_token' => trim((string)($params['guest_token'] ?? '')),
                 ]);
             } catch (\Throwable) {
@@ -339,6 +342,8 @@ class CheckoutQueryProvider implements QueryProviderInterface
                     'country_code' => (string)($params['country_code'] ?? ''),
                     'locale' => (string)($params['locale'] ?? ''),
                     'environment' => (string)($params['environment'] ?? 'sandbox'),
+                    'quote_token' => $quoteToken,
+                    'checkout_token' => $quoteToken,
                 ],
             );
             $payment = $this->recordPaymentState($quoteToken, $idempotencyKey, $payment);
@@ -576,12 +581,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 (string)__('暂无可用配送方式。'),
                 showPrice: true,
             ),
-            'payment_methods_html' => $html->renderMethodOptions(
+            'payment_methods_html' => $html->renderPaymentMethodOptions(
                 $paymentMethods,
                 'payment_method',
-                $currency,
                 (string)__('暂无可用支付方式。'),
-                showPrice: false,
             ),
         ]);
     }
@@ -850,7 +853,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
         ]);
 
         $orderId = (int)$order->getId();
-        $redirect = '/checkout/success-page?order_id=' . $orderId;
+        $redirect = '/checkout/success?order_id=' . $orderId;
         $requiresAction = false;
 
         try {
@@ -1015,11 +1018,29 @@ class CheckoutQueryProvider implements QueryProviderInterface
             if (\array_key_exists('enabled', $method) && !$method['enabled']) {
                 continue;
             }
+            $display = \is_array($method['display_metadata'] ?? null) ? $method['display_metadata'] : [];
+            $iconUrl = trim((string)($method['icon_url'] ?? $display['icon_url'] ?? $display['icon'] ?? ''));
+            $guideUrl = trim((string)($method['guide_url'] ?? ''));
+            if ($guideUrl === '') {
+                $guideRoute = trim((string)($method['guide_route'] ?? ''));
+                if ($guideRoute !== '') {
+                    $guideUrl = '/' . ltrim($guideRoute, '/');
+                } else {
+                    $guideUrl = '/guide/payment/' . rawurlencode($code);
+                }
+            } elseif (!str_starts_with($guideUrl, '/') && !preg_match('#^https?://#i', $guideUrl)) {
+                $guideUrl = '/' . ltrim($guideUrl, '/');
+            }
             $normalized[] = [
                 'code' => $code,
                 'label' => (string)($method['label'] ?? $method['title'] ?? $method['name'] ?? $code),
                 'title' => (string)($method['title'] ?? $method['label'] ?? $code),
                 'description' => (string)($method['description'] ?? ''),
+                'icon_url' => $iconUrl,
+                'guide_url' => $guideUrl,
+                'has_guide' => array_key_exists('has_guide', $method)
+                    ? (bool)$method['has_guide']
+                    : true,
                 'source' => (string)($method['source'] ?? 'Weline_Payment'),
             ];
         }
@@ -1114,6 +1135,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'getData',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'read',
                     'graph' => true,
@@ -1128,6 +1150,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'getDeliveryContext',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'read',
                     'graph' => true,
@@ -1141,6 +1164,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'getDeliveryCaptchaChallenge',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'read',
                     'graph' => false,
@@ -1155,6 +1179,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'setDeliveryCountry',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
@@ -1168,6 +1193,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'selectDeliveryAddress',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
@@ -1181,6 +1207,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'saveDeliveryAddress',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
@@ -1198,6 +1225,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'placeOrder',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
@@ -1216,6 +1244,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'createOrder',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
@@ -1234,13 +1263,17 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'freezeQuote',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 4,
                     'params' => [
                         'address' => ['type' => 'array', 'required' => false],
+                        'billing_address' => ['type' => 'array', 'required' => false],
+                        'billing_same_as_shipping' => ['type' => 'boolean', 'required' => false],
                         'service_code' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'payment_method' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                         'client_hints' => ['type' => 'array', 'required' => false],
                         'guest_token' => ['type' => 'string', 'required' => false, 'max_length' => 64],
                     ],
@@ -1250,6 +1283,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'submitV2',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,
@@ -1270,6 +1304,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'resumePaymentV2',
                     'frontend' => true,
+                    'external' => true,
                     'auth' => 'any',
                     'mode' => 'write',
                     'graph' => false,

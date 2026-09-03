@@ -12,10 +12,25 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
     {
         $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
 
-        self::assertStringContainsString("\$this->getUrl('checkout/success-page')", $template);
+        self::assertStringContainsString("@url{'checkout/success'}", $template);
         self::assertStringContainsString('const successPageUrl =', $template);
-        self::assertStringNotContainsString("window.location.href = '/checkout/success-page", $template);
+        self::assertStringNotContainsString("window.location.href = '/checkout/success", $template);
         self::assertStringContainsString("successUrl.searchParams.set('checkout_token', checkoutToken);", $template);
+        self::assertStringNotContainsString('checkout/success-page', $template);
+        $controllerRoot = dirname(__DIR__, 6) . '/app/code/Weline/Checkout/Controller';
+        self::assertFileExists($controllerRoot . '/Success.php');
+        self::assertFileDoesNotExist($controllerRoot . '/SuccessPage.php');
+        self::assertStringNotContainsString('function successPage', $this->read('app/code/Weline/Checkout/Controller/Frontend/Checkout.php'));
+
+        $successController = $this->read('app/code/Weline/Checkout/Controller/Success.php');
+        self::assertStringContainsString('checkout_payment_cancelled', $successController);
+        self::assertStringContainsString('isCancelOutcome', $successController);
+        $successTpl = $this->read('app/code/Weline/Checkout/view/frontend/checkout/success.phtml');
+        self::assertStringContainsString('paymentCancelled', $successTpl);
+        self::assertStringContainsString('已取消成功', $successTpl);
+        self::assertStringContainsString('已取消', $successTpl);
+        self::assertStringContainsString('data-payment-outcome="cancel"', $successTpl);
+        self::assertStringContainsString('cancel_state', $successTpl);
     }
 
     public function testCheckoutRendersDurablePaymentRecoveryStateThroughBinQuery(): void
@@ -71,7 +86,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
     {
         $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
 
-        self::assertStringContainsString("\$this->getUrl('products')", $template);
+        self::assertStringContainsString("@url{'products'}", $template);
         self::assertStringContainsString('data-checkout-empty hidden', $template);
         self::assertStringContainsString('weline-code="checkout.checkout.empty.section_1"', $template);
         self::assertStringContainsString('data-checkout-form hidden', $template);
@@ -118,6 +133,8 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
 
         self::assertStringContainsString('id="checkout-summary-discount"', $template);
         self::assertStringContainsString('class="weline-checkout__coupon-slot"', $template);
+        self::assertStringContainsString('id="checkout-summary-note"', $template);
+        self::assertStringContainsString('class="weline-checkout__note-slot"', $template);
         self::assertStringNotContainsString('<w:widget', $template);
         self::assertMatchesRegularExpression(
             '/\.weline-checkout__totals > \[role="listitem"\]/s',
@@ -129,12 +146,42 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         );
     }
 
+    public function testCheckoutExpressPaymentSlotSitsInLeftMainBeforeShipping(): void
+    {
+        $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
+
+        self::assertStringContainsString('data-checkout-express-host', $template);
+        self::assertStringContainsString('id="checkout-express-payment"', $template);
+        self::assertStringContainsString('class="weline-checkout__express-slot"', $template);
+        self::assertStringContainsString('weline:checkout:express-pay', $template);
+        self::assertStringContainsString('submitCheckoutPayment', $template);
+        self::assertStringContainsString('expressHost.hidden = cartIsEmpty', $template);
+        self::assertStringNotContainsString('Weline_Payment::templates/frontend/widgets/checkout-express-payment.phtml', $template);
+
+        $formPos = strpos($template, 'data-checkout-form');
+        $mainPos = strpos($template, 'class="weline-checkout__main"');
+        $expressPos = strpos($template, 'id="checkout-express-payment"');
+        $shippingPos = strpos($template, 'id="checkout-shipping-address"');
+        self::assertNotFalse($formPos);
+        self::assertNotFalse($mainPos);
+        self::assertNotFalse($expressPos);
+        self::assertNotFalse($shippingPos);
+        self::assertGreaterThan($formPos, $expressPos);
+        self::assertGreaterThan($mainPos, $expressPos);
+        self::assertGreaterThan($expressPos, $shippingPos);
+    }
+
     public function testSuccessTemplateRendersV2OrderEvidenceAndActions(): void
     {
         $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/success.phtml');
 
         self::assertStringContainsString('data-testid="checkout-success"', $template);
-        self::assertStringContainsString('<section class="checkout-success-page"', $template);
+        self::assertStringContainsString('class="amz-order-confirm amz-order-confirm--', $template);
+        self::assertStringContainsString('checkout-success-page', $template);
+        self::assertStringContainsString('amz-order-confirm__banner', $template);
+        self::assertStringContainsString('amz-order-confirm__btn--primary', $template);
+        self::assertStringContainsString('--amz-btn-primary-bg: #ffd814', $template);
+        self::assertStringContainsString('--amz-success: #067d62', $template);
         self::assertStringContainsString('data-order-uuid="<?= $escape($requestOrderUuid) ?>"', $template);
         self::assertStringContainsString(
             'data-checkout-group-uuid="<?= $escape($requestCheckoutGroupUuid) ?>"',
@@ -147,22 +194,39 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('order_v2_display_number', $template);
         self::assertStringContainsString('order_v2_total_label', $template);
         self::assertStringContainsString("'paid' => (string) __('已支付')", $template);
-        self::assertStringContainsString("number_format(((int)\$money['grand_total_minor']) / 100, 2, '.', ',')", $template);
-        self::assertStringContainsString("\$this->getUrl('customer/account/index')", $template);
-        self::assertStringContainsString(
-            "\$this->getUrl('customer/account/index', ['order_uuid' => \$requestOrderUuid]) . '#orders'",
-            $template,
-        );
+        self::assertStringContainsString("number_format(\$minor / 100, 2, '.', ',')", $template);
+        self::assertStringContainsString("@url{'customer/account/index'}", $template);
+        self::assertStringContainsString("@url{'customer/account/index'|['order_uuid' => \$requestOrderUuid]}#orders", $template);
         self::assertStringNotContainsString("'#orders?order_uuid='", $template);
-        self::assertStringNotContainsString("\$this->getUrl('checkout/frontend/order/view'", $template);
-        self::assertStringContainsString("\$this->getUrl('products')", $template);
+        self::assertStringNotContainsString("checkout/frontend/order/view", $template);
+        self::assertStringContainsString("@url{'products'}", $template);
         self::assertStringNotContainsString('weline_checkout/frontend/order', $template);
         self::assertStringContainsString('$escape = static fn', $template);
         self::assertStringNotContainsString('$this->escapeHtml(', $template);
-        self::assertStringContainsString('background: var(--weline-layout-surface-primary', $template);
-        self::assertStringContainsString('color: var(--weline-layout-text-primary', $template);
+        self::assertStringContainsString("__('感谢您的订购！')", $template);
+        self::assertStringContainsString('<w:slot id="checkout-success-guest-account"', $template);
+        self::assertStringContainsString('weline-code="checkout.success.guest_account"', $template);
+        self::assertStringContainsString('name="checkout-success-guest-convert"', $template);
+        self::assertStringNotContainsString('GuestCheckoutConvertService', $template);
+        self::assertStringContainsString(
+            'width: min(100%, var(--weline-layout-content-max-width));',
+            $template,
+        );
+        self::assertStringContainsString(
+            'padding: 24px var(--weline-layout-content-padding-inline) 48px;',
+            $template,
+        );
+        self::assertStringNotContainsString('max-width: 980px', $template);
+        self::assertStringNotContainsString(
+            'var(--weline-layout-content-max-width, 1040px)',
+            $template,
+        );
+        self::assertStringNotContainsString(
+            'var(--weline-layout-content-padding-inline, 16px)',
+            $template,
+        );
 
-        $controller = $this->read('app/code/Weline/Checkout/Controller/SuccessPage.php');
+        $controller = $this->read('app/code/Weline/Checkout/Controller/Success.php');
         self::assertStringContainsString("number_format(((int)(\$order->money['grand_total_minor'] ?? 0)) / 100, 2, '.', ',')", $controller);
         self::assertStringContainsString('CheckoutSessionAccessService', $controller);
         self::assertStringContainsString("getParam('checkout_token'", $controller);
@@ -176,14 +240,17 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
 
     public function testCheckoutOrderControllersUseRealRouterPaths(): void
     {
-        $success = $this->read('app/code/Weline/Checkout/Controller/SuccessPage.php');
+        $success = $this->read('app/code/Weline/Checkout/Controller/Success.php');
         $legacyCheckout = $this->read('app/code/Weline/Checkout/Controller/Frontend/Checkout.php');
         $orders = $this->read('app/code/Weline/Checkout/Controller/Frontend/Order.php');
         $orderList = $this->read('app/code/Weline/Checkout/view/frontend/order/list.phtml');
         $orderView = $this->read('app/code/Weline/Checkout/view/frontend/order/view.phtml');
 
         self::assertStringContainsString("'/customer/account/index#orders'", $success);
-        self::assertStringContainsString("'/checkout/frontend/order/list'", $legacyCheckout);
+        self::assertStringContainsString("'/cart'", $success);
+        self::assertStringContainsString('isLoggedIn() ? self::ORDER_LIST_PATH : self::CART_PATH', $success);
+        self::assertStringNotContainsString('function successPage', $legacyCheckout);
+        self::assertStringNotContainsString('checkout/success-page', $legacyCheckout);
         self::assertStringNotContainsString("'/checkout/frontend/order/list'", $orders);
         self::assertStringNotContainsString("'/checkout/frontend/order/view'", $orders);
         self::assertStringContainsString("'checkout/frontend/order/view'", $orderList);
