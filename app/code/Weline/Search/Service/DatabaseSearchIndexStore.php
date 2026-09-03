@@ -652,9 +652,9 @@ final class DatabaseSearchIndexStore implements SearchIndexStorageInterface
         if ($normalized[SearchDocument::schema_fields_ENTITY_TYPE] === ''
             || $normalized[SearchDocument::schema_fields_ENTITY_ID] === ''
             || $normalized[SearchDocument::schema_fields_WEBSITE_CODE] === ''
-            || $normalized[SearchDocument::schema_fields_STORE_ID] <= 0
+            || $normalized[SearchDocument::schema_fields_STORE_ID] < 0
             || $normalized[SearchDocument::schema_fields_STORE_CODE] === ''
-            || $normalized[SearchDocument::schema_fields_CHANNEL_ID] <= 0
+            || $normalized[SearchDocument::schema_fields_CHANNEL_ID] < 0
             || $normalized[SearchDocument::schema_fields_CHANNEL_CODE] === ''
         ) {
             throw new \InvalidArgumentException('search_document_scope_identity_invalid');

@@ -85,11 +85,17 @@ scope delete/upsert 和连续 watermark 推进。低版本不能覆盖高版本�
 ## Scope 与回滚
 
 - `website_id=0` 是合法默认站点。
+- 系统默认站的默认店铺/渠道主键可为 `store_id=0`、`channel_id=0`
+ （`Store::ID_DEFAULT` / `SalesChannel::ID_DEFAULT`）；storefront 搜索门禁
+  不得再把 `>=1` 当成完整性条件。
+- Store 由可信请求 URL 与各店 `Store.url` 的 path 前缀匹配选出（最长完整
+  路径段）；Channel 取该店 default。`__store`/`__channel` 只做一致性断言，
+  不能改变解析结果，普通访问无需带这些 query。
 - Store/Channel 查询必须同时匹配精确数字身份，禁止跨 Scope 泄漏。
 - locale/currency 只允许精确值或同时为空的中性文档；中性文档先加载，
   精确文档按 entity identity 覆盖，禁止 partial dimension。
 - 浏览器 `search.search` 只接受 `q`；Website/Store/Channel/locale/currency
-  全部来自服务端 `RequestContext::scopeMetadata()`。
+  全部来自服务端 `RequestContext::scopeMetadata()`（须为 channel Identity）。
 - serving alias 按 Website 持久化 `direct/index`、generation 与 version；
   apply 后保持 `shadow/direct`，只有 fresh verify 成功后的精确 allowlist
   才 CAS 到已验证 generation。
@@ -144,7 +150,8 @@ php bin/w commerce:migrate-p3c-search rollback \
 
 `SearchQueryProvider` 只发布一个 frontend read operation：`search(q?)`。
 任何客户端 Scope 参数都会返回 `search_scope_invalid`；缺少完整 channel
-Scope 也 fail-closed。
+Scope（含非空 locale/currency；`store_id`/`channel_id` 允许为 `0`）也
+fail-closed。
 
 `ProductProjectionDirectCatalogReader` 通过 Search 自有接口消费 Product
 公开的 `snapshotWebsite()`。每次直读结果包含：

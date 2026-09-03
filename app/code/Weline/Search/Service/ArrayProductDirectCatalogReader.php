@@ -105,7 +105,7 @@ final class ArrayProductDirectCatalogReader implements ProductDirectCatalogReade
         $channelId = (int)($query['channel_id'] ?? 0);
         $locale = \trim((string)($query['locale'] ?? ''));
         $currency = \strtoupper(\trim((string)($query['currency'] ?? '')));
-        if ($storeId < 1 || $channelId < 1 || $locale === '' || $currency === '') {
+        if ($storeId < 0 || $channelId < 0 || $locale === '' || $currency === '') {
             throw new SearchQueryException(
                 SearchQueryException::ERROR_SCOPE,
                 __('Search Product 直读要求完整 Store/Channel/locale/currency Scope'),
@@ -113,6 +113,9 @@ final class ArrayProductDirectCatalogReader implements ProductDirectCatalogReade
                     'website_id' => $websiteId,
                     'store_id' => $storeId,
                     'channel_id' => $channelId,
+                    'reason' => $storeId < 0 || $channelId < 0
+                        ? 'negative_store_channel_id'
+                        : ($locale === '' ? 'empty_locale' : 'empty_currency'),
                 ],
             );
         }

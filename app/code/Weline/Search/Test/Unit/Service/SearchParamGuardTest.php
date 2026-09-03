@@ -29,7 +29,7 @@ final class SearchParamGuardTest extends TestCase
 
     public function testRejectsUnknownParamsForAllType(): void
     {
-        $this->installScope();
+        $this->installChannelScope(storeId: 11, channelId: 21);
         $guard = new SearchParamGuard();
         $registry = $this->createMock(SearchProviderRegistry::class);
         $registry->method('get')->willReturn(null);
@@ -41,7 +41,7 @@ final class SearchParamGuardTest extends TestCase
 
     public function testAllowsProductCategoryIdWhenTypeProduct(): void
     {
-        $this->installScope();
+        $this->installChannelScope(storeId: 11, channelId: 21);
         $provider = new class implements \Weline\Search\Api\SearchProviderInterface {
             public function code(): string { return 'product'; }
             public function label(): string { return 'product'; }
@@ -70,12 +70,72 @@ final class SearchParamGuardTest extends TestCase
         self::assertSame(12, $request->extras['category_id']);
     }
 
-    private function installScope(): void
+    public function testAllowsDefaultWebsiteStoreChannelZeroIds(): void
+    {
+        $this->installChannelScope(storeId: 0, channelId: 0);
+        $registry = $this->createMock(SearchProviderRegistry::class);
+        $registry->method('get')->willReturn(null);
+        $registry->method('all')->willReturn([]);
+
+        $request = (new SearchParamGuard())->guardSearch(['q' => '汉服'], $registry);
+
+        self::assertSame(0, $request->websiteId);
+        self::assertSame(0, $request->storeId);
+        self::assertSame(0, $request->channelId);
+        self::assertSame('zh_Hans_CN', $request->locale);
+        self::assertSame('CNY', $request->currency);
+    }
+
+    public function testRejectsWebsiteOnlyScope(): void
     {
         RequestContext::setWelineWebsiteId(0);
-        RequestContext::setWelineStoreId(11);
-        RequestContext::setWelineChannelId(21);
-        RequestContext::installScopeIdentity(ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL));
+        RequestContext::installScopeIdentity(ScopeIdentity::website(0, 'default'));
+        RequestContext::setWelineUserLang('zh_Hans_CN');
+        RequestContext::setWelineUserCurrency('CNY');
+
+        $registry = $this->createMock(SearchProviderRegistry::class);
+        $registry->method('get')->willReturn(null);
+        $registry->method('all')->willReturn([]);
+
+        try {
+            (new SearchParamGuard())->guardSearch(['q' => '汉服'], $registry);
+            self::fail('Expected SearchParamException');
+        } catch (SearchParamException $exception) {
+            self::assertSame(SearchParamGuard::ERROR_SCOPE, $exception->errorCode);
+            self::assertSame('metadata_null_or_not_channel', $exception->context['reason'] ?? null);
+        }
+    }
+
+    public function testRejectsEmptyLocaleOnChannelScope(): void
+    {
+        $this->installChannelScope(storeId: 0, channelId: 0);
+        RequestContext::setWelineUserLang('');
+
+        $registry = $this->createMock(SearchProviderRegistry::class);
+        $registry->method('get')->willReturn(null);
+        $registry->method('all')->willReturn([]);
+
+        try {
+            (new SearchParamGuard())->guardSearch(['q' => '汉服'], $registry);
+            self::fail('Expected SearchParamException');
+        } catch (SearchParamException $exception) {
+            self::assertSame(SearchParamGuard::ERROR_SCOPE, $exception->errorCode);
+            self::assertSame('empty_locale', $exception->context['reason'] ?? null);
+        }
+    }
+
+    private function installChannelScope(int $storeId, int $channelId): void
+    {
+        RequestContext::setWelineWebsiteId(0);
+        RequestContext::setWelineStoreId($storeId);
+        RequestContext::setWelineChannelId($channelId);
+        RequestContext::installScopeIdentity(ScopeIdentity::channel(
+            0,
+            'default',
+            'default',
+            'default',
+            ScopeIdentity::MODE_NORMAL,
+        ));
         RequestContext::setWelineUserLang('zh_Hans_CN');
         RequestContext::setWelineUserCurrency('CNY');
         RequestContext::setStorefrontRoutePath('/');
