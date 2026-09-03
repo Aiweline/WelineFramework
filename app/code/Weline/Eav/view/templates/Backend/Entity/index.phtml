@@ -1,113 +1,116 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
 ?>
-<!-- start page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <lang>Eav > 实体</lang>
-            </h4>
+<link rel="stylesheet" href="@static(Weline_Eav::css/eav-entity-list.css)">
 
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span>
-                        <lang>系统配置</lang>
-                    </span></li>
-                    <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/backend/entity')">
-                            <lang>Eav</lang>
-                        </a>
-                    </li>
-                    <li class='breadcrumb-item'>
-                        <a href="@backend-url('*/backend/entity')">
-                            <lang>实体</lang>
-                        </a>
-                    </li>
-                </ol>
-            </div>
-
+<div class="w-stack w-eav-entity-list" data-gap="lg">
+    <header class="w-eav-entity-list__hero">
+        <div class="w-eav-entity-list__hero-icon" aria-hidden="true">
+            <w:icon name="database" size="lg" />
         </div>
+        <div class="w-eav-entity-list__hero-copy">
+            <h1><lang>Eav实体</lang></h1>
+            <p><lang>查看已注册的 EAV 实体定义，可搜索代码、名称与类名</lang></p>
+        </div>
+        <div class="w-eav-entity-list__hero-actions">
+            <a class="w-button" data-tone="primary" data-variant="outline" data-size="sm"
+               href="@backend-url('*/backend/manager')">
+                <w:icon name="layers" size="sm" />
+                <lang>打开 EAV 管理器</lang>
+            </a>
+        </div>
+    </header>
+
+    <div>
+        <template>Weline_Component::message.phtml</template>
     </div>
-</div>
-<!-- end page title -->
-<!-- start page message -->
-<div class='row'>
-    <template>Weline_Component::message.phtml</template>
-</div> <!-- end message -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
-                    <lang>Eav实体</lang>
-                </h4>
-                <div class='table-rep-plugin'>
-                    <!-- search form -->
-                    <div class='row'>
-                        <div class='col-12'>
-                            <block class='Weline\Component\Block\Form\Search' id='entity-search'
-                                   action='*/backend/entity' method='get' keyword='search' value='product'
-                                   placeholder='请输入关键词'></block>
-                        </div>
-                    </div>
-                    <!-- end search form -->
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                            <thead>
-                            <tr>
-                                <th data-priority='1'><?= __('实体ID') ?></th>
-                                <th data-priority='3'><?= __('名称') ?></th>
-                                <th data-priority='3'><?= __('类') ?></th>
-                                <th data-priority='1'><?= __('实体主键字段类型') ?></th>
-                                <th data-priority='1'><?= __('实体主键字段长度') ?></th>
-                                <th data-priority='1'><?= __('是否系统生成') ?></th>
-                                <th data-priority='3'><?= __('创建时间') ?></th>
-                                <th data-priority='3'><?= __('更新时间') ?></th>
-                                <th data-priority='3'><?= __('操作') ?></th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <foreach name="entities" item="entity" key="key">
-                                <tr>
-                                    <td>{{entity.eav_entity_id}}</td>
-                                    <td>{{entity.code}}</td>
-                                    <td class='co-name'>
-                                        <local name="entity-name" model='Weline\Eav\Model\EavEntity\LocalDescription'
-                                               field='name' id='entity.eav_entity_id'>
-                                            {{entity.local_name|entity.name}}
-                                        </local>
-                                    </td>
-                                    <td class='co-name'>{{entity.class}}</td>
-                                    <td class='co-name'>{{entity.eav_entity_id_field_type}}</td>
-                                    <td class='co-name'>{{entity.eav_entity_id_field_length}}</td>
-                                    <td class='co-name'>{{entity.is_system}}</td>
-                                    <td class='co-name'>{{entity.create_time}}</td>
-                                    <td class='co-name'>{{entity.update_time}}</td>
-                                    <td class='co-name'>
-                                        <div class="d-flex gap-2">
-                                            <empty name="entity.is_system">
-                                                <a class="btn btn-info" href="@backend-url('*/backend/entity/edit')?code={{entity
-                                                .code}}">
-                                                    <lang>修改</lang>
-                                                </a>
-                                                <a class="btn btn-danger" href="@backend-url('*/backend/entity/delete')?code={{entity
-                                                .code}}">
-                                                    <lang>删除</lang>
-                                                </a>
-                                                <else/>
-                                                <b class="text-danger"><lang>系统实体</lang></b>
-                                            </empty>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </foreach>
-                            </tbody>
-                        </table>
-                        {{pagination}}
-                    </div>
-                </div>
+
+    <section class="w-card w-eav-entity-list__card">
+        <div class="w-card__header">
+            <div>
+                <h2 class="w-eav-entity-list__card-title"><lang>实体列表</lang></h2>
+                <p class="w-eav-entity-list__card-desc"><lang>系统实体不可修改或删除</lang></p>
+            </div>
+            <div class="w-eav-entity-list__toolbar">
+                <block class="Weline\Component\Block\Form\Search"
+                       id="entity-search"
+                       action="*/backend/entity"
+                       method="get"
+                       keyword="search"
+                       value=""
+                       placeholder="请输入代码、名称或类名"></block>
             </div>
         </div>
-    </div> <!-- end col -->
-</div> <!-- end row -->
+
+        <div class="w-card__body w-eav-entity-list__body">
+            <div class="w-eav-entity-list__table-wrap">
+                <table class="w-eav-entity-list__table" id="eav-entity-list-table">
+                    <thead>
+                    <tr>
+                        <th><lang>实体ID</lang></th>
+                        <th><lang>代码</lang></th>
+                        <th><lang>名称</lang></th>
+                        <th><lang>类</lang></th>
+                        <th><lang>主键类型</lang></th>
+                        <th><lang>主键长度</lang></th>
+                        <th><lang>类型</lang></th>
+                        <th><lang>创建时间</lang></th>
+                        <th><lang>更新时间</lang></th>
+                        <th><lang>操作</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <foreach name="entities" item="entity" key="key">
+                        <tr>
+                            <td class="w-eav-entity-list__id">{{entity.eav_entity_id}}</td>
+                            <td><code class="w-eav-entity-list__code">{{entity.code}}</code></td>
+                            <td class="w-eav-entity-list__name">
+                                <local name="entity-name"
+                                       model="Weline\Eav\Model\EavEntity\LocalDescription"
+                                       field="name"
+                                       id="entity.eav_entity_id">
+                                    {{entity.local_name|entity.name}}
+                                </local>
+                            </td>
+                            <td>
+                                <div class="w-eav-entity-list__class" title="{{entity.class}}">{{entity.class}}</div>
+                            </td>
+                            <td class="w-eav-entity-list__meta">{{entity.eav_entity_id_field_type}}</td>
+                            <td class="w-eav-entity-list__meta">{{entity.eav_entity_id_field_length}}</td>
+                            <td>
+                                <if condition="entity.is_system">
+                                    <span class="w-badge" data-w-background="warning"><lang>系统实体</lang></span>
+                                    <else/>
+                                    <span class="w-badge" data-w-background="neutral"><lang>自定义</lang></span>
+                                </if>
+                            </td>
+                            <td class="w-eav-entity-list__meta">{{entity.create_time}}</td>
+                            <td class="w-eav-entity-list__meta">{{entity.update_time}}</td>
+                            <td>
+                                <div class="w-eav-entity-list__actions">
+                                    <if condition="entity.is_system == 0">
+                                        <a class="w-button" data-tone="primary" data-variant="outline" data-size="sm"
+                                           href="@backend-url('*/backend/entity/edit')?code={{entity.code}}">
+                                            <lang>修改</lang>
+                                        </a>
+                                        <a class="w-button" data-tone="danger" data-variant="outline" data-size="sm"
+                                           href="@backend-url('*/backend/entity/delete')?code={{entity.code}}">
+                                            <lang>删除</lang>
+                                        </a>
+                                        <else/>
+                                        <span class="w-text" data-tone="muted" data-size="sm"><lang>系统实体</lang></span>
+                                    </if>
+                                </div>
+                            </td>
+                        </tr>
+                    </foreach>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="w-eav-entity-list__footer">
+            {{pagination}}
+        </div>
+    </section>
+</div>

@@ -187,12 +187,13 @@ Eav属性输入：缺少select选项,"Eav attribute input: select option missing
 新建,Create
 暂无属性集,"No attribute sets"
 属性集详情,"Attribute set details"
-"Eav > 属性组","Eav > attribute group"
-系统配置,"System Configuration"
-Eav,Eav
-Eav属性组,"Eav attribute group"
-Eav属性归组,"Eav attribute grouping"
-将属性归组方便管理,"Group attributes for easier management"
+将属性归组，便于在属性集内组织与管理,将属性归组，便于在属性集内组织与管理
+EAV,EAV
+"EAV 属性组列表","EAV 属性组列表"
+按实体与属性集查看、搜索并维护属性组,按实体与属性集查看、搜索并维护属性组
+关键词,关键词
+搜索,搜索
+重置,重置
 ID,ID
 所属实体,"Parent Entity"
 组名,"Group Name"
@@ -201,32 +202,42 @@ ID,ID
 创建时间,"Create time"
 更新时间,"Update time"
 操作,Operation
-属性组表单,"Attribute group form"
-属性组信息编辑。,"Editing attribute group information."
-填写正确！,"Correct entry!"
-组代码,"Group Code"
-添加,Add
+暂无属性组,暂无属性组
+可点击「添加组」创建，或先在属性集中组织结构。,可点击「添加组」创建，或先在属性集中组织结构。
+面包屑,面包屑
+请输入属性组名称、代码或实体关键词,请输入属性组名称、代码或实体关键词
 编辑,Edit
+添加,Add
+维护属性组名称、代码、所属实体与属性集,维护属性组名称、代码、所属实体与属性集
+组代码,"Group Code"
 继续新增,"Continue Adding New"
-Eav>属性管理,"Eav>Attribute Management"
-Eav实体-属性管理,"Eav entity-attribute management"
-管理实体的属性,"Manage Entity Attributes"
-您当前管理的属性实体是：,"The property entity you are currently managing is:"
-实体ID,"Entity ID"
-系统实体,"System Entity"
+属性管理,属性管理
+管理实体的属性定义、启用状态与本地化名称,管理实体的属性定义、启用状态与本地化名称
+当前实体,当前实体
+"打开 EAV 管理器","打开 EAV 管理器"
+属性列表,属性列表
+系统属性不可删除；可搜索代码、名称与实体,系统属性不可删除；可搜索代码、名称与实体
+名称,Name
+状态,Status
+类型,类型
+暂无属性记录,暂无属性记录
+启用,Enable
+禁用,Disable
+系统,system
+自定义,自定义
+系统属性,"System Attribute"
 属性配置项弹窗,"Attribute configuration item popup"
+配置属性的配置项,配置属性的配置项
+配置项,"Configuration item"
+所属实体代码,所属实体代码
 关闭,Close
 保存更改,"Save changes"
 确认删除,"Confirm deletion"
 确认,Confirm
-名称,Name
-启用,Enable
 属性代码,"Attribute Code"
-状态,Status
 属性配置项,"Attribute configuration item"
 暂无配置项。,"No configuration items."
 添加配置项,"Add Configuration Item"
-配置项,"Configuration item"
 每个配置项名称,"Each configuration item name"
 请输入配置项名称,"Please enter the configuration item name"
 每个配置项应该有自己的代码，请填写对应实体和属性时的唯一编码。,"Each configuration item should have its own code; please enter the unique code when filling in the corresponding entity and attribute."
@@ -252,13 +263,13 @@ Eav实体-属性管理,"Eav entity-attribute management"
 个,indivual
 搜索实体,"Search Entity"
 搜索【实体-属性集-属性组】,"Search [Entity - Property Set - Property Group]"
+填写正确！,"Correct entry!"
 请正确填写正确属性代码，最小长度3个字符，最大长度60个字符,"Please fill in the correct attribute code, minimum length 3 characters, maximum length 60 characters"
 属性名,"Attribute Name"
 请正确填写正确属性名，最小长度3个字符，最大长度128个字符,"Please fill in the correct attribute name, minimum length 3 characters, maximum length 128 characters"
 属性类型,"Attribute Type"
 必须选择一个类型,"Must select a type"
 是否启用,Enable
-禁用,Disable
 前端可见,"Frontend Visible"
 可筛选,Filterable?
 可搜索,Searchable?
@@ -276,7 +287,6 @@ Eav实体-属性管理,"Eav entity-attribute management"
 有配置项则只能选择配置项内设置的值，没有配置项可以输入任意值。,"If there are configuration items, only values set within the configuration items can be selected; if there are no configuration items, any value can be entered."
 是否是系统生成,"Is system-generated"
 非系统属性,"Non-system Attribute"
-系统属性,"System Attribute"
 仅做标记是否由系统生成，或者非系统生成（用户自定义）。,"Only marks whether it is system-generated or non-system-generated (user-defined)."
 配置值,"Configuration Value"
 颜色,Color
@@ -330,18 +340,23 @@ Eav实体-属性管理,"Eav entity-attribute management"
 请先填写文本再操作！,"Please fill in the text first before operating!"
 当前属性文本为空！,"Current attribute text is empty!"
 "Eav > 属性集","Eav > attribute set"
+系统配置,"System Configuration"
+Eav,Eav
 Eav属性集,"Eav attribute set"
 将属性归档为集-方便管理,"Archive attributes into sets for easier management"
+实体ID,"Entity ID"
 编码,Encoding
 属性集名,"Attribute set name"
 修改通知,"Modification notification"
-"Eav > 实体","Eav > Entity"
 Eav实体,"Eav entity"
-修改,Modify
+"查看已注册的 EAV 实体定义，可搜索代码、名称与类名","查看已注册的 EAV 实体定义，可搜索代码、名称与类名"
+实体列表,实体列表
+系统实体不可修改或删除,系统实体不可修改或删除
 类,Class
-实体主键字段类型,"Entity primary key field type"
-实体主键字段长度,"Entity primary key field length"
-是否系统生成,"Is system-generated"
+主键类型,主键类型
+主键长度,主键长度
+系统实体,"System Entity"
+修改,Modify
 "%{1} 属性管理","%{1} attribute management"
 "管理 %{1}（%{2}）的属性集、属性组与属性","Manage attribute sets, groups and attributes for %{1} (%{2})"
 "按实体、属性集、属性组和属性维护 EAV 结构","Maintain EAV structures by entities, attribute sets, attribute groups, and properties"
@@ -368,7 +383,6 @@ Swatch,Swatch
 "删除 EAV 节点","Delete EAV node"
 该操作无法撤销，确定删除当前节点吗？,"This operation cannot be undone. Are you sure you want to delete the current node?"
 请填写必填字段,"Please fill in required fields"
-系统,system
 "添加 %{1}","Add %{1}"
 选项项,"Option items"
 "共 %{1} 项","%{1} items"
@@ -439,6 +453,20 @@ EAV属性依赖解析缺少必要参数：%{1},"Missing required EAV attribute d
 类型不存在:%{1},"Type does not exist: %{1}"
 "属性类型添加失败 %{1}","Failed to add attribute type %{1}"
 "EAV Scope 工具：help/preflight/ensure-columns（apply 仅隔离 clone，经 scope:migrate-p1a）","EAV Scope tool: help/preflight/ensure-columns (apply only isolate clone, via scope:migrate-p1a)"
+Eav>属性管理,"Eav>Attribute Management"
+Eav实体-属性管理,"Eav entity-attribute management"
+管理实体的属性,"Manage Entity Attributes"
+您当前管理的属性实体是：,"The property entity you are currently managing is:"
+"Eav > 实体","Eav > Entity"
+实体主键字段类型,"Entity primary key field type"
+实体主键字段长度,"Entity primary key field length"
+是否系统生成,"Is system-generated"
+"Eav > 属性组","Eav > attribute group"
+Eav属性组,"Eav attribute group"
+Eav属性归组,"Eav attribute grouping"
+将属性归组方便管理,"Group attributes for easier management"
+属性组表单,"Attribute group form"
+属性组信息编辑。,"Editing attribute group information."
 请先选择实体范围,请先选择实体范围
 "已加入 EAV 多语言 AI 翻译队列","已加入 EAV 多语言 AI 翻译队列"
 定时翻译,定时翻译

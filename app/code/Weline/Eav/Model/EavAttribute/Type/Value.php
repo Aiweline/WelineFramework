@@ -216,9 +216,22 @@ class Value extends \Weline\Framework\Database\Model implements \Weline\Framewor
             // SchemaParser/其他场景在未设置 attribute 时调用 getTable()，返回占位表名避免抛错；实际值表由 install() 按 entity+type 创建
             return parent::getTable('eav_attribute_type_value');
         }
-        // 如果已经计算过表名，直接返回
-        $entityCode = trim((string) $this->attribute->current_getEntity()->getEntityCode());
-        $typeCode = trim((string) $this->attribute->getTypeModel()->getCode());
+        // EntityDefinition-only 实体（如 ProductCatalogAttributeEntity）不会 current_setEntity(EavModel)；
+        // 值表命名以 EavEntity.code 为准，避免「属性没有实体」。
+        $entityCode = '';
+        try {
+            $entityCode = trim((string)$this->attribute->getEavEntity()->getCode());
+        } catch (\Throwable) {
+            $entityCode = '';
+        }
+        if ($entityCode === '') {
+            try {
+                $entityCode = trim((string)$this->attribute->current_getEntity()->getEntityCode());
+            } catch (\Throwable) {
+                $entityCode = '';
+            }
+        }
+        $typeCode = trim((string)$this->attribute->getTypeModel()->getCode());
         if ($entityCode === '' || $typeCode === '') {
             return parent::getTable('eav_attribute_type_value');
         }
