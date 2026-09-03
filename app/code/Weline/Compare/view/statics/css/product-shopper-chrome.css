@@ -14,8 +14,11 @@
     display: flex;
     align-items: center;
     gap: 1rem;
-    max-width: var(--weline-layout-content-max-width, 75rem);
-    margin: 0 auto;
+    box-sizing: border-box;
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
+    padding-inline: var(--weline-layout-content-padding-inline);
 }
 
 .w-compare-bar__summary {
