@@ -112,6 +112,32 @@ class HeadRendererSeoProfileTest extends TestCase
         self::assertSame('Probe Article', $context['article']['headline'] ?? null);
     }
 
+    public function testRegistryFiltersBeforeInstantiationAndIsolatesProviderFailures(): void
+    {
+        $source = file_get_contents(
+            dirname(__DIR__, 3) . '/Service/Head/HeadProviderRegistry.php',
+        );
+
+        self::assertIsString($source);
+        $filterPosition = strpos(
+            $source,
+            "if (!is_array(\$extension)\n                    || \$this->extensionName(\$extension) !== 'SeoProfileProvider'",
+        );
+        $classResolutionPosition = strpos(
+            $source,
+            '$class = $this->extensionClass($extension);',
+        );
+
+        self::assertIsInt($filterPosition);
+        self::assertIsInt($classResolutionPosition);
+        self::assertLessThan($classResolutionPosition, $filterPosition);
+        self::assertGreaterThanOrEqual(2, substr_count($source, 'catch (\\Throwable)'));
+        self::assertStringContainsString(
+            'One broken optional provider must not hide healthy peers.',
+            $source,
+        );
+    }
+
     public function testCustomSlotProviderReturnsStructuredPayloadRenderedBySeo(): void
     {
         $resolver = $this->getMockBuilder(PageSeoContextResolver::class)

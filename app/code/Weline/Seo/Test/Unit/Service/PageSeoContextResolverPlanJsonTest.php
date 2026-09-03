@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Seo\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Seo\Service\Head\HeadProviderRegistry;
 use Weline\Seo\Service\Head\PageSeoContextResolver;
 
 class PageSeoContextResolverPlanJsonTest extends TestCase
@@ -29,7 +30,7 @@ class PageSeoContextResolverPlanJsonTest extends TestCase
             ],
         ]);
 
-        $context = (new PageSeoContextResolver())->resolve($template);
+        $context = (new PageSeoContextResolver(new PageSeoContextResolverEmptyProviderRegistry()))->resolve($template);
 
         self::assertSame('privacy_policy', $context['page_type']);
         self::assertSame('Privacy Policy', $context['title']);
@@ -38,6 +39,84 @@ class PageSeoContextResolverPlanJsonTest extends TestCase
         self::assertSame(['@type' => 'DigitalDocument'], $context['schema_nodes'][0]);
         self::assertSame(['@type' => 'FAQPage', 'name' => 'Privacy FAQ'], $context['schema_nodes'][1]);
         self::assertCount(2, $context['breadcrumbs']);
+    }
+
+    public function testResolvesProductFromSharedSeoProfileForIsolatedHeadTemplate(): void
+    {
+        $product = [
+            'product_id' => 83,
+            'name' => '汉服商品',
+            'storefront_offers' => [
+                ['sku' => 'ZZS-HANFU-RED-S', 'specifications' => ['color' => '48', 'size' => '57']],
+                ['sku' => 'ZZS-HANFU-RED-M', 'specifications' => ['color' => '48', 'size' => '58']],
+            ],
+        ];
+        $template = new PageSeoContextResolverPlanJsonTemplateStub([
+            'seo' => [
+                'page_type' => 'product',
+                'title' => '汉服商品',
+                'product' => $product,
+            ],
+        ]);
+
+        $context = (new PageSeoContextResolver(new PageSeoContextResolverEmptyProviderRegistry()))->resolve($template);
+
+        self::assertSame('product', $context['page_type']);
+        self::assertSame($product, $context['product']);
+        self::assertCount(2, $context['product']['storefront_offers']);
+    }
+    public function testLazilyResolvesIntegrationContextWhenOptionalDependencyIsOmitted(): void
+    {
+        if (!defined('BP')) {
+            define('BP', dirname(__DIR__, 7) . DIRECTORY_SEPARATOR);
+        }
+        if (!defined('DS')) {
+            define('DS', DIRECTORY_SEPARATOR);
+        }
+        if (!defined('CLI')) {
+            define('CLI', true);
+        }
+        if (!defined('PROD')) {
+            define('PROD', false);
+        }
+        \Weline\Framework\Manager\ObjectManager::getInstance();
+
+        $integration = $this->createMock(\Weline\Seo\Service\Head\HeadIntegrationContextService::class);
+        $integration->expects(self::once())
+            ->method('resolve')
+            ->willReturn([
+                'locale' => 'en_US',
+                'alternates' => [
+                    'en_US' => 'https://shop.test/en_US/products',
+                    'x-default' => 'https://shop.test/products',
+                ],
+            ]);
+        \Weline\Framework\Manager\ObjectManager::setInstance(
+            \Weline\Seo\Service\Head\HeadIntegrationContextService::class,
+            $integration,
+        );
+
+        try {
+            $template = new PageSeoContextResolverPlanJsonTemplateStub([
+                'seo' => [
+                    'title' => 'Hanfu Collection',
+                    'canonical_url' => 'https://shop.test/en_US/products',
+                ],
+            ]);
+
+            $context = (new PageSeoContextResolver(new PageSeoContextResolverEmptyProviderRegistry()))
+                ->resolve($template);
+
+            self::assertSame('en_US', $context['locale']);
+            self::assertSame(
+                'https://shop.test/products',
+                $context['alternates']['x-default'] ?? null,
+            );
+        } finally {
+            \Weline\Framework\Manager\ObjectManager::removeInstance(
+                \Weline\Seo\Service\Head\HeadIntegrationContextService::class,
+            );
+        }
     }
 }
 
@@ -53,5 +132,17 @@ final class PageSeoContextResolverPlanJsonTemplateStub
     public function getData(string $key): mixed
     {
         return $this->data[$key] ?? null;
+    }
+}
+
+final class PageSeoContextResolverEmptyProviderRegistry extends HeadProviderRegistry
+{
+    public function __construct()
+    {
+    }
+
+    public function getSeoProfileProviders(bool $forceReload = false): array
+    {
+        return [];
     }
 }
