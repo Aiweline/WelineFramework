@@ -185,6 +185,10 @@ class EventRegistry implements EventRegistryInterface
 
         // 过滤已卸载/禁用模块的残留数据，避免对无效模块继续做冲突/规约校验
         $this->purgeInactiveModulesFromRegistry($registry);
+
+        // 目标模块可能是事件 owner。清除 owner 事件前先保留其他模块已经注册的观察者，
+        // 否则一次模块定向升级会把跨模块监听关系从增量注册表中永久抹掉。
+        $foreignObservers = $this->captureForeignObserversForOwnedEntries($registry, $moduleNames);
         
         // 2. 清除目标模块的旧数据
         RegistryProgress::log('Event incremental: clearing modules ' . implode(', ', $moduleNames));
@@ -201,22 +205,120 @@ class EventRegistry implements EventRegistryInterface
         // 4. 合并新数据到注册表
         RegistryProgress::log('Event incremental: merging scanned data');
         $this->mergeScannedDataIntoRegistry($registry, $newScannedData, $newObserversData);
-        unset($newScannedData, $newObserversData);
+        $this->restoreForeignObservers($registry, $foreignObservers);
+        unset($newScannedData, $newObserversData, $foreignObservers);
         RegistryProgress::log('Event incremental raw scan data released');
         
         // 5. 重新排序所有观察者
-        foreach ($registry['events'] as &$eventInfo) {
-            if (isset($eventInfo['observers']) && count($eventInfo['observers']) > 1) {
-                usort($eventInfo['observers'], function ($a, $b) {
-                    $sortA = (int)($a['sort'] ?? 10000);
-                    $sortB = (int)($b['sort'] ?? 10000);
-                    return $sortA <=> $sortB;
-                });
+        foreach (['events', 'dynamic_patterns'] as $section) {
+            foreach ($registry[$section] as &$eventInfo) {
+                if (isset($eventInfo['observers']) && count($eventInfo['observers']) > 1) {
+                    usort($eventInfo['observers'], static function ($a, $b): int {
+                        $sort = ((int)($a['sort'] ?? 10000)) <=> ((int)($b['sort'] ?? 10000));
+                        if ($sort !== 0) {
+                            return $sort;
+                        }
+
+                        $left = (string)($a['observer_key'] ?? (($a['instance'] ?? '') . '::' . ($a['name'] ?? '')));
+                        $right = (string)($b['observer_key'] ?? (($b['instance'] ?? '') . '::' . ($b['name'] ?? '')));
+                        return $left <=> $right;
+                    });
+                }
             }
+            unset($eventInfo);
         }
         
         // 6. 保存注册表
         return $this->saveRegistry($registry);
+    }
+
+    /**
+     * Preserve observers owned by modules outside the incremental target before
+     * their event owner is cleared. Entries are restored only when the owner
+     * still declares the event or dynamic pattern after the refresh.
+     *
+     * @param array<string, mixed> $registry
+     * @param string[] $moduleNames
+     * @return array{events: array<string, array<int, array<string, mixed>>>, dynamic_patterns: array<string, array<int, array<string, mixed>>>}
+     */
+    private function captureForeignObserversForOwnedEntries(array $registry, array $moduleNames): array
+    {
+        $preserved = [
+            'events' => [],
+            'dynamic_patterns' => [],
+        ];
+
+        foreach (array_keys($preserved) as $section) {
+            foreach ((array)($registry[$section] ?? []) as $name => $eventInfo) {
+                if (!is_array($eventInfo)
+                    || !in_array((string)($eventInfo['module'] ?? ''), $moduleNames, true)
+                ) {
+                    continue;
+                }
+
+                foreach ((array)($eventInfo['observers'] ?? []) as $observer) {
+                    if (!is_array($observer)) {
+                        continue;
+                    }
+                    $observerModule = (string)($observer['module'] ?? '');
+                    if ($observerModule === '' || in_array($observerModule, $moduleNames, true)) {
+                        continue;
+                    }
+                    $preserved[$section][(string)$name][] = $observer;
+                }
+            }
+        }
+
+        return $preserved;
+    }
+
+    /**
+     * @param array<string, mixed> $registry
+     * @param array{events?: array<string, array<int, array<string, mixed>>>, dynamic_patterns?: array<string, array<int, array<string, mixed>>>} $preserved
+     */
+    private function restoreForeignObservers(array &$registry, array $preserved): void
+    {
+        foreach (['events', 'dynamic_patterns'] as $section) {
+            foreach ((array)($preserved[$section] ?? []) as $name => $observers) {
+                if (!isset($registry[$section][$name])) {
+                    continue;
+                }
+
+                $registry[$section][$name]['observers'] = is_array($registry[$section][$name]['observers'] ?? null)
+                    ? $registry[$section][$name]['observers']
+                    : [];
+                $known = [];
+                foreach ($registry[$section][$name]['observers'] as $observer) {
+                    if (is_array($observer)) {
+                        $known[$this->observerIdentity($observer)] = true;
+                    }
+                }
+
+                foreach ($observers as $observer) {
+                    $identity = $this->observerIdentity($observer);
+                    if ($identity === '' || isset($known[$identity])) {
+                        continue;
+                    }
+                    $registry[$section][$name]['observers'][] = $observer;
+                    $known[$identity] = true;
+                }
+            }
+        }
+    }
+
+    /**
+     * @param array<string, mixed> $observer
+     */
+    private function observerIdentity(array $observer): string
+    {
+        $observerKey = trim((string)($observer['observer_key'] ?? ''));
+        if ($observerKey !== '') {
+            return $observerKey;
+        }
+
+        $instance = trim((string)($observer['instance'] ?? ''));
+        $name = trim((string)($observer['name'] ?? ''));
+        return $instance === '' && $name === '' ? '' : $instance . '::' . $name;
     }
 
     /**

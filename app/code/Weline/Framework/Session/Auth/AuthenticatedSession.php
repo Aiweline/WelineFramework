@@ -66,6 +66,13 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
         ?AuthenticatedLoginContext $context = null,
     ): void
     {
+        if (!$this->isValidPrincipalId($user->getAuthIdentifier())) {
+            throw new \RuntimeException((string)__('认证登录失败：用户标识无效。'));
+        }
+        if (trim((string)$user->getAuthUsername()) === '') {
+            throw new \RuntimeException((string)__('认证登录失败：用户名为空。'));
+        }
+
         $this->session->start();
 
         $registry = null;
@@ -78,6 +85,7 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
         }
 
         $this->session->regenerate(true);
+        $this->rebindSiblingAreaDevicesAfterRotation($registry);
 
         $deviceContext = null;
         try {
@@ -183,7 +191,10 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
 
         $loginKey = $this->session->get($this->areaConfig->getLoginKey());
         $loginIdKey = $this->session->get($this->areaConfig->getLoginIdKey());
-        if ($loginKey === null || $loginKey === '' || $loginIdKey === null || $loginIdKey === '') {
+        if ($loginKey === null || $loginKey === '' || !$this->isValidPrincipalId($loginIdKey)) {
+            if ($loginIdKey !== null && $loginIdKey !== '' && !$this->isValidPrincipalId($loginIdKey)) {
+                $this->clearAuthenticationState(true);
+            }
             $this->deviceValidationResult = false;
             return false;
         }
@@ -241,34 +252,42 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
         }
 
         if ($this->cachedUser !== null) {
-            return $this->cachedUser;
+            if ($this->isValidPrincipalId($this->cachedUser->getAuthIdentifier())) {
+                return $this->cachedUser;
+            }
+            $this->clearAuthenticationState(true);
+            return null;
         }
 
         $userId = $this->getUserId();
         $modelClass = $this->session->get($this->areaConfig->getUserModelKey());
 
-        if ($userId === null || $modelClass === null || $modelClass === '') {
+        if ($userId === null || !$this->isValidPrincipalId($userId) || $modelClass === null || $modelClass === '') {
+            $this->clearAuthenticationState(true);
             return null;
         }
 
         if (!\class_exists($modelClass)) {
+            $this->clearAuthenticationState(true);
             return null;
         }
 
         try {
             $model = ObjectManager::make($modelClass);
-            
+
             if (\method_exists($model, 'load')) {
                 $model->load($userId);
             }
-            
-            if ($model instanceof AuthenticableInterface) {
+
+            if ($model instanceof AuthenticableInterface
+                && $this->isValidPrincipalId($model->getAuthIdentifier())) {
                 $this->cachedUser = $model;
                 return $model;
             }
         } catch (\Throwable $e) {
         }
 
+        $this->clearAuthenticationState(true);
         return null;
     }
 
@@ -279,6 +298,31 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
     public function getCustomer(): ?AuthenticableInterface
     {
         return $this->getUser();
+    }
+
+    /**
+     * Auth principals must be a positive numeric id (or non-empty non-"0" string).
+     * Rejects half-login payloads that historically stored login_id=0.
+     */
+    private function isValidPrincipalId(mixed $id): bool
+    {
+        if ($id === null) {
+            return false;
+        }
+        if (\is_string($id)) {
+            $id = \trim($id);
+            if ($id === '') {
+                return false;
+            }
+        }
+        if (\is_int($id) || (\is_string($id) && \ctype_digit($id))) {
+            return (int)$id > 0;
+        }
+        if (\is_string($id)) {
+            return $id !== '0';
+        }
+
+        return false;
     }
 
     /**
@@ -383,6 +427,69 @@ class AuthenticatedSession implements AuthenticatedSessionInterface
     public function regenerate(bool $deleteOldSession = true): void
     {
         $this->session->regenerate($deleteOldSession);
+        try {
+            $this->rebindSiblingAreaDevicesAfterRotation($this->resolveDeviceRegistry());
+        } catch (\Throwable) {
+            // Rotation must not fail closed on optional sibling rebind errors.
+        }
+    }
+
+    /**
+     * Shared WELINE_SESSID: regenerating for one auth area keeps sibling-area
+     * login keys + device public ids in the payload. Rebind those device rows
+     * onto the new session id before the next request hits session_rebound.
+     */
+    private function rebindSiblingAreaDevicesAfterRotation(
+        ?AuthenticatedDeviceRegistryInterface $registry,
+    ): void {
+        if ($registry === null) {
+            return;
+        }
+
+        $currentDeviceKey = AuthenticatedDeviceContext::sessionKeyForArea($this->areaConfig->getArea());
+        $seenDeviceKeys = [$currentDeviceKey => true];
+        $ttl = 3600;
+        if (\method_exists($this->session, 'getDefaultTtl')) {
+            $ttl = max(1, (int)$this->session->getDefaultTtl());
+        }
+        $sessionId = $this->session->getId();
+        if ($sessionId === '') {
+            return;
+        }
+
+        foreach (AreaConfig::getAvailableAreas() as $area) {
+            if (!$registry->supportsArea($area)) {
+                continue;
+            }
+            $deviceKey = AuthenticatedDeviceContext::sessionKeyForArea($area);
+            if (isset($seenDeviceKeys[$deviceKey])) {
+                continue;
+            }
+            $seenDeviceKeys[$deviceKey] = true;
+            $deviceId = $this->session->get($deviceKey);
+            if (!\is_string($deviceId) || trim($deviceId) === '') {
+                continue;
+            }
+            try {
+                $siblingConfig = new AreaConfig($area);
+            } catch (\Throwable) {
+                continue;
+            }
+            $principalId = $this->session->get($siblingConfig->getLoginIdKey());
+            if (!$this->isValidPrincipalId($principalId)) {
+                continue;
+            }
+            try {
+                $registry->rebindToCurrentSession(new AuthenticatedDeviceContext(
+                    area: $area,
+                    principalId: (string)$principalId,
+                    sessionId: $sessionId,
+                    sessionExpiresAt: time() + $ttl,
+                    deviceId: trim($deviceId),
+                ));
+            } catch (\Throwable) {
+            }
+        }
     }
 
     /**
