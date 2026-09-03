@@ -43,13 +43,13 @@ args = ["app/code/Weline/Ai/Mcp/bin/learning-mcp"]
 required = true
 ```
 
-Cursor uses `.cursor/mcp.json` and `~/.cursor/mcp.json`. Step 0 for every agent task:
+Cursor reads `.cursor/mcp.json`; Claude Code uses project `.mcp.json`; VS Code 1.106+ uses `.vscode/mcp.json`. Step 0 for every agent task:
 
 ```bash
 php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php
 ```
 
-That script auto-repairs MCP registration/approval (via `ensure-cursor-mcp.php`), probes local STDIO health, and checks Git branch inputs. It never switches branches or performs another Git mutation; a non-`dev` framework checkout is reported for the workspace owner to resolve explicitly. Host start time is derived from the monotonic-style `ps etime` duration instead of parsing timezone-free `ps lstart`, preventing an old process from being reported as a future/current generation. It only touches user `mcp.json` when registration changed or the host CLI is not ready (avoiding per-session approval resets). Refreshing the Hook-only Codex plugin artifact is non-blocking while the attached STDIO MCP and host runtime are healthy/current; a reload remains mandatory for a stale runtime generation or an actual MCP registration change. It does **not** write `~/.cursor/permissions.json`; non-empty `mcpAllowlist` there can lock Cursor away from **Run Everything**. Agents must not send operators to Settings first. Continue with `prepare_project` only when `project-guidance-bootstrap.v1.status=ready`.
+That script probes local STDIO health, probes host attachment, and returns `host_mcp_install` steps for the **current agent session** to execute. Bootstrap scripts do **not** write host MCP config files or install Git hooks for registration refresh. It never switches branches or performs another Git mutation; a non-`dev` framework checkout is reported for the workspace owner to resolve explicitly. Host start time is derived from the monotonic-style `ps etime` duration instead of parsing timezone-free `ps lstart`, preventing an old process from being reported as a future/current generation. It only touches user `mcp.json` when registration changed or the host CLI is not ready (avoiding per-session approval resets). Refreshing the Hook-only Codex plugin artifact is non-blocking while the attached STDIO MCP and host runtime are healthy/current; a reload remains mandatory for a stale runtime generation or an actual MCP registration change. It does **not** write `~/.cursor/permissions.json`; non-empty `mcpAllowlist` there can lock Cursor away from **Run Everything**. Agents must not send operators to Settings first. Continue with `prepare_project` only when `project-guidance-bootstrap.v1.status=ready`.
 
 For IDE Agent chats, use the operator's chosen Cursor **Run Mode** (for example **Run Everything** or **Auto-review**). One-time MCP enable is handled via `cursor-agent mcp enable weline_project_intelligence`, not by editing `permissions.json`.
 

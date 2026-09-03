@@ -58,9 +58,11 @@ $is_logged_in = $this->is_logged_in ?? false;
             transform: translateY(-2px);
         }
         .ai-chat-page {
-            max-width: 1200px;
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
             margin: 20px auto;
-            padding: 0 20px;
+            padding: 0 var(--weline-layout-content-padding-inline);
         }
         
         .chat-container {
@@ -803,8 +805,10 @@ function scrollToBottom() {
 }
 
 .chat-container {
-    max-width: 1200px;
-    margin: 0 auto;
+    box-sizing: border-box;
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
     height: 100%;
     background: white;
     border-radius: 10px;

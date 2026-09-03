@@ -5,7 +5,8 @@
 ## 适用对象
 
 - Codex、Cursor 及其他通过 `weline_project_intelligence` MCP 接入的客户端。
-- 问答、概念解释可跳过写码门禁；**任何改代码、修 bug、补测试、验收结论**必须遵循本文。
+- **非编码**（闲聊、概念解释、与本仓实现无关说明）：**禁止**调用 MCP（含 ensure / `prepare_project` / 计划门禁）。
+- **编码/工程**（改代码、修 bug、补测试、模块文档、诊断/评审、部署规划、验收结论）：必须遵循本文完整工作流。
 
 ## 核心原则（Vibe Coding 工程化）
 
@@ -43,7 +44,7 @@
 - 对照归属模块 `doc/需求.md`（REQ-ID、范围、验收、待确认项）。
 - 用户已确认的需求优先于文档推断；临时决定用 `set_session_directives`，**不自动写入** `需求.md`。
 - 用 `resolve_task_context` 取有界证据；禁止凭通用框架经验发明需求或事件名。
-- **每条可执行用户需求（硬门槛，`user_requirement_full_workflow`）**：提出后须**立即**理解意图/范围/非目标/成功标准，并 `submit_task_plan` 建立从**需求分析到验收**的完整会话工作流（`plan.requirements` ≥1 + `acceptance` ≥1 + 架构/任务拆解）；**不得**等到写码或 `PLAN_REQUIRED` 才补计划。需求不明时先澄清，禁止边写边猜。
+- **每条可执行编码/工程用户需求（硬门槛，`user_requirement_full_workflow`）**：提出后须**立即**理解意图/范围/非目标/成功标准，并 `submit_task_plan` 建立从**需求分析到验收**的完整会话工作流（`plan.requirements` ≥1 + `acceptance` ≥1 + 架构/任务拆解）；**不得**等到写码或 `PLAN_REQUIRED` 才补计划。需求不明时先澄清，禁止边写边猜。非编码任务不进入本阶段。
 
 ### 2. 扩展点选型（写代码前硬关）
 
@@ -121,7 +122,7 @@ Hook 专项：[Hook创建规范.md](../../Hook/doc/Hook创建规范.md)。Event 
 6. **硬规则（布局内嵌归属）**：Theme `layouts/` / `partials/` 仅允许归属 `Weline_Theme` 的 `<w:widget>` / `fetch(...Weline_Theme::.../widgets/...)`；其他模块必须空 slot + `default_injections`。改后跑 `php bin/w frontend:check-theme-layout-widgets`。
 7. **必须**为前台字面 `<section>` 与 `w:slot wrapper="section"` 配置非空语义 section 身份（属性名 `weline-code`；部件根节点用 `WidgetUiScope`）；改模板后跑 `php bin/w frontend:check-section-code`。
 8. 视觉值优先主题 CSS 变量；浏览器业务请求走 `Weline.Api.*`。
-9. **内容区宽度**：必须遵守 `theme-layout-content-width.md`——已包 `.w-container` 的页面禁止再写 `max-width`/`padding-inline`；未包容器的 checkout/cart 等须用 `--weline-layout-content-max-width` 与 `--weline-layout-content-padding-inline`（禁止 `1440px` fallback）。特质 Hero/CTA 色可在局部 scope 自定义，宽度无例外。
+9. **内容区宽度（高压线·统一版心，`frontend_unified_content_container`）**：必须遵守 `theme-layout-content-width.md`——**禁止自写一套页面/模块容器**。已包 `.w-container` 的页面只能 `width:100%` + `padding-inline:0`（禁止再写 `max-width`/`padding-inline`）；未包容器的 checkout/cart 等独立壳须用 `--weline-layout-content-max-width` 与 `--weline-layout-content-padding-inline`（或 `.w-theme-content-width`），禁止 `1440px`/`1200px` fallback 与双重 gutter。特质 Hero/CTA 色可在局部 scope 自定义，宽度无例外。
 10. **响应式**：设计阶段纳入平板（≈768）与 PC（≥1024），兼顾 375；验收收集多断点证据。
 11. **Taglib / i18n**：写 HTML 控件前读 [场景映射表.md](../../Taglib/doc/场景映射表.md)；前台文案用 `<lang>`/`@lang()`，禁止 HTML 内 `<?= __() ?>`。**`@lang()`/`@lang{}` 源文含逗号须加引号或改用 `<lang>`**（未加引号的逗号会被当成参数分隔，编译成 `<?=__('a', .b)?>` 触发 ParseError）。
 12. 专项细则按任务再读：`部件开发指南.md`、`frontend-section-weline-code.md`、`theme-css-variables-only.md`、`theme-layout-content-width.md`。

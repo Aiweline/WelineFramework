@@ -257,12 +257,17 @@ final class ExecutionRunService
         $bundleStatus = trim((string) ($bundle['status'] ?? ''));
         $targetNotFound = $contextFailed && $bundleStatus === 'CONTEXT_TARGET_NOT_FOUND';
         $targetAmbiguous = $contextFailed && $bundleStatus === 'CONTEXT_TARGET_AMBIGUOUS';
+        $targetUnavailable = $contextFailed && $bundleStatus === 'CONTEXT_TARGET_UNAVAILABLE';
         $failedWorkflowState = $targetAmbiguous
             ? 'CONTEXT_TARGET_AMBIGUOUS'
-            : ($targetNotFound ? 'CONTEXT_TARGET_NOT_FOUND' : 'CONTEXT_INCOMPLETE');
+            : ($targetNotFound
+                ? 'CONTEXT_TARGET_NOT_FOUND'
+                : ($targetUnavailable ? 'CONTEXT_TARGET_UNAVAILABLE' : 'CONTEXT_INCOMPLETE'));
         $failedReasonCode = $targetAmbiguous
             ? 'EXACT_TARGET_AMBIGUOUS'
-            : ($targetNotFound ? 'EXACT_TARGET_NOT_FOUND' : 'CONTRACT_DISCOVERY');
+            : ($targetNotFound
+                ? 'EXACT_TARGET_NOT_FOUND'
+                : ($targetUnavailable ? 'CONTEXT_BATCH_STALLED' : 'CONTRACT_DISCOVERY'));
         $completeness = is_array($bundle['context_completeness'] ?? null)
             ? $bundle['context_completeness']
             : ['score' => $ready ? 100 : 0, 'covered' => [], 'missing' => []];
@@ -281,7 +286,9 @@ final class ExecutionRunService
                         ? 'One or more short requested symbols match multiple in-scope definitions.'
                         : ($targetNotFound
                             ? 'One or more exact requested symbols do not exist in the refreshed in-scope index.'
-                            : 'One or more required context dimensions are missing without a recoverable batch plan.'))),
+                            : ($targetUnavailable
+                                ? 'Context materialization stalled without concrete path/symbol progress; native exact-path fallback is allowed.'
+                                : 'One or more required context dimensions are missing without a recoverable batch plan.')))),
             'output_summary' => $completeness + [
                 'context_batch_plan' => $contextBatchPlan,
             ],

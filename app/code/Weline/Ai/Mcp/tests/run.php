@@ -7,6 +7,7 @@ use LearningMcp\Config;
 use LearningMcp\DeployBridgeService;
 use LearningMcp\EditService;
 use LearningMcp\ExecutionRunService;
+use LearningMcp\HardConstraintsCatalog;
 use LearningMcp\IntelligenceService;
 use LearningMcp\IndexGarbageCollector;
 use LearningMcp\ProcessRunner;
@@ -1058,6 +1059,102 @@ try {
                 === ($firstContextChildInput['paths'] ?? [])
             && ($firstContextChildBundle['write_contract']['parent_apply_allowed'] ?? false) === true,
         'first planned context child closes independently with its own writable run and bundle',
+    );
+    check(
+        (int) ($firstContextChildInput['context_batch_depth'] ?? 0) === 1,
+        'context child requests carry depth so nested replans can detect stalls',
+    );
+    $stalledDepthBundle = $batchFixtureIntelligence->call('get_edit_bundle', [
+        'repository' => (string) ($firstContextChildInput['repository'] ?? $batchFixtureRoot),
+        'client_session_id' => (string) ($firstContextChildInput['client_session_id'] ?? 'batch-fixture'),
+        'readiness_id' => (string) ($firstContextChildInput['readiness_id'] ?? ''),
+        'task' => 'Prove stalled nested context batches terminate without looping',
+        'task_contract' => [
+            'goal' => 'Terminate when nested context batches cannot make progress',
+            'known_paths' => [],
+            'known_symbols' => [],
+            'authorized_actions' => ['edit'],
+        ],
+        'paths' => [],
+        'symbols' => [],
+        'context_batch_depth' => 1,
+        'include_docs' => true,
+        'include_skills' => false,
+        'module' => (string) ($firstContextChildInput['module'] ?? ''),
+    ]);
+    $stalledDepthStatus = (string) ($stalledDepthBundle['status'] ?? '');
+    check(
+        in_array($stalledDepthStatus, ['READY_FOR_EDIT', 'CONTEXT_TARGET_UNAVAILABLE', 'CONTEXT_BATCH_PLANNED'], true),
+        'depth-1 empty-path calls stay on the sealed context state machine',
+    );
+    if ($stalledDepthStatus === 'CONTEXT_BATCH_PLANNED') {
+        $nestedChildren = (array) (
+            $stalledDepthBundle['continuation']['batch_plan']['child_requests'] ?? []
+        );
+        $nestedDepths = array_map(
+            static fn (array $request): int => (int) ($request['input']['context_batch_depth'] ?? 0),
+            array_values(array_filter($nestedChildren, 'is_array')),
+        );
+        check(
+            $nestedChildren !== []
+                && $nestedDepths !== []
+                && min($nestedDepths) >= 2,
+            'depth-1 discovery that still plans children advances depth instead of looping at depth 1',
+        );
+        $depthTwoInput = is_array($nestedChildren[0]['input'] ?? null)
+            ? $nestedChildren[0]['input']
+            : [];
+        $depthTwoBundle = $depthTwoInput === []
+            ? []
+            : $batchFixtureIntelligence->call('get_edit_bundle', $depthTwoInput);
+        check(
+            ($depthTwoBundle['status'] ?? '') !== 'CONTEXT_BATCH_PLANNED'
+                || (int) (($depthTwoBundle['continuation']['batch_plan']['batch_count'] ?? 0)) === 0,
+            'depth >= 2 refuses another CONTEXT_BATCH_PLANNED loop',
+        );
+        if (($depthTwoBundle['status'] ?? '') === 'CONTEXT_TARGET_UNAVAILABLE') {
+            check(
+                ($depthTwoBundle['native_exact_path_fallback_allowed'] ?? false) === true
+                    && ($depthTwoBundle['mcp_target_unavailable'] ?? false) === true
+                    && ($depthTwoBundle['execution_run']['workflow_state'] ?? '') === 'CONTEXT_TARGET_UNAVAILABLE',
+                'stalled nested context exposes MCP_TARGET_UNAVAILABLE native fallback signals',
+            );
+        }
+    } elseif ($stalledDepthStatus === 'CONTEXT_TARGET_UNAVAILABLE') {
+        check(
+            ($stalledDepthBundle['native_exact_path_fallback_allowed'] ?? false) === true
+                && ($stalledDepthBundle['continuation_needed'] ?? true) === false
+                && ($stalledDepthBundle['execution_run']['workflow_state'] ?? '') === 'CONTEXT_TARGET_UNAVAILABLE',
+            'depth-1 stall terminates as CONTEXT_TARGET_UNAVAILABLE with native fallback allowed',
+        );
+    }
+    $nonProgressingChild = $batchFixtureIntelligence->call('get_edit_bundle', array_replace(
+        $firstContextChildInput,
+        [
+            'task' => 'Re-request the same unmaterializable path set without progress',
+            'paths' => ['app/code/Fixture/DoesNotExistForContextStall.php'],
+            'symbols' => [],
+            'task_contract' => [
+                'goal' => 'Stall when child path batches only restate missing requested paths',
+                'known_paths' => ['app/code/Fixture/DoesNotExistForContextStall.php'],
+                'known_symbols' => [],
+                'authorized_actions' => ['edit'],
+            ],
+            'context_batch_depth' => 1,
+            'include_docs' => false,
+            'include_skills' => false,
+        ],
+    ));
+    check(
+        ($nonProgressingChild['status'] ?? '') === 'CONTEXT_TARGET_UNAVAILABLE'
+            && ($nonProgressingChild['ready_for_edit'] ?? true) === false
+            && ($nonProgressingChild['continuation_needed'] ?? true) === false
+            && ($nonProgressingChild['native_exact_path_fallback_allowed'] ?? false) === true
+            && !str_contains(
+                json_encode($nonProgressingChild['continuation']['batch_plan']['search_goals'] ?? [], JSON_UNESCAPED_UNICODE),
+                'Resolve remaining context dimensions',
+            ),
+        'non-progressing child path batches terminate instead of inventing search_goal loops',
     );
     $exactTargetRegions = [];
     $exactTargetRegionCounts = [];
@@ -2247,7 +2344,11 @@ try {
     check(str_contains(substr(ToolService::instructions(), 0, 512), 'readiness_id'), 'first 512 instruction characters require readiness binding');
     check(str_contains(ToolService::instructions(), 'get_edit_bundle once'), 'instructions preserve one-bundle editing');
     check(str_contains(ToolService::instructions(), 'submit_task_plan'), 'instructions require submit_task_plan before sealed edits');
-    check(str_contains(ToolService::instructions(), 'every user requirement'), 'instructions require plan on every user requirement');
+    check(str_contains(ToolService::instructions(), 'every coding/engineering user requirement'), 'instructions require plan on every coding/engineering user requirement');
+    check(str_contains(ToolService::instructions(), 'CALL SCOPE'), 'instructions declare MCP call scope gate');
+    check(str_contains(ToolService::instructions(), 'non-coding'), 'instructions skip MCP for non-coding turns');
+    check(str_contains(HardConstraintsCatalog::package()['mcp_operational'][0]['id'] ?? '', 'mcp_call_scope')
+        || in_array('mcp_call_scope', array_column(HardConstraintsCatalog::mcpOperationalRules(), 'id'), true), 'mcp_operational includes mcp_call_scope');
     check(str_contains(ToolService::instructions(), 'PLAN_REQUIRED'), 'instructions mention PLAN_REQUIRED');
 
     $ui = file_get_contents(dirname(__DIR__) . '/ui/execution-run-v1.html');
@@ -2262,7 +2363,8 @@ try {
     );
     check(
         str_contains((string) $ui, 'workflowLabels[workflow]')
-            && str_contains((string) $ui, 'CONTEXT_TARGET_AMBIGUOUS'),
+            && str_contains((string) $ui, 'CONTEXT_TARGET_AMBIGUOUS')
+            && str_contains((string) $ui, 'CONTEXT_TARGET_UNAVAILABLE'),
         'MCP App prioritizes specific context workflow states over generic failure',
     );
 

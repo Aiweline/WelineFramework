@@ -131,7 +131,7 @@ try {
     $missingPlanBlocked = $e->errorCode === TaskPlanGate::ERROR_PLAN_REQUIRED
         && ($e->details['next_action'] ?? '') === 'submit_task_plan'
         && ($e->details['hard_constraint'] ?? '') === 'user_requirement_full_workflow'
-        && ($e->details['trigger'] ?? '') === 'every_user_requirement'
+        && ($e->details['trigger'] ?? '') === 'every_coding_user_requirement'
         && is_array($e->details['plan_workflow'] ?? null);
     $planWorkflowPresent = isset($e->details['plan_workflow']['steps']);
 }
@@ -159,9 +159,9 @@ gateCheck(
 $missingEnvelope = TaskPlanGate::missingPlanEnvelope();
 gateCheck(
     ($missingEnvelope['status'] ?? '') === 'missing'
-        && ($missingEnvelope['trigger'] ?? '') === 'every_user_requirement'
+        && ($missingEnvelope['trigger'] ?? '') === 'every_coding_user_requirement'
         && is_array($missingEnvelope['plan_workflow'] ?? null),
-    'missingPlanEnvelope includes workflow blueprint and every_user_requirement trigger',
+    'missingPlanEnvelope includes workflow blueprint and every_coding_user_requirement trigger',
 );
 
 $blueprint = TaskPlanWorkflow::blueprint();
@@ -171,7 +171,7 @@ $stepIds = array_map(
 );
 gateCheck(
     ($blueprint['immediate_action'] ?? '') === 'submit_task_plan'
-        && ($blueprint['trigger'] ?? '') === 'every_user_requirement'
+        && ($blueprint['trigger'] ?? '') === 'every_coding_user_requirement'
         && count(is_array($blueprint['steps'] ?? null) ? $blueprint['steps'] : []) >= 8
         && in_array('requirement_analysis', $stepIds, true)
         && in_array('acceptance', $stepIds, true)
