@@ -898,25 +898,47 @@ final class ProjectRetriever
             $capacityMissingSymbols,
             self::CONTEXT_BATCH_SYMBOL_LIMIT,
         );
-        if (!$readyForEdit
+        $contextBatchDepth = max(0, (int) ($options['context_batch_depth'] ?? 0));
+        // Child batches must not invent another search_goal-only round; that recreates
+        // empty-path CONTEXT_BATCH_PLANNED loops when missing dimensions stay unchanged.
+        if ($contextBatchDepth >= 1) {
+            $nextSearchGoals = [];
+        }
+        $nextSearchGoals = Text::uniqueStrings($nextSearchGoals, false);
+        $concreteBatchCount = count($nextPathBatches) + count($nextSymbolBatches);
+        $nonProgressingConcreteBatches = $contextBatchDepth >= 1
+            && $this->contextBatchesAreNonProgressing(
+                $materializationPaths,
+                $symbols,
+                $nextPathBatches,
+                $nextSymbolBatches,
+            );
+        // Depth 0 may emit architecture role search_goals once. Depth >=1 or any call
+        // with no concrete path/symbol work and no remaining search goals is stalled.
+        $stalledWithoutProgress = !$readyForEdit
             && !$terminalContextFailure
-            && $nextPathBatches === []
-            && $nextSymbolBatches === []
-            && $nextSearchGoals === []) {
-            $nextSearchGoals[] = 'Resolve remaining context dimensions ['
-                . implode(', ', $missingDimensions)
-                . '] inside the original task scope.';
+            && (
+                $contextBatchDepth >= 2
+                || $nonProgressingConcreteBatches
+                || ($concreteBatchCount === 0 && (
+                    $contextBatchDepth >= 1
+                    || $nextSearchGoals === []
+                ))
+            );
+        if ($stalledWithoutProgress) {
+            $terminalContextFailure = true;
+            $terminalContextStatus = 'CONTEXT_TARGET_UNAVAILABLE';
         }
         if ($terminalContextFailure) {
             $nextPathBatches = [];
             $nextSymbolBatches = [];
             $nextSearchGoals = [];
         }
-        $nextSearchGoals = Text::uniqueStrings($nextSearchGoals, false);
         $batchCount = count($nextPathBatches)
             + count($nextSymbolBatches)
             + count($nextSearchGoals);
         $continuationNeeded = !$readyForEdit && !$terminalContextFailure;
+        $targetUnavailable = $terminalContextStatus === 'CONTEXT_TARGET_UNAVAILABLE';
         $batchPlan = [
             'schema_version' => 'context-batch-plan.v1',
             'status' => $readyForEdit
@@ -932,6 +954,7 @@ final class ProjectRetriever
             'search_goals' => $nextSearchGoals,
             'remaining_path_count' => array_sum(array_map('count', $nextPathBatches)),
             'missing_symbol_count' => count($missingSymbols),
+            'context_batch_depth' => $contextBatchDepth,
             'requires_user_confirmation' => false,
             'parent_apply_allowed' => false,
             'parent_terminal' => $continuationNeeded || $terminalContextFailure,
@@ -949,7 +972,9 @@ final class ProjectRetriever
             : ($terminalContextFailure
                 ? ($targetAmbiguous
                     ? 'One or more short requested symbols resolve to multiple in-scope definitions.'
-                    : 'One or more exact requested symbols do not exist in the refreshed in-scope index.')
+                    : ($targetUnavailable
+                        ? 'Context materialization stalled without concrete path/symbol progress; further CONTEXT_BATCH_PLANNED children would not change missing targets.'
+                        : 'One or more exact requested symbols do not exist in the refreshed in-scope index.'))
                 : 'The bounded parent reached its context capacity; executable child requests cover every remaining target.');
         $continuation['next_path_batches'] = $nextPathBatches;
         $continuation['next_symbol_batches'] = $nextSymbolBatches;
@@ -974,6 +999,8 @@ final class ProjectRetriever
             'ready_for_edit' => $readyForEdit,
             'coverage_status' => $coverage['status'],
             'continuation_needed' => $continuationNeeded,
+            'mcp_target_unavailable' => $targetUnavailable,
+            'native_exact_path_fallback_allowed' => $targetUnavailable,
             'missing_paths' => $missingPaths,
             'missing_symbols' => $missingSymbols,
             'unresolved_targets' => [
@@ -1510,6 +1537,64 @@ final class ProjectRetriever
                 'batch_policy' => 'Submit each non-empty path batch together. Combine all search goals into one discovery call; never query one file or one role at a time.',
             ],
         ];
+    }
+
+    /**
+     * Child context batches that only restate paths/symbols already requested in
+     * this call cannot make progress; re-emitting CONTEXT_BATCH_PLANNED would loop.
+     *
+     * @param list<string> $requestedPaths
+     * @param list<string> $requestedSymbols
+     * @param list<list<string>> $nextPathBatches
+     * @param list<list<string>> $nextSymbolBatches
+     */
+    private function contextBatchesAreNonProgressing(
+        array $requestedPaths,
+        array $requestedSymbols,
+        array $nextPathBatches,
+        array $nextSymbolBatches,
+    ): bool {
+        $plannedPaths = [];
+        foreach ($nextPathBatches as $pathBatch) {
+            if (!is_array($pathBatch)) {
+                continue;
+            }
+            foreach ($pathBatch as $path) {
+                $path = trim((string) $path);
+                if ($path !== '') {
+                    $plannedPaths[] = $path;
+                }
+            }
+        }
+        $plannedSymbols = [];
+        foreach ($nextSymbolBatches as $symbolBatch) {
+            if (!is_array($symbolBatch)) {
+                continue;
+            }
+            foreach ($symbolBatch as $symbol) {
+                $symbol = trim((string) $symbol);
+                if ($symbol !== '') {
+                    $plannedSymbols[] = $symbol;
+                }
+            }
+        }
+        if ($plannedPaths === [] && $plannedSymbols === []) {
+            return true;
+        }
+        $requestedPathLookup = array_fill_keys($requestedPaths, true);
+        foreach ($plannedPaths as $path) {
+            if (!isset($requestedPathLookup[$path])) {
+                return false;
+            }
+        }
+        $requestedSymbolLookup = array_fill_keys($requestedSymbols, true);
+        foreach ($plannedSymbols as $symbol) {
+            if (!isset($requestedSymbolLookup[$symbol])) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

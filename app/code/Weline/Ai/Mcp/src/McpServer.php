@@ -267,7 +267,7 @@ final class McpServer
         } elseif (in_array($code, ['INDEX_NOT_READY', 'INDEX_SYMBOL_QUERY_FAILED', 'INDEX_SYMBOL_REFRESH_FAILED'], true)) {
             $details['workflow_state'] = 'CONTEXT_INDEX_RETRY';
             $details['model_continuation_allowed'] = true;
-        } elseif (in_array($code, ['CONTEXT_INCOMPLETE', 'CONTEXT_TARGET_AMBIGUOUS'], true)) {
+        } elseif (in_array($code, ['CONTEXT_INCOMPLETE', 'CONTEXT_TARGET_AMBIGUOUS', 'CONTEXT_TARGET_UNAVAILABLE'], true)) {
             $details['workflow_state'] = $code;
             $details['model_continuation_allowed'] = false;
         }

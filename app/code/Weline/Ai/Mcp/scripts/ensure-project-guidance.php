@@ -45,7 +45,7 @@ $branchOk = $branch === 'dev';
 $sourceState = welineGuidanceSourceState($mcpRoot);
 $hostRuntime = welineGuidanceHostRuntimeState((int) $sourceState['latest_mtime']);
 
-$ensureScript = $mcpRoot . DIRECTORY_SEPARATOR . 'scripts' . DIRECTORY_SEPARATOR . 'ensure-cursor-mcp.php';
+$ensureScript = $mcpRoot . DIRECTORY_SEPARATOR . 'scripts' . DIRECTORY_SEPARATOR . 'ensure-host-mcp-registrations.php';
 $ensure = welineGuidanceRunPhp($ensureScript, $repoRoot);
 if (($ensure['exit_code'] ?? 1) !== 0) {
     welineGuidanceEmit([
@@ -58,28 +58,27 @@ if (($ensure['exit_code'] ?? 1) !== 0) {
         'repairs' => $repairs,
         'ensure_mcp' => $ensure,
         'blocker' => [
-            'code' => 'HOST_MCP_ENSURE_FAILED',
-            'message' => 'Automatic MCP registration/enable failed.',
+            'code' => 'HOST_MCP_GUIDANCE_FAILED',
+            'message' => 'Unable to resolve host MCP install guidance.',
         ],
-        'agent_next_action' => 'Report ensure-project-guidance failure; do not ask the user to hand-edit MCP settings.',
+        'agent_next_action' => 'Report ensure-project-guidance failure; bootstrap must not write host MCP configs.',
     ], 1);
 }
 
 $ensurePayload = is_array($ensure['json'] ?? null) ? $ensure['json'] : [];
-$hostReady = (bool) (($ensurePayload['host']['ready'] ?? false));
-if (($ensurePayload['changed'] ?? false) === true || ($ensurePayload['user_changed'] ?? false) === true) {
-    $repairs[] = 'rewrote_cursor_mcp_registration';
-}
-if (($ensurePayload['enable']['enabled'] ?? false) === true) {
-    $repairs[] = 'cursor_agent_mcp_enable';
-}
+$cursorPayload = is_array($ensurePayload['cursor'] ?? null) ? $ensurePayload['cursor'] : [];
+$hostReady = (bool) (($ensurePayload['primary_ready'] ?? false) || ($cursorPayload['host']['ready'] ?? false));
+$hostMcpInstall = [
+    'schema_version' => $ensurePayload['schema_version'] ?? 'host-mcp-install-guidance.v1',
+    'writes_host_config' => false,
+    'primary_host' => $ensurePayload['primary_host'] ?? null,
+    'primary_ready' => $ensurePayload['primary_ready'] ?? false,
+    'hosts' => $ensurePayload['hosts'] ?? null,
+    'registration' => $ensurePayload['registration'] ?? null,
+    'agent_next_action' => $ensurePayload['agent_next_action'] ?? null,
+];
 $userMcp = welineGuidanceUserMcpPath();
-$mcpConfigChanged = (($ensurePayload['changed'] ?? false) === true)
-    || (($ensurePayload['user_changed'] ?? false) === true);
-if ($userMcp !== null && is_file($userMcp) && ($mcpConfigChanged || !$hostReady)) {
-    touch($userMcp);
-    $repairs[] = 'touched_user_mcp_json_for_host_respawn';
-}
+$mcpConfigChanged = false;
 
 $codexPlugin = welineGuidanceEnsureCodexPlugin($repoRoot, $mcpRoot, $hostRuntime, $sourceState);
 if (($codexPlugin['ready'] ?? false) !== true) {
@@ -175,8 +174,8 @@ if (!$branchOk) {
     ];
     $nextAction = 'Stop with MCP_REQUIRED_TOOLS_MISSING; do not call prepare_project through an incomplete tool catalog.';
 } elseif (!$hostReady) {
-    $status = 'host_repair_needed';
-    $nextAction = 'Host CLI is not ready yet. Rerun ensure-project-guidance after the host reload; never continue through a closed MCP handle.';
+    $status = 'host_install_needed';
+    $nextAction = (string) ($hostMcpInstall['agent_next_action'] ?? 'Execute host_mcp_install steps in this session, rerun ensure-project-guidance, then prepare_project.');
 } elseif ($hostReloadRequired) {
     $status = 'host_repair_needed';
     $nextAction = (($restart['scheduled'] ?? false) === true)
@@ -196,6 +195,24 @@ welineGuidanceEmit([
     'repository' => $repoRoot,
     'git_branch' => $branch,
     'git_branch_ok' => $branchOk,
+    'mcp_init_check' => [
+        'schema_version' => 'mcp-init-check.v1',
+        'server' => 'weline_project_intelligence',
+        'correct' => $status === 'ready',
+        'verdict' => $status,
+        'may_call_prepare_project' => $status === 'ready',
+        'checks' => [
+            'git_branch_dev' => $branchOk,
+            'stdio_probe' => $stdioOk,
+            'stdio_required_tools' => $missingRequiredTools === [],
+            'host_attached' => $hostReady,
+            'host_runtime_current' => !$hostReloadRequired,
+            'session_tool_catalog' => 'verify_in_chat',
+        ],
+        'missing_required_tools' => $missingRequiredTools,
+        'primary_host' => $hostMcpInstall['primary_host'] ?? null,
+        'note' => 'session_tool_catalog is not probed by ensure; if prepare_project is missing in this chat despite correct=true, start a new Agent turn (HOST_MCP_SESSION_CATALOG_STALE).',
+    ],
     'mcp_stdio' => $stdio,
     'mcp_required_tools' => welineGuidanceRequiredMcpTools(),
     'mcp_source' => $sourceState,
@@ -205,12 +222,12 @@ welineGuidanceEmit([
     'host_reload_policy' => $reloadDecision,
     'host_restart' => $restart,
     'cursor_mcp_bounce' => $cursorBounce,
-    'mcp_host' => $ensurePayload['host'] ?? null,
+    'mcp_host' => $cursorPayload['host'] ?? null,
+    'host_mcp_install' => $hostMcpInstall,
     'ensure_mcp' => [
-        'changed' => $ensurePayload['changed'] ?? false,
-        'user_changed' => $ensurePayload['user_changed'] ?? false,
-        'enable' => $ensurePayload['enable'] ?? null,
-        'permissions' => $ensurePayload['permissions'] ?? null,
+        'writes_host_config' => false,
+        'primary_ready' => $ensurePayload['primary_ready'] ?? false,
+        'primary_host' => $ensurePayload['primary_host'] ?? null,
     ],
     'repairs' => array_values(array_unique($repairs)),
     'blocker' => $blocker,
