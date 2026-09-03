@@ -326,7 +326,10 @@ $adapterCallbackUrl = static function (array $adapter) use ($templateInstance, $
     }
 
     // 与支付 OAuth redirect_uri 同源，避免展示地址与实际授权不一致
-    if ($callbackPath === 'payment/frontend/callback/return'
+    if ((str_starts_with($callbackPath, 'payment/frontend/callback/')
+            && !str_contains($callbackPath, '/return/')
+            && !str_ends_with($callbackPath, '.cancel')
+            && $callbackPath !== 'payment/frontend/callback/notify')
         && class_exists(\Weline\Payment\Service\PayPalOAuthService::class)
     ) {
         try {
