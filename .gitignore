@@ -8,6 +8,11 @@
 /tmp/
 /data/pagebuilder/
 
+# Uploaded / generated storefront media — only keep the placeholder
+/pub/media/**
+!/pub/media/
+!/pub/media/.gitkeep
+
 # IDE / editor local config (do not commit)
 .idea
 .vscode
