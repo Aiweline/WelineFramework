@@ -336,8 +336,11 @@ try {
         }
 
         .wf-home__shell {
-            width: min(1180px, calc(100% - 40px));
-            margin: 0 auto;
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
         }
 
         .wf-nav {
