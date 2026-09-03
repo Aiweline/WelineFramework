@@ -31,7 +31,7 @@ return [
             'layout-footer-partner-links',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'footer-partner-links',
             'area' => 'footer',
             'sort_order' => 10,
