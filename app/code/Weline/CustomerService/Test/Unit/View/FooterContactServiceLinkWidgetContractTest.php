@@ -8,20 +8,21 @@ use PHPUnit\Framework\TestCase;
 
 final class FooterContactServiceLinkWidgetContractTest extends TestCase
 {
-    public function testFooterContactServiceLinkRegistersDefaultInjection(): void
+    public function testFooterContactServiceLinkRegistersHomepageDefaultAndRemainsGloballyAvailable(): void
     {
         $widgetFile = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_CustomerService/widget.php';
         self::assertFileExists($widgetFile);
         $widgets = require $widgetFile;
         self::assertArrayHasKey('footer-contact-service-link', $widgets);
         $widget = $widgets['footer-contact-service-link'];
+        self::assertSame(['*'], $widget['page_layouts'] ?? null);
         self::assertSame('footer-help-links', $widget['slot'] ?? null);
         self::assertSame(
             'Weline_CustomerService::templates/frontend/widgets/footer-contact-service-link.phtml',
             $widget['template'] ?? null
         );
         $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('*', $injection['layout_type'] ?? null);
+        self::assertSame('homepage', $injection['layout_type'] ?? null);
         self::assertSame('footer-help-links', $injection['slot'] ?? null);
         self::assertSame(50, (int)($injection['sort_order'] ?? -1));
         self::assertSame('联系客服', $injection['config']['label'] ?? null);
