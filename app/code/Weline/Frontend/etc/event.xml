@@ -22,4 +22,11 @@
     <event name="Weline_Framework_FrontendController::init_before">
         <observer name="Weline_Frontend::auto_login" instance="Weline\Frontend\Observer\AutoLogin" disabled="false" shared="true" sort="0"/>
     </event>
+    <event name="Weline_Seo::integration::head_context_resolve">
+        <observer name="Weline_Frontend::seo_head_context_provider_bridge"
+                  instance="Weline\Frontend\Observer\SeoHeadContextResolve"
+                  disabled="false"
+                  shared="true"
+                  sort="15"/>
+    </event>
 </config>
