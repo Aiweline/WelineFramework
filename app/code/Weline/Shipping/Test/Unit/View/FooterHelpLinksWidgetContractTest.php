@@ -17,7 +17,7 @@ final class FooterHelpLinksWidgetContractTest extends TestCase
         $widget = $widgets['footer-shipping-info-link'];
         self::assertSame('footer-help-links', $widget['slot'] ?? null);
         $injection = $widget['default_injections'][0] ?? [];
-        self::assertSame('*', $injection['layout_type'] ?? null);
+        self::assertSame('homepage', $injection['layout_type'] ?? null);
         self::assertSame('footer-help-links', $injection['slot'] ?? null);
         self::assertSame(20, (int)($injection['sort_order'] ?? -1));
         self::assertSame('配送说明', $injection['config']['label'] ?? null);
@@ -70,7 +70,11 @@ final class FooterHelpLinksWidgetContractTest extends TestCase
         );
         self::assertStringContainsString('data-testid="shipping-guide"', $shippingTpl);
         self::assertStringContainsString('data-testid="shipping-returns"', $returnsTpl);
-        self::assertStringContainsString('<lang>', $shippingTpl);
-        self::assertStringContainsString('<lang>', $returnsTpl);
+        self::assertStringContainsString('amazon-doc__panel', $shippingTpl);
+        self::assertStringContainsString('amazon-doc__panel', $returnsTpl);
+        self::assertStringContainsString('一、发货时效', $shippingTpl);
+        self::assertStringContainsString('一、适用条件', $returnsTpl);
+        self::assertStringNotContainsString('width: min(52rem', $shippingTpl);
+        self::assertStringNotContainsString('width: min(52rem', $returnsTpl);
     }
 }

@@ -1,34 +1,155 @@
 <?php
 /**
- * 前台退换货政策页。
+ * 前台退换货政策正文（注入 Theme layouts/guide/default 壳）。
  *
  * @var \Weline\Framework\View\Template $this
  */
+$toc = [
+    ['id' => 'returns-s1', 'label' => __('一、适用条件')],
+    ['id' => 'returns-s2', 'label' => __('二、不予退换的情形')],
+    ['id' => 'returns-s3', 'label' => __('三、办理流程')],
+    ['id' => 'returns-s4', 'label' => __('四、运费说明')],
+    ['id' => 'returns-s5', 'label' => __('五、退款金额与到账')],
+    ['id' => 'returns-s6', 'label' => __('六、换货规则')],
+    ['id' => 'returns-s7', 'label' => __('七、尺码与试穿建议')],
+    ['id' => 'returns-s8', 'label' => __('八、争议与联系')],
+];
 ?>
-<section class="shipping-returns" data-testid="shipping-returns" weline-code="shipping.returns">
-    <header class="shipping-returns__header">
-        <h1 class="shipping-returns__title"><lang>退换政策</lang></h1>
-        <p class="shipping-returns__subtitle">
-            <lang>了解退换货条件、办理流程与注意事项。</lang>
-        </p>
+<article class="amazon-doc" data-testid="shipping-returns" weline-code="shipping.returns">
+    <style>
+        .amazon-doc { width: 100%; max-width: none; margin: 0; padding: 0; color: var(--weline-layout-text-primary, #0f1111); }
+        .amazon-doc__hero {
+            margin: 0 0 var(--weline-space-5, 1.25rem);
+            padding: clamp(1.35rem, 3vw, 1.85rem) clamp(1.15rem, 2.5vw, 1.75rem);
+            border-radius: 8px;
+            background:
+                radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
+                linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
+            color: #fff;
+        }
+        .amazon-doc__eyebrow { margin: 0 0 .4rem; font-size: .82rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: #febd69; }
+        .amazon-doc__hero h1 { margin: 0; font-size: clamp(1.55rem, 3.2vw, 2.1rem); line-height: 1.2; color: #fff; }
+        .amazon-doc__hero p { margin: .75rem 0 0; max-width: 46rem; line-height: 1.65; color: #ddd; }
+        .amazon-doc__panel {
+            display: grid;
+            grid-template-columns: minmax(11rem, 14rem) minmax(0, 1fr);
+            gap: 0;
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(15, 17, 17, .08);
+            overflow: hidden;
+        }
+        .amazon-doc__toc { padding: 1.1rem 1rem 1.25rem; border-right: 1px solid #e3e6e6; background: #fafafa; }
+        .amazon-doc__toc h2 { margin: 0 0 .7rem; font-size: .95rem; }
+        .amazon-doc__toc nav { display: grid; gap: .3rem; }
+        .amazon-doc__toc a { display: block; padding: .35rem .5rem; border-radius: 4px; color: #007185; text-decoration: none; font-size: .9rem; line-height: 1.35; }
+        .amazon-doc__toc a:hover { background: #f7fafa; color: #c45500; text-decoration: underline; }
+        .amazon-doc__body { padding: clamp(1.1rem, 2.4vw, 1.65rem); }
+        .amazon-doc__section { margin-top: 1.35rem; scroll-margin-top: 1rem; }
+        .amazon-doc__section:first-of-type { margin-top: 0; }
+        .amazon-doc__section h2 { margin: 0 0 .7rem; font-size: 1.15rem; border-left: 4px solid #ff9900; padding-left: .65rem; }
+        .amazon-doc__section p, .amazon-doc__section li { margin: 0 0 .65rem; line-height: 1.7; color: #333; }
+        .amazon-doc__section ul { margin: .3rem 0 .9rem; padding-left: 1.3rem; }
+        .amazon-doc__related { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid #e3e6e6; display: flex; flex-wrap: wrap; gap: .65rem 1rem; }
+        .amazon-doc__related a { color: #007185; text-decoration: none; font-size: .92rem; }
+        .amazon-doc__related a:hover { color: #c45500; text-decoration: underline; }
+        @media (max-width: 900px) {
+            .amazon-doc__panel { grid-template-columns: 1fr; }
+            .amazon-doc__toc { border-right: 0; border-bottom: 1px solid #e3e6e6; }
+            .amazon-doc__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) {
+            .amazon-doc__toc nav { grid-template-columns: 1fr; }
+        }
+    </style>
+
+    <header class="amazon-doc__hero" aria-labelledby="returns-title">
+        <p class="amazon-doc__eyebrow"><lang>帮助中心</lang></p>
+        <h1 id="returns-title"><lang>退换政策</lang></h1>
+        <p><lang>本页说明退货、换货与退款的适用条件、办理流程、运费承担、到账时效与特殊品类规则。下单即表示您已阅读并理解本政策；法律法规另有强制性规定的，从其规定。</lang></p>
     </header>
 
-    <article class="shipping-returns__section">
-        <h2><lang>适用条件</lang></h2>
-        <p><lang>自签收之日起 7 日内，未使用、不影响二次销售的商品可申请退换（法规另有规定的除外）。食品、贴身衣物、定制商品等特殊品类以商品页说明为准。</lang></p>
-    </article>
+    <div class="amazon-doc__panel">
+        <aside class="amazon-doc__toc" aria-label="<?= htmlspecialchars((string)__('退换政策目录'), ENT_QUOTES, 'UTF-8') ?>">
+            <h2><lang>目录</lang></h2>
+            <nav>
+                <?php foreach ($toc as $item): ?>
+                    <a href="#<?= htmlspecialchars($item['id'], ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars((string)$item['label'], ENT_QUOTES, 'UTF-8') ?></a>
+                <?php endforeach; ?>
+            </nav>
+        </aside>
 
-    <article class="shipping-returns__section">
-        <h2><lang>办理流程</lang></h2>
-        <p><lang>登录「我的订单」选择对应订单提交售后申请，按提示填写原因并上传凭证。审核通过后按指引寄回商品；我们确认收货后将尽快完成退款或换货发货。</lang></p>
-    </article>
+        <div class="amazon-doc__body">
+            <section class="amazon-doc__section" id="returns-s1" weline-code="shipping.guide.returns.s1">
+                <h2><lang>一、适用条件</lang></h2>
+                <p><lang>1.1 一般情形：自签收之日起 7 日内，商品未经穿着使用（或仅试穿）、吊牌完整、不影响二次销售的，可申请退货或换货。</lang></p>
+                <p><lang>1.2 质量问题：存在做工瑕疵、破损、污渍、尺码与标称明显不符、错发漏发等情形的，不受「未使用」限制，但仍需保留商品与凭证并尽快申报。</lang></p>
+                <p><lang>1.3 特殊品类：定制/来图定做、剪裁改衣、贴身内衣、已下水洗涤、已拆封的易耗配件、以及商品页明确标注「不支持无理由退换」的特价/清仓商品，适用商品页特别约定；无质量问题通常不支持无理由退换。</lang></p>
+                <p><lang>1.4 法规权利：依法适用七日无理由退货的品类，按其法定条件执行；本政策不得减损您依法享有的权利。</lang></p>
+            </section>
 
-    <article class="shipping-returns__section">
-        <h2><lang>运费说明</lang></h2>
-        <p><lang>因质量问题产生的退换，往返运费由我们承担。因个人原因退换，寄回运费由买家承担；换货的二次发出运费视活动与商品政策而定。</lang></p>
-    </article>
+            <section class="amazon-doc__section" id="returns-s2" weline-code="shipping.guide.returns.s2">
+                <h2><lang>二、不予退换的情形</lang></h2>
+                <ul>
+                    <li><lang>超过约定或法定退换期限，且不存在质量或错发问题；</lang></li>
+                    <li><lang>商品已穿着使用、洗涤、染色、裁剪、熨烫变形，或吊牌/防伪标缺失导致无法二次销售；</lang></li>
+                    <li><lang>非本站出售商品、缺少配件/赠品、或凭证不全无法核对订单；</lang></li>
+                    <li><lang>因个人喜好、选错颜色/尺码且已超过无理由期限（质量问题除外）；</lang></li>
+                    <li><lang>虚拟商品、电子兑换码、已履约的服务类商品（无质量问题）。</lang></li>
+                </ul>
+            </section>
 
-    <p class="shipping-returns__related">
-        <a href="@url{'guide/shipping'}"><lang>查看配送说明</lang></a>
-    </p>
-</section>
+            <section class="amazon-doc__section" id="returns-s3" weline-code="shipping.guide.returns.s3">
+                <h2><lang>三、办理流程</lang></h2>
+                <p><lang>3.1 提交申请：登录账户进入「我的订单」，选择对应订单与商品，提交售后（退货/换货/仅退款），填写原因并上传清晰照片或视频。</lang></p>
+                <p><lang>3.2 审核：我们将在 1–3 个工作日内完成初审。审核通过后，系统或客服会告知退货地址、寄回要求与注意事项。</lang></p>
+                <p><lang>3.3 寄回商品：请使用可追踪物流寄回，妥善包装并保留运单。建议在包裹内附上订单号与联系方式。</lang></p>
+                <p><lang>3.4 收货确认：我们收到退回商品后，将在 1–2 个工作日内完成质检核对。</lang></p>
+                <p><lang>3.5 完成处理：退货通过后办理退款；换货通过后安排重新发出。进度可在订单售后详情中查看。</lang></p>
+            </section>
+
+            <section class="amazon-doc__section" id="returns-s4" weline-code="shipping.guide.returns.s4">
+                <h2><lang>四、运费说明</lang></h2>
+                <p><lang>4.1 因商品质量问题、错发、漏发导致的退换：往返运费由我们承担（按实际产生且合理的标准运费核实报销或直免）。</lang></p>
+                <p><lang>4.2 因个人原因（尺码不合适、不喜欢、拍错）退换：寄回运费由买家承担；换货的二次发出运费视活动与商品政策而定，结账或客服确认时会明示。</lang></p>
+                <p><lang>4.3 到付件：未经同意的到付包裹可能被拒收，因此产生的费用由寄件方承担。</lang></p>
+            </section>
+
+            <section class="amazon-doc__section" id="returns-s5" weline-code="shipping.guide.returns.s5">
+                <h2><lang>五、退款金额与到账</lang></h2>
+                <p><lang>5.1 退款金额一般为商品实付金额。因质量问题退货的，符合条件的运费一并退还；个人原因退货可能扣除已产生的运费优惠或回程运费。</lang></p>
+                <p><lang>5.2 优惠券、满减、积分、赠品：已使用的优惠是否退回以活动规则为准；赠品如已使用或损坏，可能需补差或从退款中扣除相应金额。</lang></p>
+                <p><lang>5.3 到账时效：质检通过后 3–15 个工作日内原路退回，具体到账时间以支付渠道（银行卡、第三方支付等）为准。节假日可能顺延。</lang></p>
+            </section>
+
+            <section class="amazon-doc__section" id="returns-s6" weline-code="shipping.guide.returns.s6">
+                <h2><lang>六、换货规则</lang></h2>
+                <p><lang>6.1 换货适用于同款不同尺码/颜色且库存充足的情形；无同款库存时，可改为退货退款或协商其它方案。</lang></p>
+                <p><lang>6.2 换货商品寄回要求与退货相同。换出商品发货后，物流与签收规则适用《配送说明》。</lang></p>
+                <p><lang>6.3 定制类商品原则上不支持换款，仅对确认的质量问题提供修补、重做或退款方案。</lang></p>
+            </section>
+
+            <section class="amazon-doc__section" id="returns-s7" weline-code="shipping.guide.returns.s7">
+                <h2><lang>七、尺码与试穿建议</lang></h2>
+                <ul>
+                    <li><lang>下单前请对照商品页尺码表与自身三围/身高体重；若介于两码之间，可先咨询客服。</lang></li>
+                    <li><lang>试穿请在清洁环境进行，避免化妆沾染、香水、烟味；保留吊牌与原包装。</lang></li>
+                    <li><lang>汉服形制、交领宽窄、袖型等观感因个人审美差异较大，非质量问题时请优先参考详情页实拍与尺寸，并在期限内申请退换。</lang></li>
+                </ul>
+            </section>
+
+            <section class="amazon-doc__section" id="returns-s8" weline-code="shipping.guide.returns.s8">
+                <h2><lang>八、争议与联系</lang></h2>
+                <p><lang>如对审核结果有异议，可通过帮助中心「联系客服」或联系我们页提交补充材料。我们将在合理期限内复核。更完整的退款条款亦可参阅退款政策页。</lang></p>
+            </section>
+
+            <p class="amazon-doc__related">
+                <a href="@url{'guide/shipping'}"><lang>查看配送说明</lang></a>
+                <a href="@url{'refund'}"><lang>查看退款政策</lang></a>
+                <a href="@url{'help'}"><lang>返回帮助中心</lang></a>
+                <a href="@url{'customer/account/index'}#orders"><lang>前往我的订单</lang></a>
+            </p>
+        </div>
+    </div>
+</article>

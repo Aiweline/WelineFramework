@@ -60,7 +60,32 @@ $seed = [
     'district' => (string)($formAddress['district'] ?? ''),
     'address1' => (string)($formAddress['address1'] ?? $formAddress['street'] ?? ''),
     'postal_code' => (string)($formAddress['postal_code'] ?? ''),
-    'address_id' => (string)($formAddress['address_id'] ?? ''),
+    'address_id' => (string)($formAddress['address_id'] ?? $selected['id'] ?? ''),
+];
+
+$hasSaved = $addresses !== [];
+$selectedId = (string)($seed['address_id'] ?? '');
+if ($selectedId === '' && $hasSaved) {
+    foreach ($addresses as $address) {
+        if (!empty($address['is_selected'])) {
+            $selectedId = (string)($address['id'] ?? '');
+            break;
+        }
+    }
+    if ($selectedId === '') {
+        $selectedId = (string)($addresses[0]['id'] ?? '');
+    }
+}
+$initialMode = $hasSaved ? 'collapsed' : 'new';
+$ui = [
+    'edit' => (string)__('编辑'),
+    'add_new' => (string)__('使用新地址'),
+    'cancel' => (string)__('取消'),
+    'save_use' => (string)__('使用此地址'),
+    'billing_same' => (string)__('账单地址与收货地址相同'),
+    'billing_title' => (string)__('账单地址'),
+    'shipping_title' => (string)__('收货地址'),
+    'saved_heading' => (string)__('选择收货地址'),
 ];
 ?>
 <section class="<?= $esc($scope->cssClass) ?> w-shipping-checkout-address"
@@ -70,73 +95,176 @@ $seed = [
          data-testid="shipping-checkout-address"
          data-shipping-checkout-address
          data-weline-load="shippingCheckoutAddress"
-         data-initial-address="<?= $esc(json_encode($seed, $jsonFlags) ?: '{}') ?>">
-    <?php if ($addresses !== []): ?>
-    <div class="w-shipping-checkout-address__saved" data-saved-addresses>
-        <span class="w-shipping-checkout-address__saved-label"><?= __('选择已存地址') ?></span>
-        <div class="w-shipping-checkout-address__tags" role="list">
-            <?php foreach ($addresses as $address): ?>
-                <?php
-                $id = (string)($address['id'] ?? '');
-                $label = (string)($address['display_label'] ?? $address['full_address'] ?? $id);
-                $isSelected = !empty($address['is_selected']);
-                $payload = [
-                    'id' => $id,
-                    'name' => (string)($address['contact_name'] ?? $address['name'] ?? ''),
-                    'phone' => (string)($address['contact_phone'] ?? $address['phone'] ?? ''),
-                    'email' => (string)($seed['email'] ?? ''),
-                    'country_code' => (string)($address['country_code'] ?? ''),
-                    'country' => (string)($address['country'] ?? $address['country_name'] ?? ''),
-                    'province' => (string)($address['province'] ?? ''),
-                    'city' => (string)($address['city'] ?? ''),
-                    'district' => (string)($address['district'] ?? ''),
-                    'address1' => (string)($address['street'] ?? $address['address1'] ?? ''),
-                    'postal_code' => (string)($address['postal_code'] ?? ''),
-                ];
-                ?>
-                <button type="button"
-                        class="w-shipping-checkout-address__tag<?= $isSelected ? ' is-selected' : '' ?>"
-                        role="listitem"
-                        data-address-id="<?= $esc($id) ?>"
-                        data-address-json="<?= $esc(json_encode($payload, $jsonFlags) ?: '{}') ?>"
-                        aria-pressed="<?= $isSelected ? 'true' : 'false' ?>">
-                    <?= $esc($label) ?>
+         data-mode="<?= $esc($initialMode) ?>"
+         data-has-saved="<?= $hasSaved ? '1' : '0' ?>"
+         data-selected-id="<?= $esc($selectedId) ?>"
+         data-initial-address="<?= $esc(json_encode($seed, $jsonFlags) ?: '{}') ?>"
+         data-i18n="<?= $esc(json_encode($ui, $jsonFlags) ?: '{}') ?>">
+
+    <div class="w-shipping-checkout-address__section" data-shipping-section>
+        <h3 class="w-shipping-checkout-address__heading"><?= $esc($ui['shipping_title']) ?></h3>
+
+        <?php if ($hasSaved): ?>
+        <div class="w-shipping-checkout-address__saved" data-saved-addresses>
+            <p class="w-shipping-checkout-address__saved-label"><?= $esc($ui['saved_heading']) ?></p>
+            <div class="w-shipping-checkout-address__cards" role="radiogroup" aria-label="<?= $esc($ui['saved_heading']) ?>">
+                <?php foreach ($addresses as $address): ?>
+                    <?php
+                    $id = (string)($address['id'] ?? '');
+                    $name = (string)($address['contact_name'] ?? $address['name'] ?? '');
+                    $phone = (string)($address['contact_phone'] ?? $address['phone'] ?? '');
+                    $label = (string)($address['display_label'] ?? $address['full_address'] ?? $id);
+                    $line = trim(implode(' / ', array_filter([
+                        (string)($address['country'] ?? $address['country_name'] ?? $address['country_code'] ?? ''),
+                        (string)($address['province'] ?? ''),
+                        (string)($address['city'] ?? ''),
+                        (string)($address['district'] ?? ''),
+                        (string)($address['street'] ?? $address['address1'] ?? ''),
+                    ], static fn (string $part): bool => $part !== '')));
+                    $isSelected = $id !== '' && $id === $selectedId;
+                    $payload = [
+                        'id' => $id,
+                        'name' => $name,
+                        'phone' => $phone,
+                        'email' => (string)($seed['email'] ?? ''),
+                        'country_code' => (string)($address['country_code'] ?? ''),
+                        'country' => (string)($address['country'] ?? $address['country_name'] ?? ''),
+                        'province' => (string)($address['province'] ?? ''),
+                        'city' => (string)($address['city'] ?? ''),
+                        'district' => (string)($address['district'] ?? ''),
+                        'address1' => (string)($address['street'] ?? $address['address1'] ?? ''),
+                        'postal_code' => (string)($address['postal_code'] ?? ''),
+                    ];
+                    ?>
+                    <label class="w-shipping-checkout-address__card<?= $isSelected ? ' is-selected' : '' ?>"
+                           data-address-card
+                           data-address-id="<?= $esc($id) ?>"
+                           data-address-json="<?= $esc(json_encode($payload, $jsonFlags) ?: '{}') ?>">
+                        <input class="w-shipping-checkout-address__radio"
+                               type="radio"
+                               name="shipping_address_id"
+                               value="<?= $esc($id) ?>"
+                               <?= $isSelected ? 'checked' : '' ?>
+                               data-address-radio>
+                        <span class="w-shipping-checkout-address__card-body">
+                            <?php if ($name !== ''): ?>
+                                <strong class="w-shipping-checkout-address__card-name"><?= $esc($name) ?></strong>
+                            <?php endif; ?>
+                            <?php if ($phone !== ''): ?>
+                                <span class="w-shipping-checkout-address__card-meta"><?= $esc($phone) ?></span>
+                            <?php endif; ?>
+                            <span class="w-shipping-checkout-address__card-line"><?= $esc($line !== '' ? $line : $label) ?></span>
+                        </span>
+                        <button type="button"
+                                class="w-shipping-checkout-address__card-edit"
+                                data-edit-address
+                                data-address-id="<?= $esc($id) ?>">
+                            <?= $esc($ui['edit']) ?>
+                        </button>
+                    </label>
+                <?php endforeach; ?>
+            </div>
+            <button type="button" class="w-shipping-checkout-address__link-btn" data-add-address>
+                <?= $esc($ui['add_new']) ?>
+            </button>
+        </div>
+        <?php endif; ?>
+
+        <div class="w-shipping-checkout-address__editor"
+             data-address-editor
+             data-shipping-editor
+             <?= $hasSaved ? 'hidden' : '' ?>>
+            <div class="w-shipping-checkout-address__grid">
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><?= __('收货人') ?></span>
+                    <input class="w-form-control w-input" name="name" type="text" <?= $hasSaved ? '' : 'required' ?> autocomplete="shipping name" value="<?= $esc($seed['name']) ?>" data-shipping-field>
+                </label>
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><?= __('电话') ?></span>
+                    <input class="w-form-control w-input" name="phone" type="tel" <?= $hasSaved ? '' : 'required' ?> autocomplete="shipping tel" value="<?= $esc($seed['phone']) ?>" data-shipping-field>
+                </label>
+                <label class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
+                    <span class="w-form-label"><?= __('邮箱') ?></span>
+                    <input class="w-form-control w-input" name="email" type="email" <?= $hasSaved ? '' : 'required' ?> autocomplete="email" value="<?= $esc($seed['email']) ?>" data-shipping-field>
+                </label>
+                <div class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide" data-shipping-address-cascade>
+                    <w:theme:address
+                        levels="country,province,city"
+                        code="checkout-shipping-address"
+                        searchable="true"
+                        cascade="true"
+                        district="true" />
+                </div>
+                <label class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
+                    <span class="w-form-label"><?= __('详细地址') ?></span>
+                    <input class="w-form-control w-input" name="address1" type="text" <?= $hasSaved ? '' : 'required' ?> autocomplete="shipping street-address" value="<?= $esc($seed['address1']) ?>" data-shipping-field>
+                </label>
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><?= __('邮编') ?></span>
+                    <input class="w-form-control w-input" name="postal_code" type="text" autocomplete="shipping postal-code" value="<?= $esc($seed['postal_code']) ?>" data-shipping-field>
+                </label>
+            </div>
+            <?php if ($hasSaved): ?>
+            <div class="w-shipping-checkout-address__editor-actions">
+                <button type="button" class="w-shipping-checkout-address__secondary-btn" data-cancel-edit>
+                    <?= $esc($ui['cancel']) ?>
                 </button>
-            <?php endforeach; ?>
+                <button type="button" class="w-shipping-checkout-address__primary-btn" data-use-edited-address>
+                    <?= $esc($ui['save_use']) ?>
+                </button>
+            </div>
+            <?php endif; ?>
         </div>
     </div>
-    <?php endif; ?>
 
-    <div class="w-shipping-checkout-address__grid">
-        <label class="w-shipping-checkout-address__field">
-            <span class="w-form-label"><?= __('收货人') ?></span>
-            <input class="w-form-control w-input" name="name" type="text" required autocomplete="shipping name" value="<?= $esc($seed['name']) ?>">
+    <div class="w-shipping-checkout-address__section w-shipping-checkout-address__section--billing" data-billing-section>
+        <h3 class="w-shipping-checkout-address__heading"><?= $esc($ui['billing_title']) ?></h3>
+        <label class="w-shipping-checkout-address__same">
+            <input type="checkbox" name="billing_same_as_shipping" value="1" checked data-billing-same>
+            <span><?= $esc($ui['billing_same']) ?></span>
         </label>
-        <label class="w-shipping-checkout-address__field">
-            <span class="w-form-label"><?= __('电话') ?></span>
-            <input class="w-form-control w-input" name="phone" type="tel" required autocomplete="shipping tel" value="<?= $esc($seed['phone']) ?>">
-        </label>
-        <label class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
-            <span class="w-form-label"><?= __('邮箱') ?></span>
-            <input class="w-form-control w-input" name="email" type="email" required autocomplete="email" value="<?= $esc($seed['email']) ?>">
-        </label>
-        <div class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide" data-shipping-address-cascade>
-            <w:theme:address
-                levels="country,province,city"
-                code="checkout-shipping-address"
-                searchable="true"
-                cascade="true"
-                district="true" />
+        <div class="w-shipping-checkout-address__editor" data-billing-editor hidden>
+            <?php /* 账单区不用第二套 theme:address，避免与收货级联争用 form 内 country_code 等元数据字段 */ ?>
+            <div class="w-shipping-checkout-address__grid">
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><?= __('收货人') ?></span>
+                    <input class="w-form-control w-input" name="billing_name" type="text" autocomplete="billing name" value="" data-billing-field disabled>
+                </label>
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><?= __('电话') ?></span>
+                    <input class="w-form-control w-input" name="billing_phone" type="tel" autocomplete="billing tel" value="" data-billing-field disabled>
+                </label>
+                <label class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
+                    <span class="w-form-label"><?= __('邮箱') ?></span>
+                    <input class="w-form-control w-input" name="billing_email" type="email" autocomplete="email" value="" data-billing-field disabled>
+                </label>
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><?= __('国家/地区') ?></span>
+                    <input class="w-form-control w-input" name="billing_country_code" type="text" maxlength="8" value="CN" data-billing-field disabled placeholder="CN">
+                </label>
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><?= __('省份') ?></span>
+                    <input class="w-form-control w-input" name="billing_province" type="text" autocomplete="address-level1" value="" data-billing-field disabled>
+                </label>
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><?= __('城市') ?></span>
+                    <input class="w-form-control w-input" name="billing_city" type="text" autocomplete="address-level2" value="" data-billing-field disabled>
+                </label>
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><?= __('区县') ?></span>
+                    <input class="w-form-control w-input" name="billing_district" type="text" autocomplete="address-level3" value="" data-billing-field disabled>
+                </label>
+                <label class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
+                    <span class="w-form-label"><?= __('详细地址') ?></span>
+                    <input class="w-form-control w-input" name="billing_address1" type="text" autocomplete="billing street-address" value="" data-billing-field disabled>
+                </label>
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><?= __('邮编') ?></span>
+                    <input class="w-form-control w-input" name="billing_postal_code" type="text" autocomplete="billing postal-code" value="" data-billing-field disabled>
+                </label>
+            </div>
         </div>
-        <label class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
-            <span class="w-form-label"><?= __('详细地址') ?></span>
-            <input class="w-form-control w-input" name="address1" type="text" required autocomplete="shipping street-address" value="<?= $esc($seed['address1']) ?>">
-        </label>
-        <label class="w-shipping-checkout-address__field">
-            <span class="w-form-label"><?= __('邮编') ?></span>
-            <input class="w-form-control w-input" name="postal_code" type="text" autocomplete="shipping postal-code" value="<?= $esc($seed['postal_code']) ?>">
-        </label>
     </div>
 </section>
-<link rel="stylesheet" href="@static(Weline_Shipping::css/widgets/checkout-shipping-address.css)?v=20260828-csa1">
+<link rel="stylesheet" href="@static(Weline_Shipping::css/widgets/checkout-shipping-address.css)?v=20260903-csa3">
 <?php // shippingCheckoutAddress：由部件根 data-weline-load 声明，禁止 @static 直引 ?>
