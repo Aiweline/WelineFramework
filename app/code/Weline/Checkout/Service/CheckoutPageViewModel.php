@@ -19,7 +19,7 @@ final class CheckoutPageViewModel
         $guestToken = trim((string)$guestToken);
         $v2Params = $guestToken !== '' ? ['guest_token' => $guestToken] : [];
         try {
-            $v2Result = w_query('cart', 'getV2Cart', $v2Params);
+            $v2Result = w_query('cart', 'getCart', $v2Params);
         } catch (\Throwable) {
             $v2Result = null;
         }
@@ -55,7 +55,7 @@ final class CheckoutPageViewModel
     }
 
     /**
-     * Normalize authoritative Cart V2 minor-unit rows for checkout presentation.
+     * Normalize authoritative Cart minor-unit rows for checkout presentation.
      *
      * @return array{items:list<array<string,mixed>>,currency:string,is_empty:bool,item_count:int,subtotal:float,grand_total:float}
      */

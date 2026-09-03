@@ -5,11 +5,79 @@ declare(strict_types=1);
 /**
  * Checkout 前台部件：配送地址上下文默认注入 Theme header `delivery` 槽。
  * Theme layouts/partials 禁止内嵌本模块 <w:widget>；靠 default_injections 补空槽。
+ *
+ * `checkout-storefront-slots` 是结账模块页槽目录（对齐 Product `product-info` 嵌套槽），
+ * 仅供 ThemeComponentCatalog::findSlot 发现，不默认注入到布局节点。
  */
 return [
+    'checkout-storefront-slots' => [
+        'name' => '结账页模块槽位',
+        'description' => '结账模块页模板槽目录：快捷支付、收货地址、优惠券、订单留言、成功页访客转化；供 Payment/Shipping/Marketing/Order/Customer 的 required default_injections 发现，禁止当作布局内容部件放置。',
+        'type' => 'container',
+        'code' => 'checkout-storefront-slots',
+        'area' => 'frontend',
+        'template' => 'Weline_Checkout::templates/frontend/widgets/checkout-storefront-slots.phtml',
+        'page_layouts' => ['checkout', 'checkout_success'],
+        'position' => ['content'],
+        'is_container' => true,
+        'slots' => [
+            'checkout-express-payment' => [
+                'name' => '结账快捷支付',
+                'accepts' => [
+                    'checkout-express-payment',
+                    'express-checkout',
+                    'express-payment',
+                    'payment',
+                ],
+                'max' => 1,
+            ],
+            'checkout-shipping-address' => [
+                'name' => '结账收货地址',
+                'accepts' => [
+                    'checkout-shipping-address',
+                    'shipping-address',
+                    'delivery-address',
+                    'address',
+                ],
+                'max' => 1,
+            ],
+            'checkout-summary-discount' => [
+                'name' => '结账优惠券',
+                'accepts' => [
+                    'checkout-summary-discount',
+                    'checkout-coupon',
+                    'marketing',
+                ],
+                'max' => 1,
+            ],
+            'checkout-summary-note' => [
+                'name' => '结账订单留言',
+                'accepts' => [
+                    'checkout-summary-note',
+                    'order-notice',
+                    'order',
+                ],
+                'max' => 1,
+            ],
+            'checkout-success-guest-account' => [
+                'name' => '结账成功访客转化',
+                'accepts' => [
+                    'checkout-success-guest-account',
+                    'guest-account-convert',
+                    'layout-checkout-success-guest-account',
+                ],
+                'max' => 1,
+            ],
+        ],
+        'supports' => [
+            'checkout-storefront-slots',
+            'checkout-page-slots',
+        ],
+        'params' => [],
+    ],
     'product-buy-now' => [
         'name' => '立即结账',
-        'description' => '产品主要信息购买操作槽：Cart V2 加购后跳转结账页。',
+        'description' => '产品主要信息购买操作槽：Cart 加购后跳转结账页。',
         'type' => 'product',
         'code' => 'product-buy-now',
         'area' => 'frontend',
@@ -37,7 +105,7 @@ return [
     ],
     'product-card-buy-now' => [
         'name' => '商品卡立即购买',
-        'description' => '商品卡片购买操作槽：Cart V2 加购后跳转结账页。',
+        'description' => '商品卡片购买操作槽：Cart 加购后跳转结账页。',
         'type' => 'product',
         'code' => 'product-card-buy-now',
         'area' => 'frontend',
@@ -68,7 +136,7 @@ return [
             'checkout-delivery-context',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'delivery',
             'area' => 'header',
             'sort_order' => 0,

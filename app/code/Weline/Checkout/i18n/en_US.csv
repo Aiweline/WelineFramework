@@ -179,7 +179,6 @@
 订单已取消,"Order cancelled"
 取消订单失败：%{1},"Failed to cancel order: %{1}"
 订单创建失败：%{1},"Order creation failed: %{1}"
-结账成功,"Checkout Successful"
 支付处理成功,"Payment processed successfully"
 支付处理失败：%{1},"Payment processing failed: %{1}"
 该兼容入口已停用，请从订单管理更新状态,"This compatible portal has been deactivated, please update the status from order management"
@@ -199,10 +198,12 @@ clock,clock
 结账诊断,"Checkout diagnostics"
 circle,circle
 查看结账会话状态和过期诊断,"View checkout session status and expiration diagnostics"
+已取消,Cancelled
+已取消成功,"Cancelled successfully"
+结账成功,"Checkout Successful"
 待处理,Pending
 处理中,Processing
 已完成,Completed
-已取消,Cancelled
 已退款,Refunded
 待支付,"Pending Payment"
 已支付,Paid
@@ -243,7 +244,16 @@ SKU,SKU
 确定取消,"Confirm cancellation"
 保留订单,"reserve order"
 取消订单失败，请稍后重试,"Failed to cancel order, please try again later"
-感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
+优惠,优惠
+该支付已取消，无需再次操作。,"This payment is already cancelled. No further action is needed."
+支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。,"Payment cancelled successfully. The order is not paid yet. You can return to checkout and choose a payment method again."
+感谢您的订购！,感谢您的订购！
+您的订单已支付成功，我们正在为您准备发货。,您的订单已支付成功，我们正在为您准备发货。
+确认信息将发送至,确认信息将发送至
+配送地址,"Delivery address"
+配送方式,"Shipping Method"
+"预计 2–5 个工作日内发货","预计 2–5 个工作日内发货"
+返回结账,"Return to checkout"
 返回订单列表,"Back to Order List"
 继续购物,"continue shopping"
 正在加载结账信息...,"Loading checkout information..."
@@ -268,30 +278,18 @@ SKU,SKU
 查看购物车,"View cart"
 订单已创建,"Order created"
 支付状态待确认,"Payment status pending confirmation"
+快捷支付,"Express checkout"
 收货信息,"Receiving information"
 结账收货地址,结账收货地址
-配送方式,"Shipping Method"
 正在加载配送方式...,"Loading shipping methods..."
 支付方式,"Payment Method"
 正在加载支付方式...,"Loading payment methods..."
 订单摘要,"Order summary"
 结账优惠券,结账优惠券
-优惠,优惠
+结账订单留言,结账订单留言
 应付合计,"Total payable"
 请确认收货信息、配送方式和支付方式。,"Please confirm the delivery information, delivery method and payment method."
-全部,All
-请输入订单号,"Please enter order number"
-搜索,Search
-客户ID,"Customer ID"
-操作,Actions
-查看,View
-配送状态,"Shipping Status"
-订单项,"Order Items"
-总价,"Total Price"
-折扣,Discount
-返回列表,"Back to List"
 China,China
-配送地址,"Delivery address"
 关闭,Close
 国家/地区,Country/Region
 搜索国家/地区,"Search country/region"
@@ -313,10 +311,20 @@ China,China
 定位完成，但当前未启用地址添加模块。,"Location completed"
 定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,"Location applied. Country/region cascade selected. Please complete recipient details and save."
 自动定位失败，请手动选择国家并完善地址。,"Auto-detect failed. Please select a country and complete the address."
+全部,All
+请输入订单号,"Please enter order number"
+搜索,Search
+客户ID,"Customer ID"
+操作,Actions
+查看,View
+配送状态,"Shipping Status"
+订单项,"Order Items"
+总价,"Total Price"
+折扣,Discount
+返回列表,"Back to List"
 正在前往结账...,"Proceeding to checkout..."
 结账准备失败,"Checkout preparation failed"
 立即结账,"Proceed to checkout"
-立即购买,"Buy Now"
 订单列表,"order list"
 订单号关键词,"Order number keyword"
 全部状态,"All status"
@@ -334,6 +342,8 @@ China,China
 统计来自当前结账会话样本，不执行迁移或写操作。,"Statistics are from a sample of the current checkout session, no migration or write operations were performed."
 最近会话,"recent conversations"
 暂无可诊断会话,"No diagnostic sessions available yet"
+展开简介,"Show more"
+收起,"Show less"
 订单无法取消,"Order cannot be cancelled"
 订单ID不能为空,"Order ID cannot be empty"
 支付方式不能为空,"Payment method cannot be empty"
@@ -371,6 +381,8 @@ China,China
 请选择国家/地区,请选择国家/地区
 请选择配送地址,请选择配送地址
 地址不存在,地址不存在
+立即购买,"Buy Now"
+感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
 收货人,consignee
 电话,Telephone
 邮箱,Mail
@@ -394,3 +406,5 @@ China,China
 提交订单并支付,"Submit order and pay"
 订单已创建，正在前往支付页面。,"The order has been created and you are heading to the payment page."
 订单已创建，支付正在处理中。,"The order has been created and payment is being processed."
+支付已取消,"Payment cancelled"
+您已取消本次支付，订单尚未完成付款。可返回结账页重新选择支付方式。,"You cancelled this payment. The order is not paid yet. You can return to checkout and try again."

@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Checkout\Service;
 
+use Weline\Checkout\Api\CheckoutSessionStoreInterface;
+use Weline\Checkout\Model\CheckoutSession;
 use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Payment\Api\Data\PaymentTransactionRecord;
 use Weline\Payment\Api\PaymentFacadeInterface;
@@ -18,6 +20,8 @@ final class CheckoutOrderPaymentService
     public function __construct(
         private readonly OrderFacadeInterface $orders,
         private readonly PaymentFacadeInterface $payments,
+        private readonly CheckoutSuccessUrlBuilder $successUrlBuilder,
+        private readonly CheckoutSessionStoreInterface $checkoutSessions,
     ) {
     }
 
@@ -95,6 +99,8 @@ final class CheckoutOrderPaymentService
                 'actor_id' => $customerId > 0 ? (string)$customerId : 'anonymous',
                 'items' => $order->items,
                 'totals' => $order->money,
+                'shipping_snapshot' => $order->shipping,
+                'coupon_code' => trim((string) ($context['coupon_code'] ?? '')),
                 'metadata' => [
                     'checkout_group_uuid' => $order->checkoutGroupUuid,
                     'display_number' => $order->displayNumber,
@@ -105,6 +111,36 @@ final class CheckoutOrderPaymentService
                 if (array_key_exists($key, $context) && !is_array($context[$key])) {
                     $paymentContext[$key] = $context[$key];
                 }
+            }
+
+            $checkoutToken = trim((string) (
+                $context['checkout_token']
+                ?? $context['quote_token']
+                ?? ''
+            ));
+            if ($checkoutToken !== '') {
+                $this->prolongSubmittedSuccessCapability($checkoutToken);
+            }
+            $landingExtras = [
+                'source' => 'payment_return',
+                'checkout_group_uuid' => $order->checkoutGroupUuid,
+            ];
+            if ($checkoutToken !== '') {
+                $landingExtras['checkout_token'] = $checkoutToken;
+            }
+            $paymentContext['browser_landing_url'] = $this->successUrlBuilder->buildForOrders(
+                [$order->orderUuid],
+                $landingExtras,
+            );
+            $landingParams = [];
+            if ($order->checkoutGroupUuid !== '') {
+                $landingParams['checkout_group_uuid'] = $order->checkoutGroupUuid;
+            }
+            if ($checkoutToken !== '') {
+                $landingParams['checkout_token'] = $checkoutToken;
+            }
+            if ($landingParams !== []) {
+                $paymentContext['browser_landing_params'] = $landingParams;
             }
 
             $transaction = $this->payments->tryCreatePayment($methodCode, $paymentContext);
@@ -200,7 +236,7 @@ final class CheckoutOrderPaymentService
                 return $candidate;
             }
         }
-        foreach (['gateway_response', 'response', 'next_action'] as $key) {
+        foreach (['payload', 'gateway_response', 'response', 'next_action'] as $key) {
             $nested = $response[$key] ?? null;
             if (is_array($nested)) {
                 $candidate = $this->extractRedirectUrl($nested);
@@ -225,5 +261,21 @@ final class CheckoutOrderPaymentService
 
         return in_array($scheme, ['http', 'https'], true)
             && filter_var($url, FILTER_VALIDATE_URL) !== false;
+    }
+
+    private function prolongSubmittedSuccessCapability(string $checkoutToken): void
+    {
+        $session = $this->checkoutSessions->get($checkoutToken);
+        if (!is_array($session)) {
+            return;
+        }
+        if ((string)($session['state'] ?? '') !== CheckoutSession::STATE_SUBMITTED) {
+            return;
+        }
+        $this->checkoutSessions->put(
+            $checkoutToken,
+            $session,
+            gmdate('Y-m-d H:i:s', time() + CheckoutSession::TTL_SUBMITTED_SUCCESS_SECONDS),
+        );
     }
 }

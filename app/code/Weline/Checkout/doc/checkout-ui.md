@@ -2,7 +2,7 @@
 
 ## 规则
 
-- 商品事实只来自 `w_query('cart', 'getV2Cart')`，由 `CheckoutPageViewModel` 把受信任 minor-unit 行归一化为展示数据；Controller 不接收浏览器商品名、价格或数量
+- 商品事实只来自 `w_query('cart', 'getCart')`，由 `CheckoutPageViewModel` 把受信任 minor-unit 行归一化为展示数据；Controller 不接收浏览器商品名、价格或数量
 - 首屏商品行 DOM **只**由服务端模板生成：`CheckoutPageViewModel` → `view/frontend/checkout/partials/items.phtml` → Hook `frontend::partials::checkout::cart-items`
 - 异步刷新商品行与方式选项仍由 `CheckoutHtmlRenderer` 生成，浏览器只注入 `items_html` / `*_methods_html`
 - 浏览器 JS **只**做交互：选配送/支付、提交、`textContent` 更新合计；通过 `items_html` / `*_methods_html` 注入服务端片段
@@ -20,7 +20,11 @@
 - 布局：保留 Shopify 风格两栏（主表单 + sticky 订单摘要）、panel 卡片与 860px 以下单列响应式
 - 色板：`.weline-checkout` 作用域内定义 `--checkout-text` `#0f1111`、`--checkout-text-secondary` `#565959`、`--checkout-link` `#007185`、`--checkout-border` `#ddd`、`--checkout-cta-bg` `#ffd814`（深色字）
 - 优惠券：`checkout-summary-discount` 槽 + `Weline_Marketing::checkout-coupon` 部件（默认 Amazon 灰底应用按钮）；禁止 Hook 直出模板
+- 订单留言：`checkout-summary-note` 槽 + `Weline_Order::order-notice` 部件；与迷你购物车/购物车页共享留言会话
 - 收货地址：`checkout-shipping-address` 槽 + `Weline_Shipping::checkout-shipping-address` 部件（`<w:theme:address>` 级联 + 已存地址选择）；Checkout 禁止裸拼国家/省/市 input
+- 收货交互：有已存地址默认收起；radio 单选地址卡；可编辑 / 使用新地址；账单默认与收货相同，可展开修改（Shopify 分段 + Amazon 卡片）
+- 模块页槽发现：`checkout-storefront-slots` 容器声明结账模块页嵌套槽，供 Theme `findSlot` / required `default_injections` 安装（对齐 Product `product-info`）
+- 快捷支付：`checkout-express-payment` 槽（左侧主栏、收货信息上方）+ `Weline_Payment::checkout-express-payment` 部件（`enabled` 开关；Shopify Express 布局 + Amazon 色板）；禁止 Checkout 内嵌 PayPal
 - 优先复用 Theme Amazon token（`--color-text-*` / `--color-link`）；CTA 黄按钮写死 Amazon 黄，避免站点品牌主色（如品红）污染结账主按钮
 - 入口页：`/checkout`
 
@@ -47,7 +51,7 @@ php bin/w e2e:run \
 ```
 
 `TEST-P2E-09` 必须证明 `/checkout` 首屏响应和可见 DOM 都含服务端
-`data-checkout-item`；`TEST-BROWSER-01` 必须从受信任 `cart.addV2` 走到
+`data-checkout-item`；`TEST-BROWSER-01` 必须从受信任 `cart.add` 走到
 `checkout.freezeQuote` / `checkout.submitV2`，不得因接口拒绝而跳过。
 
 模块：`Weline_Checkout` `1.4.4`；Theme 布局增量无需升版强制。

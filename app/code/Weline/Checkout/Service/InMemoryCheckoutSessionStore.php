@@ -18,9 +18,13 @@ final class InMemoryCheckoutSessionStore implements CheckoutSessionStoreInterfac
         if ($token === '') {
             throw new \InvalidArgumentException('checkout_session_token_empty');
         }
+        $state = (string)($payload['state'] ?? \Weline\Checkout\Model\CheckoutSession::STATE_QUOTED);
+        $ttl = $state === \Weline\Checkout\Model\CheckoutSession::STATE_SUBMITTED
+            ? \Weline\Checkout\Model\CheckoutSession::TTL_SUBMITTED_SUCCESS_SECONDS
+            : \Weline\Checkout\Model\CheckoutSession::TTL_QUOTED_SECONDS;
         $this->rows[$token] = [
             'payload' => $payload,
-            'expires_at' => $expiresAt,
+            'expires_at' => $expiresAt ?? gmdate('Y-m-d H:i:s', time() + $ttl),
         ];
     }
 

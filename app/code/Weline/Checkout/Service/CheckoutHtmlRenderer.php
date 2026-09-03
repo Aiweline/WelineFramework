@@ -65,6 +65,80 @@ final class CheckoutHtmlRenderer
         return $html;
     }
 
+    /**
+     * Payment method cards: logo + expandable intro + provider guide details link.
+     *
+     * @param list<array<string, mixed>> $methods
+     */
+    public function renderPaymentMethodOptions(
+        array $methods,
+        string $inputName = 'payment_method',
+        string $emptyMessage = '',
+    ): string {
+        if ($methods === []) {
+            return '<p class="weline-checkout__empty">' . $this->e($emptyMessage) . '</p>';
+        }
+
+        $expandLabel = (string)__('展开简介');
+        $collapseLabel = (string)__('收起');
+        $detailsLabel = (string)__('查看详情');
+        $html = '';
+
+        foreach ($methods as $index => $method) {
+            $code = (string)($method['code'] ?? '');
+            $label = (string)($method['label'] ?? $method['title'] ?? $code);
+            $desc = trim((string)($method['description'] ?? ''));
+            $iconUrl = trim((string)($method['icon_url'] ?? ''));
+            $guideUrl = trim((string)($method['guide_url'] ?? ''));
+            $hasGuide = array_key_exists('has_guide', $method)
+                ? (bool)$method['has_guide']
+                : ($guideUrl !== '');
+            $checked = $index === 0 ? ' checked' : '';
+
+            if ($guideUrl !== '' && !str_starts_with($guideUrl, '/') && !preg_match('#^https?://#i', $guideUrl)) {
+                $guideUrl = '/' . ltrim($guideUrl, '/');
+            }
+
+            $logoHtml = $iconUrl !== ''
+                ? '<img class="weline-checkout__payment-logo" src="' . $this->e($iconUrl) . '" alt="'
+                    . $this->e($label) . '" loading="lazy" decoding="async" width="40" height="28">'
+                : '<span class="weline-checkout__payment-logo weline-checkout__payment-logo--empty" aria-hidden="true"></span>';
+
+            $detailsHtml = ($hasGuide && $guideUrl !== '')
+                ? '<a class="weline-checkout__payment-details" href="' . $this->e($guideUrl)
+                    . '" target="_blank" rel="noopener noreferrer" data-payment-details>'
+                    . $this->e($detailsLabel) . '</a>'
+                : '';
+
+            $introHtml = '';
+            if ($desc !== '') {
+                $introHtml = '<span class="weline-checkout__payment-intro" data-payment-intro>'
+                    . '<small class="weline-checkout__payment-intro-text">' . $this->e($desc) . '</small>'
+                    . '<button type="button" class="weline-checkout__payment-intro-toggle"'
+                    . ' data-payment-intro-toggle'
+                    . ' data-label-expand="' . $this->e($expandLabel) . '"'
+                    . ' data-label-collapse="' . $this->e($collapseLabel) . '"'
+                    . ' hidden>' . $this->e($expandLabel) . '</button>'
+                    . '</span>';
+            }
+
+            $html .= '<label class="weline-checkout__option weline-checkout__option--payment"'
+                . ' data-payment-method="' . $this->e($code) . '">'
+                . '<input type="radio" name="' . $this->e($inputName) . '" value="' . $this->e($code) . '"' . $checked . '>'
+                . $logoHtml
+                . '<span class="weline-checkout__payment-body">'
+                . '<span class="weline-checkout__payment-title-row">'
+                . '<strong>' . $this->e($label) . '</strong>'
+                . $detailsHtml
+                . '</span>'
+                . $introHtml
+                . '</span>'
+                . '</label>';
+        }
+
+        return $html;
+    }
+
     private function money(string $currency, float $amount): string
     {
         return $currency . ' ' . number_format($amount, 2, '.', '');
