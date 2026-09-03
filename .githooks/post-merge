@@ -1,0 +1,8 @@
+#!/bin/sh
+# Auto-refresh Weline multi-host MCP registration (Cursor / Claude / VS Code).
+ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || exit 0
+SCRIPT="$ROOT/app/code/Weline/Ai/Mcp/scripts/ensure-host-mcp-registrations.php"
+[ -f "$SCRIPT" ] || exit 0
+PHP="${PHP_BINARY:-php}"
+command -v "$PHP" >/dev/null 2>&1 || PHP=php
+"$PHP" "$SCRIPT" --quiet >/dev/null 2>&1 || true
