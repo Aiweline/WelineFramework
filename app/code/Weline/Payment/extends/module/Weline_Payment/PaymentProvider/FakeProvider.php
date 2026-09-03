@@ -10,6 +10,7 @@ use Weline\Payment\Api\Data\AvailabilityRequest;
 use Weline\Payment\Api\Data\AvailabilityResult;
 use Weline\Payment\Api\Data\CallbackRequest;
 use Weline\Payment\Api\Data\CallbackResult;
+use Weline\Payment\Api\Data\CancelRequest;
 use Weline\Payment\Api\Data\CaptureRequest;
 use Weline\Payment\Api\Data\PaymentRequest;
 use Weline\Payment\Api\Data\PaymentResult;
@@ -213,6 +214,21 @@ final class FakeProvider implements ProviderInterface
             'attempt_code' => $request->getAttemptCode(),
             'provider_reference' => $request->getProviderReference() ?: 'FAKE-' . $request->getIntentCode(),
             'message' => 'Fake payment resumed.',
+        ]);
+    }
+
+    public function cancelPayment(CancelRequest $request): PaymentResult
+    {
+        return PaymentResult::fromArray([
+            'status' => PaymentResult::STATUS_FAILED,
+            'action_type' => 'cancelled',
+            'intent_code' => $request->getIntentCode(),
+            'attempt_code' => $request->getAttemptCode(),
+            'provider_reference' => $request->getProviderReference() ?: 'FAKE-CANCEL-' . $request->getIntentCode(),
+            'message' => (string) __('Fake payment cancelled.'),
+            'payload' => [
+                'fake_result' => 'cancelled',
+            ],
         ]);
     }
 

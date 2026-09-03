@@ -10,6 +10,7 @@ use Weline\Payment\Api\Data\AvailabilityRequest;
 use Weline\Payment\Api\Data\AvailabilityResult;
 use Weline\Payment\Api\Data\CallbackRequest;
 use Weline\Payment\Api\Data\CallbackResult;
+use Weline\Payment\Api\Data\CancelRequest;
 use Weline\Payment\Api\Data\CaptureRequest;
 use Weline\Payment\Api\Data\PaymentRequest;
 use Weline\Payment\Api\Data\PaymentResult;
@@ -20,15 +21,19 @@ use Weline\Payment\Api\Data\RefundResult;
 use Weline\Payment\Api\Data\ResumeRequest;
 use Weline\Payment\Api\Data\TestConnectionRequest;
 use Weline\Payment\Api\Data\VoidRequest;
+use Weline\Payment\Api\Data\PaymentOperationRequest;
 use Weline\Payment\Interface\ProviderConnectInterface;
+use Weline\Payment\Interface\ProviderConnectPrepareInterface;
 use Weline\Payment\Interface\ProviderInterface;
 use Weline\Payment\Service\PayPalApiClient;
+use Weline\Payment\Service\PayPalPlatformCredentialService;
 use Weline\Payment\Service\PaymentConfigValidationService;
 use Weline\Payment\Service\PaymentRedirectUriCatalog;
 use Weline\Payment\Service\PayPalOAuthService;
+use Weline\Payment\Service\PayPalWebhookTransitionMapper;
 use Weline\Framework\Manager\ObjectManager;
 
-final class PayPalProvider implements ProviderInterface, ProviderConnectInterface
+final class PayPalProvider implements ProviderInterface, ProviderConnectInterface, ProviderConnectPrepareInterface
 {
     private ?PayPalApiClient $apiClient = null;
 
@@ -66,8 +71,10 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             'void' => false,
             'saved_instrument' => false,
             'offline_confirmation' => false,
-            'supported_currencies' => ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'HKD', 'SGD'],
-            'supported_countries' => ['US', 'GB', 'DE', 'CA', 'AU', 'FR', 'IT', 'ES', 'JP', 'HK', 'SG'],
+            // CNY/CN：本站默认币种与收货国；Sandbox/部分商户可测，正式以 PayPal 商户能力为准。
+            'supported_currencies' => ['USD', 'EUR', 'GBP', 'CAD', 'AUD', 'JPY', 'HKD', 'SGD', 'CNY'],
+            'supported_countries' => ['US', 'GB', 'DE', 'CA', 'AU', 'FR', 'IT', 'ES', 'JP', 'HK', 'SG', 'CN', 'XZ'],
+            'supported_discount_actions' => ['discount_fixed_amount', 'discount_percentage', 'free_shipping'],
         ];
     }
 
@@ -104,7 +111,7 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
 
     public function suggestedRedirectUris(): array
     {
-        return ObjectManager::getInstance(PaymentRedirectUriCatalog::class)->suggestedRedirectUris();
+        return ObjectManager::getInstance(PaymentRedirectUriCatalog::class)->suggestedRedirectUris(null, $this->getCode());
     }
 
     public function connectConfigUrl(?string $scope = null, array $context = []): string
@@ -120,6 +127,33 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
     public function revokeConnect(string $environment = 'sandbox', ?string $scope = null): void
     {
         $this->oauth()->revoke($environment, $scope);
+    }
+
+    /**
+     * @param array<string, mixed> $context
+     * @return array{ready:bool,redirect_url:?string,message:?string}
+     */
+    public function prepareConnectAuthorize(string $environment = 'sandbox', ?string $scope = null, array $context = []): array
+    {
+        unset($context);
+        if (strtolower(trim($environment)) !== 'sandbox') {
+            return ['ready' => true, 'redirect_url' => null, 'message' => null];
+        }
+
+        /** @var PayPalPlatformCredentialService $platform */
+        $platform = ObjectManager::getInstance(PayPalPlatformCredentialService::class);
+        if ($platform->hasPlatformSandboxCredentials() || !$platform->shouldUseBundledSandboxCredentials()) {
+            return ['ready' => true, 'redirect_url' => null, 'message' => null];
+        }
+
+        return [
+            'ready' => false,
+            'redirect_url' => ObjectManager::getInstance(\Weline\Framework\Http\Url::class)
+                ->getUrl('payment/backend/platform-sandbox-setup/index'),
+            'message' => (string) __(
+                '首次使用需完成 PayPal 沙箱平台应用一次性初始化（维护者操作，商户无需手填 Client ID/Secret）。'
+            ),
+        ];
     }
 
     private function oauth(): PayPalOAuthService
@@ -145,13 +179,15 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
             ],
             'return_url' => [
                 'type' => 'text',
-                'required' => true,
+                'required' => false,
                 'label' => 'Return URL',
+                'readonly' => true,
             ],
             'cancel_url' => [
                 'type' => 'text',
-                'required' => true,
+                'required' => false,
                 'label' => 'Cancel URL',
+                'readonly' => true,
             ],
             'webhook_id' => [
                 'type' => 'text',
@@ -219,11 +255,18 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
         try {
             $config = $this->resolveRuntimeConfig($request->getContext());
             $referenceId = $request->getAttemptCode() ?: $request->getIntentCode();
-            $order = $this->getApiClient()->createOrder(
-                $config,
+            [$paypalCurrency, $paypalAmountMinor] = $this->resolvePayPalOrderMoney(
                 $request->getCurrencyCode(),
                 $request->getAmountMinor(),
+                $config,
+            );
+            $order = $this->getApiClient()->createOrder(
+                $config,
+                $paypalCurrency,
+                $paypalAmountMinor,
                 $referenceId,
+                $this->resolveShellUrl($request, PaymentOperationRequest::FIELD_RETURN_URL, 'return_url', $config),
+                $this->resolveShellUrl($request, PaymentOperationRequest::FIELD_CANCEL_URL, 'cancel_url', $config),
             );
 
             return PaymentResult::fromArray([
@@ -236,6 +279,8 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 'payload' => [
                     'redirect_url' => $order['approve_url'],
                     'environment' => (string) ($config['environment'] ?? 'sandbox'),
+                    'presentment_currency' => $request->getCurrencyCode(),
+                    'paypal_currency' => $paypalCurrency,
                 ],
             ]);
         } catch (Throwable $throwable) {
@@ -247,6 +292,23 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 'message' => $throwable->getMessage(),
             ]);
         }
+    }
+
+    /**
+     * PayPal REST 沙箱不接受 CNY；本地沙箱 E2E 将 CNY 按固定汇率折算为 USD 下单。
+     *
+     * @param array<string, mixed> $config
+     * @return array{0:string,1:int}
+     */
+    private function resolvePayPalOrderMoney(string $currencyCode, int $amountMinor, array $config): array
+    {
+        $currency = strtoupper(trim($currencyCode));
+        $environment = strtolower(trim((string) ($config['environment'] ?? 'sandbox')));
+        if ($currency !== 'CNY' || $environment !== 'sandbox' || $amountMinor <= 0) {
+            return [$currency, max(0, $amountMinor)];
+        }
+
+        return ['USD', max(1, (int) round($amountMinor / 7.2))];
     }
 
     public function resumePayment(ResumeRequest $request): PaymentResult
@@ -304,6 +366,23 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
                 'message' => $throwable->getMessage(),
             ]);
         }
+    }
+
+    public function cancelPayment(CancelRequest $request): PaymentResult
+    {
+        $reference = trim((string) ($request->getProviderReference() ?? $request->getToken() ?? ''));
+
+        return PaymentResult::fromArray([
+            'status' => PaymentResult::STATUS_FAILED,
+            'action_type' => 'cancelled',
+            'intent_code' => $request->getIntentCode(),
+            'attempt_code' => $request->getAttemptCode(),
+            'provider_reference' => $reference !== '' ? $reference : $request->getIntentCode(),
+            'message' => (string) __('PayPal payment cancelled.'),
+            'payload' => [
+                'cancel_reason' => $request->getCancelReason(),
+            ],
+        ]);
     }
 
     public function authorize(AuthorizeRequest $request): PaymentResult
@@ -447,17 +526,20 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
         }
 
         $resource = \is_array($payload['resource'] ?? null) ? $payload['resource'] : [];
-        $statusTransition = match (strtoupper((string) ($payload['event_type'] ?? ''))) {
-            'PAYMENT.CAPTURE.COMPLETED', 'CHECKOUT.ORDER.COMPLETED' => 'paid',
-            'PAYMENT.CAPTURE.DENIED', 'CHECKOUT.ORDER.APPROVED' => 'processing',
-            default => 'processing',
-        };
+        $eventType = (string) ($payload['event_type'] ?? 'paypal.webhook.received');
+        $mapper = new PayPalWebhookTransitionMapper();
+        $statusTransition = $mapper->mapStatusTransition($eventType, $payload);
+        $transactionCode = trim((string) (
+            $resource['id']
+            ?? $resource['supplementary_data']['related_ids']['order_id']
+            ?? ''
+        ));
 
         return CallbackResult::fromArray([
             'verified' => true,
-            'event_type' => (string) ($payload['event_type'] ?? 'paypal.webhook.received'),
+            'event_type' => $eventType,
             'provider_event_id' => (string) ($payload['id'] ?? ''),
-            'transaction_code' => (string) ($resource['id'] ?? $resource['supplementary_data']['related_ids']['order_id'] ?? ''),
+            'transaction_code' => $transactionCode,
             'status_transition' => $statusTransition,
             'schema_version' => '1',
         ]);
@@ -543,9 +625,30 @@ final class PayPalProvider implements ProviderInterface, ProviderConnectInterfac
     private function hasRequiredCredentials(array $config): bool
     {
         return trim((string) ($config['client_id'] ?? '')) !== ''
-            && trim((string) ($config['client_secret'] ?? '')) !== ''
-            && trim((string) ($config['return_url'] ?? '')) !== ''
-            && trim((string) ($config['cancel_url'] ?? '')) !== '';
+            && trim((string) ($config['client_secret'] ?? '')) !== '';
+    }
+
+    /**
+     * @param array<string, mixed> $config
+     */
+    private function resolveShellUrl(
+        PaymentRequest $request,
+        string $requestField,
+        string $contextField,
+        array $config,
+    ): ?string {
+        $fromRequest = trim($request->getString($requestField));
+        if ($fromRequest !== '') {
+            return $fromRequest;
+        }
+        $context = $request->getContext();
+        $fromContext = trim((string) ($context[$contextField] ?? ''));
+        if ($fromContext !== '') {
+            return $fromContext;
+        }
+        $fromConfig = trim((string) ($config[$contextField] ?? ''));
+
+        return $fromConfig !== '' ? $fromConfig : null;
     }
 
     /**

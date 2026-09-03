@@ -9,8 +9,8 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Http\RedirectException;
 use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Payment\Interface\ProviderConnectPrepareInterface;
 use Weline\Payment\Service\PaymentConnectDispatcher;
-use Weline\Payment\Service\PayPalPlatformCredentialService;
 use Weline\SystemConfig\Model\SystemConfig;
 use Weline\SystemConfig\Service\SystemConfigTargetScopeService;
 
@@ -36,15 +36,19 @@ final class Connect extends BackendController
 
             $scope = $this->resolveWritableConfigScope();
             $environment = trim((string) $this->request->getGet('environment', 'sandbox'));
-            if ($methodCode === 'paypal' && $this->normalizeEnvironment($environment) === 'sandbox') {
-                /** @var PayPalPlatformCredentialService $platform */
-                $platform = ObjectManager::getInstance(PayPalPlatformCredentialService::class);
-                if (!$platform->hasPlatformSandboxCredentials() && $platform->shouldUseBundledSandboxCredentials()) {
-                    $this->getMessageManager()->addWarning((string) __(
-                        '首次使用需完成 PayPal 沙箱平台应用一次性初始化（维护者操作，商户无需手填 Client ID/Secret）。'
-                    ));
+            $connect = $this->connectDispatcher->resolveConnect($methodCode);
+            if ($connect instanceof ProviderConnectPrepareInterface) {
+                $prepared = $connect->prepareConnectAuthorize(
+                    $environment,
+                    $scope,
+                    $this->resolveConfigScopeContext(),
+                );
+                if (($prepared['ready'] ?? true) === false && !empty($prepared['redirect_url'])) {
+                    if (!empty($prepared['message'])) {
+                        $this->getMessageManager()->addWarning((string) $prepared['message']);
+                    }
 
-                    return $this->redirect('payment/backend/platform-sandbox-setup/index');
+                    return $this->redirect((string) $prepared['redirect_url']);
                 }
             }
 

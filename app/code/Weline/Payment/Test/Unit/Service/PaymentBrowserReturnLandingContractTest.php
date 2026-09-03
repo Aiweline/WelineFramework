@@ -5,48 +5,51 @@ declare(strict_types=1);
 namespace Weline\Payment\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Payment\Service\PaymentBrowserReturnLandingOrchestrator;
 
-/**
- * Bare unified Return URL: DEV stays on shell landing; production redirects home.
- */
 final class PaymentBrowserReturnLandingContractTest extends TestCase
 {
-    public function testEmptyDispatchRendersLandingInDevAndHomeInProduction(): void
+    public function testDispatcherSourceDoesNotRedirectToCheckoutReturn(): void
     {
-        $dispatcher = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentBrowserReturnDispatcher.php');
-        self::assertStringContainsString('isProductionLive()', $dispatcher);
-        self::assertStringContainsString("'redirect_path' => '/'", $dispatcher);
-        self::assertStringContainsString("'render' => true", $dispatcher);
-        self::assertStringContainsString("'template' => 'browser-return'", $dispatcher);
-        self::assertStringContainsString('开发环境提示', $dispatcher);
-        self::assertStringContainsString('生产环境空参访问会跳转首页', $dispatcher);
-
-        $callback = (string) file_get_contents(dirname(__DIR__, 3) . '/Controller/Frontend/Callback.php');
-        self::assertStringContainsString("!empty(\$dispatched['render'])", $callback);
-        self::assertStringContainsString('browser_return_message', $callback);
-        self::assertStringContainsString("\$this->layoutType = null", $callback);
-        self::assertStringContainsString('@Cdn cache=false', $callback);
-
-        $checkout = (string) file_get_contents(dirname(__DIR__, 3) . '/Controller/Frontend/Checkout.php');
-        self::assertStringContainsString("return \$this->redirect('/');", $checkout);
-        self::assertStringContainsString('isProductionLive()', $checkout);
-        self::assertStringContainsString('payment_return_empty', $checkout);
-        self::assertStringContainsString("\$this->layoutType = 'checkout'", $checkout);
-
-        $landing = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/Callback/browser-return.phtml');
-        self::assertStringContainsString('<!DOCTYPE html>', $landing);
-        self::assertStringContainsString('weline-payment-return', $landing);
-        self::assertStringContainsString('<lang>', $landing);
-        self::assertStringContainsString('min-height: 100vh', $landing);
-        self::assertStringContainsString('开发环境提示', $landing);
-        self::assertFileExists(dirname(__DIR__, 3) . '/view/templates/Frontend/Callback/browser-return.phtml');
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentBrowserReturnDispatcher.php');
+        self::assertStringNotContainsString("'redirect_path' => 'payment/frontend/checkout/return'", $src);
+        self::assertStringContainsString('PaymentBrowserReturnLandingOrchestrator', $src);
     }
 
-    public function testOAuthSuccessUsesMessageManagerSuccessApi(): void
+    public function testLandingOrchestratorDefinesL1AndL2Paths(): void
     {
-        $dispatcher = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentBrowserReturnDispatcher.php');
-        self::assertStringContainsString('MessageManager::success(', $dispatcher);
-        self::assertStringNotContainsString('MessageManager::add_success(', $dispatcher);
-        self::assertStringContainsString('MessageManager::add_error(', $dispatcher);
+        $src = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentBrowserReturnLandingOrchestrator.php');
+        self::assertStringContainsString(PaymentBrowserReturnLandingOrchestrator::DECISION_TERMINAL_L1, $src);
+        self::assertStringContainsString(PaymentBrowserReturnLandingOrchestrator::DECISION_HANDOFF_L2, $src);
+        self::assertStringContainsString(PaymentBrowserReturnLandingOrchestrator::DECISION_CHECKOUT_LANDING_CANCEL, $src);
+        self::assertStringContainsString('function decideCancel', $src);
+        self::assertStringContainsString('checkout/success', $src);
+        self::assertStringContainsString('payment/success', $src);
+        self::assertStringContainsString('payment/handoff', $src);
+        self::assertStringNotContainsString('payment/frontend/checkout/success-page', $src);
+        self::assertStringNotContainsString("'redirect_path' => 'payment/frontend/checkout/handoff'", $src);
+        self::assertFileExists(dirname(__DIR__, 3) . '/Controller/Success.php');
+        self::assertFileExists(dirname(__DIR__, 3) . '/Controller/Handoff.php');
+        $frontendCheckout = (string) file_get_contents(dirname(__DIR__, 3) . '/Controller/Frontend/Checkout.php');
+        self::assertStringNotContainsString('function successPage', $frontendCheckout);
+        self::assertStringNotContainsString('function handoff(', $frontendCheckout);
+        self::assertStringNotContainsString('function handoffStatus', $frontendCheckout);
+        self::assertStringContainsString('payment_return_cancelled', $frontendCheckout);
+        self::assertStringContainsString('isCancelOutcome', $frontendCheckout);
+
+        $cancelSrc = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentBrowserCancelDispatcher.php');
+        self::assertStringContainsString('decideCancel', $cancelSrc);
+        self::assertStringNotContainsString('->decide(', $cancelSrc);
+
+        $returnTpl = (string) file_get_contents(dirname(__DIR__, 3) . '/view/templates/Frontend/checkout/return.phtml');
+        self::assertStringContainsString('payment_return_cancelled', $returnTpl);
+        self::assertStringContainsString('已取消成功', $returnTpl);
+        self::assertStringContainsString('已取消', $returnTpl);
+        self::assertStringContainsString('payment_cancel_already', $returnTpl);
+
+        $routesSrc = (string) file_get_contents(dirname(__DIR__, 3) . '/Service/PaymentBrowserCallbackRoutes.php');
+        self::assertStringContainsString('CANCEL_STATE_ALREADY', $routesSrc);
+        self::assertStringContainsString('CANCEL_STATE_DONE', $routesSrc);
+        self::assertStringContainsString('QUERY_CANCEL_STATE', $routesSrc);
     }
 }

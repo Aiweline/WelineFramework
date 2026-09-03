@@ -1,0 +1,325 @@
+<?php
+/** L2 支付成功中转页（禁止转化像素） */
+$checkoutSessionCode = trim((string) ($checkout_session_code ?? ''));
+$handoffMaxWaitMs = (int) ($handoff_max_wait_ms ?? 15000);
+$escape = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<main class="amz-order-confirm amz-order-confirm--pending payment-handoff"
+    weline-code="payment.checkout_handoff"
+    data-testid="payment-handoff"
+    data-checkout-session-code="<?= $escape($checkoutSessionCode) ?>"
+    data-handoff-max-wait-ms="<?= $escape((string) $handoffMaxWaitMs) ?>"
+    data-pixel-conversion-suppress="1"
+    aria-busy="true"
+    aria-live="polite">
+    <header class="amz-order-confirm__banner payment-handoff__hero">
+        <div class="amz-order-confirm__banner-inner payment-handoff__hero-inner">
+            <span class="amz-order-confirm__check payment-handoff__spinner" aria-hidden="true">
+                <span class="payment-handoff__spinner-ring"></span>
+            </span>
+            <div class="amz-order-confirm__banner-copy">
+                <p class="payment-handoff__eyebrow"><?= $escape(__('确认进度')) ?></p>
+                <h1><?= $escape(__('正在确认订单…')) ?></h1>
+                <p id="payment-handoff-message"><?= $escape(__('支付已成功，我们正在同步订单信息。')) ?></p>
+            </div>
+        </div>
+        <div class="payment-handoff__progress"
+            role="progressbar"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="12"
+            aria-label="<?= $escape(__('订单确认进度')) ?>"
+            data-testid="payment-handoff-progress">
+            <div class="payment-handoff__progress-track">
+                <div id="payment-handoff-progress-bar" class="payment-handoff__progress-bar" style="width:12%"></div>
+            </div>
+        </div>
+    </header>
+
+    <section class="amz-order-confirm__panel payment-handoff__steps" weline-code="payment.checkout_handoff.steps">
+        <ol class="payment-handoff__step-list" data-testid="payment-handoff-steps">
+            <li class="payment-handoff__step is-done" data-step="paid">
+                <span class="payment-handoff__step-dot" aria-hidden="true"></span>
+                <span class="payment-handoff__step-label"><?= $escape(__('支付已确认')) ?></span>
+            </li>
+            <li class="payment-handoff__step is-active" data-step="sync" id="payment-handoff-step-sync">
+                <span class="payment-handoff__step-dot" aria-hidden="true"></span>
+                <span class="payment-handoff__step-label"><?= $escape(__('正在同步订单')) ?></span>
+            </li>
+            <li class="payment-handoff__step" data-step="redirect" id="payment-handoff-step-redirect">
+                <span class="payment-handoff__step-dot" aria-hidden="true"></span>
+                <span class="payment-handoff__step-label"><?= $escape(__('即将跳转结果页')) ?></span>
+            </li>
+        </ol>
+        <p class="payment-handoff__hint"><?= $escape(__('请稍候，请勿关闭本页')) ?></p>
+    </section>
+</main>
+<style>
+.payment-handoff {
+    --amz-text: #0f1111;
+    --amz-muted: #565959;
+    --amz-border: #d5d9d9;
+    --amz-panel-bg: #fff;
+    --amz-banner-bg: #f7fafa;
+    --amz-pending: #c7511f;
+    --amz-pending-soft: #fff4ed;
+    --amz-success: #067d62;
+    box-sizing: border-box;
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 28px var(--weline-layout-content-padding-inline) 56px;
+    color: var(--amz-text);
+    font-size: 14px;
+    line-height: 1.5;
+}
+.payment-handoff *,
+.payment-handoff *::before,
+.payment-handoff *::after { box-sizing: border-box; }
+.payment-handoff__hero {
+    background:
+        radial-gradient(120% 90% at 0% 0%, rgba(199, 81, 31, 0.08), transparent 55%),
+        var(--amz-banner-bg);
+    border: 1px solid var(--amz-border);
+    border-radius: 12px;
+    margin-bottom: 14px;
+    overflow: hidden;
+}
+.payment-handoff__hero-inner {
+    display: flex;
+    align-items: flex-start;
+    gap: 16px;
+    padding: 24px 22px 18px;
+}
+.payment-handoff__spinner {
+    position: relative;
+    flex-shrink: 0;
+    width: 44px;
+    height: 44px;
+    display: grid;
+    place-items: center;
+    border-radius: 50%;
+    background: var(--amz-pending-soft);
+    color: var(--amz-pending);
+    margin-top: 0;
+    font-size: 0;
+}
+.payment-handoff__spinner-ring {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(199, 81, 31, 0.22);
+    border-top-color: var(--amz-pending);
+    animation: payment-handoff-spin 0.85s linear infinite;
+}
+.payment-handoff__eyebrow {
+    margin: 0 0 4px;
+    color: var(--amz-pending);
+    font-size: 12px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+.payment-handoff h1,
+.payment-handoff h2,
+.payment-handoff p { margin: 0; color: inherit; }
+.payment-handoff__hero .amz-order-confirm__banner-copy h1 {
+    font-size: 24px;
+    font-weight: 700;
+    line-height: 1.25;
+}
+.payment-handoff__hero .amz-order-confirm__banner-copy > #payment-handoff-message {
+    margin-top: 8px;
+    color: var(--amz-muted);
+    font-size: 15px;
+}
+.payment-handoff__progress {
+    padding: 0 22px 20px;
+}
+.payment-handoff__progress-track {
+    height: 6px;
+    border-radius: 999px;
+    background: #e7e9e9;
+    overflow: hidden;
+}
+.payment-handoff__progress-bar {
+    height: 100%;
+    width: 12%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #e47911 0%, var(--amz-pending) 55%, #f5a05a 100%);
+    background-size: 200% 100%;
+    animation: payment-handoff-shimmer 1.4s ease-in-out infinite;
+    transition: width 0.45s ease;
+}
+.payment-handoff__steps {
+    background: var(--amz-panel-bg);
+    border: 1px solid var(--amz-border);
+    border-radius: 12px;
+    padding: 18px 20px 16px;
+}
+.payment-handoff__step-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 12px;
+}
+.payment-handoff__step {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--amz-muted);
+    font-size: 14px;
+}
+.payment-handoff__step-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid #b0b3b3;
+    background: #fff;
+    flex-shrink: 0;
+}
+.payment-handoff__step.is-done {
+    color: var(--amz-success);
+    font-weight: 600;
+}
+.payment-handoff__step.is-done .payment-handoff__step-dot {
+    border-color: var(--amz-success);
+    background: var(--amz-success);
+    box-shadow: inset 0 0 0 2px #fff;
+}
+.payment-handoff__step.is-active {
+    color: var(--amz-text);
+    font-weight: 700;
+}
+.payment-handoff__step.is-active .payment-handoff__step-dot {
+    border-color: var(--amz-pending);
+    background: var(--amz-pending);
+    box-shadow: 0 0 0 4px rgba(199, 81, 31, 0.14);
+    animation: payment-handoff-pulse 1.2s ease-in-out infinite;
+}
+.payment-handoff__hint {
+    margin-top: 14px;
+    padding-top: 12px;
+    border-top: 1px solid #eee;
+    color: var(--amz-muted);
+    font-size: 13px;
+}
+.payment-handoff.is-ready .payment-handoff__spinner-ring {
+    animation: none;
+    border-color: var(--amz-success);
+    border-top-color: var(--amz-success);
+    background: var(--amz-success);
+}
+.payment-handoff.is-ready .payment-handoff__progress-bar {
+    width: 100% !important;
+    animation: none;
+    background: var(--amz-success);
+}
+@keyframes payment-handoff-spin {
+    to { transform: rotate(360deg); }
+}
+@keyframes payment-handoff-shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: -100% 0; }
+}
+@keyframes payment-handoff-pulse {
+    0%, 100% { box-shadow: 0 0 0 4px rgba(199, 81, 31, 0.12); }
+    50% { box-shadow: 0 0 0 7px rgba(199, 81, 31, 0.08); }
+}
+@media (max-width: 640px) {
+    .payment-handoff { padding-top: 18px; }
+    .payment-handoff__hero .amz-order-confirm__banner-copy h1 { font-size: 20px; }
+    .payment-handoff__hero-inner { padding: 18px 16px 14px; }
+    .payment-handoff__progress { padding: 0 16px 16px; }
+}
+</style>
+<script>
+(function () {
+    var root = document.querySelector('[data-testid="payment-handoff"]');
+    if (!root) {
+        return;
+    }
+    var sessionCode = root.getAttribute('data-checkout-session-code') || '';
+    var maxWait = parseInt(root.getAttribute('data-handoff-max-wait-ms') || '15000', 10);
+    if (!isFinite(maxWait) || maxWait <= 0) {
+        maxWait = 15000;
+    }
+    var elapsed = 0;
+    var intervals = [500, 1000, 2000];
+    var intervalIndex = 0;
+    var messageEl = document.getElementById('payment-handoff-message');
+    var progressEl = root.querySelector('[data-testid="payment-handoff-progress"]');
+    var progressBar = document.getElementById('payment-handoff-progress-bar');
+    var syncStep = document.getElementById('payment-handoff-step-sync');
+    var redirectStep = document.getElementById('payment-handoff-step-redirect');
+
+    function setProgress(pct) {
+        var value = Math.max(8, Math.min(100, Math.round(pct)));
+        if (progressBar) {
+            progressBar.style.width = value + '%';
+        }
+        if (progressEl) {
+            progressEl.setAttribute('aria-valuenow', String(value));
+        }
+    }
+
+    function markReady() {
+        root.classList.add('is-ready');
+        root.setAttribute('aria-busy', 'false');
+        if (syncStep) {
+            syncStep.classList.remove('is-active');
+            syncStep.classList.add('is-done');
+        }
+        if (redirectStep) {
+            redirectStep.classList.add('is-active');
+        }
+        setProgress(100);
+    }
+
+    function tickProgress() {
+        var ratio = maxWait > 0 ? (elapsed / maxWait) : 0;
+        setProgress(12 + ratio * 78);
+    }
+
+    function poll() {
+        if (!sessionCode) {
+            // 无会话时仍展示确认中界面，避免纯空白；进度缓慢推进到约 40%。
+            setProgress(28);
+            return;
+        }
+        fetch('/payment/handoff/status?checkout_session_code=' + encodeURIComponent(sessionCode) + '&elapsed_ms=' + elapsed, {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        }).then(function (response) {
+            return response.json();
+        }).then(function (payload) {
+            if (messageEl && payload && payload.message) {
+                messageEl.textContent = payload.message;
+            }
+            if (payload && payload.ready && payload.landing_url) {
+                markReady();
+                window.location.href = payload.landing_url;
+                return;
+            }
+            if (elapsed >= maxWait && payload && payload.landing_url) {
+                markReady();
+                window.location.href = payload.landing_url;
+                return;
+            }
+            var wait = (payload && payload.poll_after_ms) ? payload.poll_after_ms : (intervals[intervalIndex] || 2000);
+            intervalIndex = Math.min(intervalIndex + 1, intervals.length - 1);
+            elapsed += wait;
+            tickProgress();
+            if (elapsed < maxWait || !(payload && payload.landing_url)) {
+                setTimeout(poll, wait);
+            }
+        }).catch(function () {
+            setTimeout(poll, intervals[intervalIndex] || 2000);
+        });
+    }
+
+    tickProgress();
+    poll();
+})();
+</script>

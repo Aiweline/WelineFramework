@@ -10,7 +10,7 @@ Provider 模块只需要交付三类文件（客户指南为**推荐第四类**�
 
 **推荐**：客户支付指南与支付政策（phtml + `PaymentCustomerGuide`），详见 [payment-customer-guide-i18n.md](payment-customer-guide-i18n.md)。
 
-特殊授权 / OAuth：实现可选 `ProviderConnectInterface`，经 `payment/backend/connect/*?method_code=` 调度；浏览器回跳只用壳 `callback/return`。Webhook 辅助页、Provider SDK/iframe 由 Provider 模板或 adapter 处理；最终支付状态必须回写壳状态机。禁止新实现已废弃的 `PaymentProviderInterface`。权威边界见 [payment-shell.md](payment-shell.md)。
+特殊授权 / OAuth：实现可选 `ProviderConnectInterface`，经 `payment/backend/connect/*?method_code=` 调度；浏览器回跳只用壳 `callback/{method_code}`（取消加 `outcome=cancel`）。Webhook 辅助页、Provider SDK/iframe 由 Provider 模板或 adapter 处理；最终支付状态必须回写壳状态机。禁止新实现已废弃的 `PaymentProviderInterface`。权威边界见 [payment-shell.md](payment-shell.md)。
 
 ## ProviderInterface
 

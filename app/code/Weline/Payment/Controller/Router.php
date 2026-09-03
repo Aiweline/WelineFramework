@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Payment\Controller;
 
 use Weline\Framework\Router\RouterInterface;
+use Weline\Payment\Service\PaymentBrowserCallbackRoutes;
 
 /** Owns public storefront /guide/payment routes for payment customer guides. */
 final class Router implements RouterInterface
@@ -29,6 +30,42 @@ final class Router implements RouterInterface
                 ? 'payment/frontend/dev-relay'
                 : 'payment/frontend/dev-relay/' . $suffix;
             $rule['module'] = 'Weline_Payment';
+
+            return;
+        }
+
+        if (preg_match('#^payment/frontend/provider/([a-z0-9][a-z0-9_.-]*)/([a-z0-9][a-z0-9_.-]*)$#D', $normalizedPath, $providerMatch) === 1) {
+            $path = 'payment/frontend/provider-gateway/dispatch';
+            $rule['module'] = 'Weline_Payment';
+            \Weline\Framework\Context::current()->set('input.query.method_code', (string) $providerMatch[1]);
+            \Weline\Framework\Context::current()->set('input.query.action', (string) $providerMatch[2]);
+
+            return;
+        }
+
+        // 旧嵌套 / .cancel 后缀路径已废除
+        if ($normalizedPath === 'payment/frontend/callback/return'
+            || $normalizedPath === 'payment/frontend/callback/cancel'
+            || str_starts_with($normalizedPath, 'payment/frontend/callback/return/')
+            || str_starts_with($normalizedPath, 'payment/frontend/callback/cancel/')
+            || preg_match('#^payment/frontend/callback/[a-z0-9][a-z0-9_.-]*\.cancel$#D', $normalizedPath) === 1
+        ) {
+            $path = 'payment/frontend/callback/__removed__';
+            $rule['module'] = 'Weline_Payment';
+
+            return;
+        }
+
+        // 唯一浏览器入口：callback/{method}（取消靠 query outcome=cancel）
+        if (preg_match('#^payment/frontend/callback/([a-z0-9][a-z0-9_.-]*)$#D', $normalizedPath, $returnMatch) === 1) {
+            $methodCode = (string) $returnMatch[1];
+            if (PaymentBrowserCallbackRoutes::isReservedCallbackSegment($methodCode)) {
+                return;
+            }
+            $path = PaymentBrowserCallbackRoutes::RETURN_DISPATCH;
+            $rule['module'] = 'Weline_Payment';
+            $rule[PaymentBrowserCallbackRoutes::QUERY_METHOD_CODE] = $methodCode;
+            \Weline\Framework\Context::current()->set('input.query.method_code', $methodCode);
 
             return;
         }

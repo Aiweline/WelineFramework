@@ -22,7 +22,9 @@ class PaymentService
     public function __construct(
         private readonly PaymentMethodManager $methodManager,
         private readonly ObjectManager $objectManager,
-        private readonly ?PayablePaymentEligibilityService $eligibilityService = null
+        private readonly ?PayablePaymentEligibilityService $eligibilityService = null,
+        private readonly ?PaymentShellCallbackUrlCatalog $callbackUrlCatalog = null,
+        private readonly ?PaymentCheckoutSessionPersistenceService $checkoutSessionPersistence = null,
     ) {
     }
 
@@ -57,6 +59,10 @@ class PaymentService
             'scope' => $scope['scope'],
             'environment' => $scope['environment'],
         ]);
+
+        $callbackUrls = $this->getCallbackUrlCatalog()->buildBrowserCallbackUrls($methodCode, $scope, $transactionNo);
+        $context = array_replace($context, $callbackUrls);
+        $orderData = array_replace($orderData, $callbackUrls);
 
         $methodEligibility = $this->getEligibilityService()->evaluate(
             $paymentMethod,
@@ -109,6 +115,9 @@ class PaymentService
             PaymentOperationRequest::FIELD_CURRENCY_CODE => $currency,
             PaymentOperationRequest::FIELD_IDEMPOTENCY_KEY => (string) ($orderData['idempotency_key'] ?? $transactionNo),
             PaymentOperationRequest::FIELD_PROVIDER_REFERENCE => $transactionNo,
+            PaymentOperationRequest::FIELD_RETURN_URL => $callbackUrls['return_url'],
+            PaymentOperationRequest::FIELD_CANCEL_URL => $callbackUrls['cancel_url'],
+            PaymentOperationRequest::FIELD_FAILURE_URL => $callbackUrls['failure_url'],
             PaymentOperationRequest::FIELD_CONTEXT => $context,
         ]));
 
@@ -116,10 +125,6 @@ class PaymentService
             ->setData(PaymentTransaction::schema_fields_STATUS, $this->mapPaymentStatus($result))
             ->save();
 
-        if ($result->getProviderReference()) {
-            $transaction->setData(PaymentTransaction::schema_fields_TRANSACTION_NO, $result->getProviderReference())
-                ->save();
-        }
         if ($result->isSuccessful()) {
             $transaction->setData(PaymentTransaction::schema_fields_PAID_AT, date('Y-m-d H:i:s'))
                 ->save();
@@ -127,6 +132,14 @@ class PaymentService
         if ($result->getStatus() === PaymentResult::STATUS_FAILED) {
             throw new \RuntimeException((string) ($result->getData(PaymentResult::FIELD_MESSAGE) ?: __('创建支付订单失败')));
         }
+
+        $finalTransactionNo = (string) $transaction->getData(PaymentTransaction::schema_fields_TRANSACTION_NO);
+        $this->getCheckoutSessionPersistence()->persistFromPaymentContext(
+            $orderData,
+            $finalTransactionNo,
+            $methodCode,
+            $scope,
+        );
 
         return $transaction;
     }
@@ -234,6 +247,16 @@ class PaymentService
     private function getRefundService(): PaymentRefundService
     {
         return $this->objectManager->getInstance(PaymentRefundService::class);
+    }
+
+    private function getCallbackUrlCatalog(): PaymentShellCallbackUrlCatalog
+    {
+        return $this->callbackUrlCatalog ?? $this->objectManager->getInstance(PaymentShellCallbackUrlCatalog::class);
+    }
+
+    private function getCheckoutSessionPersistence(): PaymentCheckoutSessionPersistenceService
+    {
+        return $this->checkoutSessionPersistence ?? $this->objectManager->getInstance(PaymentCheckoutSessionPersistenceService::class);
     }
 
     private function mapRefundStatus(string $status): string

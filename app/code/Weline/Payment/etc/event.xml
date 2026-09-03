@@ -20,5 +20,17 @@
                   disabled="false"
                   shared="true"
                   sort="10"/>
+        <observer name="Weline_Payment::paypal_webhook_notification"
+                  instance="Weline\Payment\Observer\PayPalWebhookNotificationObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
+    </event>
+    <event name="Weline_Order::order_shipped">
+        <observer name="Weline_Payment::paypal_order_shipped_tracking"
+                  instance="Weline\Payment\Observer\PayPalOrderShippedTrackingObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="20"/>
     </event>
 </config>
