@@ -209,6 +209,12 @@
             paths: ["/Weline/Affiliate/view/statics/js/affiliate-account.js"],
             globalVar: null,
             description: "账户中心分销工作台"
+        },
+        recentlyViewed: {
+            origin_paths: ["app/code/Weline/RecentlyViewed/view/statics/js/widgets/recently-viewed.js"],
+            paths: ["/Weline/RecentlyViewed/view/statics/js/widgets/recently-viewed.js"],
+            globalVar: null,
+            description: "最近浏览轮播/网格"
         }
     });
 
