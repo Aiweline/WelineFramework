@@ -102,16 +102,47 @@ final class SearchParamGuard
         }
 
         $scope = RequestContext::scopeMetadata();
-        if (!\is_array($scope)
-            || ($scope['scope_kind'] ?? '') !== 'channel'
-            || (int)($scope['store_id'] ?? 0) < 1
-            || (int)($scope['channel_id'] ?? 0) < 1
-            || \trim((string)($scope['locale'] ?? '')) === ''
-            || \trim((string)($scope['currency'] ?? '')) === ''
-        ) {
+        if (!\is_array($scope) || ($scope['scope_kind'] ?? '') !== 'channel') {
             throw new SearchParamException(
                 self::ERROR_SCOPE,
                 (string)__('当前 storefront 请求没有冻结完整商城 Scope'),
+                [
+                    'reason' => 'metadata_null_or_not_channel',
+                    'scope_kind' => \is_array($scope) ? (string)($scope['scope_kind'] ?? '') : null,
+                ],
+            );
+        }
+
+        // website_id/store_id/channel_id = 0 are legal ID_DEFAULT values (Websites P1a).
+        $storeId = (int)($scope['store_id'] ?? -1);
+        $channelId = (int)($scope['channel_id'] ?? -1);
+        $storeCode = \trim((string)($scope['store_code'] ?? ''));
+        $channelCode = \trim((string)($scope['channel_code'] ?? ''));
+        if ($storeId < 0 || $channelId < 0 || $storeCode === '' || $channelCode === '') {
+            throw new SearchParamException(
+                self::ERROR_SCOPE,
+                (string)__('当前 storefront 请求没有冻结完整商城 Scope'),
+                [
+                    'reason' => 'incomplete_store_channel',
+                    'store_id' => $storeId,
+                    'channel_id' => $channelId,
+                    'store_code' => $storeCode,
+                    'channel_code' => $channelCode,
+                ],
+            );
+        }
+
+        $locale = \trim((string)($scope['locale'] ?? ''));
+        $currency = \trim((string)($scope['currency'] ?? ''));
+        if ($locale === '' || $currency === '') {
+            throw new SearchParamException(
+                self::ERROR_SCOPE,
+                (string)__('当前 storefront 请求没有冻结完整商城 Scope'),
+                [
+                    'reason' => $locale === '' ? 'empty_locale' : 'empty_currency',
+                    'locale' => $locale,
+                    'currency' => $currency,
+                ],
             );
         }
 
@@ -121,10 +152,10 @@ final class SearchParamGuard
             page: $page,
             pageSize: $pageSize,
             websiteId: (int)$scope['website_id'],
-            storeId: (int)$scope['store_id'],
-            channelId: (int)$scope['channel_id'],
-            locale: (string)$scope['locale'],
-            currency: (string)$scope['currency'],
+            storeId: $storeId,
+            channelId: $channelId,
+            locale: $locale,
+            currency: $currency,
             extras: $extras,
         );
     }

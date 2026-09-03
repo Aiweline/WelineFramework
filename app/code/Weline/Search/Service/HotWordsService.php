@@ -45,7 +45,8 @@ final class HotWordsService
     {
         $limit = max(1, min(20, $limit));
         $scope = RequestContext::scopeMetadata();
-        if (!\is_array($scope) || (int)($scope['channel_id'] ?? 0) < 1) {
+        // channel metadata may carry store_id/channel_id = 0 (ID_DEFAULT).
+        if (!\is_array($scope) || ($scope['scope_kind'] ?? '') !== 'channel') {
             return [
                 'success' => true,
                 'words' => [],
