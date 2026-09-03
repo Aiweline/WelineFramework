@@ -123,6 +123,20 @@ class AttributeFilterServiceTest extends TestCase
         self::assertSame(['42' => 2], $result['counts']);
     }
 
+    public function testValueGetTableFallsBackToEavEntityCodeWithoutCurrentEntity(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Model/EavAttribute/Type/Value.php';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('function getTable(string $table = \'\'): string', $source);
+        self::assertStringContainsString('getEavEntity()->getCode()', $source);
+        self::assertStringContainsString('current_getEntity()->getEntityCode()', $source);
+        self::assertLessThan(
+            strpos($source, 'getEavEntity()->getCode()') ?: PHP_INT_MAX,
+            strpos($source, 'function getTable(string $table = \'\'): string') ?: PHP_INT_MAX,
+        );
+    }
+
     private function invokePrivate(object $instance, string $method, array $args): mixed
     {
         $reflection = new \ReflectionMethod($instance, $method);
