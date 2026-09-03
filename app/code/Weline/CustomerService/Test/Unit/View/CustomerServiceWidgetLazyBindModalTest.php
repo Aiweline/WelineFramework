@@ -55,7 +55,7 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
         $this->assertStringContainsString("notify('error'", $content);
     }
 
-    public function testWidgetStylesheetReliesOnTheCanonicalStaticAssetVersion(): void
+    public function testWidgetAssetsUseCanonicalCssVersionAndDeclaredModuleLoader(): void
     {
         $hookFile = dirname(__DIR__, 3) . '/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml';
 
@@ -66,12 +66,18 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
             "@static(Weline_CustomerService::css/customer-service.css)",
             $content
         );
-        $this->assertStringContainsString(
+        $this->assertStringContainsString('window.Weline.load(', $content);
+        $this->assertStringNotContainsString(
             "@static(Weline_CustomerService::js/customer-service.js)",
             $content
         );
         $this->assertStringContainsString('customerServiceCssVersion', $content);
-        $this->assertStringContainsString('customerServiceJsVersion', $content);
+        $this->assertStringContainsString('var customerServiceJsVersion =', $content);
+        $this->assertStringContainsString(
+            "'Weline_CustomerService::js/customer-service.js?v=' + encodeURIComponent(customerServiceJsVersion)",
+            $content
+        );
+        $this->assertStringNotContainsString("window.Weline.load('customerService')", $content);
         $this->assertStringNotContainsString('customer-service.css)?v=', $content);
         $this->assertStringNotContainsString('customer-service.js)?v=', $content);
     }
