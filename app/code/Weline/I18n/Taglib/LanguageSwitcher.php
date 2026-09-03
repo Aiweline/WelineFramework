@@ -11,6 +11,7 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\I18n\Api\Seo\LocalizedUrlBuilderInterface;
 use Weline\I18n\Helper\InlineSvgIdUniquifier;
+use Weline\I18n\Helper\SwitcherInstanceId;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\I18n\Service\LocaleCatalogScope;
@@ -39,9 +40,6 @@ class LanguageSwitcher implements TaglibInterface
      */
     private static array $chromeDictionaryCache = [];
 
-    /** Monotonic per-request render sequence so cached chrome gets unique DOM ids. */
-    private static int $switcherRenderSeq = 0;
-
     /**
      * Drop process-local language/html memo so lifecycle changes take effect immediately.
      */
@@ -50,7 +48,6 @@ class LanguageSwitcher implements TaglibInterface
         self::$htmlCache = [];
         self::$languageCache = [];
         self::$chromeDictionaryCache = [];
-        self::$switcherRenderSeq = 0;
         InlineSvgIdUniquifier::resetSequence();
     }
 
@@ -217,11 +214,7 @@ class LanguageSwitcher implements TaglibInterface
             $currentName = htmlspecialchars($currentLabelRaw, ENT_QUOTES, 'UTF-8');
             $currentFlag = self::sanitizeInlineFlagMarkup((string)($welineCurrentLanguage['flag'] ?? ''));
             $renderFor = strtolower(trim((string)($attributes['for'] ?? '')));
-            $switcherScopeId = $scope->mode . ':' . ($isBackendArea ? 'backend' : (string)$websiteId);
-            $renderSeq = ++self::$switcherRenderSeq;
-            $switcherId = 'weline-i18n-switcher-' . substr(md5(
-                $switcherScopeId . '|' . $currentCode . '|' . json_encode(array_keys($welineLanguages)) . '|inst=' . $renderSeq
-            ), 0, 12);
+            $switcherId = SwitcherInstanceId::create('weline-i18n-switcher');
             $parts = explode('_', $currentCode);
             $shortCode = strtoupper(substr($currentCode, 0, 2));
             if (count($parts) >= 2) {
@@ -295,7 +288,7 @@ class LanguageSwitcher implements TaglibInterface
                 . '|label_mode=' . $labelMode
                 . '|markup=weline-ui-2-language-switcher-component-22'
                 . '|mount=' . $websiteMount
-                . '|inst=' . $renderSeq;
+                . '|inst=' . $switcherId;
             $now = \microtime(true);
             if (isset(self::$htmlCache[$htmlCacheKey]) && self::$htmlCache[$htmlCacheKey]['expires'] >= $now) {
                 return self::$htmlCache[$htmlCacheKey]['html'];

@@ -51,6 +51,11 @@ final class TranslationResolver implements TranslationResolverInterface
         return $translated !== '' ? $translated : $source;
     }
 
+    public function reset(): void
+    {
+        $this->moduleWords = [];
+    }
+
     public function translateForScope(
         string $source,
         ScopeIdentity $identity,
