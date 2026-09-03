@@ -7,6 +7,7 @@ namespace Weline\I18n\Api\Runtime;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ProcessCacheResetContext;
 use Weline\Framework\Runtime\ProcessCacheResetterInterface;
+use Weline\I18n\Api\Translation\TranslationResolverInterface;
 use Weline\I18n\Parser;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\I18n\Taglib\LanguageSelect;
@@ -24,6 +25,12 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface
 
         Parser::clearWorkerCaches();
         $cleared++;
+
+        try {
+            ObjectManager::getInstance(TranslationResolverInterface::class)->reset();
+            $cleared++;
+        } catch (\Throwable) {
+        }
 
         try {
             ObjectManager::getInstance(ActiveLocaleCodeProvider::class)->reset();

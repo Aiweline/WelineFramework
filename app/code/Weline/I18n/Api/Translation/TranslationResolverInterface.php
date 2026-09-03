@@ -15,6 +15,11 @@ interface TranslationResolverInterface
     public function translate(string $source, string $localeCode, array $preferredModules = []): string;
 
     /**
+     * Clear process-local module CSV words after an explicit runtime cache clear.
+     */
+    public function reset(): void;
+
+    /**
      * typed Scope + locale fallback（TASK-P1C-005-I18N）。
      * 旧 translate() 仍为无 Scope 精确/模块 CSV 路径。
      *

@@ -240,6 +240,7 @@ foreach ($currencies as $currency) {
 <?php
 // 与语言切换器一致：Phrase exclusive 下框架文案走 WidgetI18n，避免英文页仍显示中文源串。
 $i18nChrome = static fn(string $source): string => \Weline\Theme\Helper\WidgetI18n::label($source);
+$currencySwitcherId = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency-switcher-menu');
 ?>
 <div
     class="w-currency-switcher w-menu-root"
@@ -254,7 +255,7 @@ $i18nChrome = static fn(string $source): string => \Weline\Theme\Helper\WidgetI1
         data-tone="quiet"
         data-size="sm"
         data-w-menu-trigger
-        aria-controls="w-currency-switcher-menu"
+        aria-controls="<?= $escape($currencySwitcherId) ?>"
         aria-expanded="false"
         aria-label="<?= $escape($i18nChrome('切换货币')) ?>"
     >
@@ -265,7 +266,7 @@ $i18nChrome = static fn(string $source): string => \Weline\Theme\Helper\WidgetI1
     </button>
     <div
         class="w-menu w-currency-switcher__panel"
-        id="w-currency-switcher-menu"
+        id="<?= $escape($currencySwitcherId) ?>"
         data-w-menu-panel
         data-w-choice-panel
         role="menu"

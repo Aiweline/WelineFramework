@@ -5,19 +5,18 @@ declare(strict_types=1);
 namespace Weline\I18n\Helper;
 
 /**
- * Make inline SVG id/href unique per insert so the same flag can appear twice
- * (language switcher trigger + menu row) without duplicate-id health warnings.
+ * Make inline SVG id/href unique per insert so the same flag can appear in
+ * independently rendered Hook/FPC fragments without duplicate DOM ids.
  */
 final class InlineSvgIdUniquifier
 {
-    private static int $sequence = 0;
+    private const NONCE_BYTES = 12;
 
     /**
-     * @internal tests may reset between cases
+     * @internal Backward-compatible lifecycle hook; uniqueness is stateless.
      */
     public static function resetSequence(): void
     {
-        self::$sequence = 0;
     }
 
     public static function uniquify(string $markup): string
@@ -36,7 +35,10 @@ final class InlineSvgIdUniquifier
             return $markup;
         }
 
-        $suffix = '-u' . (++self::$sequence);
+        // A process-local sequence restarts independently in each Worker and
+        // collides when fragments from different renderers share one response.
+        // A 96-bit namespace remains unique across those cache/process bounds.
+        $suffix = '-u' . bin2hex(random_bytes(self::NONCE_BYTES));
         foreach ($ids as $id) {
             $quoted = preg_quote($id, '/');
             $newId = $id . $suffix;
