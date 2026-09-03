@@ -251,22 +251,32 @@ final class ProductCatalogEavBootstrap
         $basicGroupId = $this->ensureGroup($entityId, $setId, 'hanfu_basic', '基本信息');
         $variantGroupId = $this->ensureGroup($entityId, $setId, 'hanfu_variants', '规格维度');
         $specsGroupId = $this->ensureGroup($entityId, $setId, 'hanfu_specs', '规格参数');
+        $sourceGroupId = $this->ensureGroup($entityId, $setId, 'hanfu_source', '1688 来源');
         $serviceGroupId = $this->ensureGroup($entityId, $setId, 'hanfu_service', '售后保障');
 
         $typeId = $this->resolveVarcharTypeId();
+        $textTypeId = $this->resolveTypeId('textarea_text');
         $attributeCount = 0;
         $optionCount = 0;
 
         foreach ([
-            ['code' => 'attribute_set', 'name' => '属性集', 'group' => $basicGroupId, 'select' => false, 'options' => []],
-            ['code' => 'material', 'name' => '材质', 'group' => $specsGroupId, 'select' => false, 'options' => []],
-            ['code' => 'care_instructions', 'name' => '保养说明', 'group' => $serviceGroupId, 'select' => false, 'options' => []],
+            ['code' => 'attribute_set', 'name' => '属性集', 'group' => $basicGroupId, 'type' => $typeId],
+            ['code' => 'material', 'name' => '材质', 'group' => $specsGroupId, 'type' => $typeId],
+            ['code' => 'source_platform', 'name' => '来源平台', 'group' => $sourceGroupId, 'type' => $typeId],
+            ['code' => 'source_offer_id', 'name' => '1688 商品 ID', 'group' => $sourceGroupId, 'type' => $typeId],
+            ['code' => 'source_url', 'name' => '1688 商品地址', 'group' => $sourceGroupId, 'type' => $textTypeId],
+            ['code' => 'source_shop_url', 'name' => '1688 店铺地址', 'group' => $sourceGroupId, 'type' => $textTypeId],
+            ['code' => 'source_factory_url', 'name' => '1688 厂档地址', 'group' => $sourceGroupId, 'type' => $textTypeId],
+            ['code' => 'source_company_name', 'name' => '1688 企业名称', 'group' => $sourceGroupId, 'type' => $typeId],
+            ['code' => 'source_minimum_order_quantity', 'name' => '1688 起订量', 'group' => $sourceGroupId, 'type' => $typeId],
+            ['code' => 'source_snapshot_digest', 'name' => '来源快照校验值', 'group' => $sourceGroupId, 'type' => $typeId],
+            ['code' => 'care_instructions', 'name' => '保养说明', 'group' => $serviceGroupId, 'type' => $typeId],
         ] as $attribute) {
             if ($this->ensureAttribute(
                 $entityId,
                 $setId,
                 $attribute['group'],
-                $typeId,
+                $attribute['type'],
                 $attribute['code'],
                 $attribute['name'],
             )) {
@@ -302,7 +312,10 @@ final class ProductCatalogEavBootstrap
                     ['code' => 'm', 'label' => 'M'],
                     ['code' => 'l', 'label' => 'L'],
                     ['code' => 'xl', 'label' => 'XL'],
+                    ['code' => 'xxl', 'label' => 'XXL'],
+                    ['code' => 'xxxl', 'label' => 'XXXL'],
                     ['code' => '2xl', 'label' => '2XL'],
+                    ['code' => '3xl', 'label' => '3XL'],
                 ],
             ],
             [
@@ -336,6 +349,7 @@ final class ProductCatalogEavBootstrap
                 $definition['code'],
                 $definition['name'],
                 $definition['options'],
+                true,
             );
             if ($created['attribute_created']) {
                 ++$attributeCount;
@@ -352,16 +366,136 @@ final class ProductCatalogEavBootstrap
                 'basic' => $basicGroupId,
                 'variants' => $variantGroupId,
                 'specs' => $specsGroupId,
+                'source' => $sourceGroupId,
                 'service' => $serviceGroupId,
             ],
             'attributes' => $attributeCount,
             'options' => $optionCount,
+            'legacy_attributes_detached' => $this->detachAttributeCodesFromSet(
+                $entityId,
+                $setId,
+                [
+                    'available_colors',
+                    'available_sizes',
+                    'source_public_specs',
+                    'source_variant_combinations',
+                ],
+            ),
             'cleared_global_swatch_images' => $this->clearVariantOptionSwatchImages($entityId),
         ];
     }
 
     /**
-     * 全局 EAV 选项只保留抽象色值；商品样本图仅维护在商品 type_configuration。
+     * Add source-discovered Hanfu specification options to the formal EAV attribute set.
+     *
+     * @param list<array<string,mixed>> $definitions
+     * @return array{attributes:int,options:int}
+     */
+    public function ensureHanfuAttributeOptions(array $definitions): array
+    {
+        $schema = $this->ensureHanfuSchema();
+        $entityId = (int)($schema['entity_id'] ?? 0);
+        $setId = (int)($schema['set_id'] ?? 0);
+        $groups = is_array($schema['groups'] ?? null) ? $schema['groups'] : [];
+        if ($entityId <= 0 || $setId <= 0) {
+            return ['attributes' => 0, 'options' => 0];
+        }
+
+        $attributes = 0;
+        $options = 0;
+        $typeId = $this->resolveVarcharTypeId();
+        foreach ($definitions as $definition) {
+            if (!is_array($definition)) {
+                continue;
+            }
+            $code = strtolower(trim((string)($definition['code'] ?? '')));
+            if (preg_match('/^[a-z][a-z0-9_]{0,63}$/', $code) !== 1) {
+                throw new \InvalidArgumentException('hanfu_eav_attribute_code_invalid');
+            }
+            $name = trim((string)($definition['name'] ?? $definition['label'] ?? $code));
+            $variant = !empty($definition['variant']);
+            $multiple = $variant || !empty($definition['multiple']);
+            $groupId = (int)($groups[$variant ? 'variants' : 'specs'] ?? 0);
+            $rawOptions = is_array($definition['options'] ?? null) ? $definition['options'] : [];
+            $normalizedOptions = [];
+            foreach ($rawOptions as $option) {
+                if (!is_array($option)) {
+                    continue;
+                }
+                $optionCode = strtolower(trim((string)($option['code'] ?? $option['value'] ?? '')));
+                $label = trim((string)($option['label'] ?? $option['name'] ?? $optionCode));
+                if ($optionCode !== '' && $label !== '') {
+                    $normalizedOptions[] = [
+                        'code' => $optionCode,
+                        'label' => $label,
+                        'swatch' => (string)($option['swatch'] ?? ''),
+                    ];
+                }
+            }
+            if ($name === '' || $groupId <= 0 || $normalizedOptions === []) {
+                continue;
+            }
+            $created = $this->ensureSelectAttribute(
+                $entityId,
+                $setId,
+                $groupId,
+                $typeId,
+                $code,
+                $name,
+                $normalizedOptions,
+                $multiple,
+            );
+            if ($created['attribute_created']
+                || $this->ensurePlacementByCode($entityId, $code, $setId, $groupId)
+            ) {
+                ++$attributes;
+            }
+            $options += (int)$created['options_added'];
+        }
+
+        return ['attributes' => $attributes, 'options' => $options];
+    }
+
+    /** @param list<string> $codes */
+    private function detachAttributeCodesFromSet(int $entityId, int $setId, array $codes): int
+    {
+        $detached = 0;
+        /** @var EavAttribute $attributeModel */
+        $attributeModel = ObjectManager::getInstance(EavAttribute::class);
+        /** @var Placement $placementModel */
+        $placementModel = ObjectManager::getInstance(Placement::class);
+        foreach ($codes as $code) {
+            $attribute = clone $attributeModel;
+            $attribute->clearData()
+                ->where(EavAttribute::schema_fields_eav_entity_id, $entityId)
+                ->where(EavAttribute::schema_fields_code, $code)
+                ->find()
+                ->fetch();
+            $attributeId = (int)$attribute->getAttributeId();
+            if ($attributeId <= 0) {
+                continue;
+            }
+            foreach ((clone $placementModel)->clearData()
+                ->where(Placement::schema_fields_attribute_id, $attributeId)
+                ->where(Placement::schema_fields_set_id, $setId)
+                ->select()
+                ->fetchArray() as $row) {
+                $placementId = (int)($row[Placement::schema_fields_placement_id] ?? 0);
+                if ($placementId > 0) {
+                    (clone $placementModel)->load($placementId)->delete();
+                    ++$detached;
+                }
+            }
+            if ((int)$attribute->getSetId() === $setId) {
+                $attribute->setSetId(0)->setGroupId(0)->save(true);
+                ++$detached;
+            }
+        }
+        return $detached;
+    }
+
+    /**
+     * 全局 EAV 选项只保留抽象色值；商品样本图仅通过 Product/Offer 媒体关联维护。
      */
     public function clearVariantOptionSwatchImages(int $entityId): int
     {
@@ -433,15 +567,20 @@ final class ProductCatalogEavBootstrap
 
     private function resolveVarcharTypeId(): int
     {
+        return $this->resolveTypeId('input_string_255');
+    }
+
+    private function resolveTypeId(string $code): int
+    {
         /** @var Type $type */
         $type = ObjectManager::getInstance(Type::class);
         $type->clearData()
-            ->where(Type::schema_fields_code, 'input_string_255')
+            ->where(Type::schema_fields_code, $code)
             ->find()
             ->fetch();
         $typeId = (int)$type->getId();
         if ($typeId <= 0) {
-            throw new \RuntimeException('EAV input_string_255 type is missing');
+            throw new \RuntimeException('EAV attribute type is missing: ' . $code);
         }
 
         return $typeId;
@@ -665,6 +804,7 @@ final class ProductCatalogEavBootstrap
         string $code,
         string $name,
         array $options,
+        bool $multiple = false,
     ): array {
         /** @var EavAttribute $attribute */
         $attribute = ObjectManager::getInstance(EavAttribute::class);
@@ -694,12 +834,14 @@ final class ProductCatalogEavBootstrap
                 EavAttribute::schema_fields_frontend_is_filterable => $profile['frontend_is_filterable'] ? 1 : 0,
                 EavAttribute::schema_fields_frontend_is_searchable => $profile['frontend_is_searchable'] ? 1 : 0,
                 EavAttribute::schema_fields_compare_mode => $profile['compare_mode'],
-                EavAttribute::schema_fields_data_is_multiple => 0,
+                EavAttribute::schema_fields_data_is_multiple => $multiple ? 1 : 0,
                 EavAttribute::schema_fields_data_has_option => 1,
             ])->fetch();
             $attributeCreated = true;
         } else {
-            $attribute->setData(EavAttribute::schema_fields_data_has_option, 1)
+            $attribute->setData(EavAttribute::schema_fields_name, $name)
+                ->setData(EavAttribute::schema_fields_data_has_option, 1)
+                ->setData(EavAttribute::schema_fields_data_is_multiple, $multiple ? 1 : 0)
                 ->setData(EavAttribute::schema_fields_frontend_is_filterable, 1)
                 ->save(true);
         }
@@ -731,17 +873,55 @@ final class ProductCatalogEavBootstrap
         string $label,
         string $swatchColor = '',
     ): bool {
+        $label = $this->normalizeOptionLabel($label);
+        $swatchColor = trim($swatchColor);
+
         /** @var Option $option */
         $option = ObjectManager::getInstance(Option::class);
-        $option->clearData()
+        $existingOptions = $option->clearData()
             ->where(Option::schema_fields_eav_entity_id, $entityId)
             ->where(Option::schema_fields_attribute_id, $attributeId)
-            ->where(Option::schema_fields_code, $code)
-            ->find()
-            ->fetch();
+            ->order('main_table.' . Option::schema_fields_option_id)
+            ->select()
+            ->fetchArray();
+
+        $existingOptionId = 0;
+        foreach (is_array($existingOptions) ? $existingOptions : [] as $existingOption) {
+            if (!is_array($existingOption)) {
+                continue;
+            }
+            if ($this->normalizeOptionLabel(
+                (string)($existingOption[Option::schema_fields_value] ?? ''),
+            ) !== $label) {
+                continue;
+            }
+            $existingOptionId = (int)($existingOption[Option::schema_fields_option_id] ?? 0);
+            if ($existingOptionId > 0) {
+                break;
+            }
+        }
+
+        $option->clearData();
+        if ($existingOptionId > 0) {
+            $option->where(Option::schema_fields_option_id, $existingOptionId)
+                ->find()
+                ->fetch();
+        } else {
+            $option->where(Option::schema_fields_eav_entity_id, $entityId)
+                ->where(Option::schema_fields_attribute_id, $attributeId)
+                ->where(Option::schema_fields_code, $code)
+                ->find()
+                ->fetch();
+        }
+
         if ((int)$option->getOptionId() > 0) {
             $changes = [];
-            if ($swatchColor !== '') {
+            if ((string)$option->getData(Option::schema_fields_value) !== $label) {
+                $changes[Option::schema_fields_value] = $label;
+            }
+            if ($swatchColor !== ''
+                && (string)$option->getData(Option::schema_fields_swatch_color) !== $swatchColor
+            ) {
                 $changes[Option::schema_fields_swatch_color] = $swatchColor;
             }
             if ($changes === []) {
@@ -764,5 +944,17 @@ final class ProductCatalogEavBootstrap
         $option->clearData()->insert($row)->fetch();
 
         return true;
+    }
+
+    private function normalizeOptionLabel(string $label): string
+    {
+        $label = trim($label);
+        if ($label === '') {
+            return '';
+        }
+
+        $normalized = preg_replace('/\s+/u', ' ', $label);
+
+        return trim(is_string($normalized) ? $normalized : $label);
     }
 }

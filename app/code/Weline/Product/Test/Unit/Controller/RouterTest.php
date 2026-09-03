@@ -34,6 +34,31 @@ final class RouterTest extends TestCase
         ];
     }
 
+    /**
+     * @dataProvider bestSellersPathProvider
+     */
+    public function testBestSellersPathRoutesToBestSellersController(string $publicPath): void
+    {
+        $rule = [];
+
+        Router::process($publicPath, $rule);
+
+        self::assertSame('weline_product/frontend/best-sellers', $publicPath);
+        self::assertSame('Weline_Product', $rule['module'] ?? null);
+    }
+
+    /**
+     * @return array<string, array{string}>
+     */
+    public static function bestSellersPathProvider(): array
+    {
+        return [
+            'best-sellers' => ['best-sellers'],
+            'bestsellers alias' => ['/bestsellers/'],
+            'best_sellers alias' => ['best_sellers'],
+        ];
+    }
+
     public function testPositiveNumericProductPathRoutesToNativeDetailController(): void
     {
         Context::enter(new Context());

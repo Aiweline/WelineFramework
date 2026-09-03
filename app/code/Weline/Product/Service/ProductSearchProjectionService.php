@@ -163,7 +163,7 @@ final class ProductSearchProjectionService
 
         $storeId = null;
         if ($targetType === ProductSearchProjectionMutationCoordinatorInterface::TARGET_STORE_PRODUCT) {
-            $storeId = $this->requiredInt($change, 'store_id', 1);
+            $storeId = $this->requiredInt($change, 'store_id', 0);
         }
         $scopes = $this->activeScopes($websiteId, $storeId);
         $productOffers = $this->offers->listByProductIds($websiteId, [$productId]);

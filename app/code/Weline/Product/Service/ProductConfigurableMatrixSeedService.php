@@ -21,6 +21,7 @@ final class ProductConfigurableMatrixSeedService
 {
     public function __construct(
         private readonly ProductVariantMatrixService $matrix,
+        private readonly ProductAttributeMetadataCatalog $attributeMetadata,
         private readonly ProductIdentityV2Service $identities,
         private readonly ProductRepository $products,
         private readonly OfferRepository $offers,
@@ -60,12 +61,14 @@ final class ProductConfigurableMatrixSeedService
             return ['created' => 0, 'updated' => 0, 'total' => 0];
         }
 
+        $axes = $this->attributeMetadata->canonicalizeVariantAxes($axes);
+        $defaults = $this->attributeMetadata->canonicalizeVariantCombination($defaults);
         $rows = $this->matrix->generate($axes, $primarySku);
         if ($rows === []) {
             return ['created' => 0, 'updated' => 0, 'total' => 0];
         }
 
-        $defaultCombination = $this->normalizeCombination($defaults);
+        $defaultCombination = $defaults;
         $defaultKey = $defaultCombination !== []
             ? $this->matrix->combinationKey($defaultCombination)
             : $rows[0]['combination_key'];
@@ -150,7 +153,6 @@ final class ProductConfigurableMatrixSeedService
                 'combination_key' => $combinationKey,
                 'is_default' => $isDefault ? 1 : 0,
                 'requires_shipping' => 1,
-                'type_config_json' => json_encode(['combination' => $combination], JSON_UNESCAPED_UNICODE),
             ]);
             $this->writeOfferAxisValues($websiteId, (int)$local->getId(), $combination);
             $this->prices->writeExplicit($websiteId, 0, (int)$local->getId(), 'CNY', $priceMinor);
@@ -228,7 +230,6 @@ final class ProductConfigurableMatrixSeedService
                 'sku' => $sku,
                 'combination_key' => $combinationKey,
                 'is_default' => $isDefault ? 1 : 0,
-                'type_config_json' => json_encode(['combination' => $combination], JSON_UNESCAPED_UNICODE),
             ],
         );
         $this->writeOfferAxisValues($websiteId, $offerId, $combination);
@@ -250,13 +251,14 @@ final class ProductConfigurableMatrixSeedService
     /** @param array<string, string> $combination */
     private function writeOfferAxisValues(int $websiteId, int $offerId, array $combination): void
     {
+        $combination = $this->attributeMetadata->canonicalizeVariantCombination($combination);
         foreach ($combination as $code => $value) {
             $this->attributes->writeTyped(
                 $websiteId,
                 0,
                 'offer',
                 $offerId,
-                (string)$code,
+                $code,
                 '',
                 'select',
                 $value,

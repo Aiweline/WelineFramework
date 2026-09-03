@@ -72,6 +72,25 @@ final class HanfuCatalogCleanupServiceTest extends TestCase
         $this->service($fixture)->preview(0, 'cleanup-20260902');
     }
 
+    public function testExplicitProductSelectionIsFrozenAndReusedDuringApply(): void
+    {
+        $fixture = new CleanupCatalogFixture();
+        $service = $this->service($fixture);
+
+        $selection = $service->previewProductIds(0, 'cleanup-1688-rejected', [5, 1, 2, 2]);
+
+        self::assertSame([1, 2, 5], $selection['product_ids']);
+        $fixture->products[6]['name'] = 'outside-selection-drift';
+        $report = $service->apply(
+            0,
+            'cleanup-1688-rejected',
+            (string)$selection['selection_digest'],
+        );
+
+        self::assertSame('database_clean_files_quarantined', $report['status']);
+        self::assertTrue($fixture->deleted);
+    }
+
     public function testDigestDriftPreventsEveryMutation(): void
     {
         $fixture = new CleanupCatalogFixture();

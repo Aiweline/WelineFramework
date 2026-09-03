@@ -26,7 +26,7 @@ final class ProductSupplierAdminContractTest extends TestCase
 
         self::assertStringContainsString("'supplier'", $key);
         self::assertStringContainsString("'product_supplier'", $key);
-        self::assertStringContainsString("SCHEMA_VERSION = '4.5.0'", $schema);
+        self::assertStringContainsString("SCHEMA_VERSION = '4.6.0'", $schema);
         self::assertStringContainsString("'supplier' => new TableSchema", $schema);
         self::assertStringContainsString("'product_supplier' => new TableSchema", $schema);
         self::assertStringContainsString("'supplier_brand' => new TableSchema", $schema);

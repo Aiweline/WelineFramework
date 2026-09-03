@@ -200,7 +200,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 $localOffers = [];
                 foreach ($offerSpecs as $index => $spec) {
                     $offerIdentity = $offerIdentities[$index];
-                    $localOffers[] = $this->offers->create($command->websiteId, [
+                    $offerData = [
                         Offer::schema_fields_PRODUCT_ID => $productId,
                         Offer::schema_fields_GLOBAL_OFFER_UUID => $offerIdentity->globalOfferUuid,
                         'sku' => $offerIdentity->sku,
@@ -208,8 +208,22 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                         'combination_key' => (string)($spec['combination_key'] ?? ''),
                         'is_default' => $index === 0 ? 1 : 0,
                         'requires_shipping' => $definition->requiresShipping ? 1 : 0,
-                        'type_config_json' => $this->json($spec['configuration'] ?? []),
-                    ]);
+                    ];
+                    $configuration = is_array($spec['configuration'] ?? null)
+                        ? $spec['configuration']
+                        : [];
+                    if ($productType !== 'configurable' && $configuration !== []) {
+                        $offerData['type_config_json'] = $this->json($configuration);
+                    }
+                    $localOffer = $this->offers->create($command->websiteId, $offerData);
+                    $localOffers[] = $localOffer;
+                    if ($productType === 'configurable') {
+                        $this->writeOfferAxisValues(
+                            $command->websiteId,
+                            (int)$localOffer->getId(),
+                            is_array($spec['combination'] ?? null) ? $spec['combination'] : [],
+                        );
+                    }
                 }
 
                 $this->attributes->writeTyped(
@@ -251,28 +265,30 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                         );
                     }
                 }
+
                 $typeConfiguration = $payload['type_configuration'] ?? [];
                 if (!is_array($typeConfiguration)) {
                     throw new \InvalidArgumentException('product_type_configuration_invalid');
                 }
                 if ($productType === 'configurable') {
-                    if (isset($payload['axes'])) {
-                        $typeConfiguration['axes'] = $payload['axes'];
+                    $axes = $payload['axes'] ?? [];
+                    if (!is_array($axes)) {
+                        throw new \InvalidArgumentException('variant_axes_invalid');
                     }
-                    $typeConfiguration['sku_prefix'] = trim((string)(
-                        $payload['sku_prefix'] ?? $payload['sku'] ?? ''
-                    ));
+                    $this->writeProductAxisValues($command->websiteId, $productId, $axes);
+                } elseif ($typeConfiguration !== []) {
+                    $this->attributes->writeTyped(
+                        $command->websiteId,
+                        0,
+                        'product',
+                        $productId,
+                        'type_configuration',
+                        '',
+                        'json',
+                        $typeConfiguration,
+                    );
                 }
-                $this->attributes->writeTyped(
-                    $command->websiteId,
-                    0,
-                    'product',
-                    $productId,
-                    'type_configuration',
-                    '',
-                    'json',
-                    $typeConfiguration,
-                );
+
                 $this->writeCreateBasicsContent(
                     $command->websiteId,
                     $productId,
@@ -371,21 +387,13 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 throw new \InvalidArgumentException('product_offer_matrix_type_unsupported');
             }
             $matrixPayload = $payload['offer_matrix'];
-            $axes = $matrixPayload['axes'] ?? null;
-            if (!is_array($axes)) {
+            if (!is_array($matrixPayload['axes'] ?? null)) {
                 throw new \InvalidArgumentException('variant_axes_invalid');
             }
-            $typeConfiguration = $payload['type_configuration'] ?? [];
-            if (!is_array($typeConfiguration)) {
-                throw new \InvalidArgumentException('product_type_configuration_invalid');
-            }
-            $skuPrefix = trim((string)($matrixPayload['sku_prefix'] ?? ''));
-            if ($skuPrefix === '') {
+            if (trim((string)($matrixPayload['sku_prefix'] ?? '')) === '') {
                 throw new \InvalidArgumentException('variant_sku_prefix_invalid');
             }
-            $typeConfiguration['axes'] = $axes;
-            $typeConfiguration['sku_prefix'] = $skuPrefix;
-            $payload['type_configuration'] = $typeConfiguration;
+            $matrixPayload = $this->canonicalizeOfferMatrix($matrixPayload);
         }
 
         $matrixStoreIds = [];
@@ -401,14 +409,20 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             }
         }
 
-        $inventoryRows = $this->inventoryRows(
-            $command->websiteId,
-            $identity->productType,
-            $productId,
-            $payload,
-        );
-        $inventory = $inventoryRows === [] ? null : $this->inventory();
-        if ($inventoryRows !== [] && $inventory === null) {
+        if (array_key_exists('inventory', $payload) && !is_array($payload['inventory'])) {
+            throw new \InvalidArgumentException('product_inventory_rows_invalid');
+        }
+        $inventoryRequested = is_array($payload['inventory'] ?? null) && $payload['inventory'] !== [];
+        $inventoryRows = $matrixPayload === null
+            ? $this->inventoryRows(
+                $command->websiteId,
+                $identity->productType,
+                $productId,
+                $payload,
+            )
+            : [];
+        $inventory = ($inventoryRequested || $inventoryRows !== []) ? $this->inventory() : null;
+        if (($inventoryRequested || $inventoryRows !== []) && $inventory === null) {
             throw new \InvalidArgumentException('product_inventory_capability_unavailable');
         }
 
@@ -440,6 +454,13 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     $inventory,
                 ): array {
                     $this->writeAttributes($command->websiteId, $productId, $payload);
+                    if ($matrixPayload !== null) {
+                        $this->writeProductAxisValues(
+                            $command->websiteId,
+                            $productId,
+                            (array)$matrixPayload['axes'],
+                        );
+                    }
                     $matrixResult = $matrixPayload === null
                         ? null
                         : $this->reconcileOfferMatrix(
@@ -448,6 +469,14 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                             $productId,
                             $matrixPayload,
                             $matrixStoreIds,
+                        );
+                    $resolvedInventoryRows = $matrixPayload === null
+                        ? $inventoryRows
+                        : $this->inventoryRows(
+                            $command->websiteId,
+                            $identity->productType,
+                            $productId,
+                            $payload,
                         );
                     $this->writePrices($command->websiteId, $productId, $payload);
                     $this->writeTaxonomyAndMedia($command->websiteId, $productId, $payload);
@@ -475,8 +504,8 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                             }
                         }
                     }
-                    if ($inventoryRows !== [] && $inventory !== null) {
-                        $this->writeInventoryRows($command, $inventoryRows, $inventory);
+                    if ($resolvedInventoryRows !== [] && $inventory !== null) {
+                        $this->writeInventoryRows($command, $resolvedInventoryRows, $inventory);
                     }
                     $fields = [
                         'identity_version' => $identity->version,
@@ -494,7 +523,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     return [
                         'product' => $updated,
                         'offer_matrix' => $matrixResult,
-                        'inventory_updated' => count($inventoryRows),
+                        'inventory_updated' => count($resolvedInventoryRows),
                     ];
                 },
             );
@@ -597,8 +626,12 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     'combination_key' => (string)$row['combination_key'],
                     'is_default' => (string)$row['combination_key'] === $primaryKey ? 1 : 0,
                     'requires_shipping' => $definition->requiresShipping ? 1 : 0,
-                    'type_config_json' => $this->json(['combination' => $row['combination']]),
                 ],
+            );
+            $this->writeOfferAxisValues(
+                $command->websiteId,
+                (int)$local->getId(),
+                (array)$row['combination'],
             );
             if ((string)$local->getData(Offer::schema_fields_STATUS) === 'disabled') {
                 $local = $this->offers->transition(
@@ -625,8 +658,12 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 'combination_key' => (string)$row['combination_key'],
                 'is_default' => (string)$row['combination_key'] === $primaryKey ? 1 : 0,
                 'requires_shipping' => $definition->requiresShipping ? 1 : 0,
-                'type_config_json' => $this->json(['combination' => $row['combination']]),
             ]);
+            $this->writeOfferAxisValues(
+                $command->websiteId,
+                (int)$local->getId(),
+                (array)$row['combination'],
+            );
             foreach ($selectedStoreIds as $storeId) {
                 $this->storeOffers->select($command->websiteId, $storeId, (int)$local->getId(), true);
             }
@@ -740,6 +777,10 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             function () use ($command, $identity, $product, $productId): array {
                 $publishedOffers = [];
                 foreach ($this->offers->listByProductIds($command->websiteId, [$productId]) as $offer) {
+                    $offerStatus = strtolower(trim((string)($offer['status'] ?? '')));
+                    if (in_array($offerStatus, ['disabled', 'archived'], true)) {
+                        continue;
+                    }
                     $publishedOffers[] = $this->offers->publish(
                         $command->websiteId,
                         (int)($offer['offer_id'] ?? 0),
@@ -954,6 +995,83 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
     }
 
     /** @return list<array<string,mixed>> */
+    /** @param list<array<string,mixed>> $axes */
+    private function writeProductAxisValues(int $websiteId, int $productId, array $axes): void
+    {
+        $axes = $this->attributeMetadata->canonicalizeVariantAxes($axes);
+        foreach ($axes as $axis) {
+            $code = strtolower(trim((string)($axis['code'] ?? '')));
+            $rawOptions = is_array($axis['options'] ?? null) ? $axis['options'] : [];
+            $values = [];
+            foreach ($rawOptions as $option) {
+                $value = is_array($option)
+                    ? trim((string)($option['value'] ?? ''))
+                    : trim((string)$option);
+                if ($value !== '') {
+                    $values[$value] = true;
+                }
+            }
+            if ($code === '' || $values === []) {
+                continue;
+            }
+            $this->attributes->writeTyped(
+                $websiteId,
+                0,
+                'product',
+                $productId,
+                $code,
+                '',
+                'multiselect',
+                array_keys($values),
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $combination */
+    private function writeOfferAxisValues(int $websiteId, int $offerId, array $combination): void
+    {
+        $combination = $this->attributeMetadata->canonicalizeVariantCombination($combination);
+        foreach ($combination as $code => $value) {
+            $this->attributes->writeTyped(
+                $websiteId,
+                0,
+                'offer',
+                $offerId,
+                $code,
+                '',
+                'select',
+                $value,
+            );
+        }
+    }
+
+    /** @param array<string,mixed> $matrix @return array<string,mixed> */
+    private function canonicalizeOfferMatrix(array $matrix): array
+    {
+        $matrix['axes'] = $this->attributeMetadata->canonicalizeVariantAxes(
+            is_array($matrix['axes'] ?? null) ? $matrix['axes'] : [],
+        );
+        $rows = $matrix['rows'] ?? [];
+        if (!is_array($rows)) {
+            throw new \InvalidArgumentException('product_offer_matrix_invalid');
+        }
+        $canonicalRows = [];
+        foreach ($rows as $row) {
+            if (!is_array($row) || !is_array($row['combination'] ?? null)) {
+                throw new \InvalidArgumentException('variant_offer_row_invalid');
+            }
+            $combination = $this->attributeMetadata->canonicalizeVariantCombination(
+                $row['combination'],
+            );
+            $row['combination'] = $combination;
+            $row['combination_key'] = $this->variantMatrix->combinationKey($combination);
+            $canonicalRows[] = $row;
+        }
+        $matrix['rows'] = $canonicalRows;
+
+        return $matrix;
+    }
+
     private function offerSpecs(string $productType, array $payload): array
     {
         if ($productType === 'configurable') {
@@ -963,13 +1081,23 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 throw new \InvalidArgumentException('variant_axes_invalid');
             }
             $prefix = trim((string)($payload['sku_prefix'] ?? $payload['sku'] ?? ''));
+            $rawRows = $this->variantMatrix->generate($axes, $prefix, $overrides);
+            $canonicalAxes = $this->attributeMetadata->canonicalizeVariantAxes($axes);
+            $canonicalOverrides = [];
+            foreach ($rawRows as $row) {
+                $combination = $this->attributeMetadata->canonicalizeVariantCombination(
+                    $row['combination'],
+                );
+                $canonicalOverrides[$this->variantMatrix->combinationKey($combination)] = $row['sku'];
+            }
+
             return array_map(
                 static fn(array $row): array => [
                     'sku' => $row['sku'],
                     'combination_key' => $row['combination_key'],
-                    'configuration' => ['combination' => $row['combination']],
+                    'combination' => $row['combination'],
                 ],
-                $this->variantMatrix->generate($axes, $prefix, $overrides),
+                $this->variantMatrix->generate($canonicalAxes, $prefix, $canonicalOverrides),
             );
         }
 
@@ -1300,8 +1428,54 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             ]);
         }
 
+        $validMediaCombinationKeys = [];
+        if (array_key_exists('media_assignments', $payload)
+            || array_key_exists('store_media_overrides', $payload)
+        ) {
+            foreach ($this->offers->listByProductIds($websiteId, [$productId]) as $offer) {
+                $combinationKey = trim((string)($offer['combination_key'] ?? ''));
+                if ($combinationKey !== '') {
+                    $validMediaCombinationKeys[$combinationKey] = true;
+                }
+            }
+        }
         if (array_key_exists('media_assignments', $payload)) {
-            $rows = $this->mediaRows($payload['media_assignments']);
+            $assignmentInput = $payload['media_assignments'];
+            if (!is_array($assignmentInput)) {
+                throw new \InvalidArgumentException('product_media_assignments_invalid');
+            }
+            $hasVariantPayload = false;
+            foreach ($assignmentInput as $row) {
+                if (is_array($row)
+                    && strtolower(trim((string)($row['role'] ?? ''))) === 'variant'
+                ) {
+                    $hasVariantPayload = true;
+                    break;
+                }
+            }
+            if (!$hasVariantPayload) {
+                $preservePosition = 1000;
+                foreach ($this->media->listByProductIds($websiteId, [$productId], [0]) as $existing) {
+                    if (strtolower(trim((string)($existing['role'] ?? ''))) !== 'variant') {
+                        continue;
+                    }
+                    $assetId = strtolower(trim((string)($existing['asset_id'] ?? '')));
+                    $combinationKey = trim((string)($existing['combination_key'] ?? ''));
+                    if ($assetId === '' || $combinationKey === '') {
+                        continue;
+                    }
+                    $assignmentInput[] = [
+                        'asset_id' => $assetId,
+                        'role' => 'variant',
+                        'combination_key' => $combinationKey,
+                        'hidden' => !empty($existing['hidden']),
+                        'scope_state' => (string)($existing['scope_state'] ?? 'explicit'),
+                        'position' => (int)($existing['position'] ?? $preservePosition),
+                    ];
+                    $preservePosition++;
+                }
+            }
+            $rows = $this->mediaRows($assignmentInput, $validMediaCombinationKeys);
             $this->media->syncProductScope($websiteId, $productId, 0, $rows);
         }
         if (array_key_exists('store_media_overrides', $payload)) {
@@ -1336,7 +1510,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                     $websiteId,
                     $productId,
                     (int)$storeId,
-                    $this->mediaRows($storeRows),
+                    $this->mediaRows($storeRows, $validMediaCombinationKeys),
                 );
             }
         }
@@ -1373,8 +1547,8 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
         return $rows;
     }
 
-    /** @return list<array<string,mixed>> */
-    private function mediaRows(mixed $input): array
+    /** @param array<string,bool> $validCombinationKeys @return list<array<string,mixed>> */
+    private function mediaRows(mixed $input, array $validCombinationKeys = []): array
     {
         if (!is_array($input)) {
             throw new \InvalidArgumentException('product_media_assignments_invalid');
@@ -1397,12 +1571,28 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 throw new \InvalidArgumentException('product_media_asset_not_ready');
             }
             $role = strtolower(trim((string)($row['role'] ?? 'gallery')));
-            if (!in_array($role, ['main', 'gallery', 'file', 'download'], true)) {
+            if (!in_array($role, ['main', 'gallery', 'variant', 'file', 'download'], true)) {
                 throw new \InvalidArgumentException('product_media_role_invalid');
             }
+
+            $combinationKey = trim((string)($row['combination_key'] ?? ''));
+            if (is_array($row['combination'] ?? null)) {
+                $combination = $this->attributeMetadata->canonicalizeVariantCombination($row['combination']);
+                $combinationKey = $this->variantMatrix->combinationKey($combination);
+            }
+            if (($role === 'variant' && $combinationKey === '')
+                || ($role !== 'variant' && $combinationKey !== '')
+                || strlen($combinationKey) > 512
+            ) {
+                throw new \InvalidArgumentException('product_variant_media_combination_invalid');
+            }
+            if ($role === 'variant' && !isset($validCombinationKeys[$combinationKey])) {
+                throw new \InvalidArgumentException('product_variant_media_offer_unknown');
+            }
+
             $mimeType = strtolower(trim($asset->getMimeType()));
             $visibility = strtolower(trim($asset->getVisibility()));
-            if (in_array($role, ['main', 'gallery'], true) && !str_starts_with($mimeType, 'image/')) {
+            if (in_array($role, ['main', 'gallery', 'variant'], true) && !str_starts_with($mimeType, 'image/')) {
                 throw new \InvalidArgumentException('product_media_image_required');
             }
             if ($role === 'download' && $visibility !== 'private') {
@@ -1437,6 +1627,7 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 'scope_state' => 'explicit',
                 'hidden' => !empty($row['hidden']),
                 'role' => $role,
+                'combination_key' => $combinationKey,
                 'position' => max(0, (int)($row['position'] ?? $index)),
             ];
         }
@@ -1445,19 +1636,71 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
 
     private function writeAttributes(int $websiteId, int $productId, array $payload): void
     {
+        $locale = (string)($payload['locale'] ?? '');
+        $storeId = (int)($payload['store_id'] ?? 0);
+        $localFields = [];
+
         if (array_key_exists('name', $payload)) {
+            $name = (string)$payload['name'];
             $this->attributes->writeTyped(
                 $websiteId,
-                (int)($payload['store_id'] ?? 0),
+                $storeId,
                 'product',
                 $productId,
                 'name',
-                (string)($payload['locale'] ?? ''),
+                $locale,
                 'string',
-                (string)$payload['name'],
+                $name,
                 true,
             );
+            if ($storeId === 0 && $locale !== '') {
+                $this->attributes->writeTyped(
+                    $websiteId,
+                    0,
+                    'product',
+                    $productId,
+                    'name',
+                    '',
+                    'string',
+                    $name,
+                    true,
+                );
+            }
+            $localFields['name'] = $name;
         }
+
+        foreach (['short_description', 'meta_name', 'meta_description', 'meta_keywords'] as $code) {
+            if (!array_key_exists($code, $payload)) {
+                continue;
+            }
+            $value = trim((string)$payload[$code]);
+            $this->attributes->writeTyped(
+                $websiteId,
+                $storeId,
+                'product',
+                $productId,
+                $code,
+                $locale,
+                'string',
+                $value,
+                false,
+            );
+            if ($storeId === 0 && $locale !== '') {
+                $this->attributes->writeTyped(
+                    $websiteId,
+                    0,
+                    'product',
+                    $productId,
+                    $code,
+                    '',
+                    'string',
+                    $value,
+                    false,
+                );
+            }
+            $localFields[$code] = $value;
+        }
+
         $rows = $payload['attributes'] ?? [];
         if (!is_array($rows)) {
             throw new \InvalidArgumentException('product_attributes_invalid');
@@ -1468,54 +1711,93 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
                 throw new \InvalidArgumentException('product_attribute_invalid');
             }
             $scopeState = strtolower(trim((string)($row['scope_state'] ?? 'explicit')));
-            $storeId = (int)($row['store_id'] ?? 0);
+            $rowStoreId = (int)($row['store_id'] ?? 0);
             $entityType = (string)($row['entity_type'] ?? 'product');
-            // Create wizard fields ship data-entity-id="0"; never write overlays to entity 0.
-            // Align with WeShop saveFromPayload($productId, ...): bind to the real product.
             $entityId = (int)($row['entity_id'] ?? 0);
             if ($entityId <= 0) {
                 $entityId = $productId;
             }
             $code = (string)($row['attribute_code'] ?? '');
-            $locale = (string)($row['locale'] ?? '');
+            if ($code === 'type_configuration') {
+                throw new \InvalidArgumentException('product_type_configuration_reserved');
+            }
+            $rowLocale = (string)($row['locale'] ?? '');
             if ($scopeState === 'inherit') {
                 $this->attributes->deleteOverlay(
                     $websiteId,
-                    $storeId,
+                    $rowStoreId,
                     $entityType,
                     $entityId,
                     $code,
-                    $locale,
+                    $rowLocale,
                 );
             } elseif ($scopeState === 'cleared') {
                 $this->attributes->writeCleared(
                     $websiteId,
-                    $storeId,
+                    $rowStoreId,
                     $entityType,
                     $entityId,
                     $code,
-                    $locale,
+                    $rowLocale,
                     (bool)($row['is_required'] ?? false),
                 );
             } elseif ($scopeState === 'explicit') {
                 $this->attributes->writeTyped(
                     $websiteId,
-                    $storeId,
+                    $rowStoreId,
                     $entityType,
                     $entityId,
                     $code,
-                    $locale,
+                    $rowLocale,
                     (string)($row['value_type'] ?? 'string'),
                     $row['value'] ?? null,
                     (bool)($row['is_required'] ?? false),
                 );
+                if ($entityType === 'product'
+                    && $entityId === $productId
+                    && $rowStoreId === 0
+                    && in_array($code, \Weline\Product\Model\Product\LocalDescription::LOCAL_FIELDS, true)
+                    && is_scalar($row['value'] ?? null)
+                ) {
+                    $localFields[$code] = trim((string)$row['value']);
+                    if ($rowLocale !== '') {
+                        $this->attributes->writeTyped(
+                            $websiteId,
+                            0,
+                            'product',
+                            $productId,
+                            $code,
+                            '',
+                            (string)($row['value_type'] ?? 'string'),
+                            $row['value'] ?? null,
+                            (bool)($row['is_required'] ?? false),
+                        );
+                    }
+                }
             } else {
                 throw new \InvalidArgumentException('product_attribute_scope_state_invalid');
             }
         }
+
+        if ($localFields !== [] && !\Weline\Product\Model\Product\LocalDescription::isSyncing()) {
+            \Weline\Product\Model\Product\LocalDescription::upsertQuiet(
+                $productId,
+                $locale !== '' ? $locale : (string)($payload['local_code'] ?? ''),
+                $localFields,
+            );
+        }
+
         if (array_key_exists('type_configuration', $payload)) {
             if (!is_array($payload['type_configuration'])) {
                 throw new \InvalidArgumentException('product_type_configuration_invalid');
+            }
+            if ($payload['type_configuration'] === []) {
+                return;
+            }
+            if (array_key_exists('axes', $payload['type_configuration'])
+                || array_key_exists('combination', $payload['type_configuration'])
+            ) {
+                throw new \InvalidArgumentException('variant_configuration_must_use_eav');
             }
             $this->attributes->writeTyped(
                 $websiteId,
@@ -1622,9 +1904,11 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
         $selectedStores = array_fill_keys($selectedStoreIds, true);
         $offersById = [];
         $offersByUuid = [];
+        $offersBySku = [];
         foreach ($this->offers->listByProductIds($websiteId, [$productId]) as $offer) {
             $offerId = (int)($offer['offer_id'] ?? 0);
             $offerUuid = strtolower(trim((string)($offer['global_offer_uuid'] ?? '')));
+            $sku = strtolower(trim((string)($offer['sku'] ?? '')));
             if ($offerId <= 0
                 || in_array((string)($offer['status'] ?? ''), ['disabled', 'archived'], true)
             ) {
@@ -1633,6 +1917,9 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
             $offersById[$offerId] = $offerId;
             if ($offerUuid !== '') {
                 $offersByUuid[$offerUuid] = $offerId;
+            }
+            if ($sku !== '') {
+                $offersBySku[$sku] = $offerId;
             }
         }
 
@@ -1654,12 +1941,15 @@ final class ProductAdminCommandService implements ProductAdminCommandInterface
 
             $offerId = (int)($row['offer_id'] ?? 0);
             $offerUuid = strtolower(trim((string)($row['global_offer_uuid'] ?? '')));
+            $sku = strtolower(trim((string)($row['sku'] ?? '')));
             $resolvedByUuid = $offerUuid === '' ? null : ($offersByUuid[$offerUuid] ?? null);
+            $resolvedBySku = $sku === '' ? null : ($offersBySku[$sku] ?? null);
             if ($offerId <= 0) {
-                $offerId = (int)($resolvedByUuid ?? 0);
+                $offerId = (int)($resolvedByUuid ?? $resolvedBySku ?? 0);
             }
             if (!isset($offersById[$offerId])
                 || ($resolvedByUuid !== null && $resolvedByUuid !== $offerId)
+                || ($resolvedBySku !== null && $resolvedBySku !== $offerId)
             ) {
                 throw new \InvalidArgumentException('product_inventory_offer_unknown');
             }

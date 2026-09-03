@@ -136,7 +136,7 @@
                 return parseInt(input.value, 10);
             }
         ).filter(function (value) {
-            return Number.isInteger(value) && value > 0;
+            return Number.isInteger(value) && value >= 0;
         });
     }
 
@@ -2540,13 +2540,213 @@
         }).join('|');
     }
 
+    function catalogAttributeByCode(code) {
+        var normalized = String(code || '').trim().toLowerCase();
+        if (!normalized) {
+            return null;
+        }
+        var sets = catalogSetsFromPayload(
+            (state.snapshot && state.snapshot.attribute_catalog)
+                || (state.creation_context && state.creation_context.attribute_catalog)
+                || []
+        );
+        for (var setIndex = 0; setIndex < sets.length; setIndex += 1) {
+            var set = sets[setIndex];
+            var groups = Array.isArray(set && set.groups) ? set.groups : [];
+            for (var groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
+                var attributes = Array.isArray(groups[groupIndex] && groups[groupIndex].attributes)
+                    ? groups[groupIndex].attributes
+                    : [];
+                for (var attributeIndex = 0; attributeIndex < attributes.length; attributeIndex += 1) {
+                    var attribute = attributes[attributeIndex];
+                    var attributeCode = String(
+                        (attribute && (attribute.code || attribute.attribute_code)) || ''
+                    ).trim().toLowerCase();
+                    if (attributeCode === normalized) {
+                        return attribute;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    function normalizeVariantAxisOptionMeta(option, optionIndex) {
+        if (option && typeof option === 'object' && !Array.isArray(option)) {
+            var value = String(option.value || option.code || option.option_id || '').trim();
+            var label = String(option.label || option.name || value).trim();
+            var swatchColor = String(option.swatch_color || option.swatch || '').trim();
+            var swatchImage = String(option.swatch_image || '').trim();
+            return {
+                value: value,
+                label: label !== '' ? label : value,
+                swatch_color: swatchColor,
+                swatch_image: swatchImage
+            };
+        }
+        var scalar = String(option == null ? '' : option).trim();
+        return {
+            value: scalar,
+            label: scalar,
+            swatch_color: '',
+            swatch_image: '',
+            option_index: optionIndex
+        };
+    }
+
+    function buildVariantAxisOptionPool(code, selectedOptions) {
+        var pool = [];
+        var seen = {};
+        var attribute = catalogAttributeByCode(code);
+        var catalogOptions = Array.isArray(attribute && attribute.options) ? attribute.options : [];
+        catalogOptions.forEach(function (option, optionIndex) {
+            var normalized = normalizeVariantAxisOptionMeta(option, optionIndex);
+            if (!normalized.value || seen[normalized.value.toLowerCase()]) {
+                return;
+            }
+            seen[normalized.value.toLowerCase()] = true;
+            pool.push(normalized);
+        });
+        (selectedOptions || []).forEach(function (option, optionIndex) {
+            var normalized = normalizeVariantAxisOptionMeta(option, optionIndex);
+            if (!normalized.value || seen[normalized.value.toLowerCase()]) {
+                return;
+            }
+            seen[normalized.value.toLowerCase()] = true;
+            pool.push(normalized);
+        });
+        return pool;
+    }
+
+    function buildVariantAxisOptionChipHtml(option, checked, editable, axisCode, optionIndex) {
+        var normalized = normalizeVariantAxisOptionMeta(option, optionIndex);
+        var chipId = 'product-edit-axis-' + String(axisCode || 'axis') + '-' + String(optionIndex);
+        chipId = chipId.replace(/[^a-zA-Z0-9_-]+/g, '-');
+        var swatchHtml = normalized.swatch_image !== ''
+            ? '<img class="w-product-create__axis-chip-image" src="' + escapeHtml(normalized.swatch_image) + '" alt="">'
+            : (normalized.swatch_color !== ''
+                ? '<span class="w-product-create__axis-chip-swatch" style="background:'
+                    + escapeHtml(normalized.swatch_color) + '"></span>'
+                : '');
+        return '<label class="w-product-create__axis-chip" for="' + escapeHtml(chipId) + '">'
+            + '<input type="checkbox" id="' + escapeHtml(chipId) + '" data-variant-axis-option value="'
+            + escapeHtml(normalized.value) + '" data-option-label="' + escapeHtml(normalized.label) + '"'
+            + ' data-option-code="' + escapeHtml(normalized.value) + '"'
+            + (normalized.swatch_color !== ''
+                ? ' data-option-swatch-color="' + escapeHtml(normalized.swatch_color) + '"'
+                : '')
+            + (normalized.swatch_image !== ''
+                ? ' data-option-swatch-image="' + escapeHtml(normalized.swatch_image) + '"'
+                : '')
+            + (checked ? ' checked' : '')
+            + (editable ? '' : ' disabled') + '>'
+            + swatchHtml + '<span>' + escapeHtml(normalized.label) + '</span></label>';
+    }
+
+    function selectedVariantAxisOptions(row) {
+        return Array.prototype.map.call(
+            row.querySelectorAll('[data-variant-axis-option]:checked'),
+            function (input) {
+                return {
+                    value: String(input.value || ''),
+                    label: String(input.getAttribute('data-option-label') || input.value || ''),
+                    swatch_color: String(input.getAttribute('data-option-swatch-color') || '').trim(),
+                    swatch_image: String(input.getAttribute('data-option-swatch-image') || '').trim()
+                };
+            }
+        ).filter(function (option) {
+            return option.value !== '';
+        });
+    }
+
+    function renderVariantAxisOptionGrid(row, code, selectedOptions, editable) {
+        var grid = row.querySelector('[data-variant-axis-option-grid]');
+        if (!grid) {
+            return;
+        }
+        var selectedMap = {};
+        (selectedOptions || []).forEach(function (option) {
+            var normalized = normalizeVariantAxisOptionMeta(option);
+            if (normalized.value) {
+                selectedMap[normalized.value.toLowerCase()] = normalized;
+            }
+        });
+        var pool = buildVariantAxisOptionPool(code, selectedOptions || []);
+        grid.innerHTML = pool.map(function (option, optionIndex) {
+            var checked = Boolean(selectedMap[String(option.value).toLowerCase()]);
+            return buildVariantAxisOptionChipHtml(option, checked, editable, code, optionIndex);
+        }).join('');
+    }
+
+    function buildVariantCombinationChips(combination, axes) {
+        var wrap = document.createElement('div');
+        wrap.className = 'w-product-variant__combo-chips';
+        Object.keys(combination || {}).forEach(function (axisCode) {
+            var value = String(combination[axisCode] || '');
+            var axis = (axes || []).find(function (item) {
+                return item.code === axisCode;
+            });
+            var option = axis && Array.isArray(axis.options)
+                ? axis.options.find(function (item) {
+                    return String(item.value) === value;
+                })
+                : null;
+            var catalog = catalogAttributeByCode(axisCode);
+            var catalogOptions = Array.isArray(catalog && catalog.options) ? catalog.options : [];
+            var catalogMatch = catalogOptions.map(function (item, optionIndex) {
+                return normalizeVariantAxisOptionMeta(item, optionIndex);
+            }).find(function (normalized) {
+                return normalized.value === value;
+            });
+            if (!option) {
+                option = catalogMatch || {value: value, label: value};
+            } else if (catalogMatch) {
+                var currentLabel = String(option.label || option.value || '');
+                if (currentLabel === '' || currentLabel === value) {
+                    option = Object.assign({}, option, {
+                        label: catalogMatch.label || currentLabel || value,
+                        swatch_color: option.swatch_color || catalogMatch.swatch_color,
+                        swatch_image: option.swatch_image || catalogMatch.swatch_image
+                    });
+                } else {
+                    option = Object.assign({}, option, {
+                        swatch_color: option.swatch_color || catalogMatch.swatch_color,
+                        swatch_image: option.swatch_image || catalogMatch.swatch_image
+                    });
+                }
+            }
+            var chip = document.createElement('span');
+            chip.className = 'w-product-variant__combo-chip';
+            chip.title = axisCode + '=' + value;
+            var label = String((option && (option.label || option.value)) || value);
+            var swatchColor = String((option && (option.swatch_color || option.swatch)) || '').trim();
+            var swatchImage = String((option && option.swatch_image) || '').trim();
+            if (swatchImage !== '') {
+                var image = document.createElement('img');
+                image.className = 'w-product-create__axis-chip-image';
+                image.src = swatchImage;
+                image.alt = '';
+                chip.appendChild(image);
+            } else if (swatchColor !== '') {
+                var swatch = document.createElement('span');
+                swatch.className = 'w-product-create__axis-chip-swatch';
+                swatch.style.background = swatchColor;
+                chip.appendChild(swatch);
+            }
+            var text = document.createElement('span');
+            text.textContent = label;
+            chip.appendChild(text);
+            wrap.appendChild(chip);
+        });
+        return wrap;
+    }
+
     function variantAxes(matrix) {
         var seenAxes = {};
         return Array.prototype.map.call(
             matrix.querySelectorAll('[data-product-variant-axis]'),
             function (row) {
                 var codeInput = row.querySelector('[data-variant-axis-code]');
-                var optionInput = row.querySelector('[data-variant-axis-options]');
                 var code = String(codeInput ? codeInput.value : '').trim().toLowerCase();
                 if (!/^[a-z][a-z0-9_]{0,63}$/.test(code)) {
                     throw new Error('规格轴代码必须以字母开头，只能包含小写字母、数字和下划线');
@@ -2556,27 +2756,35 @@
                 }
                 seenAxes[code] = true;
                 var seenOptions = {};
-                var options = String(optionInput ? optionInput.value : '').split(/[\n,]+/)
-                    .map(function (value) {
-                        return value.trim();
-                    })
-                    .filter(function (value) {
-                        return value !== '';
-                    })
-                    .map(function (value) {
-                        var identity = value.toLowerCase();
-                        if (value.length > 128 || seenOptions[identity]) {
-                            throw new Error('规格值不能为空、重复或超过 128 个字符：' + value);
-                        }
-                        seenOptions[identity] = true;
-                        return {value: value, label: value};
-                    });
+                var options = selectedVariantAxisOptions(row).map(function (option) {
+                    var value = String(option.value || '').trim();
+                    var identity = value.toLowerCase();
+                    if (value === '' || value.length > 128 || seenOptions[identity]) {
+                        throw new Error('规格值不能为空、重复或超过 128 个字符：' + value);
+                    }
+                    seenOptions[identity] = true;
+                    var normalized = {
+                        value: value,
+                        label: String(option.label || value)
+                    };
+                    if (option.swatch_color) {
+                        normalized.swatch_color = option.swatch_color;
+                        normalized.swatch = option.swatch_color;
+                    }
+                    if (option.swatch_image) {
+                        normalized.swatch_image = option.swatch_image;
+                    }
+                    return normalized;
+                });
                 if (options.length === 0) {
                     throw new Error('每个规格轴至少需要一个规格值');
                 }
+                var attribute = catalogAttributeByCode(code);
+                var labelNode = row.querySelector('[data-variant-axis-attr-label], .w-product-variant__axis-attr-label');
+                var axisLabel = String((labelNode && labelNode.textContent) || '').trim();
                 return {
                     code: code,
-                    label: code,
+                    label: axisLabel || String((attribute && (attribute.name || attribute.label)) || code),
                     options: options
                 };
             }
@@ -2619,18 +2827,68 @@
         return 'V' + (hash >>> 0).toString(16).toUpperCase().padStart(8, '0');
     }
 
+    function compactVariantSkuPart(value) {
+        var part = String(value).toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+        if (!part) {
+            return fallbackVariantPart(value);
+        }
+        if (part.length <= 12) {
+            return part;
+        }
+        return part.slice(0, 7).replace(/-+$/g, '') + '-' + fallbackVariantPart(value).slice(-4);
+    }
+
     function generatedVariantSku(prefix, combination, axes) {
         var parts = [prefix];
         axes.forEach(function (axis) {
             var value = String(combination[axis.code] || '');
-            var part = value.toUpperCase().replace(/[^A-Z0-9]+/g, '-').replace(/^-+|-+$/g, '');
-            parts.push(part || fallbackVariantPart(value));
+            parts.push(compactVariantSkuPart(value));
         });
         var sku = parts.join('-');
         if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(sku)) {
             throw new Error('生成的 SKU 不合法或超过 128 个字符，请缩短 SKU 前缀或规格值');
         }
         return sku;
+    }
+
+    function variantImagePlaceholderUrl(matrix) {
+        var root = matrix || document.querySelector('[data-product-offer-matrix]');
+        return String((root && root.getAttribute('data-variant-image-placeholder')) || '').trim();
+    }
+
+    function buildVariantOfferImageCell(existing, combination, axes, matrix) {
+        var cell = document.createElement('td');
+        cell.className = 'w-product-variant__image-cell';
+        cell.setAttribute('data-variant-offer-image-cell', '');
+        var imageUrl = String((existing && existing.image_url) || '').trim();
+        var isPlaceholder = !!(existing && (
+            existing.image_is_placeholder === true
+            || existing.image_is_placeholder === 1
+            || existing.image_is_placeholder === '1'
+        ));
+        if (imageUrl === '' || isPlaceholder) {
+            var preview = resolveCombinationPreview(combination, axes);
+            var previewUrl = String(preview.image || '').trim();
+            if (previewUrl !== '') {
+                imageUrl = previewUrl;
+                isPlaceholder = false;
+            }
+        }
+        if (imageUrl === '') {
+            imageUrl = variantImagePlaceholderUrl(matrix);
+            isPlaceholder = true;
+        }
+        var image = document.createElement('img');
+        image.className = 'w-product-create__variant-preview-thumb'
+            + (isPlaceholder ? ' is-placeholder' : '');
+        image.setAttribute('data-variant-offer-image', '');
+        if (isPlaceholder) {
+            image.setAttribute('data-variant-offer-image-placeholder', '');
+        }
+        image.src = imageUrl;
+        image.alt = '';
+        cell.appendChild(image);
+        return cell;
     }
 
     function readVariantRow(row) {
@@ -2651,7 +2909,10 @@
             offer_version: parseInt(row.getAttribute('data-offer-version') || '0', 10) || 0,
             identity_version: parseInt(row.getAttribute('data-identity-version') || '0', 10) || 0,
             status: String(row.getAttribute('data-existing-status') || 'new'),
-            scope_state: priceRaw === '' ? 'cleared' : 'explicit'
+            scope_state: priceRaw === '' ? 'cleared' : 'explicit',
+            image_url: String(row.getAttribute('data-variant-image-url') || '').trim(),
+            image_is_placeholder: String(row.getAttribute('data-variant-image-is-placeholder') || '') === '1',
+            image_asset_id: String(row.getAttribute('data-variant-image-asset-id') || '').trim()
         };
         if (priceRaw !== '') {
             value.amount_minor = parseInt(priceRaw, 10);
@@ -2745,10 +3006,20 @@
             row.setAttribute('data-offer-version', String(value.offer_version || 0));
             row.setAttribute('data-identity-version', String(value.identity_version || 0));
             row.setAttribute('data-existing-status', String(value.status || 'new'));
+            row.setAttribute('data-variant-image-url', String(value.image_url || ''));
+            row.setAttribute(
+                'data-variant-image-is-placeholder',
+                value.image_is_placeholder === true
+                    || value.image_is_placeholder === 1
+                    || value.image_is_placeholder === '1'
+                    ? '1'
+                    : '0'
+            );
+            row.setAttribute('data-variant-image-asset-id', String(value.image_asset_id || ''));
 
-            appendVariantCell(row, Object.keys(generated.combination).map(function (axis) {
-                return axis + '=' + generated.combination[axis];
-            }).join(' / '));
+            appendVariantCell(row, buildVariantOfferImageCell(value, generated.combination, axes, matrix));
+
+            appendVariantCell(row, buildVariantCombinationChips(generated.combination, axes));
 
             var sku = document.createElement('input');
             sku.className = 'w-input';
@@ -2845,29 +3116,149 @@
         };
     }
 
+    function listCatalogVariantAxisChoices(matrix) {
+        var used = {};
+        matrix.querySelectorAll('[data-variant-axis-code]').forEach(function (input) {
+            var code = String(input.value || '').trim().toLowerCase();
+            if (code) {
+                used[code] = true;
+            }
+        });
+        var choices = [];
+        var sets = catalogSetsFromPayload(
+            (state.snapshot && state.snapshot.attribute_catalog)
+                || (state.creation_context && state.creation_context.attribute_catalog)
+                || []
+        );
+        sets.forEach(function (set) {
+            var groups = Array.isArray(set && set.groups) ? set.groups : [];
+            groups.forEach(function (group) {
+                var attributes = Array.isArray(group && group.attributes) ? group.attributes : [];
+                attributes.forEach(function (attribute) {
+                    var code = String((attribute && (attribute.code || attribute.attribute_code)) || '')
+                        .trim()
+                        .toLowerCase();
+                    if (!code || used[code] || !/^[a-z][a-z0-9_]{0,63}$/.test(code)) {
+                        return;
+                    }
+                    var options = Array.isArray(attribute.options) ? attribute.options : [];
+                    if (options.length === 0) {
+                        return;
+                    }
+                    choices.push({
+                        code: code,
+                        label: String(attribute.name || attribute.label || code)
+                    });
+                    used[code] = true;
+                });
+            });
+        });
+        choices.sort(function (left, right) {
+            return String(left.label).localeCompare(String(right.label), 'zh');
+        });
+        return choices;
+    }
+
+    function bindVariantAxisAttrShell(row, matrix, editable) {
+        var hidden = row.querySelector('[data-variant-axis-code]');
+        var labelEl = row.querySelector('[data-variant-axis-attr-label]');
+        var codeEl = row.querySelector('[data-variant-axis-attr-code]');
+        var select = row.querySelector('[data-variant-axis-code-select]');
+        if (!hidden || !select) {
+            return;
+        }
+        select.addEventListener('change', function () {
+            var code = String(select.value || '').trim().toLowerCase();
+            var option = select.options[select.selectedIndex];
+            var label = String((option && option.textContent) || code).trim();
+            if (!code) {
+                return;
+            }
+            hidden.value = code;
+            if (labelEl) {
+                labelEl.textContent = label || code;
+            }
+            if (codeEl) {
+                codeEl.textContent = code;
+                codeEl.hidden = !code || String(label).toLowerCase() === code;
+            }
+            select.hidden = true;
+            renderVariantAxisOptionGrid(row, code, selectedVariantAxisOptions(row), editable);
+        });
+    }
+
     function createVariantAxisEditor(matrix) {
+        var editable = matrix.getAttribute('data-can-edit-structure') === '1';
         var row = document.createElement('div');
         row.className = 'w-product-variant__axis';
         row.setAttribute('data-product-variant-axis', '');
 
-        var code = document.createElement('input');
-        code.className = 'w-input';
-        code.placeholder = '例如 color';
-        code.setAttribute('data-variant-axis-code', '');
-        row.appendChild(code);
+        var attr = document.createElement('div');
+        attr.className = 'w-product-variant__axis-attr';
+        attr.setAttribute('data-variant-axis-attr', '');
 
-        var options = document.createElement('input');
-        options.className = 'w-input';
-        options.placeholder = '例如 red, blue, green';
-        options.setAttribute('data-variant-axis-options', '');
-        row.appendChild(options);
+        var hidden = document.createElement('input');
+        hidden.type = 'hidden';
+        hidden.setAttribute('data-variant-axis-code', '');
+        attr.appendChild(hidden);
+
+        var labelEl = document.createElement('span');
+        labelEl.className = 'w-product-variant__axis-attr-label';
+        labelEl.setAttribute('data-variant-axis-attr-label', '');
+        labelEl.textContent = '选择属性';
+        attr.appendChild(labelEl);
+
+        var codeEl = document.createElement('code');
+        codeEl.className = 'w-product-variant__axis-attr-code';
+        codeEl.setAttribute('data-variant-axis-attr-code', '');
+        codeEl.hidden = true;
+        attr.appendChild(codeEl);
+
+        if (editable) {
+            var select = document.createElement('select');
+            select.className = 'w-select';
+            select.setAttribute('data-variant-axis-code-select', '');
+            var placeholder = document.createElement('option');
+            placeholder.value = '';
+            placeholder.textContent = '选择规格属性';
+            select.appendChild(placeholder);
+            listCatalogVariantAxisChoices(matrix).forEach(function (choice) {
+                var option = document.createElement('option');
+                option.value = choice.code;
+                option.textContent = choice.label;
+                select.appendChild(option);
+            });
+            attr.appendChild(select);
+        }
+        row.appendChild(attr);
+
+        var optionsWrap = document.createElement('div');
+        optionsWrap.className = 'w-product-variant__axis-options';
+        var grid = document.createElement('div');
+        grid.className = 'w-product-create__axis-chip-grid';
+        grid.setAttribute('data-variant-axis-option-grid', '');
+        optionsWrap.appendChild(grid);
+        if (editable) {
+            var custom = document.createElement('input');
+            custom.className = 'w-input';
+            custom.setAttribute('data-variant-axis-option-custom', '');
+            custom.placeholder = '自定义规格值，回车添加';
+            optionsWrap.appendChild(custom);
+        }
+        var help = document.createElement('span');
+        help.className = 'w-field__help';
+        help.textContent = '勾选规格值生成矩阵；有色块时显示颜色胶囊。';
+        optionsWrap.appendChild(help);
+        row.appendChild(optionsWrap);
 
         var remove = document.createElement('button');
         remove.className = 'w-button';
         remove.type = 'button';
         remove.setAttribute('data-product-variant-axis-remove', '');
         remove.textContent = '移除';
+        remove.disabled = !editable;
         row.appendChild(remove);
+        bindVariantAxisAttrShell(row, matrix, editable);
         return row;
     }
 
@@ -2890,6 +3281,53 @@
                 if (remove) {
                     remove.closest('[data-product-variant-axis]').remove();
                 }
+            });
+            axesRoot.addEventListener('change', function (event) {
+                var select = event.target.closest('[data-variant-axis-code-select]');
+                if (!select) {
+                    return;
+                }
+                var row = select.closest('[data-product-variant-axis]');
+                if (!row) {
+                    return;
+                }
+                var codeInput = row.querySelector('[data-variant-axis-code]');
+                var selected = selectedVariantAxisOptions(row);
+                renderVariantAxisOptionGrid(
+                    row,
+                    String((codeInput && codeInput.value) || select.value || '').trim().toLowerCase(),
+                    selected,
+                    true
+                );
+            });
+            axesRoot.addEventListener('keydown', function (event) {
+                if (event.key !== 'Enter') {
+                    return;
+                }
+                var custom = event.target.closest('[data-variant-axis-option-custom]');
+                if (!custom) {
+                    return;
+                }
+                event.preventDefault();
+                var row = custom.closest('[data-product-variant-axis]');
+                if (!row) {
+                    return;
+                }
+                var value = String(custom.value || '').trim();
+                if (!value) {
+                    return;
+                }
+                var codeInput = row.querySelector('[data-variant-axis-code]');
+                var code = String(codeInput ? codeInput.value : '').trim().toLowerCase();
+                var selected = selectedVariantAxisOptions(row);
+                var exists = selected.some(function (option) {
+                    return String(option.value).toLowerCase() === value.toLowerCase();
+                });
+                if (!exists) {
+                    selected.push({value: value, label: value, swatch_color: '', swatch_image: ''});
+                }
+                renderVariantAxisOptionGrid(row, code, selected, true);
+                custom.value = '';
             });
         }
         if (generate) {
@@ -2927,29 +3365,39 @@
         if (!container) {
             return [];
         }
-        return Array.prototype.map.call(
-            container.querySelectorAll('[data-product-category-row]'),
-            function (row, index) {
-                var checkbox = row.querySelector('[data-product-category-id]');
-                if (!checkbox || !checkbox.checked) {
-                    return null;
-                }
-                var categoryId = parseInt(checkbox.getAttribute('data-product-category-id') || '0', 10);
-                var positionInput = row.querySelector('[data-product-category-position]');
-                var position = parseInt(positionInput ? positionInput.value : String(index), 10);
-                if (!Number.isInteger(categoryId) || categoryId < 1
-                    || !Number.isInteger(position) || position < 0
-                ) {
-                    throw new Error('分类与排序数据无效');
-                }
-                return {
-                    category_id: categoryId,
-                    scope_state: 'explicit',
-                    selected: true,
-                    position: position
-                };
+        var categoryIds = [];
+        var categorySelect = window.WelineCatalogCategorySelect
+            && window.WelineCatalogCategorySelect['product-edit-categories'];
+        if (categorySelect && typeof categorySelect.getValues === 'function') {
+            categoryIds = categorySelect.getValues().map(function (raw) {
+                return parseInt(String(raw || ''), 10) || 0;
+            }).filter(function (id) { return id > 0; });
+        } else {
+            var categoryHidden = document.getElementById('product-edit-categories');
+            if (categoryHidden) {
+                categoryIds = String(categoryHidden.value || '').split(',').map(function (raw) {
+                    return parseInt(String(raw || '').trim(), 10) || 0;
+                }).filter(function (id) { return id > 0; });
             }
-        ).filter(Boolean);
+        }
+        var positionMap = {};
+        try {
+            positionMap = JSON.parse(
+                String(container.getAttribute('data-product-category-position-map') || '{}')
+            ) || {};
+        } catch (error) {
+            positionMap = {};
+        }
+        return categoryIds.map(function (categoryId, index) {
+            var mapped = parseInt(String(positionMap[String(categoryId)] ?? ''), 10);
+            var position = Number.isInteger(mapped) && mapped >= 0 ? mapped : index;
+            return {
+                category_id: categoryId,
+                scope_state: 'explicit',
+                selected: true,
+                position: position
+            };
+        });
     }
 
     function collectStoreCategoryOverrides() {
@@ -2989,7 +3437,7 @@
             return [];
         }
         var seen = {};
-        return Array.prototype.map.call(
+        var rows = Array.prototype.map.call(
             container.querySelectorAll('[data-product-media-row]'),
             function (row, index) {
                 var assetId = String(row.getAttribute('data-asset-id') || '').trim().toLowerCase();
@@ -3009,12 +3457,47 @@
                 return {
                     asset_id: assetId,
                     role: role,
+                    combination_key: '',
                     hidden: false,
                     scope_state: 'explicit',
                     position: position
                 };
             }
         );
+        var preserveNode = root.querySelector('[data-product-variant-media-preserve]');
+        if (preserveNode) {
+            var preserved = [];
+            try {
+                preserved = JSON.parse(preserveNode.textContent || '[]');
+            } catch (error) {
+                preserved = [];
+            }
+            if (Array.isArray(preserved)) {
+                preserved.forEach(function (item, index) {
+                    if (!item || typeof item !== 'object') {
+                        return;
+                    }
+                    var assetId = String(item.asset_id || '').trim().toLowerCase();
+                    var combinationKey = String(item.combination_key || '').trim();
+                    if (!/^[a-f0-9-]{36}$/.test(assetId)
+                        || combinationKey === ''
+                        || seen[assetId + '\0' + combinationKey]
+                    ) {
+                        return;
+                    }
+                    seen[assetId + '\0' + combinationKey] = true;
+                    rows.push({
+                        asset_id: assetId,
+                        role: 'variant',
+                        combination_key: combinationKey,
+                        hidden: Boolean(item.hidden),
+                        scope_state: String(item.scope_state || 'explicit'),
+                        position: Number.isInteger(item.position) ? item.position : (1000 + index)
+                    });
+                });
+            }
+        }
+        return rows;
     }
 
     function collectStoreMediaOverrides() {
@@ -3109,23 +3592,37 @@
         row.setAttribute('data-product-media-row', '');
         row.setAttribute('data-asset-id', assetId);
         row.setAttribute('data-mime-type', mimeType);
+        row.setAttribute('data-asset-visibility', String(file.asset_visibility || file.visibility || 'public'));
 
         var assetCell = document.createElement('td');
-        var preview = safePickerPreview(file.editor_preview_url);
+        assetCell.className = 'w-product-media-asset';
+        var openBtn = document.createElement('button');
+        openBtn.type = 'button';
+        openBtn.className = 'w-product-media-asset-open';
+        openBtn.setAttribute('data-product-media-asset-open', '');
+        openBtn.title = '在文件管理器中编辑';
+        var preview = resolveMediaPickerFileUrl(file) || safePickerPreview(file.preview_url);
+        row.setAttribute('data-preview-url', preview);
         if (preview !== '') {
             var image = document.createElement('img');
             image.className = 'w-product-media-thumb';
             image.src = preview;
             image.alt = String(file.display_name || '');
-            assetCell.appendChild(image);
+            image.loading = 'lazy';
+            image.decoding = 'async';
+            openBtn.appendChild(image);
         }
+        var metaWrap = document.createElement('span');
+        metaWrap.className = 'w-product-media-asset__meta';
         var name = document.createElement('strong');
         name.className = 'w-product-asset-name';
         name.textContent = String(file.display_name || assetId);
-        assetCell.appendChild(name);
+        metaWrap.appendChild(name);
         var meta = document.createElement('small');
         meta.textContent = mimeType + ' · ' + assetId;
-        assetCell.appendChild(meta);
+        metaWrap.appendChild(meta);
+        openBtn.appendChild(metaWrap);
+        assetCell.appendChild(openBtn);
         row.appendChild(assetCell);
 
         var roleCell = document.createElement('td');
@@ -3184,17 +3681,6 @@
     }
 
     function initializeTaxonomyMedia() {
-        var categorySearch = root.querySelector('[data-product-category-search]');
-        if (categorySearch) {
-            categorySearch.addEventListener('input', function () {
-                var needle = String(categorySearch.value || '').trim().toLowerCase();
-                root.querySelectorAll('[data-product-category-row]').forEach(function (row) {
-                    row.hidden = needle !== ''
-                        && String(row.getAttribute('data-search-text') || '').indexOf(needle) === -1;
-                });
-            });
-        }
-
         root.querySelectorAll('[data-product-store-media-row]').forEach(function (row) {
             var stateInput = row.querySelector('[data-product-media-override-state]');
             if (stateInput) {
@@ -3208,6 +3694,18 @@
         var mediaBody = root.querySelector('[data-product-media-rows]');
         if (mediaBody) {
             mediaBody.addEventListener('click', function (event) {
+                var openTarget = event.target instanceof Element
+                    ? event.target.closest('[data-product-media-asset-open]')
+                    : null;
+                if (openTarget) {
+                    event.preventDefault();
+                    var openRow = openTarget.closest('[data-product-media-row]');
+                    var focusAssetId = openRow ? String(openRow.getAttribute('data-asset-id') || '').trim().toLowerCase() : '';
+                    if (focusAssetId) {
+                        openProductMediaPicker({assetId: focusAssetId});
+                    }
+                    return;
+                }
                 var target = event.target instanceof Element
                     ? event.target.closest('[data-product-media-remove]')
                     : null;
@@ -3234,19 +3732,31 @@
             closeProductMediaDialog(dialog, 'product-media');
         }
 
+        function openProductMediaPicker(options) {
+            options = options || {};
+            if (!dialog || !frame) {
+                throw new Error('媒体选择器不可用');
+            }
+            var focusAssetId = String(options.assetId || '').trim().toLowerCase();
+            var pickerUrl = new URL(frame.getAttribute('data-src') || '', window.location.href);
+            if (pickerUrl.origin !== window.location.origin) {
+                throw new Error('媒体选择器必须与后台同源');
+            }
+            if (focusAssetId) {
+                pickerUrl.searchParams.set('asset_id', focusAssetId);
+            } else {
+                pickerUrl.searchParams.delete('asset_id');
+            }
+            frame.src = pickerUrl.href;
+            if (!openProductMediaDialog(dialog, {trigger: 'product-media'})) {
+                throw new Error('媒体选择器不可用');
+            }
+        }
+
         if (open && dialog && frame) {
             open.addEventListener('click', function () {
                 try {
-                    var pickerUrl = new URL(frame.getAttribute('data-src') || '', window.location.href);
-                    if (pickerUrl.origin !== window.location.origin) {
-                        throw new Error('媒体选择器必须与后台同源');
-                    }
-                    if (frame.src !== pickerUrl.href) {
-                        frame.src = pickerUrl.href;
-                    }
-                    if (!openProductMediaDialog(dialog, {trigger: 'product-media'})) {
-                        throw new Error('媒体选择器不可用');
-                    }
+                    openProductMediaPicker();
                 } catch (error) {
                     notify('error', messageFrom(error, '媒体选择器不可用'));
                 }
@@ -3322,10 +3832,24 @@
         var currency = String(document.getElementById('product-edit-currency').value || 'CNY')
             .trim()
             .toUpperCase();
+        var shortDescriptionInput = document.getElementById('product-edit-short-description');
+        var metaNameInput = document.getElementById('product-edit-meta-name');
+        var metaDescriptionInput = document.getElementById('product-edit-meta-description');
+        var metaKeywordsInput = document.getElementById('product-edit-meta-keywords');
         var payload = {
             name: String(document.getElementById('product-edit-name').value || '').trim(),
             locale: String(document.getElementById('product-edit-locale').value || '').trim(),
             currency: currency,
+            short_description: shortDescriptionInput
+                ? String(shortDescriptionInput.value || '').trim()
+                : '',
+            meta_name: metaNameInput ? String(metaNameInput.value || '').trim() : '',
+            meta_description: metaDescriptionInput
+                ? String(metaDescriptionInput.value || '').trim()
+                : '',
+            meta_keywords: metaKeywordsInput
+                ? String(metaKeywordsInput.value || '').trim()
+                : '',
             attributes: collectVisualAttributes(),
             category_assignments: collectCategoryAssignments(),
             media_assignments: collectMediaAssignments(),
@@ -4902,7 +5426,7 @@
             rowsByCode[code] = preservedValues[code];
         });
         if (!sets.length) {
-            return '<div class="w-alert" data-tone="warning">当前没有可用属性集。请先在 EAV 属性管理中启用属性定义，或使用下方高级数据维护迁移值。</div>';
+            return '<div class="w-alert" data-tone="warning">当前没有可用属性集。请先在 EAV 属性管理中启用属性定义。</div>';
         }
         var html = '<div class="w-product-eav__toolbar"><div class="w-field">'
             + '<label class="w-field__label" for="product-attribute-set">属性集</label>'
@@ -4920,7 +5444,7 @@
         html += '</select></div><p class="w-field__help">'
             + (lockAttributeSet
                 ? '编辑中的商品不可更换属性集，仍可在当前集下添加属性组/属性，或使用自由属性。'
-                : '切换属性集只改变当前可视化区域；其他属性行会继续保留在高级数据中。')
+                : '切换属性集只改变当前可视化区域；其他属性行仍由 EAV 按原属性集保留。')
             + '</p></div>';
         sets.forEach(function (attributeSet, setIndex) {
             if (!attributeSet || typeof attributeSet !== 'object') {

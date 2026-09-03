@@ -322,6 +322,7 @@ final class ProductVariantMatrixService
     }
 
     /** @param array<string, string> $combination */
+    /** @param array<string, string> $combination */
     private function generatedSku(string $prefix, array $combination): string
     {
         $parts = [$prefix];
@@ -331,6 +332,10 @@ final class ProductVariantMatrixService
             $part = trim($part, '-');
             if ($part === '') {
                 $part = substr(strtoupper(hash('sha256', (string)$value)), 0, 8);
+            } elseif (strlen($part) > 12) {
+                $part = rtrim(substr($part, 0, 7), '-')
+                    . '-'
+                    . substr(strtoupper(hash('sha256', (string)$value)), 0, 4);
             }
             $parts[] = $part;
         }
