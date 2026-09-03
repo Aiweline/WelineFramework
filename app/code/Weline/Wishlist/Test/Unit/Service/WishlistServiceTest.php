@@ -59,4 +59,52 @@ final class WishlistServiceTest extends TestCase
         self::assertSame(0, $page['wishlist_count']);
         self::assertSame([], $page['items']);
     }
+    public function testPrunesInvalidProductsOnReadPaths(): void
+    {
+        $store = new class extends WishlistSessionStore {
+            /** @var list<int> */
+            public array $ids = [10, 20, 30];
+
+            public function listIds(): array
+            {
+                return $this->ids;
+            }
+
+            public function saveIds(array $ids): void
+            {
+                $this->ids = array_values($ids);
+            }
+        };
+        $snapshots = new class extends \Weline\Wishlist\Service\ProductCardSnapshotResolver {
+            public function resolve(int $productId): ?array
+            {
+                return $productId === 20
+                    ? ['product_id' => $productId, 'name' => 'Keep']
+                    : null;
+            }
+        };
+        $service = new WishlistService($store, $snapshots);
+
+        $page = $service->listPage();
+        self::assertTrue($page['success']);
+        self::assertSame(1, $page['wishlist_count']);
+        self::assertCount(1, $page['items']);
+        self::assertSame([20], $store->ids);
+
+        $store->ids = [10, 20, 30];
+        $count = $service->count();
+        self::assertSame(1, $count['wishlist_count']);
+        self::assertSame([20], $store->ids);
+
+        $store->ids = [10, 30];
+        $listed = $service->list();
+        self::assertSame(0, $listed['wishlist_count']);
+        self::assertSame([], $listed['items']);
+        self::assertSame([], $store->ids);
+
+        $rejected = $service->add(99);
+        self::assertFalse($rejected['success']);
+        self::assertSame([], $store->ids);
+    }
+
 }
