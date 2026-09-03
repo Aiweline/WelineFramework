@@ -31,6 +31,7 @@ final class ProductCardBuyNowWidgetContractTest extends TestCase
         self::assertStringContainsString('data-action="buy-now"', $template);
         self::assertStringContainsString('amz-card__buy-now', $template);
         self::assertStringContainsString('weline-checkout-product-card-buy-now', $template);
-        self::assertStringContainsString("__('立即购买')", $template);
+        self::assertStringContainsString('WidgetI18n::label($labelOverride, \'立即购买\')', $template);
+        self::assertStringContainsString('$localize(\'正在前往结账...\')', $template);
     }
 }

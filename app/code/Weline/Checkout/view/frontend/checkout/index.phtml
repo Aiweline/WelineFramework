@@ -57,6 +57,17 @@ $copy = [
 
     <w:form class="weline-checkout__grid" data-checkout-form hidden>
         <div class="weline-checkout__main">
+            <div class="weline-checkout__express-host" data-checkout-express-host hidden>
+                <w:slot id="checkout-express-payment"
+                        name="<?= __('快捷支付') ?>"
+                        accept="checkout-express-payment,express-checkout,express-payment,payment"
+                        multiple="false"
+                        position="content"
+                        class="weline-checkout__express-slot"
+                        weline-code="checkout.checkout.express_payment_slot">
+                </w:slot>
+            </div>
+
             <section class="weline-checkout__panel" weline-code="checkout.checkout.index.section_2">
                 <h2><?= __('收货信息') ?></h2>
                 <w:slot id="checkout-shipping-address"
@@ -115,6 +126,14 @@ $copy = [
                     class="weline-checkout__coupon-slot"
                     weline-code="checkout.checkout.coupon_slot">
                 <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-discount-before</w:hook>
+            </w:slot>
+            <w:slot id="checkout-summary-note"
+                    name="<?= __('结账订单留言') ?>"
+                    accept="checkout-summary-note,order-notice,order"
+                    multiple="false"
+                    position="content"
+                    class="weline-checkout__note-slot"
+                    weline-code="checkout.checkout.note_slot">
             </w:slot>
             <div class="weline-checkout__totals weline-checkout__totals--tail" role="list">
                 <w:hook>Weline_Checkout::frontend::layouts::checkout::summary-discount-after</w:hook>
@@ -239,8 +258,18 @@ $copy = [
     .weline-checkout__empty-state[hidden],
     .weline-checkout__payment-recovery[hidden],
     .weline-checkout__grid[hidden],
-    .weline-checkout__notice[hidden] {
+    .weline-checkout__notice[hidden],
+    .weline-checkout__express-host[hidden] {
         display: none;
+    }
+    .weline-checkout__express-host {
+        margin: 0 0 16px;
+        width: 100%;
+        max-width: 100%;
+    }
+    .weline-checkout__express-slot {
+        display: block;
+        min-height: 0;
     }
     .weline-checkout__empty-state h2 {
         margin-top: 4px;
@@ -393,6 +422,88 @@ $copy = [
         border-radius: 8px;
         color: var(--checkout-text);
     }
+    .weline-checkout__option--payment {
+        grid-template-columns: 20px 40px minmax(0, 1fr);
+        align-items: start;
+        gap: 10px;
+        min-height: 0;
+    }
+    .weline-checkout__option--payment > input[type="radio"] {
+        margin-top: 6px;
+    }
+    .weline-checkout__payment-logo {
+        width: 40px;
+        height: 28px;
+        margin-top: 4px;
+        object-fit: contain;
+        object-position: left center;
+    }
+    .weline-checkout__payment-logo--empty {
+        display: block;
+        background: transparent;
+    }
+    .weline-checkout__payment-body {
+        display: grid;
+        gap: 4px;
+        min-width: 0;
+    }
+    .weline-checkout__payment-title-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+    .weline-checkout__payment-title-row strong {
+        margin: 0;
+    }
+    .weline-checkout__payment-details {
+        color: #0066c0;
+        font-size: 12px;
+        line-height: 1.4;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+    .weline-checkout__payment-details:hover,
+    .weline-checkout__payment-details:focus {
+        text-decoration: underline;
+        color: #c45500;
+    }
+    .weline-checkout__payment-intro {
+        display: grid;
+        gap: 4px;
+        justify-items: start;
+    }
+    .weline-checkout__payment-intro-text {
+        display: -webkit-box;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+        overflow: hidden;
+        margin: 0;
+        color: var(--checkout-text-secondary);
+        font-size: 13px;
+        line-height: 1.45;
+    }
+    .weline-checkout__payment-intro.is-expanded .weline-checkout__payment-intro-text {
+        display: block;
+        -webkit-line-clamp: unset;
+        overflow: visible;
+    }
+    .weline-checkout__payment-intro-toggle {
+        border: 0;
+        padding: 0;
+        background: transparent;
+        color: #0066c0;
+        cursor: pointer;
+        font: inherit;
+        font-size: 12px;
+        line-height: 1.4;
+    }
+    .weline-checkout__payment-intro-toggle:hover,
+    .weline-checkout__payment-intro-toggle:focus {
+        color: #c45500;
+        text-decoration: underline;
+    }
     .weline-checkout__option strong {
         display: block;
         color: var(--checkout-text);
@@ -433,7 +544,8 @@ $copy = [
         margin-top: 16px;
         color: var(--checkout-text);
     }
-    .weline-checkout__coupon-slot {
+    .weline-checkout__coupon-slot,
+    .weline-checkout__note-slot {
         margin: 4px 0 12px;
     }
     .weline-checkout__totals > [role="listitem"] {
@@ -503,7 +615,7 @@ $copy = [
     'use strict';
 
     const copy = <?= json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
-    const successPageUrl = "@url{'checkout/success-page'}";
+    const successPageUrl = "@url{'checkout/success'}";
     const root = document.querySelector('[data-weline-checkout]');
     if (!root) {
         return;
@@ -512,6 +624,7 @@ $copy = [
     const form = root.querySelector('[data-checkout-form]');
     const message = root.querySelector('[data-checkout-message]');
     const emptyState = root.querySelector('[data-checkout-empty]');
+    const expressHost = root.querySelector('[data-checkout-express-host]');
     const paymentRecovery = root.querySelector('[data-checkout-payment-recovery]');
     const paymentRecoveryTitle = root.querySelector('[data-payment-recovery-title]');
     const paymentRecoveryDetail = root.querySelector('[data-payment-recovery-detail]');
@@ -586,6 +699,26 @@ $copy = [
         };
     }
 
+    function formBillingAddress(shippingAddress) {
+        const data = new FormData(form);
+        const sameBox = form.querySelector('[data-billing-same]');
+        const same = sameBox ? !!sameBox.checked : true;
+        if (same) {
+            return Object.assign({}, shippingAddress || formAddress());
+        }
+        return {
+            name: text(data.get('billing_name')).trim(),
+            phone: text(data.get('billing_phone')).trim(),
+            email: text(data.get('billing_email')).trim(),
+            country_code: text(data.get('billing_country_code')).trim().toUpperCase() || 'CN',
+            province: text(data.get('billing_province')).trim(),
+            city: text(data.get('billing_city')).trim(),
+            district: text(data.get('billing_district')).trim(),
+            address1: text(data.get('billing_address1')).trim(),
+            postal_code: text(data.get('billing_postal_code')).trim(),
+        };
+    }
+
     function applyDefaultShippingAddress(address) {
         if (customerAddressPrefilled || !form || !address || typeof address !== 'object') {
             return;
@@ -620,6 +753,13 @@ $copy = [
     }
 
     function guestToken() {
+        if (window.WelineCart && typeof window.WelineCart.getGuestSession === 'function') {
+            const session = window.WelineCart.getGuestSession();
+            const sessionToken = session && session.token ? text(session.token).trim() : '';
+            if (sessionToken) {
+                return sessionToken;
+            }
+        }
         try {
             return text(window.sessionStorage.getItem(guestTokenStorageKey)).trim();
         } catch (error) {
@@ -691,6 +831,9 @@ $copy = [
         activePaymentRecovery = state;
         if (form) {
             form.hidden = true;
+        }
+        if (expressHost) {
+            expressHost.hidden = true;
         }
         if (emptyState) {
             emptyState.hidden = true;
@@ -771,6 +914,54 @@ $copy = [
             return;
         }
         node.innerHTML = html;
+        if (node === paymentBox) {
+            enhancePaymentMethodIntros();
+        }
+    }
+
+    function enhancePaymentMethodIntros() {
+        if (!paymentBox) {
+            return;
+        }
+        paymentBox.querySelectorAll('[data-payment-intro]').forEach(function (wrap) {
+            const text = wrap.querySelector('.weline-checkout__payment-intro-text');
+            const toggle = wrap.querySelector('[data-payment-intro-toggle]');
+            if (!(text instanceof HTMLElement) || !(toggle instanceof HTMLElement)) {
+                return;
+            }
+            wrap.classList.remove('is-expanded');
+            toggle.hidden = text.scrollHeight <= text.clientHeight + 1;
+            toggle.textContent = toggle.dataset.labelExpand || toggle.textContent;
+            toggle.setAttribute('aria-expanded', 'false');
+        });
+    }
+
+    if (paymentBox) {
+        paymentBox.addEventListener('click', function (event) {
+            const toggle = event.target && event.target.closest
+                ? event.target.closest('[data-payment-intro-toggle]')
+                : null;
+            if (toggle) {
+                event.preventDefault();
+                event.stopPropagation();
+                const wrap = toggle.closest('[data-payment-intro]');
+                if (!wrap) {
+                    return;
+                }
+                const expanded = wrap.classList.toggle('is-expanded');
+                toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+                toggle.textContent = expanded
+                    ? (toggle.dataset.labelCollapse || toggle.textContent)
+                    : (toggle.dataset.labelExpand || toggle.textContent);
+                return;
+            }
+            const details = event.target && event.target.closest
+                ? event.target.closest('[data-payment-details]')
+                : null;
+            if (details) {
+                event.stopPropagation();
+            }
+        });
     }
 
     function renderTotals() {
@@ -802,6 +993,9 @@ $copy = [
         const cartIsEmpty = Boolean(checkoutState.cart.is_empty);
         if (form) {
             form.hidden = cartIsEmpty;
+        }
+        if (expressHost) {
+            expressHost.hidden = cartIsEmpty;
         }
         if (emptyState) {
             emptyState.hidden = !cartIsEmpty;
@@ -876,6 +1070,76 @@ $copy = [
         }, 350);
     }
 
+    async function submitCheckoutPayment(paymentMethod, options) {
+        const opts = options && typeof options === 'object' ? options : {};
+        const requireFormValidity = opts.require_form_validity !== false;
+        if (!form) {
+            throw new Error(copy.load_failed);
+        }
+        if (requireFormValidity && !form.reportValidity()) {
+            throw new Error(copy.required);
+        }
+        let shippingMethod = selectedValue('shipping_method');
+        if (!shippingMethod && checkoutState.shippingMethods.length) {
+            const first = checkoutState.shippingMethods.find(function (entry) {
+                return entry && entry.code;
+            });
+            shippingMethod = first ? text(first.code) : '';
+            if (shippingMethod) {
+                const radio = form.querySelector('input[name="shipping_method"][value="' + shippingMethod + '"]');
+                if (radio) {
+                    radio.checked = true;
+                }
+            }
+        }
+        if (!shippingMethod || !paymentMethod) {
+            throw new Error(copy.required);
+        }
+        const api = await getApi();
+        const address = formAddress();
+        const billingSameEl = form.querySelector('[data-billing-same]');
+        const billingSame = billingSameEl ? !!billingSameEl.checked : true;
+        const billingAddress = formBillingAddress(address);
+        const frozen = await api.freezeQuote({
+            address: address,
+            billing_address: billingAddress,
+            billing_same_as_shipping: billingSame,
+            service_code: shippingMethod,
+            payment_method: paymentMethod,
+            guest_token: guestToken(),
+        });
+        if (!frozen || frozen.success === false) {
+            throw new Error(text(frozen && frozen.message) || copy.load_failed);
+        }
+        const quoteToken = text(frozen.quote_token || frozen.data && frozen.data.quote_token);
+        if (!quoteToken) {
+            throw new Error(copy.load_failed);
+        }
+        const idempotencyKey = newIdempotencyKey(opts.idempotency_prefix || 'checkout_ui_');
+        const result = await api.submitV2({
+            quote_token: quoteToken,
+            payment_method: paymentMethod,
+            idempotency_key: idempotencyKey,
+            country_code: address.country_code,
+            guest_token: guestToken(),
+        });
+        if (!result || result.success === false) {
+            throw new Error(text(result && result.message) || copy.load_failed);
+        }
+        handlePaymentResult(result, {
+            quote_token: quoteToken,
+            idempotency_key: idempotencyKey,
+            payment_method: paymentMethod,
+            country_code: address.country_code,
+            order_uuid: '',
+            checkout_group_uuid: '',
+            outcome: '',
+            redirect_url: '',
+            recoverable: true,
+        });
+        return result;
+    }
+
     if (form) {
         form.addEventListener('change', function (event) {
             if (event.target && event.target.name === 'shipping_method') {
@@ -889,10 +1153,6 @@ $copy = [
 
         form.addEventListener('submit', async function (event) {
             event.preventDefault();
-            if (!form.reportValidity()) {
-                setMessage(copy.required, 'error');
-                return;
-            }
             const shippingMethod = selectedValue('shipping_method');
             const paymentMethod = selectedValue('payment_method');
             if (!shippingMethod || !paymentMethod) {
@@ -905,41 +1165,9 @@ $copy = [
             }
             setMessage(copy.submitting, '');
             try {
-                const api = await getApi();
-                const address = formAddress();
-                const frozen = await api.freezeQuote({
-                    address: address,
-                    service_code: shippingMethod,
-                    guest_token: guestToken(),
-                });
-                if (!frozen || frozen.success === false) {
-                    throw new Error(text(frozen && frozen.message) || copy.load_failed);
-                }
-                const quoteToken = text(frozen.quote_token || frozen.data && frozen.data.quote_token);
-                if (!quoteToken) {
-                    throw new Error(copy.load_failed);
-                }
-                const idempotencyKey = newIdempotencyKey('checkout_ui_');
-                const result = await api.submitV2({
-                    quote_token: quoteToken,
-                    payment_method: paymentMethod,
-                    idempotency_key: idempotencyKey,
-                    country_code: address.country_code,
-                    guest_token: guestToken(),
-                });
-                if (!result || result.success === false) {
-                    throw new Error(text(result && result.message) || copy.load_failed);
-                }
-                handlePaymentResult(result, {
-                    quote_token: quoteToken,
-                    idempotency_key: idempotencyKey,
-                    payment_method: paymentMethod,
-                    country_code: address.country_code,
-                    order_uuid: '',
-                    checkout_group_uuid: '',
-                    outcome: '',
-                    redirect_url: '',
-                    recoverable: true,
+                await submitCheckoutPayment(paymentMethod, {
+                    require_form_validity: true,
+                    idempotency_prefix: 'checkout_ui_',
                 });
             } catch (error) {
                 setMessage(error.message || copy.load_failed, 'error');
@@ -950,6 +1178,31 @@ $copy = [
             }
         });
     }
+
+    root.addEventListener('weline:checkout:express-pay', async function (event) {
+        const detail = event && event.detail && typeof event.detail === 'object' ? event.detail : {};
+        const paymentMethod = text(detail.payment_method || 'paypal').trim() || 'paypal';
+        const expressButton = detail.button instanceof HTMLElement
+            ? detail.button
+            : (event.target && event.target.closest
+                ? event.target.closest('[data-express-pay]')
+                : null);
+        if (expressButton) {
+            expressButton.disabled = true;
+        }
+        setMessage(copy.submitting, '');
+        try {
+            await submitCheckoutPayment(paymentMethod, {
+                require_form_validity: false,
+                idempotency_prefix: 'checkout_express_',
+            });
+        } catch (error) {
+            setMessage(error.message || copy.load_failed, 'error');
+            if (expressButton) {
+                expressButton.disabled = false;
+            }
+        }
+    });
 
     if (shippingBox) {
         shippingBox.addEventListener('change', renderTotals);

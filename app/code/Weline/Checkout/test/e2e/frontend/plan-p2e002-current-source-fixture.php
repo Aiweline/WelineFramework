@@ -7,7 +7,7 @@ declare(strict_types=1);
  *
  * Shipping configuration, CheckoutSession, Inventory reservations and Orders
  * all use the configured database. Only catalog Offer snapshots use the
- * documented Cart V2 E2E harness.
+ * documented Cart E2E harness.
  *
  * stdin JSON:
  * - {"action":"prepare"}
@@ -17,7 +17,7 @@ declare(strict_types=1);
  * - {"action":"cleanup","fixture":{...},"quote_tokens":[],"group_uuids":[]}
  */
 
-use Weline\Cart\Api\Development\CartV2HarnessCatalog;
+use Weline\Cart\Api\Development\CartHarnessCatalog;
 use Weline\Checkout\Api\CheckoutSessionStoreInterface;
 use Weline\Checkout\Model\CheckoutSession;
 use Weline\Checkout\Service\CheckoutGroupSubmitService;
@@ -306,7 +306,7 @@ function p2e002_prepare(): array
         ],
     ];
     foreach ($offers as $offer) {
-        CartV2HarnessCatalog::put((string)$offer['uuid'], [
+        CartHarnessCatalog::put((string)$offer['uuid'], [
             'name' => (string)$offer['name'],
             'sku' => strtoupper(str_replace('_', '-', $run)),
             'currency' => (string)($offer['currency'] ?? 'CNY'),
@@ -658,7 +658,7 @@ function p2e002_cleanup(array $fixture, array $quoteTokens, array $groupUuids): 
         }
         $uuid = (string)($offer['uuid'] ?? '');
         if ($uuid !== '') {
-            CartV2HarnessCatalog::delete($uuid);
+            CartHarnessCatalog::delete($uuid);
         }
     }
 

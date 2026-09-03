@@ -25,8 +25,7 @@ final class CheckoutPageTitleContractTest extends TestCase
     {
         $controllerRoot = dirname(__DIR__, 3) . '/Controller';
         $successSources = [
-            (string)file_get_contents($controllerRoot . '/SuccessPage.php'),
-            (string)file_get_contents($controllerRoot . '/Frontend/Checkout.php'),
+            (string)file_get_contents($controllerRoot . '/Success.php'),
         ];
 
         foreach ($successSources as $source) {
@@ -34,5 +33,9 @@ final class CheckoutPageTitleContractTest extends TestCase
             self::assertStringContainsString("\$this->assign('page_title', __('结账成功'));", $source);
             self::assertStringContainsString("\$this->assign('title', __('结账成功'));", $source);
         }
+
+        $legacy = (string)file_get_contents($controllerRoot . '/Frontend/Checkout.php');
+        self::assertStringNotContainsString('function successPage', $legacy);
+        self::assertFileDoesNotExist($controllerRoot . '/SuccessPage.php');
     }
 }
