@@ -54,7 +54,7 @@ return [
             'layout-footer-help-links',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'footer-help-links',
             'area' => 'footer',
             'sort_order' => 20,
@@ -87,7 +87,7 @@ return [
             'layout-footer-help-links',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'footer-help-links',
             'area' => 'footer',
             'sort_order' => 30,
