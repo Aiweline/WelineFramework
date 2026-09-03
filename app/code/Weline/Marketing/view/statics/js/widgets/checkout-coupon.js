@@ -99,7 +99,7 @@
             if (token) {
                 params.guest_token = token;
             }
-            var cartResponse = await cartClient.getV2Cart(params);
+            var cartResponse = await cartClient.getCart(params);
             payload.lines = cartItemsFromResponse(cartResponse).map(function (item) {
                 var qty = Number(item.qty || item.quantity || 1);
                 var unitMinor = item.unit_price_minor != null
@@ -257,10 +257,16 @@
                 return client.quoteDiscount(payload);
             }).then(function (quoteResponse) {
                 var discount = quoteResponse && quoteResponse.success ? quoteResponse.discount : null;
-                if (discount) {
+                if (discount && Number(discount.amount_minor || 0) > 0) {
                     syncAppliedState(code, discount);
+                    return quoteResponse;
                 }
-                return quoteResponse;
+                clearAppliedState();
+                return client.removeCoupon({}, { silent: true }).then(function () {
+                    return quoteResponse;
+                }).catch(function () {
+                    return quoteResponse;
+                });
             });
         }
 
@@ -281,6 +287,7 @@
             applyBtn.disabled = true;
             setApplyLoading(true);
             miniCartBusyDelta(1);
+            // applyCoupon descriptor only accepts coupon_code; quote with cart lines afterwards.
             return client.applyCoupon({ coupon_code: normalized }, { silent: true }).then(function (response) {
                 if (!response || !response.success) {
                     setMessage((response && response.message) || '优惠券不可用', true);
@@ -290,6 +297,10 @@
                 setMessage('', false);
                 input.value = '';
                 return quoteSavedCoupon(appliedCode).then(function (quoteResponse) {
+                    var discount = quoteResponse && quoteResponse.success ? quoteResponse.discount : null;
+                    if (!discount || Number(discount.amount_minor || 0) <= 0) {
+                        setMessage('优惠券无效、不可用或已达使用上限', true);
+                    }
                     notifyCartDiscountChanged();
                     return quoteResponse;
                 });

@@ -307,7 +307,12 @@ class CouponService
         $ruleUsage->setData(RuleUsage::schema_fields_COUPON_ID, $couponId);
         $ruleUsage->setData(RuleUsage::schema_fields_RULE_ID, $ruleId);
         $ruleUsage->setData(RuleUsage::schema_fields_CUSTOMER_ID, $context['customer_id'] ?? null);
-        $ruleUsage->setData(RuleUsage::schema_fields_ORDER_ID, $context['order_id'] ?? null);
+        $orderId = $context['order_id'] ?? null;
+        // Checkout V2 订单主键为 UUID；rule_usage.order_id 仍为整型 legacy 字段，非数字则留空。
+        if ($orderId !== null && !is_numeric((string)$orderId)) {
+            $orderId = null;
+        }
+        $ruleUsage->setData(RuleUsage::schema_fields_ORDER_ID, $orderId);
         $ruleUsage->setData(RuleUsage::schema_fields_DISCOUNT_AMOUNT, $discountAmount);
         $ruleUsage->save();
     }
