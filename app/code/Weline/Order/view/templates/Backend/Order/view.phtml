@@ -9,13 +9,13 @@ use Weline\Order\Model\OrderItem;
 
 $order = $this->getData('order');
 $items = $this->getData('items') ?? [];
-$payments = $this->getData('payments') ?? [];
 $shipments = $this->getData('shipments') ?? [];
 $refunds = $this->getData('refunds') ?? [];
 $invoices = $this->getData('invoices') ?? [];
 $history = $this->getData('history') ?? [];
 $availableTransitions = $this->getData('available_transitions') ?? [];
 $currentStatus = $this->getData('current_status') ?? '';
+$customerPresent = $this->getData('customer_present') ?? [];
 
 if (!$order) {
     return;
@@ -23,6 +23,11 @@ if (!$order) {
 
 $orderData = is_object($order) ? $order->getData() : $order;
 $orderId = $orderData[Order::schema_fields_ID] ?? 0;
+$customerName = (string)($customerPresent['customer_name'] ?? ($orderData[Order::schema_fields_CUSTOMER_NAME] ?? ''));
+$customerEmail = (string)($customerPresent['customer_email'] ?? ($orderData[Order::schema_fields_CUSTOMER_EMAIL] ?? ''));
+$customerPhone = (string)($customerPresent['customer_phone'] ?? ($orderData[Order::schema_fields_CUSTOMER_PHONE] ?? ''));
+$createdAt = (string)($customerPresent['created_at'] ?? ($orderData[Order::schema_fields_CREATED_AT] ?? ''));
+$isAnonymous = !empty($customerPresent['is_anonymous']);
 ?>
 <div class="w-grid">
     <div style="--w-span:12;">
@@ -31,7 +36,7 @@ $orderId = $orderData[Order::schema_fields_ID] ?? 0;
             <div class="w-cluster">
                 <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
                     <li class="w-breadcrumb__item"><a href="@backend-url('admin/index/index')"><?= __('系统') ?></a></li>
-                    <li class="w-breadcrumb__item"><a href="@backend-url{'weline_order/backend/order/index'}"><?= __('订单管理') ?></a></li>
+                    <li class="w-breadcrumb__item"><a href="@backend-url{'order/backend/order/index'}"><?= __('订单管理') ?></a></li>
                     <li class="w-breadcrumb__item" data-state="active"><?= __('订单详情') ?></li>
                 </ol>
             </div>
@@ -74,15 +79,20 @@ $orderId = $orderData[Order::schema_fields_ID] ?? 0;
                             </tr>
                             <tr>
                                 <th><?= __('客户姓名') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_NAME] ?? '') ?></td>
+                                <td>
+                                    <?= htmlspecialchars($customerName) ?>
+                                    <?php if ($isAnonymous): ?>
+                                        <span class="w-badge" data-w-background="muted"><?= __('匿名') ?></span>
+                                    <?php endif; ?>
+                                </td>
                             </tr>
                             <tr>
                                 <th><?= __('客户邮箱') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_EMAIL] ?? '') ?></td>
+                                <td><?= htmlspecialchars($customerEmail) ?></td>
                             </tr>
                             <tr>
                                 <th><?= __('客户电话') ?>:</th>
-                                <td><?= htmlspecialchars($orderData[Order::schema_fields_CUSTOMER_PHONE] ?? '') ?></td>
+                                <td><?= htmlspecialchars($customerPhone) ?></td>
                             </tr>
                         </table>
                     </div>
@@ -110,7 +120,7 @@ $orderId = $orderData[Order::schema_fields_ID] ?? 0;
                             </tr>
                             <tr>
                                 <th><?= __('创建时间') ?>:</th>
-                                <td><?= $orderData[Order::schema_fields_CREATED_AT] ?? '' ?></td>
+                                <td><?= htmlspecialchars($createdAt) ?></td>
                             </tr>
                         </table>
                     </div>
@@ -120,7 +130,7 @@ $orderId = $orderData[Order::schema_fields_ID] ?? 0;
                 <?php if (!empty($availableTransitions)): ?>
                     <div style="--w-mt:var(--weline-space-4);">
                         <h6><?= __('状态操作') ?>:</h6>
-                        <w:form method="post" action="@backend-url{'weline_order/backend/order/updateStatus'}" data-w-display="inline">
+                        <w:form method="post" action="@backend-url{'order/backend/order/updateStatus'}" data-w-display="inline">
                             <input type="hidden" name="order_id" value="<?= $orderId ?>">
                             <input type="hidden" name="expected_grant_version" value="<?= (int)($expected_grant_version ?? 0) ?>">
                             <select name="status" class="w-select" style="width: auto;" data-w-display="inline-block">
@@ -178,47 +188,17 @@ $orderId = $orderData[Order::schema_fields_ID] ?? 0;
             </div>
         </div>
 
-        <!-- 支付记录 -->
-        <div class="w-card" style="--w-mb:var(--weline-space-4);">
-            <div class="w-card__header">
-                <h5 class="w-card__title" style="--w-mb:0;"><?= __('支付记录') ?></h5>
-            </div>
-            <div class="w-card__body">
-                <div class="w-table-wrap">
-                    <table class="w-table">
-                        <thead>
-                            <tr>
-                                <th><?= __('支付方式') ?></th>
-                                <th><?= __('支付金额') ?></th>
-                                <th><?= __('交易ID') ?></th>
-                                <th><?= __('状态') ?></th>
-                                <th><?= __('支付时间') ?></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <?php if (empty($payments)): ?>
-                                <tr>
-                                    <td colspan="5" class="w-text" data-align="center"><?= __('暂无支付记录') ?></td>
-                                </tr>
-                            <?php else: ?>
-                                <?php foreach ($payments as $payment): ?>
-                                    <?php
-                                    $paymentData = is_object($payment) ? $payment->getData() : $payment;
-                                    ?>
-                                    <tr>
-                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::schema_fields_PAYMENT_METHOD] ?? '') ?></td>
-                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::schema_fields_CURRENCY] ?? 'CNY') ?> <?= number_format((float)($paymentData[\Weline\Order\Model\OrderPayment::schema_fields_AMOUNT] ?? 0), 2) ?></td>
-                                        <td><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::schema_fields_TRANSACTION_ID] ?? '') ?></td>
-                                        <td><span class="w-badge" data-w-background="success"><?= htmlspecialchars($paymentData[\Weline\Order\Model\OrderPayment::schema_fields_STATUS] ?? '') ?></span></td>
-                                        <td><?= $paymentData[\Weline\Order\Model\OrderPayment::schema_fields_PAID_AT] ?? '' ?></td>
-                                    </tr>
-                                <?php endforeach; ?>
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
+        <!-- 支付记录：订单只留空槽；万能支付经部件 default_injections / 槽内 Hook 默认填充 -->
+        <w:slot id="backend-order-payment-records"
+                name="<?= __('订单支付记录') ?>"
+                accept="backend-order-payment-records,payment-records,payment"
+                exclusive="true"
+                multiple="false"
+                position="content"
+                class="backend-order-payment-records-slot"
+                weline-code="order.backend.order.payment_records_slot">
+            <w:hook name="Weline_Order::backend::order::view::payment-records"/>
+        </w:slot>
 
         <!-- 发货记录 -->
         <div class="w-card" style="--w-mb:var(--weline-space-4);">

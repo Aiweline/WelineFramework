@@ -402,8 +402,8 @@ class OrderService
                   ->where(Order::schema_fields_CUSTOMER_EMAIL, $keyword, 'LIKE');
         }
         
-        // 排序
-        $model->order(Order::schema_fields_CREATED_AT, 'DESC');
+        // 排序：框架时间戳权威列为 create_time（created_at 常为空）
+        $model->order(\Weline\Framework\Database\AbstractModel::schema_fields_CREATE_TIME, 'DESC');
         
         // 分页
         if (isset($filters['page']) && isset($filters['page_size'])) {

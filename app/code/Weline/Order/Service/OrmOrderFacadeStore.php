@@ -260,6 +260,7 @@ final class OrmOrderFacadeStore implements OrderFacadeStoreInterface
             'website_id' => (int)$row->getData(Order::schema_fields_WEBSITE_ID),
             'store_id' => (int)$row->getData(Order::schema_fields_STORE_ID),
             'customer_id' => $row->getData(Order::schema_fields_CUSTOMER_ID),
+            'customer_email' => (string)$row->getData(Order::schema_fields_CUSTOMER_EMAIL),
             'items' => $items,
             'money' => $this->decode((string)$row->getData(Order::schema_fields_MONEY_SNAPSHOT_JSON)),
             'scope' => $this->decode((string)$row->getData(Order::schema_fields_SCOPE_SNAPSHOT_JSON)),

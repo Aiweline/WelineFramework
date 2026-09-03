@@ -30,6 +30,7 @@ final class OrderReadResult
         public readonly string $numberKind = 'order',
         public readonly ?string $displayNumber = null,
         public readonly ?int $customerId = null,
+        public readonly ?string $customerEmail = null,
     ) {
     }
 
@@ -52,6 +53,7 @@ final class OrderReadResult
             'number_kind' => $this->numberKind,
             'display_number' => $this->displayNumber,
             'customer_id' => $this->customerId,
+            'customer_email' => $this->customerEmail,
         ];
     }
 }
