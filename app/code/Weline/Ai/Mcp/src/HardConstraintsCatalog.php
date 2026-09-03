@@ -55,13 +55,15 @@ final class HardConstraintsCatalog
      */
     public static function mcpInstructions(): string
     {
-        return 'Before any project knowledge, diagnosis, review, edit, or deployment planning, call prepare_project '
+        return 'CALL SCOPE: Skip Weline MCP for non-coding (chat/Q&A/unrelated advice). '
+            . 'Coding/engineering only requires MCP. 【非编码禁 MCP；仅编码/工程】 '
+            . 'Before any project knowledge, diagnosis, review, edit, or deployment planning, call prepare_project '
             . 'with the canonical repository and a stable client_session_id. Continue only when project-readiness.v1 '
             . 'status=ready on branch dev (master and other branches are blocked for framework repos). Pass readiness_id '
             . 'and the same client_session_id to every later tool. Missing module documents are auto-repaired during '
             . 'prepare_project; blocked forbids development. '
             . self::preamble() . ' '
-            . 'Read agent_guidance.hard_constraints (must obey browser_operator_self_test and feature_delivery_urls), '
+            . 'Read agent_guidance.hard_constraints (must obey browser_operator_self_test, feature_delivery_urls, and frontend_unified_content_container), '
             . 'then agent_guidance.feature_delivery_urls and closeout_delivery_reminder. '
             . 'Before claiming Web/UI done: run host-available real Browser on agreed use cases; end every feature report with 「交付地址」. '
             . 'Use resolve_task_context for guidance-bundle.v1 with task-matched fragments plus workflow_contract.v1 '
@@ -69,9 +71,10 @@ final class HardConstraintsCatalog
             . 'changes. resolve_skill and get_skill are compatibility aliases over indexed module documents; they do '
             . 'not read or generate repository Skill files. Use set_session_directives only for temporary user '
             . 'decisions; they remain in memory and never become repository knowledge. '
-            . 'On every user requirement, immediately understand the ask and call submit_task_plan with task-plan.v1 '
+            . 'On every coding/engineering user requirement, immediately understand the ask and call submit_task_plan with task-plan.v1 '
             . '(requirements, goal, extension_point, architecture, dev_tasks, ≥1 acceptance) covering analysis→acceptance; '
-            . 'do not wait until edit time. PLAN_REQUIRED returns plan_workflow — compose the plan immediately, do not stop. '
+            . 'do not wait until edit time. Non-coding asks must not submit_task_plan. '
+            . 'PLAN_REQUIRED returns plan_workflow — compose the plan immediately, do not stop. '
             . 'Track progress with update_task_plan_progress; call review_task_plan before closeout (closeout_allowed=true). '
             . 'get_edit_bundle / apply_compact_edit without an accepted plan return PLAN_REQUIRED '
             . '(user_requirement_full_workflow / task_plan_before_edit). '
@@ -105,6 +108,11 @@ final class HardConstraintsCatalog
                 'id' => 'weline_ui_theme_first',
                 'summary' => 'All storefront/admin visual UI MUST use first-party Weline Theme (Weline UI 2.0) component classes and theme CSS variable tokens; forbid third-party UI kits, hard-coded visual literals, and naked address/region inputs when <w:theme:address> exists.',
                 'doc' => 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
+            ],
+            [
+                'id' => 'frontend_unified_content_container',
+                'summary' => 'Storefront layouts/pages/widgets/module CSS MUST use the shared content-width shell from theme-layout-content-width.md — never invent a private page container. Shell A (inside Theme .w-container): width:100% + padding-inline:0 only (no second max-width/gutter). Shell B (standalone chrome-only layouts): width:min(100%, var(--weline-layout-content-max-width)) + padding-inline:var(--weline-layout-content-padding-inline) or .w-theme-content-width; forbid pixel fallbacks (1440px/1200px/1180px/90rem) and double gutters. Verify with ThemeFrontendLayoutsContentWidthContractTest / ThemeStorefrontModuleContentWidthContractTest when touching width shells.',
+                'doc' => 'app/code/Weline/Theme/doc/theme-layout-content-width.md',
             ],
             [
                 'id' => 'theme_js_module_declare_only',
@@ -153,7 +161,7 @@ final class HardConstraintsCatalog
             ],
             [
                 'id' => 'user_requirement_full_workflow',
-                'summary' => 'On every executable user requirement, immediately understand the ask and submit_task_plan with task-plan.v1 covering requirement analysis→architecture→dev_tasks→acceptance→verify→review→closeout (requirements≥1, acceptance≥1). Do not wait until get_edit_bundle; PLAN_REQUIRED / missing plan_workflow means plan now, not stop. Track via update_task_plan_progress; review_task_plan.closeout_allowed=true before claiming done.',
+                'summary' => 'On every coding/engineering executable user requirement, immediately understand the ask and submit_task_plan with task-plan.v1 covering requirement analysis→architecture→dev_tasks→acceptance→verify→review→closeout (requirements≥1, acceptance≥1). Do not wait until get_edit_bundle; PLAN_REQUIRED / missing plan_workflow means plan now, not stop. Non-coding asks (chat/Q&A/unrelated advice) skip submit_task_plan and all MCP tools. Track via update_task_plan_progress; review_task_plan.closeout_allowed=true before claiming done.',
                 'doc' => self::AUTHORITATIVE_WORKFLOW_DOC,
             ],
             [
@@ -258,8 +266,12 @@ final class HardConstraintsCatalog
     {
         return [
             [
+                'id' => 'mcp_call_scope',
+                'summary' => 'Do not call Weline MCP (ensure-project-guidance, prepare_project, submit_task_plan, sealed edits, knowledge tools) for non-coding turns: chat, identity/concept Q&A, or advice unrelated to implementing in this repository. Require MCP only for coding/engineering: code or module-doc changes, diagnosis, review, deployment planning, project knowledge retrieval, feature acceptance/closeout. Host AGENTS.md is a pointer to this gate.',
+            ],
+            [
                 'id' => 'mcp_capacity_native_fallback',
-                'summary' => 'When get_edit_bundle/apply_compact_edit/parser indexing cannot materialize an exact known path due to capacity (decode memory reserve, worker OOM, persistent RUNTIME_STALE after repair): record MCP_TARGET_UNAVAILABLE and allow native edit of that exact path only; never bypass prepare blocked, non-dev branch, doc alignment, or real acceptance; return to sealed edits when MCP recovers.',
+                'summary' => 'When get_edit_bundle/apply_compact_edit/parser indexing cannot materialize an exact known path due to capacity (decode memory reserve, worker OOM, persistent RUNTIME_STALE after repair) or terminal CONTEXT_TARGET_UNAVAILABLE (stalled nested context batches with unchanged missing targets): record MCP_TARGET_UNAVAILABLE and allow native edit of that exact path only; never bypass prepare blocked, non-dev branch, doc alignment, or real acceptance; return to sealed edits when MCP recovers. Do not spawn more CONTEXT_BATCH_PLANNED children after CONTEXT_TARGET_UNAVAILABLE.',
             ],
             [
                 'id' => 'host_mcp_not_attached_fallback',

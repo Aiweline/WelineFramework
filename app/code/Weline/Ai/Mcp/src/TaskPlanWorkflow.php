@@ -22,8 +22,8 @@ final class TaskPlanWorkflow
     public const ACCEPTANCE_STATUSES = ['pending', 'passed', 'failed', 'skipped', 'na'];
 
     /**
-     * Host agents must follow this on every user requirement, when PLAN_REQUIRED fires,
-     * or when submit_task_plan is missing from the host catalog.
+     * Host agents must follow this on every coding/engineering user requirement, when PLAN_REQUIRED fires,
+     * or when submit_task_plan is missing from the host catalog. Non-coding asks skip this workflow.
      *
      * @return array<string, mixed>
      */
@@ -31,10 +31,10 @@ final class TaskPlanWorkflow
     {
         return [
             'schema_version' => 'task-plan-workflow.v1',
-            'trigger' => 'every_user_requirement',
+            'trigger' => 'every_coding_user_requirement',
             'immediate_action' => 'submit_task_plan',
             'host_catalog_stale_action' => 'Start a new Agent turn after ensure-project-guidance; never call mcp_auth. If submit_task_plan still missing, compose plan in chat then native edit with HOST_MCP_NOT_ATTACHED.',
-            'notes' => '用户每提出一条可执行需求，须立即理解需求并 submit_task_plan，覆盖需求分析→架构→任务→验收→实现→验证→审查→收口；不得等到写码前才补计划，也不得把 PLAN_REQUIRED 当完成。',
+            'notes' => '用户每提出一条可执行编码/工程需求，须立即理解需求并 submit_task_plan，覆盖需求分析→架构→任务→验收→实现→验证→审查→收口；不得等到写码前才补计划，也不得把 PLAN_REQUIRED 当完成。闲聊/概念问答等非编码任务禁止调用 MCP。',
             'steps' => [
                 [
                     'order' => 1,

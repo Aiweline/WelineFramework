@@ -65,8 +65,10 @@ final class GuidanceWorkflowCatalog
             'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; Browser self-test + delivery URL bodies live in hard_constraints (browser_operator_self_test / feature_delivery_urls) and WebUI browser closeout gate doc.',
             '【宿主工具目录】密封编辑前确认本会话可见 submit_task_plan / get_task_plan。ensure 的 mcp_stdio 已含而本会话 GetDynamicTools 缺失时，记 HOST_MCP_SESSION_CATALOG_STALE 并新开 Agent 回合；禁止调用 mcp_auth。',
             '[Host tool catalog] Before sealed edits, confirm this chat exposes submit_task_plan / get_task_plan. If ensure mcp_stdio lists them but GetDynamicTools does not, record HOST_MCP_SESSION_CATALOG_STALE and start a new Agent turn; never call mcp_auth.',
-            '【每条用户需求】提出即可执行的需求后，立即理解并 submit_task_plan（需求分析→验收完整工作流）；不得等到写码前。',
-            '[Every user requirement] After an executable ask, immediately understand it and submit_task_plan covering analysis→acceptance; do not wait until edit time.',
+            '【调用范围】非编码（闲聊/概念问答）禁止 MCP；仅编码/工程走 ensure → prepare_project。细则见 hard_constraints.mcp_operational.mcp_call_scope。',
+            '[Call scope] Skip MCP for non-coding; coding/engineering only uses ensure → prepare_project. See hard_constraints.mcp_operational.mcp_call_scope.',
+            '【每条编码需求】可执行编码/工程需求提出后，立即理解并 submit_task_plan（需求分析→验收完整工作流）；不得等到写码前。非编码勿 submit_task_plan。',
+            '[Every coding requirement] After an executable coding/engineering ask, immediately understand it and submit_task_plan covering analysis→acceptance; do not wait until edit time. Non-coding must not submit_task_plan.',
         ];
     }
 
@@ -234,14 +236,14 @@ final class GuidanceWorkflowCatalog
             'phases' => [
                 ['id' => 'bootstrap', 'label' => '引导与 ready', 'tools' => ['ensure-project-guidance', 'prepare_project'], 'read' => ['agent_guidance.hard_constraints', 'session_startup_notices']],
                 ['id' => 'locate', 'label' => '定位与需求确认', 'tools' => ['resolve_task_context', 'search_project_knowledge', 'submit_task_plan'], 'notes' => [
-                    'Every executable user requirement must be understood here and immediately become submit_task_plan.requirements + acceptance — do not defer planning until implement.',
+                    'Coding/engineering executable requirements must be understood here and immediately become submit_task_plan.requirements + acceptance — do not defer planning until implement. Non-coding asks skip this phase and all MCP tools.',
                 ]],
                 ['id' => 'extension_point', 'label' => '扩展点选型', 'docs' => [
                     'app/code/Weline/Framework/doc/3-开发/扩展点选型.md',
                     'app/code/Weline/Framework/doc/event/README.md',
                 ]],
                 ['id' => 'plan', 'label' => '计划拆解', 'tools' => ['submit_task_plan', 'get_task_plan', 'update_task_plan_progress', 'review_task_plan'], 'docs' => ['doc/开发/plan.md', 'doc/开发/task.md', 'task_contract'], 'notes' => [
-                    'On every user requirement: compose requirements + architecture + dev_tasks + acceptance and call submit_task_plan immediately (user_requirement_full_workflow).',
+                    'On every coding/engineering user requirement: compose requirements + architecture + dev_tasks + acceptance and call submit_task_plan immediately (user_requirement_full_workflow). Non-coding skips MCP.',
                     'PLAN_REQUIRED is not a dead-end: follow plan_workflow steps 1–8 and submit_task_plan now.',
                     'Track dev_tasks and acceptance status via update_task_plan_progress during implement/verify.',
                     'Call review_task_plan before closeout; closeout_allowed=true required to claim done.',
@@ -361,7 +363,7 @@ final class GuidanceWorkflowCatalog
                 ],
                 [
                     'id' => 'layout_content_width_tokens',
-                    'summary' => '内容区宽度与左右 gutter 必须走 --weline-layout-content-max-width / --weline-layout-content-padding-inline 或外层 .w-container；禁止 1440px 等私有 fallback；特质色仅局部 scope 可自定义',
+                    'summary' => '【高压线·统一版心】禁止自写一套页面容器；内容区宽度/gutter 必须走 theme-layout-content-width.md 的壳层 A（已在 .w-container 内：width:100% + padding-inline:0）或壳层 B（独立壳：--weline-layout-content-* / .w-theme-content-width）；禁止 1440px/1200px 等私有 fallback 与双重 gutter；特质色仅局部 scope 可自定义',
                     'detail_doc' => 'app/code/Weline/Theme/doc/theme-layout-content-width.md',
                 ],
                 [
@@ -395,8 +397,10 @@ final class GuidanceWorkflowCatalog
                     'Editing generated/ or view/tpl as if they were source templates',
                     'Desktop-only Web UI implementation without tablet/PC responsive consideration',
                     'Shipping a feature without reconciling owning module doc/ with behavior',
-                    'Hard-coded content max-width (1440px/1280px/1180px) or private padding-inline instead of --weline-layout-content-* / .w-container',
+                    'Inventing a private page/module content container instead of Theme shell A (.w-container fill) or shell B (--weline-layout-content-* / .w-theme-content-width)',
+                    'Hard-coded content max-width (1440px/1280px/1180px/90rem) or private padding-inline instead of --weline-layout-content-* / .w-container',
                     'Double horizontal gutters: .w-container parent plus page/widget max-width + padding-inline',
+                    'var(--weline-layout-content-max-width, 1440px) or any pixel fallback on layout content tokens',
                     'Third-party UI kits (Bootstrap/Element/Ant/…) or ad-hoc visual CSS literals instead of Weline UI 2.0 + theme CSS variable tokens',
                     'Naked country/province/city/district inputs when <w:theme:address> or official Theme/Taglib address controls exist',
                 ],
@@ -412,7 +416,7 @@ final class GuidanceWorkflowCatalog
                     'Design and accept Web UI across tablet (≈768) and PC (≥1024), plus mobile 375 when relevant',
                     'After each feature, reconcile module README/需求/开发日志/topic docs with shipped behavior',
                     'After each feature closeout, list probe-verified frontend/backend/API URLs; primary acceptance must use direct http(s) Markdown links `[label](url)`, not host-private pseudo-protocols (e.g. command:simpleBrowser) as the sole/primary link or styled plain “open” text',
-                    'Align content width with theme: inside .w-container use width:100% and padding-inline:0; standalone shells use --weline-layout-content-max-width and --weline-layout-content-padding-inline without pixel fallbacks',
+                    'Before writing any page/module content shell, choose Theme shell A or B per theme-layout-content-width.md — never invent a third container; inside .w-container use width:100% and padding-inline:0; standalone shells use --weline-layout-content-max-width and --weline-layout-content-padding-inline (or .w-theme-content-width) without pixel fallbacks',
                 ],
                 'authoritative_doc' => 'app/code/Weline/Theme/doc/开发/Theme开发总指南.md',
                 'authoritative_docs' => [

@@ -249,7 +249,7 @@ final class ToolService
             self::tool(
                 'get_edit_bundle',
                 'Get compact edit bundle',
-                'Primary read entry: always set repository to the current canonical project directory, then call once with the complete TaskContract, requirement, and every known path/symbol. The server discovers missing architecture roles, indexes all selected paths in bounded batches, and returns ready_for_edit or a terminal CONTEXT_BATCH_PLANNED parent. For that capacity state only, execute its exact child_requests in order; each ready child is independently edited with its own run and bundle. Never apply the parent or substitute per-file reads. Symbol regions expose expected_file_sha256, symbol_uid/target_ref, and exact body expected_digest for direct edit-plan.v1 use; content_sha256 is only the bounded snippet digest. The complete bounded result is mirrored into text content for deferred-tool wrappers.',
+                'Primary read entry: always set repository to the current canonical project directory, then call once with the complete TaskContract, requirement, and every known path/symbol. The server discovers missing architecture roles, indexes all selected paths in bounded batches, and returns ready_for_edit or a terminal CONTEXT_BATCH_PLANNED parent. For that capacity state only, execute its exact child_requests in order; each ready child is independently edited with its own run and bundle. When a child (or any call) cannot make concrete path/symbol progress it returns terminal CONTEXT_TARGET_UNAVAILABLE with native_exact_path_fallback_allowed — record MCP_TARGET_UNAVAILABLE and do not spawn more CONTEXT_BATCH_PLANNED children. Never apply the parent or substitute per-file reads. Symbol regions expose expected_file_sha256, symbol_uid/target_ref, and exact body expected_digest for direct edit-plan.v1 use; content_sha256 is only the bounded snippet digest. The complete bounded result is mirrored into text content for deferred-tool wrappers.',
                 self::objectSchema($project + [
                     'task' => self::stringSchema('Current coding, diagnosis, review, or documentation task.'),
                     'task_contract' => [
@@ -283,6 +283,12 @@ final class ToolService
                     'token_budget' => ['type' => 'integer', 'minimum' => 256, 'maximum' => 24000],
                     'include_docs' => ['type' => 'boolean'],
                     'include_skills' => ['type' => 'boolean'],
+                    'context_batch_depth' => [
+                        'type' => 'integer',
+                        'minimum' => 0,
+                        'maximum' => 8,
+                        'description' => 'Internal depth for ordered context child_requests; callers normally omit this. Depth >= 1 refuses search_goal-only replans and stalls as CONTEXT_TARGET_UNAVAILABLE when missing targets do not change.',
+                    ],
                     'supersedes_run_id' => self::stringSchema('Prior run superseded only by an explicit USER_SCOPE_CHANGE.'),
                 ], ['task']),
                 $readOnly,

@@ -217,9 +217,10 @@ final class TaskPlanGate
         if ($plan === null || ($plan['status'] ?? '') !== 'accepted') {
             throw new ToolException(
                 self::ERROR_PLAN_REQUIRED,
-                'PLAN_REQUIRED: on every user requirement, compose task-plan.v1 '
+                'PLAN_REQUIRED: on every coding/engineering user requirement, compose task-plan.v1 '
                 . '(requirements, architecture, dev_tasks, acceptance) and call submit_task_plan '
-                . 'before ' . $tool . '. Do not treat this as completion — immediate next step is full workflow planning.',
+                . 'before ' . $tool . '. Do not treat this as completion — immediate next step is full workflow planning. '
+                . 'Non-coding asks must not reach sealed edits.',
                 false,
                 self::planRequiredDetails($tool),
             );
@@ -311,11 +312,11 @@ final class TaskPlanGate
             'schema' => self::SCHEMA,
             'hard_constraint' => 'user_requirement_full_workflow',
             'also_enforced_by' => 'task_plan_before_edit',
-            'trigger' => 'every_user_requirement',
+            'trigger' => 'every_coding_user_requirement',
             'plan_workflow' => TaskPlanWorkflow::blueprint(),
             'plan_template' => [
                 'goal' => '',
-                'requirements' => ['理解后的用户需求要点'],
+                'requirements' => ['理解后的编码/工程需求要点'],
                 'extension_point' => '',
                 'architecture' => '',
                 'dev_tasks' => [
@@ -343,9 +344,9 @@ final class TaskPlanGate
                 'status' => 'missing',
                 'edit_allowed' => false,
                 'next_action' => 'submit_task_plan',
-                'trigger' => 'every_user_requirement',
+                'trigger' => 'every_coding_user_requirement',
                 'hard_constraint' => 'user_requirement_full_workflow',
-                'message' => '用户每提出可执行需求，须立即理解并 submit_task_plan（需求分析→验收完整工作流），不得等到写码。',
+                'message' => '用户每提出可执行编码/工程需求，须立即理解并 submit_task_plan（需求分析→验收完整工作流），不得等到写码。非编码任务禁止调用 MCP。',
             ],
             [
                 'plan_workflow' => TaskPlanWorkflow::blueprint(),

@@ -106,6 +106,13 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'weline_ui_theme_first'),
         false,
     ),
+    'hard_constraints include frontend_unified_content_container' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'frontend_unified_content_container'
+            && str_contains((string) ($rule['summary'] ?? ''), 'never invent a private page container')),
+        false,
+    ),
     'hard_constraints include theme_js_module_declare_only' => array_reduce(
         is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'theme_js_module_declare_only'),
