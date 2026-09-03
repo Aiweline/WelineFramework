@@ -3162,6 +3162,11 @@
         track: function (eventName, meta, options) {
             options = options || {};
             var normalizedEventName = __normalizePixelEventName(eventName || 'behavior_event');
+            var suppressConversion = (document.body && document.body.getAttribute('data-pixel-conversion-suppress') === '1')
+                || document.querySelector('[data-pixel-conversion-suppress="1"]');
+            if (suppressConversion && ['checkout_success', 'payment_success', 'purchase'].indexOf(normalizedEventName) > -1) {
+                return null;
+            }
             var payload = JSON.parse(JSON.stringify(this.init));
             var now = new Date();
             var domElement = options.element || (meta && meta.domElement) || null;

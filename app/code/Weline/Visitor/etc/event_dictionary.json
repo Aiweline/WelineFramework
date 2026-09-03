@@ -114,6 +114,20 @@
       "page_scopes": ["checkout"]
     },
     {
+      "weline_event": "payment_success",
+      "ga4_event": "purchase",
+      "google_recommended": true,
+      "event_family": "ecommerce",
+      "require_exact_marker": true,
+      "skip_gtm_push": false,
+      "required_params": ["transaction_id", "value", "currency"],
+      "markers": {
+        "classes": ["weline-pixel::payment_success"],
+        "attrs": ["data-pixel-event=payment_success"]
+      },
+      "page_scopes": ["payment"]
+    },
+    {
       "weline_event": "checkout_failure",
       "ga4_event": "checkout_failure",
       "google_recommended": false,
