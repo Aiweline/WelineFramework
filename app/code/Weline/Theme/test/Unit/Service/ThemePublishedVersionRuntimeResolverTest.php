@@ -21,6 +21,22 @@ final class ThemePublishedVersionRuntimeResolverTest extends TestCase
         self::assertStringContainsString('default.default.default', $source);
     }
 
+    public function testEditorShellKeepsEditorAreaIndependentFromPreviewArea(): void
+    {
+        $controller = $this->read('app/code/Weline/Theme/Controller/Backend/ThemeEditor.php');
+
+        self::assertStringContainsString('$editorArea = $this->resolveRequestedEditorArea();', $controller);
+        self::assertStringNotContainsString('$previewAreaParam = $this->request->getParam(', $controller);
+    }
+
+    public function testWorkspaceReturnsBlockedResultToRequestBoundary(): void
+    {
+        $workspace = $this->read('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php');
+
+        self::assertStringContainsString("if ((\$result['blocked'] ?? false) === true) {", $workspace);
+        self::assertStringContainsString('return $result;', $workspace);
+        self::assertStringNotContainsString("throw new \\RuntimeException('theme_scope_structural_conflict');", $workspace);
+    }
     public function testThemeEditorPublishFlushesScopedThemeCaches(): void
     {
         $controller = $this->read('app/code/Weline/Theme/Controller/Backend/ThemeEditor.php');

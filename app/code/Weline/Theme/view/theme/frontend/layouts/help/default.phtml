@@ -1,6 +1,6 @@
 <?php
 /**
- * 帮助中心默认布局（电商常见模板）
+ * 帮助中心默认布局（亚马逊风格）
  *
  * 自动读取站点名称、描述与联系方式；提供主题话题、FAQ、联系卡片，
  * 并预留可扩展 slot 供其他模块投放小部件。
@@ -41,12 +41,18 @@ $subtitle = trim((string)($meta['subtitle'] ?? ''));
 if ($subtitle === '') {
     $subtitle = (string)$contact['site_description'];
 }
+if ($subtitle === '' || $subtitle === (string)$contact['site_description']) {
+    $lead = (string)__('查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。');
+} else {
+    $lead = $subtitle;
+}
 $siteName = (string)$contact['site_name'];
 $email = (string)$contact['contact_email'];
 $phone = (string)$contact['contact_phone'];
 $hours = (string)$contact['service_hours'];
 $address = (string)$contact['contact_address'];
 $mailHref = 'mailto:' . $email;
+$updatedAt = date('Y-m-d');
 $topics = [
     ['icon' => 'truck', 'title' => __('物流配送'), 'desc' => __('发货时效、运费与配送范围'), 'url' => 'guide/shipping', 'route' => true],
     ['icon' => 'undo', 'title' => __('退换货'), 'desc' => __('退货条件、流程与退款进度'), 'url' => 'guide/returns', 'route' => true],
@@ -57,113 +63,365 @@ $topics = [
 ];
 
 $faqs = [
-    ['q' => __('下单后多久发货？'), 'a' => __('一般情况下，现货订单在付款成功后 24–48 小时内发出；预售或定制商品以商品页说明为准。')],
-    ['q' => __('如何查询物流？'), 'a' => __('登录账户后可在「我的订单」中查看物流；也可在页脚「配送说明」了解发货与签收规则。')],
-    ['q' => __('支持哪些支付方式？'), 'a' => __('支持常见在线支付与站点已开通的支付渠道。具体可用方式以结算页与「支付方式指南」为准。')],
-    ['q' => __('如何申请退换货？'), 'a' => __('请先阅读「退换政策」，确认符合条件后在「我的订单」提交售后，或点击「联系客服」获取协助。')],
+    ['q' => __('下单后多久发货？'), 'a' => __('现货订单通常在付款成功后 1–3 个工作日内发出（节假日顺延）；预售、定制或以商品页标注时效为准。详见「配送说明」。')],
+    ['q' => __('如何查询物流？'), 'a' => __('登录后打开「我的订单」可查看承运商与运单节点。长时间无更新时，可先排除节假日，再通过「联系客服」并提供订单号协助查询。')],
+    ['q' => __('运费如何计算？是否包邮？'), 'a' => __('运费按收货地区、重量/体积与配送服务在结账页实时计算。满足满额包邮或活动门槛时会自动减免，以结算页显示为准。')],
+    ['q' => __('支持哪些支付方式？'), 'a' => __('支持站点已开通的在线支付渠道（如 PayPal 等）。具体可用方式以结算页与「支付方式」指南为准，并可查阅各支付商的用户协议。')],
+    ['q' => __('如何申请退换货？'), 'a' => __('请先阅读「退换政策」确认期限与品类要求，再在「我的订单」提交售后并上传凭证。质量问题与个人原因的运费承担规则不同，详见政策页。')],
+    ['q' => __('退款多久到账？'), 'a' => __('退回商品质检通过后，退款一般在 3–15 个工作日内原路退回，具体到账时间以支付渠道为准。完整规则见「退款政策」。')],
+    ['q' => __('可以修改或取消订单吗？'), 'a' => __('未发货订单可在「我的订单」尝试取消或联系客服协助修改地址/备注。已发货订单无法直接取消，可按签收后的退换政策办理。')],
+    ['q' => __('个人信息如何保护？'), 'a' => __('我们仅在提供交易与服务所必需的范围内处理个人信息，详见「隐私政策」与「Cookie 政策」。您可在账户设置中管理部分偏好。')],
 ];
+$quickLinks = [
+    ['label' => __('我的订单'), 'url' => 'customer/account/index#orders', 'route' => true],
+    ['label' => __('我的账户'), 'url' => 'customer/account/index', 'route' => true],
+    ['label' => __('配送说明'), 'url' => 'guide/shipping', 'route' => true],
+    ['label' => __('退换政策'), 'url' => 'guide/returns', 'route' => true],
+    ['label' => __('退款政策'), 'url' => 'refund', 'route' => true],
+    ['label' => __('支付方式'), 'url' => 'guide/payment', 'route' => true],
+    ['label' => __('隐私政策'), 'url' => 'privacy', 'route' => true],
+    ['label' => __('服务条款'), 'url' => 'terms', 'route' => true],
+    ['label' => __('Cookie 政策'), 'url' => 'cookies', 'route' => true],
+    ['label' => __('联系客服'), 'url' => '#contact-service', 'route' => false, 'open_cs' => true],
+];
+$ariaSupport = (string)__('帮助支持');
+$ariaQuick = (string)__('快捷入口');
+$ariaSearch = (string)__('搜索帮助');
+$searchPlaceholder = (string)__('搜索帮助主题，例如：退货、运费、发票');
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::help::head-after</w:hook>
     <style>
-        body.help-layout { margin: 0; min-height: 100vh; color: var(--weline-layout-text-primary); background: var(--weline-layout-surface-primary); }
-        .help-layout__inner { width: min(var(--weline-layout-content-max-width), calc(100% - (var(--weline-layout-content-padding-inline) * 2))); margin: 0 auto; padding: var(--size-control-md) 0 var(--token-size-64px); }
-        .help-layout__hero { display: grid; gap: var(--weline-space-3); margin-bottom: var(--spacing-7); }
-        .help-layout__eyebrow { margin: 0; font-size: var(--font-size-sm); font-weight: 700; color: var(--weline-layout-link-color); }
-        .help-layout__hero h1 { margin: 0; font-size: clamp(var(--font-size-3xl), 4vw, var(--size-control-md)); line-height: 1.15; }
-        .help-layout__hero p { margin: 0; max-width: var(--token-size-46rem); color: var(--weline-layout-text-secondary); line-height: 1.7; }
-        .help-layout__search { margin-top: var(--spacing-sm); }
-        .help-layout__search-form { display: flex; gap: var(--spacing-sm); max-width: var(--token-size-560px); }
-        .help-layout__search-form input { flex: 1; min-height: var(--size-control-lg); border: var(--border-width-thin) solid var(--color-border-panel-2); border-radius: var(--border-radius-lg); padding: 0 var(--spacing-3_5); }
-        .help-layout__search-form button { min-height: var(--size-control-lg); border: 0; border-radius: var(--border-radius-lg); padding: 0 var(--spacing-md); background: var(--weline-layout-link-color); color: var(--color-bg-primary); font-weight: 700; cursor: pointer; }
-        .help-layout__grid { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(var(--token-size-240px), .9fr); gap: var(--spacing-lg); align-items: start; }
-        .help-layout__topics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--spacing-3_5); }
-        .help-layout__topic { display: grid; gap: var(--spacing-1_5); padding: var(--spacing-4_5); border: var(--border-width-thin) solid var(--color-border-slate); border-radius: var(--token-size-10px); text-decoration: none; color: inherit; background: var(--color-bg-primary); }
-        .help-layout__topic:hover { border-color: var(--weline-layout-link-color); text-decoration: none; }
-        .help-layout__topic strong { font-size: var(--font-size-base); }
-        .help-layout__topic span { color: var(--weline-layout-text-secondary); font-size: var(--weline-font-size-sm); line-height: 1.5; }
-        .help-layout__section { margin-top: var(--spacing-7); padding: var(--spacing-lg); border: var(--border-width-thin) solid var(--color-border-slate); border-radius: var(--border-radius-xl); background: var(--color-bg-primary); }
-        .help-layout__section h2 { margin: 0 0 var(--spacing-md); font-size: var(--font-size-2_5xl); }
-        .help-layout__faq { display: grid; gap: var(--weline-space-3); }
-        .help-layout__faq-item { padding: var(--spacing-3_5) var(--spacing-md); border: var(--border-width-thin) solid var(--token-color-e8edf5); border-radius: var(--border-radius-lg); background: var(--color-bg-slate); }
-        .help-layout__faq-item strong { display: block; margin-bottom: var(--spacing-1_5); }
-        .help-layout__faq-item p { margin: 0; color: var(--weline-layout-text-secondary); line-height: 1.65; }
-        .help-layout__side { display: grid; gap: var(--spacing-md); }
-        .help-layout__card { padding: var(--weline-space-5); border: var(--border-width-thin) solid var(--color-border-slate); border-radius: var(--border-radius-xl); background: var(--color-bg-slate); }
-        .help-layout__card h3 { margin: 0 0 var(--spacing-2_5); font-size: var(--font-size-base); }
-        .help-layout__card p, .help-layout__card a { margin: 0 0 var(--spacing-sm); color: var(--weline-layout-text-secondary); line-height: 1.6; text-decoration: none; }
-        .help-layout__card a:hover { color: var(--weline-layout-link-color); text-decoration: underline; }
-        .help-layout__extras { margin-top: var(--spacing-lg); display: grid; gap: var(--spacing-md); }
+        body.help-layout {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--color-text-primary, #0f1111);
+            background: var(--color-bg-canvas, #ffffff);
+            font-family: "Amazon Ember", Arial, sans-serif;
+        }
+        .amazon-help.weline-page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        .amazon-help__main { flex: 1 0 auto; display: flex; flex-direction: column; }
+        .amazon-help__hero {
+            margin: 0 0 1.25rem;
+            padding: clamp(1.35rem, 3vw, 1.85rem) clamp(1.15rem, 2.5vw, 1.75rem);
+            border-radius: 8px;
+            background:
+                radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
+                linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
+            color: #fff;
+            box-sizing: border-box;
+        }
+        .amazon-help__stage {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+            padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+        }
+        .amazon-help__eyebrow {
+            margin: 0 0 .45rem;
+            font-size: .85rem;
+            font-weight: 700;
+            letter-spacing: .08em;
+            text-transform: uppercase;
+            color: #febd69;
+        }
+        .amazon-help__hero h1 {
+            margin: 0;
+            font-size: clamp(1.7rem, 3.6vw, 2.4rem);
+            line-height: 1.2;
+            font-weight: 700;
+            color: #fff;
+        }
+        .amazon-help__hero-lead {
+            margin: .85rem 0 0;
+            max-width: 46rem;
+            line-height: 1.65;
+            color: #ddd;
+        }
+        .amazon-help__meta {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem 1.25rem;
+            font-size: .9rem;
+            color: #febd69;
+        }
+        .amazon-help__meta a { color: inherit; text-decoration: underline; }
+        .amazon-help__search {
+            margin-top: 1.25rem;
+            max-width: 40rem;
+        }
+        .amazon-help__search-form {
+            display: flex;
+            gap: 0;
+            background: #fff;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, .22);
+        }
+        .amazon-help__search-form input {
+            flex: 1;
+            min-width: 0;
+            min-height: 2.85rem;
+            border: 0;
+            padding: 0 1rem;
+            font-size: 1rem;
+            color: #0f1111;
+            outline: none;
+        }
+        .amazon-help__search-form button {
+            min-height: 2.85rem;
+            border: 0;
+            padding: 0 1.25rem;
+            background: #febd69;
+            color: #111;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .amazon-help__search-form button:hover { background: #f3a847; }
+        .amazon-help__body {
+            flex: 1 0 auto;
+            width: 100%;
+            background: linear-gradient(180deg, #eaeded 0, #f3f3f3 12rem);
+        }
+        .amazon-help__panel {
+            background: #fff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(15, 17, 17, .08);
+            padding: clamp(1.15rem, 2.4vw, 1.65rem);
+            box-sizing: border-box;
+        }
+        .amazon-help__panel + .amazon-help__panel,
+        .amazon-help__panel + .help-layout__support,
+        .help-layout__primary > * + * {
+            margin-top: 1.15rem;
+        }
+        .amazon-help__panel-title {
+            margin: 0 0 1rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-left: 4px solid #ff9900;
+            padding-left: .65rem;
+            color: #0f1111;
+        }
+        .help-layout__topics {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: .85rem;
+        }
+        .help-layout__topic {
+            display: grid;
+            gap: .45rem;
+            padding: 1rem 1.05rem;
+            border: 1px solid #e3e6e6;
+            border-radius: 8px;
+            text-decoration: none;
+            color: inherit;
+            background: #fafafa;
+            transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
+        }
+        .help-layout__topic:hover {
+            border-color: #ff9900;
+            background: #fff;
+            box-shadow: 0 1px 3px rgba(15, 17, 17, .08);
+            text-decoration: none;
+        }
+        .help-layout__topic strong {
+            font-size: 1rem;
+            color: #0f1111;
+        }
+        .help-layout__topic span {
+            color: #565959;
+            font-size: .9rem;
+            line-height: 1.5;
+        }
+        .help-layout__faq { display: grid; gap: .75rem; }
+        .help-layout__faq-item {
+            padding: .95rem 1rem;
+            border: 1px solid #e3e6e6;
+            border-radius: 8px;
+            background: #fafafa;
+        }
+        .help-layout__faq-item strong {
+            display: block;
+            margin-bottom: .4rem;
+            color: #0f1111;
+            border-left: 3px solid #ff9900;
+            padding-left: .55rem;
+        }
+        .help-layout__faq-item p {
+            margin: 0;
+            color: #333;
+            line-height: 1.65;
+            font-size: .96rem;
+        }
+        .help-layout__extras { display: grid; gap: 1rem; }
+        .help-layout__support { margin-top: 1.15rem; width: 100%; }
+        .help-layout__sidebar-slot {
+            display: block;
+            width: 100%;
+            min-width: 0;
+        }
+        .help-layout__support-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
+            gap: 1rem;
+            align-items: stretch;
+            width: 100%;
+            min-width: 0;
+        }
+        .help-layout__card {
+            min-width: 0;
+            padding: 1.15rem 1.2rem;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            background: #fff;
+            box-shadow: 0 1px 2px rgba(15, 17, 17, .08);
+        }
+        .help-layout__card h3 {
+            margin: 0 0 .9rem;
+            font-size: 1.05rem;
+            font-weight: 700;
+            border-left: 4px solid #ff9900;
+            padding-left: .55rem;
+            writing-mode: horizontal-tb;
+            white-space: normal;
+            line-height: 1.35;
+        }
+        .help-layout__contact { display: grid; gap: .55rem; color: #565959; line-height: 1.6; }
+        .help-layout__contact p { margin: 0; }
+        .help-layout__contact a { color: #007185; text-decoration: none; }
+        .help-layout__contact a:hover { color: #c45500; text-decoration: underline; }
+        .help-layout__contact-cta {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            margin-top: .55rem;
+            min-height: 2.45rem;
+            padding: 0 1rem;
+            border-radius: 8px;
+            background: #ff9900;
+            color: #111 !important;
+            font-weight: 700;
+            text-decoration: none !important;
+            width: fit-content;
+        }
+        .help-layout__contact-cta:hover { filter: brightness(.96); text-decoration: none !important; }
+        .help-layout__quick-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+            gap: .65rem;
+            width: 100%;
+            min-width: 0;
+        }
+        .help-layout__quick-link {
+            display: flex;
+            align-items: center;
+            min-height: 2.55rem;
+            padding: .55rem .8rem;
+            border: 1px solid #e3e6e6;
+            border-radius: 8px;
+            background: #fafafa;
+            color: #0f1111;
+            text-decoration: none;
+            font-size: .95rem;
+            line-height: 1.35;
+            white-space: nowrap;
+        }
+        .help-layout__quick-link:hover {
+            border-color: #ff9900;
+            color: #c45500;
+            background: #fff;
+            text-decoration: none;
+        }
         @media (max-width: 900px) {
-            .help-layout__grid { grid-template-columns: 1fr; }
             .help-layout__topics { grid-template-columns: 1fr 1fr; }
+            .help-layout__support-grid { grid-template-columns: 1fr; }
         }
         @media (max-width: 560px) {
             .help-layout__topics { grid-template-columns: 1fr; }
-            .help-layout__search-form { flex-direction: column; }
+            .amazon-help__search-form { flex-direction: column; }
+            .amazon-help__search-form button { min-height: 2.6rem; }
         }
     </style>
     <w:hook>seo::head</w:hook>
 </head>
-<body class="help-layout <?= $escape($meta['class'] ?? '') ?>">
+<body class="help-layout amazon-help-layout <?= $escape($meta['class'] ?? '') ?>">
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::help::body-start</w:hook>
 
-    <div class="weline-page-wrapper">
+    <div class="weline-page-wrapper amazon-help" data-testid="storefront-help-page">
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
 
-        <main class="help-layout__main" id="help-main" data-layout="help">
-            <div class="help-layout__inner">
-                <header class="help-layout__hero">
-                    <p class="help-layout__eyebrow"><?= $escape($siteName) ?></p>
-                    <h1><?= $escape($title) ?></h1>
-                    <p><?= $escape($subtitle) ?></p>
-                    <div class="help-layout__search">
-                        <w:form action="@url{'search'}" method="get" class="help-layout__search-form">
-                            <input type="search" name="q" placeholder="<?= $escape(__('搜索帮助主题，例如：退货、运费、发票')) ?>" aria-label="<?= $escape(__('搜索帮助')) ?>">
-                            <button type="submit"><?= $escape(__('搜索')) ?></button>
-                        </w:form>
-                    </div>
-                </header>
-
-                <div class="help-layout__grid">
+        <main class="help-layout__main amazon-help__main" id="help-main" data-layout="help">
+            <div class="amazon-help__body">
+                <div class="amazon-help__stage help-layout__inner">
+                    <header class="amazon-help__hero" aria-labelledby="help-layout-title" weline-code="theme.help.hero">
+                        <p class="amazon-help__eyebrow"><?= $escape($siteName) ?></p>
+                        <h1 id="help-layout-title"><?= $escape($title) ?></h1>
+                        <p class="amazon-help__hero-lead"><?= $escape($lead) ?></p>
+                        <div class="amazon-help__meta">
+                            <span><lang>最后更新：</lang><?= $escape($updatedAt) ?></span>
+                            <a href="@url{'guide/shipping'}"><lang>配送说明</lang></a>
+                            <a href="@url{'guide/returns'}"><lang>退换政策</lang></a>
+                            <a href="@url{'privacy'}"><lang>隐私政策</lang></a>
+                            <a href="@url{'terms'}"><lang>服务条款</lang></a>
+                        </div>
+                        <div class="amazon-help__search help-layout__search">
+                            <w:form action="@url{'search'}" method="get" class="amazon-help__search-form help-layout__search-form">
+                                <input type="search" name="q" placeholder="<?= $escape($searchPlaceholder) ?>" aria-label="<?= $escape($ariaSearch) ?>">
+                                <button type="submit"><lang>搜索</lang></button>
+                            </w:form>
+                        </div>
+                    </header>
                     <div class="help-layout__primary">
-                        <w:slot id="help-topics"
-                                name="帮助主题"
-                                accept="layout-help-topics,help-topics,content,faq,notice"
-                                reject="header,footer,logo,navigation"
-                                multiple="true"
-                                append="true"
-                                max="12"
-                                position="content"
-                                class="help-layout__topics-slot">
-                            <div class="help-layout__topics" id="help-topics">
-                                <?php foreach ($topics as $topic): ?>
-                                    <?php
-                                    $topicOpenCs = !empty($topic['open_cs']);
-                                    $topicAttrs = $topicOpenCs ? ' data-cs-footer-open-chat role="button"' : '';
-                                    ?>
-                                    <a class="help-layout__topic"
-                                       href="<?php if (!empty($topic['route'])): ?>@url{$topic['url']}<?php else: ?><?= $escape($topic['url']) ?><?php endif; ?>"<?= $topicAttrs ?>>
-                                        <strong><?= $escape($topic['title']) ?></strong>
-                                        <span><?= $escape($topic['desc']) ?></span>
-                                    </a>
-                                <?php endforeach; ?>
-                            </div>
-                        </w:slot>
+                        <section class="amazon-help__panel" aria-labelledby="help-topics-title" weline-code="theme.help.topics">
+                            <h2 class="amazon-help__panel-title" id="help-topics-title"><lang>热门帮助主题</lang></h2>
+                            <w:slot id="help-topics"
+                                    name="帮助主题"
+                                    accept="layout-help-topics,help-topics,content,faq,notice"
+                                    reject="header,footer,logo,navigation"
+                                    multiple="true"
+                                    append="true"
+                                    max="12"
+                                    position="content"
+                                    class="help-layout__topics-slot">
+                                <div class="help-layout__topics" id="help-topics">
+                                    <?php foreach ($topics as $topic): ?>
+                                        <?php
+                                        $topicOpenCs = !empty($topic['open_cs']);
+                                        $topicAttrs = $topicOpenCs ? ' data-cs-footer-open-chat role="button"' : '';
+                                        ?>
+                                        <a class="help-layout__topic"
+                                           href="<?php if (!empty($topic['route'])): ?>@url{$topic['url']}<?php else: ?><?= $escape($topic['url']) ?><?php endif; ?>"<?= $topicAttrs ?>>
+                                            <strong><?= $escape($topic['title']) ?></strong>
+                                            <span><?= $escape($topic['desc']) ?></span>
+                                        </a>
+                                    <?php endforeach; ?>
+                                </div>
+                            </w:slot>
+                        </section>
 
-                        <section class="help-layout__section" id="help-faq" aria-labelledby="help-faq-title" weline-code="theme.help.faq">
-                            <h2 id="help-faq-title"><?= $escape(__('常见问题')) ?></h2>
+                        <section class="amazon-help__panel help-layout__section" id="help-faq" aria-labelledby="help-faq-title" weline-code="theme.help.faq">
+                            <h2 class="amazon-help__panel-title" id="help-faq-title"><?= $escape(__('常见问题')) ?></h2>
                             <w:slot id="help-faq"
                                     name="帮助 FAQ"
                                     accept="layout-help-faq,faq,content,notice"
@@ -197,7 +455,7 @@ $faqs = [
                         </w:slot>
                     </div>
 
-                    <aside class="help-layout__side">
+                    <section class="help-layout__support" aria-label="<?= $escape($ariaSupport) ?>" data-testid="help-support" weline-code="theme.help.support">
                         <w:slot id="help-sidebar"
                                 name="帮助侧栏"
                                 accept="layout-help-sidebar,content,notice,faq,banner,contact"
@@ -207,35 +465,43 @@ $faqs = [
                                 max="10"
                                 position="content"
                                 class="help-layout__sidebar-slot">
-                            <div class="help-layout__card">
-                                <h3><?= $escape(__('联系我们')) ?></h3>
-                                <?php if ($email !== ''): ?>
-                                    <p><a href="<?= $escape($mailHref) ?>"><?= $escape($email) ?></a></p>
-                                <?php endif; ?>
-                                <?php if ($phone !== ''): ?>
-                                    <p><a href="tel:<?= $escape(preg_replace('/\s+/', '', $phone) ?? $phone) ?>"><?= $escape($phone) ?></a></p>
-                                <?php endif; ?>
-                                <?php if ($hours !== ''): ?>
-                                    <p><?= $escape($hours) ?></p>
-                                <?php endif; ?>
-                                <?php if ($address !== ''): ?>
-                                    <p><?= $escape($address) ?></p>
-                                <?php endif; ?>
-                                <p><a href="@url{'contact'}"><?= $escape(__('前往联系我们页')) ?></a></p>
-                            </div>
-                            <div class="help-layout__card">
-                                <h3><?= $escape(__('快捷入口')) ?></h3>
-                                <p><a href="@url{'customer/account/index'}#orders"><?= $escape(__('我的订单')) ?></a></p>
-                                <p><a href="@url{'customer/account/index'}"><?= $escape(__('我的账户')) ?></a></p>
-                                <p><a href="@url{'guide/shipping'}"><?= $escape(__('配送说明')) ?></a></p>
-                                <p><a href="@url{'guide/returns'}"><?= $escape(__('退换政策')) ?></a></p>
-                                <p><a href="@url{'guide/payment'}"><?= $escape(__('支付方式')) ?></a></p>
-                                <p><a href="@url{'privacy'}"><?= $escape(__('隐私政策')) ?></a></p>
-                                <p><a href="@url{'terms'}"><?= $escape(__('服务条款')) ?></a></p>
-                                <p><a href="#contact-service" data-cs-footer-open-chat role="button"><?= $escape(__('联系客服')) ?></a></p>
+                            <div class="help-layout__support-grid">
+                                <div class="help-layout__card help-layout__card--contact">
+                                    <h3><?= $escape(__('联系我们')) ?></h3>
+                                    <div class="help-layout__contact">
+                                        <?php if ($email !== ''): ?>
+                                            <p><a href="<?= $escape($mailHref) ?>"><?= $escape($email) ?></a></p>
+                                        <?php endif; ?>
+                                        <?php if ($phone !== ''): ?>
+                                            <p><a href="tel:<?= $escape(preg_replace('/\s+/', '', $phone) ?? $phone) ?>"><?= $escape($phone) ?></a></p>
+                                        <?php endif; ?>
+                                        <?php if ($hours !== ''): ?>
+                                            <p><?= $escape($hours) ?></p>
+                                        <?php endif; ?>
+                                        <?php if ($address !== ''): ?>
+                                            <p><?= $escape($address) ?></p>
+                                        <?php endif; ?>
+                                        <a class="help-layout__contact-cta" href="@url{'contact'}"><?= $escape(__('前往联系我们页')) ?></a>
+                                    </div>
+                                </div>
+                                <div class="help-layout__card help-layout__card--quick">
+                                    <h3><?= $escape(__('快捷入口')) ?></h3>
+                                    <nav class="help-layout__quick-grid" aria-label="<?= $escape($ariaQuick) ?>">
+                                        <?php foreach ($quickLinks as $link): ?>
+                                            <?php
+                                            $linkOpenCs = !empty($link['open_cs']);
+                                            $linkAttrs = $linkOpenCs ? ' data-cs-footer-open-chat role="button"' : '';
+                                            ?>
+                                            <a class="help-layout__quick-link"
+                                               href="<?php if (!empty($link['route'])): ?>@url{$link['url']}<?php else: ?><?= $escape($link['url']) ?><?php endif; ?>"<?= $linkAttrs ?>>
+                                                <?= $escape($link['label']) ?>
+                                            </a>
+                                        <?php endforeach; ?>
+                                    </nav>
+                                </div>
                             </div>
                         </w:slot>
-                    </aside>
+                    </section>
                 </div>
             </div>
         </main>

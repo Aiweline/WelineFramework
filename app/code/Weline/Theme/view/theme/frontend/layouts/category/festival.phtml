@@ -63,7 +63,9 @@ $this->assign('title', $title);
         }
         .weshop-category-layout__banner,
         .weshop-category-layout__content {
-            width: min(var(--size-content-1180), calc(100% - var(--spacing-xl)));
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            padding-inline: var(--weline-layout-content-padding-inline);
             margin: 0 auto var(--spacing-lg);
         }
         .weshop-category-layout__banner {

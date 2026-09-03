@@ -2,12 +2,13 @@
 
 declare(strict_types=1);
 
-namespace Weline\Theme\Test\Unit\Service\Scoped;
+namespace Weline\Theme\Test\Unit\Service\Service\Scoped;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
-use Weline\SystemConfig\Service\SystemConfigScopeResolver;
+use Weline\SystemConfig\Api\Scope\ScopeContext;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\Scoped\ThemeEditorContextFactory;
@@ -18,6 +19,15 @@ final class ThemeEditorContextFactoryTest extends TestCase
 {
     public function testDownstreamThemeMustMatchTheScopeDraftBinding(): void
     {
+        $identity = ScopeIdentity::global();
+        $scopes = $this->createMock(ScopeHierarchyInterface::class);
+        $scopes->method('contextFromClaims')->willReturn(new ScopeContext(
+            identity: $identity,
+            storageScope: 'default.default.default',
+            storeMode: ScopeIdentity::MODE_NORMAL,
+            fallbackStorageScopes: ['default.default.default'],
+        ));
+
         $catalog = $this->createMock(ScopeIdentityCatalogInterface::class);
         $catalog->method('authoritativeIdentity')->willReturnCallback(
             static fn(ScopeIdentity $identity): ScopeIdentity => $identity,
@@ -45,7 +55,7 @@ final class ThemeEditorContextFactoryTest extends TestCase
         ]);
 
         $factory = new ThemeEditorContextFactory(
-            new SystemConfigScopeResolver(),
+            $scopes,
             $catalog,
             $themes,
             $themeContext,
@@ -58,7 +68,7 @@ final class ThemeEditorContextFactoryTest extends TestCase
 
         $factory->fromInput([
             'editor_context' => [
-                'scope' => ['identity' => ScopeIdentity::global()->toArray()],
+                'scope' => ['identity' => $identity->toArray()],
                 'area' => 'frontend',
                 'resource_type' => 'layout',
                 'theme_id' => 10,

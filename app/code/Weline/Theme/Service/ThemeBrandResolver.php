@@ -19,6 +19,9 @@ use Weline\Theme\Model\WelineTheme;
  *
  * Brand lives under appearance payload key `brand` with paths:
  * /brand/favicon, /brand/apple_touch_icon, /brand/logo_light, /brand/logo_dark.
+ *
+ * Site name / description are Website/Store/Channel identity fields
+ * (BrandBasicsIdentityProviderInterface), not appearance.brand text keys.
  */
 final class ThemeBrandResolver
 {

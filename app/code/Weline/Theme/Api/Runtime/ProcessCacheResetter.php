@@ -30,7 +30,8 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             ThemeTemplate::clearProcessCache();
             LayoutDependencyTracker::clearCache();
             RuntimeTemplateMaterializer::clearProcessCache();
-            return 7;
+            \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+            return 8;
         }
 
         Partials::clearMetaCache();
@@ -84,6 +85,7 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
         ThemeTemplate::clearProcessCache();
         LayoutDependencyTracker::clearCache();
         RuntimeTemplateMaterializer::clearProcessCache();
+        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
     }
 
     public function warmUp(int $limit = 1000): int

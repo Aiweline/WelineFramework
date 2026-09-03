@@ -31,10 +31,11 @@
         }
 
         .cart-empty-main {
-            width: min(var(--token-size-1120px), calc(100% - var(--size-control-md)));
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
             min-height: 54vh;
             margin: 0 auto;
-            padding: var(--weline-layout-spacing-3xl) 0 calc(var(--weline-layout-spacing-3xl) * 1.125);
+            padding: var(--weline-layout-spacing-3xl) var(--weline-layout-content-padding-inline) calc(var(--weline-layout-spacing-3xl) * 1.125);
         }
 
         .cart-empty-content {
@@ -97,8 +98,10 @@
 
         @media (max-width: 640px) {
             .cart-empty-main {
-                width: min(100% - var(--size-control-xs), var(--token-size-1120px));
-                padding: var(--size-control-md) 0 var(--size-control-2xl);
+                width: min(100%, var(--weline-layout-content-max-width));
+                max-width: 100%;
+            padding-block: var(--size-control-md) var(--size-control-2xl);
+                padding-inline: var(--weline-layout-content-padding-inline);
             }
         }
     </style>

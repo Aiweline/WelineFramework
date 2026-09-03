@@ -15,6 +15,9 @@ final class ThemeBrandBasicsContractTest extends TestCase
         );
         self::assertStringContainsString('id="btnThemeBrandBasics"', $template);
         self::assertStringContainsString('id="themeBrandBasicsDrawer"', $template);
+        self::assertStringContainsString('id="themeBrandIdentitySlot"', $template);
+        self::assertStringContainsString('Weline_Theme::backend::theme-editor::brand-basics::identity', $template);
+        self::assertStringContainsString('data-w-brand-identity-slot', $template);
         self::assertStringContainsString('id="btnThemeChromeCollapse"', $template);
         self::assertStringContainsString('id="themeEditorChromeStrip"', $template);
         self::assertStringContainsString('data-w-brand-input="favicon"', $template);
@@ -57,6 +60,9 @@ final class ThemeBrandBasicsContractTest extends TestCase
         self::assertStringContainsString('recommendWidth: 128', $js);
         self::assertStringContainsString('recommendWidth: 180', $js);
         self::assertStringContainsString('recommendWidth: 320', $js);
+        self::assertStringContainsString('brand-basics-identity', $js);
+        self::assertStringContainsString('data-w-identity-input', $js);
+        self::assertStringContainsString('renderIdentityFields', $js);
         $css = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/view/statics/ui/pages/weline-theme-editor.css'
         );
@@ -64,6 +70,37 @@ final class ThemeBrandBasicsContractTest extends TestCase
         self::assertStringContainsString('w-theme-brand-upload', $css);
         self::assertStringContainsString('w-theme-brand-upload__empty', $css);
         self::assertStringContainsString('w-theme-brand-field__row', $css);
+        self::assertStringContainsString('w-theme-brand-identity', $css);
+    }
+
+    public function testIdentityProviderSlotIsRegistered(): void
+    {
+        $hook = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/hook.php'
+        );
+        self::assertStringContainsString(
+            'Weline_Theme::backend::theme-editor::brand-basics::identity',
+            $hook
+        );
+        $interface = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Api/BrandBasicsIdentityProviderInterface.php'
+        );
+        self::assertStringContainsString('function supports', $interface);
+        self::assertStringContainsString('function load', $interface);
+        self::assertStringContainsString('function save', $interface);
+        $websites = (string)\file_get_contents(
+            \dirname(__DIR__, 4) . '/Websites/etc/module.php'
+        );
+        self::assertStringContainsString('theme.brand_basics_identity.websites', $websites);
+        $provider = (string)\file_get_contents(
+            \dirname(__DIR__, 4) . '/Websites/Service/ThemeBrandBasicsIdentityProvider.php'
+        );
+        self::assertStringContainsString('implements BrandBasicsIdentityProviderInterface', $provider);
+        $resolver = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/ThemeBrandResolver.php'
+        );
+        self::assertStringNotContainsString("'site_name'", $resolver);
+        self::assertStringNotContainsString("'site_description'", $resolver);
     }
 
     public function testSiteBrandPrefersThemeScopeResolver(): void
@@ -73,9 +110,38 @@ final class ThemeBrandBasicsContractTest extends TestCase
         );
         self::assertStringContainsString('ThemeBrandResolver', $source);
         self::assertStringContainsString('resolveThemeBrandUrl', $source);
+        self::assertStringContainsString('resolveFrontendSiteName', $source);
+        self::assertStringContainsString('WebsiteData', $source);
+        self::assertStringContainsString('isGenericBrandPlaceholder', $source);
+        self::assertStringNotContainsString('resolveThemeBrandText', $source);
         $resolver = (string)\file_get_contents(
             \dirname(__DIR__, 3) . '/Service/ThemeBrandResolver.php'
         );
         self::assertStringContainsString("\$includeDraft ? 'draft_payload' : 'published_payload'", $resolver);
+    }
+
+    public function testFooterLocaleBrandUsesSiteBrandWebsiteName(): void
+    {
+        $footer = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/theme/frontend/widgets/container/footer/default.phtml'
+        );
+        self::assertStringContainsString('resolveFrontendSiteName', $footer);
+        self::assertStringContainsString('footer-locale__logo-text', $footer);
+        self::assertStringContainsString('留空使用当前网站名称', $footer);
+        self::assertStringNotContainsString(
+            '$siteLogoText = WidgetI18n::label(',
+            $footer
+        );
+
+        $logoWidget = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/theme/frontend/widgets/header/logo/default.phtml'
+        );
+        self::assertStringContainsString('resolveFrontendSiteName', $logoWidget);
+        self::assertStringNotContainsString('@param logo_text {default="Weline"', $logoWidget);
+
+        $header = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/view/theme/frontend/partials/header/default.phtml'
+        );
+        self::assertStringContainsString('resolveFrontendSiteName', $header);
     }
 }

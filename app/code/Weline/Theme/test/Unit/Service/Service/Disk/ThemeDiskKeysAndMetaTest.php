@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Theme\Test\Unit\Service\Disk;
+namespace Weline\Theme\Test\Unit\Service\Service\Disk;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Helper\CssVariableInjector;

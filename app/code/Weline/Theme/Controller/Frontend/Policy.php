@@ -74,6 +74,10 @@ class Policy extends FrontendController
         $this->request->setGet('page_type', $layoutType);
         $this->request->setGet('layout_option', $layoutOption);
 
+        // Controller metadata is translated before Template::fetchHtml() can
+        // register the source module, so bind Theme to this request explicitly.
+        $this->request->addModule('Weline_Theme');
+
         $title = trim((string)$this->request->getParam('theme_page_title', ''));
         if ($title !== '') {
             $this->assign('title', __($title));
@@ -183,6 +187,7 @@ class Policy extends FrontendController
             'contact' => ['default'],
             'about' => ['default'],
             'help' => ['default'],
+            'guide' => ['default'],
             'terms' => ['default'],
             'default' => ['default'],
             'policy' => ['default', 'cookie', 'ads-preferences', 'privacy', 'term-condition', 'refund', 'disclaimer'],

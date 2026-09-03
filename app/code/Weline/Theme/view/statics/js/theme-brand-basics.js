@@ -1,5 +1,6 @@
 /**
- * Theme brand basics drawer — Scope-owned favicon/logo via appearance /brand/* patches.
+ * Theme brand basics drawer — Scope-owned favicon/logo via appearance /brand/* patches,
+ * plus Website/Store/Channel identity fields via BrandBasicsIdentity slot API.
  */
 (function () {
     'use strict';
@@ -55,6 +56,11 @@
         return document.getElementById('themeBrandBasicsDrawer');
     }
 
+    function identitySlotEl() {
+        return document.getElementById('themeBrandIdentitySlot')
+            || document.querySelector('[data-w-brand-identity-slot]');
+    }
+
     function openDrawer() {
         const el = drawerEl();
         if (!el) return;
@@ -66,7 +72,7 @@
         } catch (_e) {
             el.style.display = '';
         }
-        refreshFromWorkspace().catch((err) => toast(err?.message || String(err), 'error'));
+        refreshAll().catch((err) => toast(err?.message || String(err), 'error'));
     }
 
     function closeDrawer() {
@@ -98,12 +104,96 @@
         return out;
     }
 
+    function collectIdentityValues() {
+        const out = {};
+        document.querySelectorAll('[data-w-identity-input]').forEach((input) => {
+            const key = String(input.getAttribute('data-w-identity-input') || '').trim();
+            if (!key) return;
+            out[key] = String(input.value || '').trim();
+        });
+        return out;
+    }
+
     async function loadAppearanceWorkspace() {
         const editor = editorApi();
         if (!editor?.loadScopedWorkspace) {
             throw new Error('Theme Editor scoped workspace API unavailable');
         }
         return editor.loadScopedWorkspace('appearance');
+    }
+
+    function identityApiUrl() {
+        const editor = editorApi();
+        const base = String(editor?.config?.apiBase || '').replace(/\/$/, '');
+        if (!base) throw new Error('Theme Editor apiBase unavailable');
+        return `${base}/brand-basics-identity`;
+    }
+
+    async function loadIdentity() {
+        const editor = editorApi();
+        if (!editor?.apiJson || !editor?.buildTypedEditorContext) {
+            return { available: false, fields: [], values: {} };
+        }
+        const url = new URL(identityApiUrl(), window.location.origin);
+        url.searchParams.set('editor_context', JSON.stringify(editor.buildTypedEditorContext('appearance')));
+        const result = await editor.apiJson(url.toString());
+        if (!result?.success) {
+            throw new Error(result?.message || '加载身份信息失败');
+        }
+        return result.data || { available: false, fields: [], values: {} };
+    }
+
+    function renderIdentityFields(payload) {
+        const slot = identitySlotEl();
+        if (!slot) return;
+        const fieldsRoot = slot.querySelector('[data-w-identity-fields]') || slot;
+        const labelEl = slot.querySelector('[data-w-identity-label]');
+        const fields = Array.isArray(payload?.fields) ? payload.fields : [];
+        const values = payload?.values && typeof payload.values === 'object' ? payload.values : {};
+        const available = payload?.available === true && fields.length > 0;
+
+        slot.hidden = !available;
+        if (labelEl) {
+            labelEl.textContent = String(payload?.label || '身份信息');
+        }
+        if (!available) {
+            if (fieldsRoot !== slot) fieldsRoot.innerHTML = '';
+            return;
+        }
+
+        const html = fields.map((field) => {
+            const key = String(field.key || '').trim();
+            if (!key) return '';
+            const type = String(field.type || 'text');
+            const label = String(field.label || key);
+            const max = field.max > 0 ? ` maxlength="${Number(field.max)}"` : '';
+            const required = field.required ? ' required' : '';
+            const value = String(values[key] ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+            if (type === 'textarea') {
+                const rows = field.rows > 0 ? Number(field.rows) : 3;
+                return `<label class="w-field w-theme-brand-identity__field" data-w-identity-field="${key}">
+                    <span class="w-field__label">${label}</span>
+                    <textarea class="w-textarea" data-w-identity-input="${key}" rows="${rows}"${max}${required}>${value}</textarea>
+                </label>`;
+            }
+            return `<label class="w-field w-theme-brand-identity__field" data-w-identity-field="${key}">
+                <span class="w-field__label">${label}</span>
+                <input type="text" class="w-input" data-w-identity-input="${key}" value="${value}"${max}${required}>
+            </label>`;
+        }).join('');
+
+        if (fieldsRoot !== slot) {
+            fieldsRoot.innerHTML = html;
+            return;
+        }
+        let wrap = slot.querySelector('[data-w-identity-fields]');
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.className = 'w-theme-brand-identity__fields';
+            wrap.setAttribute('data-w-identity-fields', '');
+            slot.appendChild(wrap);
+        }
+        wrap.innerHTML = html;
     }
 
     function ownershipText(workspace, draft) {
@@ -147,6 +237,40 @@
         return workspace;
     }
 
+    async function refreshIdentity() {
+        const payload = await loadIdentity();
+        renderIdentityFields(payload);
+        return payload;
+    }
+
+    async function refreshAll() {
+        await Promise.all([refreshFromWorkspace(), refreshIdentity()]);
+    }
+
+    async function saveIdentity() {
+        const editor = editorApi();
+        const slot = identitySlotEl();
+        if (!slot || slot.hidden) {
+            return { skipped: true };
+        }
+        if (!editor?.apiJson || !editor?.buildTypedEditorContext) {
+            throw new Error('Theme Editor identity API unavailable');
+        }
+        const result = await editor.apiJson(identityApiUrl(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                editor_context: editor.buildTypedEditorContext('appearance'),
+                values: collectIdentityValues(),
+            }),
+        });
+        if (!result?.success) {
+            throw new Error(result?.message || '身份信息保存失败');
+        }
+        renderIdentityFields(result.data || {});
+        return result.data;
+    }
+
     async function saveBrand() {
         const editor = editorApi();
         if (!editor?.queueScopedChanges) throw new Error('Theme Editor apply API unavailable');
@@ -166,13 +290,30 @@
                 changes.push({ op: 'set', path: `/brand/${key}`, value: next });
             }
         });
-        if (!changes.length) {
+
+        const identitySlot = identitySlotEl();
+        const hasIdentity = identitySlot && !identitySlot.hidden;
+        let identitySaved = false;
+        if (hasIdentity) {
+            await saveIdentity();
+            identitySaved = true;
+        }
+
+        if (!changes.length && !identitySaved) {
             toast('没有需要保存的变更', 'info');
             return;
         }
-        await editor.queueScopedChanges('appearance', changes, { summary: 'brand_basics_save' });
-        await refreshFromWorkspace();
-        toast('已保存到当前 Scope 草稿，发布后生效', 'success');
+        if (changes.length) {
+            await editor.queueScopedChanges('appearance', changes, { summary: 'brand_basics_save' });
+            await refreshFromWorkspace();
+        }
+        if (identitySaved && changes.length) {
+            toast('身份已写回实体；品牌图片已保存到当前 Scope 草稿（发布后生效）', 'success');
+        } else if (identitySaved) {
+            toast('身份信息已写回网站/店铺/渠道', 'success');
+        } else {
+            toast('已保存到当前 Scope 草稿，发布后生效', 'success');
+        }
     }
 
     async function inheritBrand() {
@@ -181,7 +322,7 @@
         const changes = BRAND_KEYS.map((key) => ({ op: 'inherit', path: `/brand/${key}` }));
         await editor.queueScopedChanges('appearance', changes, { summary: 'brand_basics_inherit' });
         await refreshFromWorkspace();
-        toast('已恢复继承', 'success');
+        toast('已恢复品牌图片继承（身份信息不受影响）', 'success');
     }
 
     let activeMediaDialog = null;

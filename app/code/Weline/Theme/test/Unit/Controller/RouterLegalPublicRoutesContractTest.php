@@ -41,4 +41,22 @@ final class RouterLegalPublicRoutesContractTest extends TestCase
             $source
         );
     }
+
+    public function testPublicLayoutRegistersThemeModuleBeforeTranslatingMetadata(): void
+    {
+        $policyPath = dirname(__DIR__, 3) . '/Controller/Frontend/Policy.php';
+        self::assertFileExists($policyPath);
+        $source = (string)file_get_contents($policyPath);
+
+        $scopePosition = strpos($source, "\$this->request->addModule('Weline_Theme');");
+        $translationPosition = strpos($source, '__($title)');
+
+        self::assertNotFalse($scopePosition, 'Theme request scope must be registered explicitly.');
+        self::assertNotFalse($translationPosition, 'Public route title must remain translatable.');
+        self::assertLessThan(
+            $translationPosition,
+            $scopePosition,
+            'Theme request scope must be registered before controller metadata is translated.'
+        );
+    }
 }

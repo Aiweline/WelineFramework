@@ -204,7 +204,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 <css>Weline_Theme::ui/pages/weline-theme-editor-widget-config.css?v=20260825-config-panel-v3</css>
 <css>Weline_Theme::ui/pages/weline-theme-editor-widget-param.css</css>
 <!-- Critical path: discover editor JS while HTML continues parsing (avoid late bottom-of-page waterfall). -->
-<link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260901-widget-config-revision-v2" fetchpriority="high">
+<link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260903-slot-full-widgets-v2" fetchpriority="high">
 <link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)?v=20260901-widget-library-header-v3" fetchpriority="high">
 
 <div class="<?= $editorShellClassSafe ?>" id="themeEditor"
@@ -936,6 +936,15 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
             <span data-w-brand-ownership>@lang{继承自主题包默认值}</span>
         </div>
 
+        <section class="w-theme-brand-identity" id="themeBrandIdentitySlot"
+                 data-w-brand-identity-slot
+                 hidden>
+            <w:hook>Weline_Theme::backend::theme-editor::brand-basics::identity<else/>
+                <h6 class="w-theme-brand-field__title" data-w-identity-label>@lang{身份信息}</h6>
+                <div class="w-theme-brand-identity__fields" data-w-identity-fields></div>
+            </w:hook>
+        </section>
+
         <section class="w-theme-brand-field" data-w-brand-field="favicon">
             <h6 class="w-theme-brand-field__title">
                 <label for="themeBrandFavicon">@lang{Favicon}</label>
@@ -1034,10 +1043,10 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
     </div>
     <div class="w-drawer__footer w-theme-brand-basics-footer">
         <button type="button" class="w-button" data-tone="neutral" data-variant="outline" data-w-brand-action="inherit">
-            <w:icon name="refresh" size="sm"></w:icon><span>@lang{恢复继承}</span>
+            <w:icon name="refresh" size="sm"></w:icon><span>@lang{恢复品牌图片继承}</span>
         </button>
         <button type="button" class="w-button" data-tone="primary" data-w-brand-action="save">
-            <w:icon name="save" size="sm"></w:icon><span>@lang{保存到当前 Scope}</span>
+            <w:icon name="save" size="sm"></w:icon><span>@lang{保存}</span>
         </button>
     </div>
 </aside>
@@ -1102,4 +1111,4 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 </aside>
 
 <!-- Editor shell first: execute before async widget-param; modulepreload already warmed the fetch. -->
-<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260901-widget-config-revision-v2"></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260903-slot-full-widgets-v2"></script>

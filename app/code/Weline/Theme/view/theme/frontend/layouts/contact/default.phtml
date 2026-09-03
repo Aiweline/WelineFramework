@@ -54,9 +54,11 @@ $mailHref = 'mailto:' . $contactEmail;
         }
 
         .contact-layout__inner {
-            width: min(var(--weline-layout-content-max-width), calc(100% - (var(--weline-layout-content-padding-inline) * 2)));
-            margin: 0 auto;
-            padding: var(--weline-layout-spacing-2xl) 0 var(--weline-layout-spacing-3xl);
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            margin-inline: auto;
+            padding: var(--weline-layout-spacing-2xl) var(--weline-layout-content-padding-inline) var(--weline-layout-spacing-3xl);
         }
 
         .contact-layout__hero-grid,
@@ -236,8 +238,10 @@ $mailHref = 'mailto:' . $contactEmail;
 
         @media (max-width: 860px) {
             .contact-layout__inner {
-                width: min(100% - (var(--weline-layout-content-padding-inline) * 2), var(--weline-layout-content-max-width));
-                padding: var(--weline-layout-spacing-xl) 0 var(--weline-layout-spacing-2xl);
+                width: min(100%, var(--weline-layout-content-max-width));
+                max-width: 100%;
+                padding-block: var(--weline-layout-spacing-xl) var(--weline-layout-spacing-2xl);
+                padding-inline: var(--weline-layout-content-padding-inline);
             }
 
             .contact-layout__hero-grid,

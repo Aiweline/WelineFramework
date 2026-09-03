@@ -5,11 +5,15 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Contract;
 
 use Weline\Framework\Database\AbstractModel;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Session\Session;
 use Weline\Framework\Test\TestCore;
 use Weline\Meta\Model\Meta;
+use Weline\SystemConfig\Api\Scope\ScopeSelectorCatalogInterface;
 use Weline\Theme\Controller\Backend\ThemeEditor;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
@@ -123,6 +127,29 @@ class ThemeEditorPreviewContractTest extends TestCore
         ObjectManager::setInstance(PreviewContextService::class, $previewContext);
         $themeContext = new ThemeContextService($themeMock, $previewContext);
         ObjectManager::setInstance(ThemeContextService::class, $themeContext);
+        $eventsManager = $this->createMock(EventsManager::class);
+        $eventsManager->method('dispatch')->willReturnSelf();
+        ObjectManager::setInstance(EventsManager::class, $eventsManager);
+        $scopeCatalog = $this->createMock(ScopeSelectorCatalogInterface::class);
+        $scopeCatalog->method('build')->willReturn([
+            'selected_scope' => PreviewContextService::DEFAULT_SCOPE,
+            'selected_label' => 'Global',
+            'selected_identity' => ScopeIdentity::global()->toArray(),
+            'selected_kind' => ScopeIdentity::KIND_GLOBAL,
+            'selected_website_code' => '',
+            'selected_store_code' => '',
+            'selected_channel_code' => '',
+            'selected_store_mode' => ScopeIdentity::MODE_NORMAL,
+            'website_options' => [],
+            'store_options' => [],
+            'channel_options' => [],
+            'catalog_options' => [],
+            'options' => [],
+            'tree_options' => [],
+            'legacy_readonly' => true,
+            'legacy_scope' => PreviewContextService::DEFAULT_SCOPE,
+        ]);
+        ObjectManager::setInstance(ScopeSelectorCatalogInterface::class, $scopeCatalog);
 
         $controller = new ThemeEditor(
             $themeMock,
@@ -142,8 +169,12 @@ class ThemeEditorPreviewContractTest extends TestCore
 
     protected function tearDown(): void
     {
+        ObjectManager::removeInstance(EventsManager::class);
+        ObjectManager::removeInstance(ScopeSelectorCatalogInterface::class);
         ObjectManager::removeInstance(PreviewContextService::class);
         ObjectManager::removeInstance(ThemeContextService::class);
+        ObjectManager::removeInstance(Request::class);
+        RequestContext::resetWelineVars();
         parent::tearDown();
     }
 
@@ -152,9 +183,11 @@ class ThemeEditorPreviewContractTest extends TestCore
         $backendPrefix = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
         self::assertNotSame('', $backendPrefix);
         $requestPath = '/' . $backendPrefix . '/theme/backend/theme-editor/index';
+        ObjectManager::removeInstance(Request::class);
+        RequestContext::resetWelineVars();
         self::initRequest($requestPath);
         $request = ObjectManager::getInstance(Request::class);
-        \Weline\Framework\Runtime\RequestContext::setId('theme-editor-preview-contract');
+        RequestContext::setId('theme-editor-preview-contract');
         $request->getServer();
         $request->setServer('WELINE_ORIGIN_REQUEST_URI', $requestPath);
         $request->setServer('REQUEST_URI', $requestPath);
@@ -183,7 +216,7 @@ class ThemeEditorPreviewContractTest extends TestCore
 
         $this->assertIsString($html);
         $this->assertStringContainsString('id="previewFrame"', $html);
-        $this->assertStringContainsString('src="about:blank"', $html);
+        $this->assertStringContainsString('src="/theme/frontend/theme-preview/content?theme_id=1', $html);
         $this->assertStringContainsString('data-api-start-preview=', $html);
         $this->assertStringContainsString('id="widgetListLoading"', $html);
     }

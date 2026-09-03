@@ -601,6 +601,39 @@ readonly class ThemeLayoutVersionService
     }
 
     /**
+     * Return the newest published version regardless of scope identity.
+     *
+     * This is a metadata-only fallback for runtime diagnostics after the
+     * request scope chain has been exhausted; layout rendering still resolves
+     * through the scoped workspace.
+     */
+    public function findAnyPublishedVersion(int $themeId, string $pageType): ?ThemeLayoutVersion
+    {
+        if ($themeId <= 0 || trim($pageType) === '') {
+            return null;
+        }
+
+        $result = $this->versionModel->reset()
+            ->where(ThemeLayoutVersion::schema_fields_THEME_ID, $themeId)
+            ->where(ThemeLayoutVersion::schema_fields_PAGE_TYPE, $pageType)
+            ->where(ThemeLayoutVersion::schema_fields_IS_PUBLISHED, 1)
+            ->order(ThemeLayoutVersion::schema_fields_VERSION_NUMBER, 'DESC')
+            ->limit(1)
+            ->select()
+            ->fetchArray();
+
+        if (!is_array($result) || count($result) === 0) {
+            return null;
+        }
+
+        $row = is_array($result[0] ?? null) ? $result[0] : $result;
+        $version = clone $this->versionModel;
+        $version->setData($row);
+
+        return $version->getVersionId() ? $version : null;
+    }
+
+    /**
      * 删除版本
      * 
      * @param int $versionId 版本ID

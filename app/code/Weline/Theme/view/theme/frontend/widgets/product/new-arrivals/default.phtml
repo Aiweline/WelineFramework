@@ -36,6 +36,7 @@ use Weline\Theme\Helper\ThemeDemoCatalog;
 use Weline\Theme\Helper\ThemeUiColor;
 use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
+use Weline\Theme\Helper\ProductCardUrl;
 use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\WidgetUiScope;
 
@@ -85,6 +86,17 @@ if ($products === [] && $isPreviewMode) {
 }
 
 if ($products === []) {
+    // Never return a blank string: DEV WidgetHtmlHealthInspector treats empty
+    // HTML as a warning toast. Keep visually hidden so storefront still "hides".
+    ?>
+<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?> is-empty"
+         weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>"
+         data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-testid="new-arrivals-empty"
+         hidden
+         aria-hidden="true"></section>
+    <?php
     return;
 }
 
@@ -93,13 +105,9 @@ foreach ($products as $index => &$product) {
     $product['id'] = $productId;
     $product['product_id'] = $productId;
     $route = trim((string)($product['url'] ?? ''));
-    if (str_starts_with($route, 'http://') || str_starts_with($route, 'https://')) {
-        $product['url'] = $route;
-        $product['url_path'] = '';
-    } else {
-        $product['url'] = '';
-        $product['url_path'] = ltrim($route, '/');
-    }
+    $productLink = ProductCardUrl::splitForTaglib($route);
+    $product['url'] = $productLink['url'];
+    $product['url_path'] = $productLink['url_path'];
     if ($isPreviewMode && !empty($product['is_demo']) && !isset($product['stock'])) {
         $product['stock'] = 20 + ($index * 11);
     }

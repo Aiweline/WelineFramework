@@ -66,7 +66,9 @@ $this->assign('title', $title);
             background: var(--color-bg-panel);
         }
         .weshop-product-layout__banner {
-            width: min(var(--size-content-1180), calc(100% - var(--spacing-xl)));
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            padding-inline: var(--weline-layout-content-padding-inline);
             margin: 0 auto var(--spacing-lg);
             padding: var(--spacing-4_5) var(--spacing-5_5);
             border: var(--border-width-thin) solid var(--color-border-panel);
@@ -88,7 +90,9 @@ $this->assign('title', $title);
         }
         .weshop-product-layout__content,
         .weshop-product-layout__sections {
-            width: min(var(--size-content-1180), calc(100% - var(--spacing-xl)));
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            padding-inline: var(--weline-layout-content-padding-inline);
             margin: 0 auto var(--spacing-lg);
         }
     </style>

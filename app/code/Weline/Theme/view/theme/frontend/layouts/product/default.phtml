@@ -255,9 +255,7 @@ $this->assign('meta', $meta);
                                         position="content"
                                         wrapper="div"
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--recently-viewed">
-                                    <w:hook>Weline_Theme::frontend::layouts::product::recently-viewed<else/>
-                                        <w:widget type="product" name="recently-viewed" />
-                                    </w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::product::recently-viewed</w:hook>
                                 </w:slot>
                                 <w:slot id="product-cross-sell"
                                         name="搭配推荐"
@@ -309,10 +307,10 @@ $this->assign('meta', $meta);
     }
 
     .product-detail-layout__container {
-        width: 100%;
-        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, var(--spacing-container-max-width, 1440px)));
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-container-padding, 1.25rem));
+        padding: 0 var(--weline-layout-content-padding-inline);
         box-sizing: border-box;
     }
 
@@ -346,10 +344,10 @@ $this->assign('meta', $meta);
     }
 
     .product-detail-layout__tabs-container {
-        width: 100%;
-        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, var(--spacing-container-max-width, 1440px)));
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-container-padding, 1.25rem));
+        padding: 0 var(--weline-layout-content-padding-inline);
         box-sizing: border-box;
     }
 
@@ -364,10 +362,10 @@ $this->assign('meta', $meta);
     }
 
     .product-detail-layout__reviews-container {
-        width: 100%;
-        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, var(--spacing-container-max-width, 1440px)));
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-container-padding, 1.25rem));
+        padding: 0 var(--weline-layout-content-padding-inline);
         box-sizing: border-box;
     }
 
@@ -387,10 +385,10 @@ $this->assign('meta', $meta);
     }
 
     .product-detail-layout__related-container {
-        width: 100%;
-        max-width: var(--weline-layout-content-max-width, var(--layout-max-width, var(--spacing-container-max-width, 1440px)));
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-container-padding, 1.25rem));
+        padding: 0 var(--weline-layout-content-padding-inline);
         box-sizing: border-box;
     }
 
@@ -418,8 +416,8 @@ $this->assign('meta', $meta);
     .product-detail-layout__related .widget-wrapper > .widget-products,
     .product-detail-layout__main ~ .widget-products,
     .weline-main-content > .widget-products {
-        width: 100%;
-        max-width: var(--weline-layout-content-max-width);
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
         margin: 0 auto;
         padding: var(--spacing-6) var(--weline-layout-content-padding-inline);
         box-sizing: border-box;
@@ -581,7 +579,7 @@ $this->assign('meta', $meta);
         }
 
         .product-detail-layout__container {
-            padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-container-padding, 1.25rem));
+            padding: 0 var(--weline-layout-content-padding-inline);
         }
 
         .product-detail-layout__wrapper {
@@ -596,7 +594,7 @@ $this->assign('meta', $meta);
 
         .product-detail-layout__tabs-container,
         .product-detail-layout__related-container {
-            padding: 0 var(--weline-layout-content-padding-inline, var(--spacing-container-padding, 1.25rem));
+            padding: 0 var(--weline-layout-content-padding-inline);
         }
     }
     </style>

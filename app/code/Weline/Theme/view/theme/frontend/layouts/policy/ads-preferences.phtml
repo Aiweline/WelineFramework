@@ -1,250 +1,347 @@
 <?php
 /**
- * 布局：广告偏好页面
- *
- * 用于展示广告兴趣偏好说明与用户管理选择
- * 字段
- * @meta.name {default="广告偏好页面",name="广告偏好页面",description="用于展示广告兴趣偏好说明与用户管理选择"}
- * @meta.description {default="说明我们如何基于兴趣展示广告以及您如何管理偏好",name="广告偏好说明",description="用于展示广告偏好、兴趣定向、选择退出与相关权利说明"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
- * @param title {default="广告偏好",name="页面标题",description="页面标题，用于设置页面标题"}
- * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），如不为空会直接渲染，覆盖默认示例条款"}
- * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
- * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
- * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
- *
- * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
- * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
- * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ * 布局：广告偏好页面（亚马逊条款式）
+ * @meta.name {default="广告偏好页面",name="广告偏好页面",description="广告偏好"}
+ * @meta.description {default="说明兴趣广告与管理选择",name="广告偏好说明",description="广告偏好"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录"}
+ * @param title {default="广告偏好",name="页面标题",description="页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="非空时覆盖默认正文"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类"}
  */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\SiteContactInfo;
+
 $meta = $this->getData('meta') ?? [];
+$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$contact = [
+    'site_name' => 'Weline',
+];
+try {
+    $resolver = ObjectManager::getInstance(SiteContactInfo::class);
+    if ($resolver instanceof SiteContactInfo) {
+        $contact = array_merge($contact, $resolver->resolve());
+    }
+} catch (\Throwable) {
+}
+$siteName = (string)$contact['site_name'];
+$title = (string)($meta['title'] ?? __('广告偏好'));
+$updatedAt = date('Y-m-d');
+$ariaNav = (string)__('广告偏好目录');
+$ariaArticle = (string)__('广告偏好正文');
+$toc = [
+    ['id' => 'ads-s1', 'label' => __('一、什么是广告偏好？')],
+    ['id' => 'ads-s2', 'label' => __('二、我们如何使用偏好信息？')],
+    ['id' => 'ads-s3', 'label' => __('三、如何管理广告偏好？')],
+    ['id' => 'ads-s4', 'label' => __('四、与隐私政策、Cookie 政策的关系')],
+    ['id' => 'ads-s5', 'label' => __('五、政策更新')],
+];
+$ariaToc = (string)__('目录');
+$ariaTocNav = (string)$toc[0]['label'] ?? '';
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy.ads-preferences::head-after</w:hook>
+    <style>
+        body.amazon-policy-layout {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--color-text-primary, #0f1111);
+            background: var(--color-bg-canvas, #ffffff);
+            font-family: "Amazon Ember", Arial, sans-serif;
+        }
+        .amazon-policy.weline-page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: transparent;
+        }
+        .amazon-policy__main {
+            flex: 1 0 auto;
+            width: 100%;
+            background: linear-gradient(180deg, #eaeded 0, #f3f3f3 12rem);
+        }
+        .amazon-policy__stage {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+            padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+        }
+        .amazon-policy__hero {
+            margin: 0 0 1.25rem;
+            padding: clamp(1.35rem, 3vw, 1.85rem) clamp(1.15rem, 2.5vw, 1.75rem);
+            border-radius: 8px;
+            background:
+                radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
+                linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
+            color: #fff;
+            box-sizing: border-box;
+        }
+        .amazon-policy__eyebrow {
+            margin: 0 0 0.4rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #febd69;
+        }
+        .amazon-policy__hero h1 {
+            margin: 0;
+            font-size: clamp(1.55rem, 3.2vw, 2.1rem);
+            line-height: 1.2;
+            font-weight: 700;
+            color: #ffffff;
+        }
+        .amazon-policy__hero-lead {
+            margin: 0.75rem 0 0;
+            max-width: 46rem;
+            line-height: 1.65;
+            color: #dddddd;
+        }
+        .amazon-policy__meta {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem 1.25rem;
+            font-size: 0.9rem;
+            color: #febd69;
+        }
+        .amazon-policy__meta a { color: inherit; text-decoration: underline; }
+        .amazon-policy__panel {
+            display: grid;
+            grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+            gap: 0;
+            align-items: start;
+            background: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
+            overflow: hidden;
+        }
+        .amazon-policy__toc {
+            padding: 1.15rem 1rem 1.25rem;
+            border-right: 1px solid #e3e6e6;
+            background: #fafafa;
+            position: sticky;
+            top: 0.75rem;
+        }
+        .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
+        .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
+        .amazon-policy__toc a {
+            display: block;
+            padding: 0.4rem 0.55rem;
+            border-radius: 4px;
+            color: #007185;
+            text-decoration: none;
+            font-size: 0.9rem;
+            line-height: 1.35;
+        }
+        .amazon-policy__toc a:hover {
+            background: #f7fafa;
+            color: #c45500;
+            text-decoration: underline;
+        }
+        .amazon-policy__article {
+            padding: clamp(1.15rem, 2.5vw, 1.75rem) clamp(1.15rem, 2.5vw, 1.85rem) 1.85rem;
+        }
+        .amazon-policy__intro {
+            margin: 0 0 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e3e6e6;
+            color: #565959;
+            line-height: 1.7;
+        }
+        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 1rem; }
+        .amazon-policy__section h2 {
+            margin: 0 0 0.75rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-left: 4px solid #ff9900;
+            padding-left: 0.65rem;
+            color: #0f1111;
+        }
+        .amazon-policy__section p {
+            margin: 0 0 0.7rem;
+            line-height: 1.7;
+            font-size: 0.98rem;
+            color: #333;
+        }
+        .amazon-policy__section ul {
+            margin: 0.35rem 0 0.85rem;
+            padding-left: 1.35rem;
+        }
+        .amazon-policy__section li {
+            margin-bottom: 0.45rem;
+            line-height: 1.65;
+            color: #333;
+        }
+        .amazon-policy__footer-note {
+            margin-top: 1.75rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e3e6e6;
+            font-size: 0.9rem;
+            color: #565959;
+        }
+        .amazon-policy__related {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem 1rem;
+        }
+        .amazon-policy__related a {
+            color: #007185;
+            text-decoration: none;
+            font-size: 0.92rem;
+        }
+        .amazon-policy__related a:hover {
+            color: #c45500;
+            text-decoration: underline;
+        }
+        @media (max-width: 900px) {
+            .amazon-policy__panel { grid-template-columns: 1fr; }
+            .amazon-policy__toc {
+                position: static;
+                border-right: 0;
+                border-bottom: 1px solid #e3e6e6;
+            }
+            .amazon-policy__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) {
+            .amazon-policy__toc nav { grid-template-columns: 1fr; }
+        }
+    </style>
     <w:hook>seo::head</w:hook>
 </head>
-<body>
+<body class="amazon-policy-layout <?= $escape($meta['class'] ?? '') ?>">
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy.ads-preferences::body-start</w:hook>
 
-    <div class="weline-page-wrapper weline-policy-page weline-ads-preferences" data-testid="storefront-ads-preferences-page">
+    <div class="weline-page-wrapper amazon-policy weline-ads-preferences" data-testid="storefront-ads-preferences-page" data-layout="policy-ads-preferences">
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
 
-        <div class="weline-main-content">
-            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
-
+        <main class="amazon-policy__main" id="main-content">
             <w:slot id="content"
                     name="内容区"
                     accept="layout-policy-ads-preferences-content,layout-policy-content,layout-default-content,content,policy-content,ads-preferences,cms-content,faq"
                     reject="header,footer"
                     multiple="true"
                     position="content"
-                    class="policy-ads-preferences__content-root-slot">
-            <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> ads-preferences" id="ads-preferences-main" data-layout="policy-ads-preferences">
+                    class="policy-ads-preferences__content-root-slot amazon-policy__content-root-slot">
+            <div class="policy-main <?= $escape($meta['class'] ?? '') ?>" data-layout="policy-ads-preferences">
                 <w:slot id="policy-ads-preferences-content"
                         name="广告偏好正文"
                         accept="layout-policy-ads-preferences-content,layout-policy-content,ads-preferences,policy-content,content,faq"
                         reject="header,footer"
                         multiple="true"
                         position="content"
-                        class="policy-main__content-slot">
+                        class="amazon-policy__content-slot">
                 <if condition="meta.content">
                     {{meta.content}}
                 <else/>
-                    <div class="policy-default-content">
-                        <div class="w-container">
-                            <section class="policy-header" weline-code="theme.policy.section_1">
-                                <h1 class="policy-title">
-                                    <if condition="meta.title">
-                                        {{meta.title}}
-                                    <else/>
-                                        <lang>广告偏好</lang>
-                                    </if>
-                                </h1>
-                                <p class="policy-description">
-                                    <lang>本页面向您说明我们如何基于兴趣偏好展示广告或推荐内容，以及您可用于管理这些偏好的选择。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_2">
-                                <h2 class="section-title"><lang>一、什么是广告偏好？</lang></h2>
-                                <p class="section-text">
-                                    <lang>广告偏好是指根据您在本网站上的浏览、搜索、互动等信息，为您展示更相关广告或内容推荐的兴趣设置。这些偏好有助于减少无关广告，同时保持网站服务的可持续运营。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_3">
-                                <h2 class="section-title"><lang>二、我们如何使用广告偏好？</lang></h2>
-                                <p class="section-text">
-                                    <lang>在适用法律法规允许的范围内，我们可能将广告偏好用于：</lang>
-                                </p>
-                                <ul class="policy-list">
-                                    <li><lang>（1）展示与您兴趣更匹配的促销、商品或服务信息；</lang></li>
-                                    <li><lang>（2）评估广告投放效果，改进广告相关性与展示频率；</lang></li>
-                                    <li><lang>（3）限制重复展示，避免过多打扰；</lang></li>
-                                    <li><lang>（4）与经授权的广告合作伙伴协同完成必要的投放与计量（如适用）。</lang></li>
-                                </ul>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_4">
-                                <h2 class="section-title"><lang>三、您如何管理广告偏好？</lang></h2>
-                                <p class="section-text">
-                                    <lang>您可以通过以下方式管理广告相关选择：</lang>
-                                </p>
-                                <ul class="policy-list">
-                                    <li><lang>（1）浏览器设置：禁用部分 Cookie 或限制跟踪功能；</lang></li>
-                                    <li><lang>（2）设备/系统广告设置：在操作系统或浏览器提供的广告隐私选项中调整兴趣广告；</lang></li>
-                                    <li><lang>（3）账户相关设置：如您已登录，可在账户隐私或通知相关入口中管理可配置项（以实际提供的功能为准）；</lang></li>
-                                    <li><lang>（4）第三方退出机制：部分广告网络提供兴趣广告退出入口，具体以第三方说明为准。</lang></li>
-                                </ul>
-                                <p class="section-text">
-                                    <lang>请注意，关闭兴趣广告后，您仍可能看到广告，但广告相关性可能下降；部分必要功能（如登录态、购物车）不受影响。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_5">
-                                <h2 class="section-title"><lang>四、与隐私政策、Cookie 政策的关系</lang></h2>
-                                <p class="section-text">
-                                    <lang>广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅：</lang>
-                                </p>
-                                <ul class="policy-list">
-                                    <li><a href="@url{'privacy'}"><lang>隐私声明</lang></a></li>
-                                    <li><a href="@url{'cookies'}"><lang>Cookie 政策</lang></a></li>
-                                    <li><a href="@url{'terms'}"><lang>使用条件</lang></a></li>
-                                </ul>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_6">
-                                <h2 class="section-title"><lang>五、政策更新</lang></h2>
-                                <p class="section-text">
-                                    <lang>我们可能因法律法规变化或业务需要更新本广告偏好说明。更新后的内容将发布在本页面，并自公布之日起生效。</lang>
-                                </p>
-                            </section>
+                        <div class="amazon-policy__stage">
+                        <header class="amazon-policy__hero" aria-labelledby="policy-ads-preferences-title" weline-code="theme.policy.hero">
+                            
+                                <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
+                                <h1 id="policy-ads-preferences-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><lang>广告偏好</lang><?php endif; ?></h1>
+                                <p class="amazon-policy__hero-lead"><lang>本页面向您说明我们如何基于兴趣偏好展示广告或推荐内容，以及您可用于管理这些偏好的选择。</lang></p>
+                                <div class="amazon-policy__meta">
+                                    <span><lang>最后更新：</lang><?= $escape($updatedAt) ?></span>
+                                    <a href="@url{'privacy'}"><lang>隐私政策</lang></a>
+                                    <a href="@url{'cookies'}"><lang>Cookie 政策</lang></a>
+                                    <a href="@url{'help'}"><lang>帮助中心</lang></a>
                         </div>
-                    </div>
+                        </header>
+
+                        <div class="amazon-policy__panel">
+                                    <aside class="amazon-policy__toc" aria-label="<?= $escape($ariaLabels['广告偏好目录']) ?>">
+                                        <h2><lang>目录</lang></h2>
+                                        <nav>
+                                            <?php foreach ($toc as $item): ?>
+                                                <a href="#<?= $escape($item['id']) ?>"><?= $escape($item['label']) ?></a>
+                                            <?php endforeach; ?>
+                                        </nav>
+                                    </aside>
+
+                                    <article class="amazon-policy__article" aria-label="<?= $escape($ariaLabels['广告偏好正文']) ?>">
+                                        <p class="amazon-policy__intro"><lang>兴趣广告有助于展示更相关内容，您仍可随时通过浏览器、系统或账户入口管理偏好。完整个人信息处理见隐私政策与 Cookie 政策。</lang></p>
+
+                                        <section class="amazon-policy__section" id="ads-s1" weline-code="theme.policy.section_2">
+                                            <h2><lang>一、什么是广告偏好？</lang></h2>
+                                            <p><lang>广告偏好是指我们或合作伙伴基于您的浏览、兴趣或设备信息，用于提升广告或推荐相关性的选择设置。它不改变您对本站核心购物功能的使用。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="ads-s2" weline-code="theme.policy.section_3">
+                                            <h2><lang>二、我们如何使用偏好信息？</lang></h2>
+                                            <p><lang>在您同意或法律法规允许的范围内，我们可能将偏好信息用于：</lang></p>
+                                            <ul>
+                                                <li><lang>（1）展示更匹配您兴趣的广告或内容推荐；</lang></li>
+                                                <li><lang>（2）衡量广告效果与到达情况；</lang></li>
+                                                <li><lang>（3）防止欺诈、提升安全性与服务质量。</lang></li>
+                                            </ul>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="ads-s3" weline-code="theme.policy.section_4">
+                                            <h2><lang>三、如何管理广告偏好？</lang></h2>
+                                            <p><lang>您可以通过以下方式管理广告相关选择：</lang></p>
+                                            <ul>
+                                                <li><lang>（1）浏览器设置：禁用部分 Cookie 或限制跟踪功能；</lang></li>
+                                                <li><lang>（2）设备/系统广告设置：在操作系统或浏览器提供的广告隐私选项中调整兴趣广告；</lang></li>
+                                                <li><lang>（3）账户相关设置：如您已登录，可在账户隐私或通知相关入口中管理可配置项（以实际提供的功能为准）；</lang></li>
+                                                <li><lang>（4）第三方退出机制：部分广告网络提供兴趣广告退出入口，具体以第三方说明为准。</lang></li>
+                                            </ul>
+                                            <p><lang>请注意，关闭兴趣广告后，您仍可能看到广告，但广告相关性可能下降；部分必要功能（如登录态、购物车）不受影响。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="ads-s4" weline-code="theme.policy.section_5">
+                                            <h2><lang>四、与隐私政策、Cookie 政策的关系</lang></h2>
+                                            <p><lang>广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅相关页面。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="ads-s5" weline-code="theme.policy.section_6">
+                                            <h2><lang>五、政策更新</lang></h2>
+                                            <p><lang>我们可能因法律法规变化或业务需要更新本广告偏好说明。更新后的内容将发布在本页面，并自公布之日起生效。</lang></p>
+                                        </section>
+
+                                        <div class="amazon-policy__footer-note">
+                                            <p><lang>关闭兴趣广告后您仍可能看到广告，但相关性可能下降。如需进一步帮助，请联系客服。</lang></p>
+                                            <div class="amazon-policy__related">
+                                                <a href="@url{'privacy'}"><lang>隐私政策</lang></a>
+                                                <a href="@url{'cookies'}"><lang>Cookie 政策</lang></a>
+                                                <a href="@url{'terms'}"><lang>服务条款</lang></a>
+                                                <a href="@url{'help'}"><lang>帮助中心</lang></a>
+                                            </div>
+                                        </div>
+                                    </article>
+                                                                </div>
+                        </div>
                 </if>
                 </w:slot>
-            </main>
+            </div>
             </w:slot>
-
-            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
-        </div>
+        </main>
 
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
-            <footer class="weline-footer">
-                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
-            </footer>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
             <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
         </if>
     </div>
 
     <w:hook>Weline_Theme::frontend::layouts::policy.ads-preferences::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
-
-    <style>
-    .ads-preferences.policy-main {
-        width: 100%;
-        flex: 1;
-        padding: var(--weline-layout-spacing-xl) 0;
-    }
-
-    .policy-default-content {
-        width: 100%;
-        padding: var(--weline-layout-spacing-xl) 0 var(--weline-layout-spacing-2xl);
-    }
-
-    .policy-header {
-        text-align: left;
-        margin-bottom: var(--weline-layout-spacing-xl);
-    }
-
-    .policy-title {
-        font-size: var(--weline-layout-font-size-3xl);
-        font-weight: var(--weline-layout-font-weight-semibold);
-        color: var(--weline-layout-text-primary);
-        margin: 0 0 var(--weline-space-3) 0;
-    }
-
-    .policy-description {
-        font-size: var(--weline-layout-font-size-base);
-        line-height: var(--weline-layout-line-height-relaxed);
-        color: var(--weline-layout-text-secondary);
-        margin: 0;
-    }
-
-    .policy-section {
-        margin-top: var(--spacing-7);
-    }
-
-    .policy-section .section-title {
-        font-size: var(--weline-layout-font-size-xl);
-        font-weight: var(--weline-layout-font-weight-semibold);
-        color: var(--weline-layout-text-primary);
-        margin: 0 0 var(--weline-space-3) 0;
-    }
-
-    .policy-section .section-text {
-        font-size: var(--weline-layout-font-size-base);
-        color: var(--weline-layout-text-secondary);
-        line-height: var(--weline-layout-line-height-relaxed);
-        margin: 0 0 var(--weline-space-3) 0;
-    }
-
-    .policy-list {
-        margin: var(--weline-space-3) 0;
-        padding-left: var(--spacing-lg);
-        list-style-type: decimal;
-    }
-
-    .policy-list li {
-        font-size: var(--weline-layout-font-size-base);
-        color: var(--weline-layout-text-secondary);
-        line-height: var(--weline-layout-line-height-relaxed);
-        margin-bottom: var(--spacing-sm);
-    }
-
-    .policy-list a {
-        color: var(--weline-layout-link, var(--weline-color-primary, #0b57d0));
-        text-decoration: underline;
-    }
-
-    @media (max-width: 768px) {
-        .ads-preferences.policy-main {
-            padding: var(--weline-layout-spacing-lg) 0;
-        }
-
-        .policy-default-content {
-            padding: var(--weline-layout-spacing-lg) 0 var(--weline-layout-spacing-xl);
-        }
-
-        .policy-title {
-            font-size: var(--weline-layout-font-size-2xl);
-        }
-
-        .policy-section .section-title {
-            font-size: var(--weline-layout-font-size-lg);
-        }
-
-        .policy-list {
-            padding-left: var(--weline-space-5);
-        }
-
-        .policy-list li {
-            font-size: var(--weline-layout-font-size-sm);
-        }
-    }
-    </style>
     <w:hook>seo::footer</w:hook>
 </body>
 </html>

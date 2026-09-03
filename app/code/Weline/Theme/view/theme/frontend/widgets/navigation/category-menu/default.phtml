@@ -1,26 +1,24 @@
 <?php
 /**
- * 分类菜单部件
+ * 分类菜单部件：Header 横向分类条（Amazon chrome），默认注入 category-menu。
  *
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {category-menu}
  * @widget.name {分类菜单}
- * @widget.description {Header 分类下拉菜单，支持多级展开}
+ * @widget.description {Header 横向分类导航（mega/overflow）；默认注入 category-menu 槽。}
  * @widget.type {navigation}
  * @widget.area {frontend}
  * @widget.position {["header"]}
  * @widget.page_layouts {["*"]}
  * @widget.slot {category-menu}
- * @widget.supports {["layout-header-category-menu","layout-header-categories"]}
+ * @widget.supports {["layout-header-category-menu","layout-header-categories","category-menu"]}
  * @widget.exclusive {true}
+ * @widget.default_injections {[{"layout_type":"homepage","slot":"category-menu","area":"header","sort_order":0,"required":true,"reason":"全局 chrome 载体默认展示横向分类条；非首页继承合并","config":{"show_banner_with_children":true}}]}
  *
- * @param title {default="全部分类",type="string",label="标题"}
- * @param max_depth {default=3,type="number",label="最大层级"}
- * @param show_icons {default=true,type="bool",label="显示图标"}
- * @param show_count {default=false,type="bool",label="显示产品数量"}
- * @param expand_on_hover {default=true,type="bool",label="悬停展开"}
- * @param show_banner_with_children {default=true,type="bool",label="有子分类时展示 Banner/描述",description="Mega Menu：有子分类时是否在子分类上方展示分类 Banner 与描述；无子分类时始终展示（有内容则显示）"}
+ * @param title {default="分类导航",type="string",label="无障碍标题"}
+ * @param show_banner_with_children {default=true,type="bool",label="有子分类时展示 Banner/描述",description="Mega Menu：有子分类时是否在子分类上方展示分类 Banner 与描述"}
+ * @param show_all_products {default=null,type="bool",label="显示全部商品入口",description="覆盖 all-menu 默认偏好；留空则跟随 all-menu / Registry。"}
  */
 
 use Weline\Theme\Helper\HeaderCommerceData;
@@ -31,11 +29,16 @@ $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
-$title = $this->getData('title') ?? __('全部分类');
-$maxDepth = (int)($this->getData('max_depth') ?? 3);
-$showIcons = (bool)($this->getData('show_icons') ?? true);
-$showCount = (bool)($this->getData('show_count') ?? false);
-$expandOnHover = (bool)($this->getData('expand_on_hover') ?? true);
+$editorPreviewLight = false;
+try {
+    $editorModeFlag = trim((string)($this->request->getParam('editor_mode', '') ?? ''));
+    $editorPreviewLight = ($editorModeFlag === '1' || strtolower($editorModeFlag) === 'true')
+        || (bool)$this->getData('editor_mode')
+        || $isPreviewMode;
+} catch (\Throwable) {
+    $editorPreviewLight = (bool)$this->getData('editor_mode') || $isPreviewMode;
+}
+
 $showBannerWithChildren = $this->getData('show_banner_with_children') ?? true;
 if (is_string($showBannerWithChildren)) {
     $normalizedBannerFlag = strtolower(trim($showBannerWithChildren));
@@ -43,354 +46,108 @@ if (is_string($showBannerWithChildren)) {
 } else {
     $showBannerWithChildren = (bool)$showBannerWithChildren;
 }
-$style = $this->getData('style') ?? 'flyout';
-if (!in_array($style, ['flyout', 'accordion'], true)) {
-    $style = 'flyout';
+
+$navOptions = [];
+$showAllProductsOverride = $this->getData('show_all_products');
+if ($showAllProductsOverride !== null && $showAllProductsOverride !== '') {
+    if (is_string($showAllProductsOverride)) {
+        $navOptions['include_all_products'] = !in_array(
+            strtolower(trim($showAllProductsOverride)),
+            ['0', 'false', 'no', 'off', ''],
+            true
+        );
+    } else {
+        $navOptions['include_all_products'] = (bool)$showAllProductsOverride;
+    }
 }
 
-$navToCategory = static function (array $item) use (&$navToCategory): array {
-    $children = [];
-    foreach ((array)($item['children'] ?? []) as $child) {
-        if (is_array($child)) {
-            $children[] = $navToCategory($child);
+$navItems = $this->getData('navItems');
+if (!is_array($navItems) || $navItems === []) {
+    $navItems = [];
+    if (!$this->getData('navItems_set_by_hook')) {
+        $catalogNav = HeaderCommerceData::resolveCategoryNavItems($navOptions);
+        if (!empty($catalogNav['items']) && is_array($catalogNav['items'])) {
+            $navItems = $catalogNav['items'];
         }
     }
+}
+
+$headerFlattenNavForEditor = static function (array $items): array {
+    $out = [];
+    foreach ($items as $item) {
+        if (!is_array($item)) {
+            continue;
+        }
+        $flat = $item;
+        $flat['children'] = [];
+        $out[] = $flat;
+    }
+
+    return $out;
+};
+
+$hanfuDemoNav = static function (): array {
+    $searchHref = static fn (string $query): string => '/search?q=' . rawurlencode($query);
 
     return [
-        'name' => (string)($item['text'] ?? $item['name'] ?? ''),
-        'url' => (string)($item['url'] ?? '#'),
-        'icon' => (string)($item['icon'] ?? 'circle'),
-        'children' => $children,
+        [
+            'text' => '全部商品',
+            'url' => '/products',
+            'description' => '浏览全部已发布商品',
+            'children' => [],
+        ],
+        [
+            'text' => '女士汉服',
+            'url' => $searchHref('女士汉服'),
+            'description' => '按形制探索适合日常、节庆与礼仪场景的女士汉服',
+            'children' => [
+                ['text' => '明制汉服', 'url' => $searchHref('明制汉服'), 'children' => []],
+                ['text' => '宋制汉服', 'url' => $searchHref('宋制汉服'), 'children' => []],
+                ['text' => '唐制汉服', 'url' => $searchHref('唐制汉服'), 'children' => []],
+            ],
+        ],
+        [
+            'text' => '男士汉服',
+            'url' => $searchHref('男士汉服'),
+            'description' => '传统形制与现代日常穿着兼顾的男士系列',
+            'children' => [
+                ['text' => '圆领袍', 'url' => $searchHref('男士圆领袍')],
+                ['text' => '道袍与直裰', 'url' => $searchHref('道袍 直裰')],
+            ],
+        ],
+        [
+            'text' => '儿童汉服',
+            'url' => $searchHref('儿童汉服'),
+            'children' => [
+                ['text' => '女童汉服', 'url' => $searchHref('女童汉服')],
+                ['text' => '男童汉服', 'url' => $searchHref('男童汉服')],
+            ],
+        ],
+        [
+            'text' => '汉服配饰',
+            'url' => $searchHref('汉服配饰'),
+            'children' => [
+                ['text' => '发簪与发冠', 'url' => $searchHref('发簪 发冠')],
+                ['text' => '绣花鞋履', 'url' => $searchHref('汉服鞋履')],
+            ],
+        ],
     ];
 };
 
-// 优先万能分类 catalog；仅预览且无树时回落演示占位。
-$categories = [];
-$catalogNav = HeaderCommerceData::resolveCategoryNavItems();
-if (!empty($catalogNav['items']) && is_array($catalogNav['items'])) {
-    foreach ($catalogNav['items'] as $item) {
-        if (is_array($item)) {
-            $categories[] = $navToCategory($item);
-        }
-    }
+if ($navItems === [] && $editorPreviewLight) {
+    $navItems = $hanfuDemoNav();
 }
-
-if ($categories === [] && $isPreviewMode) {
-$categories = [
-    [
-        'id' => 1,
-        'name' => __('电子产品'),
-        'url' => '/category/electronics',
-        'icon' => 'phone',
-        'count' => 156,
-        'children' => [
-            [
-                'id' => 11,
-                'name' => __('手机通讯'),
-                'url' => '/category/electronics/phones',
-                'count' => 45,
-                'children' => [
-                    ['id' => 111, 'name' => __('智能手机'), 'url' => '/category/electronics/phones/smartphones', 'count' => 15],
-                    ['id' => 112, 'name' => __('功能手机'), 'url' => '/category/electronics/phones/feature-phones', 'count' => 10],
-                    ['id' => 113, 'name' => __('充电器'), 'url' => '/category/electronics/phones/chargers', 'count' => 20],
-                ],
-            ],
-            ['id' => 12, 'name' => __('电脑办公'), 'url' => '/category/electronics/computers', 'count' => 38],
-            ['id' => 13, 'name' => __('智能设备'), 'url' => '/category/electronics/smart-devices', 'count' => 22],
-            ['id' => 14, 'name' => __('影音娱乐'), 'url' => '/category/electronics/av', 'count' => 51],
-        ],
-    ],
-    [
-        'id' => 2,
-        'name' => __('服装鞋帽'),
-        'url' => '/category/fashion',
-        'icon' => 'circle',
-        'count' => 243,
-        'children' => [
-            ['id' => 21, 'name' => __('男装'), 'url' => '/category/fashion/mens', 'count' => 89],
-            ['id' => 22, 'name' => __('女装'), 'url' => '/category/fashion/womens', 'count' => 112],
-            ['id' => 23, 'name' => __('童装'), 'url' => '/category/fashion/kids', 'count' => 42],
-            ['id' => 24, 'name' => __('鞋靴箱包'), 'url' => '/category/fashion/shoes-bags', 'count' => 60],
-        ],
-    ],
-    [
-        'id' => 3,
-        'name' => __('家居生活'),
-        'url' => '/category/home',
-        'icon' => 'home',
-        'count' => 178,
-        'children' => [
-            ['id' => 31, 'name' => __('家具'), 'url' => '/category/home/furniture', 'count' => 40],
-            ['id' => 32, 'name' => __('厨具'), 'url' => '/category/home/kitchen', 'count' => 55],
-            ['id' => 33, 'name' => __('家纺'), 'url' => '/category/home/textile', 'count' => 33],
-        ],
-    ],
-    ['id' => 4, 'name' => __('美妆个护'), 'url' => '/category/beauty', 'icon' => 'heart', 'count' => 134],
-    ['id' => 5, 'name' => __('食品生鲜'), 'url' => '/category/food', 'icon' => 'circle', 'count' => 89],
-    ['id' => 6, 'name' => __('运动户外'), 'url' => '/category/sports', 'icon' => 'circle', 'count' => 112],
-    ['id' => 7, 'name' => __('图书文具'), 'url' => '/category/books', 'icon' => 'book', 'count' => 76],
-    ['id' => 8, 'name' => __('母婴用品'), 'url' => '/category/baby', 'icon' => 'heart', 'count' => 98],
-];
+if ($editorPreviewLight && is_array($navItems) && $navItems !== []) {
+    $navItems = $headerFlattenNavForEditor($navItems);
 }
-$renderSubmenu = function ($items, $depth = 1, $maxDepth = 3, $showCount = false) use (&$renderSubmenu, $esc) {
-    if ($depth >= $maxDepth || empty($items)) {
-        return;
-    }
-    ?>
-    <ul class="submenu submenu-depth-<?= $depth ?>">
-        <?php foreach ($items as $item): ?>
-            <li class="submenu-item <?= !empty($item['children']) ? 'has-children' : '' ?>">
-                <a href="<?= $esc((string)$item['url']) ?>" class="submenu-link">
-                    <span class="item-name"><?= $esc((string)$item['name']) ?></span>
-                    <?php if ($showCount && isset($item['count'])): ?>
-                        <span class="item-count"><?= (int)$item['count'] ?></span>
-                    <?php endif; ?>
-                    <?php if (!empty($item['children'])): ?>
-                        <w:icon name="arrow-right" size="sm"></w:icon>
-                    <?php endif; ?>
-                </a>
-                <?php if (!empty($item['children'])): ?>
-                    <?php $renderSubmenu($item['children'], $depth + 1, $maxDepth, $showCount); ?>
-                <?php endif; ?>
-            </li>
-        <?php endforeach; ?>
-    </ul>
-    <?php
-};
 ?>
-
-<section class="<?= $esc($wc) ?> menu-style-<?= $esc((string)$style) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
-         weline-code="<?= $esc($scope->code) ?>"
-         data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>"
-         data-expand-on-hover="<?= $expandOnHover ? 'true' : 'false' ?>"
-         data-show-banner-with-children="<?= $showBannerWithChildren ? '1' : '0' ?>">
-    <button class="menu-trigger" type="button" aria-expanded="false">
-        <w:icon name="menu" size="sm"></w:icon>
-        <span><?= $esc((string)$title) ?></span>
-        <w:icon name="arrow-down" size="sm"></w:icon>
-    </button>
-    <div class="menu-dropdown">
-        <ul class="category-menu-list">
-            <?php foreach ($categories as $category): ?>
-                <li class="menu-item <?= !empty($category['children']) ? 'has-children' : '' ?>">
-                    <a href="<?= $esc((string)$category['url']) ?>" class="menu-link">
-                        <?php if ($showIcons && !empty($category['icon'])): ?>
-                            <w:icon name="category.icon|circle" size="sm"></w:icon>
-                        <?php endif; ?>
-                        <span class="item-name"><?= $esc((string)$category['name']) ?></span>
-                        <?php if ($showCount && isset($category['count'])): ?>
-                            <span class="item-count"><?= (int)$category['count'] ?></span>
-                        <?php endif; ?>
-                        <?php if (!empty($category['children'])): ?>
-                            <w:icon name="arrow-right" size="sm"></w:icon>
-                        <?php endif; ?>
-                    </a>
-                    <?php if (!empty($category['children'])): ?>
-                        <?php $renderSubmenu($category['children'], 1, $maxDepth, $showCount); ?>
-                    <?php endif; ?>
-                </li>
-            <?php endforeach; ?>
-        </ul>
-    </div>
-</section>
-
-<style>
-.<?= $wc ?> {
-    position: relative;
-}
-
-.<?= $wc ?> .menu-trigger {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-3);
-    padding: var(--weline-space-3) var(--weline-space-5);
-    background: var(--weline-theme-primary);
-    color: var(--weline-theme-on-primary);
-    border: none;
-    border-radius: var(--weline-radius-md);
-    font-weight: 600;
-    cursor: pointer;
-    transition: background var(--weline-theme-transition-base);
-    width: 100%;
-}
-
-.<?= $wc ?> .menu-trigger:hover {
-    background: var(--weline-theme-primary-hover);
-}
-
-.<?= $wc ?> .menu-trigger w-icon:last-child {
-    margin-left: auto;
-    transition: transform var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?>.menu-open .menu-trigger w-icon:last-child {
-    transform: rotate(180deg);
-}
-
-.<?= $wc ?> .menu-dropdown {
-    position: absolute;
-    top: 100%;
-    left: 0;
-    width: var(--layout-sidebar-width);
-    background: var(--weline-theme-surface-raised);
-    border-radius: 0 0 var(--weline-radius-md) var(--weline-radius-md);
-    box-shadow: var(--weline-theme-shadow-lg);
-    opacity: 0;
-    visibility: hidden;
-    transform: translateY(var(--spacing-neg-2_5));
-    transition: all var(--weline-theme-transition-base);
-    z-index: 1000;
-}
-
-.<?= $wc ?>:hover .menu-dropdown,
-.<?= $wc ?>.menu-open .menu-dropdown {
-    opacity: 1;
-    visibility: visible;
-    transform: translateY(0);
-}
-
-.<?= $wc ?> .category-menu-list {
-    list-style: none;
-    margin: 0;
-    padding: var(--weline-space-3) 0;
-}
-
-.<?= $wc ?> .menu-item {
-    position: relative;
-}
-
-.<?= $wc ?> .menu-link,
-.<?= $wc ?> .submenu-link {
-    display: flex;
-    align-items: center;
-    gap: var(--weline-space-3);
-    padding: var(--weline-space-3) var(--weline-space-5);
-    color: var(--weline-theme-text);
-    text-decoration: none;
-    transition: all var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .menu-link:hover,
-.<?= $wc ?> .submenu-link:hover {
-    background: var(--weline-theme-surface-muted);
-    color: var(--weline-theme-primary);
-}
-
-.<?= $wc ?> .item-name {
-    flex: 1;
-    font-size: var(--weline-font-size-sm);
-}
-
-.<?= $wc ?> .item-count {
-    font-size: var(--weline-font-size-xs);
-    color: var(--weline-theme-text-muted);
-}
-
-.<?= $wc ?>.menu-style-flyout .submenu {
-    position: absolute;
-    top: 0;
-    left: 100%;
-    width: var(--token-size-250px);
-    background: var(--weline-theme-surface-raised);
-    border-radius: var(--weline-radius-md);
-    box-shadow: var(--weline-theme-shadow-lg);
-    list-style: none;
-    margin: 0;
-    padding: var(--weline-space-3) 0;
-    opacity: 0;
-    visibility: hidden;
-    transform: translateX(var(--spacing-neg-2_5));
-    transition: all var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?>.menu-style-flyout .menu-item:hover > .submenu,
-.<?= $wc ?>.menu-style-flyout .submenu-item:hover > .submenu {
-    opacity: 1;
-    visibility: visible;
-    transform: translateX(0);
-}
-
-.<?= $wc ?>.menu-style-accordion .submenu {
-    position: static;
-    width: 100%;
-    background: var(--weline-theme-surface-muted);
-    box-shadow: none;
-    border-radius: 0;
-    padding: 0;
-    max-height: 0;
-    overflow: hidden;
-    opacity: 1;
-    visibility: visible;
-    transform: none;
-    transition: max-height var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?>.menu-style-accordion .menu-item.expanded > .submenu {
-    max-height: var(--token-size-500px);
-}
-
-.<?= $wc ?>.menu-style-accordion .submenu-link {
-    padding-left: var(--weline-space-12);
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    max-width: 100%;
-}
-
-.widget-preview-canvas .<?= $wc ?> .menu-dropdown,
-.<?= $wc ?>.is-preview .menu-dropdown {
-    position: static;
-    opacity: 1;
-    visibility: visible;
-    transform: none;
-    width: 100%;
-    box-shadow: none;
-}
-
-@media (max-width: 768px) {
-    .<?= $wc ?> .menu-dropdown {
-        width: 100%;
-    }
-
-    .<?= $wc ?>.menu-style-flyout .submenu {
-        position: static;
-        width: 100%;
-        box-shadow: none;
-        transform: none;
-    }
-}
-</style>
-
-<script>
-(function () {
-    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
-    if (!root) return;
-
-    var trigger = root.querySelector('.menu-trigger');
-
-    if (trigger) {
-        trigger.addEventListener('click', function () {
-            var open = root.classList.toggle('menu-open');
-            trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
-        });
-    }
-
-    document.addEventListener('click', function (e) {
-        if (!root.contains(e.target)) {
-            root.classList.remove('menu-open');
-            if (trigger) trigger.setAttribute('aria-expanded', 'false');
-        }
-    });
-
-    if (root.classList.contains('menu-style-accordion')) {
-        root.querySelectorAll('.has-children > .menu-link, .has-children > .submenu-link').forEach(function (link) {
-            link.addEventListener('click', function (e) {
-                e.preventDefault();
-                this.closest('.menu-item, .submenu-item')?.classList.toggle('expanded');
-            });
-        });
-    }
-})();
-</script>
+<div class="<?= $esc($wc) ?> header-category-menu-widget<?= $isPreviewMode ? ' is-preview' : '' ?>"
+     weline-code="<?= $esc($scope->code) ?>"
+     data-uid="<?= $esc($scope->uid) ?>"
+     data-js-ns="<?= $esc($scope->jsNs) ?>"
+     data-testid="header-category-menu-widget">
+    <?= $this->fetch('Weline_Theme::theme/frontend/partials/header/categories-horizontal-nav.phtml', [
+        'items' => $navItems,
+        'show_banner_with_children' => $showBannerWithChildren,
+    ]) ?>
+</div>

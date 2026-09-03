@@ -32,16 +32,27 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
 $currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
-$isEnglish = str_starts_with(strtolower($currentLocale), 'en')
-    || preg_match('#/en_US(?:/|$)#', $requestUri) === 1;
+if (preg_match('#/([a-z]{2}(?:_[A-Za-z]{2,4}){1,2})(?:/|$)#', $requestUri, $localeMatch) === 1) {
+    $currentLocale = (string)$localeMatch[1];
+}
+$normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
+$isChineseLocale = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
+$translateDefaultCopy = static function (string $source, string $english) use ($isChineseLocale): string {
+    $translated = trim(WidgetI18n::label($source));
+    if ($translated !== '' && $translated !== $source) {
+        return $translated;
+    }
+
+    return $isChineseLocale ? $source : $english;
+};
 
 $titleSource = trim((string)($this->getData('title') ?? ''));
 $subtitleSource = trim((string)($this->getData('subtitle') ?? ''));
 $title = in_array($titleSource, ['', '热门分类', '按汉服品类选购'], true)
-    ? ($isEnglish ? 'Shop Hanfu by Category' : '按汉服品类选购')
+    ? $translateDefaultCopy('按汉服品类选购', 'Shop Hanfu by Category')
     : WidgetI18n::label($titleSource);
 $subtitle = in_array($subtitleSource, ['', '浏览我们的商品分类', '从准确形制开始选择'], true)
-    ? ($isEnglish ? 'Start with the garment form that matches your needs' : '从准确形制开始选择')
+    ? $translateDefaultCopy('从准确形制开始选择', 'Start with the garment form that matches your needs')
     : WidgetI18n::label($subtitleSource);
 $categoryIds = (string)($this->getData('category_ids') ?? '');
 $limit = max(1, min(5, (int)($this->getData('limit') ?? 5)));
@@ -107,8 +118,8 @@ foreach (array_slice($categoryNames, 0, $limit) as $category) {
     $code = (string)$category['code'];
     $categories[] = [
         'id' => (int)$category['id'],
-        'name' => $isEnglish ? $category['name_en'] : $category['name_zh'],
-        'alt' => $isEnglish ? $category['alt_en'] : $category['alt_zh'],
+        'name' => $translateDefaultCopy($category['name_zh'], $category['name_en']),
+        'alt' => $translateDefaultCopy($category['alt_zh'], $category['alt_en']),
         'url' => '/category/' . $code,
         'image' => '/pub/media/catalog/hanfu/r2/categories/icons/' . $code . '.webp',
         'count' => 0,

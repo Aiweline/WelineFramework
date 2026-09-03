@@ -3031,6 +3031,11 @@
                 <div class="shared-chrome-panel" data-chrome-mode="carrier">
                     <div class="w-badge" data-tone="primary">${escapeHtml(translateUiText('全局页头/页脚'))}</div>
                     <p class="w-text" data-tone="muted">${escapeHtml(translateUiText('当前在全局 chrome 载体编辑；修改后全站跟随。'))}</p>
+                    <div class="shared-chrome-actions">
+                        <button type="button" class="w-btn" data-tone="neutral" data-chrome-action="restore-all" data-chrome-area="">
+                            ${escapeHtml(translateUiText('清空其它布局本地 chrome'))}
+                        </button>
+                    </div>
                 </div>
             `;
         }
@@ -3055,6 +3060,9 @@
                 <div class="shared-chrome-actions">
                     <button type="button" class="w-btn" data-tone="primary" data-chrome-action="restore" data-chrome-area="${escapeHtml(area)}">
                         ${escapeHtml(translateUiText('恢复全局继承'))}
+                    </button>
+                    <button type="button" class="w-btn" data-tone="neutral" data-chrome-action="restore-all" data-chrome-area="">
+                        ${escapeHtml(translateUiText('恢复全部布局继承'))}
                     </button>
                 </div>
             </div>
@@ -3094,7 +3102,8 @@
             return;
         }
         const layoutType = getEffectiveLayoutType(state.layoutType || state.pageType || 'homepage') || 'homepage';
-        if (layoutType === SHARED_CHROME_CARRIER_PAGE_TYPE) {
+        const restoreAll = action === 'restore-all';
+        if (layoutType === SHARED_CHROME_CARRIER_PAGE_TYPE && !restoreAll) {
             showToast(translateUiText('全局载体无需切换继承'), 'info');
             return;
         }
@@ -3105,7 +3114,13 @@
                 return;
             }
         }
-        const endpoint = action === 'restore' ? config.apiRestoreChrome : config.apiDetachChrome;
+        if (restoreAll) {
+            const ok = window.confirm(translateUiText('确定清空其它布局上的本地页头/页脚，全部恢复跟随全局？显式独立的布局也会被恢复。'));
+            if (!ok) {
+                return;
+            }
+        }
+        const endpoint = (action === 'restore' || restoreAll) ? config.apiRestoreChrome : config.apiDetachChrome;
         const payload = {
             theme_id: state.themeId,
             page_type: layoutType,
@@ -3114,7 +3129,8 @@
             editor_area: getEffectiveEditorArea(state.editorArea || 'frontend'),
             editor_context: buildTypedEditorContext('layout'),
             scope: { identity: state.scopeIdentity },
-            areas,
+            areas: restoreAll ? SHARED_CHROME_AREAS : areas,
+            ...(restoreAll ? { all_non_carrier: 1 } : {}),
             ...getLayoutLockVirtualPayload(),
         };
         try {
@@ -6165,6 +6181,10 @@
         console.log('收到 iframe 消息:', data);
 
         if (data.type === 'slot-selected') {
+            // 部件模式只触发部件，忽略插槽选中。
+            if (normalizeSelectionTarget(state.selectionTarget) === 'widget') {
+                return;
+            }
             if (isPreviewInteractionMode()) {
                 setInteractionMode('edit');
             }
@@ -6195,6 +6215,10 @@
 
         switch (data.type) {
             case 'widget-selected':
+                // 插槽模式不打开部件配置。
+                if (normalizeSelectionTarget(state.selectionTarget) === 'slot') {
+                    break;
+                }
                 // 预览页面中选中了部件
                 handlePreviewWidgetSelected(data);
                 break;
@@ -6429,6 +6453,13 @@
         const areaCode = normalizedSlot.area || inferAreaFromSlotId(slotId);
 
         console.log('[handleSlotSelected] slotId:', slotId, 'slot.area:', normalizedSlot.area, 'resolved areaCode:', areaCode);
+
+        // 按当前 slot 服务端全量拉取兼容部件（默认逛库仍分页）
+        setWidgetSlotFilter(
+            slotId || areaCode || null,
+            normalizedSlot.name || slotId || areaCode || '',
+            areaCode || null
+        );
 
         openWidgetPanelForSlotSelection(normalizedSlot);
         applySlotWidgetRecommendations(normalizedSlot);
@@ -8938,6 +8969,10 @@
     }
 
     function handleIframeWidgetElementClick(target) {
+        // 插槽模式只激活插槽，不点选/打开部件配置。
+        if (normalizeSelectionTarget(state.selectionTarget) === 'slot') {
+            return false;
+        }
         const widgetWrapper = target?.closest?.(
             `${WIDGET_WRAPPER_MATCH}, ${PREVIEW_OR_CODE_WIDGET_MATCH}`
         );
@@ -9850,13 +9885,17 @@
         if (state.editorArea) url.searchParams.set('editor_area', state.editorArea);
         appendWidgetLibraryFilterParams(url);
         appendLibraryTypeFilterParams(url, 'widgets');
-        url.searchParams.set('offset', String(lib.offset));
-        url.searchParams.set('limit', String(lib.limit));
-        if (lib.keyword) url.searchParams.set('keyword', lib.keyword);
+        // 默认逛库分页；选中 slot 时仍传 limit>0 走 items 通道，后端 slot_full 忽略切片一次返回全部
         if (lib.slot) {
+            url.searchParams.set('offset', '0');
+            url.searchParams.set('limit', String(Math.max(1, Number(lib.limit) || 50)));
             url.searchParams.set('slot_id', lib.slot);
             if (lib.slotArea) url.searchParams.set('area', lib.slotArea);
+        } else {
+            url.searchParams.set('offset', String(lib.offset));
+            url.searchParams.set('limit', String(lib.limit));
         }
+        if (lib.keyword) url.searchParams.set('keyword', lib.keyword);
         return url.toString();
     }
 
@@ -10754,11 +10793,12 @@
         if (options.reset) {
             lib.offset = 0;
             lib.total = 0;
-            lib.hasMore = true;
+            // slot 模式只打一枪；默认模式才继续无限滚动
+            lib.hasMore = !lib.slot;
             listEl.innerHTML = '<div class="widget-list-loading" id="widgetListLoading">'
                 + '<span class="w-spinner" role="status"><span class="w-visually-hidden">' + escapeHtml(translateUiText('加载中...')) + '</span></span>'
                 + '<span class="widget-list-loading-text">' + escapeHtml(translateUiText('部件库加载中...')) + '</span></div>';
-        } else if (!lib.hasMore) {
+        } else if (!lib.hasMore || lib.slot) {
             return;
         }
         lib.loading = true;
@@ -10775,7 +10815,14 @@
             }
             appendWidgetItems(items);
             lib.offset += items.length;
-            lib.hasMore = !!(result && result.has_more);
+            if (lib.slot || (result && Number(result.slot_full) === 1)) {
+                lib.hasMore = false;
+                if (typeof result.total === 'number') {
+                    lib.offset = result.total;
+                }
+            } else {
+                lib.hasMore = !!(result && result.has_more);
+            }
             if (lib.offset === 0 && items.length === 0) {
                 const emptyText = lib.slot
                     ? translateUiText('该插槽暂无可用部件')
@@ -10827,6 +10874,8 @@
         scroller.addEventListener('scroll', function () {
             const lib = getWidgetLibState();
             if (state.widgetLibraryTab === 'applications') return;
+            // 选中 slot 时一次拉齐兼容部件，禁止下滑分页
+            if (lib.slot) return;
             if (lib.loading || !lib.hasMore) return;
             if (scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 200) {
                 loadWidgetLibrary({ silent: true });
@@ -10846,6 +10895,11 @@
         }
         let hint = listEl.querySelector('.widget-load-more-hint');
         const lib = getWidgetLibState();
+        // slot 全量模式不展示分页提示
+        if (lib.slot) {
+            if (hint) hint.remove();
+            return;
+        }
         if (lib.total <= 0 || (lib.offset === 0)) {
             if (hint) hint.remove();
             return;
@@ -12822,8 +12876,8 @@
         // 插入新部件
         targetContainer.insertAdjacentHTML('beforeend', widgetHtml);
 
-        // 添加视觉反馈动画
-        const newWidget = targetContainer.querySelector(dataLayoutIdSelector(layoutId));
+        // 刚插入的节点即可做动画；勿对空 layoutId 调用 querySelector
+        const newWidget = targetContainer.lastElementChild;
         if (newWidget) {
             // 短暂延迟后移除 widget-new 类（动画效果）
             setTimeout(() => {
@@ -13537,6 +13591,10 @@
         doc.body._slotToolbarActionEventsBound = true;
 
         doc.body.addEventListener('click', function(e) {
+            // 部件模式不激活插槽工具条选择。
+            if (normalizeSelectionTarget(state.selectionTarget) === 'widget') {
+                return;
+            }
             const bar = e.target.closest('.widget-hover-actions[data-slot-hover-actions="1"]');
             if (!bar) {
                 return;
@@ -13981,6 +14039,10 @@
         // 使用事件委托 - 必须在最早阶段阻止冒泡
         doc.body.addEventListener('click', function(e) {
             if (isPreviewInteractionMode()) {
+                return;
+            }
+            // 插槽模式：部件本体与部件操作条都不触发部件配置。
+            if (normalizeSelectionTarget(state.selectionTarget) === 'slot') {
                 return;
             }
             // 购物控件等标记了 data-editor-interactive / data-mini-cart-* 的区域保持原生交互。
@@ -21242,7 +21304,8 @@
 
 /* Weline UI source: js/theme-brand-basics.js */
 /**
- * Theme brand basics drawer — Scope-owned favicon/logo via appearance /brand/* patches.
+ * Theme brand basics drawer — Scope-owned favicon/logo via appearance /brand/* patches,
+ * plus Website/Store/Channel identity fields via BrandBasicsIdentity slot API.
  */
 (function () {
     'use strict';
@@ -21298,6 +21361,11 @@
         return document.getElementById('themeBrandBasicsDrawer');
     }
 
+    function identitySlotEl() {
+        return document.getElementById('themeBrandIdentitySlot')
+            || document.querySelector('[data-w-brand-identity-slot]');
+    }
+
     function openDrawer() {
         const el = drawerEl();
         if (!el) return;
@@ -21309,7 +21377,7 @@
         } catch (_e) {
             el.style.display = '';
         }
-        refreshFromWorkspace().catch((err) => toast(err?.message || String(err), 'error'));
+        refreshAll().catch((err) => toast(err?.message || String(err), 'error'));
     }
 
     function closeDrawer() {
@@ -21341,12 +21409,96 @@
         return out;
     }
 
+    function collectIdentityValues() {
+        const out = {};
+        document.querySelectorAll('[data-w-identity-input]').forEach((input) => {
+            const key = String(input.getAttribute('data-w-identity-input') || '').trim();
+            if (!key) return;
+            out[key] = String(input.value || '').trim();
+        });
+        return out;
+    }
+
     async function loadAppearanceWorkspace() {
         const editor = editorApi();
         if (!editor?.loadScopedWorkspace) {
             throw new Error('Theme Editor scoped workspace API unavailable');
         }
         return editor.loadScopedWorkspace('appearance');
+    }
+
+    function identityApiUrl() {
+        const editor = editorApi();
+        const base = String(editor?.config?.apiBase || '').replace(/\/$/, '');
+        if (!base) throw new Error('Theme Editor apiBase unavailable');
+        return `${base}/brand-basics-identity`;
+    }
+
+    async function loadIdentity() {
+        const editor = editorApi();
+        if (!editor?.apiJson || !editor?.buildTypedEditorContext) {
+            return { available: false, fields: [], values: {} };
+        }
+        const url = new URL(identityApiUrl(), window.location.origin);
+        url.searchParams.set('editor_context', JSON.stringify(editor.buildTypedEditorContext('appearance')));
+        const result = await editor.apiJson(url.toString());
+        if (!result?.success) {
+            throw new Error(result?.message || '加载身份信息失败');
+        }
+        return result.data || { available: false, fields: [], values: {} };
+    }
+
+    function renderIdentityFields(payload) {
+        const slot = identitySlotEl();
+        if (!slot) return;
+        const fieldsRoot = slot.querySelector('[data-w-identity-fields]') || slot;
+        const labelEl = slot.querySelector('[data-w-identity-label]');
+        const fields = Array.isArray(payload?.fields) ? payload.fields : [];
+        const values = payload?.values && typeof payload.values === 'object' ? payload.values : {};
+        const available = payload?.available === true && fields.length > 0;
+
+        slot.hidden = !available;
+        if (labelEl) {
+            labelEl.textContent = String(payload?.label || '身份信息');
+        }
+        if (!available) {
+            if (fieldsRoot !== slot) fieldsRoot.innerHTML = '';
+            return;
+        }
+
+        const html = fields.map((field) => {
+            const key = String(field.key || '').trim();
+            if (!key) return '';
+            const type = String(field.type || 'text');
+            const label = String(field.label || key);
+            const max = field.max > 0 ? ` maxlength="${Number(field.max)}"` : '';
+            const required = field.required ? ' required' : '';
+            const value = String(values[key] ?? '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+            if (type === 'textarea') {
+                const rows = field.rows > 0 ? Number(field.rows) : 3;
+                return `<label class="w-field w-theme-brand-identity__field" data-w-identity-field="${key}">
+                    <span class="w-field__label">${label}</span>
+                    <textarea class="w-textarea" data-w-identity-input="${key}" rows="${rows}"${max}${required}>${value}</textarea>
+                </label>`;
+            }
+            return `<label class="w-field w-theme-brand-identity__field" data-w-identity-field="${key}">
+                <span class="w-field__label">${label}</span>
+                <input type="text" class="w-input" data-w-identity-input="${key}" value="${value}"${max}${required}>
+            </label>`;
+        }).join('');
+
+        if (fieldsRoot !== slot) {
+            fieldsRoot.innerHTML = html;
+            return;
+        }
+        let wrap = slot.querySelector('[data-w-identity-fields]');
+        if (!wrap) {
+            wrap = document.createElement('div');
+            wrap.className = 'w-theme-brand-identity__fields';
+            wrap.setAttribute('data-w-identity-fields', '');
+            slot.appendChild(wrap);
+        }
+        wrap.innerHTML = html;
     }
 
     function ownershipText(workspace, draft) {
@@ -21390,6 +21542,40 @@
         return workspace;
     }
 
+    async function refreshIdentity() {
+        const payload = await loadIdentity();
+        renderIdentityFields(payload);
+        return payload;
+    }
+
+    async function refreshAll() {
+        await Promise.all([refreshFromWorkspace(), refreshIdentity()]);
+    }
+
+    async function saveIdentity() {
+        const editor = editorApi();
+        const slot = identitySlotEl();
+        if (!slot || slot.hidden) {
+            return { skipped: true };
+        }
+        if (!editor?.apiJson || !editor?.buildTypedEditorContext) {
+            throw new Error('Theme Editor identity API unavailable');
+        }
+        const result = await editor.apiJson(identityApiUrl(), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                editor_context: editor.buildTypedEditorContext('appearance'),
+                values: collectIdentityValues(),
+            }),
+        });
+        if (!result?.success) {
+            throw new Error(result?.message || '身份信息保存失败');
+        }
+        renderIdentityFields(result.data || {});
+        return result.data;
+    }
+
     async function saveBrand() {
         const editor = editorApi();
         if (!editor?.queueScopedChanges) throw new Error('Theme Editor apply API unavailable');
@@ -21409,13 +21595,30 @@
                 changes.push({ op: 'set', path: `/brand/${key}`, value: next });
             }
         });
-        if (!changes.length) {
+
+        const identitySlot = identitySlotEl();
+        const hasIdentity = identitySlot && !identitySlot.hidden;
+        let identitySaved = false;
+        if (hasIdentity) {
+            await saveIdentity();
+            identitySaved = true;
+        }
+
+        if (!changes.length && !identitySaved) {
             toast('没有需要保存的变更', 'info');
             return;
         }
-        await editor.queueScopedChanges('appearance', changes, { summary: 'brand_basics_save' });
-        await refreshFromWorkspace();
-        toast('已保存到当前 Scope 草稿，发布后生效', 'success');
+        if (changes.length) {
+            await editor.queueScopedChanges('appearance', changes, { summary: 'brand_basics_save' });
+            await refreshFromWorkspace();
+        }
+        if (identitySaved && changes.length) {
+            toast('身份已写回实体；品牌图片已保存到当前 Scope 草稿（发布后生效）', 'success');
+        } else if (identitySaved) {
+            toast('身份信息已写回网站/店铺/渠道', 'success');
+        } else {
+            toast('已保存到当前 Scope 草稿，发布后生效', 'success');
+        }
     }
 
     async function inheritBrand() {
@@ -21424,7 +21627,7 @@
         const changes = BRAND_KEYS.map((key) => ({ op: 'inherit', path: `/brand/${key}` }));
         await editor.queueScopedChanges('appearance', changes, { summary: 'brand_basics_inherit' });
         await refreshFromWorkspace();
-        toast('已恢复继承', 'success');
+        toast('已恢复品牌图片继承（身份信息不受影响）', 'success');
     }
 
     let activeMediaDialog = null;

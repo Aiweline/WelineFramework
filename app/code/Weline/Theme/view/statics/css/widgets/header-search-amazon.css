@@ -200,13 +200,14 @@
     cursor: pointer;
     font-size: var(--font-size-xs, 0.75rem);
     line-height: 1.4;
-    color: var(--weline-chrome-text-secondary, #565959);
+    color: var(--weline-chrome-text-primary, #111111);
     font-family: inherit;
 }
 
 .search-category-facade:hover,
 .search-type-facade:hover {
     background-color: var(--weline-chrome-bg-tertiary, #e7e7e7);
+    color: var(--weline-chrome-text-primary, #111111);
 }
 
 .search-category-label,

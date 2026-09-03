@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Theme\Test\Unit\Service;
+namespace Weline\Theme\Test\Unit\Service\Service;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Test\TestCore;
