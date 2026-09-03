@@ -54,6 +54,7 @@
 博客页面,"Blog Page"
 未命名页面,"Untitled Page"
 全部文章,"All Posts"
+展开/收起,展开/收起
 正在加载评论...,"Loading reviews..."
 评论加载失败，请稍后重试。,"Reviews could not be loaded. Please try again later."
 暂时还没有已审核的评论，欢迎分享第一条真实体验。,"No approved reviews yet. Be the first to share your experience."
@@ -138,6 +139,11 @@ Slug,Slug
 最新博客文章,"Latest blog posts"
 分类名称不能为空,分类名称不能为空
 分类不存在,分类不存在
+不能将自己作为父分类,不能将自己作为父分类
+父分类不存在,父分类不存在
+博客分类最多支持两级,博客分类最多支持两级
+不能将分类移动到其子孙节点下,不能将分类移动到其子孙节点下
+含子分类的节点只能放在顶级,含子分类的节点只能放在顶级
 "博客 slug 无效。","Invalid blog slug."
 "博客 slug 已被其他文章占用：%{1}","Blog slug is already used by another post: %{1}"
 "博客 slug 与 CMS blog 页面冲突：%{1}","Blog slug conflicts with a CMS blog page: %{1}"

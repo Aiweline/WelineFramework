@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Blog\Service;
 
+use Weline\Framework\App\State;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 
@@ -21,15 +22,12 @@ final class BlogScopeResolver
 
     public function locale(): string
     {
-        $scope = RequestContext::scopeIdentity();
-        if ($scope instanceof ScopeIdentity) {
-            $locale = trim((string)($scope->localeCode ?? $scope->locale ?? ''));
-            if ($locale !== '') {
-                return $locale;
-            }
+        $locale = trim(State::getLang());
+        if ($locale === '') {
+            return 'zh_Hans_CN';
         }
 
-        return (string)(\w_env('lang', '') ?: 'zh_Hans_CN');
+        return str_replace('-', '_', $locale);
     }
 
     public function baseUrl(): string
