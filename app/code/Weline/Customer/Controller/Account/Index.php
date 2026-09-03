@@ -32,7 +32,7 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
     {
         $requestStartedAt = microtime(true);
         $loginStartedAt = $requestStartedAt;
-        // 检查是否登录
+        // 检查是否登录（含有效客户主键；拒绝半登录态）
         if (!$this->isLoggedIn()) {
             // 保存当前URL作为来源
             $this->setAccountTimingHeaders([
@@ -54,9 +54,27 @@ class Index extends \Weline\Framework\App\Controller\FrontendController
         /** @var Customer $user */
         $user = $this->getLoginUser();
         $userMs = $this->elapsedMs($userStartedAt);
+        if (!$user instanceof Customer || (int)$user->getId() <= 0) {
+            try {
+                $this->session->logout();
+            } catch (\Throwable) {
+            }
+            $this->setAccountTimingHeaders([
+                'total' => $this->elapsedMs($requestStartedAt),
+                'login' => $loginMs,
+                'user' => $userMs,
+                'redirect' => 1,
+            ]);
+            $currentUrl = $this->request->getUrlBuilder()->getCurrentUrl();
+            $this->redirect('/customer/account/login?referer=' . urlencode($currentUrl));
+            return;
+        }
         // 设置用户数据
         $assignStartedAt = microtime(true);
         $this->assign('user', $user);
+        $this->assign('username', (string)($user->getUsername() ?: $user->getEmail()));
+        $this->assign('email', (string)$user->getEmail());
+        $this->assign('avatarInitial', strtoupper(mb_substr((string)($user->getUsername() ?: $user->getEmail() ?: '?'), 0, 1)));
         $assignMs = $this->elapsedMs($assignStartedAt);
 
         $sidebarStartedAt = microtime(true);

@@ -11,6 +11,7 @@ use Weline\Customer\Service\AccountSidebarContentGate;
 use Weline\Customer\Service\CustomerAccountService;
 use Weline\Customer\Service\CustomerAuthReturnUrlService;
 use Weline\Customer\Service\CustomerRememberDeviceService;
+use Weline\Customer\Service\GuestCheckoutConvertService;
 use Weline\Customer\Service\PasswordResetService;
 use Weline\Framework\App\Env;
 use Weline\Framework\DataObject\DataObject;
@@ -61,8 +62,74 @@ class AccountQueryProvider implements QueryProviderInterface
             'resetPassword' => $this->resetPassword($params),
             'completeChallenge' => $this->completeChallenge($params),
             'getSidebarSection' => $this->getSidebarSection($params),
+            'inspectGuestCheckoutConvert' => $this->inspectGuestCheckoutConvert($params),
+            'convertGuestCheckout' => $this->convertGuestCheckout($params),
             default => throw new \InvalidArgumentException('Account query provider does not support operation: ' . $operation),
         };
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function inspectGuestCheckoutConvert(array $params): array
+    {
+        $session = $this->sessionFactory->createFrontendSession();
+        if ($session->isLoggedIn()) {
+            return $this->failure((string)__('您已登录'), [
+                'outcome' => 'unavailable',
+            ]);
+        }
+        $result = ObjectManager::getInstance(GuestCheckoutConvertService::class)->inspect(
+            trim((string)($params['checkout_token'] ?? '')),
+            trim((string)($params['order_uuid'] ?? '')),
+        );
+
+        return [
+            'success' => in_array($result['outcome'], ['eligible', 'login_required'], true),
+            'message' => $result['message'],
+            'data' => $result,
+        ] + $result;
+    }
+
+    /**
+     * @param array<string,mixed> $params
+     * @return array<string,mixed>
+     */
+    private function convertGuestCheckout(array $params): array
+    {
+        $session = $this->sessionFactory->createFrontendSession();
+        if ($session->isLoggedIn()) {
+            $user = $session->getUser();
+            if ($user instanceof Customer && $user->mustSetPassword()) {
+                return [
+                    'success' => true,
+                    'message' => (string)__('请先设置密码'),
+                    'outcome' => 'password_required',
+                    'redirect' => '/customer/account/set-password',
+                    'data' => [
+                        'outcome' => 'password_required',
+                        'redirect' => '/customer/account/set-password',
+                    ],
+                ];
+            }
+
+            return $this->failure((string)__('您已登录'), [
+                'outcome' => 'unavailable',
+            ]);
+        }
+        $result = ObjectManager::getInstance(GuestCheckoutConvertService::class)->convert(
+            trim((string)($params['checkout_token'] ?? '')),
+            trim((string)($params['order_uuid'] ?? '')),
+        );
+        $ok = ($result['outcome'] ?? '') === 'converted';
+
+        return [
+            'success' => $ok,
+            'message' => $result['message'],
+            'data' => $result,
+            'redirect' => $result['redirect'] ?? null,
+        ] + $result;
     }
 
     /**
@@ -679,6 +746,35 @@ class AccountQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Load one account sidebar content section via Hook as JSON',
+                ],
+                [
+                    'name' => 'inspectGuestCheckoutConvert',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 2,
+                    'cache_ttl' => 0,
+                    'auth' => 'any',
+                    'params' => [
+                        'checkout_token' => ['type' => 'string', 'max_length' => 64],
+                        'order_uuid' => ['type' => 'string', 'max_length' => 64],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Inspect guest checkout success convert eligibility',
+                ],
+                [
+                    'name' => 'convertGuestCheckout',
+                    'frontend' => true,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 8,
+                    'auth' => 'any',
+                    'params' => [
+                        'checkout_token' => ['type' => 'string', 'max_length' => 64],
+                        'order_uuid' => ['type' => 'string', 'max_length' => 64],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Convert guest checkout success into customer session and claim orders',
                 ],
             ],
         ];
