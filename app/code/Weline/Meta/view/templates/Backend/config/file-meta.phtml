@@ -27,60 +27,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
 }
 ?>
 
-<!-- 页面标题 -->
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-            <h4 style="--w-mb-sm:0;"><lang>元数据配置管理</lang></h4>
-            <div class="w-cluster">
-                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                    <li class="w-breadcrumb__item">
-                        <a href="@backend-url('admin/index/index')"><lang>系统</lang></a>
-                    </li>
-                    <li class="w-breadcrumb__item">
-                        <a href="@backend-url('meta/backend/meta')"><lang>元数据管理</lang></a>
-                    </li>
-                    <li class="w-breadcrumb__item" data-state="active"><lang>配置管理</lang></li>
-                </ol>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- 消息 -->
-<div class="w-grid">
-    <div style="--w-span:12;">
-        <template>Weline_Component::message.phtml</template>
-    </div>
-</div>
-
-<div class="w-container" style="--w-pt:0;--w-pe:0;--w-pb:0;--w-ps:0;">
-                <div class="w-grid">
-                    <div style="--w-span:12;">
-                        <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="between">
-                            <h4 style="--w-mb-sm:0;"><?= __('元数据配置管理') ?></h4>
-                            <div class="w-cluster">
-                                <ol class="w-breadcrumb" style="--w-mt:0;--w-me:0;--w-mb:0;--w-ms:0;">
-                                    <li class="w-breadcrumb__item">
-                                        <a href="@backend-url('admin/index/index')"><?= __('系统') ?></a>
-                                    </li>
-                                    <li class="w-breadcrumb__item">
-                                        <a href="@backend-url('meta/backend/meta')"><?= __('元数据管理') ?></a>
-                                    </li>
-                                    <li class="w-breadcrumb__item" data-state="active"><?= __('配置管理') ?></li>
-                                </ol>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="w-grid">
-                    <div style="--w-span:12;">
-                        <template>Weline_Component::message.phtml</template>
-                    </div>
-                </div>
-
-                <div class="meta-config-page" id="meta-config-app"
+<div class="meta-config-page" id="meta-config-app"
      data-tree-url="@url{'meta/backend/config/file/tree'}"
      data-meta-url="@url{'meta/backend/config/file/fileMeta'}"
      data-save-url="@url{'meta/backend/config/file/save'}"
@@ -615,6 +562,13 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         return escapeHtml(value).replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     }
 
+    // Backend page already has session cookies. Prefer same-origin fetch so large
+    // tree payloads are not truncated by adminRequest binary list limits (200).
+    function metaBackendRequest(url, options) {
+        const opts = Object.assign({ credentials: 'same-origin' }, options || {});
+        return fetch(url, opts);
+    }
+
     filtersForm.addEventListener('submit', function (e) {
         e.preventDefault();
         loadTree();
@@ -697,7 +651,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         treeCount.textContent = '';
 
         const params = new URLSearchParams(filters);
-        Weline.adminRequest('meta', endpoints.tree + '?' + params.toString(), { credentials: 'same-origin' })
+        metaBackendRequest( endpoints.tree + '?' + params.toString(), { credentials: 'same-origin' })
             .then(response => response.json())
             .then(json => {
                 if (json.code !== 200) {
@@ -772,7 +726,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             identity_id: lastFilters.identity_id || '',
         });
 
-        Weline.adminRequest('meta', endpoints.file + '?' + params.toString(), { credentials: 'same-origin' })
+        metaBackendRequest( endpoints.file + '?' + params.toString(), { credentials: 'same-origin' })
             .then(response => response.json())
             .then(json => {
                 if (json.code !== 200) {
@@ -880,7 +834,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
             activeNode.classList.add('saving');
         }
 
-        Weline.adminRequest('meta', endpoints.save, {
+        metaBackendRequest( endpoints.save, {
             method: 'POST',
             body: formData,
             credentials: 'same-origin',
@@ -938,7 +892,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
 
         translationModalBody.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><div class="w-spinner w-text" role="status" data-tone="primary"></div><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('正在加载翻译...') ?></p></div>';
 
-        Weline.adminRequest('meta', endpoints.translation + '?' + params.toString(), { credentials: 'same-origin' })
+        metaBackendRequest( endpoints.translation + '?' + params.toString(), { credentials: 'same-origin' })
             .then(response => response.json())
             .then(json => {
                 if (json.code !== 200) {
@@ -1002,7 +956,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         }
 
         const formData = new FormData(form);
-        Weline.adminRequest('meta', endpoints.translationSave, {
+        metaBackendRequest( endpoints.translationSave, {
             method: 'POST',
             body: formData,
             credentials: 'same-origin',
@@ -1089,7 +1043,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
 
         metaNameDescTranslationModalBody.innerHTML = '<div class="w-text" data-align="center" style="--w-pt:var(--weline-space-6);--w-pb:var(--weline-space-6);"><div class="w-spinner w-text" role="status" data-tone="primary"></div><p class="w-text" data-tone="muted" style="--w-mt:var(--weline-space-2);--w-mb:0;"><?= __('正在加载翻译...') ?></p></div>';
 
-        Weline.adminRequest('meta', endpoints.metaNameDescTranslation + '?' + params.toString(), { credentials: 'same-origin' })
+        metaBackendRequest( endpoints.metaNameDescTranslation + '?' + params.toString(), { credentials: 'same-origin' })
             .then(response => response.json())
             .then(json => {
                 if (json.code !== 200) {
@@ -1151,7 +1105,7 @@ if (empty($currentNamespace) && !empty($namespaceList)) {
         }
 
         const formData = new FormData(form);
-        Weline.adminRequest('meta', endpoints.metaNameDescTranslationSave, {
+        metaBackendRequest( endpoints.metaNameDescTranslationSave, {
             method: 'POST',
             body: formData,
             credentials: 'same-origin',
