@@ -137,6 +137,22 @@ class PaymentCheckoutSession extends Model
     /**
      * @return array<string, mixed>
      */
+    public function getAmountSnapshot(): array
+    {
+        return $this->decodeJsonField(self::schema_fields_AMOUNT_SNAPSHOT);
+    }
+
+    /**
+     * @param array<string, mixed> $snapshot
+     */
+    public function setAmountSnapshot(array $snapshot): static
+    {
+        return $this->setJsonField(self::schema_fields_AMOUNT_SNAPSHOT, $snapshot);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     private function decodeJsonField(string $field): array
     {
         $raw = $this->getData($field);

@@ -1,0 +1,90 @@
+<?php
+/**
+ * 后台订单详情：万能支付 Attempt 记录。
+ *
+ * @var \Weline\Framework\View\Template $this
+ *
+ * @widget.code {backend-order-payment-records}
+ * @widget.name {订单支付记录}
+ * @widget.description {订单后台详情支付记录槽：从 PaymentAttempt 投影；默认注入 backend-order-payment-records。}
+ * @widget.type {content}
+ * @widget.area {backend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["backend-order-view"]}
+ * @widget.slot {backend-order-payment-records}
+ * @widget.supports {["backend-order-payment-records","payment-records","payment"]}
+ * @widget.default_injections {[{"layout_type":"backend-order-view","layout_option":"default","slot":"backend-order-payment-records","area":"content","sort_order":10,"required":true,"reason":"订单详情支付记录默认由万能支付 Attempt 部件提供","config":{"title":"支付记录"}}]}
+ *
+ * @param title {default="支付记录",type="string",label="标题"}
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Order\Model\Order;
+use Weline\Payment\Service\BackendOrderPaymentRecordsService;
+use Weline\Theme\Helper\WidgetUiScope;
+
+$scope = WidgetUiScope::forWidget('backend-order-payment-records');
+$wc = $scope->cssClass;
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+$title = '支付记录';
+$configuredTitle = trim((string)($this->getData('title') ?? ''));
+if ($configuredTitle !== '' && !str_starts_with($configuredTitle, 'Weline_')) {
+    $title = $configuredTitle;
+}
+
+$order = $this->getData('order');
+$orderId = (int)($this->getData('order_id') ?? 0);
+if ($orderId <= 0 && $order) {
+    $orderData = is_object($order) ? $order->getData() : (array)$order;
+    $orderId = (int)($orderData[Order::schema_fields_ID] ?? 0);
+}
+if ($orderId <= 0) {
+    $orderId = (int)($this->request->getParam('id') ?? 0);
+}
+
+/** @var BackendOrderPaymentRecordsService $recordsService */
+$recordsService = ObjectManager::getInstance(BackendOrderPaymentRecordsService::class);
+$payments = $recordsService->listForOrderId($orderId);
+?>
+<div class="w-card <?= $esc($wc) ?>"
+     style="--w-mb:var(--weline-space-4);"
+     weline-code="<?= $esc($scope->code) ?>"
+     data-uid="<?= $esc($scope->uid) ?>"
+     data-js-ns="<?= $esc($scope->jsNs) ?>"
+     data-testid="backend-order-payment-records">
+    <div class="w-card__header">
+        <h5 class="w-card__title" style="--w-mb:0;"><?= $esc($title) ?></h5>
+    </div>
+    <div class="w-card__body">
+        <div class="w-table-wrap">
+            <table class="w-table">
+                <thead>
+                    <tr>
+                        <th><?= __('支付方式') ?></th>
+                        <th><?= __('支付金额') ?></th>
+                        <th><?= __('交易ID') ?></th>
+                        <th><?= __('状态') ?></th>
+                        <th><?= __('支付时间') ?></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php if ($payments === []): ?>
+                        <tr>
+                            <td colspan="5" class="w-text" data-align="center"><?= __('暂无支付记录') ?></td>
+                        </tr>
+                    <?php else: ?>
+                        <?php foreach ($payments as $payment): ?>
+                            <tr>
+                                <td><?= $esc((string)($payment['payment_method'] ?? '')) ?></td>
+                                <td><?= $esc((string)($payment['currency'] ?? 'CNY')) ?> <?= number_format((float)($payment['amount'] ?? 0), 2) ?></td>
+                                <td><?= $esc((string)($payment['transaction_id'] ?? '')) ?></td>
+                                <td><span class="w-badge" data-w-background="success"><?= $esc((string)($payment['status'] ?? '')) ?></span></td>
+                                <td><?= $esc((string)($payment['paid_at'] ?? '')) ?></td>
+                            </tr>
+                        <?php endforeach; ?>
+                    <?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>

@@ -68,12 +68,14 @@ class Payment extends AbstractRestController
         try {
             $orderData = [
                 'order_id' => $orderId,
+                'payable_type' => (string) $this->request->getParam('payable_type', 'order'),
+                'payable_id' => (string) $this->request->getParam('payable_id', $orderId),
                 'amount' => $amount,
                 'currency' => $currency,
                 'subject' => $subject ?: __('订单支付'),
                 'description' => $description ?: __('订单号: %{1}', [$orderId]),
-                'return_url' => $this->getUrl('*/frontend/checkout/return'),
-                'notify_url' => $this->getUrl('*/frontend/callback/notify'),
+                'scope' => (string) $this->request->getParam('scope', ''),
+                'environment' => (string) $this->request->getParam('environment', 'sandbox'),
             ];
             
             $transaction = $this->paymentService->createPayment($methodCode, $orderData);

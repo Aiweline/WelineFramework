@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 108 28" role="img" aria-label="PayPal">
+  <text x="2" y="20"
+        font-family="Helvetica Neue, Arial, Verdana, sans-serif"
+        font-size="20"
+        font-weight="700"
+        font-style="italic"
+        letter-spacing="-0.4">
+    <tspan fill="#003087">Pay</tspan><tspan fill="#009cde">Pal</tspan>
+  </text>
+</svg>

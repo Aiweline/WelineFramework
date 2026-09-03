@@ -48,6 +48,16 @@
         validation="max:1024" />
 
     <w:config:field
+        key="payment/method/paypal/express_logo"
+        label="快捷支付 Logo"
+        description="结账页快捷支付按钮 logo。留空使用默认 PayPal 快捷支付 logo（paypal-express.svg）。部件级 logo 优先于本配置。"
+        type="image"
+        value-type="string"
+        default=""
+        scope="global,website,store"
+        validation="max:1024" />
+
+    <w:config:field
         key="payment/method/paypal/default_currency"
         label="默认支付货币"
         description="可支付对象没有指定目标支付货币时使用的默认货币。"
@@ -91,7 +101,7 @@
         action-label="沙箱一键授权"
         action-label-connected="重新授权"
         connected-key="payment/method/paypal/sandbox_oauth_connected_at"
-        callback-path="payment/frontend/callback/return"
+        callback-path="payment/frontend/callback/paypal"
         callback-label="登记到 PayPal App 的 Return URL（含当前范围）" />
 
     <w:config:adapter
@@ -208,7 +218,7 @@
         action-label="正式一键授权"
         action-label-connected="重新授权"
         connected-key="payment/method/paypal/live_oauth_connected_at"
-        callback-path="payment/frontend/callback/return"
+        callback-path="payment/frontend/callback/paypal"
         callback-label="登记到 PayPal App 的 Return URL（含当前范围）" />
 
     <w:config:adapter
@@ -223,7 +233,7 @@
     <w:config:field
         key="payment/method/paypal/return_url"
         label="Return URL"
-        description="PayPal 支付成功后跳转回站点的 URL。须含 target_scope=当前配置范围（三段 storage_scope）；路径固定为 payment/frontend/callback/return。"
+        description="PayPal 支付成功后跳转回站点的 URL。路径含支付码 paypal；须含 target_scope=当前配置范围（三段 storage_scope）。"
         type="text"
         value-type="string"
         default=""

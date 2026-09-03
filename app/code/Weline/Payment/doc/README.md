@@ -99,7 +99,7 @@ Provider 模块的最小交付物是：
 - checkout phtml：由该 Provider 模块负责前台特殊展示或输入字段。
 - config phtml：放在 `extends/module/Weline_SystemConfig/Config/{area}/{code}.phtml`。
 
-浏览器 OAuth / 支付回跳只登记壳统一 `payment/frontend/callback/return`，并用 query `target_scope={三段 storage_scope}` 标明写入范围（Global/Website/Store/Channel）；一键授权走 `payment/backend/connect/authorize?method_code=`。可选实现 `ProviderConnectInterface`。Provider 模板/SDK/iframe 只渲染与收集，最终支付状态仍回写壳。禁止实现已废弃的 `PaymentProviderInterface`。缺显式范围时授权 fail-closed，禁止静默写 Global。
+浏览器 OAuth / 支付回跳只登记壳 `payment/frontend/callback/{method_code}`，并用 query `target_scope={三段 storage_scope}` 标明写入范围（Global/Website/Store/Channel）；取消与 return 同路径，加 `outcome=cancel`。一键授权走 `payment/backend/connect/authorize?method_code=`。可选实现 `ProviderConnectInterface`。Provider 模板/SDK/iframe 只渲染与收集，最终支付状态仍回写壳。禁止实现已废弃的 `PaymentProviderInterface`。缺显式范围时授权 fail-closed，禁止静默写 Global。
 
 ## Fake Provider
 
