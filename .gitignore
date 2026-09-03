@@ -8,14 +8,23 @@
 /tmp/
 /data/pagebuilder/
 
-# ???????????????
+# IDE / editor local config (do not commit)
 .idea
 .vscode
-.cursor/*
-!.cursor/mcp.json
-!.cursor/rules/
-!.cursor/rules/weline-mcp-readiness.mdc
+.cursor/
 .trae/
+
+# AI agent protocols — only AGENTS.md is committed; editor-local MCP/rules stay untracked
+CLAUDE.md
+CLAUDE.local.md
+.mcp.json
+.cursorrules
+.cursorignore
+.codex/
+.github/copilot-instructions.md
+GEMINI.md
+.windsurfrules
+
 # ???????
 /.workflow
 
