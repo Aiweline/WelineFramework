@@ -4,15 +4,15 @@ declare(strict_types=1);
 
 namespace Weline\Widget\Test\Unit;
 
-use Weline\Framework\Test\TestCore;
+use PHPUnit\Framework\TestCase;
 use Weline\Widget\Service\ParamSchemaRegistry;
+use Weline\Widget\Service\ParamSchemaScanner;
 
-final class ParamSchemaRegistryExpandTest extends TestCore
+final class ParamSchemaRegistryExpandTest extends TestCase
 {
     public function testExpandBannerItemsProvidesArrayItemSchema(): void
     {
-        /** @var ParamSchemaRegistry $registry */
-        $registry = $this->objectManager->getInstance(ParamSchemaRegistry::class);
+        $registry = $this->createRegistry();
 
         $expanded = $registry->expandParams([
             'slides' => [
@@ -33,8 +33,7 @@ final class ParamSchemaRegistryExpandTest extends TestCore
 
     public function testExpandAllMenuTreeRewritesUiTypeAndInputToNavTree(): void
     {
-        /** @var ParamSchemaRegistry $registry */
-        $registry = $this->objectManager->getInstance(ParamSchemaRegistry::class);
+        $registry = $this->createRegistry();
 
         $expanded = $registry->expandParams([
             'menu_tree' => [
@@ -50,5 +49,10 @@ final class ParamSchemaRegistryExpandTest extends TestCore
         self::assertSame('nav_tree', $expanded['menu_tree']['input'] ?? null);
         self::assertSame('all_menu_tree', $expanded['menu_tree']['schema_type'] ?? null);
         self::assertFalse($expanded['menu_tree']['i18n'] ?? true);
+    }
+
+    private function createRegistry(): ParamSchemaRegistry
+    {
+        return new ParamSchemaRegistry($this->createMock(ParamSchemaScanner::class));
     }
 }
