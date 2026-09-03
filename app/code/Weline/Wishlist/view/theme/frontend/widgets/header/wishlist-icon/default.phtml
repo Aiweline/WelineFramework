@@ -18,6 +18,7 @@
  */
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 use Weline\Wishlist\Service\WishlistService;
 
@@ -43,7 +44,7 @@ if ($isPreviewMode && $wishlistCount <= 0) {
          data-js-ns="<?= $esc($scope->jsNs) ?>"
          data-w-wishlist-icon="1"
          data-wishlist-count="<?= $wishlistCount ?>">
-    <a href="@url{'customer/account/index'}#wishlist" class="wishlist-link" title="<?= __('我的收藏') ?>">
+    <a href="@url{'customer/account/index'}#wishlist" class="wishlist-link" title="<?= $esc(WidgetI18n::label('我的收藏')) ?>">
         <span class="wishlist-icon-wrapper">
             <span class="header-wishlist-icon" aria-hidden="true">
                 <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true">
@@ -61,7 +62,7 @@ if ($isPreviewMode && $wishlistCount <= 0) {
             <?php endif; ?>
         </span>
         <span class="wishlist-info">
-            <span class="wishlist-label"><?= __('收藏') ?></span>
+            <span class="wishlist-label"><?= $esc(WidgetI18n::label('收藏')) ?></span>
         </span>
     </a>
 </section>
