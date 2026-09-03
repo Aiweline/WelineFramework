@@ -42,23 +42,37 @@ class HeadProviderRegistry
         ];
 
         try {
-            foreach (ExtendsData::getExtendedBy('Weline_Seo', $forceReload) as $extensions) {
-                foreach ($extensions as $extension) {
-                    $extendName = $this->extensionName($extension);
+            $extensionsByModule = ExtendsData::getExtendedBy('Weline_Seo', $forceReload);
+        } catch (\Throwable) {
+            $this->cachedProviders = $providers;
+            return $providers;
+        }
+
+        foreach ($extensionsByModule as $extensions) {
+            if (!is_array($extensions)) {
+                continue;
+            }
+            foreach ($extensions as $extension) {
+                if (!is_array($extension)
+                    || $this->extensionName($extension) !== 'SeoProfileProvider'
+                ) {
+                    continue;
+                }
+
+                try {
                     $class = $this->extensionClass($extension);
                     if ($class === '' || !class_exists($class)) {
                         continue;
                     }
                     $instance = $this->objectManager->getInstance($class);
-                    if ($extendName === 'SeoProfileProvider' && $instance instanceof SeoProfileProviderInterface) {
+                    if ($instance instanceof SeoProfileProviderInterface) {
                         $providers['seo_profile'][] = $instance;
                     }
+                } catch (\Throwable) {
+                    // One broken optional provider must not hide healthy peers.
+                    continue;
                 }
             }
-        } catch (\Throwable) {
-            $providers = [
-                'seo_profile' => [],
-            ];
         }
 
         $this->cachedProviders = $providers;

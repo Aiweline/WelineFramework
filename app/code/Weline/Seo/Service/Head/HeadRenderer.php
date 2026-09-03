@@ -30,7 +30,7 @@ class HeadRenderer
         if ($slot === '') {
             $slot = 'head';
         }
-        if ($slot === 'head' && $this->claimTemplateRender($template, '__weline_seo_head_rendered')) {
+        if ($slot === 'head' && $this->claimHeadRender($template)) {
             return '';
         }
         if ($slot === 'inspector') {
@@ -58,6 +58,23 @@ class HeadRenderer
                 $slot === 'footer' ? $this->renderSeoPanelTabBootstrap($template) : '',
             ])),
         };
+    }
+
+    private function claimHeadRender($template): bool
+    {
+        $requestId = \Weline\Framework\Runtime\RequestContext::getId();
+        if ($requestId !== null && $requestId !== '') {
+            $key = 'weline.seo.head.rendered';
+            if (\Weline\Framework\Runtime\RequestContext::has($key)) {
+                return true;
+            }
+
+            \Weline\Framework\Runtime\RequestContext::set($key, true);
+            $this->claimTemplateRender($template, '__weline_seo_head_rendered');
+            return false;
+        }
+
+        return $this->claimTemplateRender($template, '__weline_seo_head_rendered');
     }
 
     private function claimTemplateRender($template, string $key): bool
