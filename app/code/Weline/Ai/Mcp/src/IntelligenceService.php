@@ -547,7 +547,7 @@ final class IntelligenceService
             $workflowContract['active_surface_ids'] = $activeSurfaceIds;
             $workflowContract['matched_surfaces'] = GuidanceWorkflowCatalog::resolveActiveSurfaces($task);
             $workflowContract['task_plan_gate'] = [
-                'required_on' => ['every_user_requirement', 'before_get_edit_bundle', 'before_apply_compact_edit'],
+                'required_on' => ['every_coding_user_requirement', 'before_get_edit_bundle', 'before_apply_compact_edit'],
                 'required_before' => ['get_edit_bundle', 'apply_compact_edit'],
                 'submit_tool' => 'submit_task_plan',
                 'get_tool' => 'get_task_plan',
@@ -773,6 +773,7 @@ final class IntelligenceService
                     'token_budget' => $effectiveTokenBudget,
                     'include_docs' => (bool) ($input['include_docs'] ?? true),
                     'include_skills' => (bool) ($input['include_skills'] ?? true),
+                    'context_batch_depth' => max(0, (int) ($input['context_batch_depth'] ?? 0)),
                 ]);
                 $serverAggregation = is_array($bundle['server_aggregation'] ?? null)
                     ? $bundle['server_aggregation']
@@ -864,7 +865,9 @@ final class IntelligenceService
                     'context_policy' => 'Use the stable ready_for_edit decision. Candidate path batches and semantic goals are aggregated by this MCP call; never compensate with native per-file reads.',
                     'next' => (bool) ($bundle['ready_for_edit'] ?? false)
                         ? 'Emit one complete edit-plan.v1 for all required files and call apply_compact_edit exactly once.'
-                        : 'Treat CONTEXT_BATCH_PLANNED as a successful terminal parent plan. Execute only batch_plan.child_requests in order; each ready child is independently planned and applied with its own run_id and bundle_id.',
+                        : ((string) ($bundle['status'] ?? '') === 'CONTEXT_TARGET_UNAVAILABLE'
+                            ? 'Record MCP_TARGET_UNAVAILABLE and use native edit only for exact known paths; do not spawn more CONTEXT_BATCH_PLANNED children.'
+                            : 'Treat CONTEXT_BATCH_PLANNED as a successful terminal parent plan. Execute only batch_plan.child_requests in order; each ready child is independently planned and applied with its own run_id and bundle_id.'),
                     'batch_followup_allowed' => $needsFollowup,
                     'followup_request' => [
                         'child_requests' => $needsFollowup ? $childRequests : [],
@@ -1037,6 +1040,7 @@ final class IntelligenceService
                 'token_budget' => 24_000,
                 'include_docs' => (bool) ($input['include_docs'] ?? true),
                 'include_skills' => (bool) ($input['include_skills'] ?? true),
+                'context_batch_depth' => max(0, (int) ($input['context_batch_depth'] ?? 0)) + 1,
             ];
             $module = trim((string) ($input['module'] ?? ''));
             if ($module !== '') {

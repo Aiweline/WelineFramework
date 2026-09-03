@@ -1013,7 +1013,7 @@ final class ProjectIndexer
 
     private function isRetainedKnowledgePath(string $path): bool
     {
-        return in_array($path, ['AGENTS.md', 'CLAUDE.md'], true)
+        return $path === 'AGENTS.md'
             || str_starts_with($path, 'docs/weline/')
             || preg_match('~^app/code/[^/]+/[^/]+/doc(?:/|$)~', $path) === 1;
     }
@@ -1219,7 +1219,7 @@ final class ProjectIndexer
 
     private function fileKind(string $path, string $extension): string
     {
-        if (in_array($path, ['AGENTS.md', 'CLAUDE.md'], true)) {
+        if ($path === 'AGENTS.md') {
             return 'rule';
         }
         if (preg_match('~^app/code/[^/]+/[^/]+/doc(?:/|$)~', $path) === 1
