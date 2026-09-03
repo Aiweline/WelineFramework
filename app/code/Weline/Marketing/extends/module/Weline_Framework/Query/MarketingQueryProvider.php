@@ -33,7 +33,11 @@ final class MarketingQueryProvider implements QueryProviderInterface
             return match ($operation) {
                 'validateCoupon' => $this->couponSession->validateCoupon($params, $quotes),
                 'quoteDiscount' => $this->couponSession->quoteDiscount($params, $quotes),
-                'applyCoupon' => $this->couponSession->applyCoupon((string)($params['coupon_code'] ?? $params['code'] ?? '')),
+                'applyCoupon' => $this->couponSession->applyCoupon(
+                    (string)($params['coupon_code'] ?? $params['code'] ?? ''),
+                    $quotes,
+                    $params,
+                ),
                 'removeCoupon' => $this->couponSession->removeCoupon(),
                 'getCoupon' => $this->couponSession->getCoupon(),
                 default => throw new \InvalidArgumentException((string)__('营销接口不支持操作：%{1}', [$operation])),
@@ -77,7 +81,7 @@ final class MarketingQueryProvider implements QueryProviderInterface
                     'name' => 'applyCoupon',
                     'frontend' => true,
                     'mode' => 'write',
-                    'params' => $this->couponCodeParams(),
+                    'params' => $this->couponCodeParams() + $this->quoteParams(),
                 ],
                 [
                     'name' => 'removeCoupon',
