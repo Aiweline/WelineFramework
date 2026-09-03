@@ -507,6 +507,11 @@ OK,OK
 文件资源标识无效,"The file asset ID is invalid"
 文件资源修订版本无效,"The file asset revision is invalid."
 目标文件不存在,"The target file does not exist"
+"文件资源 ID 无效","文件资源 ID 无效"
+文件资源不存在,文件资源不存在
+文件资源缺少存储定位信息,文件资源缺少存储定位信息
+文件资源所在存储不可用,文件资源所在存储不可用
+无权访问该文件资源,无权访问该文件资源
 "媒体文件访问缺少冻结的 ScopeIdentity。","Media-file access requires a frozen ScopeIdentity."
 媒体文件操作缺少显式语言。,"The media-file operation requires an explicit locale."
 文件夹名称不能为空,"Folder name is required"
