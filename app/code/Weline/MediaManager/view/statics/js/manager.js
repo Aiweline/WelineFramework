@@ -384,10 +384,6 @@
                 var urlParams = new URLSearchParams(window.location.search);
                 var fromUrl = urlParams.get('initialValue');
                 if (fromUrl !== null && fromUrl !== '') CONFIG.initialValue = fromUrl;
-                var focusAssetId = urlParams.get('asset_id');
-                if (focusAssetId !== null && String(focusAssetId).trim() !== '') {
-                    CONFIG.focusAssetId = String(focusAssetId).trim().toLowerCase();
-                }
                 [
                     ['aspect_ratio', 'aspectRatio'],
                     ['aspectRatio', 'aspectRatio'],
@@ -493,13 +489,7 @@
             if (IFRAME_MODE && (CONFIG.initialValue || '').trim()) {
                 lastHash = null;
             }
-            if (IFRAME_MODE && (CONFIG.focusAssetId || '').trim()) {
-                lastHash = null;
-            }
             openDir(lastHash || '', true);
-            if (IFRAME_MODE && (CONFIG.focusAssetId || '').trim()) {
-                applyFocusAssetId();
-            }
         });
     }
 
@@ -1273,51 +1263,6 @@
         openDir(directoryHash);
     }
 
-    function applyFocusAssetId() {
-        var assetId = String(CONFIG.focusAssetId || '').trim().toLowerCase();
-        if (!assetId || CONFIG._focusAssetApplied) {
-            return;
-        }
-        CONFIG._focusAssetApplied = true;
-        api({
-            cmd: 'find_asset',
-            asset_id: assetId,
-            locale_code: CONFIG.localeCode || 'zh_Hans_CN'
-        }, function(data) {
-            if (data && data.error) {
-                showError(Array.isArray(data.error) ? data.error.join(', ') : String(data.error));
-                return;
-            }
-            var entry = data && data.result;
-            if (!entry || !entry.hash) {
-                showError(t('searchTargetMissing'));
-                return;
-            }
-            if (data.storage && String(data.storage) !== String(CURRENT_STORAGE || '')) {
-                var select = qs('#mmf-storage-select');
-                if (select) {
-                    select.value = String(data.storage);
-                    CURRENT_STORAGE = String(data.storage);
-                    updateStorageKey();
-                }
-            }
-            var directoryHash = String(entry.phash || '');
-            if (!directoryHash && entry.path) {
-                directoryHash = '';
-            }
-            NAV_PENDING = {
-                directoryHash: directoryHash,
-                focusHash: entry.hash,
-                treeFocusHash: directoryHash || entry.hash,
-                highlightHash: entry.hash,
-                openDetails: true
-            };
-            openDir(directoryHash);
-        }, function(err) {
-            showError(err || t('searchFailed'));
-        });
-    }
-
     function applyNavigationPending() {
         if (!NAV_PENDING || NAV_PENDING.directoryHash !== CWD_HASH) return;
         var pending = NAV_PENDING;
@@ -1330,20 +1275,12 @@
             SELECTED = [pending.treeFocusHash];
         }
         highlightSelected();
-        updateStatus();
-        updatePreviewPanel();
-        if (IFRAME_MODE) {
-            updateSelectBar();
-        }
         window.requestAnimationFrame(function() {
             if (pending.focusHash) {
                 scrollMediaItemIntoView(pending.focusHash);
             }
             scrollTreeItemIntoView(pending.treeFocusHash);
             flashSearchHighlight(pending.highlightHash || pending.treeFocusHash);
-            if (pending.openDetails && pending.focusHash && FILES[pending.focusHash]) {
-                openAssetDetails(pending.focusHash);
-            }
         });
     }
 
