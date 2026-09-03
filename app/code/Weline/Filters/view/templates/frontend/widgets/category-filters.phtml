@@ -1,0 +1,200 @@
+<?php
+/**
+ * 部件：分类/列表左侧筛选（Filters）
+ *
+ * @widget.code {category-filters}
+ * @widget.name {分类筛选}
+ * @widget.description {分类页左侧筛选器：部门、价格与 EAV 属性筛选}
+ * @widget.type {sidebar}
+ * @widget.area {frontend}
+ * @widget.position {["sidebar"]}
+ * @widget.page_layouts {["category","search","product_list"]}
+ * @widget.supports {["layout-category-filters","layout-product-list-filters","category-filters","attribute-filter","price-filter"]}
+ * @widget.default_injections {[{"layout_type":"category","layout_option":"default","slot":"category-filters","area":"sidebar","sort_order":0,"required":true,"reason":"分类页默认注入 Filters 筛选部件"},{"layout_type":"product_list","layout_option":"default","slot":"list-filters","area":"sidebar","sort_order":0,"required":true,"reason":"商品列表默认注入 Filters 筛选部件"}]}
+ */
+
+use Weline\Filters\Service\StorefrontFilterPanelService;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+
+/** @var \Weline\Framework\View\Template $this */
+
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
+$offers = $this->getData('storefront_offers_unfiltered');
+if (!is_array($offers) || $offers === []) {
+    $offers = $this->getData('storefront_offers');
+}
+$offers = is_array($offers) ? $offers : [];
+
+/** @var Request $request */
+$request = ObjectManager::getInstance(Request::class);
+$requestUri = (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? '');
+$requestPath = strtolower(trim(str_replace('\\', '/', (string)(parse_url($requestUri, PHP_URL_PATH) ?: '')), '/'));
+
+/** @var StorefrontFilterPanelService $panelService */
+$panelService = ObjectManager::getInstance(StorefrontFilterPanelService::class);
+if ($offers === []) {
+    $offers = $panelService->resolveListingOffers($requestPath);
+}
+
+$listingUrl = '/categories';
+$rootCurrent = false;
+if (preg_match('#(?:^|/)(categories|products|product-list)(?:/|$)#', $requestPath, $m) === 1) {
+    $listingUrl = '/' . ($m[1] === 'product-list' ? 'products' : $m[1]);
+    $rootCurrent = in_array($m[1], ['categories', 'products', 'product-list'], true)
+        && !str_contains($requestPath, 'category/');
+} elseif (preg_match('#(?:^|/)category/(.+)$#', $requestPath, $m) === 1) {
+    $listingUrl = '/category/' . trim($m[1], '/');
+    $rootCurrent = false;
+} else {
+    $category = $this->getData('storefront_category');
+    if (is_array($category)) {
+        $url = trim((string)($category['url'] ?? ''));
+        $path = trim(str_replace('\\', '/', (string)($category['path'] ?? '')), '/');
+        if ($url !== '') {
+            $listingUrl = '/' . ltrim((string)(parse_url($url, PHP_URL_PATH) ?: $url), '/');
+        } elseif ($path !== '') {
+            $listingUrl = '/category/' . $path;
+        }
+    }
+}
+
+$query = [];
+parse_str((string)(parse_url($requestUri, PHP_URL_QUERY) ?: ''), $query);
+if (!is_array($query)) {
+    $query = [];
+}
+
+$websiteId = max(0, (int)RequestContext::getWelineWebsiteId());
+$panel = $panelService->buildPanel($offers, $listingUrl, $query, $websiteId, $rootCurrent);
+
+$departments = $panel['departments'];
+$priceOptions = $panel['price'];
+$attributeGroups = $panel['attributes'];
+$hasActive = (bool)$panel['has_active'];
+$clearUrl = (string)$panel['clear_url'];
+?>
+<aside class="w-filters wc-theme_widget_category_filters" data-testid="storefront-filters-panel" data-hook-source="Weline_Filters" weline-code="filters.widget.category_filters">
+    <?php if ($hasActive): ?>
+        <div class="w-filters__clear-row">
+            <a class="w-filters__clear" href="<?= $escape($clearUrl) ?>"><lang>清除筛选条件</lang></a>
+        </div>
+    <?php endif; ?>
+
+    <section class="w-filters__section" weline-code="filters-department">
+        <h3 class="w-filters__heading"><lang>部门</lang></h3>
+        <ul class="w-filters__list" data-testid="storefront-filters-departments">
+            <li>
+                <?php if (!empty($panel['root_current'])): ?>
+                    <span class="w-filters__current" data-testid="storefront-filters-dept-root-current"><lang>全部类目</lang></span>
+                <?php else: ?>
+                    <a class="w-filters__link" href="@url{'categories'}" data-testid="storefront-filters-dept-root">
+                        <span aria-hidden="true">‹</span>
+                        <lang>全部类目</lang>
+                    </a>
+                <?php endif; ?>
+            </li>
+            <?php foreach ($departments as $dept): ?>
+                <?php $depth = max(0, (int)($dept['depth'] ?? 0)); ?>
+                <li class="w-filters__dept" data-depth="<?= $depth ?>" data-testid="storefront-filters-dept-item">
+                    <?php if (!empty($dept['current'])): ?>
+                        <span class="w-filters__current" data-testid="storefront-filters-dept-current"><?= $escape($dept['name']) ?></span>
+                    <?php else: ?>
+                        <a class="w-filters__link" href="<?= $escape($dept['url']) ?>"><?= $escape($dept['name']) ?></a>
+                    <?php endif; ?>
+                </li>
+            <?php endforeach; ?>
+        </ul>
+    </section>
+
+    <?php if ($priceOptions !== []): ?>
+        <section class="w-filters__section" weline-code="filters-price">
+            <h3 class="w-filters__heading"><lang>价格</lang></h3>
+            <ul class="w-filters__list" data-testid="storefront-filters-price">
+                <?php foreach ($priceOptions as $opt): ?>
+                    <li>
+                        <a
+                            class="w-filters__option<?= !empty($opt['selected']) ? ' is-active' : '' ?>"
+                            href="<?= $escape($opt['url']) ?>"
+                            aria-current="<?= !empty($opt['selected']) ? 'true' : 'false' ?>"
+                        >
+                            <span class="w-filters__radio" aria-hidden="true"></span>
+                            <span class="w-filters__label"><?= $escape($opt['label']) ?></span>
+                            <span class="w-filters__count"><?= (int)$opt['count'] ?></span>
+                        </a>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </section>
+    <?php endif; ?>
+
+    <?php foreach ($attributeGroups as $group): ?>
+        <section class="w-filters__section" weline-code="filters-attr-<?= $escape($group['code']) ?>" data-filter-code="<?= $escape($group['code']) ?>">
+            <h3 class="w-filters__heading"><?= $escape($group['name']) ?></h3>
+            <ul class="w-filters__list" data-testid="storefront-filters-attribute">
+                <?php foreach ($group['options'] as $opt): ?>
+                    <li>
+                        <a
+                            class="w-filters__option<?= !empty($opt['selected']) ? ' is-active' : '' ?>"
+                            href="<?= $escape($opt['url']) ?>"
+                            aria-current="<?= !empty($opt['selected']) ? 'true' : 'false' ?>"
+                        >
+                            <span class="w-filters__check" aria-hidden="true"></span>
+                            <span class="w-filters__label"><?= $escape($opt['label']) ?></span>
+                            <span class="w-filters__count"><?= (int)$opt['count'] ?></span>
+                        </a>
+                    </li>
+                <?php endforeach; ?>
+            </ul>
+        </section>
+    <?php endforeach; ?>
+
+    <?php if ($priceOptions === [] && $attributeGroups === [] && $departments === []): ?>
+        <p class="w-filters__empty" data-testid="storefront-filters-empty"><lang>暂无可用筛选条件</lang></p>
+    <?php endif; ?>
+</aside>
+<style>
+.w-filters { color: #0f1111; font-size: 13px; line-height: 1.35; }
+.w-filters__clear-row { margin-bottom: 12px; }
+.w-filters__clear { color: #c45500; text-decoration: none; font-weight: 600; }
+.w-filters__clear:hover { text-decoration: underline; }
+.w-filters__section + .w-filters__section { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e5e7eb; }
+.w-filters__heading { margin: 0 0 8px; font-size: 14px; font-weight: 700; }
+.w-filters__list { list-style: none; margin: 0; padding: 0; }
+.w-filters__dept { margin: 0; }
+.w-filters__dept[data-depth="1"] { padding-left: 12px; }
+.w-filters__dept[data-depth="2"] { padding-left: 24px; }
+.w-filters__dept[data-depth="3"] { padding-left: 36px; }
+.w-filters__dept[data-depth="4"] { padding-left: 48px; }
+.w-filters__link, .w-filters__current { display: block; padding: 4px 0; text-decoration: none; }
+.w-filters__link { color: #2162a1; }
+.w-filters__link:hover { color: #c45500; text-decoration: underline; }
+.w-filters__current { font-weight: 700; color: #0f1111; }
+.w-filters__option {
+    display: inline-grid;
+    grid-template-columns: 1rem auto auto;
+    align-items: center;
+    gap: 8px;
+    max-width: 100%;
+    padding: 5px 0;
+    color: #0f1111;
+    text-decoration: none;
+}
+.w-filters__option:hover { color: #c45500; }
+.w-filters__radio, .w-filters__check {
+    width: 14px; height: 14px; border: 1.5px solid #879596; box-sizing: border-box; flex-shrink: 0;
+}
+.w-filters__radio { border-radius: 50%; }
+.w-filters__check { border-radius: 2px; }
+.w-filters__option.is-active .w-filters__radio {
+    border-color: #e47911; box-shadow: inset 0 0 0 3px #e47911;
+}
+.w-filters__option.is-active .w-filters__check {
+    border-color: #e47911; background: #e47911;
+}
+.w-filters__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.w-filters__count { color: #565959; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.w-filters__empty { margin: 0; color: #565959; }
+</style>
