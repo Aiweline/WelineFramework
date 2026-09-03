@@ -213,7 +213,7 @@ return [
 
     'Weline_Theme::frontend::partials::product-card::add-to-cart' => [
         'name' => __('商品卡片加购按钮'),
-        'description' => __('商品卡片加购操作槽，默认由 Weline_Cart 通过 Cart V2 addV2 提供加购按钮。'),
+        'description' => __('商品卡片加购操作槽，默认由 Weline_Cart 通过 Cart add 提供加购按钮。'),
         'doc' => 'frontend/partials/product-card/add-to-cart.md',
     ],
 
@@ -1031,5 +1031,12 @@ return [
         'name' => __('后台 Topbar Logo'),
         'description' => __('覆盖后台顶部栏的 Logo 区域，可由 Weline_Backend 等模块实现，从自身配置读取 logo_dark/logo_light/logo_sm 等。未实现时使用 Admin 默认静态 Logo。'),
         'doc' => 'backend/partials/topbar/logo.md',
+    ],
+
+    // ==================== Theme Editor — Brand Basics ====================
+    'Weline_Theme::backend::theme-editor::brand-basics::identity' => [
+        'name' => __('主题编辑器基础信息 · 身份槽'),
+        'description' => __('主题编辑器「基础信息」Drawer 的身份字段扩展槽。Website / Store / Channel 等模块应通过 BrandBasicsIdentityProviderInterface 挂载真实名称与简介，并由本 Hook 可选注入自定义 UI；权威读写走 identity API，不写入 appearance.brand。'),
+        'doc' => 'backend/theme-editor/brand-basics-identity.md',
     ],
 ];

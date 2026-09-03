@@ -541,7 +541,8 @@ class WidgetDefaultInjectionService
             'items' => [],
         ];
         $theme = $this->loadTheme($themeId);
-        if (!$theme || trim($pageType) === '') {
+        // 全局 chrome 只持久化在 homepage 载体；非载体布局不得补齐本地 footer-container。
+        if (!$theme || trim($pageType) === '' || trim($pageType) !== ThemeLayout::PAGE_TYPE_HOME) {
             return $result;
         }
 
@@ -1991,10 +1992,14 @@ class WidgetDefaultInjectionService
                 }
             }
         } catch (\Throwable) {
-            return null;
+            // Keep resolving through the component catalog below.
         }
 
-        return null;
+        try {
+            return $this->componentCatalog->findSlot($slotId, $componentArea, $theme);
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**
@@ -2003,34 +2008,60 @@ class WidgetDefaultInjectionService
      */
     private function slotAcceptsInjection(array $accept, array $item): bool
     {
-        $candidates = [];
-        $code = trim((string)($item['code'] ?? ''));
-        if ($code !== '') {
-            $candidates[] = $code;
-        }
         $widget = is_array($item['widget'] ?? null) ? $item['widget'] : [];
-        foreach (['supports', 'slots'] as $key) {
-            $list = $widget[$key] ?? [];
+        $candidates = [
+            $item['code'] ?? null,
+            $item['type'] ?? null,
+            $item['slot'] ?? null,
+            $widget['code'] ?? null,
+            $widget['type'] ?? null,
+            $widget['slot'] ?? null,
+        ];
+
+        foreach ([$item['supports'] ?? [], $item['position'] ?? [], $widget['supports'] ?? [], $widget['position'] ?? []] as $list) {
             if (!is_array($list)) {
-                continue;
+                $list = [$list];
             }
             foreach ($list as $value) {
-                $value = trim((string)$value);
-                if ($value !== '') {
-                    $candidates[] = $value;
-                }
+                $candidates[] = $value;
             }
         }
-        $candidates = array_values(array_unique($candidates));
-        if ($candidates === []) {
+
+        $slots = $widget['slots'] ?? [];
+        if (is_array($slots)) {
+            foreach ($slots as $key => $slot) {
+                if (is_string($key)) {
+                    $candidates[] = $key;
+                }
+                if (is_array($slot)) {
+                    $candidates[] = $slot['id'] ?? null;
+                    $candidates[] = $slot['code'] ?? null;
+                    continue;
+                }
+                $candidates[] = $slot;
+            }
+        }
+
+        $normalizedCandidates = [];
+        foreach ($candidates as $candidate) {
+            if (is_array($candidate) || is_object($candidate)) {
+                continue;
+            }
+            $candidate = strtolower(trim((string)$candidate));
+            if ($candidate !== '') {
+                $normalizedCandidates[$candidate] = $candidate;
+            }
+        }
+        if ($normalizedCandidates === []) {
             return true;
         }
+
         foreach ($accept as $token) {
-            $token = trim((string)$token);
+            $token = strtolower(trim((string)$token));
             if ($token === '' || $token === '*') {
                 return true;
             }
-            if (in_array($token, $candidates, true)) {
+            if (isset($normalizedCandidates[$token])) {
                 return true;
             }
         }

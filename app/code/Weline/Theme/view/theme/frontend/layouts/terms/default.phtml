@@ -73,26 +73,40 @@ $toc = [
             font-family: "Amazon Ember", Arial, sans-serif;
         }
 
+        .amazon-terms__main {
+            flex: 1 0 auto;
+            display: flex;
+            flex-direction: column;
+        }
+        .amazon-terms.weline-page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
         .amazon-terms__breadcrumb {
             border-bottom: 1px solid var(--color-border-default, #ddd);
             background: var(--color-bg-secondary, #eaeded);
         }
 
         .amazon-terms__hero {
+            margin: 0 0 1.25rem;
+            padding: clamp(1.35rem, 3vw, 1.85rem) clamp(1.15rem, 2.5vw, 1.75rem);
+            border-radius: 8px;
             background:
-                radial-gradient(ellipse at top right, rgba(255, 153, 0, 0.16), transparent 46%),
-                linear-gradient(135deg, var(--color-bg-dark-secondary, #131921) 0%, var(--color-bg-dark, #232f3e) 58%, var(--color-bg-dark-tertiary, #37475a) 100%);
-            color: var(--color-text-light, #ffffff);
+                radial-gradient(ellipse at top right, rgba(255, 153, 0, 0.14), transparent 46%),
+                linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
+            color: #ffffff;
+            box-sizing: border-box;
         }
 
-        .amazon-terms__hero-inner,
-        .amazon-terms__inner {
-            width: min(var(--weline-layout-content-max-width, 1440px), calc(100% - 2rem));
-            margin: 0 auto;
-        }
-
-        .amazon-terms__hero-inner {
-            padding: clamp(1.75rem, 4vw, 2.75rem) 0;
+        .amazon-terms__stage {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+            padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
         }
 
         .amazon-terms__eyebrow {
@@ -134,8 +148,9 @@ $toc = [
         }
 
         .amazon-terms__body {
-            background: var(--color-bg-muted, #f3f3f3);
-            padding: clamp(1.25rem, 3vw, 2rem) 0 clamp(2.5rem, 5vw, 3.5rem);
+            flex: 1 0 auto;
+            width: 100%;
+            background: linear-gradient(180deg, #eaeded 0, #f3f3f3 12rem);
         }
 
         .amazon-terms__panel {
@@ -310,21 +325,19 @@ $toc = [
                     <?php if ($customContent !== ''): ?>
                         <?= $customContent ?>
                     <?php else: ?>
-                        <header class="amazon-terms__hero" aria-labelledby="terms-layout-title" weline-code="theme.terms.hero">
-                            <div class="amazon-terms__hero-inner">
-                                <p class="amazon-terms__eyebrow"><?= $escape($siteName) ?></p>
-                                <h1 id="terms-layout-title"><?= $escape($title) ?></h1>
-                                <p class="amazon-terms__hero-lead"><?= $escape($subtitle) ?></p>
-                                <div class="amazon-terms__meta">
-                                    <span><?= $escape(__('最后更新：')) ?><?= $escape($updatedAt) ?></span>
-                                    <a href="@url{'privacy'}"><?= $escape(__('隐私政策')) ?></a>
-                                    <a href="@url{'help'}"><?= $escape(__('帮助中心')) ?></a>
-                                </div>
-                            </div>
-                        </header>
-
                         <div class="amazon-terms__body" weline-code="theme.terms.body">
-                            <div class="amazon-terms__inner">
+                            <div class="amazon-terms__stage">
+                                <header class="amazon-terms__hero" aria-labelledby="terms-layout-title" weline-code="theme.terms.hero">
+                                    <p class="amazon-terms__eyebrow"><?= $escape($siteName) ?></p>
+                                    <h1 id="terms-layout-title"><?= $escape($title) ?></h1>
+                                    <p class="amazon-terms__hero-lead"><?= $escape($subtitle) ?></p>
+                                    <div class="amazon-terms__meta">
+                                        <span><?= $escape(__('最后更新：')) ?><?= $escape($updatedAt) ?></span>
+                                        <a href="@url{'privacy'}"><?= $escape(__('隐私政策')) ?></a>
+                                        <a href="@url{'help'}"><?= $escape(__('帮助中心')) ?></a>
+                                    </div>
+                                </header>
+
                                 <div class="amazon-terms__panel">
                                     <aside class="amazon-terms__toc" aria-label="<?= $escape(__('条款目录')) ?>">
                                         <h2><?= $escape(__('目录')) ?></h2>

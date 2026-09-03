@@ -19,6 +19,12 @@ final class FooterContainerWidgetContractTest extends TestCase
 
         self::assertStringContainsString('@widget.code {footer-container}', $src);
         self::assertStringContainsString('@widget.exclusive {true}', $src);
+        self::assertStringContainsString('@widget.is_container {true}', $src);
+        self::assertStringContainsString('@widget.slots {', $src);
+        self::assertStringContainsString('"footer-about-links"', $src);
+        self::assertStringContainsString('"footer-partner-links"', $src);
+        self::assertStringContainsString('"footer-payment-account-links"', $src);
+        self::assertStringContainsString('"footer-help-links"', $src);
         self::assertStringContainsString('"slot":"footer"', $src);
         self::assertStringContainsString('"required":true', $src);
         self::assertStringContainsString('type="footer_link_groups"', $src);
@@ -31,8 +37,13 @@ final class FooterContainerWidgetContractTest extends TestCase
         self::assertStringContainsString('<w:slot id="footer-help-links"', $src);
         self::assertStringContainsString('footer-section__links', $src);
         self::assertStringContainsString('footer-section__link', $src);
+        self::assertStringContainsString('resolveFrontendSiteName', $src);
+        self::assertStringContainsString('留空使用当前网站名称', $src);
         self::assertStringNotContainsString('<ul class="footer-section__list">', $src);
         self::assertStringNotContainsString('<li>', $src);
+        self::assertStringNotContainsString('getFooter()->getHtml()', $src);
+        self::assertStringNotContainsString('Weline\\Frontend\\Block\\Footer\\Base', $src);
+        self::assertStringContainsString('<w:hook>footer</w:hook>', $src);
     }
 
     public function testNormalizeSkipsDisabledGroups(): void
@@ -74,4 +85,20 @@ final class FooterContainerWidgetContractTest extends TestCase
             self::assertIsArray($def['item_schema'] ?? null);
         }
     }
+
+    public function testInkFooterChromeUsesSemanticTokensOnly(): void
+    {
+        $css = (string)file_get_contents(
+            dirname(__DIR__, 2) . '/view/statics/css/widgets/footer-chrome-amazon.css',
+        );
+
+        self::assertStringContainsString('var(--weline-chrome-bg-dark)', $css);
+        self::assertStringContainsString('var(--weline-chrome-bg-dark-secondary)', $css);
+        self::assertStringContainsString('var(--weline-layout-content-max-width)', $css);
+        self::assertDoesNotMatchRegularExpression('/#[0-9a-fA-F]{3,8}/', $css);
+        self::assertStringNotContainsString('rgba(', $css);
+        self::assertStringNotContainsString('1440px', $css);
+        self::assertStringNotContainsString('Amazon footer chrome', $css);
+    }
+
 }

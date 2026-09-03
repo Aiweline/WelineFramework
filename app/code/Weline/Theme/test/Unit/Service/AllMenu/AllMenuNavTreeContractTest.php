@@ -236,6 +236,9 @@ final class AllMenuNavTreeContractTest extends TestCase
         self::assertStringContainsString('@widget.code {all-menu}', $widgetSrc);
         self::assertStringContainsString('type="all_menu_tree"', $widgetSrc);
         self::assertStringContainsString('AllMenuTreeRegistry::publish', $widgetSrc);
+        self::assertStringContainsString('publishAllProductsNav', $widgetSrc);
+        self::assertStringContainsString('show_all_products', $widgetSrc);
+        self::assertStringContainsString('all_products_label', $widgetSrc);
         self::assertStringContainsString('js-header-drawer-trigger', $widgetSrc);
 
         $schemaDef = include $schema;

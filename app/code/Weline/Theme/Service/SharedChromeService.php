@@ -214,6 +214,72 @@ final class SharedChromeService
     }
 
     /**
+     * 清空非载体布局上的本地 chrome，恢复默认全局继承。
+     *
+     * @param list<string>|null $pageTypes null = ThemeLayout::getPageTypes() 全部（跳过载体与 dashboard）
+     * @param list<string>|null $areas
+     * @return array{
+     *   restored_layouts:int,
+     *   removed_nodes:int,
+     *   layouts:list<array{page_type:string,removed:int}>,
+     *   mode:string
+     * }
+     */
+    public function restoreNonCarrierLayouts(
+        ThemeEditorContext $baseContext,
+        ?array $pageTypes,
+        ?array $areas,
+        string $actorId,
+        string $actorName = '',
+    ): array {
+        $baseContext = $baseContext->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+        if ($pageTypes === null || $pageTypes === []) {
+            $pageTypes = \array_keys(ThemeLayout::getPageTypes());
+        }
+
+        $layouts = [];
+        $restoredLayouts = 0;
+        $removedNodes = 0;
+        foreach ($pageTypes as $pageType) {
+            $pageType = \trim((string)$pageType);
+            if ($pageType === ''
+                || $this->isChromeCarrierPageType($pageType)
+                || $pageType === ThemeLayout::PAGE_TYPE_DASHBOARD
+            ) {
+                continue;
+            }
+
+            try {
+                $result = $this->restore(
+                    $baseContext->withLayoutType($pageType),
+                    $areas,
+                    $actorId,
+                    $actorName,
+                );
+            } catch (\Throwable) {
+                continue;
+            }
+
+            $removed = (int)($result['removed'] ?? 0);
+            if ($removed > 0) {
+                ++$restoredLayouts;
+                $removedNodes += $removed;
+            }
+            $layouts[] = [
+                'page_type' => $pageType,
+                'removed' => $removed,
+            ];
+        }
+
+        return [
+            'restored_layouts' => $restoredLayouts,
+            'removed_nodes' => $removedNodes,
+            'layouts' => $layouts,
+            'mode' => self::MODE_INHERIT,
+        ];
+    }
+
+    /**
      * 清空本布局 chrome 占用，恢复跟随全局。
      *
      * @param list<string>|null $areas

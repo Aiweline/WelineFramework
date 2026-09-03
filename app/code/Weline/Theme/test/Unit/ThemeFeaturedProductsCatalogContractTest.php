@@ -19,6 +19,8 @@ final class ThemeFeaturedProductsCatalogContractTest extends TestCase
         self::assertStringContainsString('if ($products === [] && $isPreviewMode)', $content);
         self::assertStringContainsString('ThemeDemoCatalog::products', $content);
         self::assertStringContainsString('if ($products === []) {', $content);
+        self::assertStringContainsString('data-testid="featured-products-empty"', $content);
+        self::assertStringContainsString('hidden', $content);
         self::assertStringContainsString('return;', $content);
         self::assertStringContainsString("ProductCardAddToCartParams::fetchDictionary(\$product)", $content);
     }

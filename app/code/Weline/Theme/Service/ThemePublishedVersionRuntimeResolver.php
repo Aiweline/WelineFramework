@@ -49,6 +49,14 @@ class ThemePublishedVersionRuntimeResolver
                     'themePublishedVersion' => $published->getDisplayName(),
                 ];
             }
+
+            $published = $versions->findAnyPublishedVersion($themeId, $pageType);
+            if ($published instanceof ThemeLayoutVersion && $published->getVersionId() > 0) {
+                return [
+                    'themePublishedVersionId' => (string)$published->getVersionId(),
+                    'themePublishedVersion' => $published->getDisplayName(),
+                ];
+            }
         } catch (\Throwable) {
             return $empty;
         }

@@ -105,6 +105,43 @@ final class WidgetHtmlHealthInspectorTest extends TestCase
         self::assertTrue($this->hasCode($issues, 'missing_closed_root'), json_encode($issues, JSON_UNESCAPED_UNICODE));
     }
 
+    public function testLibxmlVoidSourceCloseDoesNotBreakPictureOrSection(): void
+    {
+        // DOMDocument/saveHTML often emits </source> around <img>; source is void.
+        $html = '<section class="wc-theme_widget_hero_slider" weline-code="hero-slider">'
+            . '<div class="slide-media"><picture>'
+            . '<source media="(max-width: 768px)" srcset="/a-mobile.webp">'
+            . '<img src="/a.webp" alt="x" loading="eager" decoding="async">'
+            . '</source></picture></div>'
+            . '</section>';
+        $issues = $this->inspector->inspect($html, ['code' => 'hero-slider']);
+        self::assertFalse($this->hasCode($issues, 'tag_mismatch'), json_encode($issues, JSON_UNESCAPED_UNICODE));
+        self::assertFalse($this->hasCode($issues, 'unclosed_tag'), json_encode($issues, JSON_UNESCAPED_UNICODE));
+        self::assertFalse($this->hasCode($issues, 'unexpected_close'), json_encode($issues, JSON_UNESCAPED_UNICODE));
+        self::assertSame('ok', $this->inspector->worstSeverity($issues));
+    }
+
+    public function testQuotedAttributeGreaterThanDoesNotBreakBalance(): void
+    {
+        $html = '<footer id="footer"><div title="foo>bar"><span>x</span></div></footer>';
+        $issues = $this->inspector->inspect($html, ['code' => 'footer-container', 'slot_id' => 'footer']);
+        self::assertSame([], $issues, json_encode($issues, JSON_UNESCAPED_UNICODE));
+    }
+
+    public function testFooterContainerLikeShellWithStylesheetLinkIsBalanced(): void
+    {
+        $html = '<link rel="stylesheet" href="/static/footer.css?v=1">'
+            . '<footer id="footer" class="weline-footer wc-theme_widget_footer_container">'
+            . '<div class="footer-nav"><div class="footer-container"><div class="footer-content">'
+            . '<div class="footer-section"><div class="footer-section__links">'
+            . '<a class="footer-section__link" href="/about">About</a>'
+            . '</div></div></div></div></div>'
+            . '</footer>'
+            . '<style>.wc-theme_widget_footer_container .footer-content { display: grid; }</style>';
+        $issues = $this->inspector->inspect($html, ['code' => 'footer-container', 'slot_id' => 'footer']);
+        self::assertSame([], $issues, json_encode($issues, JSON_UNESCAPED_UNICODE));
+    }
+
     /**
      * @param list<array{code?:string}> $issues
      */

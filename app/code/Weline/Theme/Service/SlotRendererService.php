@@ -581,10 +581,22 @@ class SlotRendererService
                     continue;
                 }
 
+                $widgetCode = (string)($widget['widget_code'] ?? '');
+                // footer-container 的标准扩展槽写在模板字面量 w:slot 中；定义侧 slots 可能滞后，
+                // 发布态 filter 仍须保留这些子槽，否则预览有内容、发布后扩展链接整列空白。
+                if ($widgetCode === 'footer-container') {
+                    foreach (FooterDefaultLinksHelper::standardExtensionSlotIds() as $childSlotId) {
+                        $childSlotId = \trim((string)$childSlotId);
+                        if ($childSlotId !== '') {
+                            $slotIds[$childSlotId] = true;
+                        }
+                    }
+                }
+
                 $definition = $this->placeableRegistry->find(
                     (string)($widget['widget_module'] ?? ''),
                     (string)($widget['widget_type'] ?? ''),
-                    (string)($widget['widget_code'] ?? ''),
+                    $widgetCode,
                     $this->renderTheme,
                     $renderArea,
                 );
@@ -669,8 +681,8 @@ class SlotRendererService
      * 页头/页脚是全局 chrome：不属于 blog/product 等任一业务布局，编辑一次全站生效。
      *
      * 可视化当前把全局 chrome 持久化在 homepage workspace（存储载体，不是归属）。
-     * 其它 pageType 若本页未放置同名独占槽，则合并该套全局 chrome；本页已有部件不覆盖，
-     * 且不得整页回退 homepage，以免混入首页内容区部件。
+     * 其它 pageType 若本页未放置同名 chrome 槽（含嵌套 header/footer 扩展槽），则合并该套全局 chrome；
+     * 本页已有部件不覆盖，且不得整页回退 homepage，以免混入首页内容区部件。
      *
      * @param array<string, list<array<string, mixed>>> $slotWidgets
      * @return array<string, list<array<string, mixed>>>
@@ -686,28 +698,47 @@ class SlotRendererService
             return $slotWidgets;
         }
 
-        // 独占全局 chrome 槽；与 partials header/footer 的 layout-global-* accept 对齐。
-        $chromeSlots = ['header', 'footer'];
-        $missing = [];
-        foreach ($chromeSlots as $slotId) {
-            if (empty($slotWidgets[$slotId])) {
-                $missing[] = $slotId;
-            }
-        }
-        if ($missing === []) {
-            return $slotWidgets;
-        }
-
         // 读取全局 chrome 持久化载体（homepage workspace），非「homepage 专属布局」。
         $globalChromeLayout = $this->getLayoutData($themeId, ThemeLayout::PAGE_TYPE_HOME, $status, $area);
         $globalChromeSlotWidgets = $this->organizeWidgetsBySlot($globalChromeLayout);
-        foreach ($missing as $slotId) {
-            if (!empty($globalChromeSlotWidgets[$slotId])) {
-                $slotWidgets[$slotId] = $globalChromeSlotWidgets[$slotId];
+        foreach ($globalChromeSlotWidgets as $slotId => $widgets) {
+            if ($widgets === [] || !$this->slotWidgetsBelongToSharedChrome((string)$slotId, $widgets)) {
+                continue;
+            }
+            if (empty($slotWidgets[$slotId])) {
+                $slotWidgets[$slotId] = $widgets;
             }
         }
 
         return $slotWidgets;
+    }
+
+    /**
+     * @param list<array<string, mixed>> $widgets
+     */
+    private function slotWidgetsBelongToSharedChrome(string $slotId, array $widgets): bool
+    {
+        $slotId = strtolower(trim($slotId));
+        if ($slotId === 'header' || $slotId === 'footer'
+            || str_starts_with($slotId, 'header-')
+            || str_starts_with($slotId, 'header_')
+            || str_starts_with($slotId, 'footer-')
+            || str_starts_with($slotId, 'footer_')
+        ) {
+            return true;
+        }
+
+        foreach ($widgets as $widget) {
+            if (!is_array($widget)) {
+                continue;
+            }
+            $widgetArea = strtolower(trim((string)($widget['area'] ?? '')));
+            if ($widgetArea === 'header' || $widgetArea === 'footer') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private function htmlHasLayoutScopedSlots(string $html): bool
@@ -1178,9 +1209,45 @@ class SlotRendererService
             if ($replaced !== null) {
                 return $replaced;
             }
+            // wishlist-icon：无既有 markup 时插到第一个模板直嵌部件（账户）之前，保持货币后→收藏→账户顺序
+            if ($widgetCode === 'wishlist-icon') {
+                return $this->prependCowLayoutAdditionBeforeFirstTemplateWidget(
+                    $inner,
+                    $templateWidgets,
+                    $renderedHtml,
+                );
+            }
         }
 
         return $this->insertCowLayoutAdditionsIntoMultipleSlotInner($inner, $templateWidgets, $renderedHtml);
+    }
+
+    /**
+     * @param list<array{ref:string,html:string,element?:\DOMElement}> $templateWidgets
+     */
+    private function prependCowLayoutAdditionBeforeFirstTemplateWidget(
+        string $inner,
+        array $templateWidgets,
+        string $additionsHtml,
+    ): string {
+        if ($additionsHtml === '') {
+            return $inner;
+        }
+
+        foreach ($templateWidgets as $templateWidget) {
+            $block = (string)($templateWidget['html'] ?? '');
+            if ($block === '' || !\str_contains($inner, $block)) {
+                continue;
+            }
+            $insertAt = \strpos($inner, $block);
+            if ($insertAt === false) {
+                continue;
+            }
+
+            return \substr($inner, 0, $insertAt) . $additionsHtml . \substr($inner, $insertAt);
+        }
+
+        return $additionsHtml . $inner;
     }
 
     private function replaceExistingSlotWidgetMarkupByCode(
@@ -1408,8 +1475,20 @@ class SlotRendererService
         $depth = 1;
         $cursor = $openEnd;
         while ($cursor < $length && $depth > 0) {
-            $nextOpen = \stripos($html, '<div', $cursor);
-            $nextClose = \stripos($html, '</div>', $cursor);
+            $lt = \strpos($html, '<', $cursor);
+            if ($lt === false) {
+                return null;
+            }
+
+            // Comments may contain literal </div> tokens; never treat them as structure.
+            if (\substr($html, $lt, 4) === '<!--') {
+                $commentEnd = \strpos($html, '-->', $lt + 4);
+                $cursor = $commentEnd === false ? $length : $commentEnd + 3;
+                continue;
+            }
+
+            $nextOpen = \stripos($html, '<div', $lt);
+            $nextClose = \stripos($html, '</div>', $lt);
             if ($nextClose === false) {
                 return null;
             }
@@ -2657,6 +2736,8 @@ HTML;
         $keys = [
             'storefront_offer',
             'storefront_offers',
+            'storefront_offers_unfiltered',
+            'storefront_category',
             'selected_offer_uuid',
             'variant_catalog',
             'page_title',

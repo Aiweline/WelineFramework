@@ -26,7 +26,9 @@ final class SlotRendererCowMultipleSlotContractTest extends TestCase
         self::assertStringContainsString('function collectCowTombstoneRefs(', $src);
         self::assertStringContainsString('function hydrateEmptyTemplateWidgetBlocks(', $src);
         self::assertStringContainsString('function replaceExistingSlotWidgetMarkupByCode(', $src);
+        self::assertStringContainsString('function prependCowLayoutAdditionBeforeFirstTemplateWidget(', $src);
         self::assertStringContainsString('header-wishlist', $src);
+        self::assertStringContainsString("\$widgetCode === 'wishlist-icon'", $src);
         self::assertStringContainsString('if ($this->isMultipleSlotWrapperTag($wrapperOpenTag))', $src);
         self::assertStringNotContainsString('function isMultipleSlotElement(', $src);
         self::assertStringNotContainsString('function processSlotFragmentWithDom(', $src);
@@ -39,6 +41,8 @@ final class SlotRendererCowMultipleSlotContractTest extends TestCase
         self::assertStringContainsString('<w:slot id="user-area"', $header);
         self::assertStringContainsString('multiple="true"', $header);
         self::assertStringContainsString('mini-cart-icon', $header);
+        self::assertStringContainsString('wishlist-icon', $header);
+        self::assertStringContainsString('<w:hook>header-wishlist-icon</w:hook>', $header);
         self::assertStringContainsString('退货', $header);
     }
 

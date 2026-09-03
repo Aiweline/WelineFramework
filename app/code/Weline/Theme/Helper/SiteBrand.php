@@ -55,7 +55,7 @@ class SiteBrand
             return '';
         }
 
-        if (str_starts_with($configured, 'http') || str_starts_with($configured, '//') || str_starts_with($configured, '/static/')) {
+        if (str_starts_with($configured, 'http') || str_starts_with($configured, '//') || str_starts_with($configured, '/static/') || str_starts_with($configured, '/pub/media/') || str_starts_with($configured, '/Weline/')) {
             return $configured;
         }
 
@@ -143,6 +143,73 @@ class SiteBrand
         unset($template);
 
         return '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png';
+    }
+
+    /**
+     * 前台品牌字标：显式自定义文案优先；再回落当前 Website 名称 / Backend site_name；
+     * 框架占位（Weline/韦林）不作为最终展示。站名权威源是 Website 实体（基础信息 identity slot），
+     * 不是 appearance.brand。
+     */
+    public function resolveFrontendSiteName(string $configured = '', string $themeFallback = '云裳汉服 · Hanfu Atelier'): string
+    {
+        $configured = trim($configured);
+        if ($configured !== '' && !$this->isGenericBrandPlaceholder($configured)) {
+            return WidgetI18n::label($configured);
+        }
+
+        $fromWebsite = $this->resolveWebsiteDisplayName();
+        if ($fromWebsite !== '' && !$this->isGenericBrandPlaceholder($fromWebsite)) {
+            return $fromWebsite;
+        }
+
+        $fromBackend = trim($this->getRawConfig('site_name'));
+        if ($fromBackend !== '' && !$this->isGenericBrandPlaceholder($fromBackend)) {
+            return $fromBackend;
+        }
+
+        $fallback = trim($themeFallback) !== '' ? trim($themeFallback) : '云裳汉服 · Hanfu Atelier';
+
+        return WidgetI18n::label($fallback);
+    }
+
+    public function resolveFrontendSiteDescription(string $fallback = ''): string
+    {
+        $fromBackend = trim($this->getRawConfig('site_description'));
+        if ($fromBackend !== '') {
+            return $fromBackend;
+        }
+
+        return trim($fallback);
+    }
+
+    public function isGenericBrandPlaceholder(string $value): bool
+    {
+        $normalized = trim($value);
+        if ($normalized === '') {
+            return true;
+        }
+
+        return in_array($normalized, [
+            'Weline',
+            'weline',
+            'Weline Framework',
+            '韦林',
+            '默认网站',
+            'Default Website',
+        ], true);
+    }
+
+    private function resolveWebsiteDisplayName(): string
+    {
+        try {
+            if (!class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                return '';
+            }
+
+            return trim((string)(\Weline\Websites\Data\WebsiteData::getName() ?? ''));
+        } catch (\Throwable) {
+            return '';
+        }
     }
 
     public function resolveBackendLogoUrl(Template $template, string $configKey, int $width, int $height): string

@@ -241,7 +241,7 @@
 面包屑自定义内容（items）,"Breadcrumb Custom Content (Items)"
 "覆盖前台主题的面包屑节点列表，允许其他模块输出自定义的面包屑结构（如基于分类层级、搜索结果等动态生成路径）。如果未实现此 Hook，将回退到主题默认的面包屑渲染逻辑。","Override the breadcrumb node list of the frontend theme, allowing other modules to output custom breadcrumb structures (e.g., dynamically generated paths based on category hierarchy, search results, etc.). If this Hook is not implemented, it will fall back to the theme's default breadcrumb rendering logic."
 商品卡片加购按钮,商品卡片加购按钮
-"商品卡片加购操作槽，默认由 Weline_Cart 通过 Cart V2 addV2 提供加购按钮。","商品卡片加购操作槽，默认由 Weline_Cart 通过 Cart V2 addV2 提供加购按钮。"
+"商品卡片加购操作槽，默认由 Weline_Cart 通过 Cart add 提供加购按钮。","商品卡片加购操作槽，默认由 Weline_Cart 通过 Cart add 提供加购按钮。"
 商品卡片立即购买按钮,商品卡片立即购买按钮
 "商品卡片立即购买操作槽，默认由 Weline_Checkout 提供立即购买按钮。","商品卡片立即购买操作槽，默认由 Weline_Checkout 提供立即购买按钮。"
 基础布局头部之前,"Before Base Layout Header"
@@ -656,6 +656,7 @@ Default,Default
 布局已保存,"Layout saved"
 保存失败,"Save failed"
 已改为本布局独立页头/页脚,已改为本布局独立页头/页脚
+已恢复全部布局跟随全局页头/页脚,已恢复全部布局跟随全局页头/页脚
 已恢复跟随全局页头/页脚,已恢复跟随全局页头/页脚
 主题已发布,"Theme published"
 生成缓存失败，但布局已发布,"Cache generation failed, but layout has been published"
@@ -947,6 +948,42 @@ Dashboard,Dashboard
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
+SALE,SALE
+DEMO,DEMO
+NEW,NEW
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
+件商品,"items of goods"
+安全支付,"Secure payment"
+SSL加密保护,"SSL encryption protection"
+无忧退款,"Worry-Free Refund"
+30天无理由退货,"30 days no reason to return"
+免费配送,"Free Shipping"
+满额包邮,"Free shipping for orders over the threshold"
+全天候客服,"24/7 Customer Support"
+7×24小时在线,"7×24 hours online"
+SSL安全,"SSL security"
+数据加密传输,"Encrypted Data Transmission"
+认证商家,"Certified Merchant"
+正品保证,"Genuine product guarantee"
+新品上架,"New Product Listing"
+发现最新商品,"Found the latest product"
+上架,"On the shelves"
+查看全部新品,"View all new products"
+排名,Ranking
+已售,Sold
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -963,9 +1000,6 @@ Dashboard,Dashboard
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
-SALE,SALE
-DEMO,DEMO
-NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -983,6 +1017,7 @@ NEW,NEW
 表单操作,"Form operations"
 栅格内容,"Raster content"
 末页,"Last page"
+指南,指南
 个人资料,"Personal information"
 这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。,"This is the default placeholder for personal information. After the membership module is accessed, it will be replaced with the real information form, account security and address entry."
 告诉我们你需要什么，支持团队会将请求分派给合适的处理人。,"Tell us what you need and the support team will route the request to the appropriate handler."
@@ -1035,6 +1070,7 @@ NEW,NEW
 Category,Category
 "Custom category layout","Custom category layout"
 筛选,filter
+"分类筛选区域 - 由 Filters 部件默认注入","分类筛选区域 - 由 Filters 部件默认注入"
 "分类产品区域 - 展示该分类下的产品","Category Product Area - Display products under this category"
 筛选条件,"Screening criteria"
 关闭筛选,"Close filter"
@@ -1181,6 +1217,7 @@ Product,Product
 请确认您的支付信息是否正确,"Please confirm that your payment information is correct"
 如问题持续存在，请联系客服寻求帮助,"If the issue persists, please contact customer support for assistance."
 搜索筛选,"Search and filter"
+"筛选器区域 - 由 Filters 部件默认注入","筛选器区域 - 由 Filters 部件默认注入"
 "工具栏区域 - 拖拽排序/视图部件到此处","Toolbar area - Drag and drop/view widgets here"
 "产品网格区域 - 控制器渲染产品列表","Product Grid Area - Controller Renders Product List"
 "分页区域 - 控制器渲染分页组件","Pagination area - Controller renders pagination component"
@@ -1193,7 +1230,8 @@ Product,Product
 "这里预留账户导航 slot，可由会员模块接入真实菜单。","An account navigation slot is reserved here, and the real menu can be accessed by the membership module."
 我的订单,"My Orders"
 这里是订单列表的默认占位。订单模块接入后，会替换为真实订单表格、状态和操作入口。,"This is the default placeholder for the order list. After the order module is connected, it will be replaced with the real order form, status and operation entry."
-我们非常重视您的隐私保护。本隐私政策说明了我们如何收集、使用、存储和保护您的个人信息。请您仔细阅读本政策，以了解我们对您个人信息的处理方式。,"We take your privacy very seriously. This Privacy Policy explains how we collect, use, store, and protect your personal information. Please read this policy carefully to understand how we handle your personal information."
+我们非常重视您的隐私保护。本隐私政策说明我们如何收集、使用、存储和保护您的个人信息。请仔细阅读，以了解我们对个人信息的处理方式。,我们非常重视您的隐私保护。本隐私政策说明我们如何收集、使用、存储和保护您的个人信息。请仔细阅读，以了解我们对个人信息的处理方式。
+本政策构成您与本网站之间关于个人信息处理的重要说明。请结合目录逐章阅读；如有疑问，可通过帮助中心或联系入口与我们沟通。,本政策构成您与本网站之间关于个人信息处理的重要说明。请结合目录逐章阅读；如有疑问，可通过帮助中心或联系入口与我们沟通。
 一、信息收集,"1. Information collection"
 "1.1 我们会在合法、正当、必要的前提下收集您的个人信息。我们可能收集的信息包括：","1.1 We will collect your personal information under the premise of legal, proper and necessary. The information we may collect includes:"
 （1）账户信息：用户名、密码、邮箱地址、手机号码、实名认证信息等；,"(1) Account Information: username, password, email address, phone number, real-name authentication information, etc.;"
@@ -1231,24 +1269,33 @@ Product,Product
 （6）投诉举报权：您有权向相关监管部门投诉举报我们的个人信息处理行为。,"(6) Right to Complaints and Reports: You have the right to file complaints or reports with relevant regulatory authorities regarding our processing of personal information."
 您可以通过账户设置或联系我们行使上述权利。,"You can exercise the above rights through your account settings or by contacting us."
 六、未成年人保护,"6. Protection of Minors"
-"6.1 我们非常重视未成年人的个人信息保护。如果您是未满18周岁的未成年人，请在您的父母或监护人的陪同下阅读本政策，并在征得您的父母或监护人同意后使用我们的服务。","6.1 We attach great importance to the protection of minors’ personal information. If you are a minor under the age of 18, please read this policy accompanied by your parents or guardians, and use our services with the consent of your parents or guardians."
+"6.1 我们非常重视未成年人的个人信息保护。如果您是未满18周岁的未成年人，请在您的父母或监护人的陪同下阅读本政策，并在征得同意后使用我们的服务。","6.1 我们非常重视未成年人的个人信息保护。如果您是未满18周岁的未成年人，请在您的父母或监护人的陪同下阅读本政策，并在征得同意后使用我们的服务。"
 "6.2 如果我们发现自己在未事先获得可证实的父母或监护人同意的情况下收集了未成年人的个人信息，我们会设法尽快删除相关数据。","6.2 If we discover that we have collected personal information from minors without first obtaining verifiable parental or guardian consent, we will try to delete the relevant data as soon as possible."
-七、政策更新,"7. Policy updates"
-"7.1 我们可能会根据法律法规变化或业务需要对本隐私政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。","7.1 We may update this Privacy Policy based on changes in laws and regulations or business needs. The updated content will be posted on this page and will be effective from the date of publication."
-"7.2 如发生重大变更，我们可能会通过显著方式（如网站公告、邮件通知等）向您告知。","7.2 If major changes occur, we may notify you through prominent means (such as website announcements, email notifications, etc.)."
-八、联系我们,"8. Contact Us"
-如您对本隐私政策有任何疑问、意见或建议，或需要行使您的权利，请通过本网站提供的联系方式与我们联系。我们将在合理期限内回复您的请求。,"If you have any questions, comments, or suggestions regarding this Privacy Policy, or need to exercise your rights, please contact us through the contact information provided on this website. We will respond to your request within a reasonable timeframe."
+"七、Cookie 与同类技术","七、Cookie 与同类技术"
+"7.1 我们可能使用 Cookie、本地存储等技术维持登录状态、记住语言与货币偏好、保障交易安全，并进行必要的访问统计。","7.1 我们可能使用 Cookie、本地存储等技术维持登录状态、记住语言与货币偏好、保障交易安全，并进行必要的访问统计。"
+"7.2 您可通过浏览器设置管理 Cookie。完整说明请参阅本站「Cookie 政策」。禁用部分 Cookie 可能导致购物车、登录或结算功能异常。","7.2 您可通过浏览器设置管理 Cookie。完整说明请参阅本站「Cookie 政策」。禁用部分 Cookie 可能导致购物车、登录或结算功能异常。"
+八、第三方服务,八、第三方服务
+"8.1 为完成支付、物流跟踪、邮件通知、内容分发等，我们可能向经审慎选择的服务提供商提供必要信息，并要求其仅在委托目的范围内处理。","8.1 为完成支付、物流跟踪、邮件通知、内容分发等，我们可能向经审慎选择的服务提供商提供必要信息，并要求其仅在委托目的范围内处理。"
+"8.2 第三方支付或社交登录等服务受其自身隐私政策约束；跳转至第三方页面前请阅读其说明。","8.2 第三方支付或社交登录等服务受其自身隐私政策约束；跳转至第三方页面前请阅读其说明。"
+九、政策更新,九、政策更新
+"9.1 我们可能会根据法律法规变化或业务需要对本隐私政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。","9.1 我们可能会根据法律法规变化或业务需要对本隐私政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。"
+"9.2 如发生重大变更，我们可能会通过显著方式（如网站公告、邮件通知等）向您告知。","9.2 如发生重大变更，我们可能会通过显著方式（如网站公告、邮件通知等）向您告知。"
+十、联系我们,十、联系我们
+如您对本隐私政策有任何疑问、意见或建议，或需要行使您的权利，请通过本网站「帮助中心」「联系我们」或账户内支持入口与我们联系。我们将在合理期限内回复您的请求。,如您对本隐私政策有任何疑问、意见或建议，或需要行使您的权利，请通过本网站「帮助中心」「联系我们」或账户内支持入口与我们联系。我们将在合理期限内回复您的请求。
+如对本隐私政策有疑问，或需行使查阅、更正、删除等权利，请通过帮助中心或联系我们与支持团队沟通。,如对本隐私政策有疑问，或需行使查阅、更正、删除等权利，请通过帮助中心或联系我们与支持团队沟通。
+隐私政策目录,隐私政策目录
+隐私政策正文,隐私政策正文
 广告偏好,"Advertising Preferences"
 本页面向您说明我们如何基于兴趣偏好展示广告或推荐内容，以及您可用于管理这些偏好的选择。,"This page explains how we may show ads or recommendations based on interest preferences, and the choices available to manage them."
+"兴趣广告有助于展示更相关内容，您仍可随时通过浏览器、系统或账户入口管理偏好。完整个人信息处理见隐私政策与 Cookie 政策。","兴趣广告有助于展示更相关内容，您仍可随时通过浏览器、系统或账户入口管理偏好。完整个人信息处理见隐私政策与 Cookie 政策。"
 一、什么是广告偏好？,"1. What are advertising preferences?"
-广告偏好是指根据您在本网站上的浏览、搜索、互动等信息，为您展示更相关广告或内容推荐的兴趣设置。这些偏好有助于减少无关广告，同时保持网站服务的可持续运营。,"Advertising preferences are interest settings derived from browsing, search, and interactions on this site to show more relevant ads or content. They help reduce irrelevant ads while supporting sustainable service operation."
-二、我们如何使用广告偏好？,"2. How do we use advertising preferences?"
-在适用法律法规允许的范围内，我们可能将广告偏好用于：,"Where permitted by applicable laws and regulations, we may use advertising preferences to:"
-（1）展示与您兴趣更匹配的促销、商品或服务信息；,"(1) Show promotions, products, or services that better match your interests;"
-（2）评估广告投放效果，改进广告相关性与展示频率；,"(2) Measure ad performance and improve relevance and frequency;"
-（3）限制重复展示，避免过多打扰；,"(3) Limit repetitive impressions to reduce disruption;"
-（4）与经授权的广告合作伙伴协同完成必要的投放与计量（如适用）。,"(4) Coordinate necessary delivery and measurement with authorized advertising partners (if applicable)."
-三、您如何管理广告偏好？,"3. How can you manage advertising preferences?"
+广告偏好是指我们或合作伙伴基于您的浏览、兴趣或设备信息，用于提升广告或推荐相关性的选择设置。它不改变您对本站核心购物功能的使用。,广告偏好是指我们或合作伙伴基于您的浏览、兴趣或设备信息，用于提升广告或推荐相关性的选择设置。它不改变您对本站核心购物功能的使用。
+二、我们如何使用偏好信息？,二、我们如何使用偏好信息？
+在您同意或法律法规允许的范围内，我们可能将偏好信息用于：,在您同意或法律法规允许的范围内，我们可能将偏好信息用于：
+（1）展示更匹配您兴趣的广告或内容推荐；,（1）展示更匹配您兴趣的广告或内容推荐；
+（2）衡量广告效果与到达情况；,（2）衡量广告效果与到达情况；
+（3）防止欺诈、提升安全性与服务质量。,（3）防止欺诈、提升安全性与服务质量。
+三、如何管理广告偏好？,三、如何管理广告偏好？
 您可以通过以下方式管理广告相关选择：,"You can manage advertising-related choices in the following ways:"
 "（1）浏览器设置：禁用部分 Cookie 或限制跟踪功能；","(1) Browser settings: disable some cookies or limit tracking features;"
 （2）设备/系统广告设置：在操作系统或浏览器提供的广告隐私选项中调整兴趣广告；,"(2) Device/system ad settings: adjust interest-based ads in OS or browser privacy options;"
@@ -1256,11 +1303,12 @@ Product,Product
 （4）第三方退出机制：部分广告网络提供兴趣广告退出入口，具体以第三方说明为准。,"(4) Third-party opt-outs: some ad networks provide interest-based ad opt-out pages; follow their instructions."
 请注意，关闭兴趣广告后，您仍可能看到广告，但广告相关性可能下降；部分必要功能（如登录态、购物车）不受影响。,"Note that after turning off interest-based ads, you may still see ads with lower relevance; essential features such as sign-in and cart remain unaffected."
 "四、与隐私政策、Cookie 政策的关系","4. Relationship to Privacy Notice and Cookie Policy"
-"广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅：","Advertising preference controls do not replace the Privacy Notice or Cookie Policy. For full details on personal data and cookies, see:"
-隐私声明,"Privacy Notice"
-使用条件,"Terms of Use"
+"广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅相关页面。","广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅相关页面。"
 五、政策更新,"5. Policy updates"
 我们可能因法律法规变化或业务需要更新本广告偏好说明。更新后的内容将发布在本页面，并自公布之日起生效。,"We may update this Advertising Preferences notice due to legal or business changes. Updates are published on this page and take effect when posted."
+关闭兴趣广告后您仍可能看到广告，但相关性可能下降。如需进一步帮助，请联系客服。,关闭兴趣广告后您仍可能看到广告，但相关性可能下降。如需进一步帮助，请联系客服。
+广告偏好目录,广告偏好目录
+广告偏好正文,广告偏好正文
 网站政策说明,"Site Policy Description"
 本页面用于展示网站的隐私政策、服务条款、退款政策等重要法律文本，请在使用本网站前仔细阅读。,"This page is used to display important legal texts such as the website's privacy policy, terms of service, and refund policy. Please read them carefully before using this website."
 一、总则,"1. General principles"
@@ -1331,8 +1379,10 @@ Product,Product
 "9.3 我们保留对本政策的最终解释权，并有权根据法律法规和业务发展需要对本政策进行修订。","9.3 We reserve the right of final interpretation of this policy and the right to revise this policy in accordance with laws, regulations and business development needs."
 "9.4 如您对本政策有任何疑问，可通过本网站提供的联系方式与我们联系。","9.4 If you have any questions about this policy, you can contact us through the contact information provided on this website."
 最后更新时间：,"Last update time:"
+服务条款目录,服务条款目录
 免责声明,Disclaimer
-本免责声明说明了本网站在提供服务过程中的责任限制和免责情形。请您在使用本网站服务前仔细阅读本声明。,"This disclaimer explains the limitations of liability and disclaimers in the process of providing services on this website. Please read this disclaimer carefully before using our website services."
+本免责声明说明本网站在提供服务过程中的责任限制与免责情形。请在使用本网站服务前仔细阅读。,本免责声明说明本网站在提供服务过程中的责任限制与免责情形。请在使用本网站服务前仔细阅读。
+本声明构成服务条款的重要补充。请结合目录了解服务中断、信息内容、交易风险与责任限制等条款。,本声明构成服务条款的重要补充。请结合目录了解服务中断、信息内容、交易风险与责任限制等条款。
 一、服务中断与数据丢失,"1. Service interruption and data loss"
 "1.1 本网站不对因以下原因导致的服务中断或数据丢失承担责任：","1.1 This website is not responsible for service interruption or data loss caused by the following reasons:"
 （1）不可抗力因素，如自然灾害、战争、罢工、政府行为等；,"(1) Force Majeure Events, such as natural disasters, war, strikes, government actions, etc.;"
@@ -1362,7 +1412,12 @@ Product,Product
 "7.1 本免责声明构成服务条款的一部分，与服务条款具有同等法律效力。","7.1 This disclaimer forms part of the Terms of Service and has the same legal effect as the Terms of Service."
 "7.2 我们保留对本免责声明的最终解释权，并有权根据法律法规和业务发展需要对本声明进行修订。","7.2 We reserve the right of final interpretation of this disclaimer and have the right to revise this statement in accordance with laws, regulations and business development needs."
 "7.3 如本免责声明的任何条款被认定为无效或不可执行，不影响其他条款的效力。","7.3 If any provision of this disclaimer is determined to be invalid or unenforceable, the validity of the other provisions will not be affected."
-为了保障您的权益，我们制定了完善的退款、退货、换货政策。请您仔细阅读以下内容，了解退款条件和流程。,"In order to protect your rights and interests, we have developed a comprehensive refund, return, and exchange policy. Please read the following carefully to understand the refund conditions and procedures."
+如对本免责声明有疑问，请先阅读服务条款，或通过帮助中心联系我们。,如对本免责声明有疑问，请先阅读服务条款，或通过帮助中心联系我们。
+免责声明目录,免责声明目录
+免责声明正文,免责声明正文
+为保障您的购物权益，我们制定了退款、退货与换货规则。请仔细阅读条件、流程与到账说明，再提交申请。,为保障您的购物权益，我们制定了退款、退货与换货规则。请仔细阅读条件、流程与到账说明，再提交申请。
+退换政策,"Returns Policy"
+本退款政策说明可申请情形、不予退款情形、办理流程与退款到账规则。退换细节也可参考配送/退换指南。,本退款政策说明可申请情形、不予退款情形、办理流程与退款到账规则。退换细节也可参考配送/退换指南。
 一、退款条件,"1. Refund conditions"
 在符合以下条件的情况下，您可以申请退款：,"You can apply for a refund if the following conditions are met:"
 （3）在规定的退货期限内提出申请（通常为收到商品后7-15天内）；,"(3) Submit a request within the specified return period (usually within 7-15 days of receiving the item)."
@@ -1379,26 +1434,25 @@ Product,Product
 "3.1 提交申请：您需要在订单管理页面或联系客服提交退款申请，并提供相关证明材料（如商品照片、问题描述等）。","3.1 Submit an application: You need to submit a refund application on the order management page or contact customer service, and provide relevant supporting materials (such as product photos, problem description, etc.)."
 "3.2 审核处理：我们将在收到申请后1-3个工作日内完成审核。审核通过后，我们会通知您退货地址和注意事项。","3.2 Review processing: We will complete the review within 1-3 working days after receiving the application. After approval, we will notify you of the return address and precautions."
 "3.3 退回商品：您需要按照要求将商品退回指定地址，并保留物流凭证。建议使用可追踪的物流方式。","3.3 Return of goods: You need to return the goods to the designated address as required and retain the logistics voucher. It is recommended to use traceable logistics methods."
-"3.4 确认退款：我们收到退回商品并确认无误后，将在3-15个工作日内完成退款。退款将原路退回至您的支付账户。","3.4 Confirmation of refund: After we receive the returned goods and confirm that they are correct, the refund will be completed within 3-15 working days. The refund will be credited back to your payment account via the original route."
-四、退款金额,"4. Refund Amount"
-"4.1 退款金额包括：商品实际支付金额、运费（如因商品问题导致的退货，运费由我们承担）。","4.1 The refund amount includes: the actual payment amount for the product and shipping cost (if the product is returned due to product problems, the shipping cost will be borne by us)."
-"4.2 退款金额不包括：已使用的优惠券、积分、赠品等（如赠品已使用或损坏，可能需要扣除相应费用）。","4.2 The refund amount does not include: used coupons, points, gifts, etc. (If the gifts have been used or damaged, corresponding fees may be deducted)."
-"4.3 如因用户原因导致的退货，运费由用户承担，退款金额将扣除运费。","4.3 If the product is returned due to user reasons, the shipping cost will be borne by the user, and the refund amount will be deducted from the shipping cost."
-五、换货政策,"5. Exchange policy"
-"5.1 如商品存在质量问题，您可以选择换货。换货流程与退货类似，需要提交换货申请并退回原商品。","5.1 If there are quality problems with the product, you can choose to exchange it. The exchange process is similar to that of a return. You need to submit an exchange application and return the original product."
-"5.2 换货商品需与原商品规格、型号一致。如无相同商品，我们可能建议您选择退款。","5.2 Replacement products must have the same specifications and models as the original products. If the same product is not available, we may suggest you choose a refund."
-"5.3 换货产生的运费，如因商品质量问题，由我们承担；如因用户原因，由用户承担。","5.3 The freight incurred for exchange of goods shall be borne by us if it is due to product quality problems; if it is due to user reasons, it shall be borne by the user."
-六、退款时效,"6. Refund Period"
-"6.1 退款申请审核：1-3个工作日；","6.1 Review of refund application: 1-3 working days;"
-"6.2 商品退回确认：收到退回商品后1-2个工作日；","6.2 Product return confirmation: 1-2 working days after receiving the returned product;"
-"6.3 退款到账：确认无误后3-15个工作日（具体到账时间以支付平台为准）。","6.3 Refund arrival: 3-15 working days after confirmation (the specific arrival time is subject to the payment platform)."
-"6.4 如遇节假日或特殊情况，退款时间可能相应延长，我们会及时通知您。","6.4 In case of holidays or special circumstances, the refund time may be extended accordingly, and we will notify you in time."
-七、特殊说明,"7. Special instructions"
-"7.1 数字产品、虚拟商品、服务类商品等特殊商品，如无质量问题，一般不支持退款，具体以商品页面说明为准。","7.1 Special products such as digital products, virtual products, and service products generally do not support refunds if there are no quality problems. Please refer to the description on the product page for details."
-"7.2 如商品存在安全隐患或严重质量问题，我们将立即处理，不受退货期限限制。","7.2 If the product has safety hazards or serious quality problems, we will deal with it immediately and will not be restricted by the return period."
-"7.3 如您对退款处理结果有异议，可以联系客服或通过其他渠道申诉。","7.3 If you have any objection to the refund processing result, you can contact customer service or appeal through other channels."
-如您对退款政策有任何疑问，或需要申请退款、退货、换货，请通过本网站提供的联系方式与我们联系。我们将竭诚为您服务。,"If you have any questions about the refund policy, or need to apply for a refund, return, or exchange, please contact us through the contact information provided on this website. We are dedicated to serving you."
+"3.4 验收与退款：我们收到退货并验收合格后，将按原支付路径办理退款，并通知您处理结果。","3.4 验收与退款：我们收到退货并验收合格后，将按原支付路径办理退款，并通知您处理结果。"
+四、退款方式与时效,四、退款方式与时效
+"4.1 退款原则上原路退回至您下单时使用的支付账户。","4.1 退款原则上原路退回至您下单时使用的支付账户。"
+"4.2 退款到账时间因支付渠道而异，通常为1-10个工作日；若超时未到账，请先查询支付机构，再联系客服协助核查。","4.2 退款到账时间因支付渠道而异，通常为1-10个工作日；若超时未到账，请先查询支付机构，再联系客服协助核查。"
+"4.3 优惠券、积分等权益的退回规则以订单与活动说明为准。","4.3 优惠券、积分等权益的退回规则以订单与活动说明为准。"
+五、运费与责任,五、运费与责任
+"5.1 因商品质量问题或描述不符导致的退货，往返运费通常由我们或商家承担（以审核结论为准）。","5.1 因商品质量问题或描述不符导致的退货，往返运费通常由我们或商家承担（以审核结论为准）。"
+"5.2 因个人原因退货，退货运费一般由买家承担，除非当地强制性法规另有规定。","5.2 因个人原因退货，退货运费一般由买家承担，除非当地强制性法规另有规定。"
+六、特殊商品说明,六、特殊商品说明
+"6.1 贴身衣物、定制商品、数字内容、一经拆封无法退换的卫生类商品等，可能不适用无理由退货，请以下单页提示为准。","6.1 贴身衣物、定制商品、数字内容、一经拆封无法退换的卫生类商品等，可能不适用无理由退货，请以下单页提示为准。"
+"6.2 汉服等服饰类请关注尺码表与养护说明，降低因尺码或穿着不当导致的退换争议。","6.2 汉服等服饰类请关注尺码表与养护说明，降低因尺码或穿着不当导致的退换争议。"
+七、联系我们,七、联系我们
+如需协助办理退款或查询进度，请通过订单详情、帮助中心或「联系我们」入口提交工单，并提供订单号与问题说明。,如需协助办理退款或查询进度，请通过订单详情、帮助中心或「联系我们」入口提交工单，并提供订单号与问题说明。
+如对退款进度或条件有疑问，请通过帮助中心、订单详情或联系我们与客服沟通。,如对退款进度或条件有疑问，请通过帮助中心、订单详情或联系我们与客服沟通。
+配送说明,"Shipping Information"
+退款政策目录,退款政策目录
+退款政策正文,退款政策正文
 "本页面向您说明我们如何在本网站中使用 Cookie 及相关技术，以及您对 Cookie 的管理选择。","This page explains how we use cookies and related technologies on this website, as well as your choices for managing cookies."
+"Cookie 是提升网站可用性与安全的重要技术。请结合目录了解用途、类型与管理方式；完整个人信息说明请参阅隐私政策。","Cookie 是提升网站可用性与安全的重要技术。请结合目录了解用途、类型与管理方式；完整个人信息说明请参阅隐私政策。"
 "一、什么是 Cookie？","1. What are Cookies?"
 "Cookie 是当您访问网站时，由网站服务器存储在您设备上的小型文本文件。Cookie 有助于网站识别您的设备，记住您的偏好设置，并改进服务体验。","Cookies are small text files that are stored on your device by the website server when you visit a website. Cookies help websites recognize your device, remember your preferences, and improve your experience."
 "二、我们如何使用 Cookie？","2. How do we use cookies?"
@@ -1422,9 +1476,21 @@ Product,Product
 "（2）清除浏览数据：您可以在浏览器中清除缓存和 Cookie，以删除已存储的 Cookie。","(2) Clear Browsing Data: You can clear cache and cookies in your browser to delete stored cookies."
 "（3）选择退出部分第三方服务：部分第三方提供 Cookie 选择退订机制，具体以第三方说明为准。","(3) Opt Out of Some Third-Party Services: Some third parties provide cookie opt-out mechanisms; refer to their instructions for details."
 "请注意，如您禁用或删除 Cookie，可能会导致本网站部分功能无法正常使用或体验下降。","Please note that if you disable or delete cookies, some features of this website may not function properly or your experience may be degraded."
-"六、Cookie 政策的更新","6. Updates to the Cookie Policy"
-"我们可能会根据法律法规变化或业务需要对本 Cookie 政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。","We may update this Cookie Policy due to changes in laws and regulations or business needs. The updated content will be posted on this page and will take effect from the date of publication."
+"六、本站典型 Cookie 用途示例","六、本站典型 Cookie 用途示例"
+"（1）会话与登录：维持登录态、防范 CSRF 与异常会话；","（1）会话与登录：维持登录态、防范 CSRF 与异常会话；"
+（2）购物与结账：记住购物车、结账步骤中的必要上下文；,（2）购物与结账：记住购物车、结账步骤中的必要上下文；
+（3）偏好：语言、货币、地区、主题外观等展示偏好；,（3）偏好：语言、货币、地区、主题外观等展示偏好；
+"（4）同意与横幅：记录您对 Cookie/隐私提示的同意或稍后选择；","（4）同意与横幅：记录您对 Cookie/隐私提示的同意或稍后选择；"
+（5）安全与性能：识别异常流量、提升页面加载与可用性。,（5）安全与性能：识别异常流量、提升页面加载与可用性。
+七、与隐私政策的关系,七、与隐私政策的关系
+"Cookie 及相关技术属于个人信息处理的一部分，补充说明见「隐私政策」。若本页与隐私政策就同一事项表述不一致，以对您权益保护更有利且符合现行法律的解释为准。","Cookie 及相关技术属于个人信息处理的一部分，补充说明见「隐私政策」。若本页与隐私政策就同一事项表述不一致，以对您权益保护更有利且符合现行法律的解释为准。"
+"如对 Cookie 使用有疑问，请先查阅隐私政策，或通过帮助中心联系支持团队。","如对 Cookie 使用有疑问，请先查阅隐私政策，或通过帮助中心联系支持团队。"
+"Cookie 政策目录","Cookie 政策目录"
+"Cookie 政策正文","Cookie 政策正文"
+搜索,search
+热门帮助主题,热门帮助主题
 官方商城帮助与客户服务,"Official mall help and customer service"
+查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。,查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。
 物流配送,"Logistics delivery"
 发货时效、运费与配送范围,"Shipping time, shipping costs, and delivery range"
 退货条件、流程与退款进度,"Return conditions, process, and refund progress"
@@ -1435,22 +1501,28 @@ Product,Product
 登录、密码与个人信息,"Login, password, and personal information"
 电话、邮箱与在线支持通道,"Phone, email, and online support channels"
 下单后多久发货？,"How long does it take to ship after placing an order?"
-"一般情况下，现货订单在付款成功后 24–48 小时内发出；预售或定制商品以商品页说明为准。","Generally, in-stock orders are shipped within 24-48 hours after successful payment; for pre-sale or customized items, please refer to the product page description."
+"现货订单通常在付款成功后 1–3 个工作日内发出（节假日顺延）；预售、定制或以商品页标注时效为准。详见「配送说明」。","现货订单通常在付款成功后 1–3 个工作日内发出（节假日顺延）；预售、定制或以商品页标注时效为准。详见「配送说明」。"
 如何查询物流？,"How do I check the logistics?"
-登录账户后可在「我的订单」中查看物流；也可在页脚「配送说明」了解发货与签收规则。,登录账户后可在「我的订单」中查看物流；也可在页脚「配送说明」了解发货与签收规则。
+登录后打开「我的订单」可查看承运商与运单节点。长时间无更新时，可先排除节假日，再通过「联系客服」并提供订单号协助查询。,登录后打开「我的订单」可查看承运商与运单节点。长时间无更新时，可先排除节假日，再通过「联系客服」并提供订单号协助查询。
+运费如何计算？是否包邮？,运费如何计算？是否包邮？
+运费按收货地区、重量/体积与配送服务在结账页实时计算。满足满额包邮或活动门槛时会自动减免，以结算页显示为准。,运费按收货地区、重量/体积与配送服务在结账页实时计算。满足满额包邮或活动门槛时会自动减免，以结算页显示为准。
 支持哪些支付方式？,"Which payment methods are supported?"
-支持常见在线支付与站点已开通的支付渠道。具体可用方式以结算页与「支付方式指南」为准。,支持常见在线支付与站点已开通的支付渠道。具体可用方式以结算页与「支付方式指南」为准。
+"支持站点已开通的在线支付渠道（如 PayPal 等）。具体可用方式以结算页与「支付方式」指南为准，并可查阅各支付商的用户协议。","支持站点已开通的在线支付渠道（如 PayPal 等）。具体可用方式以结算页与「支付方式」指南为准，并可查阅各支付商的用户协议。"
 如何申请退换货？,"How do I request a return or exchange?"
-请先阅读「退换政策」，确认符合条件后在「我的订单」提交售后，或点击「联系客服」获取协助。,请先阅读「退换政策」，确认符合条件后在「我的订单」提交售后，或点击「联系客服」获取协助。
-搜索帮助主题，例如：退货、运费、发票,"Search for help topics, such as: returns, shipping costs, invoices"
+请先阅读「退换政策」确认期限与品类要求，再在「我的订单」提交售后并上传凭证。质量问题与个人原因的运费承担规则不同，详见政策页。,请先阅读「退换政策」确认期限与品类要求，再在「我的订单」提交售后并上传凭证。质量问题与个人原因的运费承担规则不同，详见政策页。
+退款多久到账？,退款多久到账？
+"退回商品质检通过后，退款一般在 3–15 个工作日内原路退回，具体到账时间以支付渠道为准。完整规则见「退款政策」。","退回商品质检通过后，退款一般在 3–15 个工作日内原路退回，具体到账时间以支付渠道为准。完整规则见「退款政策」。"
+可以修改或取消订单吗？,可以修改或取消订单吗？
+未发货订单可在「我的订单」尝试取消或联系客服协助修改地址/备注。已发货订单无法直接取消，可按签收后的退换政策办理。,未发货订单可在「我的订单」尝试取消或联系客服协助修改地址/备注。已发货订单无法直接取消，可按签收后的退换政策办理。
+个人信息如何保护？,个人信息如何保护？
+"我们仅在提供交易与服务所必需的范围内处理个人信息，详见「隐私政策」与「Cookie 政策」。您可在账户设置中管理部分偏好。","我们仅在提供交易与服务所必需的范围内处理个人信息，详见「隐私政策」与「Cookie 政策」。您可在账户设置中管理部分偏好。"
+我的账户,"My Account"
+支付方式,"Payment Methods"
+帮助支持,帮助支持
 搜索帮助,"Search for help"
-搜索,search
+搜索帮助主题，例如：退货、运费、发票,"Search for help topics, such as: returns, shipping costs, invoices"
 常见问题,"Frequently asked questions"
 前往联系我们页,"Go to the contact us page"
-我的账户,"My Account"
-配送说明,"Shipping Information"
-退换政策,"Returns Policy"
-支付方式,"Payment Methods"
 立即重试,"Retry now"
 "将在 %{seconds} 秒后自动重试...","Will automatically retry in %{seconds} seconds..."
 服务器错误,"Server Error"
@@ -1459,17 +1531,8 @@ Product,Product
 无法连接到服务器，请检查网络连接。,"Unable to connect to the server, please check your network connection."
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-搜索商品...,"Search products..."
-热搜,"Hot search."
-全部,All
-搜索类型,"Search type"
-全部%{1},"All %{1}"
 面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
-网站Logo,"Site Logo"
 展开搜索,"Expand search"
 我的,mine
 我的菜单,"my menu"
@@ -1491,7 +1554,10 @@ CNY,CNY
 退货,"Return the goods"
 与我的订单,"With my order"
 关闭菜单,"Close menu"
+搜索汉服、形制与配饰...,"Search Hanfu, garment forms, and accessories..."
 Weline,Weline
+网站Logo,"Site Logo"
+搜索商品...,"Search products..."
 "浏览 %{1} 相关商品与配件","Browse %{1} products and accessories"
 查看全部,"View all"
 导航菜单,"Navigation menu"
@@ -1562,7 +1628,6 @@ Weline,Weline
 收纳,Organize
 美妆个护,"Beauty & Personal Care"
 食品生鲜,"Food & Fresh Produce"
-件商品,"items of goods"
 如何下单购买？,"How do I place an order?"
 您可以浏览商品，选择心仪的产品加入购物车，然后前往结算页面完成支付即可。,"You can browse products, select your desired items to add to the cart, then go to the checkout page to complete payment."
 我们支持支付宝、微信支付、银联卡、信用卡等多种支付方式。,"We support various payment methods such as Alipay, WeChat Pay, UnionPay, and credit cards."
@@ -1579,36 +1644,11 @@ Weline,Weline
 主导航,"Main navigation"
 分类菜单,"Category menu"
 快捷导航,"Quick navigation"
-全部分类,"All Categories"
-智能手机,Smartphone
-功能手机,"Feature phone"
-影音娱乐,"Audiovisual entertainment"
-鞋靴箱包,"Shoes, boots, and bags"
-厨具,Kitchenware
-运动户外,"Sports & Outdoors"
-图书文具,"Books and stationery"
-母婴用品,"Baby & Maternity Products"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
-品牌故事,"Brand story"
+品牌故事,"Our Story"
 我们专注提供高品质日常好物，从选材到交付都经过严格质检。,"We focus on providing high-quality everyday essentials, with strict quality control from material selection to delivery."
 "默认内容可直接预览排版效果，接入 CMS 后可替换为正式文案。","The default content can be previewed directly to see the layout effect; after connecting to the CMS, it can be replaced with official content."
-安全支付,"Secure payment"
-SSL加密保护,"SSL encryption protection"
-无忧退款,"Worry-Free Refund"
-30天无理由退货,"30 days no reason to return"
-免费配送,"Free Shipping"
-满额包邮,"Free shipping for orders over the threshold"
-全天候客服,"24/7 Customer Support"
-7×24小时在线,"7×24 hours online"
-SSL安全,"SSL security"
-数据加密传输,"Encrypted Data Transmission"
-认证商家,"Certified Merchant"
-正品保证,"Genuine product guarantee"
 春季系列上新,"Spring collection is now available"
 采用轻盈面料与极简剪裁，适合通勤与周末出行。现在下单可享限时包邮。,"Made with lightweight fabrics and minimalist designs, suitable for commuting and weekend outings. Place your order now and enjoy limited-time free shipping."
 立即选购,"Buy Now"
@@ -1627,22 +1667,10 @@ SSL安全,"SSL security"
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
-新品上架,"New Product Listing"
-发现最新商品,"Found the latest product"
-上架,"On the shelves"
-查看全部新品,"View all new products"
-暂无浏览记录,"No recently viewed items"
-排名,Ranking
-已售,Sold
-为您精选的优质商品,"High-quality products selected for you"
 限时抢购，错过不再,"Flash Sale, Don't Miss Out"
 距离结束,"Ends in"
-剩余,Remaining
 立即抢购,"Buy Now"
 精选轮播,"Featured Carousel"
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1672,12 +1700,6 @@ VIP会员,"VIP Member"
 "评分 %d","Rating %d"
 下一条,Next
 第%d条,"Item %d"
-暂无可用筛选条件,"No filters available"
-清除全部,"Clear all"
-价格区间,"Price range"
-"0 - 99 元","0 - 99 yuan"
-"100 - 299 元","100 - 299 yuan"
-"300 元以上","More than 300 yuan"
 面包屑导航,Breadcrumbs
 请输入您的邮箱,"Enter your email"
 我们不会向您发送垃圾邮件,"We will not send you spam"
@@ -1703,14 +1725,6 @@ VIP会员,"VIP Member"
 热卖,"Hot selling."
 新品,"New Product"
 促销活动,promotions
-用户名,用户名
-"您好, %{1}","Hello, %{1}"
-您好,Hello
-注册,Register
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-限时特惠！全场满300减50,"Limited Time Offer! Spend $300 and save $50 on your entire order"
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -2378,8 +2392,9 @@ AI目录加载失败,"AI directory loading failed"
 "未检测到闭包根类 .%{1}","Missing closed-root class .%{1}"
 "部件根结构疑似被拆散（缺少 .%{1}）","Widget root structure looks shredded (missing .%{1})"
 示例商品名称,"Example Product Name"
+全部,All
 "© %{1} Weline Framework. %{2}","© %{1} Weline Framework. %{2}"
-保留所有权利,"All rights reserved"
+保留所有权利,"All rights reserved."
 "严重错误：在 after_render 事件中检测到PHP代码\n\n位置信息：\n  源文件: %{1}\n  来源标识: %{2}\n\n错误说明：\n  在 after_render 事件中，PHP代码应该已经执行，渲染后的HTML中不应该再包含PHP标签。\n  如果仍然看到PHP代码，说明提取的内容来自编译后的模板文件，而不是渲染后的HTML。\n\n解决方案：\n  1. 确保在 after_render 事件中只处理渲染后的HTML内容\n  2. 不要从文件系统读取编译后的模板文件\n  3. 如果 script 标签包含PHP代码，请添加 data-no-extract=""true"" 属性，不提取该标签","Serious error: PHP code detected in the after_render event\n\nLocation information:\n Source file: %{1}\n Source identifier: %{2}\n\nError description:\n In the after_render event, the PHP code should have been executed, and the rendered HTML should no longer contain PHP tags. \n If you still see PHP code, it means that the extracted content comes from the compiled template file, not the rendered HTML. \n\nSolution:\n 1. Make sure to process only the rendered HTML content in the after_render event\n 2. Do not read the compiled template file from the file system\n 3. If the script tag contains PHP code, add the data-no-extract=""true"" attribute to not extract the tag"
 "严重错误：发现内联样式或脚本残留\n\n位置信息：\n  源文件: %{1}\n  标签类型: <%{2}>\n  行号: 第 %{3} 行，第 %{4} 列\n  字符位置: %{5}\n\n问题代码片段：\n%{6}\n\n错误说明：\n  所有内联样式和脚本都应该被提取到外部文件中。\n  如果某些脚本需要保留在HTML中，请添加 data-no-extract=""true"" 属性。\n\n解决方案：\n  1. 检查为什么该标签没有被提取（可能是提取逻辑问题）\n  2. 如果确实需要保留在HTML中，添加 data-no-extract=""true"" 属性\n  3. 确保标签格式正确，可以被正则表达式匹配","Serious error: Found inline style or script residue\n\nPosition information:\n Source file: %{1}\n Tag type: <%{2}>\n Line number: Line %{3}, Column %{4}\n Character position: %{5}\n\nProblem code snippet:\n%{6}\n\nError description:\n All inline styles and scripts should be extracted into external files. \n If some script needs to remain in the HTML, add the data-no-extract=""true"" attribute. \n\nSolution:\n 1. Check why the tag is not extracted (maybe an extraction logic problem)\n 2. If it really needs to be retained in the HTML, add the data-no-extract=""true"" attribute\n 3. Make sure the tag is in the correct format and can be matched by the regular expression"
 "严重错误：编译后的%{1}文件中检测到PHP代码，这是不允许的\n\n位置信息：\n  源文件: %{2}\n  来源标识: %{3}\n  %{1}内容中的行号: 第 %{4} 行\n  PHP代码位置: 字符位置 %{5}\n\n问题代码片段：\n%{6}\n\n错误说明：\n  主题布局内不允许存在编译后还有PHP代码。\n  编译后的%{1}文件必须是纯%{1}，不能包含任何PHP代码。\n\n正确的做法：\n  1. 使用CSS变量：在模板中定义CSS变量，然后在CSS中使用 var()\n  2. 使用data属性：在HTML元素上设置data属性，然后在JS中读取\n  3. 使用window对象：在模板中设置 window.config = {...}，然后在JS中使用\n  4. 使用标签系统：使用框架提供的标签系统传递数据\n  5. 如果确实需要PHP代码，请添加 data-no-extract=""true"" 属性，不提取该标签","Fatal error: PHP code was detected in the compiled %{1} file, which is not allowed\n\nLocation information:\n Source file: %{2}\n Source identifier: %{3}\n %{1} Line number in content: Line %{4}\n PHP code position: Character position %{5}\n\nProblem code snippet:\n%{6}\n\nError description:\n Compiled PHP code is not allowed in the theme layout. \n The compiled %{1} file must be pure %{1} and cannot contain any PHP code. \n\nCorrect approach:\n 1. Use CSS variables: define CSS variables in the template, and then use var() in CSS\n 2. Use data attributes: set the data attribute on the HTML element, and then read it in JS\n 3. Use window objects: set window.config = {...} in the template, and then use it in JS\n 4. Use the tag system: use the tag system provided by the framework to pass data\n 5. If you really need PHP code, add the data-no-extract=""true"" attribute to not extract the tag"
@@ -2759,6 +2774,148 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+为您精选的优质商品,"High-quality products selected for you"
+限时特惠！全场满300减50,"Limited Time Offer! Spend $300 and save $50 on your entire order"
+搜索类型,"Search type"
+全部%{1},"All %{1}"
+热搜,"Hot search."
+"云裳 Hanfu Atelier","Yunshang · Hanfu Atelier"
+注册,Register
+您好,Hello
+"您好, %{1}","Hello, %{1}"
+我们非常重视您的隐私保护。本隐私政策说明了我们如何收集、使用、存储和保护您的个人信息。请您仔细阅读本政策，以了解我们对您个人信息的处理方式。,"We take your privacy very seriously. This Privacy Policy explains how we collect, use, store, and protect your personal information. Please read this policy carefully to understand how we handle your personal information."
+"6.1 我们非常重视未成年人的个人信息保护。如果您是未满18周岁的未成年人，请在您的父母或监护人的陪同下阅读本政策，并在征得您的父母或监护人同意后使用我们的服务。","6.1 We attach great importance to the protection of minors’ personal information. If you are a minor under the age of 18, please read this policy accompanied by your parents or guardians, and use our services with the consent of your parents or guardians."
+广告偏好是指根据您在本网站上的浏览、搜索、互动等信息，为您展示更相关广告或内容推荐的兴趣设置。这些偏好有助于减少无关广告，同时保持网站服务的可持续运营。,"Advertising preferences are interest settings derived from browsing, search, and interactions on this site to show more relevant ads or content. They help reduce irrelevant ads while supporting sustainable service operation."
+二、我们如何使用广告偏好？,"2. How do we use advertising preferences?"
+在适用法律法规允许的范围内，我们可能将广告偏好用于：,"Where permitted by applicable laws and regulations, we may use advertising preferences to:"
+（1）展示与您兴趣更匹配的促销、商品或服务信息；,"(1) Show promotions, products, or services that better match your interests;"
+（2）评估广告投放效果，改进广告相关性与展示频率；,"(2) Measure ad performance and improve relevance and frequency;"
+（3）限制重复展示，避免过多打扰；,"(3) Limit repetitive impressions to reduce disruption;"
+（4）与经授权的广告合作伙伴协同完成必要的投放与计量（如适用）。,"(4) Coordinate necessary delivery and measurement with authorized advertising partners (if applicable)."
+三、您如何管理广告偏好？,"3. How can you manage advertising preferences?"
+"广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅：","Advertising preference controls do not replace the Privacy Notice or Cookie Policy. For full details on personal data and cookies, see:"
+隐私声明,"Privacy Notice"
+使用条件,"Terms of Use"
+本免责声明说明了本网站在提供服务过程中的责任限制和免责情形。请您在使用本网站服务前仔细阅读本声明。,"This disclaimer explains the limitations of liability and disclaimers in the process of providing services on this website. Please read this disclaimer carefully before using our website services."
+为了保障您的权益，我们制定了完善的退款、退货、换货政策。请您仔细阅读以下内容，了解退款条件和流程。,"In order to protect your rights and interests, we have developed a comprehensive refund, return, and exchange policy. Please read the following carefully to understand the refund conditions and procedures."
+"3.4 确认退款：我们收到退回商品并确认无误后，将在3-15个工作日内完成退款。退款将原路退回至您的支付账户。","3.4 Confirmation of refund: After we receive the returned goods and confirm that they are correct, the refund will be completed within 3-15 working days. The refund will be credited back to your payment account via the original route."
+四、退款金额,"4. Refund Amount"
+"4.1 退款金额包括：商品实际支付金额、运费（如因商品问题导致的退货，运费由我们承担）。","4.1 The refund amount includes: the actual payment amount for the product and shipping cost (if the product is returned due to product problems, the shipping cost will be borne by us)."
+"4.2 退款金额不包括：已使用的优惠券、积分、赠品等（如赠品已使用或损坏，可能需要扣除相应费用）。","4.2 The refund amount does not include: used coupons, points, gifts, etc. (If the gifts have been used or damaged, corresponding fees may be deducted)."
+"4.3 如因用户原因导致的退货，运费由用户承担，退款金额将扣除运费。","4.3 If the product is returned due to user reasons, the shipping cost will be borne by the user, and the refund amount will be deducted from the shipping cost."
+五、换货政策,"5. Exchange policy"
+"5.1 如商品存在质量问题，您可以选择换货。换货流程与退货类似，需要提交换货申请并退回原商品。","5.1 If there are quality problems with the product, you can choose to exchange it. The exchange process is similar to that of a return. You need to submit an exchange application and return the original product."
+"5.2 换货商品需与原商品规格、型号一致。如无相同商品，我们可能建议您选择退款。","5.2 Replacement products must have the same specifications and models as the original products. If the same product is not available, we may suggest you choose a refund."
+"5.3 换货产生的运费，如因商品质量问题，由我们承担；如因用户原因，由用户承担。","5.3 The freight incurred for exchange of goods shall be borne by us if it is due to product quality problems; if it is due to user reasons, it shall be borne by the user."
+六、退款时效,"6. Refund Period"
+"6.1 退款申请审核：1-3个工作日；","6.1 Review of refund application: 1-3 working days;"
+"6.2 商品退回确认：收到退回商品后1-2个工作日；","6.2 Product return confirmation: 1-2 working days after receiving the returned product;"
+"6.3 退款到账：确认无误后3-15个工作日（具体到账时间以支付平台为准）。","6.3 Refund arrival: 3-15 working days after confirmation (the specific arrival time is subject to the payment platform)."
+"6.4 如遇节假日或特殊情况，退款时间可能相应延长，我们会及时通知您。","6.4 In case of holidays or special circumstances, the refund time may be extended accordingly, and we will notify you in time."
+七、特殊说明,"7. Special instructions"
+"7.1 数字产品、虚拟商品、服务类商品等特殊商品，如无质量问题，一般不支持退款，具体以商品页面说明为准。","7.1 Special products such as digital products, virtual products, and service products generally do not support refunds if there are no quality problems. Please refer to the description on the product page for details."
+"7.2 定制、来图定做、已裁剪改衣的商品，无质量问题时通常不支持无理由退款；存在明确质量问题时，可协商修补、重做或退款。","7.2 定制、来图定做、已裁剪改衣的商品，无质量问题时通常不支持无理由退款；存在明确质量问题时，可协商修补、重做或退款。"
+"7.3 如商品存在安全隐患或严重质量问题，我们将立即处理，不受退货期限限制。","7.3 如商品存在安全隐患或严重质量问题，我们将立即处理，不受退货期限限制。"
+"7.4 如您对退款处理结果有异议，可以联系客服或通过其他渠道申诉。操作步骤亦可参阅「退换政策」指南页。","7.4 如您对退款处理结果有异议，可以联系客服或通过其他渠道申诉。操作步骤亦可参阅「退换政策」指南页。"
+八、联系我们,"8. Contact Us"
+如您对退款政策有任何疑问，或需要申请退款、退货、换货，请通过本网站「帮助中心」「我的订单」售后入口或联系客服与我们联系。我们将竭诚为您服务。,如您对退款政策有任何疑问，或需要申请退款、退货、换货，请通过本网站「帮助中心」「我的订单」售后入口或联系客服与我们联系。我们将竭诚为您服务。
+"八、Cookie 政策的更新","八、Cookie 政策的更新"
+"我们可能会根据法律法规变化或业务需要对本 Cookie 政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。重大变更将通过网站显著位置提示。","我们可能会根据法律法规变化或业务需要对本 Cookie 政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。重大变更将通过网站显著位置提示。"
+九、联系我们,九、联系我们
+"如您对本 Cookie 政策有疑问，可通过「帮助中心」或「联系我们」与我们沟通。广告偏好相关选项可在「广告偏好」页面查看（如已启用）。","如您对本 Cookie 政策有疑问，可通过「帮助中心」或「联系我们」与我们沟通。广告偏好相关选项可在「广告偏好」页面查看（如已启用）。"
+选择作用范围,"Select scope."
+搜索作用范围,"Search scope."
+未找到匹配作用范围,"No matching scope found."
+七、政策更新,"7. Policy updates"
+"7.1 我们可能会根据法律法规变化或业务需要对本隐私政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。","7.1 We may update this Privacy Policy based on changes in laws and regulations or business needs. The updated content will be posted on this page and will be effective from the date of publication."
+"7.2 如发生重大变更，我们可能会通过显著方式（如网站公告、邮件通知等）向您告知。","7.2 If major changes occur, we may notify you through prominent means (such as website announcements, email notifications, etc.)."
+如您对本隐私政策有任何疑问、意见或建议，或需要行使您的权利，请通过本网站提供的联系方式与我们联系。我们将在合理期限内回复您的请求。,"If you have any questions, comments, or suggestions regarding this Privacy Policy, or need to exercise your rights, please contact us through the contact information provided on this website. We will respond to your request within a reasonable timeframe."
+"7.2 如商品存在安全隐患或严重质量问题，我们将立即处理，不受退货期限限制。","7.2 If the product has safety hazards or serious quality problems, we will deal with it immediately and will not be restricted by the return period."
+"7.3 如您对退款处理结果有异议，可以联系客服或通过其他渠道申诉。","7.3 If you have any objection to the refund processing result, you can contact customer service or appeal through other channels."
+如您对退款政策有任何疑问，或需要申请退款、退货、换货，请通过本网站提供的联系方式与我们联系。我们将竭诚为您服务。,"If you have any questions about the refund policy, or need to apply for a refund, return, or exchange, please contact us through the contact information provided on this website. We are dedicated to serving you."
+"六、Cookie 政策的更新","6. Updates to the Cookie Policy"
+"我们可能会根据法律法规变化或业务需要对本 Cookie 政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。","We may update this Cookie Policy due to changes in laws and regulations or business needs. The updated content will be posted on this page and will take effect from the date of publication."
+"一般情况下，现货订单在付款成功后 24–48 小时内发出；预售或定制商品以商品页说明为准。","Generally, in-stock orders are shipped within 24-48 hours after successful payment; for pre-sale or customized items, please refer to the product page description."
+登录账户后可在「我的订单」中查看物流；也可在页脚「配送说明」了解发货与签收规则。,登录账户后可在「我的订单」中查看物流；也可在页脚「配送说明」了解发货与签收规则。
+支持常见在线支付与站点已开通的支付渠道。具体可用方式以结算页与「支付方式指南」为准。,支持常见在线支付与站点已开通的支付渠道。具体可用方式以结算页与「支付方式指南」为准。
+请先阅读「退换政策」，确认符合条件后在「我的订单」提交售后，或点击「联系客服」获取协助。,请先阅读「退换政策」，确认符合条件后在「我的订单」提交售后，或点击「联系客服」获取协助。
+全部分类,"All Categories"
+智能手机,Smartphone
+功能手机,"Feature phone"
+影音娱乐,"Audiovisual entertainment"
+鞋靴箱包,"Shoes, boots, and bags"
+厨具,Kitchenware
+运动户外,"Sports & Outdoors"
+图书文具,"Books and stationery"
+母婴用品,"Baby & Maternity Products"
+暂无可用筛选条件,"No filters available"
+清除全部,"Clear all"
+价格区间,"Price range"
+"0 - 99 元","0 - 99 yuan"
+"100 - 299 元","100 - 299 yuan"
+"300 元以上","More than 300 yuan"
+"云裳汉服 · Hanfu Atelier","Yunshang Hanfu · Hanfu Atelier"
+"云裳汉服 · Hanfu Atelier | 水墨汉服商城首页","Yunshang Hanfu · Hanfu Atelier | Ink-Wash Hanfu Boutique"
+云裳汉服水墨中国风独立站，精选明制、宋制、唐制汉服、马面裙与传统配饰，服务日常、节庆与礼仪场景。,"Discover Ming, Song, and Tang dynasty Hanfu, mamian skirts, and traditional accessories for everyday wear, festivals, and ceremonies."
+暂无浏览记录,"No recently viewed items"
+用户名,用户名
+女士汉服,"Women's Hanfu"
+按形制探索适合日常、节庆与礼仪场景的女士汉服,"Explore women's Hanfu by historical style for everyday wear, festivals, and ceremonies."
+明制汉服,"Ming Dynasty Hanfu"
+端庄利落的立领、马面裙与披风层次,"Structured stand collars, mamian skirts, and elegant outer layers."
+马面裙,"Mamian Skirts"
+立领长衫,"Stand-Collar Long Robes"
+披风与比甲,"Pifeng & Bijia Layers"
+宋制汉服,"Song Dynasty Hanfu"
+清雅轻盈的褙子、百迭裙与宋裤搭配,"Graceful beizi jackets, baidie skirts, and Song-style trousers."
+褙子,"Beizi Jackets"
+百迭裙,"Baidie Skirts"
+宋裤,"Song-Style Trousers"
+唐制汉服,"Tang Dynasty Hanfu"
+明快华丽的齐胸襦裙、坦领与圆领款式,"Vibrant qixiong ruqun, tanling necklines, and round-collar robes."
+齐胸襦裙,"Qixiong Ruqun"
+坦领,"Tanling Hanfu"
+圆领袍,"Round-Collar Robes"
+晋制汉服,"Jin Dynasty Hanfu"
+飘逸交领、大袖衫与裙装组合,"Flowing cross-collar ruqun, wide-sleeved jackets, and layered skirts."
+交领襦裙,"Cross-Collar Ruqun"
+大袖衫,"Wide-Sleeved Jackets"
+杂裾,"Zaju Robes"
+男士汉服,"Men's Hanfu"
+传统形制与现代日常穿着兼顾的男士系列,"Traditional silhouettes refined for contemporary everyday wear."
+节庆、礼仪与出行皆宜,"Made for festivals, ceremonies, and travel."
+道袍与直裰,"Daopao & Zhiduo Robes"
+从容雅正的传统衣冠,"Effortless, dignified traditional dress."
+曳撒与贴里,"Yesa & Tieli Robes"
+明制风格与利落剪裁,"Clean tailoring with a distinct Ming character."
+日常汉元素,"Everyday Han-Inspired Wear"
+适合通勤与日常搭配,"Easy pieces for workdays and daily styling."
+儿童汉服,"Children's Hanfu"
+舒适、安全并适合成长活动的儿童传统服饰,"Comfortable, child-safe traditional clothing made for movement and growth."
+女童汉服,"Girls' Hanfu"
+男童汉服,"Boys' Hanfu"
+亲子系列,"Family Matching"
+节庆礼服,"Festival Attire"
+汉服配饰,"Hanfu Accessories"
+以发饰、鞋履与随身雅物完成整套造型,"Complete the look with hair ornaments, footwear, and elegant carry pieces."
+发簪与发冠,"Hairpins & Crowns"
+腰带与禁步,"Belts & Jinbu Charms"
+绣花鞋履,"Embroidered Shoes"
+团扇与包袋,"Round Fans & Bags"
+按场景选购,"Shop by Occasion"
+按重要时刻与穿着需求快速找到合适的一套,"Find the right ensemble for each moment and dress code."
+婚礼与礼服,"Wedding & Ceremonial"
+节庆与雅集,"Festivals & Gatherings"
+日常通勤,"Everyday & Work"
+旅拍与演出,"Travel Shoots & Performance"
+品牌与文化,"Our Brand & Culture"
+认识云裳的审美、工艺与汉服穿着知识,"Discover Yunshang's aesthetic, craftsmanship, and guides to wearing Hanfu."
+汉服文化指南,"Hanfu Culture Guide"
+新手购物帮助,"First-Time Buyer Guide"
+云裳志,"Our Atelier"
+定制与合作,"Bespoke & Partnerships"
+云裳国际页脚,"Yunshang International Footer"
+云裳汉服独立站全局页脚：品牌、服务、法律、社交与语言货币；标准四列保留业务扩展槽。独占底部区域。,"Global footer for the Yunshang Hanfu storefront, covering brand, service, legal, social, language, and currency links. Four standard columns preserve business extension slots and exclusively own the footer area."
 2026春季新品上市,"2026 spring new product launch"
 探索最新时尚潮流,"Explore the latest fashion trends"
 全场满300减50,"Spend 300, Save 50 Storewide"
@@ -2771,9 +2928,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "清理 Theme 缓存失败","Failed to clear Theme cache"
 "清理 Theme 缓存失败：","Failed to clear Theme cache:"
 底部扩展区,"Footer extras"
-选择作用范围,"Select scope."
-搜索作用范围,"Search scope."
-未找到匹配作用范围,"No matching scope found."
 页脚链接,"Footer Links"
 邮件订阅,"Email Subscription"
 社交媒体,"Social Media"
@@ -3310,6 +3464,7 @@ Cart,Cart
 热门,Trending
 或者看看这些精选商品,"Or explore these picks for you"
 关于我们页面布局,"About Us page layout"
+联系我们页面布局,"Contact Us Page Layout"
 活动,Campaigns
 帮助中心扩展,"Help Center Extras"
 页脚帮助中心链接,"Footer Help Center Link"
@@ -3338,3 +3493,82 @@ Cart,Cart
 预览中未找到该部件，请先刷新预览,"Widget not found in preview; refresh preview first"
 请先安装该应用部件,"Install this application widget first"
 该部件为模板内嵌，无法从此卸载,"Template-inline widget cannot be uninstalled here"
+"桃园清梦 · 明制花鸟套装","Peach Garden Dream · Ming-Style Set"
+烟粉花鸟，上衣与马面裙可选,"Ivory and blush florals, with top and mamian options"
+桃园清梦米白粉色明制上衣与马面裙套装,"Peach Garden Dream ivory-and-pink Ming-style top and mamian set"
+"神龙吟 · 妆花马面裙","Dragon Chant · Zhuanghua Mamian"
+黑红妆花，马面裙与飞机袖可选,"Black-and-red zhuanghua, with mamian and feijixiu options"
+神龙吟黑红妆花明制马面裙造型,"Dragon Chant black-and-red zhuanghua Ming-style mamian look"
+"醉梦夕风 · 仙鹤织金","Evening Wind · Crane Brocade"
+仙鹤织金，单裙与套装可选,"Crane brocade, available as a skirt or coordinated set"
+醉梦夕风深色仙鹤织金马面裙造型,"Evening Wind dark crane-brocade mamian look"
+浏览系列,"Explore collection"
+按汉服品类选购,"Shop Hanfu by Category"
+从准确形制开始选择,"Start with the garment form that matches your needs"
+配饰,Accessories
+套装与场景,"Sets & Occasions"
+女装汉服分类图，展示女性汉服的裙装层次,"Women's Hanfu category image showing layered skirt silhouettes"
+男装汉服分类图，展示男性袍衫轮廓,"Men's Hanfu category image showing robe silhouettes"
+童装汉服分类图，展示儿童尺度汉服,"Children's Hanfu category image showing child-proportioned garments"
+汉服配饰分类图，展示头饰、佩饰与鞋履,"Hanfu accessories category image showing headwear, pendants, and footwear"
+汉服套装分类图，展示完整上下装搭配,"Hanfu sets category image showing a complete coordinated outfit"
+"织艺谱系 · Textile Heritage","Textile Heritage"
+云锦,"Nanjing Yunjin"
+宋锦,"Suzhou Song Brocade"
+蜀锦,"Chengdu Shu Brocade"
+苏绣,"Suzhou Embroidery"
+妆花,"Brocaded Weave"
+花罗,"Patterned Gauze"
+全部商品,"Shop All Hanfu"
+浏览全部商品,"Shop All Hanfu"
+热销榜,"Best Sellers"
+热门入口,"Popular Links"
+账户与服务,"Account & Services"
+商品对比,"Compare Products"
+Pinterest,Pinterest
+TikTok,TikTok
+店铺通知,"Store notice"
+分类导航,"Category navigation"
+更多分类,"More categories"
+All,All
+"Search type","Search type"
+Favorites,Favorites
+"My Favorites","My Favorites"
+Register,Register
+"All Categories","All Categories"
+"Open all categories menu","Open all categories menu"
+Hanfu,Hanfu
+"Add to Favorites","Add to Favorites"
+"Add to Compare","Add to Compare"
+"Quick View","Quick View"
+"Buy Now","Buy Now"
+Close,Close
+"About Us","About Us"
+Active,Active
+"Cookie Policy","Cookie Policy"
+Style,Style
+Occasion,Occasion
+Material,Material
+"Spec products","Spec products"
+Ming,Ming
+Tang,Tang
+Song,Song
+Daily,Daily
+Wedding,Wedding
+Festival,Festival
+Restoration,Restoration
+Polyester,Polyester
+Silk,Silk
+Zhijin,Zhijin
+Chiffon,Chiffon
+"Browse ming products and accessories","Browse Ming products and accessories"
+"Browse tang products and accessories","Browse Tang products and accessories"
+"Browse song products and accessories","Browse Song products and accessories"
+"Browse daily products and accessories","Browse daily products and accessories"
+"Browse wedding products and accessories","Browse wedding products and accessories"
+"Browse festival products and accessories","Browse festival products and accessories"
+"Browse restoration products and accessories","Browse historically inspired products and accessories"
+"Browse polyester products and accessories","Browse polyester products and accessories"
+"Browse silk products and accessories","Browse silk products and accessories"
+"Browse zhijin products and accessories","Browse gold-brocade products and accessories"
+"Browse chiffon products and accessories","Browse chiffon products and accessories"

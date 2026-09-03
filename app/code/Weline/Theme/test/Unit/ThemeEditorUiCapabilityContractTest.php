@@ -90,7 +90,10 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         $editorCss = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.css');
         self::assertStringContainsString('TE-CAP side-panel-push', $editorCss);
         self::assertStringContainsString('panel-widget-open .editor-widget-panel', $editorCss);
-        self::assertStringContainsString('z-index: 2001', $editorCss);
+        self::assertMatchesRegularExpression(
+            '/\.editor-floating-panel-actions\s*\{[^}]*z-index:\s*var\(--weline-z-overlay\);/s',
+            $editorCss,
+        );
         self::assertStringNotContainsString('editor-compact-mode .editor-main {\n        grid-template-columns: minmax(0, 1fr);', $editorCss);
         self::assertStringNotContainsString('editor-compact-mode .editor-config-panel,\n    .theme-editor-container.editor-compact-mode .editor-widget-panel {\n        position: absolute;', $editorCss);
         $editorTemplate = $this->read('app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml');
@@ -99,7 +102,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('.widget-library-type-chip.is-active', $editorCss);
         self::assertStringContainsString('id="wAiWidgetButton"', $editorTemplate);
         self::assertStringContainsString('rel="modulepreload"', $editorTemplate);
-        self::assertStringContainsString('weline-theme-editor.js)?v=20260901-clear-theme-cache-v1', $editorTemplate);
+        $this->assertEditorBundleVersionedLinksMatch($editorTemplate);
         self::assertStringContainsString('data-library-type="applications"', $editorTemplate);
         self::assertStringContainsString('data-library-type="app_default">@lang{默认安装}', $editorTemplate);
         self::assertStringContainsString('data-api-theme-ai-publish=', $editorTemplate);
@@ -291,6 +294,16 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('data-w-editor-selection-target="widget"', $styles);
         self::assertStringContainsString('data-w-editor-link-block="1"', $styles);
         self::assertStringContainsString('.slot-mode-hit-area', $styles);
+
+        $uiBundle = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+        foreach ([$editor, $uiBundle] as $parent) {
+            self::assertStringContainsString("normalizeSelectionTarget(state.selectionTarget) === 'slot'", $parent);
+            self::assertStringContainsString("normalizeSelectionTarget(state.selectionTarget) === 'widget'", $parent);
+            self::assertStringContainsString('插槽模式只激活插槽，不点选/打开部件配置。', $parent);
+            self::assertStringContainsString('部件模式只触发部件，忽略插槽选中。', $parent);
+            self::assertStringContainsString('部件模式不激活插槽工具条选择。', $parent);
+        }
+        self::assertStringContainsString('部件模式只触发部件，不激活插槽。', $engine);
     }
 
     public function testWidgetHoverActionsReuseAnchoredFloatBaseComponent(): void
@@ -428,6 +441,31 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('editor_context:', $editor);
     }
 
+    public function testWidgetLibrarySlotFullLoadDisablesPagination(): void
+    {
+        $controller = $this->read('app/code/Weline/Theme/Controller/Backend/ThemeEditor.php');
+        $editor = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.js');
+        $legacy = $this->read('app/code/Weline/Theme/view/statics/js/theme-editor.js');
+        $template = $this->read('app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml');
+
+        self::assertStringContainsString('$slotFull = $slotId !== \'\';', $controller);
+        self::assertStringContainsString("'slot_full' => \$slotFull ? 1 : 0,", $controller);
+        self::assertStringContainsString('$hasMore = false;', $controller);
+
+        foreach ([$editor, $legacy] as $js) {
+            self::assertStringContainsString('if (lib.slot) return;', $js);
+            self::assertStringContainsString('} else if (!lib.hasMore || lib.slot) {', $js);
+            self::assertStringContainsString("Number(result.slot_full) === 1", $js);
+            self::assertStringContainsString('// slot 全量模式不展示分页提示', $js);
+            self::assertMatchesRegularExpression(
+                '/function handleSlotSelected\\([\\s\\S]*?setWidgetSlotFilter\\(/',
+                $js
+            );
+        }
+
+        self::assertStringContainsString('20260903-slot-full-widgets-v2', $template);
+    }
+
     public function testVisualPreviewDragDropKeepsInsideBeforeAndAfterFeedback(): void
     {
         $engine = $this->read('app/code/Weline/Theme/view/statics/js/editor-mode.js');
@@ -556,7 +594,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('search-placeholder="@lang(搜索网站、店铺或渠道)"', $template);
         self::assertStringNotContainsString('<w:websites:', $template);
         self::assertStringNotContainsString('data-scope-catalog=', $template);
-        self::assertStringContainsString('Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260901-clear-theme-cache-v1', $template);
+        $this->assertEditorBundleVersionedLinksMatch($template);
         self::assertStringContainsString('INTERACTION_MODE_STORAGE_KEY', $editor);
         self::assertStringContainsString('resolveInitialInteractionMode', $editor);
         self::assertStringContainsString("'interaction_mode'", $editor);
@@ -818,6 +856,9 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringContainsString('.weline-template-widget[data-template-ref]', $editor);
         self::assertStringContainsString('materializeTemplateWidgetIfNeeded', $editor);
         self::assertStringContainsString('data-template-ref', $editor);
+        // 插入后直接取 lastElementChild；禁止对空 layoutId 做 querySelector
+        self::assertStringContainsString('targetContainer.lastElementChild', $editor);
+        self::assertStringNotContainsString('targetContainer.querySelector(dataLayoutIdSelector(layoutId))', $editor);
     }
 
     public function testSlotWidgetAccordionDisclosurePanelAndUniqueCollapseIds(): void
@@ -832,7 +873,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             self::assertStringContainsString('loadWidgetConfigForAccordion(identity, widgetElement = null, configBodyEl = null)', $editor);
             self::assertStringContainsString('configBodyEl instanceof HTMLElement', $editor);
         }
-        self::assertStringContainsString('weline-theme-editor.js)?v=20260901-clear-theme-cache-v1', $template);
+        $this->assertEditorBundleVersionedLinksMatch($template);
     }
 
     public function testPreviewDropBridgeKeepsLibraryDragEventsInParentDocument(): void
@@ -873,7 +914,7 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             self::assertStringContainsString('[data-mini-cart-trigger]', $source);
         }
         self::assertStringContainsString("typeof target.closest !== 'function'", $editor);
-        self::assertStringContainsString('[data-action="add-v2"]', $editor);
+        self::assertStringContainsString('[data-action="add"]', $editor);
         foreach ([$editor, $bundle] as $source) {
             self::assertStringContainsString('isShopperRuntimeEventTarget(e.target)', $source);
             self::assertStringContainsString('bindWidgetActionEvents', $source);
@@ -896,13 +937,32 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             self::assertStringContainsString('widget-locate-flash', $editor, $path);
         }
 
-        $css = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.css');
-        self::assertStringContainsString('.widget-default-injection-locate-target', $css);
-        self::assertStringContainsString('.widget-locate-flash', $css);
+        $editorCss = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-editor.css');
+        self::assertStringContainsString('.widget-default-injection-locate-target', $editorCss);
+
+        $previewCss = $this->read('app/code/Weline/Theme/view/statics/ui/pages/weline-theme-preview.css');
+        self::assertStringContainsString('.widget-locate-flash', $previewCss);
 
         $service = $this->read('app/code/Weline/Theme/Service/WidgetDefaultInjectionService.php');
         self::assertStringContainsString('function resolveAppliedLayoutNode(', $service);
         self::assertStringContainsString("'removable'] = true", $service);
+    }
+
+    private function assertEditorBundleVersionedLinksMatch(string $template): void
+    {
+        $matches = [];
+        $count = preg_match_all(
+            '/Weline_Theme::ui\/pages\/weline-theme-editor\.js\)\?v=([a-zA-Z0-9._-]+)/',
+            $template,
+            $matches,
+        );
+        self::assertNotFalse($count, 'Theme editor bundle URLs must carry a cache version.');
+        self::assertGreaterThanOrEqual(2, $count, 'Both modulepreload and script URLs must be versioned.');
+        self::assertCount(
+            1,
+            array_unique($matches[1] ?? []),
+            'Theme editor modulepreload and script URLs must share the same cache version.',
+        );
     }
 
     private function read(string $path): string

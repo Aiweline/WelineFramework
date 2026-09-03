@@ -7,8 +7,8 @@
  * @var \Weline\Framework\View\Template $this
  *
  * @widget.code {footer-container}
- * @widget.name {页脚}
- * @widget.description {整页脚主部件：分组链接、法律/版权、社交与语言货币；标准四列保留业务扩展槽。独占底部区域。}
+ * @widget.name {云裳国际页脚}
+ * @widget.description {云裳汉服独立站全局页脚：品牌、服务、法律、社交与语言货币；标准四列保留业务扩展槽。独占底部区域。}
  * @widget.type {footer}
  * @widget.area {frontend}
  * @widget.position {["footer"]}
@@ -17,7 +17,8 @@
  * @widget.exclusive {true}
  * @widget.is_container {true}
  * @widget.supports {["layout-global-footer","footer-container"]}
- * @widget.default_injections {[{ "layout_type":"*", "slot":"footer", "area":"footer", "sort_order":0, "required":true, "exclusive":true, "reason":"整页脚主部件默认安装，保证标准扩展槽随默认四分组存在" }]}
+ * @widget.slots {"footer-about-links":{"name":"了解我们扩展","accept":["footer-blog-link","footer-news-link","layout-footer-about-links"],"multiple":true},"footer-partner-links":{"name":"合作信息扩展","accept":["footer-publish-link","footer-promote-link","layout-footer-partner-links"],"multiple":true},"footer-payment-account-links":{"name":"支付与账户扩展","accept":["footer-payment-methods-link","footer-currency-rates-link","footer-campaign-link","layout-footer-payment-account-links"],"multiple":true},"footer-help-links":{"name":"帮助中心扩展","accept":["footer-my-account-link","footer-my-orders-link","footer-shipping-info-link","footer-returns-policy-link","footer-help-center-link","footer-contact-service-link","layout-footer-help-links"],"multiple":true},"footer-language":{"name":"语言","accept":["language-switcher","language"],"max":1},"footer-currency":{"name":"货币","accept":["currency-switcher","currency"],"max":1},"footer-social":{"name":"社交媒体","accept":["footer-social","social"],"max":1},"footer-copyright":{"name":"版权信息","accept":["footer-copyright","copyright"],"max":1}}
+ * @widget.default_injections {[{ "layout_type":"homepage", "slot":"footer", "area":"footer", "sort_order":0, "required":true, "exclusive":true, "reason":"整页脚主部件默认安装到全局 chrome 载体（homepage），非首页继承合并" }]}
  *
  * @param link_groups {default=[],type="footer_link_groups",label="链接分组",description="默认四组；enabled=false 时不渲染该列及扩展槽；自定义分组不带新槽"}
  * @param link_items {default=[],type="footer_link_items",label="链接分项",description="group_key 对应分组键；先于扩展槽渲染"}
@@ -29,11 +30,14 @@
  * @param show_legal {default=true,type="bool",label="显示法律链接与版权"}
  * @param legal_links {default=[],type="footer_legal_links",label="法律与政策链接"}
  * @param copyright_text {default="",type="string",label="版权文字",description="留空使用主题默认；可用 year 占位符"}
- * @param site_logo_text {default="Weline",type="string",label="页脚 Logo 文字"}
+ * @param site_logo_text {default="",type="string",label="页脚 Logo 文字",description="留空使用当前网站名称；框架占位 Weline/韦林 同样回落到网站名称"}
  */
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Helper\FooterCopyrightHelper;
 use Weline\Theme\Helper\FooterDefaultLinksHelper;
+use Weline\Theme\Helper\SiteBrand;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('footer-container');
@@ -45,7 +49,7 @@ $label = static function (mixed $value) use ($esc): string {
         return '';
     }
 
-    return $esc((string)__($raw));
+    return $esc(WidgetI18n::label($raw));
 };
 
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
@@ -63,19 +67,36 @@ $showSocial = (bool)($this->getData('show_social') ?? true);
 $showLegal = (bool)($this->getData('show_legal') ?? true);
 $socialItems = FooterDefaultLinksHelper::normalizeSocialItems($this->getData('social_items'));
 $legalLinks = FooterDefaultLinksHelper::normalizeLegalLinks($this->getData('legal_links'));
+$themeFallbackSiteLogoText = '云裳 Hanfu Atelier';
+/** @var SiteBrand $siteBrand */
+$siteBrand = ObjectManager::getInstance(SiteBrand::class);
+$siteLogoText = $siteBrand instanceof SiteBrand
+    ? $siteBrand->resolveFrontendSiteName(
+        trim((string)($this->getData('site_logo_text') ?? '')),
+        $themeFallbackSiteLogoText,
+    )
+    : WidgetI18n::label(
+        trim((string)($this->getData('site_logo_text') ?? '')),
+        $themeFallbackSiteLogoText,
+    );
+$localizedSiteLogoText = $siteLogoText;
+$localizedRights = WidgetI18n::label('保留所有权利');
 $rawCopyright = $this->getData('copyright_text');
-$copyrightText = FooterCopyrightHelper::resolve(
-    ($rawCopyright === null || $rawCopyright === '') ? null : (string)$rawCopyright
-);
-$siteLogoText = trim((string)($this->getData('site_logo_text') ?? 'Weline'));
-if ($siteLogoText === '') {
-    $siteLogoText = 'Weline';
+if ($rawCopyright === null || trim((string)$rawCopyright) === '') {
+    $copyrightText = '© ' . date('Y') . ' ' . $localizedSiteLogoText . '. ' . $localizedRights;
+} else {
+    $copyrightText = FooterCopyrightHelper::resolve((string)$rawCopyright);
+    $copyrightText = str_replace(
+        [$themeFallbackSiteLogoText, 'Weline', '韦林', '保留所有权利'],
+        [$localizedSiteLogoText, $localizedSiteLogoText, $localizedSiteLogoText, $localizedRights],
+        $copyrightText,
+    );
 }
 $gridClass = 'footer-content footer-content--cols-' . $columns;
 ?>
 
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/footer-chrome-amazon.css)?v=20260901-footer-container-v2">
+      href="@static(Weline_Theme::css/widgets/footer-chrome-amazon.css)?v=20260902-hanfu-ink-v1">
 
 <footer id="footer"
         class="weline-footer <?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
@@ -86,19 +107,11 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
         data-layout-type="default"
         data-layout-option="default">
     <w:hook>Weline_Theme::frontend::partials::footer::before</w:hook>
-
-    <w:block>Weline\Frontend\Block\Footer\Base</w:block>
-    <?php
-    /** @var \Weline\Framework\View\Template $this */
-    echo $this->getFooter()->getHtml();
-    ?>
     <w:hook>footer</w:hook>
 
     <?php if ($showBackToTop): ?>
         <button type="button" class="footer-back-to-top" id="navBackToTop" title="<?= $esc((string)__('回到顶部')) ?>">
-            <svg class="footer-back-to-top__icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-                <path d="M12 6l-6 6h3.5V18h5v-6H18l-6-6z" fill="currentColor"></path>
-            </svg>
+            <i class="fas fa-arrow-up footer-back-to-top__icon" aria-hidden="true"></i>
             <span class="footer-back-to-top__text"><lang>回到顶部</lang></span>
         </button>
     <?php endif; ?>

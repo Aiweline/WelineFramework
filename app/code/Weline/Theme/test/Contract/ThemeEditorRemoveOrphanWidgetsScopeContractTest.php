@@ -4,18 +4,31 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Test\Contract;
 
+use Weline\Framework\Database\Connection\Api\ConnectorInterface;
+use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Test\TestCore;
 use Weline\Meta\Model\Meta;
+use Weline\SystemConfig\Api\Scope\ScopeContext;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
+use Weline\SystemConfig\Api\Scope\ScopeIdentityCatalogInterface;
+use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
+use Weline\Theme\Api\TargetTypeProviderInterface;
 use Weline\Theme\Controller\Backend\ThemeEditor;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\EditorLockService;
 use Weline\Theme\Service\PreviewTokenService;
+use Weline\Theme\Service\Scoped\ThemeEditorContextFactory;
 use Weline\Theme\Service\ThemeCacheGenerator;
+use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeLayoutService;
 use Weline\Theme\Service\ThemeLayoutVersionService;
+use Weline\Theme\Service\ThemeTargetTypeRegistry;
 use Weline\Theme\Service\WidgetPositionResolver;
 use Weline\Widget\Service\WidgetRegistry;
 
@@ -23,7 +36,11 @@ class ThemeEditorRemoveOrphanWidgetsScopeContractTest extends TestCore
 {
     private function buildController(ThemeLayout $themeLayout): ThemeEditor
     {
-        $themeMock = $this->createMock(WelineTheme::class);
+        $themeMock = $this->getMockBuilder(WelineTheme::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['clearData', 'load', 'getId'])
+            ->addMethods(['clearQuery'])
+            ->getMock();
         $layoutService = $this->createMock(ThemeLayoutService::class);
         $cacheGenerator = $this->createMock(ThemeCacheGenerator::class);
         $positionResolver = $this->createMock(WidgetPositionResolver::class);
@@ -32,6 +49,48 @@ class ThemeEditorRemoveOrphanWidgetsScopeContractTest extends TestCore
         $editorLockService = $this->createMock(EditorLockService::class);
         $versionService = ObjectManager::getInstance(ThemeLayoutVersionService::class);
         $previewTokenService = ObjectManager::getInstance(PreviewTokenService::class);
+        $themeMock->method('clearData')->willReturnSelf();
+        $themeMock->method('clearQuery')->willReturnSelf();
+        $themeMock->method('load')->willReturnSelf();
+        $themeMock->method('getId')->willReturn(1);
+
+        $identity = ScopeIdentity::global();
+        $scopeHierarchy = $this->createMock(ScopeHierarchyInterface::class);
+        $scopeHierarchy->method('contextFromClaims')->willReturn(new ScopeContext(
+            identity: $identity,
+            storageScope: 'default.default.default',
+            storeMode: ScopeIdentity::MODE_NORMAL,
+            fallbackStorageScopes: ['default.default.default'],
+        ));
+        $scopeCatalog = $this->createMock(ScopeIdentityCatalogInterface::class);
+        $scopeCatalog->method('authoritativeIdentity')->willReturnCallback(
+            static fn(ScopeIdentity $candidate): ScopeIdentity => $candidate,
+        );
+        $themeContext = $this->getMockBuilder(ThemeContextService::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['themeSupportsArea'])
+            ->getMock();
+        $themeContext->method('themeSupportsArea')->willReturn(true);
+        $targetProvider = $this->createMock(TargetTypeProviderInterface::class);
+        $targetProvider->method('canUseLayoutType')->willReturn(true);
+        $targetTypes = $this->getMockBuilder(ThemeTargetTypeRegistry::class)
+            ->onlyMethods(['get', 'isValidTarget'])
+            ->getMock();
+        $targetTypes->method('get')->willReturn($targetProvider);
+        $targetTypes->method('isValidTarget')->willReturn(true);
+        $workspaces = $this->createMock(ThemeScopedWorkspaceInterface::class);
+        $workspaces->method('load')->willReturn(['draft_payload' => ['theme_id' => 1]]);
+        ObjectManager::setInstance(ThemeEditorContextFactory::class, new ThemeEditorContextFactory(
+            $scopeHierarchy,
+            $scopeCatalog,
+            $themeMock,
+            $themeContext,
+            $targetTypes,
+            $workspaces,
+        ));
+        $eventsManager = $this->createMock(EventsManager::class);
+        $eventsManager->method('dispatch')->willReturnSelf();
+        ObjectManager::setInstance(EventsManager::class, $eventsManager);
 
         $controller = new ThemeEditor(
             $themeMock,
@@ -50,14 +109,25 @@ class ThemeEditorRemoveOrphanWidgetsScopeContractTest extends TestCore
         return $controller;
     }
 
+    protected function tearDown(): void
+    {
+        ObjectManager::removeInstance(EventsManager::class);
+        ObjectManager::removeInstance(ThemeEditorContextFactory::class);
+        ObjectManager::removeInstance(Request::class);
+        RequestContext::resetWelineVars();
+        parent::tearDown();
+    }
+
     public function testRemoveOrphanWidgetsScopesDeleteToCurrentPageTypeAndStatus(): void
     {
         $backendPrefix = \trim((string)(\Weline\Framework\App\Env::getAreaRoutePrefix('backend') ?? ''), '/');
         self::assertNotSame('', $backendPrefix);
         $requestPath = '/' . $backendPrefix . '/theme/backend/theme-editor/remove-orphan-widgets';
+        ObjectManager::removeInstance(Request::class);
+        RequestContext::resetWelineVars();
         self::initRequest($requestPath);
         $request = ObjectManager::getInstance(Request::class);
-        \Weline\Framework\Runtime\RequestContext::setId('theme-editor-remove-orphan-contract');
+        RequestContext::setId('theme-editor-remove-orphan-contract');
         $request->getServer();
         $request->setServer('WELINE_ORIGIN_REQUEST_URI', $requestPath);
         $request->setServer('REQUEST_URI', $requestPath);
@@ -72,9 +142,18 @@ class ThemeEditorRemoveOrphanWidgetsScopeContractTest extends TestCore
 
         $themeLayout = $this->getMockBuilder(ThemeLayout::class)
             ->disableOriginalConstructor()
-            ->onlyMethods(['delete'])
+            ->onlyMethods(['delete', 'getConnection'])
             ->addMethods(['clearQuery', 'where', 'select', 'fetchArray', 'fetch'])
             ->getMock();
+
+        $connector = $this->createMock(ConnectorInterface::class);
+        $connector->expects(self::once())
+            ->method('tableExist')
+            ->with(ThemeLayout::schema_table)
+            ->willReturn(true);
+        $connection = $this->createMock(ConnectionFactory::class);
+        $connection->expects(self::once())->method('getConnector')->willReturn($connector);
+        $themeLayout->method('getConnection')->willReturn($connection);
 
         $themeLayout->method('clearQuery')->willReturnSelf();
         $themeLayout->method('select')->willReturnSelf();

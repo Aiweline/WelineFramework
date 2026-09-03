@@ -67,7 +67,6 @@ return [
     'Weline_Theme::theme/frontend/widgets/product/new-arrivals/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/bestsellers/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/deals-of-day/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/product/recently-viewed/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/you-may-like/default.phtml',
     'Weline_Theme::theme/frontend/widgets/product/up-sell/default.phtml',
 
@@ -78,7 +77,6 @@ return [
     'Weline_Theme::theme/frontend/widgets/category/category-list/default.phtml',
     'Weline_Theme::theme/frontend/widgets/category/category-grid/default.phtml',
     'Weline_Theme::theme/frontend/widgets/navigation/category-menu/default.phtml',
-    'Weline_Theme::theme/frontend/widgets/category-filters/default.phtml',
 
     // --- 侧栏 (sidebar) ---
     'Weline_Theme::theme/frontend/widgets/sidebar/sidebar-menu/default.phtml',
@@ -306,12 +304,12 @@ return [
             'layout-footer-help-links',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'footer-help-links',
             'area' => 'footer',
             'sort_order' => 40,
             'required' => true,
-            'reason' => '页脚帮助中心默认展示 Theme /help 入口',
+            'reason' => '全局 chrome 载体默认展示 Theme /help 入口；非首页继承合并',
             'config' => [
                 'label' => '帮助中心',
             ],

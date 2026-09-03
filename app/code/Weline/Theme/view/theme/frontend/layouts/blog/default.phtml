@@ -54,10 +54,10 @@ $this->assign('meta', $meta);
             color: #0f1111;
         }
         .blog-layout__main {
-            width: 100%;
-            max-width: var(--weline-layout-content-max-width, 90rem);
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
             margin: 0 auto;
-            padding: var(--weline-space-4, 1rem) var(--weline-layout-content-padding-inline, 1rem) var(--weline-space-8, 2rem);
+            padding: var(--weline-space-4, 1rem) var(--weline-layout-content-padding-inline) var(--weline-space-8, 2rem);
             box-sizing: border-box;
         }
         .blog-layout__panel {

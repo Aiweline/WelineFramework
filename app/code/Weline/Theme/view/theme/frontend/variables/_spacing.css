@@ -170,8 +170,13 @@
     --weshop-spacing-3xl: var(--spacing-3xl);
     --weshop-container-max-width: var(--layout-max-width);
     --weshop-container-padding: var(--spacing-container-padding);
-    --weline-layout-content-max-width: var(--layout-max-width, var(--spacing-container-max-width, 1440px));
-    --weline-layout-content-padding-inline: var(--spacing-container-padding, var(--spacing-md, 1rem));
+    --weline-layout-content-max-width: var(--layout-max-width);
+    /* PC 视口 ≥ 版心 max-width 时左右 gutter 归零；窄屏保留 --spacing-container-padding */
+    --weline-layout-content-padding-inline: clamp(
+        0px,
+        calc((var(--spacing-container-max-width) - 100vw) * 9999),
+        var(--spacing-container-padding)
+    );
     --weshop-control-height: var(--control-height);
     --weshop-border-width: var(--border-width);
     --weshop-line-height-tight: var(--line-height-tight);

@@ -2071,6 +2071,28 @@
         return window.Weline && window.Weline.Theme ? window.Weline.Theme.Editor || null : null;
     }
 
+    function showAiWidgetToast(message, tone) {
+        var ui = getUi();
+        var toast = ui && ui.toast;
+        var text = String(message || '').trim();
+        if (!toast || !text) return;
+
+        var method = tone === 'success'
+            ? 'success'
+            : (tone === 'warning' ? 'warning' : (tone === 'error' ? 'error' : 'show'));
+        if (typeof toast[method] === 'function') {
+            if (method === 'show') {
+                toast.show(text, { tone: tone || 'neutral' });
+            } else {
+                toast[method](text);
+            }
+            return;
+        }
+        if (typeof toast.show === 'function') {
+            toast.show(text, { tone: tone || 'neutral' });
+        }
+    }
+
     function formatAiWidgetErrorMessage(err) {
         var raw = '';
         if (err && typeof err === 'object') {
@@ -2425,6 +2447,22 @@
         }, 900);
     }
 
+    function buildAiWidgetPanelMarkup() {
+        return [
+            '<header class="w-dialog__header w-ai-widget-header"><h2 class="w-dialog__title w-ai-widget-title" id="wAiWidgetTitle">' + aiIconHtml('sparkles') + '<span>AI 生成 Widget</span></h2><button type="button" class="w-button w-ai-widget-close" data-tone="quiet" data-size="sm" data-ai-close aria-label="关闭">' + aiIconHtml('close') + '</button></header>',
+            '<div class="w-dialog__body w-ai-widget-body">',
+            '<div class="w-ai-widget-section"><div class="w-ai-widget-section-title">位置选择器</div><div class="w-ai-widget-target"><strong data-ai-target-summary></strong><div class="w-ai-widget-muted" data-ai-target-protocol></div></div><div class="w-ai-widget-tree" data-ai-tree></div></div>',
+            '<div class="w-ai-widget-section"><div class="w-ai-widget-section-title">生成配置</div><div class="w-ai-widget-form">',
+            '<div class="w-ai-widget-field"><label>插入方式</label><select data-ai-insert-mode></select></div>',
+            '<div class="w-ai-widget-field"><label>部件类型</label><select data-ai-widget-type></select></div>',
+            '<div class="w-ai-widget-field full"><label>参考上下文</label><div class="w-ai-context-options" data-ai-context-options></div></div>',
+            '<div class="w-ai-widget-field full"><label>生成要求</label><textarea data-ai-prompt placeholder="例如：在页脚生成一个品牌社交链接区，包含微信、抖音、YouTube 和邮箱订阅入口"></textarea></div>',
+            '<div class="w-ai-widget-field full"><label>预览</label><div class="w-ai-widget-preview" data-ai-preview><div class="w-ai-widget-preview__canvas" data-ai-preview-canvas><div class="w-ai-widget-preview__empty" data-ai-preview-empty>填写生成要求并点击「生成并放入」后在此预览</div></div><div class="w-ai-widget-preview__overlay" data-ai-preview-overlay hidden><div class="w-ai-widget-preview__overlay-inner"><span class="w-ai-widget-preview__spinner" aria-hidden="true"></span><span>生成中...</span></div></div></div></div>',
+            '</div></div></div>',
+            '<footer class="w-dialog__footer w-ai-widget-actions w-ai-widget-footer"><div class="w-ai-widget-status-wrap" role="status" aria-live="polite"><span class="w-ai-widget-muted" data-ai-status>生成后会保存为普通 Widget 并自动放入目标位置</span></div><button type="button" class="w-button w-ai-widget-generate" data-tone="primary" data-ai-generate>生成并放入</button></footer>'
+        ].join('');
+    }
+
     function openPanel() {
         var ui = getUi();
         if (!ui) return;
@@ -2460,19 +2498,7 @@
         panel.dataset.wClosable = 'true';
         panel.dataset.wBackdrop = 'dismissible';
         panel.setAttribute('aria-labelledby', 'wAiWidgetTitle');
-        panel.innerHTML = [
-            '<header class="w-dialog__header w-ai-widget-header"><h2 class="w-dialog__title w-ai-widget-title" id="wAiWidgetTitle">' + aiIconHtml('sparkles') + '<span>AI 生成 Widget</span></h2><button type="button" class="w-button w-ai-widget-close" data-tone="quiet" data-size="sm" data-ai-close aria-label="关闭">' + aiIconHtml('close') + '</button></header>',
-            '<div class="w-dialog__body w-ai-widget-body">',
-            '<div class="w-ai-widget-section"><div class="w-ai-widget-section-title">位置选择器</div><div class="w-ai-widget-target"><strong data-ai-target-summary></strong><div class="w-ai-widget-muted" data-ai-target-protocol></div></div><div class="w-ai-widget-tree" data-ai-tree></div></div>',
-            '<div class="w-ai-widget-section"><div class="w-ai-widget-section-title">生成配置</div><div class="w-ai-widget-form">',
-            '<div class="w-ai-widget-field"><label>插入方式</label><select data-ai-insert-mode></select></div>',
-            '<div class="w-ai-widget-field"><label>部件类型</label><select data-ai-widget-type></select></div>',
-            '<div class="w-ai-widget-field full"><label>参考上下文</label><div class="w-ai-context-options" data-ai-context-options></div></div>',
-            '<div class="w-ai-widget-field full"><label>生成要求</label><textarea data-ai-prompt placeholder="例如：在页脚生成一个品牌社交链接区，包含微信、抖音、YouTube 和邮箱订阅入口"></textarea></div>',
-            '<div class="w-ai-widget-field full"><label>预览</label><div class="w-ai-widget-preview" data-ai-preview><div class="w-ai-widget-preview__canvas" data-ai-preview-canvas><div class="w-ai-widget-preview__empty" data-ai-preview-empty>填写生成要求并点击「生成并放入」后在此预览</div></div><div class="w-ai-widget-preview__overlay" data-ai-preview-overlay hidden><div class="w-ai-widget-preview__overlay-inner"><span class="w-ai-widget-preview__spinner" aria-hidden="true"></span><span>生成中...</span></div></div></div></div>',
-            '</div><div class="w-ai-widget-actions"><span class="w-ai-widget-muted" data-ai-status>生成后会保存为普通 Widget 并自动放入目标位置</span><button type="button" class="w-button w-ai-widget-generate" data-tone="primary" data-ai-generate>生成并放入</button></div></div>',
-            '</div>'
-        ].join('');
+        panel.innerHTML = buildAiWidgetPanelMarkup();
         doc.body.appendChild(panel);
         ui.mount(panel);
         panel.querySelector('[data-ai-close]').addEventListener('click', closePanel, { once: true });
@@ -2533,10 +2559,12 @@
         var button = panel.querySelector('[data-ai-generate]');
         if (!prompt) {
             status.textContent = '请填写生成要求';
+            showAiWidgetToast(status.textContent, 'warning');
             return;
         }
         if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
             status.textContent = 'Weline.Api 尚未就绪';
+            showAiWidgetToast(status.textContent, 'error');
             return;
         }
         var placementTarget = hasPlacementTarget(state.target) ? state.target : null;
@@ -2570,6 +2598,7 @@
             addWidgetToLibrary(data.widget);
             if (!placementTarget) {
                 status.textContent = '已生成并保存为普通 Widget';
+                showAiWidgetToast(status.textContent, 'success');
                 window.setTimeout(closePanel, 900);
                 return;
             }
@@ -2577,6 +2606,7 @@
             var adapter = getThemeAdapter();
             if (!adapter || typeof adapter.placeWidgetFromProvider !== 'function') {
                 status.textContent = '已生成并保存为普通 Widget，当前页面没有可用放置适配器';
+                showAiWidgetToast(status.textContent, 'warning');
                 window.setTimeout(closePanel, 1200);
                 return;
             }
@@ -2585,12 +2615,15 @@
                 throw new Error((placed && placed.message) || '生成成功，但放入布局失败');
             }
             status.textContent = '已生成并放入目标位置';
+            showAiWidgetToast(status.textContent, 'success');
             window.setTimeout(closePanel, 900);
         } catch (err) {
             console.error('[Widget AI] generate failed:', err);
             setAiPreviewGenerating(panel, false);
-            renderAiPreviewError(panel, formatAiWidgetErrorMessage(err));
-            status.textContent = formatAiWidgetErrorMessage(err);
+            var errorMessage = formatAiWidgetErrorMessage(err);
+            renderAiPreviewError(panel, errorMessage);
+            status.textContent = errorMessage;
+            showAiWidgetToast(errorMessage, 'error');
         } finally {
             button.disabled = false;
             markAiWidgets();

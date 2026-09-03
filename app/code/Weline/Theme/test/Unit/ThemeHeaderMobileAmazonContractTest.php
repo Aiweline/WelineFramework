@@ -17,10 +17,15 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringContainsString('data-header-mobile="amazon"', $source);
         self::assertStringContainsString('header-mobile-menu-btn js-header-drawer-trigger', $source);
         self::assertStringContainsString('hamburger-menu-btn--fallback', $source);
+        self::assertStringContainsString('hamburger-menu-btn--fallback js-header-drawer-trigger', $source);
+        self::assertStringContainsString("'text' => '全部商品'", $source);
+        self::assertStringContainsString("'url' => '/products'", $source);
         self::assertStringContainsString('header-nav-all-root', $source);
         self::assertStringContainsString('header-mobile-menu-icon', $source);
         self::assertStringContainsString('categories-sidebar-close-icon', $source);
         self::assertStringContainsString('<w:widget type="navigation" name="all-menu"', $source);
+        self::assertStringContainsString('<w:widget type="navigation" name="category-menu"', $source);
+        self::assertStringContainsString('<w:slot id="header-nav-extensions"', $source);
         self::assertStringContainsString('categories-sidebar-home', $source);
         self::assertStringContainsString('categories-sidebar-signin', $source);
         self::assertStringContainsString('<w:i18n:switcher />', $source);
@@ -76,14 +81,14 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringContainsString('function bindHeaderCategoryDrawer()', $source);
         self::assertStringContainsString('window.__welineHeaderDrawerBound', $source);
         self::assertStringContainsString('bindHeaderCategoryDrawer();', $source);
-        self::assertStringContainsString('categories-sidebar-nav.phtml', $source);
+        self::assertStringContainsString('fetchCategoriesSidebarNav', $source);
         self::assertFileExists(dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/categories-sidebar-nav.phtml');
         $sidebarNav = (string)file_get_contents(
             dirname(__DIR__, 2) . '/view/theme/frontend/partials/header/categories-sidebar-nav.phtml'
         );
         self::assertStringContainsString('data-w-placement="right-start"', $sidebarNav);
         self::assertStringContainsString('data-w-gap="0"', $sidebarNav);
-        self::assertStringContainsString('mega-menu-panel.phtml', $sidebarNav);
+        self::assertStringContainsString('fetchMegaMenuPanel', $sidebarNav);
         self::assertStringContainsString('drawer_flyout', $sidebarNav);
         self::assertStringContainsString('sidebar-category-card__media', $sidebarNav);
         self::assertStringNotContainsString('sidebar-category-children', $sidebarNav);
@@ -124,6 +129,7 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
     {
         $container = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/container/header/default.phtml';
         $search = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/search/header-search/default.phtml';
+        $searchCss = dirname(__DIR__, 2) . '/view/statics/css/widgets/header-search-amazon.css';
         $account = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/header/account/default.phtml';
         $cart = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml';
         $full = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/header/full-header/default.phtml';
@@ -134,15 +140,25 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringContainsString('flex: 0 0 100%', $containerSource);
 
         $searchSource = (string)file_get_contents($search);
-        self::assertStringContainsString('border-radius: 8px', $searchSource);
-        self::assertStringContainsString('.header-search-hot-words', $searchSource);
+        $searchCssSource = (string)file_get_contents($searchCss);
+        self::assertStringContainsString('header-search-amazon.css', $searchSource);
+        self::assertStringContainsString(
+            '\'show_hot_words\' => $showHotWords',
+            $searchSource,
+        );
+        self::assertStringContainsString('@media (max-width: 768px)', $searchCssSource);
+        self::assertStringContainsString('.header-search-form', $searchCssSource);
+        self::assertStringContainsString('.header-search-hot-words', $searchCssSource);
+        self::assertStringContainsString('border-radius: var(', $searchCssSource);
+        self::assertStringNotContainsString('border-radius: 8px', $searchSource . $searchCssSource);
 
         $accountSource = (string)file_get_contents($account);
         self::assertStringContainsString('.login-text::after', $accountSource);
         self::assertStringContainsString("@url{'customer/account/login'}", $accountSource);
         self::assertStringContainsString('data-w-header-account="1"', $accountSource);
         self::assertStringContainsString('data-weline-load="api,account"', $accountSource);
-        self::assertStringContainsString('createFrontendSession', $accountSource);
+        self::assertStringContainsString('data-auth-state="guest"', $accountSource);
+        self::assertStringNotContainsString('createFrontendSession', $accountSource);
         self::assertStringNotContainsString('href="/account/login"', $accountSource);
 
         $cartSource = (string)file_get_contents($cart);

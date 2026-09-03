@@ -4,7 +4,11 @@
 
 - **code**：`all-menu`
 - **槽**：`all-menu`（Header「全部」）
-- **配置字段**：`menu_tree`（ParamSchema `all_menu_tree` → `nav_tree`）
+- **配置字段**：
+  - `menu_tree`（ParamSchema `all_menu_tree` → `nav_tree`）
+  - `show_all_products`（bool，默认 `true`）：是否在横向分类条前置「全部商品」入口
+  - `all_products_label`（默认 `全部商品`）
+  - `all_products_url`（默认 `/products`）
 
 节点本质是 **名字 + URL + 标签 + 父子位置**。页面 / 分类 / 自定义可在同一棵树中任意交叉嵌套，硬上限 **3 级**。
 
@@ -55,4 +59,7 @@
 
 ## 运行时
 
-部件渲染时调用 `AllMenuTreeRegistry::publish($menuTree)`；Header `#categories-sidebar` 优先消费该树（小屏汉堡与桌面「全部」共用），列表文案经 `headerEsc` 按当前语言翻译。
+部件渲染时：
+1. 按 `show_all_products` 调用 `AllMenuTreeRegistry::publishAllProductsNav(...)`（默认开启「全部商品」→ `/products`，主题编辑器可关）。
+2. 调用 `AllMenuTreeRegistry::publish($menuTree)`；Header `#categories-sidebar` 优先消费该树（小屏汉堡与桌面「全部」共用）。
+3. 横向分类条经 `HeaderCommerceData::resolveCategoryNavItems()` 读取 Registry，按开关前置叶子「全部商品」。
