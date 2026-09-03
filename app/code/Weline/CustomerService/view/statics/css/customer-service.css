@@ -747,6 +747,8 @@
 
     .cs-chat-header.w-panel-header {
         padding: 1rem 1.25rem;
+        background: var(--cs-header-bg);
+        color: var(--cs-header-text);
     }
 
     .cs-chat-body.w-panel-body {
@@ -954,4 +956,42 @@
             pointer-events: none;
         }
     }
+}
+
+/*
+ * Unlayered: Theme .w-panel-header/.w-panel-footer are unlayered and beat @layer page.
+ * Keep Amazon/chrome header readable (dark bg + light text) against ink/panel light surfaces.
+ */
+.customer-service-widget .cs-chat-header.w-panel-header {
+    background: var(--cs-header-bg);
+    color: var(--cs-header-text);
+    border-bottom-color: color-mix(in srgb, var(--cs-header-text) 14%, transparent);
+}
+
+.customer-service-widget .cs-chat-header.w-panel-header .cs-chat-title,
+.customer-service-widget .cs-chat-header.w-panel-header #cs-title-text {
+    color: var(--cs-header-text);
+}
+
+.customer-service-widget .cs-chat-header.w-panel-header .cs-status-label {
+    background-color: color-mix(in srgb, var(--cs-header-text) 14%, transparent);
+    color: var(--cs-header-text-muted);
+}
+
+.customer-service-widget .cs-chat-header.w-panel-header .cs-status-label.cs-status-offline {
+    background-color: color-mix(in srgb, var(--cs-header-text) 12%, transparent);
+    color: var(--cs-header-text-muted);
+}
+
+.customer-service-widget .cs-chat-header.w-panel-header .cs-btn-icon,
+.customer-service-widget .cs-chat-header.w-panel-header .w-button.cs-btn-icon {
+    background: color-mix(in srgb, var(--cs-header-text) 12%, transparent);
+    border-color: transparent;
+    color: var(--cs-header-text);
+}
+
+.customer-service-widget .cs-chat-header.w-panel-header .cs-btn-icon:hover,
+.customer-service-widget .cs-chat-header.w-panel-header .w-button.cs-btn-icon:hover {
+    background: color-mix(in srgb, var(--cs-header-text) 20%, transparent);
+    color: var(--cs-header-text);
 }

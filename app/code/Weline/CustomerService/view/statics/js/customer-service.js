@@ -347,7 +347,23 @@ const CustomerServiceWidget = (function() {
         }
     }
 
+    function updateWidgetLocaleDirection() {
+        const widgetRoot = document.getElementById('customer-service-widget');
+        if (!widgetRoot) {
+            return;
+        }
+
+        const locale = String(state.locale || 'zh_Hans_CN');
+        const language = locale.split(/[_-]/, 1)[0].toLowerCase();
+        const isRtl = ['ar', 'fa', 'he', 'ur'].includes(language);
+
+        widgetRoot.lang = locale.replace(/_/g, '-');
+        widgetRoot.dir = isRtl ? 'rtl' : 'ltr';
+    }
+
     function updateWidgetLocaleText() {
+        updateWidgetLocaleDirection();
+
         const textMap = {
             'cs-title-text': __('客服服务'),
             'cs-locale-label-text': __('我的语言'),
@@ -366,6 +382,11 @@ const CustomerServiceWidget = (function() {
         const messageInput = document.getElementById('cs-message-input');
         if (messageInput) {
             messageInput.placeholder = __('输入消息...');
+        }
+
+        const sendButton = document.querySelector('[data-cs-send-message]');
+        if (sendButton) {
+            sendButton.setAttribute('aria-label', __('发送'));
         }
 
         const settingsButton = document.getElementById('cs-settings-btn');
