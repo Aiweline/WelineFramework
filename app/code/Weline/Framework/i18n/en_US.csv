@@ -2344,6 +2344,8 @@ Operation：%{1}.%{2},Operation：%{1}.%{2}
 显示详细编译信息,"Show detailed compilation information"
 基本用法,"Basic Usage"
 详细模式,"Detailed mode"
+认证登录失败：用户标识无效。,认证登录失败：用户标识无效。
+认证登录失败：用户名为空。,认证登录失败：用户名为空。
 认证设备登记失败。,"Authenticated device registration failed."
 认证登录状态保存失败。,"Failed to persist authentication session state."
 认证设备服务不可用。,"Authenticated device service is unavailable."

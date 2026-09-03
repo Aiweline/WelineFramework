@@ -168,6 +168,27 @@ class AuthenticatedSessionTest extends TestCase
         $this->assertFalse($frontendSession->isBackend());
     }
 
+    public function testLoginRejectsInvalidPrincipalId(): void
+    {
+        $this->session->start($this->testSessionId);
+        $user = $this->createMockUser(0, 'ghost');
+
+        $this->expectException(\RuntimeException::class);
+        $this->authSession->login($user);
+    }
+
+    public function testIsLoggedInRejectsZeroPrincipalId(): void
+    {
+        $this->session->start($this->testSessionId);
+        $this->session->set($this->authSession->getAreaConfig()->getLoginKey(), 'ghost');
+        $this->session->set($this->authSession->getAreaConfig()->getLoginIdKey(), 0);
+        $this->session->set($this->authSession->getAreaConfig()->getUserModelKey(), \stdClass::class);
+        $this->session->save();
+
+        $this->assertFalse($this->authSession->isLoggedIn());
+        $this->assertNull($this->authSession->getUserId());
+    }
+
     public function testReset(): void
     {
         $this->session->start($this->testSessionId);
