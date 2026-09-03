@@ -81,6 +81,10 @@ final class ManagerJsBinQueryContractTest extends TestCase
         self::assertStringContainsString('activeTargets.indexOf(hash) >= 0', $js);
         self::assertStringContainsString('function bindMediaSearch()', $js);
         self::assertStringContainsString("cmd: 'search'", $js);
+        self::assertStringContainsString("cmd: 'find_asset'", $js);
+        self::assertStringContainsString('function applyFocusAssetId()', $js);
+        self::assertStringContainsString("urlParams.get('asset_id')", $js);
+        self::assertStringContainsString('openDetails: true', $js);
         self::assertStringContainsString('function navigateToSearchResult(entry)', $js);
         self::assertStringContainsString('mmf-search-input', $template);
         self::assertStringContainsString('mmf-sidebar-search', $style);
