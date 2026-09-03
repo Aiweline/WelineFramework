@@ -271,22 +271,15 @@ class ParamTypeRenderer implements ParamFormRendererInterface
 
     private function resolveUiType(array $param): string
     {
-        $canonical = trim((string)($param['type'] ?? ''));
-        if ($canonical !== '') {
-            $normalized = $this->normalizeType($canonical);
-            if (isset(self::DEFAULT_TYPE_CLASSES[$normalized])) {
-                return $normalized;
-            }
-        }
-
-        foreach (['ui_type', 'input', 'ui', 'type'] as $key) {
+        foreach (['ui_type', 'input', 'ui'] as $key) {
             $value = trim((string)($param[$key] ?? ''));
             if ($value !== '') {
                 return $value;
             }
         }
 
-        return 'string';
+        $semanticType = trim((string)($param['type'] ?? ''));
+        return $semanticType !== '' ? $semanticType : 'string';
     }
 
     private function normalizeValueForRender(array $param, mixed $value): mixed
