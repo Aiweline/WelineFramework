@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace Weline\Blog\Service;
 
-use Weline\Blog\Model\Category;
 use Weline\Framework\Runtime\RequestContext;
 
 /**
@@ -13,8 +12,7 @@ use Weline\Framework\Runtime\RequestContext;
 final class BlogSearchCategoryScopeService
 {
     public function __construct(
-        private readonly Category $categoryModel,
-        private readonly BlogCategoryAttributeService $categoryAttributes,
+        private readonly BlogCategoryAdminService $categoryAdmin,
     ) {
     }
 
@@ -37,43 +35,37 @@ final class BlogSearchCategoryScopeService
      */
     private function listFromDatabase(int $websiteId, string $locale = ''): array
     {
-        $model = clone $this->categoryModel;
-        $query = $model->clearData()->reset();
-        $websiteIds = BlogWebsiteScope::websiteIdsForQuery($websiteId);
-        $query->where(Category::schema_fields_WEBSITE_ID, $websiteIds, 'IN');
-        $rows = $query
-            ->order(Category::schema_fields_SORT_ORDER, 'ASC')
-            ->order(Category::schema_fields_ID, 'ASC')
-            ->select()
-            ->fetchArray();
-        if (!is_array($rows) || $rows === []) {
+        $tree = $this->categoryAdmin->tree($websiteId, $locale);
+        if ($tree === []) {
             return [];
         }
 
-        $ids = array_values(array_filter(array_map(
-            static fn($row): int => is_array($row) ? (int)($row[Category::schema_fields_ID] ?? 0) : 0,
-            $rows,
-        )));
-        $localizedNames = $this->categoryAttributes->readNameMap($websiteId, $ids, $locale);
+        return $this->mapTree($tree);
+    }
 
+    /**
+     * @param list<array<string, mixed>> $nodes
+     * @return list<array{code:string,label:string,params:array<string,int|string|float|bool>,children:list<array<string,mixed>>}>
+     */
+    private function mapTree(array $nodes): array
+    {
         $out = [];
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
+        foreach ($nodes as $node) {
+            if (!is_array($node)) {
                 continue;
             }
-            $id = max(0, (int)($row[Category::schema_fields_ID] ?? 0));
+            $id = max(0, (int)($node['category_id'] ?? 0));
             if ($id <= 0) {
                 continue;
             }
-            $fallbackName = trim((string)($row[Category::schema_fields_NAME] ?? ''));
-            $slug = trim((string)($row[Category::schema_fields_SLUG] ?? ''));
-            $label = $localizedNames[$id]
-                ?? $this->categoryAttributes->resolveDisplayName($websiteId, $id, $locale, $fallbackName);
+            $label = trim((string)($node['name'] ?? ''));
+            $slug = trim((string)($node['slug'] ?? $node['code'] ?? ''));
+            $children = $this->mapTree(is_array($node['nodes'] ?? null) ? $node['nodes'] : []);
             $out[] = [
                 'code' => 'blog_category_' . $id,
                 'label' => $label !== '' ? $label : ($slug !== '' ? $slug : (string)__('未命名分类')),
                 'params' => ['category_id' => $id],
-                'children' => [],
+                'children' => $children,
             ];
         }
 

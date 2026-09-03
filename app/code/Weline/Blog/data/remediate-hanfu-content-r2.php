@@ -9,6 +9,7 @@ declare(strict_types=1);
  *   php app/code/Weline/Blog/data/remediate-hanfu-content-r2.php --dry-run
  *   php app/code/Weline/Blog/data/remediate-hanfu-content-r2.php --apply
  *   php app/code/Weline/Blog/data/remediate-hanfu-content-r2.php --verify
+ *   php app/code/Weline/Blog/data/remediate-hanfu-content-r2.php --cleanup
  */
 
 use Weline\Blog\Model\Post;
@@ -29,7 +30,7 @@ const HANFU_R2_EN = 'en_US';
 
 $mode = '--dry-run';
 foreach (array_slice($argv, 1) as $argument) {
-    if (in_array($argument, ['--dry-run', '--apply', '--verify'], true)) {
+    if (in_array($argument, ['--dry-run', '--apply', '--verify', '--cleanup'], true)) {
         $mode = $argument;
     }
 }
@@ -37,6 +38,7 @@ foreach (array_slice($argv, 1) as $argument) {
 $repoRoot = dirname(__DIR__, 5);
 $coreProfiles = require __DIR__ . '/hanfu-r2-core-profiles.php';
 $ethnicProfiles = require __DIR__ . '/china-ethnic-groups.php';
+require_once __DIR__ . '/hanfu-r2-ethnic-editorial.php';
 if (!is_array($coreProfiles) || count($coreProfiles) !== 48) {
     throw new RuntimeException('hanfu_r2_core_profile_count_invalid');
 }
@@ -287,153 +289,16 @@ function hanfuR2MaterialHandling(array $profile, bool $en): string
 /** @param array<string,mixed> $profile */
 function hanfuR2BuildEthnic(array $profile, string $variant, string $title, string $locale): string
 {
-    $en = hanfuR2IsEnglish($locale);
-    $name = trim((string)($profile[$en ? 'en' : 'zh'] ?? ''));
-    $region = trim((string)($profile[$en ? 'region_en' : 'region'] ?? ''));
-    $silhouette = trim((string)($profile[$en ? 'silhouette_en' : 'silhouette'] ?? ''));
-    $fabric = trim((string)($profile[$en ? 'fabric_en' : 'fabric'] ?? ''));
-    $occasion = trim((string)($profile[$en ? 'occasion_en' : 'occasion'] ?? ''));
-    $motif = trim((string)($profile[$en ? 'motif_en' : 'motif'] ?? ''));
-    foreach ([$name, $region, $silhouette, $fabric, $occasion, $motif] as $field) {
-        if ($field === '') {
-            throw new RuntimeException('hanfu_r2_ethnic_profile_field_missing');
+    $article = hanfuR2EthnicEditorial($profile, $variant, $title, $locale);
+    $html = hanfuR2P($article['lede']);
+    foreach ($article['sections'] as $section) {
+        $html .= hanfuR2H2($section['heading']);
+        foreach ($section['paragraphs'] as $paragraph) {
+            $html .= hanfuR2P($paragraph);
         }
     }
-    $care = hanfuR2MaterialHandling($profile, $en);
-
-    if ($en) {
-        $html = hanfuR2P(
-            $title . ' documents a reading path for ' . $name . ' dress associated with ' . $region
-            . '. It is not a claim that one festival outfit, one village or one generated editorial image represents every person in the community.'
-        );
-        if ($variant === 'overview') {
-            $html .= hanfuR2H2('1. Region is context, not a costume label');
-            $html .= hanfuR2P(
-                'The profile locates this tradition in ' . $region
-                . '. Climate, livelihood, trade, religion, gender, age and local history can all change dress within that geography, so regional attribution should remain visible.'
-            );
-            $html .= hanfuR2H2('2. Read the silhouette from garment relationships');
-            $html .= hanfuR2P(
-                'The observable silhouette cues recorded for ' . $name . ' are: ' . $silhouette
-                . '. Read how upper and lower garments, wraps, belts, aprons, footwear and headwear relate rather than identifying the tradition from color alone.'
-            );
-            $html .= hanfuR2H2('3. Material and craft evidence');
-            $html .= hanfuR2P(
-                'The working material record is ' . $fabric
-                . '. Separate fiber, weave, dye, embroidery, applied metal, bead, leather or rattan work; a photograph may show surface appearance without proving composition or making method.'
-            );
-            $html .= hanfuR2H2('4. Motifs need a documented carrier');
-            $html .= hanfuR2P(
-                'The profile associates ' . $name . ' dress with ' . $motif
-                . '. A motif should be linked to a specific garment area, maker, date and source before assigning meaning; similar geometry across cultures is not proof of shared identity.'
-            );
-            $html .= hanfuR2H2('5. Daily and ceremonial layers are different');
-            $html .= hanfuR2P(
-                $occasion . ' is an occasion cue in this profile, not a definition of everyday dress. '
-                . 'Festival, wedding, work, age-grade and performance clothing may differ in material, completeness and ornament.'
-            );
-        } else {
-            $html .= hanfuR2H2('1. Begin with the occasion and participants');
-            $html .= hanfuR2P(
-                'The recorded occasion cue is ' . $occasion
-                . '. Before describing the clothing, identify who participates, whether the scene is daily, ritual, staged or revived, and when and where the record was made.'
-            );
-            $html .= hanfuR2H2('2. Build the dressing sequence from structure');
-            $html .= hanfuR2P(
-                'For ' . $name . ', the profile records ' . $silhouette
-                . '. Document base garments, closures, waist or shoulder support, outer layers, footwear, headwear and removable ornament in order; do not invent a sequence from a final portrait.'
-            );
-            $html .= hanfuR2H2('3. Craft detail is not generic decoration');
-            $html .= hanfuR2P(
-                'Material evidence includes ' . $fabric . ', with motif cues described as ' . $motif
-                . '. Record the carrier and technique separately so metalwork, embroidery, weave, dye or natural material are not collapsed into “ethnic pattern.”'
-            );
-            $html .= hanfuR2H2('4. Handling and preservation');
-            $html .= hanfuR2P($care);
-            $html .= hanfuR2H2('5. Photographing, borrowing and selling responsibly');
-            $html .= hanfuR2P(
-                'Ask whether an object is ceremonial, sacred, inherited or restricted before styling it. Credit the community, maker and collection when known, and do not market a replica as community-authenticated without authorization.'
-            );
-        }
-        $html .= hanfuR2H2('6. Editorial verification checklist');
-        $html .= hanfuR2List([
-            'Name ' . $name . ' and the specific region instead of using a generic “ethnic” label.',
-            'Show the recorded silhouette cue—' . $silhouette . '—without substituting generic Hanfu.',
-            'Keep daily, ceremonial, revived and stage contexts separate.',
-            'Describe ' . $fabric . ' as a material lead, not an unverified composition claim.',
-            'Attach motif interpretation to a documented source and garment carrier.',
-            'State image and source limits; invite correction from community and specialist evidence.',
-        ]);
-        $html .= hanfuR2P(
-            'The responsible conclusion for ' . $title . ' is a bounded profile: it makes ' . $name
-            . ' dress easier to observe while keeping variation, living practice and community authority visible.'
-        );
-        return $html;
-    }
-
-    $html = hanfuR2P(
-        '《' . $title . '》为' . $name . '服饰建立一条可核查的阅读路径，资料所指地区为' . $region . '。'
-        . '本文不把一套节庆盛装、一个村落或一张编辑配图当作整个群体的唯一代表。'
-    );
-    if ($variant === 'overview') {
-        $html .= hanfuR2H2('一、地区是语境，不是服装标签');
-        $html .= hanfuR2P(
-            '本资料把相关传统定位在' . $region . '。气候、生计、贸易、宗教、性别、年龄和地方历史都会造成内部差异，因此介绍时必须保留具体地区。'
-        );
-        $html .= hanfuR2H2('二、从服装关系读取整体轮廓');
-        $html .= hanfuR2P(
-            $name . '服饰在资料中可观察的轮廓线索是“' . $silhouette . '”。'
-            . '判断应看上衣、下装、披裹、腰带、围裙、鞋履和头饰如何配合，不能只凭颜色识别民族。'
-        );
-        $html .= hanfuR2H2('三、材料与工艺要分层记录');
-        $html .= hanfuR2P(
-            '当前材料线索为“' . $fabric . '”。应把纤维、织法、染色、刺绣以及金属、珠饰、皮革或藤编附件分开；照片能显示表面，却未必证明成分和制作方法。'
-        );
-        $html .= hanfuR2H2('四、纹样必须落到具体载体');
-        $html .= hanfuR2P(
-            '资料把“' . $motif . '”列为' . $name . '纹样线索。'
-            . '解释含义前要对应具体服装部位、制作者、年代与来源；跨文化出现相似几何，不等于身份同源。'
-        );
-        $html .= hanfuR2H2('五、日常与礼仪层级不可混用');
-        $html .= hanfuR2P(
-            '“' . $occasion . '”是本文的场合线索，不是日常服饰的全部定义。'
-            . '节庆、婚礼、劳动、年龄身份和舞台展演在材料、件数与装饰程度上可能明显不同。'
-        );
-    } else {
-        $html .= hanfuR2H2('一、先确认场合与参与者');
-        $html .= hanfuR2P(
-            '资料记录的场合线索是“' . $occasion . '”。描述服装前，应先说明谁参与、属于日常还是礼仪、现场还是展演，以及记录的时间与地点。'
-        );
-        $html .= hanfuR2H2('二、按结构还原穿着层次');
-        $html .= hanfuR2P(
-            $name . '服饰的轮廓资料为“' . $silhouette . '”。'
-            . '应依次记录基础层、闭合、腰部或肩部支撑、外层、鞋履、头饰和可拆装饰，不能只凭完成造型反推穿法。'
-        );
-        $html .= hanfuR2H2('三、工艺细节不是泛化装饰');
-        $html .= hanfuR2P(
-            '材料线索包括“' . $fabric . '”，纹样线索为“' . $motif . '”。'
-            . '必须分开记录载体与技术，避免把金属、刺绣、织锦、染色或天然材料统称为“民族花纹”。'
-        );
-        $html .= hanfuR2H2('四、护理与保管');
-        $html .= hanfuR2P($care);
-        $html .= hanfuR2H2('五、拍摄、借用与销售的边界');
-        $html .= hanfuR2P(
-            '用于造型前要确认物件是否具有礼仪、神圣、传承或使用限制；来源清楚时注明社群、制作者与收藏方，未经授权不能把复制品写成社群认证。'
-        );
-    }
-    $html .= hanfuR2H2('六、编辑校核清单');
-    $html .= hanfuR2List([
-        '写明' . $name . '与具体地区，不用笼统“少数民族风”代替。',
-        '配图必须展示“' . $silhouette . '”线索，不能用泛化汉服替换。',
-        '把日常、礼仪、复兴与舞台语境分开。',
-        '“' . $fabric . '”只作材料线索，不冒充未核实的成分证明。',
-        '纹样解释要对应资料来源和具体服装载体。',
-        '明确配图与资料边界，并为社群和专业证据保留修正入口。',
-    ]);
-    $html .= hanfuR2P(
-        '因此，《' . $title . '》应被理解为有边界的资料画像：它帮助读者观察' . $name . '服饰，同时保留内部差异、当代生活与社群解释权。'
-    );
-    return $html;
+    $html .= hanfuR2H2(str_starts_with(strtolower($locale), 'en') ? 'Reviewed fact card' : '已核对事实卡');
+    return $html . hanfuR2List($article['reviewed_facts']);
 }
 
 /** @param array<string,bool> $seen */
@@ -495,6 +360,11 @@ function hanfuR2EnsureAsset(
 
     try {
         $descriptor = $library->describe(HANFU_R2_DISK, $objectKey, HANFU_R2_ZH, $accessZh);
+        if (($descriptor['asset_ready'] ?? false) !== true
+            || trim((string)($descriptor['asset_id'] ?? '')) === ''
+        ) {
+            throw new RuntimeException('hanfu_r2_asset_missing:' . $objectKey);
+        }
         if (!hash_equals($sha, strtolower(trim((string)($descriptor['sha256'] ?? ''))))) {
             throw new RuntimeException('hanfu_r2_asset_identity_collision:' . $objectKey);
         }
@@ -615,6 +485,8 @@ $library = $mode === '--dry-run' ? null : ObjectManager::getInstance(FileAssetLi
 $admin = $mode === '--apply' ? ObjectManager::getInstance(BlogPostAdminService::class) : null;
 $coverByBase = [];
 $sourceByBase = [];
+$objectKeysByBase = [];
+$legacyObjectKeys = [];
 
 foreach ($titles as $base => $pairTitles) {
     $route = hanfuR2EthnicRoute($base);
@@ -623,7 +495,8 @@ foreach ($titles as $base => $pairTitles) {
             throw new RuntimeException('hanfu_r2_core_topic_missing:' . $base);
         }
         $source = $repoRoot . '/var/hanfu-production/final/blog-core/' . $base . '.webp';
-        $objectKey = 'blog/hanfu/r2/covers/core/' . $base . '.webp';
+        $objectDirectory = 'blog/hanfu/r2/covers/core/';
+        $objectStem = $base;
         $kindZh = '汉服专题';
         $kindEn = 'Hanfu topic';
         $relations = ['blog_base_slug' => $base, 'topic_type' => 'core'];
@@ -633,7 +506,8 @@ foreach ($titles as $base => $pairTitles) {
             throw new RuntimeException('hanfu_r2_ethnic_topic_missing:' . $base);
         }
         $source = $repoRoot . '/var/hanfu-production/final/blog-ethnic/' . $code . '-' . $variant . '.webp';
-        $objectKey = 'blog/hanfu/r2/covers/ethnic/' . $code . '-' . $variant . '.webp';
+        $objectDirectory = 'blog/hanfu/r2/covers/ethnic/';
+        $objectStem = $code . '-' . $variant;
         $kindZh = '民族服饰';
         $kindEn = 'ethnic-dress';
         $relations = [
@@ -646,7 +520,15 @@ foreach ($titles as $base => $pairTitles) {
     if (!is_file($source) || filesize($source) < 1024) {
         throw new RuntimeException('hanfu_r2_cover_source_missing:' . $source);
     }
+    $sourceSha = strtolower((string)hash_file('sha256', $source));
+    if (preg_match('/^[0-9a-f]{64}$/D', $sourceSha) !== 1) {
+        throw new RuntimeException('hanfu_r2_cover_sha_invalid:' . $source);
+    }
+    $legacyObjectKey = $objectDirectory . $objectStem . '.webp';
+    $objectKey = $objectDirectory . $objectStem . '-' . substr($sourceSha, 0, 12) . '.webp';
     $sourceByBase[$base] = $source;
+    $objectKeysByBase[$base] = $objectKey;
+    $legacyObjectKeys[$base] = $legacyObjectKey;
     $expectedUrl = '/pub/media/' . $objectKey;
     if ($mode !== '--dry-run') {
         if (!$library instanceof FileAssetLibraryInterface) {
@@ -754,12 +636,15 @@ if ($mode === '--apply') {
     }
 }
 
-if ($mode === '--verify') {
+$current = [];
+if (in_array($mode, ['--verify', '--cleanup'], true)) {
     $current = hanfuR2PublishedRows();
     $currentCovers = [];
     $currentParagraphs = [];
     foreach ($current as $row) {
         $slug = (string)($row[Post::schema_fields_SLUG] ?? '');
+        $locale = (string)($row[Post::schema_fields_LOCALE] ?? '');
+        $base = hanfuR2BaseSlug($slug, $locale);
         $content = (string)($row[Post::schema_fields_CONTENT] ?? '');
         $cover = trim((string)($row[Post::schema_fields_COVER_IMAGE] ?? ''));
         if (preg_match('/补充说明|Additional note|为了达到字数|to reach the word count/iu', $content) === 1
@@ -769,7 +654,13 @@ if ($mode === '--verify') {
         ) {
             throw new RuntimeException('hanfu_r2_verify_post_failed:' . $slug);
         }
-        $base = hanfuR2BaseSlug($slug, (string)($row[Post::schema_fields_LOCALE] ?? ''));
+        if (!isset($coverByBase[$base]) || !hash_equals((string)$coverByBase[$base], $cover)) {
+            throw new RuntimeException(
+                ($mode === '--cleanup'
+                    ? 'hanfu_r2_cleanup_post_reference_mismatch:'
+                    : 'hanfu_r2_verify_cover_mismatch:') . $slug,
+            );
+        }
         $currentCovers[$base] = $cover;
         if (preg_match_all('#<p>(.*?)</p>#su', $content, $matches)) {
             foreach ($matches[1] as $paragraph) {
@@ -790,6 +681,47 @@ if ($mode === '--verify') {
     }
 }
 
+$deletedObsoleteAssets = 0;
+if ($mode === '--cleanup') {
+    if (!$library instanceof FileAssetLibraryInterface
+        || count($legacyObjectKeys) !== 160
+        || count(array_unique($legacyObjectKeys)) !== 160
+        || count($objectKeysByBase) !== 160
+    ) {
+        throw new RuntimeException('hanfu_r2_cleanup_allowlist_invalid');
+    }
+    $cleanupAccess = new FileAccessContext(ScopeIdentity::global(), HANFU_R2_ZH, null, [], 'metadata_edit');
+    foreach ($legacyObjectKeys as $base => $legacyObjectKey) {
+        if (!isset($objectKeysByBase[$base])
+            || hash_equals($objectKeysByBase[$base], $legacyObjectKey)
+            || preg_match('#^blog/hanfu/r2/covers/(?:core|ethnic)/[a-z0-9-]+\.webp$#D', $legacyObjectKey) !== 1
+        ) {
+            throw new RuntimeException('hanfu_r2_cleanup_key_outside_allowlist:' . $legacyObjectKey);
+        }
+        try {
+            $descriptor = $library->describe(HANFU_R2_DISK, $legacyObjectKey, HANFU_R2_ZH, $cleanupAccess);
+        } catch (RuntimeException) {
+            continue;
+        }
+        if (($descriptor['asset_ready'] ?? false) !== true
+            || trim((string)($descriptor['asset_id'] ?? '')) === ''
+        ) {
+            continue;
+        }
+        if (!hash_equals($legacyObjectKey, (string)($descriptor['object_key'] ?? ''))) {
+            throw new RuntimeException('hanfu_r2_cleanup_identity_mismatch:' . $legacyObjectKey);
+        }
+        $library->deleteObject(HANFU_R2_DISK, $legacyObjectKey, $cleanupAccess);
+        $afterDelete = $library->describe(HANFU_R2_DISK, $legacyObjectKey, HANFU_R2_ZH, $cleanupAccess);
+        if (($afterDelete['asset_ready'] ?? false) === true
+            || trim((string)($afterDelete['asset_id'] ?? '')) !== ''
+        ) {
+            throw new RuntimeException('hanfu_r2_cleanup_delete_failed:' . $legacyObjectKey);
+        }
+        ++$deletedObsoleteAssets;
+    }
+}
+
 $measurements = array_column($drafts, '_measure');
 echo json_encode([
     'ok' => true,
@@ -798,6 +730,7 @@ echo json_encode([
     'topic_pairs' => count($titles),
     'unique_covers' => count(array_unique($coverByBase)),
     'unique_paragraphs' => count($seenParagraphs),
+    'deleted_obsolete_assets' => $deletedObsoleteAssets,
     'minimum_measure' => $measurements === [] ? 0 : min($measurements),
     'maximum_measure' => $measurements === [] ? 0 : max($measurements),
     'locales' => $localeCounts,
