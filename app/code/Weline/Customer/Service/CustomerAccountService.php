@@ -100,20 +100,30 @@ class CustomerAccountService
 
     public function loginCustomer(Customer $customer): void
     {
-        $session = $this->sessionFactory->createFrontendSession();
-        $session->login($customer);
+        $customerId = (int)$customer->getId();
+        if ($customerId <= 0) {
+            throw new \RuntimeException((string)__('登录失败：客户标识无效。'));
+        }
 
-        $customer->setSessionId($session->getId())
+        $fresh = $this->customerModel->reset()->clearData()->load($customerId);
+        if (!$fresh instanceof Customer || (int)$fresh->getId() <= 0) {
+            throw new \RuntimeException((string)__('登录失败：无法加载客户。'));
+        }
+
+        $session = $this->sessionFactory->createFrontendSession();
+        $session->login($fresh);
+
+        $fresh->setSessionId($session->getId())
             ->setLoginIp($this->request->clientIP())
             ->resetAttemptTimes()
             ->save();
 
-        $this->syncSandboxCookie($customer->isSandboxAccount());
+        $this->syncSandboxCookie($fresh->isSandboxAccount());
 
         /** @var EventsManager $eventManager */
         $eventManager = ObjectManager::getInstance(EventsManager::class);
         $eventData = new \Weline\Framework\DataObject\DataObject([
-            'user' => $customer,
+            'user' => $fresh,
             'request' => $this->request,
             'session' => $session,
         ]);

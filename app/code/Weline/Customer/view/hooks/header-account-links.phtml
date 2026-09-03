@@ -4,22 +4,16 @@
  * @hook-sort-order 0
  * @hook-solo false
  *
- * Always emit both guest and signed-in items. FPC / soft-reconcile may flip
- * data-auth-state in JS without re-rendering this hook; visibility is toggled
- * via data-account-menu-auth + applyHeaderMenuAuth.
+ * Always emit both guest and signed-in items with guest-default visibility.
+ * Header widget SSR is always the guest shell; Weline_Frontend
+ * syncHeaderAccountChrome / applyHeaderMenuAuth flips data-account-menu-auth
+ * after account.current — do not SSR visibility from the frontend Session.
  */
-
-use Weline\Framework\Session\SessionFactory;
-
-$session = SessionFactory::getInstance()->createFrontendSession();
-$isLoggedIn = $session->isLoggedIn();
-$signedHidden = $isLoggedIn ? '' : ' hidden';
-$guestHidden = $isLoggedIn ? ' hidden' : '';
 ?>
 
-<li role="none" data-account-menu-auth="signed-in"<?= $signedHidden ?>><a href="@url{'customer/account/index'}#overview" role="menuitem"><?= __('账户') ?></a></li>
-<li role="none" data-account-menu-auth="signed-in"<?= $signedHidden ?>><a href="@url{'customer/account/index'}#profile" role="menuitem"><?= __('个人资料') ?></a></li>
-<li role="none" data-account-menu-auth="signed-in"<?= $signedHidden ?>><a href="@url{'customer/account/index'}#security" role="menuitem"><?= __('安全设置') ?></a></li>
-<li role="none" data-account-menu-auth="signed-in"<?= $signedHidden ?>><a href="@url{'customer/account/logout'}" role="menuitem" data-account-logout-confirm><?= __('退出登录') ?></a></li>
-<li role="none" data-account-menu-auth="guest"<?= $guestHidden ?>><a href="@url{'customer/account/login'}" role="menuitem"><?= __('登录') ?></a></li>
-<li role="none" data-account-menu-auth="guest"<?= $guestHidden ?>><a href="@url{'customer/account/register'}" role="menuitem"><?= __('注册') ?></a></li>
+<li role="none" data-account-menu-auth="signed-in" hidden><a href="@url{'customer/account/index'}#overview" role="menuitem"><?= __('账户') ?></a></li>
+<li role="none" data-account-menu-auth="signed-in" hidden><a href="@url{'customer/account/index'}#profile" role="menuitem"><?= __('个人资料') ?></a></li>
+<li role="none" data-account-menu-auth="signed-in" hidden><a href="@url{'customer/account/index'}#security" role="menuitem"><?= __('安全设置') ?></a></li>
+<li role="none" data-account-menu-auth="signed-in" hidden><a href="@url{'customer/account/logout'}" role="menuitem" data-account-logout-confirm><?= __('退出登录') ?></a></li>
+<li role="none" data-account-menu-auth="guest"><a href="@url{'customer/account/login'}" role="menuitem"><?= __('登录') ?></a></li>
+<li role="none" data-account-menu-auth="guest"><a href="@url{'customer/account/register'}" role="menuitem"><?= __('注册') ?></a></li>
