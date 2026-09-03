@@ -137,6 +137,7 @@ Weline.Api.resource('i18n_admin').action({
 - 服务端 `LanguageSwitcher::buildLanguageHref()` 统一生成前后台语言路径：已识别后台前缀时直接在前缀后插入语言段，不把模块路由段误判为第二个后台前缀。
 - 后台顶栏 `<w:i18n:switcher />` 与前台一致，读取当前/默认网站的 `WebsiteLanguage`；`ActiveLocaleCodeProvider`（已安装+已激活）仅作网站无语言行时的回退。表单侧 `<w:i18n:language:select catalog="installed" />` 仍可单独使用安装态目录
 - `<w:i18n:switcher />` **必须运行时渲染**（编译期只输出 `LanguageSwitcher::render()` 调用），禁止把语言列表 HTML 烘焙进 `com_*.phtml`；否则 Worker chrome 预热/非后台编译上下文会把「仅中文」冻进模板
+- `header-language-switcher` / `header-currency-switcher` 输出包含实例级 DOM id，不得登记 aggregate/output HTML 缓存；同页页头、侧栏、页脚都要独立执行。实例 id 必须由每次服务端 render 的随机命名空间生成，不能依赖会在独立 Hook/Template 上下文中重置的请求/进程计数器；trigger 的 `aria-controls` 只允许指向本实例 panel。内联国旗 SVG 的 `id` 及 `href` / `url()` 引用也必须在每次插入时生成独立的 96-bit 命名空间，避免不同 Worker/FPC 片段拼装到同一响应时复用局部序号。
 - `<w:i18n:language:select />` 与 `<w:i18n:switcher />` 共享 `LanguageSelect::getLanguageItems()` 作为唯一语言目录：统一按国家分组，组内展示地区语言、参考名称与 Locale 代码，搜索同时覆盖国家、语言和代码。PageBuilder、网站表单、SystemConfig、字典和后台顶栏只需使用官方 Taglib，不再各自维护语言 option。未声明 `multiple` 时必须单选，不得继承同页其他 Taglib 泄漏的 `Taglib__multiple`
 - `LanguageSelect catalog="installed|global"`：管理表单默认只显示已安装语言；语言支持申请使用
   Symfony Intl 全球目录。`disabled-values` 会保留站点已支持语言但禁止再次选择。全球目录

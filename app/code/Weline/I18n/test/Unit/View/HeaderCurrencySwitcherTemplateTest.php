@@ -15,16 +15,39 @@ final class HeaderCurrencySwitcherTemplateTest extends TestCase
         self::assertFileExists($path);
         $content = (string) file_get_contents($path);
 
-        self::assertStringContainsString('<span class="weline-choice-symbol"', $content);
-        self::assertMatchesRegularExpression(
-            '/<span class="weline-choice-meta">\s*<\?= \$escape\(\$currencyCode\) \?>\s*<\/span>/',
-            $content
-        );
+        self::assertStringContainsString('<span class="w-currency-switcher__symbol"', $content);
+        self::assertStringNotContainsString('<span class="weline-choice-symbol"', $content);
 
-        preg_match('/<span class="weline-choice-meta">(?P<meta>.*?)<\/span>/s', $content, $matches);
-        self::assertArrayHasKey('meta', $matches, 'Currency switcher should render a meta text node.');
-        self::assertStringNotContainsString('$currencySymbol', $matches['meta']);
-        self::assertStringNotContainsString('·', $matches['meta']);
+        preg_match('/<span class="w-currency-switcher__copy">(?P<copy>.*?)<\/span>/s', $content, $matches);
+        self::assertArrayHasKey('copy', $matches, 'Currency switcher should render a copy block.');
+        self::assertStringContainsString('$currencyName', $matches['copy']);
+        self::assertStringContainsString('$currencyCode', $matches['copy']);
+        self::assertStringNotContainsString('$currencySymbol', $matches['copy']);
+        self::assertStringNotContainsString('·', $matches['copy']);
+    }
+
+    public function testCurrencyPanelUsesPerRenderInstanceId(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/hooks/header-currency-switcher.phtml';
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('SwitcherInstanceId::create(', $content);
+        self::assertStringNotContainsString('RequestContext::get(', $content);
+        self::assertStringContainsString('$currencySwitcherId', $content);
+        self::assertStringContainsString('aria-controls="<?= $escape($currencySwitcherId) ?>"', $content);
+        self::assertStringContainsString('id="<?= $escape($currencySwitcherId) ?>"', $content);
+        self::assertStringNotContainsString('aria-controls="w-currency-switcher-menu"', $content);
+        self::assertStringNotContainsString('id="w-currency-switcher-menu"', $content);
+    }
+
+    public function testSwitcherInstanceIdsStayUniqueWithoutSharedRequestContext(): void
+    {
+        $first = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency-switcher-menu');
+        $second = \Weline\I18n\Helper\SwitcherInstanceId::create('w-currency-switcher-menu');
+
+        self::assertNotSame($first, $second);
+        self::assertMatchesRegularExpression('/^w-currency-switcher-menu-[0-9a-f]{24}$/D', $first);
+        self::assertMatchesRegularExpression('/^w-currency-switcher-menu-[0-9a-f]{24}$/D', $second);
     }
 
 }
