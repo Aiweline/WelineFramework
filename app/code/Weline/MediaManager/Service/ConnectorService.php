@@ -225,7 +225,6 @@ final class ConnectorService
                 'file' => $this->handleStorageResource($storage, $src, false, $actorId, $manager),
                 'tmb' => $this->handleStorageResource($storage, $src, true, $actorId, $manager),
                 'search' => $this->handleStorageSearch($storage, $src, $manager),
-                'find_asset' => $this->handleStorageFindAsset($storage, $src, $manager, $actorId),
                 default => ['error' => (string)__('当前存储提供者暂不支持此操作')],
             };
         } catch (\InvalidArgumentException | \RuntimeException $exception) {
@@ -573,81 +572,6 @@ final class ConnectorService
         }
 
         return ['results' => $results];
-    }
-
-    /**
-     * Locate a FileAsset by id and return a browser entry the FE can navigate to.
-     *
-     * @param array<string,mixed> $src
-     * @return array<string,mixed>
-     */
-    private function handleStorageFindAsset(
-        string $storage,
-        array $src,
-        StorageDirectoryManagerInterface $manager,
-        ?int $actorId,
-    ): array {
-        $this->assertStorageCapability($storage, 'browse', $manager);
-        $assetId = strtolower(trim((string)($src['asset_id'] ?? '')));
-        if (preg_match(
-            '/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/',
-            $assetId,
-        ) !== 1) {
-            return ['error' => (string)__('文件资源 ID 无效')];
-        }
-
-        try {
-            /** @var \Weline\FileManager\Api\FileAssetManagerInterface $assets */
-            $assets = ObjectManager::getInstance(\Weline\FileManager\Api\FileAssetManagerInterface::class);
-            $asset = $assets->get($assetId);
-        } catch (\Throwable) {
-            return ['error' => (string)__('文件资源不存在')];
-        }
-
-        $diskCode = trim($asset->getDiskCode());
-        $objectKey = trim($asset->getObjectKey(), '/');
-        if ($diskCode === '' || $objectKey === '') {
-            return ['error' => (string)__('文件资源缺少存储定位信息')];
-        }
-        if ($diskCode !== $storage) {
-            try {
-                $storage = $this->getStorageManager()->canonicalizeDiskCode($diskCode);
-            } catch (\Throwable) {
-                return ['error' => (string)__('文件资源所在存储不可用')];
-            }
-        }
-
-        $locale = $this->requiredLocale($src);
-        $access = $this->fileAccessContext($locale, $actorId);
-        $entry = $this->findStorageEntry($storage, $objectKey, $manager);
-        if ($entry === null) {
-            $entry = [
-                'path' => $objectKey,
-                'name' => basename($objectKey),
-                'type' => 'file',
-                'size' => max(0, (int)$asset->getData(\Weline\FileManager\Model\FileAsset::schema_fields_BYTES)),
-                'mime_type' => $asset->getMimeType(),
-                'last_modified' => null,
-            ];
-        }
-
-        $info = $this->buildStorageFileInfo($entry);
-        try {
-            $info = array_replace($info, $this->getAssetCatalogService()->describe(
-                $storage,
-                $objectKey,
-                $locale,
-                $access,
-            ));
-        } catch (FileAccessDeniedException) {
-            return ['error' => (string)__('无权访问该文件资源')];
-        }
-        $info['asset_id'] = $assetId;
-
-        return [
-            'storage' => $storage,
-            'result' => $info,
-        ];
     }
 
     /** @return array<string,mixed> */
