@@ -161,6 +161,11 @@ final class WidgetHtmlHealthInspector
                 }
                 $name = strtolower($m[1]);
                 $offset = $lt + strlen($m[0]);
+                // libxml/saveHTML may emit </source>/</img> for void elements; never
+                // let those closes pop real containers (picture/section/div cascade).
+                if (isset(self::VOID_TAGS[$name])) {
+                    continue;
+                }
                 if ($stack === []) {
                     $issues[] = [
                         'severity' => 'error',
@@ -183,16 +188,22 @@ final class WidgetHtmlHealthInspector
                 continue;
             }
 
-            if (preg_match('/<([a-zA-Z][\w:-]*)([^<>]*?)(\/?)>/A', $html, $m, 0, $lt) !== 1) {
-                // likely a literal "<" in text; skip one char
+            $openTagEnd = $this->findHtmlTagClose($html, $lt + 1);
+            if ($openTagEnd === null) {
+                break;
+            }
+
+            $openTag = substr($html, $lt, $openTagEnd - $lt);
+            if (preg_match('/^<([a-zA-Z][\w:-]*)/', $openTag, $m) !== 1) {
                 $offset = $lt + 1;
                 continue;
             }
 
             $name = strtolower($m[1]);
-            $selfClosing = $m[3] === '/' || isset(self::VOID_TAGS[$name]);
-            $tagLen = strlen($m[0]);
-            $offset = $lt + $tagLen;
+            $selfClosing = str_ends_with(rtrim($openTag), '/>')
+                || preg_match('/\/\s*>$/', $openTag) === 1
+                || isset(self::VOID_TAGS[$name]);
+            $offset = $openTagEnd;
 
             if ($selfClosing) {
                 continue;
@@ -427,6 +438,30 @@ final class WidgetHtmlHealthInspector
         }
 
         return substr($detail, 0, $max - 1) . '…';
+    }
+
+    private function findHtmlTagClose(string $html, int $from): ?int
+    {
+        $length = strlen($html);
+        $quote = null;
+        for ($i = max(0, $from); $i < $length; $i++) {
+            $ch = $html[$i];
+            if ($quote !== null) {
+                if ($ch === $quote) {
+                    $quote = null;
+                }
+                continue;
+            }
+            if ($ch === '"' || $ch === "'") {
+                $quote = $ch;
+                continue;
+            }
+            if ($ch === '>') {
+                return $i + 1;
+            }
+        }
+
+        return null;
     }
 
     private function snippet(string $html, int $pos, int $radius = 48): string

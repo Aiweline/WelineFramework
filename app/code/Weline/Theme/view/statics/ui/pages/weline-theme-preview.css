@@ -845,6 +845,19 @@ body.editor-mode [data-wslot][data-w-drop-position="invalid"] .w-theme-preview-d
     color: var(--editor-mode-selection-invalid);
 }
 
+body.editor-mode .widget-locate-flash {
+    animation: w-theme-widget-locate-pulse var(--weline-motion-normal) ease-in-out 4 alternate;
+}
+
+@keyframes w-theme-widget-locate-pulse {
+    from {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--editor-mode-selection-active) 45%, transparent);
+    }
+    to {
+        box-shadow: 0 0 0 var(--weline-space-2) color-mix(in srgb, var(--editor-mode-selection-active) 28%, transparent);
+    }
+}
+
 /* 响应式 */
 @media (max-width: 768px) {
     body.editor-mode [data-wslot].w-theme-preview-canvas-slot {
@@ -873,6 +886,7 @@ body.editor-mode [data-wslot][data-w-drop-position="invalid"] .w-theme-preview-d
 }
 
 @media (prefers-reduced-motion: reduce) {
+    body.editor-mode .widget-locate-flash,
     body.editor-mode [data-wslot],
     .slot-highlight,
     .w-theme-preview-drop-before::before,

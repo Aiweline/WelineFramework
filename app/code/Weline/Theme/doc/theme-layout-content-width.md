@@ -1,18 +1,23 @@
 # 主题内容区宽度 Token（layout content width）
 
-> **强约束**：前台页面、布局、部件、业务模块 CSS 必须与 Header/Footer 共用同一套内容区宽度 Token，禁止各自写 `1440px` / `1280px` / `max-width: 1200px` 等私有字面量。  
-> 关联：`theme-css-variables-only.md`（颜色/间距 Token）、`ThemeDefaultContainerWidthContractTest`。
+> **高压线（MCP `frontend_unified_content_container`）**：前台 layout / 业务页 / 部件 / 模块 CSS **必须**套用下方壳层 A 或 B，与 Header/Footer 共用同一套内容区宽度 Token。  
+> **禁止**自写第三套「页面容器」（私有 `max-width` + `margin:auto` + `padding-inline`）、`1440px` / `1280px` / `1180px` / `1200px` / `90rem` 等字面量版心，或在已有 `.w-container` 外再套一层等宽壳。  
+> 关联：`theme-css-variables-only.md`（颜色/间距 Token）、`ThemeDefaultContainerWidthContractTest`、`ThemeFrontendLayoutsContentWidthContractTest`、`ThemeStorefrontModuleContentWidthContractTest`。
 
 ## 权威 Token
 
 | Token | 定义链（叶子在 `variables/_spacing.css`） | 用途 |
 |---|---|---|
 | `--weline-layout-content-max-width` | `_spacing.css` → `--layout-max-width` → `--spacing-container-max-width` | 内容区最大宽度 |
-| `--weline-layout-content-padding-inline` | `_spacing.css` → `--spacing-container-padding` | 内容区左右内边距 |
+| `--weline-layout-content-padding-inline` | `_spacing.css` → `clamp(0px, (max-width - 100vw) * 9999, --spacing-container-padding)` | 内容区左右内边距；**视口 ≥ max-width 时为 0，窄屏保留 gutter** |
 
 **前台 head 必须加载** `theme/frontend/variables/_spacing.css`（见 `partials/head/default.phtml`），否则 `--weline-layout-content-*` 未定义时 Header 会撑满视口、`.w-container` 却走私有 fallback，版心左沿错位。
 
 Header / Footer / `.w-container` 已消费上述 Token；业务页不得使用不同 fallback 导致左右沿错位。
+
+### PC 最宽时 padding 归零
+
+`--weline-layout-content-padding-inline` 用 `100vw` 与 `--spacing-container-max-width` 比较：视口达到或超过版心最大宽度时计算为 `0`，避免顶栏/版心在 1440 满宽时仍出现左右绿色 padding；窄于 max-width 时仍等于 `--spacing-container-padding`。禁止再写第二个 `1440px` 媒体断点字面量。
 
 ## Homepage Shell B 特例（`layouts/homepage/default.phtml`）
 

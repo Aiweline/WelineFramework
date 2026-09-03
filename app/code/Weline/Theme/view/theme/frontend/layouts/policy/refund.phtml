@@ -1,298 +1,368 @@
 <?php
 /**
- * 布局：退款政策页面
- *
- * 用于展示网站退款、退货、换货政策
- * 字段
- * @meta.name {default="退款政策页面",name="退款政策页面",description="用于展示网站退款、退货、换货政策"}
- * @meta.description {default="说明退款、退货、换货的条件、流程和规则",name="退款政策说明",description="用于展示退款条件、退货流程、换货规则、退款时效等内容"}
- * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录，0不需要登录，1需要登录，这个不是元素据，是预览系统判断是否需要自动登录的。"}
- * @param title {default="退款政策",name="页面标题",description="页面标题，用于设置页面标题"}
- * @param content {default="",name="主要内容（HTML字符串）",description="主要内容（HTML字符串），如不为空会直接渲染，覆盖默认示例条款"}
- * @param showHeader {default=true,name="是否显示header",description="是否显示header，用于控制header的显示"}
- * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
- * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
- *
- * 参数配置由 ControllerFetchFileBefore Observer 自动加载到 meta 数组中
- * 模板中使用 meta.参数 输出内容，使用 meta.参数 在条件判断中
- * 页面标题由 Observer 自动设置（如果控制器未设置，则使用 meta.title 的默认值）
+ * 布局：退款政策页面（亚马逊条款式）
+ * @meta.name {default="退款政策页面",name="退款政策页面",description="退款政策"}
+ * @meta.description {default="说明退款条件与流程",name="退款政策说明",description="退款政策"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="是否需要登录"}
+ * @param title {default="退款政策",name="页面标题",description="页面标题"}
+ * @param content {default="",name="主要内容（HTML字符串）",description="非空时覆盖默认正文"}
+ * @param showHeader {default=true,name="是否显示header",description="是否显示header"}
+ * @param showFooter {default=true,name="是否显示footer",description="是否显示footer"}
+ * @param class {default="",name="额外CSS类",description="额外CSS类"}
  */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\SiteContactInfo;
+
 $meta = $this->getData('meta') ?? [];
+$escape = static fn($value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$contact = [
+    'site_name' => 'Weline',
+];
+try {
+    $resolver = ObjectManager::getInstance(SiteContactInfo::class);
+    if ($resolver instanceof SiteContactInfo) {
+        $contact = array_merge($contact, $resolver->resolve());
+    }
+} catch (\Throwable) {
+}
+$siteName = (string)$contact['site_name'];
+$title = (string)($meta['title'] ?? __('退款政策'));
+$updatedAt = date('Y-m-d');
+$ariaNav = (string)__('退款政策目录');
+$ariaArticle = (string)__('退款政策正文');
+$toc = [
+    ['id' => 'refund-s1', 'label' => __('一、退款条件')],
+    ['id' => 'refund-s2', 'label' => __('二、不予退款的情况')],
+    ['id' => 'refund-s3', 'label' => __('三、退款流程')],
+    ['id' => 'refund-s4', 'label' => __('四、退款方式与时效')],
+    ['id' => 'refund-s5', 'label' => __('五、运费与责任')],
+    ['id' => 'refund-s6', 'label' => __('六、特殊商品说明')],
+    ['id' => 'refund-s7', 'label' => __('七、联系我们')],
+];
 ?>
 <!DOCTYPE html>
-<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}">
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
 <head>
     <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy.refund::head-after</w:hook>
+    <style>
+        body.amazon-policy-layout {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--color-text-primary, #0f1111);
+            background: var(--color-bg-canvas, #ffffff);
+            font-family: "Amazon Ember", Arial, sans-serif;
+        }
+        .amazon-policy.weline-page-wrapper {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background: transparent;
+        }
+        .amazon-policy__main {
+            flex: 1 0 auto;
+            width: 100%;
+            background: linear-gradient(180deg, #eaeded 0, #f3f3f3 12rem);
+        }
+        .amazon-policy__stage {
+            box-sizing: border-box;
+            width: min(100%, var(--weline-layout-content-max-width));
+            max-width: 100%;
+            min-width: 0;
+            margin-inline: auto;
+            padding-inline: var(--weline-layout-content-padding-inline);
+            padding-block: clamp(2.25rem, 4.5vw, 3.25rem) clamp(3rem, 6vw, 4.5rem);
+        }
+        .amazon-policy__hero {
+            margin: 0 0 1.25rem;
+            padding: clamp(1.35rem, 3vw, 1.85rem) clamp(1.15rem, 2.5vw, 1.75rem);
+            border-radius: 8px;
+            background:
+                radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
+                linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
+            color: #fff;
+            box-sizing: border-box;
+        }
+        .amazon-policy__eyebrow {
+            margin: 0 0 0.4rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #febd69;
+        }
+        .amazon-policy__hero h1 {
+            margin: 0;
+            font-size: clamp(1.55rem, 3.2vw, 2.1rem);
+            line-height: 1.2;
+            font-weight: 700;
+            color: #ffffff;
+        }
+        .amazon-policy__hero-lead {
+            margin: 0.75rem 0 0;
+            max-width: 46rem;
+            line-height: 1.65;
+            color: #dddddd;
+        }
+        .amazon-policy__meta {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.75rem 1.25rem;
+            font-size: 0.9rem;
+            color: #febd69;
+        }
+        .amazon-policy__meta a { color: inherit; text-decoration: underline; }
+        .amazon-policy__panel {
+            display: grid;
+            grid-template-columns: minmax(200px, 240px) minmax(0, 1fr);
+            gap: 0;
+            align-items: start;
+            background: #ffffff;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 1px 2px rgba(15, 17, 17, 0.08);
+            overflow: hidden;
+        }
+        .amazon-policy__toc {
+            padding: 1.15rem 1rem 1.25rem;
+            border-right: 1px solid #e3e6e6;
+            background: #fafafa;
+            position: sticky;
+            top: 0.75rem;
+        }
+        .amazon-policy__toc h2 { margin: 0 0 0.75rem; font-size: 0.95rem; font-weight: 700; }
+        .amazon-policy__toc nav { display: grid; gap: 0.35rem; }
+        .amazon-policy__toc a {
+            display: block;
+            padding: 0.4rem 0.55rem;
+            border-radius: 4px;
+            color: #007185;
+            text-decoration: none;
+            font-size: 0.9rem;
+            line-height: 1.35;
+        }
+        .amazon-policy__toc a:hover {
+            background: #f7fafa;
+            color: #c45500;
+            text-decoration: underline;
+        }
+        .amazon-policy__article {
+            padding: clamp(1.15rem, 2.5vw, 1.75rem) clamp(1.15rem, 2.5vw, 1.85rem) 1.85rem;
+        }
+        .amazon-policy__intro {
+            margin: 0 0 1.25rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid #e3e6e6;
+            color: #565959;
+            line-height: 1.7;
+        }
+        .amazon-policy__section { margin-top: 1.5rem; scroll-margin-top: 1rem; }
+        .amazon-policy__section h2 {
+            margin: 0 0 0.75rem;
+            font-size: 1.2rem;
+            font-weight: 700;
+            border-left: 4px solid #ff9900;
+            padding-left: 0.65rem;
+            color: #0f1111;
+        }
+        .amazon-policy__section p {
+            margin: 0 0 0.7rem;
+            line-height: 1.7;
+            font-size: 0.98rem;
+            color: #333;
+        }
+        .amazon-policy__section ul {
+            margin: 0.35rem 0 0.85rem;
+            padding-left: 1.35rem;
+        }
+        .amazon-policy__section li {
+            margin-bottom: 0.45rem;
+            line-height: 1.65;
+            color: #333;
+        }
+        .amazon-policy__footer-note {
+            margin-top: 1.75rem;
+            padding-top: 1rem;
+            border-top: 1px solid #e3e6e6;
+            font-size: 0.9rem;
+            color: #565959;
+        }
+        .amazon-policy__related {
+            margin-top: 1rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.65rem 1rem;
+        }
+        .amazon-policy__related a {
+            color: #007185;
+            text-decoration: none;
+            font-size: 0.92rem;
+        }
+        .amazon-policy__related a:hover {
+            color: #c45500;
+            text-decoration: underline;
+        }
+        @media (max-width: 900px) {
+            .amazon-policy__panel { grid-template-columns: 1fr; }
+            .amazon-policy__toc {
+                position: static;
+                border-right: 0;
+                border-bottom: 1px solid #e3e6e6;
+            }
+            .amazon-policy__toc nav { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        }
+        @media (max-width: 560px) {
+            .amazon-policy__toc nav { grid-template-columns: 1fr; }
+        }
+    </style>
     <w:hook>seo::head</w:hook>
 </head>
-<body>
+<body class="amazon-policy-layout <?= $escape($meta['class'] ?? '') ?>">
     <w:hook>seo::body</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::policy.refund::body-start</w:hook>
 
-    <div class="weline-page-wrapper weline-policy-page weline-refund-policy">
+    <div class="weline-page-wrapper amazon-policy weline-refund-policy" data-testid="storefront-refund-page" data-layout="policy-refund">
         <if condition="meta.showHeader">
             <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
             <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
             <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
         </if>
 
-        <div class="weline-main-content">
-            <w:hook>Weline_Theme::frontend::layouts::base::content-before</w:hook>
-
+        <main class="amazon-policy__main" id="main-content">
             <w:slot id="content"
                     name="内容区"
                     accept="layout-policy-refund-content,layout-policy-content,layout-default-content,content,policy-content,refund-policy,cms-content,faq"
                     reject="header,footer"
                     multiple="true"
                     position="content"
-                    class="policy-refund__content-root-slot">
-            <main class="policy-main <?= htmlspecialchars($meta['class'] ?? '') ?> refund-policy" id="refund-policy-main" data-layout="policy-refund">
+                    class="amazon-policy__content-root-slot">
+            <div class="policy-main <?= $escape($meta['class'] ?? '') ?>" data-layout="policy-refund">
                 <w:slot id="policy-refund-content"
                         name="退款政策正文"
                         accept="layout-policy-refund-content,layout-policy-content,refund-policy,policy-content,content,faq"
                         reject="header,footer"
                         multiple="true"
                         position="content"
-                        class="policy-main__content-slot">
+                        class="amazon-policy__content-slot">
                 <if condition="meta.content">
                     {{meta.content}}
                 <else/>
-                    <div class="policy-default-content">
-                        <div class="w-container">
-                            <section class="policy-header" weline-code="theme.policy.section_1">
-                                <h1 class="policy-title">
-                                    <if condition="meta.title">
-                                        {{meta.title}}
-                                    <else/>
-                                        <lang>退款政策</lang>
-                                    </if>
-                                </h1>
-                                <p class="policy-description">
-                                    <lang>为了保障您的权益，我们制定了完善的退款、退货、换货政策。请您仔细阅读以下内容，了解退款条件和流程。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_2">
-                                <h2 class="section-title"><lang>一、退款条件</lang></h2>
-                                <p class="section-text">
-                                    <lang>在符合以下条件的情况下，您可以申请退款：</lang>
-                                </p>
-                                <ul class="policy-list">
-                                    <li><lang>（1）商品存在质量问题或与描述不符；</lang></li>
-                                    <li><lang>（2）未收到商品或商品在运输过程中损坏；</lang></li>
-                                    <li><lang>（3）在规定的退货期限内提出申请（通常为收到商品后7-15天内）；</lang></li>
-                                    <li><lang>（4）商品保持原状，未使用、未损坏、未影响二次销售；</lang></li>
-                                    <li><lang>（5）提供完整的商品、包装、配件、赠品等；</lang></li>
-                                    <li><lang>（6）其他符合法律法规规定的情形。</lang></li>
-                                </ul>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_3">
-                                <h2 class="section-title"><lang>二、不予退款的情况</lang></h2>
-                                <p class="section-text">
-                                    <lang>以下情况不予退款：</lang>
-                                </p>
-                                <ul class="policy-list">
-                                    <li><lang>（1）超过退货期限的商品；</lang></li>
-                                    <li><lang>（2）已使用、损坏或影响二次销售的商品；</lang></li>
-                                    <li><lang>（3）定制类商品或特殊商品（如个性化定制、数字产品等）；</lang></li>
-                                    <li><lang>（4）因用户原因导致的退款申请（如选错规格、颜色等）；</lang></li>
-                                    <li><lang>（5）特价商品、清仓商品（如商品页面明确标注不支持退货）；</lang></li>
-                                    <li><lang>（6）其他不符合退款条件的情形。</lang></li>
-                                </ul>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_4">
-                                <h2 class="section-title"><lang>三、退款流程</lang></h2>
-                                <p class="section-text">
-                                    <lang>3.1 提交申请：您需要在订单管理页面或联系客服提交退款申请，并提供相关证明材料（如商品照片、问题描述等）。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>3.2 审核处理：我们将在收到申请后1-3个工作日内完成审核。审核通过后，我们会通知您退货地址和注意事项。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>3.3 退回商品：您需要按照要求将商品退回指定地址，并保留物流凭证。建议使用可追踪的物流方式。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>3.4 确认退款：我们收到退回商品并确认无误后，将在3-15个工作日内完成退款。退款将原路退回至您的支付账户。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_5">
-                                <h2 class="section-title"><lang>四、退款金额</lang></h2>
-                                <p class="section-text">
-                                    <lang>4.1 退款金额包括：商品实际支付金额、运费（如因商品问题导致的退货，运费由我们承担）。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>4.2 退款金额不包括：已使用的优惠券、积分、赠品等（如赠品已使用或损坏，可能需要扣除相应费用）。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>4.3 如因用户原因导致的退货，运费由用户承担，退款金额将扣除运费。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_6">
-                                <h2 class="section-title"><lang>五、换货政策</lang></h2>
-                                <p class="section-text">
-                                    <lang>5.1 如商品存在质量问题，您可以选择换货。换货流程与退货类似，需要提交换货申请并退回原商品。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>5.2 换货商品需与原商品规格、型号一致。如无相同商品，我们可能建议您选择退款。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>5.3 换货产生的运费，如因商品质量问题，由我们承担；如因用户原因，由用户承担。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_7">
-                                <h2 class="section-title"><lang>六、退款时效</lang></h2>
-                                <p class="section-text">
-                                    <lang>6.1 退款申请审核：1-3个工作日；</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>6.2 商品退回确认：收到退回商品后1-2个工作日；</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>6.3 退款到账：确认无误后3-15个工作日（具体到账时间以支付平台为准）。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>6.4 如遇节假日或特殊情况，退款时间可能相应延长，我们会及时通知您。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_8">
-                                <h2 class="section-title"><lang>七、特殊说明</lang></h2>
-                                <p class="section-text">
-                                    <lang>7.1 数字产品、虚拟商品、服务类商品等特殊商品，如无质量问题，一般不支持退款，具体以商品页面说明为准。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>7.2 如商品存在安全隐患或严重质量问题，我们将立即处理，不受退货期限限制。</lang>
-                                </p>
-                                <p class="section-text">
-                                    <lang>7.3 如您对退款处理结果有异议，可以联系客服或通过其他渠道申诉。</lang>
-                                </p>
-                            </section>
-
-                            <section class="policy-section" weline-code="theme.policy.section_9">
-                                <h2 class="section-title"><lang>八、联系我们</lang></h2>
-                                <p class="section-text">
-                                    <lang>如您对退款政策有任何疑问，或需要申请退款、退货、换货，请通过本网站提供的联系方式与我们联系。我们将竭诚为您服务。</lang>
-                                </p>
-                            </section>
+                        <div class="amazon-policy__stage">
+                        <header class="amazon-policy__hero" aria-labelledby="policy-refund-title" weline-code="theme.policy.hero">
+                            
+                                <p class="amazon-policy__eyebrow"><?= $escape($siteName) ?></p>
+                                <h1 id="policy-refund-title"><?php if (!empty($meta['title'])): ?><?= $escape($title) ?><?php else: ?><lang>退款政策</lang><?php endif; ?></h1>
+                                <p class="amazon-policy__hero-lead"><lang>为保障您的购物权益，我们制定了退款、退货与换货规则。请仔细阅读条件、流程与到账说明，再提交申请。</lang></p>
+                                <div class="amazon-policy__meta">
+                                    <span><lang>最后更新：</lang><?= $escape($updatedAt) ?></span>
+                                    <a href="@url{'guide/returns'}"><lang>退换政策</lang></a>
+                                    <a href="@url{'terms'}"><lang>服务条款</lang></a>
+                                    <a href="@url{'help'}"><lang>帮助中心</lang></a>
                         </div>
-                    </div>
+                        </header>
+
+                        <div class="amazon-policy__panel">
+                                    <aside class="amazon-policy__toc" aria-label="<?= $escape($ariaNav) ?>">
+                                        <h2><lang>目录</lang></h2>
+                                        <nav>
+                                            <?php foreach ($toc as $item): ?>
+                                                <a href="#<?= $escape($item['id']) ?>"><?= $escape($item['label']) ?></a>
+                                            <?php endforeach; ?>
+                                        </nav>
+                                    </aside>
+
+                                    <article class="amazon-policy__article" aria-label="<?= $escape($ariaNav) ?>">
+                                        <p class="amazon-policy__intro"><lang>本退款政策说明可申请情形、不予退款情形、办理流程与退款到账规则。退换细节也可参考配送/退换指南。</lang></p>
+
+                                        <section class="amazon-policy__section" id="refund-s1" weline-code="theme.policy.section_2">
+                                            <h2><lang>一、退款条件</lang></h2>
+                                            <p><lang>在符合以下条件的情况下，您可以申请退款：</lang></p>
+                                            <ul>
+                                                <li><lang>（1）商品存在质量问题或与描述不符；</lang></li>
+                                                <li><lang>（2）未收到商品或商品在运输过程中损坏；</lang></li>
+                                                <li><lang>（3）在规定的退货期限内提出申请（通常为收到商品后7-15天内）；</lang></li>
+                                                <li><lang>（4）商品保持原状，未使用、未损坏、未影响二次销售；</lang></li>
+                                                <li><lang>（5）提供完整的商品、包装、配件、赠品等；</lang></li>
+                                                <li><lang>（6）其他符合法律法规规定的情形。</lang></li>
+                                            </ul>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="refund-s2" weline-code="theme.policy.section_3">
+                                            <h2><lang>二、不予退款的情况</lang></h2>
+                                            <p><lang>以下情况不予退款：</lang></p>
+                                            <ul>
+                                                <li><lang>（1）超过退货期限的商品；</lang></li>
+                                                <li><lang>（2）已使用、损坏或影响二次销售的商品；</lang></li>
+                                                <li><lang>（3）定制类商品或特殊商品（如个性化定制、数字产品等）；</lang></li>
+                                                <li><lang>（4）因用户原因导致的退款申请（如选错规格、颜色等）；</lang></li>
+                                                <li><lang>（5）特价商品、清仓商品（如商品页面明确标注不支持退货）；</lang></li>
+                                                <li><lang>（6）其他不符合退款条件的情形。</lang></li>
+                                            </ul>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="refund-s3" weline-code="theme.policy.section_4">
+                                            <h2><lang>三、退款流程</lang></h2>
+                                            <p><lang>3.1 提交申请：您需要在订单管理页面或联系客服提交退款申请，并提供相关证明材料（如商品照片、问题描述等）。</lang></p>
+                                            <p><lang>3.2 审核处理：我们将在收到申请后1-3个工作日内完成审核。审核通过后，我们会通知您退货地址和注意事项。</lang></p>
+                                            <p><lang>3.3 退回商品：您需要按照要求将商品退回指定地址，并保留物流凭证。建议使用可追踪的物流方式。</lang></p>
+                                            <p><lang>3.4 验收与退款：我们收到退货并验收合格后，将按原支付路径办理退款，并通知您处理结果。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="refund-s4" weline-code="theme.policy.section_5">
+                                            <h2><lang>四、退款方式与时效</lang></h2>
+                                            <p><lang>4.1 退款原则上原路退回至您下单时使用的支付账户。</lang></p>
+                                            <p><lang>4.2 退款到账时间因支付渠道而异，通常为1-10个工作日；若超时未到账，请先查询支付机构，再联系客服协助核查。</lang></p>
+                                            <p><lang>4.3 优惠券、积分等权益的退回规则以订单与活动说明为准。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="refund-s5" weline-code="theme.policy.section_6">
+                                            <h2><lang>五、运费与责任</lang></h2>
+                                            <p><lang>5.1 因商品质量问题或描述不符导致的退货，往返运费通常由我们或商家承担（以审核结论为准）。</lang></p>
+                                            <p><lang>5.2 因个人原因退货，退货运费一般由买家承担，除非当地强制性法规另有规定。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="refund-s6" weline-code="theme.policy.section_7">
+                                            <h2><lang>六、特殊商品说明</lang></h2>
+                                            <p><lang>6.1 贴身衣物、定制商品、数字内容、一经拆封无法退换的卫生类商品等，可能不适用无理由退货，请以下单页提示为准。</lang></p>
+                                            <p><lang>6.2 汉服等服饰类请关注尺码表与养护说明，降低因尺码或穿着不当导致的退换争议。</lang></p>
+                                        </section>
+
+                                        <section class="amazon-policy__section" id="refund-s7" weline-code="theme.policy.section_8">
+                                            <h2><lang>七、联系我们</lang></h2>
+                                            <p><lang>如需协助办理退款或查询进度，请通过订单详情、帮助中心或「联系我们」入口提交工单，并提供订单号与问题说明。</lang></p>
+                                        </section>
+
+                                        <div class="amazon-policy__footer-note">
+                                            <p><lang>如对退款进度或条件有疑问，请通过帮助中心、订单详情或联系我们与客服沟通。</lang></p>
+                                            <div class="amazon-policy__related">
+                                                <a href="@url{'guide/returns'}"><lang>退换政策</lang></a>
+                                                <a href="@url{'guide/shipping'}"><lang>配送说明</lang></a>
+                                                <a href="@url{'privacy'}"><lang>隐私政策</lang></a>
+                                                <a href="@url{'help'}"><lang>帮助中心</lang></a>
+                                            </div>
+                                        </div>
+                                    </article>
+                                                                </div>
+                        </div>
                 </if>
                 </w:slot>
-            </main>
+            </div>
             </w:slot>
-
-            <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
-        </div>
+        </main>
 
         <if condition="meta.showFooter">
             <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
-            <footer class="weline-footer">
-                <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
-            </footer>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default"/>
             <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
         </if>
     </div>
 
     <w:hook>Weline_Theme::frontend::layouts::policy.refund::body-end</w:hook>
     <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
-
-    <style>
-    .refund-policy.policy-main {
-        width: 100%;
-        flex: 1;
-        padding: var(--weline-layout-spacing-xl) 0;
-    }
-
-    .policy-default-content {
-        width: 100%;
-        padding: var(--weline-layout-spacing-xl) 0 var(--weline-layout-spacing-2xl);
-    }
-
-    .policy-header {
-        text-align: left;
-        margin-bottom: var(--weline-layout-spacing-xl);
-    }
-
-    .policy-title {
-        font-size: var(--weline-layout-font-size-3xl);
-        font-weight: var(--weline-layout-font-weight-semibold);
-        color: var(--weline-layout-text-primary);
-        margin: 0 0 var(--weline-space-3) 0;
-    }
-
-    .policy-description {
-        font-size: var(--weline-layout-font-size-base);
-        line-height: var(--weline-layout-line-height-relaxed);
-        color: var(--weline-layout-text-secondary);
-        margin: 0;
-    }
-
-    .policy-section {
-        margin-top: var(--spacing-7);
-    }
-
-    .policy-section .section-title {
-        font-size: var(--weline-layout-font-size-xl);
-        font-weight: var(--weline-layout-font-weight-semibold);
-        color: var(--weline-layout-text-primary);
-        margin: 0 0 var(--weline-space-3) 0;
-    }
-
-    .policy-section .section-text {
-        font-size: var(--weline-layout-font-size-base);
-        color: var(--weline-layout-text-secondary);
-        line-height: var(--weline-layout-line-height-relaxed);
-        margin: 0 0 var(--weline-space-3) 0;
-    }
-
-    .policy-list {
-        margin: var(--weline-space-3) 0;
-        padding-left: var(--spacing-lg);
-        list-style-type: decimal;
-    }
-
-    .policy-list li {
-        font-size: var(--weline-layout-font-size-base);
-        color: var(--weline-layout-text-secondary);
-        line-height: var(--weline-layout-line-height-relaxed);
-        margin-bottom: var(--spacing-sm);
-    }
-
-    @media (max-width: 768px) {
-        .refund-policy.policy-main {
-            padding: var(--weline-layout-spacing-lg) 0;
-        }
-
-        .policy-default-content {
-            padding: var(--weline-layout-spacing-lg) 0 var(--weline-layout-spacing-xl);
-        }
-
-        .policy-title {
-            font-size: var(--weline-layout-font-size-2xl);
-        }
-
-        .policy-section .section-title {
-            font-size: var(--weline-layout-font-size-lg);
-        }
-
-        .policy-list {
-            padding-left: var(--weline-space-5);
-        }
-
-        .policy-list li {
-            font-size: var(--weline-layout-font-size-sm);
-        }
-    }
-    </style>
     <w:hook>seo::footer</w:hook>
 </body>
 </html>

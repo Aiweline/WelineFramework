@@ -147,6 +147,25 @@
     gap: 0.4rem;
 }
 
+.w-theme-brand-identity {
+    margin: 0 0 1.25rem;
+    padding-bottom: 1rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--w-color-border, #334155) 80%, transparent);
+}
+
+.w-theme-brand-identity__fields {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.w-theme-brand-identity__field .w-field__label {
+    display: block;
+    margin-bottom: 0.35rem;
+    font-size: 0.82rem;
+    font-weight: 650;
+    color: var(--w-theme-editor-text-primary, #f8fafc);
+}
+
 .w-theme-brand-field__title {
     margin: 0;
     font-size: 0.82rem;

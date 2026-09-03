@@ -119,6 +119,13 @@
     }
 
     function guestToken() {
+        if (window.WelineCart && typeof window.WelineCart.getGuestSession === 'function') {
+            var session = window.WelineCart.getGuestSession();
+            var sessionToken = session && session.token ? String(session.token).trim() : '';
+            if (sessionToken) {
+                return sessionToken;
+            }
+        }
         try {
             return String(window.sessionStorage.getItem(guestTokenStorageKey) || '').trim();
         } catch (e) {
@@ -203,6 +210,21 @@
         return rowTotal;
     }
 
+    function isDisplayableImageUrl(value) {
+        var image = String(value || '').trim();
+        if (!image) {
+            return false;
+        }
+        // FileManager internal refs and other non-http(s) schemes must never hit img.src.
+        if (/^asset:\/\//i.test(image)) {
+            return false;
+        }
+        if (/^[a-z][a-z0-9+.-]*:/i.test(image) && !/^(https?:)?\/\//i.test(image)) {
+            return false;
+        }
+        return true;
+    }
+
     function buildLine(root, item, currency) {
         var row = document.createElement('article');
         row.className = 'mini-cart-drawer__line';
@@ -214,6 +236,12 @@
         }
 
         var image = String(item.image || attr(root, 'data-placeholder-image', '')).trim();
+        if (!isDisplayableImageUrl(image)) {
+            image = attr(root, 'data-placeholder-image', '');
+            if (!isDisplayableImageUrl(image)) {
+                image = '';
+            }
+        }
         var url = String(item.url || '/cart');
         var name = String(item.name || '');
         var qty = Math.max(1, Number(item.qty || item.quantity || 1));
@@ -568,11 +596,11 @@
             var api = await withTimeout(waitForCartApi(), 8000, 'cart api wait timeout');
             var token = guestToken();
             var result;
-            if (typeof api.getV2Cart === 'function') {
+            if (typeof api.getCart === 'function') {
                 result = await withTimeout(
-                    api.getV2Cart(token ? { guest_token: token } : {}, { silent: true }),
+                    api.getCart(token ? { guest_token: token } : {}, { silent: true }),
                     8000,
-                    'getV2Cart timeout'
+                    'getCart timeout'
                 );
             } else if (typeof api.summary === 'function') {
                 result = await withTimeout(api.summary({}, { silent: true }), 8000, 'summary timeout');
@@ -616,15 +644,15 @@
             var requestOptions = { silent: true };
             var result;
             if (remove) {
-                if (typeof api.removeV2 === 'function') {
-                    result = await api.removeV2(params, requestOptions);
+                if (typeof api.remove === 'function') {
+                    result = await api.remove(params, requestOptions);
                 } else if (typeof api.remove === 'function') {
                     result = await api.remove(params, requestOptions);
                 } else {
                     return;
                 }
-            } else if (typeof api.updateV2 === 'function') {
-                result = await api.updateV2(Object.assign({}, params, { qty: qty }), requestOptions);
+            } else if (typeof api.update === 'function') {
+                result = await api.update(Object.assign({}, params, { qty: qty }), requestOptions);
             } else if (typeof api.update === 'function') {
                 result = await api.update(Object.assign({}, params, { qty: qty }), requestOptions);
             } else {
@@ -850,11 +878,11 @@
                 var api = await withTimeout(waitForCartApi(), 8000, 'cart api wait timeout');
                 var token = guestToken();
                 var result;
-                if (typeof api.getV2Cart === 'function') {
+                if (typeof api.getCart === 'function') {
                     result = await withTimeout(
-                        api.getV2Cart(token ? { guest_token: token } : {}, { silent: true }),
+                        api.getCart(token ? { guest_token: token } : {}, { silent: true }),
                         8000,
-                        'getV2Cart timeout'
+                        'getCart timeout'
                     );
                 } else if (typeof api.miniItems === 'function') {
                     result = await withTimeout(api.miniItems({ limit: 20 }, { silent: true }), 8000, 'miniItems timeout');
@@ -937,6 +965,19 @@
         applyMiniCartBusyDelta(-1);
     };
     window.Weline.MiniCart.resetBusy = resetAllDrawerBusy;
+    window.Weline.MiniCart.open = function () {
+        document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
+            if (isDemoChromeOnly(root)) {
+                return;
+            }
+            setDrawerOpen(root, true);
+        });
+    };
+    window.Weline.MiniCart.close = function () {
+        document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
+            setDrawerOpen(root, false);
+        });
+    };
 
     function bootMiniCartRoots() {
         document.querySelectorAll('[data-w-mini-cart="1"]').forEach(function (root) {
@@ -979,6 +1020,10 @@
         window.addEventListener('weline:cart-updated', function (event) {
             var summary = event && event.detail && typeof event.detail === 'object' ? event.detail : null;
             scheduleCartRefreshFromEvent(summary);
+        });
+
+        window.addEventListener('weshop:mini-cart:open-request', function () {
+            window.Weline.MiniCart.open();
         });
 
         window.addEventListener('weshop:mini-cart:busy', function (event) {

@@ -23,6 +23,7 @@
  */
 
 use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('promo-banner');
@@ -39,7 +40,7 @@ $backgroundColor = ThemeUiColor::sanitize(
     $this->getData('background_color') ?? '',
     'var(--weline-theme-danger-surface)'
 );
-$text = $this->getData('text') ?? __('限时特惠！全场满300减50');
+$text = WidgetI18n::label(trim((string)($this->getData('text') ?? '')), '限时特惠！全场满300减50');
 $textColor = ThemeUiColor::sanitize(
     $this->getData('text_color') ?? '',
     'var(--weline-theme-danger)'

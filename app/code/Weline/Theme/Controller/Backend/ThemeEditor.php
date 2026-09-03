@@ -8,6 +8,7 @@ use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\App\Env;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Sse\SseWriter;
 use Weline\Framework\Http\Url;
 use Weline\Theme\Model\ThemeLayout;
@@ -217,10 +218,7 @@ class ThemeEditor extends BackendController
         );
         $requestedBackendThemeId = (int)$this->request->getParam('backend_theme_id', 0);
         $pageType = (string)$this->request->getParam('page_type', ThemeLayout::PAGE_TYPE_HOME);
-        $previewAreaParam = $this->request->getParam('preview_area', $this->request->getParam('editor_area', PreviewContextService::AREA_FRONTEND));
-        $editorArea = $previewContextService->normalizeArea(
-            (string)$previewAreaParam
-        );
+        $editorArea = $this->resolveRequestedEditorArea();
         $scopeCatalog = ObjectManager::getInstance(ScopeSelectorCatalogInterface::class)->build(
             (string)$this->request->getParam('scope', PreviewContextService::DEFAULT_SCOPE),
             null,
@@ -564,6 +562,53 @@ class ThemeEditor extends BackendController
     public function postPublishScopedWorkspace()
     {
         return $this->fetchJson($this->scopedWorkspacePayload('publish'));
+    }
+
+    /** Load Website/Store/Channel identity fields for「基础信息」slot. */
+    #[Acl(
+        'Weline_Theme::theme_visual_editor',
+        '读取主题基础信息身份',
+        'eye',
+        '读取当前 Scope 的网站/店铺/渠道真实身份字段',
+        'Weline_Theme::theme_visual_editor',
+        accessMode: Acl::ACCESS_MODE_READ,
+    )]
+    public function getBrandBasicsIdentity()
+    {
+        return $this->fetchJson($this->brandBasicsIdentityPayload('load'));
+    }
+
+    /** Persist Website/Store/Channel identity fields from「基础信息」slot. */
+    #[Acl(
+        'Weline_Theme::theme_visual_editor_scope_edit',
+        '保存主题基础信息身份',
+        'edit',
+        '写回当前 Scope 的网站/店铺/渠道真实身份字段',
+        'Weline_Theme::theme_visual_editor',
+        accessMode: Acl::ACCESS_MODE_EDIT,
+    )]
+    public function postBrandBasicsIdentity()
+    {
+        return $this->fetchJson($this->brandBasicsIdentityPayload('save'));
+    }
+
+    /** @return array<string,mixed> */
+    private function brandBasicsIdentityPayload(string $operation): array
+    {
+        try {
+            $input = $this->getEditorJsonPayload();
+            /** @var \Weline\Theme\Service\BrandBasicsIdentityService $service */
+            $service = ObjectManager::getInstance(\Weline\Theme\Service\BrandBasicsIdentityService::class);
+            $data = match ($operation) {
+                'load' => $service->loadFromInput($input),
+                'save' => $service->saveFromInput($input),
+                default => throw new \InvalidArgumentException('theme_brand_basics_identity_operation_invalid'),
+            };
+
+            return ['success' => true, 'data' => $data];
+        } catch (\Throwable $e) {
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
     }
 
     /** @return array<string,mixed> */
@@ -1028,19 +1073,32 @@ class ThemeEditor extends BackendController
         unset($flatWidget);
 
         $total = count($flat);
-        $slice = array_slice($flat, $offset, $limit);
-        foreach ($slice as &$widget) {
-            $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget, $theme, $editorArea);
+        // Slot 模式：一次返回该槽全部兼容部件（供推荐/搜索）；默认逛库仍分页。
+        // 全量时不批量渲染 preview_html（贵且易打满连接池）；眼睛按钮按需预览。
+        $slotFull = $slotId !== '';
+        if ($slotFull) {
+            $offset = 0;
+            $slice = $flat;
+            $responseLimit = $total > 0 ? $total : $limit;
+            $hasMore = false;
+        } else {
+            $slice = array_slice($flat, $offset, $limit);
+            $responseLimit = $limit;
+            $hasMore = ($offset + $limit) < $total;
+            foreach ($slice as &$widget) {
+                $widget['preview_html'] = $this->buildWidgetPreviewHtml($widget, $theme, $editorArea);
+            }
+            unset($widget);
         }
-        unset($widget);
 
         return $this->fetchJson([
             'success' => true,
             'items' => $slice,
             'total' => $total,
             'offset' => $offset,
-            'limit' => $limit,
-            'has_more' => ($offset + $limit) < $total,
+            'limit' => $responseLimit,
+            'has_more' => $hasMore,
+            'slot_full' => $slotFull ? 1 : 0,
             'slot_id' => $slotId,
             'keyword' => $keyword,
             'library_tabs' => $libraryTabs,
@@ -2672,6 +2730,7 @@ class ThemeEditor extends BackendController
     /**
      * 恢复跟随全局页头/页脚。
      * 路由: POST theme/backend/theme-editor/restore-chrome
+     * 可选：all_non_carrier=1 清空同 identity 下全部非载体布局的本地 chrome。
      */
     public function postRestoreChrome()
     {
@@ -2681,16 +2740,20 @@ class ThemeEditor extends BackendController
             $areas = isset($data['areas']) && \is_array($data['areas']) ? $data['areas'] : null;
             /** @var SharedChromeService $chrome */
             $chrome = ObjectManager::getInstance(SharedChromeService::class);
-            $result = $chrome->restore(
-                $context,
-                $areas,
-                'backend-user:' . (string)($this->session->getUserId() ?? 0),
-                (string)($this->session->getUsername() ?? ''),
-            );
+            $actorId = 'backend-user:' . (string)($this->session->getUserId() ?? 0);
+            $actorName = (string)($this->session->getUsername() ?? '');
+            $allNonCarrier = !empty($data['all_non_carrier'])
+                || !empty($data['restore_all'])
+                || (string)($data['scope'] ?? '') === 'all_non_carrier';
+            $result = $allNonCarrier
+                ? $chrome->restoreNonCarrierLayouts($context, null, $areas, $actorId, $actorName)
+                : $chrome->restore($context, $areas, $actorId, $actorName);
 
             return $this->fetchJson([
                 'success' => true,
-                'message' => __('已恢复跟随全局页头/页脚'),
+                'message' => $allNonCarrier
+                    ? __('已恢复全部布局跟随全局页头/页脚')
+                    : __('已恢复跟随全局页头/页脚'),
                 'data' => $result,
                 'scoped_workspace' => $result['workspace'] ?? null,
             ]);
@@ -3336,6 +3399,9 @@ class ThemeEditor extends BackendController
                     'layout_options_by_type' => $this->compactEditorLayoutOptions($layoutOptionsByType),
                 ],
             ];
+        } catch (ResponseTerminateException $e) {
+            // query-bin / fetchJson 终止不可吞成「Response terminate with status 200」业务失败
+            throw $e;
         } catch (\Throwable $e) {
             return [
                 'success' => false,
@@ -3399,6 +3465,8 @@ class ThemeEditor extends BackendController
                     'layout_options_by_type' => $this->compactEditorLayoutOptions($layoutOptionsByType),
                 ],
             ];
+        } catch (ResponseTerminateException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             return [
                 'success' => false,
@@ -3471,6 +3539,8 @@ class ThemeEditor extends BackendController
                     'form_html' => $formHtml,
                 ],
             ];
+        } catch (ResponseTerminateException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             return [
                 'success' => false,
@@ -3533,6 +3603,8 @@ class ThemeEditor extends BackendController
                     'config' => $validatedConfig,
                 ],
             ];
+        } catch (ResponseTerminateException $e) {
+            throw $e;
         } catch (\Throwable $e) {
             return [
                 'success' => false,

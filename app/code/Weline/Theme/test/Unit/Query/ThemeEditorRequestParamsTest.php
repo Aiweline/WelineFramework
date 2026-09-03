@@ -253,6 +253,9 @@ class ThemeEditorRequestParamsTest extends TestCore
             "'/theme/backend/theme-editor/reconcile-required-defaults'" => 'postReconcileRequiredDefaults()',
             "'/theme/backend/theme-editor/apply-required-defaults'" => 'postApplyRequiredDefaults()',
             "'/theme/backend/theme-editor/widget-field-i18n'" => 'getWidgetFieldI18n()',
+            "'/theme/backend/theme-editor/chrome-mode'" => 'getChromeMode()',
+            "'/theme/backend/theme-editor/detach-chrome'" => 'postDetachChrome()',
+            "'/theme/backend/theme-editor/restore-chrome'" => 'postRestoreChrome()',
             "'/theme/backend/ai/agents'" => 'createDirectThemeAi()->getAgents()',
             "'/theme/backend/ai/publish'" => 'createDirectThemeAi()->postPublish()',
             "'/theme/backend/ai/prepare-refine'" => 'createDirectThemeAi()->postPrepareRefine()',
@@ -261,6 +264,7 @@ class ThemeEditorRequestParamsTest extends TestCore
             self::assertStringContainsString($handler, $provider, $handler);
         }
 
+        self::assertStringContainsString("postChromeMode()", $provider);
         self::assertStringContainsString("'/theme/backend/ai/'", $provider);
     }
 }

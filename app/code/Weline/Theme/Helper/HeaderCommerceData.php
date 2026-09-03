@@ -6,6 +6,7 @@ namespace Weline\Theme\Helper;
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Search\Service\SearchProviderRegistry;
+use Weline\Theme\Service\AllMenu\AllMenuTreeRegistry;
 
 /**
  * 页头商务数据：优先 Query 真实数据；仅在无数据/不可用时回落主题演示默认值。
@@ -17,25 +18,33 @@ final class HeaderCommerceData
      */
     public static function defaultHotWords(): array
     {
-        return ['iPhone', '耳机', '运动鞋', '连衣裙', '笔记本'];
+        return ['马面裙', '明制汉服', '宋制汉服', '齐胸襦裙', '汉服配饰'];
     }
 
     /**
      * 横向分类条 / 分类部件：优先万能分类 product space 店面树。
+     * 是否前置「全部商品」由 all-menu 默认部件经 AllMenuTreeRegistry 发布（默认开启，可关）。
      *
+     * @param array{include_all_products?:bool,all_products_label?:string,all_products_url?:string} $options
      * @return array{
      *   items:list<array<string,mixed>>,
      *   source:string,
      *   is_demo:bool
      * }
      */
-    public static function resolveCategoryNavItems(): array
+    public static function resolveCategoryNavItems(array $options = []): array
     {
+        $include = array_key_exists('include_all_products', $options)
+            ? (bool)$options['include_all_products']
+            : AllMenuTreeRegistry::allProductsEnabled();
+        $label = trim((string)($options['all_products_label'] ?? AllMenuTreeRegistry::allProductsLabel()));
+        $url = trim((string)($options['all_products_url'] ?? AllMenuTreeRegistry::allProductsUrl()));
+
         try {
             if (!\class_exists(\Weline\Product\Service\StorefrontAllMenuCategoryTreeService::class)) {
                 return [
-                    'items' => [],
-                    'source' => 'unavailable',
+                    'items' => self::maybePrependAllProductsItem([], $include, $label, $url),
+                    'source' => $include ? 'products_catalog' : 'unavailable',
                     'is_demo' => false,
                 ];
             }
@@ -46,8 +55,8 @@ final class HeaderCommerceData
             $tree = $service->navTree(self::resolveWebsiteId());
             if ($tree === []) {
                 return [
-                    'items' => [],
-                    'source' => 'catalog_empty',
+                    'items' => self::maybePrependAllProductsItem([], $include, $label, $url),
+                    'source' => $include ? 'products_catalog' : 'catalog_empty',
                     'is_demo' => false,
                 ];
             }
@@ -55,24 +64,75 @@ final class HeaderCommerceData
             $items = $normalizer->toNavItems($tree);
             if ($items === []) {
                 return [
-                    'items' => [],
-                    'source' => 'catalog_empty',
+                    'items' => self::maybePrependAllProductsItem([], $include, $label, $url),
+                    'source' => $include ? 'products_catalog' : 'catalog_empty',
                     'is_demo' => false,
                 ];
             }
 
             return [
-                'items' => $items,
+                'items' => self::maybePrependAllProductsItem($items, $include, $label, $url),
                 'source' => 'catalog',
                 'is_demo' => false,
             ];
         } catch (\Throwable) {
             return [
-                'items' => [],
-                'source' => 'error',
+                'items' => self::maybePrependAllProductsItem([], $include, $label, $url),
+                'source' => $include ? 'products_catalog' : 'error',
                 'is_demo' => false,
             ];
         }
+    }
+
+    /**
+     * @param list<array<string,mixed>> $items
+     * @return list<array<string,mixed>>
+     */
+    public static function prependProductsCatalogItem(
+        array $items,
+        string $label = '全部商品',
+        string $url = '/products',
+        string $description = '浏览全部已发布商品',
+    ): array {
+        return self::maybePrependAllProductsItem($items, true, $label, $url, $description);
+    }
+
+    /**
+     * @param list<array<string,mixed>> $items
+     * @return list<array<string,mixed>>
+     */
+    public static function maybePrependAllProductsItem(
+        array $items,
+        bool $include,
+        string $label = '全部商品',
+        string $url = '/products',
+        string $description = '浏览全部已发布商品',
+    ): array {
+        if (!$include) {
+            return $items;
+        }
+
+        $label = trim($label) !== '' ? trim($label) : '全部商品';
+        $url = trim($url);
+        if ($url === '' || $url === '#') {
+            $url = '/products';
+        }
+        $description = trim($description) !== '' ? trim($description) : '浏览全部已发布商品';
+
+        $firstText = trim((string)($items[0]['text'] ?? $items[0]['name'] ?? ''));
+        $firstUrl = trim((string)($items[0]['url'] ?? ''));
+        if ($firstText === $label || preg_match('#(^|/)products/?$#', $firstUrl) === 1) {
+            return $items;
+        }
+
+        array_unshift($items, [
+            'text' => $label,
+            'url' => $url,
+            'description' => $description,
+            'children' => [],
+        ]);
+
+        return $items;
     }
 
     private static function resolveWebsiteId(): int

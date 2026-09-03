@@ -94,13 +94,30 @@ $resolveSlideBackground = static function (array $slide, int $index) use ($defau
 // 无运营配置时提供可直接上线的汉服视觉；图片不烘焙文字，文案按当前 storefront locale 输出。
 $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
 $currentLocale = trim(\Weline\Framework\App\State::getLangLocal());
-$isEnglish = str_starts_with(strtolower($currentLocale), 'en')
-    || preg_match('#/en_US(?:/|$)#', $requestUri) === 1;
+if ($currentLocale === ''
+    && preg_match('#/([a-z]{2}(?:_[A-Za-z]{2,4}){1,2})(?:/|$)#', $requestUri, $localeMatch) === 1
+) {
+    $currentLocale = (string)$localeMatch[1];
+}
+$normalizedLocale = strtolower(str_replace('_', '-', $currentLocale));
+$isChineseLocale = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
+$translateDefaultCopy = static function (string $source, string $english) use ($isChineseLocale): string {
+    try {
+        $translated = trim((string)\Weline\Theme\Helper\WidgetI18n::label($source));
+    } catch (\Throwable) {
+        $translated = $source;
+    }
+    if ($translated !== '' && $translated !== $source) {
+        return $translated;
+    }
+
+    return $isChineseLocale ? $source : $english;
+};
 $heroImage = static function (string $slug, string $alt, bool $priority = false) use ($esc): string {
     $desktop = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '.webp';
     $mobile = '/pub/media/catalog/hanfu/r2/homepage/' . $slug . '-mobile.webp';
     return '<picture>'
-        . '<source media="(max-width: 768px)" srcset="' . $esc($mobile) . '">'
+        . '<source media="(max-width: 768px)" srcset="' . $esc($mobile) . '" />'
         . '<img src="' . $esc($desktop) . '" alt="' . $esc($alt) . '" '
         . 'loading="' . ($priority ? 'eager' : 'lazy') . '" decoding="async"'
         . ($priority ? ' fetchpriority="high"' : '')
@@ -118,7 +135,7 @@ if (empty($slides)) {
             'subtitle_en' => 'Ivory and blush florals, with top and mamian options',
             'alt_zh' => '桃园清梦米白粉色明制上衣与马面裙套装',
             'alt_en' => 'Peach Garden Dream ivory-and-pink Ming-style top and mamian set',
-            'link' => '/product/taoyuan-qingmeng',
+            'link' => '/products',
         ],
         [
             'slug' => 'shenlong-yin',
@@ -128,7 +145,7 @@ if (empty($slides)) {
             'subtitle_en' => 'Black-and-red zhuanghua, with mamian and feijixiu options',
             'alt_zh' => '神龙吟黑红妆花明制马面裙造型',
             'alt_en' => 'Dragon Chant black-and-red zhuanghua Ming-style mamian look',
-            'link' => '/product/shenlong-yin-zhuanghua-mamian',
+            'link' => '/products',
         ],
         [
             'slug' => 'zuimeng-xifeng',
@@ -138,21 +155,21 @@ if (empty($slides)) {
             'subtitle_en' => 'Crane brocade, available as a skirt or coordinated set',
             'alt_zh' => '醉梦夕风深色仙鹤织金马面裙造型',
             'alt_en' => 'Evening Wind dark crane-brocade mamian look',
-            'link' => '/product/zuimeng-xifeng-xianhe-mamian',
+            'link' => '/products',
         ],
     ];
     $slides = [];
     foreach ($defaults as $index => $default) {
         $slides[] = [
             'gradient' => $defaultGradients[$index],
-            'title' => $isEnglish ? $default['title_en'] : $default['title_zh'],
-            'subtitle' => $isEnglish ? $default['subtitle_en'] : $default['subtitle_zh'],
-            'button_text' => $isEnglish ? 'View product' : '查看商品',
+            'title' => $translateDefaultCopy($default['title_zh'], $default['title_en']),
+            'subtitle' => $translateDefaultCopy($default['subtitle_zh'], $default['subtitle_en']),
+            'button_text' => $translateDefaultCopy('浏览系列', 'Explore collection'),
             'link' => $default['link'],
             'text_position' => 'left',
             'image_file_html' => $heroImage(
                 $default['slug'],
-                $isEnglish ? $default['alt_en'] : $default['alt_zh'],
+                $translateDefaultCopy($default['alt_zh'], $default['alt_en']),
                 $index === 0,
             ),
         ];
@@ -175,8 +192,13 @@ if (empty($slides)) {
                     $textPosition = 'left';
                 }
                 $slideLink = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($slide['link'] ?? '#');
-                if ($slideLink === '') {
+                if ($slideLink === '' || $slideLink === '#') {
                     $slideLink = '#';
+                } else {
+                    $slideLinkParts = \Weline\Theme\Helper\ProductCardUrl::splitForTaglib($slideLink);
+                    $slideLink = $slideLinkParts['url'] !== ''
+                        ? $slideLinkParts['url']
+                        : ($slideLinkParts['url_path'] !== '' ? $this->getUrl($slideLinkParts['url_path']) : '#');
                 }
                 ?>
                 <div class="slide <?= $index === 0 ? 'active' : '' ?>" 
@@ -225,7 +247,6 @@ if (empty($slides)) {
             </div>
         <?php endif; ?>
     </div>
-</section>
 
 <style>
 .<?= $wc ?> {
@@ -311,6 +332,18 @@ if (empty($slides)) {
     padding: 0 10%;
 }
 
+.<?= $wc ?> .slide-text {
+    box-sizing: border-box;
+    width: 100%;
+    max-width: var(--size-content-640);
+    padding: var(--weline-space-6);
+    background: color-mix(in srgb, var(--weline-theme-surface-raised) 92%, transparent);
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border-color);
+    border-radius: var(--weline-theme-radius-xl);
+    box-shadow: var(--weline-theme-shadow-lg);
+    backdrop-filter: blur(var(--spacing-sm));
+}
+
 .<?= $wc ?> .text-left .slide-text {
     text-align: left;
 }
@@ -332,19 +365,19 @@ if (empty($slides)) {
 }
 
 .<?= $wc ?> .slide-title {
-    font-size: var(--spacing-2xl);
+    font-size: var(--weline-layout-font-size-4xl);
     font-weight: 700;
-    color: var(--weline-theme-on-primary);
+    color: var(--weline-theme-text);
     margin: 0 0 var(--spacing-3_5);
-    text-shadow: 0 var(--spacing-0_5) var(--spacing-sm) color-mix(in srgb, var(--weline-theme-overlay) 40%, transparent);
+    text-shadow: none;
     animation: heroSlideUp 0.6s ease forwards;
 }
 
 .<?= $wc ?> .slide-subtitle {
-    font-size: var(--font-size-xl);
-    color: color-mix(in srgb, var(--weline-theme-on-primary) 90%, transparent);
+    font-size: var(--weline-layout-font-size-xl);
+    color: var(--weline-theme-text-secondary);
     margin: 0 0 var(--weline-space-8);
-    text-shadow: 0 var(--spacing-px) var(--spacing-xs) color-mix(in srgb, var(--weline-theme-overlay) 35%, transparent);
+    text-shadow: none;
     animation: heroSlideUp 0.6s 0.2s ease forwards;
     opacity: 0;
 }
@@ -357,7 +390,7 @@ if (empty($slides)) {
     text-decoration: none;
     border-radius: var(--weline-radius-round);
     font-weight: 600;
-    font-size: var(--font-size-base);
+    font-size: var(--weline-layout-font-size-base);
     transition: all var(--weline-theme-transition-base);
     animation: heroSlideUp 0.6s 0.4s ease forwards;
     opacity: 0;
@@ -451,16 +484,21 @@ if (empty($slides)) {
     }
 
     .<?= $wc ?> .slide-content {
-        align-items: flex-start;
-        padding: var(--weline-space-8) var(--weline-space-5);
+        align-items: flex-end;
+        padding: var(--weline-space-8) var(--weline-space-5) var(--weline-space-12);
+    }
+
+    .<?= $wc ?> .slide-text {
+        max-width: var(--size-content-640);
+        padding: var(--weline-space-5);
     }
 
     .<?= $wc ?> .slide-title {
-        font-size: var(--font-size-4xl);
+        font-size: var(--weline-layout-font-size-2xl);
     }
     
     .<?= $wc ?> .slide-subtitle {
-        font-size: var(--font-size-base);
+        font-size: var(--weline-layout-font-size-base);
     }
     
     .<?= $wc ?> .slide-button {
@@ -469,8 +507,10 @@ if (empty($slides)) {
     }
     
     .<?= $wc ?> .slider-arrow {
+        top: var(--weline-space-8);
         width: var(--size-control-md);
         height: var(--size-control-md);
+        transform: none;
     }
 }
 </style>
@@ -576,3 +616,4 @@ if (empty($slides)) {
     startAutoplay();
 })();
 </script>
+</section>

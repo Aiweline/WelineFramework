@@ -173,7 +173,7 @@
             '[data-qty-increase]',
             '[data-qty-input]',
             '[data-remove-item]',
-            '[data-action="add-v2"]',
+            '[data-action="add"]',
             '[data-action="add"]',
             '[data-action="wishlist-toggle"]',
             '[data-action="compare-toggle"]',
@@ -1194,6 +1194,10 @@
      * @param {HTMLElement} slot - 插槽元素
      */
     function selectSlot(slot) {
+        // 部件模式只触发部件，不激活插槽。
+        if (isWidgetSelectionTarget()) {
+            return;
+        }
         const slotData = buildSlotSelectionPayload(slot);
         if (!slotData) {
             return;
@@ -2028,6 +2032,10 @@ function notify(type, detail = {}) {
 }
 
 function selectSlot(slot) {
+    // 部件模式只触发部件，不激活插槽。
+    if (root.dataset.wEditorSelectionTarget === 'widget') {
+        return;
+    }
     document.querySelectorAll('[data-wslot][data-state="selected"]').forEach((candidate) => {
         if (candidate !== slot) candidate.removeAttribute('data-state');
     });

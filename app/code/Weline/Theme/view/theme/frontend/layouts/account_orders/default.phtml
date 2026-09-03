@@ -43,14 +43,17 @@
 
 .account-orders__main {
     flex: 1;
-    padding: var(--weline-layout-spacing-lg);
+    min-width: 0;
+    padding: var(--weline-layout-spacing-lg) var(--weline-layout-content-padding-inline);
     display: flex;
     justify-content: center;
 }
 
 .account-orders__container {
-    width: 100%;
-    max-width: var(--weline-layout-content-max-width);
+    box-sizing: border-box;
+    width: min(100%, var(--weline-layout-content-max-width));
+    max-width: 100%;
+    margin-inline: auto;
 }
 
 .account-orders__filters {

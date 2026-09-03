@@ -19,5 +19,18 @@ return [
                 ],
             ],
         ],
+        'BrandBasicsIdentity' => [
+            'path' => 'extends/module/Weline_Theme/BrandBasicsIdentity',
+            'interface' => 'Weline\Theme\Api\BrandBasicsIdentityProviderInterface',
+            'description' => 'Theme Editor brand-basics identity slot. Modules attach real Website/Store/Channel name & description; register via provides theme.brand_basics_identity.* or this extends path.',
+            'required' => false,
+            'multiple' => true,
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Theme/BrandBasicsIdentity/{Provider}.php',
+                    'example' => 'app/code/Weline/Websites/Service/ThemeBrandBasicsIdentityProvider.php',
+                ],
+            ],
+        ],
     ],
 ];

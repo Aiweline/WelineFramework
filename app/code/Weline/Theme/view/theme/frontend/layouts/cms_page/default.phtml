@@ -142,7 +142,8 @@ $isEditorPreview = (bool)($this->getData('editor_mode') ?? false)
     }
     
     .container {
-        max-width: var(--weline-layout-content-max-width);
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
         margin: 0 auto;
         padding: 0 var(--weline-layout-content-padding-inline);
         box-sizing: border-box;

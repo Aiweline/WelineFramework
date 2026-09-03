@@ -1,0 +1,237 @@
+<?php
+/**
+ * Header 横向分类条（Amazon chrome）：一级 mega + overflow「更多」。
+ * 由 category-menu 部件默认注入；Theme header partial 禁止内嵌同结构。
+ *
+ * @var list<array<string,mixed>> $items
+ * @var callable(string):string|null $esc
+ * @var callable(string):string|null $esc_desc
+ * @var bool|null $show_banner_with_children
+ */
+use Weline\Theme\Helper\HeaderNavFragment;
+use Weline\Theme\Helper\WidgetI18n;
+
+$items = is_array($items ?? null) ? $items : [];
+$showBannerWithChildren = $show_banner_with_children ?? true;
+if (is_string($showBannerWithChildren)) {
+    $normalized = strtolower(trim($showBannerWithChildren));
+    $showBannerWithChildren = !in_array($normalized, ['0', 'false', 'no', 'off', ''], true);
+} else {
+    $showBannerWithChildren = (bool)$showBannerWithChildren;
+}
+
+$headerCategoryService = null;
+try {
+    if (class_exists(\WeShop\Catalog\Service\CategoryService::class)) {
+        $headerCategoryService = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \WeShop\Catalog\Service\CategoryService::class
+        );
+    }
+} catch (\Throwable) {
+    $headerCategoryService = null;
+}
+
+$headerCapitalize = static function (string $label): string {
+    if ($label === '') {
+        return '';
+    }
+    if (function_exists('mb_substr') && function_exists('mb_strtoupper')) {
+        $first = mb_substr($label, 0, 1, 'UTF-8');
+        if ($first === '') {
+            return $label;
+        }
+
+        return mb_strtoupper($first, 'UTF-8') . mb_substr($label, 1, null, 'UTF-8');
+    }
+
+    return ucfirst($label);
+};
+
+$defaultEsc = is_callable($esc ?? null)
+    ? $esc
+    : static function ($value) use ($headerCategoryService, $headerCapitalize): string {
+        $key = trim((string)($value ?? ''));
+        if ($key === '') {
+            return '';
+        }
+        try {
+            $widgetLabel = WidgetI18n::label($key);
+            if ($widgetLabel !== '' && $widgetLabel !== $key) {
+                return htmlspecialchars($headerCapitalize($widgetLabel), ENT_QUOTES, 'UTF-8');
+            }
+        } catch (\Throwable) {
+        }
+        if ($headerCategoryService instanceof \WeShop\Catalog\Service\CategoryService) {
+            $categoryLabel = $headerCategoryService->localizeCategoryDisplayName($key);
+            if ($categoryLabel !== '' && $categoryLabel !== $key) {
+                return htmlspecialchars($headerCapitalize($categoryLabel), ENT_QUOTES, 'UTF-8');
+            }
+        }
+        $translated = (string)__($key);
+
+        return htmlspecialchars($headerCapitalize($translated !== '' ? $translated : $key), ENT_QUOTES, 'UTF-8');
+    };
+
+$defaultEscDesc = is_callable($esc_desc ?? null)
+    ? $esc_desc
+    : static function ($value) use ($headerCategoryService): string {
+        $key = trim((string)($value ?? ''));
+        if ($key === '') {
+            return '';
+        }
+        try {
+            $widgetLabel = WidgetI18n::label($key);
+            if ($widgetLabel !== '' && $widgetLabel !== $key) {
+                return htmlspecialchars($widgetLabel, ENT_QUOTES, 'UTF-8');
+            }
+        } catch (\Throwable) {
+        }
+        if ($headerCategoryService instanceof \WeShop\Catalog\Service\CategoryService
+            && method_exists($headerCategoryService, 'localizeCategoryDescription')) {
+            $categoryDescription = (string)$headerCategoryService->localizeCategoryDescription($key);
+            if ($categoryDescription !== '' && $categoryDescription !== $key) {
+                return htmlspecialchars($categoryDescription, ENT_QUOTES, 'UTF-8');
+            }
+        }
+        $translated = (string)__($key);
+
+        return htmlspecialchars($translated !== '' ? $translated : $key, ENT_QUOTES, 'UTF-8');
+    };
+
+$headerLocalizeUrl = static function (string $url): string {
+    return HeaderNavFragment::localizeHref($url);
+};
+
+/** @var \Weline\Framework\View\Template $template */
+$template = $this;
+
+$renderMenuItem = null;
+$renderMenuItem = static function ($item, $level = 1) use (
+    &$renderMenuItem,
+    $defaultEsc,
+    $defaultEscDesc,
+    $headerLocalizeUrl,
+    $showBannerWithChildren,
+    $template
+) {
+    if (!is_array($item)) {
+        return;
+    }
+    $hasChildren = !empty($item['children']) && is_array($item['children']);
+    $text = (string)($item['text'] ?? $item['name'] ?? '');
+    $url = $headerLocalizeUrl((string)($item['url'] ?? '#'));
+    if (!$hasChildren):
+        ?>
+        <li class="category-item">
+            <a href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>" class="category-link" data-nav-localized="1">
+                <?= $defaultEsc($text) ?>
+            </a>
+        </li>
+        <?php
+        return;
+    endif;
+
+    if ($level === 1):
+        $panelId = 'mega-menu-' . preg_replace('/[^a-z0-9_-]+/i', '-', strtolower($text));
+        $panelId = trim((string)$panelId, '-');
+        if ($panelId === '' || $panelId === 'mega-menu') {
+            $panelId = 'mega-menu-' . substr(md5($text . '|' . $url), 0, 10);
+        }
+        ?>
+        <li class="category-item has-children category-item--mega"
+            data-w-component="popover"
+            data-w-open-on="hover"
+            data-w-placement="bottom-start">
+            <div class="category-link-wrapper"
+                 data-w-popover-trigger
+                 aria-haspopup="dialog"
+                 aria-expanded="false">
+                <a href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>"
+                   class="category-link">
+                    <?= $defaultEsc($text) ?>
+                </a>
+                <span class="category-arrow" aria-hidden="true"></span>
+            </div>
+            <?= HeaderNavFragment::fetchMegaMenuPanel($template, [
+                'item' => $item,
+                'panel_id' => $panelId,
+                'esc' => $defaultEsc,
+                'esc_desc' => $defaultEscDesc,
+                'show_banner_with_children' => $showBannerWithChildren,
+            ]) ?>
+        </li>
+        <?php
+        return;
+    endif;
+    ?>
+    <li class="category-item has-children"
+        data-w-component="popover"
+        data-w-open-on="hover"
+        data-w-placement="right-start">
+        <div class="category-link-wrapper"
+             data-w-popover-trigger
+             aria-haspopup="dialog"
+             aria-expanded="false">
+            <a href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>"
+               class="category-link">
+                <?= $defaultEsc($text) ?>
+            </a>
+            <span class="category-arrow" aria-hidden="true"></span>
+        </div>
+        <div class="w-popover header-category-panel w-surface-body is-flyout"
+             data-surface="body"
+             data-w-popover-panel
+             role="dialog"
+             data-state="closed"
+             aria-hidden="true"
+             hidden>
+            <ul class="header-category-panel__list" role="list">
+                <?php foreach ($item['children'] as $child): ?>
+                    <?php $renderMenuItem($child, $level + 1); ?>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+    </li>
+    <?php
+};
+?>
+<nav class="categories-nav" aria-label="<?= $defaultEsc('分类导航') ?>" data-testid="header-category-menu">
+    <ul class="categories-list" id="categories-list">
+        <?php foreach ($items as $item): ?>
+            <?php $renderMenuItem($item); ?>
+        <?php endforeach; ?>
+        <li class="categories-overflow-wrapper"
+            id="categories-overflow-wrapper"
+            data-w-component="popover"
+            data-w-open-on="hover"
+            data-w-placement="bottom-start"
+            style="display: none;">
+            <button class="categories-overflow-btn w-button"
+                    id="categories-overflow-btn"
+                    type="button"
+                    data-w-popover-trigger
+                    data-tone="quiet"
+                    aria-haspopup="dialog"
+                    aria-expanded="false"
+                    aria-label="<?= $defaultEsc('更多分类') ?>">
+                <span><?= $defaultEsc('更多') ?></span>
+                <i class="fas fa-chevron-down" aria-hidden="true"></i>
+            </button>
+            <div class="w-popover w-mega-menu w-mega-menu--split header-category-panel categories-overflow-panel w-surface-body is-megamenu is-mega-panel-split"
+                 data-w-component="mega-menu"
+                 data-surface="body"
+                 data-w-popover-panel
+                 data-w-mega-menu
+                 data-mega-menu
+                 data-w-gap="0"
+                 role="dialog"
+                 data-state="closed"
+                 aria-hidden="true"
+                 hidden>
+                <div class="mega-menu-layout"
+                     id="categories-overflow-dropdown"
+                     role="presentation"></div>
+            </div>
+        </li>
+    </ul>
+</nav>

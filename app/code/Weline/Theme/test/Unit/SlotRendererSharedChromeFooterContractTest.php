@@ -36,14 +36,12 @@ final class SlotRendererSharedChromeFooterContractTest extends TestCase
         self::assertGreaterThan($mergeLayoutPos, $mergeChromePos);
     }
 
-    public function testSharedChromeMergeFillsEmptyHeaderAndFooterFromGlobalCarrier(): void
+    public function testSharedChromeMergeFillsEmptyChromeSlotsFromGlobalCarrier(): void
     {
         $src = $this->readService();
 
-        self::assertMatchesRegularExpression(
-            '/function mergeSharedChromeSlotWidgets\([\s\S]*?\$chromeSlots\s*=\s*\[\s*[\'"]header[\'"]\s*,\s*[\'"]footer[\'"]\s*\]/',
-            $src
-        );
+        self::assertStringContainsString('function mergeSharedChromeSlotWidgets(', $src);
+        self::assertStringContainsString('function slotWidgetsBelongToSharedChrome(', $src);
         self::assertStringContainsString('if ($pageType === ThemeLayout::PAGE_TYPE_HOME)', $src);
         self::assertStringContainsString('if (empty($slotWidgets[$slotId]))', $src);
         self::assertStringContainsString(
@@ -51,5 +49,6 @@ final class SlotRendererSharedChromeFooterContractTest extends TestCase
             $src
         );
         self::assertStringContainsString('存储载体，不是归属', $src);
+        self::assertStringContainsString("\$widgetArea === 'header' || \$widgetArea === 'footer'", $src);
     }
 }

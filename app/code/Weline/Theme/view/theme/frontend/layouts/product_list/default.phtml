@@ -130,10 +130,11 @@ $this->assign('meta', $meta);
                                         multiple="true"
                                         position="sidebar">
                                     <w:hook>Weline_Theme::frontend::layouts::product-list::filters-before</w:hook>
-                                    <?php
-                                    // 必须运行时 getHook：禁止 w:widget 在布局编译期把 filters-sidebar 输出写死。
-                                    echo $this->getHook('Weline_Theme::frontend::layouts::product-list::filters-sidebar', true);
-                                    ?>
+                                    <!-- 仅 slot + 预览占位；筛选由 Weline_Filters category-filters 经 default_injections 注入 -->
+                                    <div class="product-list-layout__placeholder slot-placeholder"
+                                         data-placeholder="list-filters">
+                                        <span class="product-list-layout__placeholder-text"><lang>筛选器区域 - 由 Filters 部件默认注入</lang></span>
+                                    </div>
                                     <w:hook>Weline_Theme::frontend::layouts::product-list::filters-after</w:hook>
                                 </w:slot>
                             </div>
@@ -283,10 +284,10 @@ $this->assign('meta', $meta);
     }
 
     .product-list-layout__container {
-        width: 100%;
-        max-width: var(--weline-layout-content-max-width, 1400px);
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline);
         box-sizing: border-box;
         display: grid;
         grid-template-columns: 240px minmax(0, 1fr);

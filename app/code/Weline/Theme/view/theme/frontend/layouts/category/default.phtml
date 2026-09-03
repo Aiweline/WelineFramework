@@ -123,17 +123,11 @@ $this->assign('title', $title);
                                         multiple="true"
                                         position="sidebar">
                                     <w:hook>Weline_Theme::frontend::layouts::category::filters-before</w:hook>
-                                    <w:hook>Weline_Theme::frontend::layouts::category::subcategories-filter</w:hook>
-                                    <if condition="meta.filter_sidebar">
-                                        {{meta.filter_sidebar}}
-                                    <elseif condition="filter_sidebar"/>
-                                        {{filter_sidebar}}
-                                    <else/>
-                                        <?php
-                                        // 必须运行时 getHook：禁止 w:widget 在布局编译期把 filters-sidebar 输出写死（会串分类）。
-                                        echo $this->getHook('Weline_Theme::frontend::layouts::category::filters-sidebar', true);
-                                        ?>
-                                    </if>
+                                    <!-- 仅 slot + 预览占位；筛选由 Weline_Filters category-filters 经 default_injections 注入，禁止布局 getHook/内嵌 w:widget 占槽 -->
+                                    <div class="category-layout__placeholder slot-placeholder"
+                                         data-placeholder="category-filters">
+                                        <span class="category-layout__placeholder-text"><lang>分类筛选区域 - 由 Filters 部件默认注入</lang></span>
+                                    </div>
                                     <w:hook>Weline_Theme::frontend::layouts::category::filters-after</w:hook>
                                 </w:slot>
                             </div>
@@ -258,10 +252,10 @@ $this->assign('title', $title);
        ======================================== */
 
     .category-layout__recommendations {
-        width: 100%;
-        max-width: var(--weline-layout-content-max-width, 1400px);
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
         margin: 0 auto;
-        padding: 0 var(--weline-layout-content-padding-inline, 1.5rem) var(--spacing-5, 1.25rem);
+        padding: 0 var(--weline-layout-content-padding-inline) var(--spacing-5, 1.25rem);
         box-sizing: border-box;
     }
 
@@ -273,14 +267,14 @@ $this->assign('title', $title);
     }
 
     .category-layout__container {
-        width: 100%;
-        max-width: var(--weline-layout-content-max-width, 1400px);
+        width: min(100%, var(--weline-layout-content-max-width));
+        max-width: 100%;
         margin: 0 auto;
         display: grid;
         grid-template-columns: 220px minmax(0, 1fr);
         gap: var(--spacing-4, 1rem);
         align-items: start;
-        padding: 0 var(--weline-layout-content-padding-inline, 1.5rem);
+        padding: 0 var(--weline-layout-content-padding-inline);
         box-sizing: border-box;
     }
 

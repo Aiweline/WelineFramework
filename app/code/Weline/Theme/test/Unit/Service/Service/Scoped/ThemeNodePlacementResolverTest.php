@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-namespace Weline\Theme\Test\Unit\Service\Scoped;
+namespace Weline\Theme\Test\Unit\Service\Service\Scoped;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Service\Scoped\ThemeNodePlacementResolver;

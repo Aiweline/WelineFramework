@@ -19,6 +19,9 @@ final class ThemeEditorRemoveWidgetScopedContractTest extends TestCase
         $editorJs = (string)file_get_contents(
             dirname(__DIR__, 2) . '/view/statics/ui/pages/weline-theme-editor.js'
         );
+        $writeService = (string)file_get_contents(
+            dirname(__DIR__, 2) . '/Service/Scoped/ThemeScopedLayoutWriteService.php'
+        );
 
         self::assertStringContainsString('removeScopedLayoutNodeFromWorkspace(', $controller);
         self::assertStringContainsString('resolveScopedNodeUidForRemoval(', $controller);
@@ -37,6 +40,9 @@ final class ThemeEditorRemoveWidgetScopedContractTest extends TestCase
             $controller,
         );
         self::assertStringContainsString('node_uid: nodeUid', $editorJs);
-        self::assertStringContainsString('layout_node_removed', $editorJs);
+        self::assertStringContainsString('queueRemovedLayoutNode(result', $editorJs);
+        self::assertStringContainsString('widgetEl.remove();', $editorJs);
+        self::assertStringContainsString("'op' => ThemePatchCommand::OP_REMOVE_NODE", $writeService);
+        self::assertStringContainsString("summary: 'layout_node_removed'", $writeService);
     }
 }

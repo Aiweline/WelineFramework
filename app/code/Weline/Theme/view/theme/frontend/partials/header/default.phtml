@@ -9,7 +9,7 @@
  * @meta.name {default="Header头部片段",name="Header头部片段",description="Header头部片段，用于描述片段的名称"}
  * @meta.description {default="页面头部区域（导航栏、Logo、搜索等）",name="页面头部区域（导航栏、Logo、搜索等）",description="页面头部区域（导航栏、Logo、搜索等），用于描述片段的用途"}
  * @param.logo {default="",name="Logo URL",description="Logo图片URL，用于设置头部Logo图片地址"}
- * @param.logoText {default="Weline",name="Logo文字",description="Logo文字，用于设置当Logo图片不存在时显示的文字"}
+ * @param.logoText {default="云裳 Hanfu Atelier",name="Logo文字",description="Logo文字，用于设置当Logo图片不存在时显示的文字"}
  * @param.logoHeight {default=50,name="Logo高度",description="Logo高度（像素），用于设置Logo图片的高度，宽度自适应"}
  * @param.navItems {default=[],name="导航项数组",description="导航项数组，用于设置头部导航菜单，格式：[{\"text\":\"菜单文字\",\"url\":\"菜单链接\"}]"}
  * @param.showSearch {default=true,name="是否显示搜索框",description="是否显示搜索框，用于控制搜索框的显示"}
@@ -26,7 +26,21 @@
 $meta = $this->getData('meta') ?? [];
 $layout = $this->getData('layout') ?? [];
 $logo = $meta['logo'] ?? '';
-$logoText = $meta['logoText'] ?? __('Weline');
+$configuredLogoText = trim((string)($meta['logoText'] ?? ''));
+$logoText = '云裳 Hanfu Atelier';
+try {
+    $siteBrandForName = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
+    if ($siteBrandForName instanceof \Weline\Theme\Helper\SiteBrand) {
+        $logoText = $siteBrandForName->resolveFrontendSiteName($configuredLogoText, '云裳 Hanfu Atelier');
+    } else {
+        $logoText = \Weline\Theme\Helper\WidgetI18n::label($configuredLogoText, '云裳 Hanfu Atelier');
+    }
+} catch (\Throwable) {
+    $logoText = \Weline\Theme\Helper\WidgetI18n::label($configuredLogoText, '云裳 Hanfu Atelier');
+}
+$logoWordmarkParts = preg_split('/\s+/u', trim($logoText), 2) ?: [];
+$logoWordmarkPrimary = (string)($logoWordmarkParts[0] ?? $logoText);
+$logoWordmarkSecondary = (string)($logoWordmarkParts[1] ?? '');
 $logoHeight = $meta['logoHeight'] ?? 50; // Logo高度，默认50px
 // navItems 可能在 hook 中被设置，先尝试从模板数据中获取，如果没有则从 meta 中获取
 $navItems = $this->getData('navItems') ?? $meta['navItems'] ?? [];
@@ -43,22 +57,24 @@ if (is_string($headerShowBannerWithChildren)) {
 }
 $class = $meta['class'] ?? '';
 
-// 默认 Logo：优先站点品牌配置，否则使用 Theme 模块现用标识
-$defaultLogoUrl = '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png';
+// 默认 Logo：优先商家已配置素材；未配置时展示可编辑的汉服文字品牌。
+$defaultLogoUrl = '';
+$themeFallbackLogoUrl = '/Weline/Theme/view/theme/frontend/assets/images/theme/logo.png';
 try {
     $siteBrand = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Theme\Helper\SiteBrand::class);
     if ($siteBrand instanceof \Weline\Theme\Helper\SiteBrand) {
         $resolvedLogo = $siteBrand->resolveFrontendLogoUrl($this);
-        if (is_string($resolvedLogo) && $resolvedLogo !== '') {
+        if (is_string($resolvedLogo) && $resolvedLogo !== '' && $resolvedLogo !== $themeFallbackLogoUrl) {
             $defaultLogoUrl = $resolvedLogo;
         }
     }
 } catch (\Throwable) {
-    // 保持 Theme 模块默认标识
+    // 站点品牌服务不可用时保留文字品牌兜底。
 }
 if ($logo === '' || $logo === null) {
     $logo = $defaultLogoUrl;
 }
+$hasLogo = is_string($logo) && trim($logo) !== '';
 
 $headerHot = \Weline\Theme\Helper\HeaderCommerceData::resolveHotWords(8);
 $headerHotWords = $headerHot['words'] ?? [];
@@ -87,9 +103,28 @@ $headerFlattenNavForEditor = static function (array $items): array {
     return $out;
 };
 
-// 性能极客模式：颜色变量已在ControllerFetchFileBefore事件中统一处理
-// 直接使用colors数组，无需重复读取和处理
-$colors = $this->getData('colors') ?? [];
+// 页头默认只消费已登记的语义 Token；Theme 编辑器传入值可逐项覆盖。
+$defaultHeaderColors = [
+    'primary' => 'var(--color-primary)',
+    'primaryDark' => 'var(--color-primary-dark)',
+    'primaryLight' => 'var(--color-primary-light)',
+    'bgDark' => 'var(--weline-chrome-bg-dark)',
+    'bgDarkSecondary' => 'var(--weline-chrome-bg-dark-secondary)',
+    'bgPrimary' => 'var(--color-bg-primary)',
+    'bgSecondary' => 'var(--color-bg-secondary)',
+    'bgTertiary' => 'var(--color-bg-tertiary)',
+    'textPrimary' => 'var(--color-text-primary)',
+    'textSecondary' => 'var(--color-text-secondary)',
+    'textLight' => 'var(--color-text-light)',
+    'textLightSecondary' => 'var(--color-text-light-secondary)',
+    'borderDefault' => 'var(--color-border-default)',
+    'borderFocus' => 'var(--color-border-focus)',
+];
+$providedColors = $this->getData('colors');
+$providedColors = is_array($providedColors)
+    ? array_filter($providedColors, static fn($value): bool => is_string($value) && trim($value) !== '')
+    : [];
+$colors = array_replace($defaultHeaderColors, $providedColors);
 $headerCategoryService = null;
 try {
     if (class_exists(\WeShop\Catalog\Service\CategoryService::class)) {
@@ -118,32 +153,24 @@ $headerLabel = static function ($value) use ($headerCategoryService, $headerCapi
     if ($key === '') {
         return '';
     }
-    $translated = (string)__($key);
-    if ($translated !== $key) {
-        return $headerCapitalize($translated);
-    }
     $widgetLabel = \Weline\Theme\Helper\WidgetI18n::label($key);
-    if ($widgetLabel !== $key) {
-        $widgetTranslated = (string)__($widgetLabel);
-        if ($widgetTranslated !== $widgetLabel) {
-            return $headerCapitalize($widgetTranslated);
-        }
-        $key = $widgetLabel;
+    if ($widgetLabel !== '' && $widgetLabel !== $key) {
+        return $headerCapitalize($widgetLabel);
     }
     if ($headerCategoryService instanceof \WeShop\Catalog\Service\CategoryService) {
-        return $headerCapitalize($headerCategoryService->localizeCategoryDisplayName($key));
+        $categoryLabel = $headerCategoryService->localizeCategoryDisplayName($key);
+        if ($categoryLabel !== '' && $categoryLabel !== $key) {
+            return $headerCapitalize($categoryLabel);
+        }
     }
+    $translated = (string)__($key);
 
-    return $headerCapitalize($key);
+    return $headerCapitalize($translated !== '' ? $translated : $key);
 };
 $headerDesc = static function ($value) use ($headerCategoryService): string {
     $key = trim((string)($value ?? ''));
     if ($key === '') {
         return '';
-    }
-    $translated = (string)__($key);
-    if ($translated !== $key) {
-        return $translated;
     }
     try {
         $widgetLabel = \Weline\Theme\Helper\WidgetI18n::label($key);
@@ -154,10 +181,14 @@ $headerDesc = static function ($value) use ($headerCategoryService): string {
     }
     if ($headerCategoryService instanceof \WeShop\Catalog\Service\CategoryService
         && method_exists($headerCategoryService, 'localizeCategoryDescription')) {
-        return (string)$headerCategoryService->localizeCategoryDescription($key);
+        $categoryDescription = (string)$headerCategoryService->localizeCategoryDescription($key);
+        if ($categoryDescription !== '' && $categoryDescription !== $key) {
+            return $categoryDescription;
+        }
     }
+    $translated = (string)__($key);
 
-    return $key;
+    return $translated !== '' ? $translated : $key;
 };
 $headerEsc = static function ($value) use ($headerLabel): string {
     return htmlspecialchars($headerLabel($value), ENT_QUOTES, 'UTF-8');
@@ -175,306 +206,115 @@ $defaultNavItemsFactory = static function (): array {
         return $defaultNavItems;
     }
 
+    $searchHref = static fn (string $query): string => '/search?q=' . rawurlencode($query);
     $defaultNavItems = [
-    [
-        'text' => '电子产品', 'url' => '/category/electronics',
-        'children' => [
-            [
-                'text' => '手机通讯', 'url' => '/category/electronics/phones',
-                'children' => [
-                    [
-                        'text' => '智能手机',
-                        'url' => '/category/electronics/phones/smartphones',
-                        'description' => '旗舰与中端智能机，覆盖拍照、续航与游戏场景',
-                        'children' => [
-                            ['text' => '安卓旗舰', 'url' => '/category/electronics/phones/smartphones/android'],
-                            ['text' => '影像专长', 'url' => '/category/electronics/phones/smartphones/camera'],
-                            ['text' => '长续航', 'url' => '/category/electronics/phones/smartphones/battery'],
-                        ],
+        [
+            'text' => '全部商品',
+            'url' => '/products',
+            'description' => '浏览全部已发布商品',
+            'children' => [],
+        ],
+        [
+            'text' => '女士汉服',
+            'url' => $searchHref('女士汉服'),
+            'description' => '按形制探索适合日常、节庆与礼仪场景的女士汉服',
+            'children' => [
+                [
+                    'text' => '明制汉服',
+                    'url' => $searchHref('明制汉服'),
+                    'description' => '端庄利落的立领、马面裙与披风层次',
+                    'children' => [
+                        ['text' => '马面裙', 'url' => $searchHref('马面裙')],
+                        ['text' => '立领长衫', 'url' => $searchHref('立领长衫')],
+                        ['text' => '披风与比甲', 'url' => $searchHref('披风 比甲')],
                     ],
-                    ['text' => '功能手机', 'url' => '/category/electronics/phones/feature-phones', 'description' => '简洁耐用，适合长辈与备用机'],
-                    ['text' => '5G手机', 'url' => '/category/electronics/phones/5g-phones', 'description' => '高速网络与低延迟体验'],
-                    ['text' => '折叠手机', 'url' => '/category/electronics/phones/foldable', 'description' => '大屏多任务与便携兼顾'],
-                    ['text' => '手机壳', 'url' => '/category/electronics/phones/cases', 'description' => '防摔、轻薄与风格保护'],
-                    ['text' => '屏幕保护膜', 'url' => '/category/electronics/phones/screen-protectors', 'description' => '钢化膜与高清贴膜'],
-                    ['text' => '充电器', 'url' => '/category/electronics/phones/chargers', 'description' => '快充与多口充电方案'],
-                    ['text' => '数据线', 'url' => '/category/electronics/phones/cables', 'description' => 'USB-C / Lightning 等接口线材'],
-                    ['text' => '移动电源', 'url' => '/category/electronics/phones/power-banks', 'description' => '出行补电与大容量便携'],
-                    ['text' => '手机耳机', 'url' => '/category/electronics/phones/headphones', 'description' => '有线与无线通话听感配件'],
-                ]
-            ],
-            [
-                'text' => '电脑办公', 'url' => '/category/electronics/computers',
-                'children' => [
-                    ['text' => '笔记本', 'url' => '/category/electronics/computers/laptops'],
-                    ['text' => '游戏本', 'url' => '/category/electronics/computers/gaming-laptops'],
-                    ['text' => '超极本', 'url' => '/category/electronics/computers/ultrabooks'],
-                    ['text' => '台式机', 'url' => '/category/electronics/computers/desktops'],
-                    ['text' => '一体机', 'url' => '/category/electronics/computers/all-in-one'],
-                    ['text' => '平板电脑', 'url' => '/category/electronics/computers/tablets'],
-                    ['text' => '显示器', 'url' => '/category/electronics/computers/monitors'],
-                    ['text' => '键盘', 'url' => '/category/electronics/computers/keyboards'],
-                    ['text' => '鼠标', 'url' => '/category/electronics/computers/mice'],
-                    ['text' => '摄像头', 'url' => '/category/electronics/computers/webcams'],
-                    ['text' => '存储设备', 'url' => '/category/electronics/computers/storage'],
-                ]
-            ],
-            [
-                'text' => '智能设备', 'url' => '/category/electronics/smart-devices',
-                'children' => [
-                    ['text' => '智能手表', 'url' => '/category/electronics/smart-devices/smart-watches'],
-                    ['text' => '运动手环', 'url' => '/category/electronics/smart-devices/fitness-trackers'],
-                    ['text' => '智能音箱', 'url' => '/category/electronics/smart-devices/smart-speakers'],
-                    ['text' => '智能照明', 'url' => '/category/electronics/smart-devices/smart-lights'],
-                    ['text' => '智能门锁', 'url' => '/category/electronics/smart-devices/smart-locks'],
-                    ['text' => '智能摄像头', 'url' => '/category/electronics/smart-devices/smart-cameras'],
-                    ['text' => '智能家居套装', 'url' => '/category/electronics/smart-devices/smart-home'],
-                    ['text' => '可穿戴设备', 'url' => '/category/electronics/smart-devices/wearables'],
-                ]
-            ],
-            [
-                'text' => '影音娱乐', 'url' => '/category/electronics/audio-video',
-                'children' => [
-                    ['text' => '无线耳机', 'url' => '/category/electronics/audio-video/wireless-headphones'],
-                    ['text' => '有线耳机', 'url' => '/category/electronics/audio-video/wired-headphones'],
-                    ['text' => '入耳式耳机', 'url' => '/category/electronics/audio-video/earbuds'],
-                    ['text' => '蓝牙音响', 'url' => '/category/electronics/audio-video/speakers'],
-                    ['text' => 'Soundbar', 'url' => '/category/electronics/audio-video/soundbars'],
-                    ['text' => '单反相机', 'url' => '/category/electronics/audio-video/dslr-cameras'],
-                    ['text' => '微单相机', 'url' => '/category/electronics/audio-video/mirrorless'],
-                    ['text' => '运动相机', 'url' => '/category/electronics/audio-video/action-cameras'],
-                    ['text' => '游戏主机', 'url' => '/category/electronics/audio-video/gaming-consoles'],
-                    ['text' => '游戏配件', 'url' => '/category/electronics/audio-video/gaming-accessories'],
-                ]
-            ],
-        ]
-    ],
-    [
-        'text' => '服装服饰', 'url' => '/category/clothing',
-        'children' => [
-            [
-                'text' => '男装', 'url' => '/category/clothing/men',
-                'children' => [
-                    ['text' => '衬衫', 'url' => '/category/clothing/men/shirts'],
-                    ['text' => 'T恤', 'url' => '/category/clothing/men/t-shirts'],
-                    ['text' => 'Polo衫', 'url' => '/category/clothing/men/polo-shirts'],
-                    ['text' => '长裤', 'url' => '/category/clothing/men/pants'],
-                    ['text' => '短裤', 'url' => '/category/clothing/men/shorts'],
-                    ['text' => '外套', 'url' => '/category/clothing/men/jackets'],
-                    ['text' => '毛衣', 'url' => '/category/clothing/men/sweaters'],
-                    ['text' => '皮鞋', 'url' => '/category/clothing/men/shoes'],
-                    ['text' => '运动鞋', 'url' => '/category/clothing/men/sneakers'],
-                    ['text' => '皮带', 'url' => '/category/clothing/men/belts'],
-                    ['text' => '手表', 'url' => '/category/clothing/men/watches'],
-                    ['text' => '包袋', 'url' => '/category/clothing/men/bags'],
-                ]
-            ],
-            [
-                'text' => '女装', 'url' => '/category/clothing/women',
-                'children' => [
-                    ['text' => '连衣裙', 'url' => '/category/clothing/women/dresses'],
-                    ['text' => '上装', 'url' => '/category/clothing/women/tops'],
-                    ['text' => '衬衫', 'url' => '/category/clothing/women/blouses'],
-                    ['text' => '下装', 'url' => '/category/clothing/women/bottoms'],
-                    ['text' => '半身裙', 'url' => '/category/clothing/women/skirts'],
-                    ['text' => '外套', 'url' => '/category/clothing/women/outerwear'],
-                    ['text' => '大衣', 'url' => '/category/clothing/women/coats'],
-                    ['text' => '高跟鞋', 'url' => '/category/clothing/women/heels'],
-                    ['text' => '平底鞋', 'url' => '/category/clothing/women/flats'],
-                    ['text' => '靴子', 'url' => '/category/clothing/women/boots'],
-                    ['text' => '手提包', 'url' => '/category/clothing/women/handbags'],
-                    ['text' => '斜挎包', 'url' => '/category/clothing/women/crossbody-bags'],
-                    ['text' => '首饰', 'url' => '/category/clothing/women/jewelry'],
-                ]
-            ],
-            [
-                'text' => '童装', 'url' => '/category/clothing/kids',
-                'children' => [
-                    ['text' => '男童装', 'url' => '/category/clothing/kids/boys'],
-                    ['text' => '女童装', 'url' => '/category/clothing/kids/girls'],
-                    ['text' => '婴儿装', 'url' => '/category/clothing/kids/baby'],
-                    ['text' => '童鞋', 'url' => '/category/clothing/kids/shoes'],
-                    ['text' => '童装配饰', 'url' => '/category/clothing/kids/accessories'],
-                    ['text' => '校服', 'url' => '/category/clothing/kids/school-uniforms'],
-                    ['text' => '泳装', 'url' => '/category/clothing/kids/swimwear'],
-                ]
-            ],
-            [
-                'text' => '运动服饰', 'url' => '/category/clothing/sports',
-                'children' => [
-                    ['text' => '运动装', 'url' => '/category/clothing/sports/athletic-wear'],
-                    ['text' => '跑步装备', 'url' => '/category/clothing/sports/running-gear'],
-                    ['text' => '健身服', 'url' => '/category/clothing/sports/fitness-wear'],
-                    ['text' => '运动鞋', 'url' => '/category/clothing/sports/sports-shoes'],
-                    ['text' => '跑鞋', 'url' => '/category/clothing/sports/running-shoes'],
-                    ['text' => '篮球鞋', 'url' => '/category/clothing/sports/basketball-shoes'],
-                    ['text' => '户外装备', 'url' => '/category/clothing/sports/outdoor'],
-                    ['text' => '露营装备', 'url' => '/category/clothing/sports/camping'],
-                ]
-            ],
-        ]
-    ],
-    [
-        'text' => '家居用品', 'url' => '/category/home',
-        'children' => [
-            [
-                'text' => '家具', 'url' => '/category/home/furniture',
-                'children' => [
-                    ['text' => '沙发', 'url' => '/category/home/furniture/sofas'],
-                    ['text' => '沙发床', 'url' => '/category/home/furniture/sofa-beds'],
-                    ['text' => '餐桌', 'url' => '/category/home/furniture/tables'],
-                    ['text' => '茶几', 'url' => '/category/home/furniture/coffee-tables'],
-                    ['text' => '椅子', 'url' => '/category/home/furniture/chairs'],
-                    ['text' => '办公椅', 'url' => '/category/home/furniture/office-chairs'],
-                    ['text' => '床具', 'url' => '/category/home/furniture/beds'],
-                    ['text' => '衣柜', 'url' => '/category/home/furniture/wardrobes'],
-                    ['text' => '书柜', 'url' => '/category/home/furniture/bookcases'],
-                ]
-            ],
-            [
-                'text' => '家纺', 'url' => '/category/home/textiles',
-                'children' => [
-                    ['text' => '床上用品', 'url' => '/category/home/textiles/bedding'],
-                    ['text' => '床单被套', 'url' => '/category/home/textiles/sheets'],
-                    ['text' => '枕头', 'url' => '/category/home/textiles/pillows'],
-                    ['text' => '被子', 'url' => '/category/home/textiles/quilts'],
-                    ['text' => '窗帘', 'url' => '/category/home/textiles/curtains'],
-                    ['text' => '毛巾', 'url' => '/category/home/textiles/towels'],
-                    ['text' => '地毯', 'url' => '/category/home/textiles/rugs'],
-                    ['text' => '靠垫', 'url' => '/category/home/textiles/cushions'],
-                ]
-            ],
-            [
-                'text' => '厨房用品', 'url' => '/category/home/kitchen',
-                'children' => [
-                    ['text' => '锅具', 'url' => '/category/home/kitchen/cookware'],
-                    ['text' => '刀具', 'url' => '/category/home/kitchen/knives'],
-                    ['text' => '餐具', 'url' => '/category/home/kitchen/dining'],
-                    ['text' => '杯具', 'url' => '/category/home/kitchen/cups'],
-                    ['text' => '收纳', 'url' => '/category/home/kitchen/storage'],
-                    ['text' => '厨房工具', 'url' => '/category/home/kitchen/kitchen-tools'],
-                    ['text' => '小家电', 'url' => '/category/home/kitchen/small-appliances'],
-                ]
-            ],
-            [
-                'text' => '装饰用品', 'url' => '/category/home/decor',
-                'children' => [
-                    ['text' => '墙饰', 'url' => '/category/home/decor/wall-art'],
-                    ['text' => '花瓶', 'url' => '/category/home/decor/vases'],
-                    ['text' => '灯具', 'url' => '/category/home/decor/lamps'],
-                    ['text' => '镜子', 'url' => '/category/home/decor/mirrors'],
-                    ['text' => '绿植', 'url' => '/category/home/decor/plants'],
-                ]
-            ],
-        ]
-    ],
-    [
-        'text' => '运动户外', 'url' => '/category/sports',
-        'children' => [
-            [
-                'text' => '健身训练', 'url' => '/category/sports/fitness',
-                'children' => [
-                    ['text' => '哑铃杠铃', 'url' => '/category/sports/fitness/weights', 'description' => '家用力量训练与增肌器材'],
-                    ['text' => '跳绳', 'url' => '/category/sports/fitness/jump-rope', 'description' => '有氧燃脂与敏捷训练'],
-                    ['text' => '瑜伽垫', 'url' => '/category/sports/fitness/yoga-mat', 'description' => '防滑加厚，适合瑜伽与地面训练'],
-                    ['text' => '健身车', 'url' => '/category/sports/fitness/bikes', 'description' => '户内单车与旋钮训练'],
-                    ['text' => '护具套装', 'url' => '/category/sports/fitness/gear', 'description' => '护膝手套、腰带与训练配件'],
                 ],
-            ],
-            [
-                'text' => '跑步运动', 'url' => '/category/sports/running',
-                'children' => [
-                    ['text' => '跑鞋', 'url' => '/category/sports/running/shoes', 'description' => '缓震透气跑鞋与训练鞋'],
-                    ['text' => '跑步服', 'url' => '/category/sports/running/apparel', 'description' => '速干跑衣与压缩裤'],
-                    ['text' => '跑步手表', 'url' => '/category/sports/running/watches', 'description' => '配速距离与心率监测'],
-                    ['text' => '跑步背包', 'url' => '/category/sports/running/packs', 'description' => '轻量水袋与腰包'],
+                [
+                    'text' => '宋制汉服',
+                    'url' => $searchHref('宋制汉服'),
+                    'description' => '清雅轻盈的褙子、百迭裙与宋裤搭配',
+                    'children' => [
+                        ['text' => '褙子', 'url' => $searchHref('褙子')],
+                        ['text' => '百迭裙', 'url' => $searchHref('百迭裙')],
+                        ['text' => '宋裤', 'url' => $searchHref('宋裤')],
+                    ],
                 ],
-            ],
-            [
-                'text' => '户外露营', 'url' => '/category/sports/outdoor',
-                'children' => [
-                    ['text' => '帐篷', 'url' => '/category/sports/outdoor/tents', 'description' => '双人与家庭露营帐'],
-                    ['text' => '睡袋', 'url' => '/category/sports/outdoor/sleeping-bags', 'description' => '保暖轻便睡袋'],
-                    ['text' => '登山鞋', 'url' => '/category/sports/outdoor/hiking-shoes', 'description' => '防滑耐磨户外鞋'],
-                    ['text' => '登山包', 'url' => '/category/sports/outdoor/backpacks', 'description' => '轻量承重与防水背包'],
-                    ['text' => '户外灯具', 'url' => '/category/sports/outdoor/lights', 'description' => '头灯与营地照明'],
+                [
+                    'text' => '唐制汉服',
+                    'url' => $searchHref('唐制汉服'),
+                    'description' => '明快华丽的齐胸襦裙、坦领与圆领款式',
+                    'children' => [
+                        ['text' => '齐胸襦裙', 'url' => $searchHref('齐胸襦裙')],
+                        ['text' => '坦领', 'url' => $searchHref('坦领汉服')],
+                        ['text' => '圆领袍', 'url' => $searchHref('唐制圆领袍')],
+                    ],
                 ],
-            ],
-            [
-                'text' => '球类运动', 'url' => '/category/sports/ball',
-                'children' => [
-                    ['text' => '篮球', 'url' => '/category/sports/ball/basketball', 'description' => '篮球与护具配件'],
-                    ['text' => '足球', 'url' => '/category/sports/ball/soccer', 'description' => '足球与训练装备'],
-                    ['text' => '羽毛球', 'url' => '/category/sports/ball/badminton', 'description' => '球拍羽球与羽毛球'],
-                    ['text' => '乒乓球', 'url' => '/category/sports/ball/table-tennis', 'description' => '拍套与乒乓球台'],
+                [
+                    'text' => '晋制汉服',
+                    'url' => $searchHref('晋制汉服'),
+                    'description' => '飘逸交领、大袖衫与裙装组合',
+                    'children' => [
+                        ['text' => '交领襦裙', 'url' => $searchHref('交领襦裙')],
+                        ['text' => '大袖衫', 'url' => $searchHref('大袖衫')],
+                        ['text' => '杂裾', 'url' => $searchHref('杂裾')],
+                    ],
                 ],
             ],
         ],
-    ],
-    [
-        'text' => '图书音像', 'url' => '/category/books',
-        'children' => [
-            [
-                'text' => '文学小说', 'url' => '/category/books/fiction',
-                'children' => [
-                    ['text' => '现当代文学', 'url' => '/category/books/fiction/contemporary', 'description' => '热门与获奖作品'],
-                    ['text' => '科幻奇幻', 'url' => '/category/books/fiction/scifi', 'description' => '科幻、奇幻与悬疑故事'],
-                    ['text' => '经典名著', 'url' => '/category/books/fiction/classics', 'description' => '世界与中国经典文学'],
-                    ['text' => '青少年读物', 'url' => '/category/books/fiction/ya', 'description' => '青春成长与轻小说'],
-                ],
-            ],
-            [
-                'text' => '经管技能', 'url' => '/category/books/business',
-                'children' => [
-                    ['text' => '商业经营', 'url' => '/category/books/business/management', 'description' => '组织管理与领导力'],
-                    ['text' => '职场进阶', 'url' => '/category/books/business/career', 'description' => '职业规划与效率方法'],
-                    ['text' => '投资理财', 'url' => '/category/books/business/finance', 'description' => '个人理财与投资入门'],
-                    ['text' => '产品运营', 'url' => '/category/books/business/product', 'description' => '产品思维与增长策略'],
-                ],
-            ],
-            [
-                'text' => '音像娱乐', 'url' => '/category/books/av',
-                'children' => [
-                    ['text' => '音乐专辑', 'url' => '/category/books/av/albums', 'description' => '流行与经典音乐'],
-                    ['text' => '影视光盘', 'url' => '/category/books/av/movies', 'description' => '电影与纪录片光盘'],
-                    ['text' => '有声书', 'url' => '/category/books/av/audiobooks', 'description' => '居家与途中听书'],
-                    ['text' => '教育音频', 'url' => '/category/books/av/learning', 'description' => '语言与技能课程'],
-                ],
+        [
+            'text' => '男士汉服',
+            'url' => $searchHref('男士汉服'),
+            'description' => '传统形制与现代日常穿着兼顾的男士系列',
+            'children' => [
+                ['text' => '圆领袍', 'url' => $searchHref('男士圆领袍'), 'description' => '节庆、礼仪与出行皆宜'],
+                ['text' => '道袍与直裰', 'url' => $searchHref('道袍 直裰'), 'description' => '从容雅正的传统衣冠'],
+                ['text' => '曳撒与贴里', 'url' => $searchHref('曳撒 贴里'), 'description' => '明制风格与利落剪裁'],
+                ['text' => '日常汉元素', 'url' => $searchHref('男士汉元素'), 'description' => '适合通勤与日常搭配'],
             ],
         ],
-    ],
-    [
-        'text' => '食品饮料', 'url' => '/category/food',
-        'children' => [
-            [
-                'text' => '零食坚果', 'url' => '/category/food/snacks',
-                'children' => [
-                    ['text' => '坚果烘焙', 'url' => '/category/food/snacks/nuts', 'description' => '坚果礼盒与日常零食'],
-                    ['text' => '肉类零食', 'url' => '/category/food/snacks/jerky', 'description' => '肉干肉铺与休闲小食'],
-                    ['text' => '糖果点心', 'url' => '/category/food/snacks/candy', 'description' => '糖果巧克力与点心'],
-                    ['text' => '薯片脆片', 'url' => '/category/food/snacks/chips', 'description' => '薯片与脆片零食'],
-                ],
-            ],
-            [
-                'text' => '饮料冲调', 'url' => '/category/food/drinks',
-                'children' => [
-                    ['text' => '咖啡茶饮', 'url' => '/category/food/drinks/coffee-tea', 'description' => '咖啡茶包与即饮粉'],
-                    ['text' => '果汁饮料', 'url' => '/category/food/drinks/juice', 'description' => '果汁与功能饮料'],
-                    ['text' => '矿泉水', 'url' => '/category/food/drinks/water', 'description' => '纯净饮用水与气泡水'],
-                    ['text' => '乳制品', 'url' => '/category/food/drinks/dairy', 'description' => '牛奶酸奶与植物奶'],
-                ],
-            ],
-            [
-                'text' => '粮油调味', 'url' => '/category/food/pantry',
-                'children' => [
-                    ['text' => '米面杂粮', 'url' => '/category/food/pantry/grains', 'description' => '主食杂粮与意面'],
-                    ['text' => '食用油', 'url' => '/category/food/pantry/oil', 'description' => '烹饪油与调味油'],
-                    ['text' => '调味品', 'url' => '/category/food/pantry/seasoning', 'description' => '酱料香料与复合调味'],
-                    ['text' => '罐头食品', 'url' => '/category/food/pantry/canned', 'description' => '方便储备与即食罐'],
-                ],
+        [
+            'text' => '儿童汉服',
+            'url' => $searchHref('儿童汉服'),
+            'description' => '舒适、安全并适合成长活动的儿童传统服饰',
+            'children' => [
+                ['text' => '女童汉服', 'url' => $searchHref('女童汉服')],
+                ['text' => '男童汉服', 'url' => $searchHref('男童汉服')],
+                ['text' => '亲子系列', 'url' => $searchHref('亲子汉服')],
+                ['text' => '节庆礼服', 'url' => $searchHref('儿童节庆汉服')],
             ],
         ],
-    ],
+        [
+            'text' => '汉服配饰',
+            'url' => $searchHref('汉服配饰'),
+            'description' => '以发饰、鞋履与随身雅物完成整套造型',
+            'children' => [
+                ['text' => '发簪与发冠', 'url' => $searchHref('发簪 发冠')],
+                ['text' => '腰带与禁步', 'url' => $searchHref('腰带 禁步')],
+                ['text' => '绣花鞋履', 'url' => $searchHref('汉服鞋履')],
+                ['text' => '团扇与包袋', 'url' => $searchHref('团扇 汉服包袋')],
+            ],
+        ],
+        [
+            'text' => '按场景选购',
+            'url' => $searchHref('汉服'),
+            'description' => '按重要时刻与穿着需求快速找到合适的一套',
+            'children' => [
+                ['text' => '婚礼与礼服', 'url' => $searchHref('婚礼汉服')],
+                ['text' => '节庆与雅集', 'url' => $searchHref('节庆汉服')],
+                ['text' => '日常通勤', 'url' => $searchHref('日常汉服')],
+                ['text' => '旅拍与演出', 'url' => $searchHref('旅拍 演出 汉服')],
+            ],
+        ],
+        [
+            'text' => '品牌与文化',
+            'url' => '/about',
+            'description' => '认识云裳的审美、工艺与汉服穿着知识',
+            'children' => [
+                ['text' => '品牌故事', 'url' => '/about'],
+                ['text' => '汉服文化指南', 'url' => '/blog'],
+                ['text' => '新手购物帮助', 'url' => '/help'],
+            ],
+        ],
     ];
 
     return $defaultNavItems;
@@ -582,11 +422,21 @@ $defaultNavItemsFactory = static function (): array {
                             exclusive="true"
                             position="header"
                             class="header-logo">
-                        <a href="@url{'/'}" title="<lang>首页</lang>">
-                            <img src="<?= htmlspecialchars((string)$logo, ENT_QUOTES, 'UTF-8') ?>"
-                                 alt="<lang>网站Logo</lang>"
-                                 onerror="this.style.display='none'; this.nextElementSibling.style.display='inline-block';">
-                            <span class="logo-text" style="display: none;"><?= htmlspecialchars((string)$logoText, ENT_QUOTES, 'UTF-8') ?></span>
+                        <a href="@url{'/'}"
+                           title="<lang>首页</lang>"
+                           aria-label="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>">
+                            <?php if ($hasLogo): ?>
+                                <img class="logo-image"
+                                     src="<?= htmlspecialchars((string)$logo, ENT_QUOTES, 'UTF-8') ?>"
+                                     alt="<?= htmlspecialchars($logoText, ENT_QUOTES, 'UTF-8') ?>"
+                                     onerror="this.hidden=true; this.nextElementSibling.hidden=false;">
+                            <?php endif; ?>
+                            <span class="logo-wordmark" aria-hidden="true"<?= $hasLogo ? ' hidden' : '' ?>>
+                                <span class="logo-wordmark__cn"><?= htmlspecialchars($logoWordmarkPrimary, ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php if ($logoWordmarkSecondary !== ''): ?>
+                                    <span class="logo-wordmark__en"><?= htmlspecialchars($logoWordmarkSecondary, ENT_QUOTES, 'UTF-8') ?></span>
+                                <?php endif; ?>
+                            </span>
                         </a>
                     </w:slot>
                     <w:hook>Weline_Theme::frontend::partials::header::logo-after</w:hook>
@@ -613,7 +463,7 @@ $defaultNavItemsFactory = static function (): array {
                             position="header"
                             class="header-search-wrapper">
                         <?= $this->fetch('Weline_Theme::theme/frontend/partials/search/header-bar.phtml', [
-                            'placeholder' => (string)__('搜索商品...'),
+                            'placeholder' => (string)__('搜索汉服、形制与配饰...'),
                             'query' => (string)($this->request->getParam('q') ?? ''),
                             'show_hot_words' => true,
                             'panel_id' => 'header-search-panel',
@@ -788,7 +638,7 @@ $defaultNavItemsFactory = static function (): array {
                         multiple="true"
                         position="header"
                         class="header-user-area">
-                <!-- 收藏：放在货币之后、账户之前（Hook 交付，勿直嵌 wishlist-icon widget） -->
+                <!-- 收藏：模块 Hook 交付（非 Theme 部件不可内嵌）；勿再声明 default_injections，避免应用 Tab 显示未安装却顶栏已有 -->
                 <w:hook>header-wishlist-icon</w:hook>
 
                 <!-- 账户登录 Hook -->
@@ -864,7 +714,7 @@ $defaultNavItemsFactory = static function (): array {
             </a>
             </div>
 
-            <!-- 左侧分类菜单 slot：未填充时渲染 Amazon 风格默认分类 -->
+            <!-- 左侧分类菜单 slot：分类模块部件默认注入；Theme 仅保留同部件兜底，禁止内嵌分类列表 -->
             <w:hook>Weline_Theme::frontend::partials::header::categories-before</w:hook>
             <w:slot id="category-menu"
                     name="左侧菜单"
@@ -872,153 +722,18 @@ $defaultNavItemsFactory = static function (): array {
                     exclusive="true"
                     position="header"
                     class="header-nav-left-slot header-categories">
-                <?php
-                // 横向分类条：优先 hook/meta → 万能分类 catalog；演示树仅主题预览回落。
-                // AllMenu 发布树只服务抽屉侧栏，不覆盖横向条。
-                $navItems = $this->getData('navItems') ?? $meta['navItems'] ?? $navItems ?? [];
-                if (empty($navItems) && !$this->getData('navItems_set_by_hook')) {
-                    $catalogNav = \Weline\Theme\Helper\HeaderCommerceData::resolveCategoryNavItems();
-                    if (!empty($catalogNav['items']) && \is_array($catalogNav['items'])) {
-                        $navItems = $catalogNav['items'];
-                    } elseif ($editorPreviewLight) {
-                        $navItems = $defaultNavItemsFactory();
-                    }
-                }
-                if (empty($navItems) && $editorPreviewLight) {
-                    $navItems = $defaultNavItemsFactory();
-                }
-                if ($editorPreviewLight && is_array($navItems)) {
-                    $navItems = $headerFlattenNavForEditor($navItems);
-                }
-                ?>
-                <nav class="categories-nav" aria-label="<?= $headerEsc('分类导航') ?>">
-                    <ul class="categories-list" id="categories-list">
-                        <?php
-                        $headerLocalizeUrl = static function (string $url): string {
-                            return \Weline\Theme\Helper\HeaderNavFragment::localizeHref($url);
-                        };
-                        $renderMenuItem = function ($item, $level = 1) use (&$renderMenuItem, $headerEsc, $headerEscDesc, $headerLocalizeUrl, $headerShowBannerWithChildren) {
-                            $hasChildren = !empty($item['children']) && is_array($item['children']);
-                            $text = (string)($item['text'] ?? $item['name'] ?? '');
-                            $url = $headerLocalizeUrl((string)($item['url'] ?? '#'));
-                            if (!$hasChildren):
-                            ?>
-                            <li class="category-item">
-                                <a href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>" class="category-link" data-nav-localized="1">
-                                    <?= $headerEsc($text) ?>
-                                </a>
-                            </li>
-                            <?php
-                                return;
-                            endif;
-
-                            if ($level === 1):
-                                $panelId = 'mega-menu-' . preg_replace('/[^a-z0-9_-]+/i', '-', strtolower($text));
-                                $panelId = trim((string)$panelId, '-');
-                                if ($panelId === '' || $panelId === 'mega-menu') {
-                                    $panelId = 'mega-menu-' . substr(md5($text . '|' . $url), 0, 10);
-                                }
-                            ?>
-                            <li class="category-item has-children category-item--mega"
-                                data-w-component="popover"
-                                data-w-open-on="hover"
-                                data-w-placement="bottom-start">
-                                <div class="category-link-wrapper"
-                                     data-w-popover-trigger
-                                     aria-haspopup="dialog"
-                                     aria-expanded="false">
-                                    <a href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>"
-                                       class="category-link">
-                                        <?= $headerEsc($text) ?>
-                                    </a>
-                                    <span class="category-arrow" aria-hidden="true"></span>
-                                </div>
-                                <?= \Weline\Theme\Helper\HeaderNavFragment::fetchMegaMenuPanel($this, [
-                                    'item' => $item,
-                                    'panel_id' => $panelId,
-                                    'esc' => $headerEsc,
-                                    'esc_desc' => $headerEscDesc,
-                                    'show_banner_with_children' => $headerShowBannerWithChildren,
-                                ]) ?>
-                            </li>
-                            <?php
-                                return;
-                            endif;
-
-                            $placement = 'right-start';
-                            ?>
-                            <li class="category-item has-children"
-                                data-w-component="popover"
-                                data-w-open-on="hover"
-                                data-w-placement="<?= htmlspecialchars($placement, ENT_QUOTES, 'UTF-8') ?>">
-                                <div class="category-link-wrapper"
-                                     data-w-popover-trigger
-                                     aria-haspopup="dialog"
-                                     aria-expanded="false">
-                                    <a href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>"
-                                       class="category-link">
-                                        <?= $headerEsc($text) ?>
-                                    </a>
-                                    <span class="category-arrow" aria-hidden="true"></span>
-                                </div>
-                                <div class="w-popover header-category-panel w-surface-body<?= $level === 1 ? ' is-megamenu' : ' is-flyout' ?>"
-                                     data-surface="body"
-                                     data-w-popover-panel
-                                     role="dialog"
-                                     data-state="closed"
-                                     aria-hidden="true"
-                                     hidden>
-                                    <ul class="header-category-panel__list" role="list">
-                                        <?php foreach ($item['children'] as $child): ?>
-                                            <?php $renderMenuItem($child, $level + 1); ?>
-                                        <?php endforeach; ?>
-                                    </ul>
-                                </div>
-                            </li>
-                        <?php };
-
-                        foreach ($navItems as $item) {
-                            $renderMenuItem($item);
-                        }
-                        ?>
-                        <li class="categories-overflow-wrapper"
-                            id="categories-overflow-wrapper"
-                            data-w-component="popover"
-                            data-w-open-on="hover"
-                            data-w-placement="bottom-start"
-                            style="display: none;">
-                            <button class="categories-overflow-btn w-button"
-                                    id="categories-overflow-btn"
-                                    type="button"
-                                    data-w-popover-trigger
-                                    data-tone="quiet"
-                                    aria-haspopup="dialog"
-                                    aria-expanded="false"
-                                    aria-label="<?= $headerEsc('更多分类') ?>">
-                                <span><?= $headerEsc('更多') ?></span>
-                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                            </button>
-                            <div class="w-popover w-mega-menu w-mega-menu--split header-category-panel categories-overflow-panel w-surface-body is-megamenu is-mega-panel-split"
-                                 data-w-component="mega-menu"
-                                 data-surface="body"
-                                 data-w-popover-panel
-                                 data-w-mega-menu
-                                 data-mega-menu
-                                 data-w-gap="0"
-                                 role="dialog"
-                                 data-state="closed"
-                                 aria-hidden="true"
-                                 hidden>
-                                <div class="mega-menu-layout"
-                                     id="categories-overflow-dropdown"
-                                     role="presentation"></div>
-                            </div>
-                        </li>
-                    </ul>
-                </nav>
+                <w:widget type="navigation" name="category-menu" />
             </w:slot>
             <w:hook>Weline_Theme::frontend::partials::header::categories</w:hook>
             <w:hook>Weline_Theme::frontend::partials::header::categories-after</w:hook>
+
+            <!-- 分类后方扩展槽：Blog 等模块 multiple 默认注入（禁止 Theme 内嵌业务链接） -->
+            <w:slot id="header-nav-extensions"
+                    name="导航扩展"
+                    accept="header-blog-link,header-nav-link,layout-header-nav-extensions"
+                    multiple="true"
+                    position="header"
+                    class="header-nav-extensions"></w:slot>
 
             <!-- 右侧快捷导航 slot：未填充时使用 Amazon 风格快捷入口 -->
             <w:slot id="navigation"
@@ -1647,6 +1362,38 @@ textarea::-webkit-scrollbar-thumb:hover,
     font-size: var(--font-size-xl);
     font-weight: 600;
     color: var(--weline-theme-text-on-dark);
+}
+
+.logo-wordmark {
+    display: inline-flex;
+    align-items: baseline;
+    gap: var(--weline-space-2);
+    min-width: max-content;
+    color: var(--weline-theme-text-on-dark);
+    white-space: nowrap;
+}
+
+.logo-wordmark__cn {
+    font-family: var(--font-family-serif);
+    font-size: var(--font-size-2xl);
+    font-weight: var(--font-weight-semibold);
+    line-height: var(--line-height-tight);
+    letter-spacing: var(--letter-spacing-wide);
+}
+
+.logo-wordmark__en {
+    color: var(--weline-theme-text-on-dark-muted);
+    font-family: var(--font-family-serif);
+    font-size: var(--font-size-xs);
+    line-height: var(--line-height-tight);
+    letter-spacing: var(--letter-spacing-wide);
+    text-transform: uppercase;
+}
+
+@media (max-width: 480px) {
+    .logo-wordmark__en {
+        display: none;
+    }
 }
 
 /* 配送地址选择器 */
@@ -2721,6 +2468,40 @@ textarea::-webkit-scrollbar-thumb:hover,
     min-height: var(--size-control-md);
 }
 
+.header-nav-extensions {
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: none;
+    width: auto;
+    margin-left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    gap: var(--weline-space-5);
+    flex-wrap: nowrap;
+    position: relative;
+    overflow: hidden;
+    height: auto;
+    min-height: var(--size-control-md);
+}
+
+.header-nav-extensions:empty {
+    display: none;
+}
+
+.header-nav-extensions .header-nav-extension-link,
+.header-nav-extensions a {
+    color: inherit;
+    text-decoration: none;
+    white-space: nowrap;
+    font-weight: 500;
+}
+
+.header-nav-extensions .header-nav-extension-link:hover,
+.header-nav-extensions a:hover {
+    text-decoration: underline;
+}
+
 .header-nav-fill-inner {
     display: flex;
     align-items: center;
@@ -2767,6 +2548,12 @@ textarea::-webkit-scrollbar-thumb:hover,
         overflow: hidden;
         height: auto;
         min-height: var(--size-control-md);
+    }
+
+    .header-nav-extensions {
+        flex: 0 1 auto;
+        order: 1;
+        overflow: hidden;
     }
 
     .header-nav-fill-inner {
@@ -2826,7 +2613,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     content: '';
     position: absolute;
     top: 0;
-    right: 0;
+    inset-inline-end: 0;
     width: var(--spacing-15);
     height: 100%;
     background: linear-gradient(to right, transparent, var(--weline-chrome-bg-dark-secondary, #232f3e));
@@ -2834,6 +2621,12 @@ textarea::-webkit-scrollbar-thumb:hover,
     opacity: 0;
     transition: opacity 0.3s ease;
     z-index: 10;
+}
+
+html[dir="rtl"] .header-categories::after,
+html[data-dir="rtl"] .header-categories::after,
+html.is-rtl .header-categories::after {
+    background: linear-gradient(to left, transparent, var(--weline-chrome-bg-dark-secondary, #232f3e));
 }
 
 .header-categories.has-overflow::after {
@@ -4767,9 +4560,19 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
                     const categoriesListRect = categoriesList.getBoundingClientRect();
                     const headerNavFillRect = headerNavFill.getBoundingClientRect();
                     const mainNavRect = headerMainNav.getBoundingClientRect();
+                    // LTR: categories left of fill → fill.left - categories.left
+                    // RTL: flex mirrors; categories sit on the right of fill → categories.right - fill.right
+                    // Using the LTR formula under RTL yields a negative span and collapses availableWidth to 0,
+                    // which hides every category into overflow (empty middle nav).
+                    const root = document.documentElement;
+                    const isRtl = (root.getAttribute('dir') || root.getAttribute('data-dir') || '').toLowerCase() === 'rtl'
+                        || root.classList.contains('is-rtl');
+                    const spanToFill = isRtl
+                        ? (categoriesListRect.right - headerNavFillRect.right)
+                        : (headerNavFillRect.left - categoriesListRect.left);
                     const availableWidth = Math.max(
                         0,
-                        Math.min(headerNavFillRect.left - categoriesListRect.left - 16, mainNavRect.width - 32)
+                        Math.min(spanToFill - 16, mainNavRect.width - 32)
                     );
 
                     categoriesOverflowWrapper.style.display = 'flex';

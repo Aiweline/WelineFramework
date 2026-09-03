@@ -423,7 +423,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         );
 
         if (($result['blocked'] ?? false) === true) {
-            throw new \RuntimeException('theme_scope_structural_conflict');
+            return $result;
         }
 
         $result['descendants'] = $this->propagateToDescendants($context, $actorId, $actorName);
