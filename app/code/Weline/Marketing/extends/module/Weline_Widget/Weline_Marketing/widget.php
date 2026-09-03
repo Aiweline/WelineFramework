@@ -76,6 +76,42 @@ return [
             ],
         ],
     ],
+    'cart-coupon' => [
+        'name' => '购物车优惠券',
+        'description' => '购物车页订单摘要优惠券输入，会话绑定后在结账报价时生效。',
+        'type' => 'content',
+        'code' => 'cart-coupon',
+        'area' => 'frontend',
+        'template' => 'Weline_Marketing::templates/frontend/widgets/checkout-coupon.phtml',
+        'page_layouts' => ['cart'],
+        'position' => ['summary'],
+        'slot' => 'cart-summary-discount',
+        'supports' => [
+            'cart-summary-discount',
+            'cart-coupon',
+            'checkout-coupon',
+            'marketing',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'cart',
+            'layout_option' => 'default',
+            'slot' => 'cart-summary-discount',
+            'area' => 'content',
+            'sort_order' => 10,
+            'required' => true,
+            'reason' => '购物车摘要默认展示优惠券部件（Amazon 默认样式）',
+            'config' => [
+                'title' => '优惠券',
+            ],
+        ]],
+        'params' => [
+            'title' => [
+                'default' => '优惠券',
+                'type' => 'string',
+                'label' => '标题',
+            ],
+        ],
+    ],
     'footer-campaign-link' => [
         'name' => '页脚活动链接',
         'description' => '页脚支付与账户扩展槽：活动入口（跳转 /promotion/deals）；默认注入 footer-payment-account-links。',
@@ -91,7 +127,7 @@ return [
             'layout-footer-payment-account-links',
         ],
         'default_injections' => [[
-            'layout_type' => '*',
+            'layout_type' => 'homepage',
             'slot' => 'footer-payment-account-links',
             'area' => 'footer',
             'sort_order' => 10,
