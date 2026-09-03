@@ -474,7 +474,7 @@ moduleDescribe(test, 'Weline_Websites', '万能商城内核双站点最终验收
         const tokenResult = await runResourceApi(b.page, 'cart', 'issueGuestToken');
         expect(isSuccess(tokenResult), JSON.stringify(tokenResult)).toBeTruthy();
         const token = String(pickData(tokenResult).guest_token || tokenResult.guest_token || '');
-        const crossScope = await runResourceApi(b.page, 'cart', 'getV2Cart', {
+        const crossScope = await runResourceApi(b.page, 'cart', 'getCart', {
           guest_token: token,
           website_id: fixture.a.website_id,
           website_code: fixture.a.website_code,
@@ -552,11 +552,11 @@ moduleDescribe(test, 'Weline_Websites', '万能商城内核双站点最终验收
           selection: { color: 'blue' },
           guest_token: guestToken,
         };
-        const addedA = await runResourceApi(a.page, 'cart', 'addV2', {
+        const addedA = await runResourceApi(a.page, 'cart', 'add', {
           ...offer,
           qty: 1,
         });
-        const addedB = await runResourceApi(b.page, 'cart', 'addV2', {
+        const addedB = await runResourceApi(b.page, 'cart', 'add', {
           ...offer,
           qty: 3,
         });
@@ -566,13 +566,13 @@ moduleDescribe(test, 'Weline_Websites', '万能商城内核双站点最终验收
         const cartA = pickData(await runResourceApi(
           a.page,
           'cart',
-          'getV2Cart',
+          'getCart',
           { guest_token: guestToken },
         ));
         const cartB = pickData(await runResourceApi(
           b.page,
           'cart',
-          'getV2Cart',
+          'getCart',
           { guest_token: guestToken },
         ));
         expect(Number(cartA.item_count || 0)).toBe(1);
