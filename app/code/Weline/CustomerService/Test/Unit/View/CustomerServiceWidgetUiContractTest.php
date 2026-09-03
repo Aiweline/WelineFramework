@@ -41,6 +41,10 @@ final class CustomerServiceWidgetUiContractTest extends TestCase
         $this->assertStringContainsString('--weline-chrome-bg-dark', $content);
         $this->assertStringContainsString('--weline-chrome-primary', $content);
         $this->assertStringContainsString('.cs-chat-header.w-panel-header', $content);
+        $this->assertStringContainsString('Unlayered: Theme .w-panel-header', $content);
+        $this->assertStringContainsString('.customer-service-widget .cs-chat-header.w-panel-header', $content);
+        $this->assertStringContainsString('background: var(--cs-header-bg)', $content);
+        $this->assertStringContainsString('color: var(--cs-header-text)', $content);
         $this->assertStringContainsString('.cs-modal.w-modal', $content);
         $this->assertStringContainsString('@media (max-width: 720px)', $content);
         $this->assertStringContainsString('position: fixed', $content);
