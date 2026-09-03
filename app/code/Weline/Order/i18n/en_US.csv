@@ -86,6 +86,9 @@
 在订单详情页内容之前注入内容，允许其他模块在订单详情页顶部添加自定义内容。,"Inject content before the order details page content, allowing other modules to add custom content at the top of the order details page."
 订单详情页之后,"After Order Details Page"
 在订单详情页内容之后注入内容，允许其他模块在订单详情页底部添加自定义内容。,"Inject content after the order details page content, allowing other modules to add custom content at the bottom of the order details page."
+订单详情支付记录槽,订单详情支付记录槽
+"订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。","订单详情支付记录空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读支付表拼表。"
+"订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。","订单详情「支付记录」空槽内的默认扩展点；由万能支付模块注入 Attempt 记录，禁止 Order 直读 Payment 表。"
 订单列表筛选器,"Order List Filters"
 在订单列表页面的筛选器区域注入内容，允许其他模块添加自定义筛选条件。,"Inject content in the filter area of the order list page, allowing other modules to add custom filter conditions."
 前端订单创建前,"Before Frontend Order Creation"
@@ -95,6 +98,7 @@
 订单管理模块安装完成,"Order Management Module Installed"
 "已创建以下数据表: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation","The following data tables have been created: weline_checkout_group, weline_order, weline_order_item, weline_fulfillment_unit, weline_display_number_registry, weline_order_payment, weline_order_shipment, weline_order_refund, weline_order_invoice, weline_order_history, weline_order_status, weline_order_status_translation"
 "安装失败: %{1}","Installation failed: %{1}"
+订单留言槽默认部件迁移失败（%{1}）：%{2},订单留言槽默认部件迁移失败（%{1}）：%{2}
 开发物流中继未启用,开发物流中继未启用
 【演示】开发中继探针,【演示】开发中继探针
 【演示】中继探针节点,【演示】中继探针节点
@@ -206,6 +210,8 @@ switch,switch
 部分发货,"Partial Shipment"
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot required fields are empty: %{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot value/hash is illegal"
+订单留言,"Order note"
+如有特殊要求请留言,"Leave a message if you have special requirements"
 我的订单,"My Orders"
 查看订单进度与支付状态,"View order progress and payment status"
 已关闭,Closed
@@ -233,8 +239,6 @@ SKU,SKU
 查询失败,查询失败
 物流单号,"Tracking Number"
 当前,当前
-订单留言,"Order note"
-如有特殊要求请留言,"Leave a message if you have special requirements"
 订单列表,"Order List"
 新建订单,"Create Order"
 搜索订单号、客户姓名、邮箱,"Search order number, customer name, email"
@@ -249,6 +253,7 @@ SKU,SKU
 支付状态,"Payment Status"
 发货状态,"Fulfillment Status"
 暂无数据,"No Data"
+匿名,Anonymous
 编辑,Edit
 上一页,"Previous Page"
 下一页,"Next Page"
@@ -265,11 +270,7 @@ SKU,SKU
 商品名称,"Product Name"
 行总计,"Row Total"
 暂无订单项,"No Order Items"
-支付记录,"Payment Records"
-支付金额,"Payment Amount"
-交易ID,"Transaction ID"
-支付时间,"Paid At"
-暂无支付记录,"No Payment Records"
+订单支付记录,订单支付记录
 发货记录,"Shipment Records"
 承运商,Carrier
 发货时间,"Shipped At"
@@ -373,7 +374,9 @@ Outbox,Outbox
 "Order Facade idempotency 冲突：key=%{1}","Order Facade idempotency conflict: key=%{1}"
 "CheckoutGroup 提交失败并已回滚：%{1}","CheckoutGroup commit failed and rolled back: %{1}"
 "order_uuid 不能为空","order_uuid cannot be empty"
+"customer_id 须 > 0","customer_id 须 > 0"
 "Order 不存在：%{1}","Order does not exist: %{1}"
+订单已绑定其他账户,订单已绑定其他账户
 "CheckoutGroup 不存在：%{1}","CheckoutGroup does not exist: %{1}"
 "website_id/store_id 超出有效范围","website_id/store_id exceeds the valid range"
 "idempotency_key 长度须为 1..128","idempotency_key length must be 1..128"
@@ -530,6 +533,11 @@ Outbox,Outbox
 "旧 Checkout writer 已被 cutover gate 禁止（mode=%{1}）","The old Checkout writer has been disabled by the cutover gate (mode=%{1})"
 "新 Order writer 在当前 mode 不可写（mode=%{1}；shadow 仅允许 plan）","The new Order writer is not writable in the current mode (mode=%{1}; shadow only allows plan)"
 "MIG-P2-ORDER：Checkout→Order 单写切流（仅登记的隔离 clone）","MIG-P2-ORDER: Checkout→Order single write flow (only registered isolation clone)"
+支付记录,"Payment Records"
+支付金额,"Payment Amount"
+交易ID,"Transaction ID"
+支付时间,"Paid At"
+暂无支付记录,"No Payment Records"
 "Material Design Icons 类名，如：mdi-check-circle","Material Design Icons class name, such as: mdi-check-circle"
 支付已确认，订单进入处理中,"Payment has been confirmed and the order is being processed"
 支付已完成,"Payment completed"

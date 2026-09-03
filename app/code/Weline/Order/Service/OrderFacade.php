@@ -21,6 +21,7 @@ use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Order\Api\OrderPostPaymentHookInterface;
 use Weline\Order\Model\CheckoutGroup;
 use Weline\Order\Model\DisplayNumberRegistry;
+use Weline\Order\Model\Order;
 
 /**
  * Order Facade（MOD-P2D-001/002/003）.
@@ -588,6 +589,68 @@ final class OrderFacade implements OrderFacadeInterface
         $this->postPaymentHook->afterOrderPaid($paidContext);
     }
 
+    public function attachCustomerToGuestOrders(int $customerId, array $orderUuids): array
+    {
+        if ($customerId <= 0) {
+            throw new \InvalidArgumentException(\__('customer_id 须 > 0'));
+        }
+        $attached = [];
+        foreach ($orderUuids as $rawUuid) {
+            $orderUuid = trim((string)$rawUuid);
+            if ($orderUuid === '') {
+                continue;
+            }
+            if ($this->memory !== null) {
+                $row = $this->memory['orders'][$orderUuid] ?? null;
+                if (!is_array($row)) {
+                    throw new OrderFacadeConflictException(
+                        self::ERROR_NOT_FOUND,
+                        \__('Order 不存在：%{1}', [$orderUuid]),
+                        ['order_uuid' => $orderUuid],
+                    );
+                }
+                $existing = isset($row['customer_id']) ? (int)$row['customer_id'] : 0;
+                if ($existing > 0 && $existing !== $customerId) {
+                    throw new OrderFacadeConflictException(
+                        'order_customer_conflict',
+                        \__('订单已绑定其他账户'),
+                        ['order_uuid' => $orderUuid, 'customer_id' => $existing],
+                    );
+                }
+                $this->memory['orders'][$orderUuid]['customer_id'] = $customerId;
+                $attached[] = $orderUuid;
+                continue;
+            }
+
+            $model = ObjectManager::getInstance(Order::class);
+            $hit = $model->reset()
+                ->where(Order::schema_fields_ORDER_UUID, $orderUuid)
+                ->find()
+                ->fetch();
+            if (!$hit instanceof Order || !$hit->getId()) {
+                throw new OrderFacadeConflictException(
+                    self::ERROR_NOT_FOUND,
+                    \__('Order 不存在：%{1}', [$orderUuid]),
+                    ['order_uuid' => $orderUuid],
+                );
+            }
+            $existing = (int)$hit->getData(Order::schema_fields_CUSTOMER_ID);
+            if ($existing > 0 && $existing !== $customerId) {
+                throw new OrderFacadeConflictException(
+                    'order_customer_conflict',
+                    \__('订单已绑定其他账户'),
+                    ['order_uuid' => $orderUuid, 'customer_id' => $existing],
+                );
+            }
+            if ($existing !== $customerId) {
+                $hit->setData(Order::schema_fields_CUSTOMER_ID, $customerId)->save();
+            }
+            $attached[] = $orderUuid;
+        }
+
+        return $attached;
+    }
+
     public function get(string $orderUuid): OrderReadResult
     {
         $orderUuid = trim($orderUuid);
@@ -628,6 +691,7 @@ final class OrderFacade implements OrderFacadeInterface
             numberKind: (string)$row['number_kind'],
             displayNumber: $row['display_number'] ?? null,
             customerId: isset($row['customer_id']) ? (int)$row['customer_id'] : null,
+            customerEmail: ($email = trim((string)($row['customer_email'] ?? ''))) !== '' ? $email : null,
         );
     }
 
