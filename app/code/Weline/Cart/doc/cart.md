@@ -1,17 +1,17 @@
-# Cart V2（P2E-001 / P2E-002 / REQ-009）
+# Cart（P2E-001 / P2E-002 / REQ-009）
 
 ## 契约
 
-- SPI：`CartItemSnapshotProviderV2Interface::getProviderCode()` + `resolveCartItemSnapshot(OfferIdentity, ScopeIdentity, selection)`
-- Registry：`CartItemSnapshotProviderV2Registry` — provider code O(1)；重复 code → `cart_provider_code_duplicate`
-- 旧 V1 Registry **不改**；仅当 Offer 含 `legacy_product_id` 时走 `LegacyCartItemSnapshotProviderV2Adapter`
+- SPI：`CartItemSnapshotProviderInterface::getProviderCode()` + `resolveCartItemSnapshot(OfferIdentity, ScopeIdentity, selection)`
+- Registry：`CartItemSnapshotProviderRegistry` — provider code O(1)；重复 code → `cart_provider_code_duplicate`
+- 正式 SPI：`CartItemSnapshotProviderInterface`；无独立 V1 Registry
 - selection hash（仅服务端权威）：
   `sha256(global_offer_uuid + "\\n" + selection_schema_version + "\\n" + canonical_sorted_json)`
 - 客户端伪造 hash → `cart_selection_hash_mismatch`；非法 selection → `cart_selection_invalid`
 - 跨模块统一使用 `Api/CartSelectionHash`；`Service/CartSelectionHash` 保留为
   Cart 内部实现，Product 不直接依赖 Cart Service
 - 跨 Scope / 跨币种不合并；同 Scope guest→customer 合车并按可售上限截断
-- 前台 `customer_id` 不是身份凭据：`add/addV2/mergeGuest/getV2Cart` 只使用
+- 前台 `customer_id` 不是身份凭据：`add/add/mergeGuest/getCart` 只使用
   `CartCurrentCustomerResolver` 从公开
   `CustomerAccountFacadeInterface::current()` 得到的服务端登录身份
 - Query 与登录合车 Observer 的 flat
@@ -33,21 +33,21 @@
   可售/价格 Gate；快照缺失、币种漂移、不可售或空车均 fail closed
 - 冻结结果包含服务端 `cart_hash`、Scope、币种和完整履约字段；Checkout
   只允许浏览器补充地址、`service_code`、quote token 与幂等键
-- `clearV2` 用于受控清理当前可信 Cart；它与其它 V2 操作使用相同的
+- `clear` 用于受控清理当前可信 Cart；它与其它 V2 操作使用相同的
   服务端身份和 Scope 规则
 
 ## 持久化与登录合车（TEST-P2E-02）
 
-- Store：`CartV2CacheStore`（`w_cache('cart_v2')` Custom 全逃逸，跨 Worker）；单测用 `CartV2MemoryStore`
+- Store：`CartCacheStore`（`w_cache('cart')` Custom 全逃逸，跨 Worker）；单测用 `CartMemoryStore`
 - Cookie：`weline_cart_guest_token`（`issueGuestToken` 写入）
-- 只读 `getV2Cart`/`getCart`：游客尚未持有 `guest_token`（无 Cookie/参数）时返回空车成功摘要，不抛 `cart_guest_token_required`；加购/改删/合车仍必须有 token
+- 只读 `getCart`/`getCart`：游客尚未持有 `guest_token`（无 Cookie/参数）时返回空车成功摘要，不抛 `cart_guest_token_required`；加购/改删/合车仍必须有 token
 - Observer：`Weline_Customer_Account_Login::login_after` → `LoginMergeGuestCart`
-- Query：`w_query('cart','addV2'|'mergeGuest'|'getV2Cart'|'issueGuestToken'|…)`
+- Query：`w_query('cart','add'|'mergeGuest'|'getCart'|'issueGuestToken'|…)`
 - Query 的 `mergeGuest` 仅允许当前已登录客户；浏览器传入的
   `customer_id` 会被忽略且不再出现在前台 descriptor
 - 合车先校验两车 Scope 和全部行币种；校验失败时不写客户车、不删除游客车
 - Product 正式快照读取 Website shard 的 Offer/Product、Store 选品、
-  EAV 名称、Price 和 Media；`CartV2HarnessCatalog` 只用于 E2E harness
+  EAV 名称、Price 和 Media；`CartHarnessCatalog` 只用于 E2E harness
 - 旧购物车/Checkout 的价格可售校验通过
   `CartPriceSellabilityProviderInterface` 扩展；Cart 只拥有公共契约和
   `Api/CartPriceSellabilityGate`，Product 在自己的模块中注册实现。
@@ -60,13 +60,13 @@
 |---|---|
 | DTOs | `Api/Data/OfferIdentity.php`、`CartItemSnapshot.php` |
 | Public boundary | `Api/CartSelectionHash.php`、`Api/CartPriceSellabilityGate.php`、`Api/CartPriceSellabilityProviderInterface.php`、`Api/CheckoutCartSnapshotInterface.php`、`Api/CartScopeResolverInterface.php` |
-| Service | `Service/CartV2Service.php` |
+| Service | `Service/CartService.php` |
 | Scope / identity boundary | `Service/CartScopeResolver.php`、`CartCurrentCustomerResolver.php` |
-| Store | `Service/CartV2CacheStore.php` / `CartV2MemoryStore.php` |
-| Product Provider | `Product/extends/module/Weline_Cart/CartItemSnapshotProviderV2/ProductCartItemSnapshotProvider.php`、`ProductCatalogCartItemSnapshotResolver.php` |
-| Query | `w_query('cart','addV2'|'mergeGuest'|'getV2Cart'|'clearV2'|'issueGuestToken'|…)` |
+| Store | `Service/CartCacheStore.php` / `CartMemoryStore.php` |
+| Product Provider | `Product/extends/module/Weline_Cart/CartItemSnapshotProvider/ProductCartItemSnapshotProvider.php`、`ProductCatalogCartItemSnapshotResolver.php` |
+| Query | `w_query('cart','add'|'mergeGuest'|'getCart'|'clear'|'issueGuestToken'|…)` |
 
-`CartService::add` 在同时带 `provider_code` + `global_offer_uuid` 时走 V2（默认注入 `CartV2Service`）。
+`CartService::add` 在同时带 `provider_code` + `global_offer_uuid` 时走 V2（默认注入 `CartService`）。
 
 ## 验证
 

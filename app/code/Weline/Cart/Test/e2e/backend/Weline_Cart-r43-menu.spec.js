@@ -22,7 +22,7 @@ async function cartApi(page,operation,params={}){
  },{operation,params});
 }
 const MODULE='Weline_Cart';
-moduleDescribe(test,MODULE,'R4.3 Cart 后台检查',()=>moduleCase(test,{module:MODULE,id:'CK-R43-CART-001'},'从侧栏查询真实 Cart V2 持久缓存',async({page})=>{
+moduleDescribe(test,MODULE,'R4.3 Cart 后台检查',()=>moduleCase(test,{module:MODULE,id:'CK-R43-CART-001'},'从侧栏查询真实 Cart 持久缓存',async({page})=>{
  const seed=fixture('prepare'); const guards=installBackendBrowserGuards(page);
  let guestToken=''; let cartCleared=false;
  try{
@@ -31,7 +31,7 @@ moduleDescribe(test,MODULE,'R4.3 Cart 后台检查',()=>moduleCase(test,{module:
   expect(succeeded(issued),JSON.stringify(issued)).toBeTruthy();
   guestToken=String(payload(issued).guest_token||issued.guest_token||'');
   expect(guestToken).not.toBe('');
-  const added=await cartApi(page,'addV2',{provider_code:seed.provider_code,global_offer_uuid:seed.offer_uuid,guest_token:guestToken,qty:1});
+  const added=await cartApi(page,'add',{provider_code:seed.provider_code,global_offer_uuid:seed.offer_uuid,guest_token:guestToken,qty:1});
   expect(succeeded(added),JSON.stringify(added)).toBeTruthy();
   const scopeKey=String(payload(added).scope_key||added.scope_key||'');
   expect(scopeKey).not.toBe('');
@@ -49,7 +49,7 @@ moduleDescribe(test,MODULE,'R4.3 Cart 后台检查',()=>moduleCase(test,{module:
  }finally{
   if(guestToken){
    await gotoFrontend(page,'/',{timeout:60000,settleMs:300});
-   const cleared=await cartApi(page,'clearV2');
+   const cleared=await cartApi(page,'clear');
    expect(succeeded(cleared),JSON.stringify(cleared)).toBeTruthy();
    expect(payload(cleared).is_empty).toBe(true);
    cartCleared=true;

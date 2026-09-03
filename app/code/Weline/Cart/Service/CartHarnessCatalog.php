@@ -8,9 +8,9 @@ namespace Weline\Cart\Service;
  * E2E / DEV 用 Offer 目录叠加。
  * 使用 var 文件而非 w_cache，避免 CLI 夹具与 WLS Worker 缓存命名空间隔离。
  */
-final class CartV2HarnessCatalog
+final class CartHarnessCatalog
 {
-    private const DIR_NAME = 'cart_v2_harness';
+    private const DIR_NAME = 'cart_harness';
 
     /**
      * @param array<string, mixed> $row
@@ -23,7 +23,7 @@ final class CartV2HarnessCatalog
         }
         $dir = self::dir();
         if (!is_dir($dir) && !mkdir($dir, 0775, true) && !is_dir($dir)) {
-            throw new \RuntimeException('unable to create cart_v2_harness dir');
+            throw new \RuntimeException('unable to create cart_harness dir');
         }
         $path = self::pathFor($uuid);
         $json = json_encode($row, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);

@@ -25,6 +25,27 @@ final class CartStorefrontQueryBinContractTest extends TestCase
         self::assertStringContainsString('data-cart-state="error"', $template);
     }
 
+    public function testCartPageAdoptsTheSharedGuestSessionBeforeIssuingANewToken(): void
+    {
+        $template = $this->template();
+        $ensureGuestToken = strpos($template, 'async function ensureGuestToken()');
+        $loadCartModule = strpos($template, "await Weline.load('cart')", $ensureGuestToken ?: 0);
+        $rereadStoredToken = strpos($template, 'guestToken = readStoredGuestToken()', $loadCartModule ?: 0);
+        $firstReuseGuestToken = strpos($template, 'if (guestToken) {', $ensureGuestToken ?: 0);
+        $reuseGuestToken = strpos($template, 'if (guestToken) {', $rereadStoredToken ?: 0);
+        $issueGuestToken = strpos($template, '.issueGuestToken(', $rereadStoredToken ?: 0);
+
+        self::assertIsInt($ensureGuestToken);
+        self::assertIsInt($loadCartModule, 'Cart page must load the shared Cart browser session first.');
+        self::assertIsInt($rereadStoredToken, 'Cart page must re-read the shared guest token after loading Cart.');
+        self::assertSame($reuseGuestToken, $firstReuseGuestToken, 'Do not return a stale legacy token before adoption.');
+        self::assertIsInt($reuseGuestToken, 'Legacy sessionStorage must not win before shared-session adoption.');
+        self::assertIsInt($issueGuestToken, 'Cart page may issue a token only after attempting adoption.');
+        self::assertLessThan($rereadStoredToken, $loadCartModule);
+        self::assertLessThan($reuseGuestToken, $rereadStoredToken);
+        self::assertLessThan($issueGuestToken, $reuseGuestToken);
+    }
+
     public function testCartPageDoesNotSendClientOwnedIdentityOrScope(): void
     {
         $template = $this->template();
@@ -62,8 +83,8 @@ final class CartStorefrontQueryBinContractTest extends TestCase
     {
         $template = $this->template();
 
-        self::assertStringContainsString("\$this->getUrl('products')", $template);
-        self::assertStringNotContainsString("\$this->getUrl('')", $template);
+        self::assertStringContainsString("@url{'products'}", $template);
+        self::assertStringNotContainsString("@url{''}", $template);
     }
 
     public function testMoneyUsesLocaleAwareThousandsSeparatorsWithTwoDecimals(): void

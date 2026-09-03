@@ -1,5 +1,5 @@
 /**
- * 万能商城内核计划：Cart V2 selection 边界（TEST-P2E-03）。
+ * 万能商城内核计划：Cart selection 边界（TEST-P2E-03）。
  *
  * - 客户端伪造 selection_hash、嵌套 selection 均由服务端拒绝，失败后购物车保持为空
  *
@@ -35,7 +35,7 @@ function runFixture(action, payload = {}) {
   const lines = String(stdout).trim().split(/\n/).filter(Boolean);
   const parsed = JSON.parse(lines[lines.length - 1] || '{}');
   if (!parsed.ok) {
-    throw new Error(`P2E Cart V2 fixture ${action} failed: ${parsed.error || stdout}`);
+    throw new Error(`P2E Cart fixture ${action} failed: ${parsed.error || stdout}`);
   }
   return parsed;
 }
@@ -105,7 +105,7 @@ function errorCode(result) {
   );
 }
 
-moduleDescribe(test, MODULE, '计划 P2E-03 Cart V2 selection 边界', () => {
+moduleDescribe(test, MODULE, '计划 P2E-03 Cart selection 边界', () => {
   test.setTimeout(240000);
 
   moduleCase(
@@ -132,7 +132,7 @@ moduleDescribe(test, MODULE, '计划 P2E-03 Cart V2 selection 边界', () => {
           qty: 1,
         };
 
-        const forged = await runCartApi(page, 'addV2', {
+        const forged = await runCartApi(page, 'add', {
           ...common,
           selection: { size: 'M' },
           selection_hash: 'deadbeef',
@@ -140,14 +140,14 @@ moduleDescribe(test, MODULE, '计划 P2E-03 Cart V2 selection 边界', () => {
         expect(isSuccess(forged), JSON.stringify(forged)).toBeFalsy();
         expect(errorCode(forged), JSON.stringify(forged)).toBe('cart_selection_hash_mismatch');
 
-        const nested = await runCartApi(page, 'addV2', {
+        const nested = await runCartApi(page, 'add', {
           ...common,
           selection: { bad: ['nested'] },
         });
         expect(isSuccess(nested), JSON.stringify(nested)).toBeFalsy();
         expect(errorCode(nested), JSON.stringify(nested)).toBe('cart_selection_invalid');
 
-        const cart = pickData(await runCartApi(page, 'getV2Cart', {
+        const cart = pickData(await runCartApi(page, 'getCart', {
           guest_token: guestToken,
         }));
         expect(cart.is_empty === true).toBeTruthy();

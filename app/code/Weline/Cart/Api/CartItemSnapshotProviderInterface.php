@@ -4,17 +4,24 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Api;
 
+use Weline\Cart\Api\Data\CartItemSnapshot;
+use Weline\Cart\Api\Data\OfferIdentity;
+use Weline\Framework\Runtime\ScopeIdentity;
+
+/**
+ * Cart snapshot SPI（REQ-009 / MOD-P2E-001）.
+ */
 interface CartItemSnapshotProviderInterface
 {
+    public function getProviderCode(): string;
+
     /**
-     * Return null when this provider does not own the requested product.
-     *
-     * Supported snapshot keys include product_id, name, sku, image, price,
-     * found, sellable, stock, qty, message, source_app, source_module,
-     * business_module, business_code, business_name, and product_type.
-     *
-     * @param array<string, mixed> $params
-     * @return array<string, mixed>|null
+     * @param array<string, scalar|null> $selection
+     * Return null when this provider does not own the offer.
      */
-    public function resolveCartItemSnapshot(int $productId, array $params = []): ?array;
+    public function resolveCartItemSnapshot(
+        OfferIdentity $offer,
+        ScopeIdentity $scope,
+        array $selection = [],
+    ): ?CartItemSnapshot;
 }

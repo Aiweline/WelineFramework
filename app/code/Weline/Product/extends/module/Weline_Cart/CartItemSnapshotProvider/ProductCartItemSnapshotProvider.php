@@ -2,22 +2,22 @@
 
 declare(strict_types=1);
 
-namespace Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProviderV2;
+namespace Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider;
 
-use Weline\Cart\Api\CartItemSnapshotProviderV2Interface;
+use Weline\Cart\Api\CartItemSnapshotProviderInterface;
 use Weline\Cart\Api\CartSelectionHash;
 use Weline\Cart\Api\Data\CartItemSnapshot;
 use Weline\Cart\Api\Data\OfferIdentity;
-use Weline\Cart\Api\Development\CartV2HarnessCatalog;
+use Weline\Cart\Api\Development\CartHarnessCatalog;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 
 /**
- * Default Product catalog Cart V2 snapshot provider（MOD-P2E-001）.
+ * Default Product catalog Cart snapshot provider（MOD-P2E-001）.
  * Harness may inject catalog via forTesting(); production resolves the durable
  * Product Website shard through ProductCatalogCartItemSnapshotResolver.
  */
-final class ProductCartItemSnapshotProvider implements CartItemSnapshotProviderV2Interface
+final class ProductCartItemSnapshotProvider implements CartItemSnapshotProviderInterface
 {
     public const CODE = 'product';
 
@@ -72,7 +72,7 @@ final class ProductCartItemSnapshotProvider implements CartItemSnapshotProviderV
 
         $row = $this->catalog[$offer->globalOfferUuid] ?? null;
         if ($row === null) {
-            $row = CartV2HarnessCatalog::get($offer->globalOfferUuid);
+            $row = CartHarnessCatalog::get($offer->globalOfferUuid);
         }
         if ($row === null) {
             $catalogResolver = $this->catalogResolver ?? $this->productionResolver();

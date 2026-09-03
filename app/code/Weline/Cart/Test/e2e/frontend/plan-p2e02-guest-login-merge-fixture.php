@@ -9,9 +9,9 @@ declare(strict_types=1);
  * stdout JSON only.
  */
 
-use Weline\Cart\Service\CartV2CacheStore;
-use Weline\Cart\Service\CartV2HarnessCatalog;
-use Weline\Cart\Service\CartV2Service;
+use Weline\Cart\Service\CartCacheStore;
+use Weline\Cart\Service\CartHarnessCatalog;
+use Weline\Cart\Service\CartService;
 use Weline\Customer\Service\CustomerAccountService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -91,7 +91,7 @@ function p2e02_prepare(?string $token): array
     }
     $customerId = (int)$customer->getId();
 
-    CartV2HarnessCatalog::put($offerUuid, [
+    CartHarnessCatalog::put($offerUuid, [
         'name' => 'P2E02 Limited ' . $token,
         'sku' => 'p2e02-' . $token,
         'currency' => 'CNY',
@@ -130,8 +130,8 @@ function p2e02_inspect(int $customerId, string $guestToken): array
         'default',
         ScopeIdentity::MODE_NORMAL,
     );
-    /** @var CartV2Service $cartV2 */
-    $cartV2 = ObjectManager::getInstance()->get(CartV2Service::class);
+    /** @var CartService $cartV2 */
+    $cartV2 = ObjectManager::getInstance()->get(CartService::class);
     return [
         'customer_cart' => $cartV2->getCart($scope, customerId: $customerId),
         'guest_cart' => $cartV2->getCart($scope, $guestToken),
@@ -151,8 +151,8 @@ function p2e02_seed_guest(string $offerUuid, int $qty): array
         'default',
         ScopeIdentity::MODE_NORMAL,
     );
-    /** @var CartV2Service $cartV2 */
-    $cartV2 = ObjectManager::getInstance()->get(CartV2Service::class);
+    /** @var CartService $cartV2 */
+    $cartV2 = ObjectManager::getInstance()->get(CartService::class);
     $guestToken = $cartV2->issueGuestToken();
     $cart = $cartV2->add(
         $scope,
@@ -171,7 +171,7 @@ function p2e02_seed_guest(string $offerUuid, int $qty): array
 function p2e02_cleanup(int $customerId, ?string $offerUuid, ?string $guestToken): void
 {
     if ($offerUuid !== null && $offerUuid !== '') {
-        CartV2HarnessCatalog::delete($offerUuid);
+        CartHarnessCatalog::delete($offerUuid);
     }
     $scopes = [
         ScopeIdentity::website(0, 'default'),
@@ -180,8 +180,8 @@ function p2e02_cleanup(int $customerId, ?string $offerUuid, ?string $guestToken)
         ScopeIdentity::channel(0, 'default', 'store-b', 'app', ScopeIdentity::MODE_NORMAL),
     ];
     try {
-        /** @var CartV2CacheStore $store */
-        $store = ObjectManager::getInstance()->get(CartV2CacheStore::class);
+        /** @var CartCacheStore $store */
+        $store = ObjectManager::getInstance()->get(CartCacheStore::class);
         foreach ($scopes as $scope) {
             if ($customerId > 0) {
                 $store->delete($scope->canonicalKey() . '|customer:' . $customerId);

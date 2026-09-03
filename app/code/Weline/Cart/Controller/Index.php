@@ -16,7 +16,7 @@ class Index extends FrontendController
 
         // The authoritative storefront cart is hydrated through QueryBin. The
         // HTML request can carry a different WLS session, so it must not select
-        // an empty-only layout before the browser has read Cart V2.
+        // an empty-only layout before the browser has read Cart.
         $this->layoutType = 'cart.default';
         $this->request->setGet('page_type', 'cart');
         $this->request->setGet('layout_type', 'cart');

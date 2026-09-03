@@ -6,7 +6,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 ?>
 <div class="w-grid" data-testid="cart-inspection-management"><div style="--w-span:12;">
     <div class="w-backend-page__heading"><h4 class="w-backend-page__title"><?= __('购物车检查') ?></h4></div>
-    <div class="w-alert" data-tone="info"><?= __('Cart V2 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。') ?></div>
+    <div class="w-alert" data-tone="info"><?= __('Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。') ?></div>
     <?php if ($load_error !== ''): ?><div class="w-alert" data-tone="danger"><?= $escape($load_error) ?></div><?php endif; ?>
     <div class="w-card"><div class="w-card__body">
         <form method="get" class="w-grid" data-testid="cart-inspection-form" style="--w-gap:var(--weline-space-2);--w-mb:var(--weline-space-4);">
