@@ -1,157 +1,152 @@
 <?php
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$search = trim((string)($this->getData('search') ?? ''));
 ?>
-<!-- start page title -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='page-title-box d-sm-flex align-items-center justify-content-between'>
-            <h4 class='mb-sm-0'>
-                <lang>Eav > 属性组</lang>
-            </h4>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-eav-manager.css)">
 
-            <div class='page-title-right'>
-                <ol class='breadcrumb m-0'>
-                    <li class='breadcrumb-item'><span>
-                        <lang>系统配置</lang>
-                    </span></li>
-                    <li class='breadcrumb-item'><a href="@backend-url('*/backend/attribute')">
-                            <lang>Eav</lang>
-                        </a>
-                    </li>
-                    <li class='breadcrumb-item active'>
-                        <a href="@backend-url('*/backend/attribute')">
-                            <lang>属性</lang>
-                        </a>
-                    </li>
-                    <li class='breadcrumb-item active'>
-                        <a href="@backend-url('*/backend/attribute/group')">
-                            <lang>属性组</lang>
-                        </a>
-                    </li>
-                </ol>
-            </div>
-
+<div class="w-stack w-eav-manager-page" data-gap="lg" data-testid="eav-attribute-group-list">
+    <header class="w-eav-manager-page__hero">
+        <div class="w-eav-manager-page__hero-icon" aria-hidden="true">
+            <w:icon name="folder" size="lg" />
         </div>
-    </div>
-</div>
-<!-- end page title -->
-<!-- start page message -->
-<div class='row'>
+        <div class="w-eav-manager-page__hero-copy">
+            <h1><lang>属性组</lang></h1>
+            <p><lang>将属性归组，便于在属性集内组织与管理</lang></p>
+        </div>
+        <nav class="w-cluster" aria-label="@lang{面包屑}">
+            <a class="w-text" data-tone="muted" href="@backend-url('*/backend/attribute')"><lang>EAV</lang></a>
+            <span class="w-text" data-tone="muted">/</span>
+            <a class="w-text" data-tone="muted" href="@backend-url('*/backend/attribute/set')"><lang>属性集</lang></a>
+            <span class="w-text" data-tone="muted">/</span>
+            <span class="w-text"><lang>属性组</lang></span>
+        </nav>
+    </header>
+
     <template>Weline_Component::message.phtml</template>
-</div> <!-- end message -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
-                    <lang>Eav属性组</lang>
-                </h4>
-                <p class='card-title-desc'>
-                    <lang>Eav属性归组</lang>
-                </p>
-                <p class="card-title-desc">
-                    <lang>将属性归组方便管理</lang>
-                </p>
-                <div class='table-rep-plugin'>
-                    <!-- search form -->
-                    <div class='row'>
-                        <div class='col-6'>
-                            <block class='Weline\Component\Block\Form\Search'
-                                   id='attribute-group-search' action='*/backend/attribute/group'
-                                   method='get' keyword='search' value='' placeholder='请输入属性组关键词回车搜素'>
-                            </block>
-                        </div>
-                        <div class='col-6'>
-                            <block class='Weline\Component\Block\OffCanvas'
-                                   template='Weline_Component::off-canvas.phtml' cache='0'
-                                   id='off_canvas_attribute_group_add'
-                                   action='*/backend/attribute/group/add' submit-button-text='保存'
-                                   target-button-text='添加组' target-button-class='btn btn-success'
-                                   title='添加属性组' close-button-show='1' close-button-text='关闭'
-                                   direction='right' class-names='w-75' off-canvas-body-style='' />
-                        </div>
+
+    <section class="w-card">
+        <div class="w-card__header">
+            <div class="w-stack" data-gap="xs">
+                <h2 class="w-card__title"><lang>EAV 属性组列表</lang></h2>
+                <p class="w-text" data-tone="muted"><lang>按实体与属性集查看、搜索并维护属性组</lang></p>
+            </div>
+        </div>
+        <div class="w-card__body w-stack" data-gap="md">
+            <div class="w-cluster" style="justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:1rem;">
+                <form class="w-cluster" method="get" action="@backend-url('*/backend/attribute/group')" style="flex:1 1 18rem;align-items:flex-end;flex-wrap:wrap;gap:0.75rem;">
+                    <label class="w-field" style="flex:1 1 14rem;min-width:12rem;">
+                        <span class="w-field__label"><lang>关键词</lang></span>
+                        <input class="w-input" type="search" name="search" value="<?= $escape($search) ?>"
+                               placeholder="@lang{请输入属性组名称、代码或实体关键词}"
+                               maxlength="200" autocomplete="off">
+                    </label>
+                    <div class="w-cluster" style="gap:0.5rem;">
+                        <button class="w-button" type="submit" data-tone="primary">
+                            <w:icon name="search" size="sm" /> <lang>搜索</lang>
+                        </button>
+                        <?php if ($search !== ''): ?>
+                            <a class="w-button" data-tone="neutral" data-variant="outline" href="@backend-url('*/backend/attribute/group')">
+                                <w:icon name="refresh" size="sm" /> <lang>重置</lang>
+                            </a>
+                        <?php endif; ?>
                     </div>
-                    <!-- end search form -->
-                    <div class='table-responsive mb-0' data-pattern='priority-columns'>
-                        <table id='tech-companies-1' class='table table-striped table-bordered'>
-                            <thead>
-                            <tr>
-                                <th data-priority='1'>
-                                    <lang>ID</lang>
-                                </th>
-                                <th data-priority='4'>
-                                    <lang>所属实体</lang>
-                                </th>
-                                <th data-priority='4'>
-                                    <lang>组名</lang>
-                                </th>
-                                <th data-priority='2'>
-                                    <lang>代码</lang>
-                                </th>
-                                <th data-priority='3'>
-                                    <lang>所属属性集</lang>
-                                </th>
-                                <th data-priority='5'>
-                                    <lang>创建时间</lang>
-                                </th>
-                                <th data-priority='6'>
-                                    <lang>更新时间</lang>
-                                </th>
-                                <th data-priority='7'>
-                                    <?= __('操作') ?>
-                                </th>
-                            </tr>
-                            </thead>
-                            <tbody>
-                            <foreach name="groups" item="group" key="key">
-                                <tr>
-                                    <td class='co-name'>{{group.group_id}}</td>
-                                    <td class='co-name'>
-                                        ID:{{group.eav_entity_id|0}}-{{group.entity_local_name|group.entity_name}}
-                                    </td>
-                                    <td class='co-name'>
-                                        <local
-                                                model='Weline\Eav\Model\EavAttribute\Group\LocalDescription'
-                                                field='name' id='group.group_id' name="group-name">
-                                            {{group.local_name|group.name}}
-                                        </local>
-                                    </td>
-                                    <td class='co-name'>{{group.code}}</td>
-                                    <td class='co-name'>
-                                        <local
-                                                model='Weline\Eav\Model\EavAttribute\Set\LocalDescription'
-                                                field='name' id='group.set_id' name="set-name">
-                                            {{group.set_local_name|group.set_name}}
-                                        </local></td>
-                                    <td class='co-name'>{{group.create_time}}</td>
-                                    <td class='co-name'>{{group.update_time}}</td>
-                                    <td class='co-name'>
-                                        <div class="d-flex gap-2">
-                                            <block class='Weline\Component\Block\OffCanvas'
-                                                   template='Weline_Component::off-canvas.phtml'
-                                                   cache='0' id='off_canvas_attribute_group_edit'
-                                                   action='*/backend/attribute/group/edit'
-                                                   vars='group'
-                                                   action-params='{group_id: group.group_id}'
-                                                   submit-button-text='保存' target-button-text='修改'
-                                                   target-button-class='btn btn-info' title='编辑属性'
-                                                   close-button-show='1' close-button-text='关闭'
-                                                   direction='right' class-names='w-75'
-                                                   off-canvas-body-style='' />
-                                            <a class='btn btn-danger' href="@backend-url('*/backend/attribute/group/delete',
-                                                ['id'=>$group['group_id']])">
-                                                <lang>删除</lang>
-                                            </a>
-                                        </div>
-                                    </td>
-                                </tr>
-                            </foreach>
-                            </tbody>
-                        </table>
-                        {{pagination}}
-                    </div>
+                </form>
+                <div class="w-cluster">
+                    <block class="Weline\Component\Block\OffCanvas"
+                           template="Weline_Component::off-canvas.phtml"
+                           cache="0"
+                           id="off_canvas_attribute_group_add"
+                           action="*/backend/attribute/group/add"
+                           submit-button-text="保存"
+                           target-button-text="添加组"
+                           target-button-class="w-button"
+                           target-tone="primary"
+                           icon="plus"
+                           title="添加属性组"
+                           close-button-show="1"
+                           close-button-text="关闭"
+                           direction="right"
+                           class-names="w-75"
+                           off-canvas-body-style="" />
                 </div>
             </div>
+
+            <div class="table-responsive mb-0" data-pattern="priority-columns">
+                <table class="table table-striped table-bordered w-table" id="eav-attribute-group-table">
+                    <thead>
+                    <tr>
+                        <th data-priority="1"><lang>ID</lang></th>
+                        <th data-priority="4"><lang>所属实体</lang></th>
+                        <th data-priority="4"><lang>组名</lang></th>
+                        <th data-priority="2"><lang>代码</lang></th>
+                        <th data-priority="3"><lang>所属属性集</lang></th>
+                        <th data-priority="5"><lang>创建时间</lang></th>
+                        <th data-priority="6"><lang>更新时间</lang></th>
+                        <th data-priority="7"><lang>操作</lang></th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <foreach name="groups" item="group" key="key">
+                        <tr>
+                            <td class="co-name">{{group.group_id}}</td>
+                            <td class="co-name">
+                                <span class="w-text" data-tone="muted">ID:{{group.eav_entity_id|0}}</span>
+                                {{group.entity_local_name|group.entity_name}}
+                            </td>
+                            <td class="co-name">
+                                <local model="Weline\Eav\Model\EavAttribute\Group\LocalDescription"
+                                       field="name" id="group.group_id" name="group-name">
+                                    {{group.local_name|group.name}}
+                                </local>
+                            </td>
+                            <td class="co-name"><code>{{group.code}}</code></td>
+                            <td class="co-name">
+                                <local model="Weline\Eav\Model\EavAttribute\Set\LocalDescription"
+                                       field="name" id="group.set_id" name="set-name">
+                                    {{group.set_local_name|group.set_name}}
+                                </local>
+                            </td>
+                            <td class="co-name">{{group.create_time}}</td>
+                            <td class="co-name">{{group.update_time}}</td>
+                            <td class="co-name">
+                                <div class="w-cluster" style="gap:0.5rem;">
+                                    <block class="Weline\Component\Block\OffCanvas"
+                                           template="Weline_Component::off-canvas.phtml"
+                                           cache="0"
+                                           id="off_canvas_attribute_group_edit"
+                                           action="*/backend/attribute/group/edit"
+                                           vars="group"
+                                           action-params="{group_id: group.group_id}"
+                                           submit-button-text="保存"
+                                           target-button-text="修改"
+                                           target-button-class="w-button"
+                                           target-tone="neutral"
+                                           title="编辑属性组"
+                                           close-button-show="1"
+                                           close-button-text="关闭"
+                                           direction="right"
+                                           class-names="w-75"
+                                           off-canvas-body-style="" />
+                                    <a class="w-button" data-tone="danger" data-variant="outline"
+                                       href="@backend-url('*/backend/attribute/group/delete', ['id'=>$group['group_id']])">
+                                        <lang>删除</lang>
+                                    </a>
+                                </div>
+                            </td>
+                        </tr>
+                    </foreach>
+                    </tbody>
+                </table>
+                <empty name="groups">
+                    <div class="w-stack" data-gap="sm" style="padding:2rem 1rem;text-align:center;">
+                        <w:icon name="folder" size="lg" />
+                        <strong><lang>暂无属性组</lang></strong>
+                        <p class="w-text" data-tone="muted"><lang>可点击「添加组」创建，或先在属性集中组织结构。</lang></p>
+                    </div>
+                </empty>
+                {{pagination}}
+            </div>
         </div>
-    </div> <!-- end col -->
-</div> <!-- end row -->
+    </section>
+</div>

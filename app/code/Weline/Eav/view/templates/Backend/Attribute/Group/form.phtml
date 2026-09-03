@@ -1,4 +1,3 @@
-
 <script>
 (function(g){
   if(g.__bqAdmin_eav_admin) return;
@@ -28,126 +27,82 @@
 })(window);
 </script>
 <?php
-/**@var \Weline\Framework\View\Template $this */
+/** @var \Weline\Framework\View\Template $this */
 ?>
-<!-- start page message -->
-<div class='row'>
+<link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-eav-manager.css)">
+
+<div class="w-stack w-eav-manager-page" data-gap="md" data-testid="eav-attribute-group-form">
     <template>Weline_Component::message.phtml</template>
-</div> <!-- end message -->
-<div class='row'>
-    <div class='col-12'>
-        <div class='card'>
-            <div class='card-body'>
-                <h4 class='card-title'>
+
+    <section class="w-card">
+        <div class="w-card__header">
+            <div class="w-stack" data-gap="xs">
+                <h2 class="w-card__title">
                     <lang>属性组</lang>
-                    <notempty name='group'>编辑
-                        <else/>
-                        添加
-                    </notempty>
-                </h4>
-                <p class='card-title-desc'>
-                    <lang>属性组表单</lang>
-                </p>
-                <p class='card-title-desc'>
-                    <lang>属性组信息编辑。</lang>
-                </p>
-                <w:form class='needs-validation' novalidate='' action='{{action}}' method='post'>
-                    <!--基础信息-->
-                    <div class='row'>
-                        <div class='col-md-3'>
-                            <div class='mb-3'>
-                                <label class='form-label' for='validationName'>
-                                    <lang>组名</lang>
-                                </label>
-                                <input type='text' class='form-control' maxlength='60' data-parsley-minlength='3'
-                                       id='validationName' placeholder='@lang{组名}'
-                                       value='{{group.name}}' name='name'
-                                       required=''>
-                                <div class='valid-feedback'>
-                                    <lang>填写正确！</lang>
-                                </div>
-                            </div>
-                        </div>
-                        <div class='col-md-3'>
-                            <div class='mb-3'>
-                                <label class='form-label' for='validationCode'>
-                                    <lang>组代码</lang>
-                                </label>
-                                <input type='text' class='form-control' maxlength='60' data-parsley-minlength='3'
-                                       id='validationCode' placeholder='@lang{组代码}'
-                                       value='{{group.code}}' name='code'
-                                       required=''>
-                                <div class='valid-feedback'>
-                                    <lang>填写正确！</lang>
-                                </div>
-                            </div>
-                        </div>
-                        <div class='col-md-3'>
-                            <div class='mb-3'>
-                                <label class='form-label' for='validationEntity'>
-                                    <lang>实体</lang>
-                                </label>
-                                <select type='text' class='form-control' name='eav_entity_id' data-parsley-minlength='3'
-                                        id='validationEntity'
-                                        required=''>
-                                    <foreach name='entities'>
-                                        <option value='{{v.eav_entity_id}}' @if{group.eav_entity_id== v.eav_entity_id=> 'selected'}>{{v.name}}</option>
-                                    </foreach>
-                                </select>
-                                <div class='valid-feedback'>
-                                    <lang>填写正确！</lang>
-                                </div>
-                            </div>
-                        </div>
-                        <div class='col-md-3'>
-                            <div class='mb-3'>
-                                <label class='form-label' for='validationSet'>
-                                    <lang>属性集</lang>
-                                </label>
-                                <select type='text' class='form-control' name='set_id' data-parsley-minlength='3'
-                                        id='validationSet'
-                                        required='required' data-selected='{{group.set_id}}'>
-                                    <if condition="group_set">
-                                        <option value="{{group_set.set_id}}" selected>{{group_set.name}}</option>
-                                    </if>
-                                </select>
-                                <div class='valid-feedback'>
-                                    <lang>填写正确！</lang>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <button class='btn btn-primary' type='submit'>
-                        <empty
-                            name='group'>
-                            <lang>添加</lang>
-                            <else/>
-                            <lang>编辑</lang>
-                        </empty>
+                    <notempty name="group"><lang>编辑</lang><else/><lang>添加</lang></notempty>
+                </h2>
+                <p class="w-text" data-tone="muted"><lang>维护属性组名称、代码、所属实体与属性集</lang></p>
+            </div>
+        </div>
+        <div class="w-card__body">
+            <w:form class="w-stack needs-validation" data-gap="md" novalidate="" action="{{action}}" method="post">
+                <div class="w-cluster" style="flex-wrap:wrap;align-items:flex-start;gap:1rem;">
+                    <label class="w-field" style="flex:1 1 12rem;min-width:10rem;">
+                        <span class="w-field__label" for="validationName"><lang>组名</lang></span>
+                        <input class="w-input" type="text" maxlength="60" data-parsley-minlength="3"
+                               id="validationName" placeholder="@lang{组名}"
+                               value="{{group.name}}" name="name" required="">
+                    </label>
+                    <label class="w-field" style="flex:1 1 12rem;min-width:10rem;">
+                        <span class="w-field__label" for="validationCode"><lang>组代码</lang></span>
+                        <input class="w-input" type="text" maxlength="60" data-parsley-minlength="3"
+                               id="validationCode" placeholder="@lang{组代码}"
+                               value="{{group.code}}" name="code" required="">
+                    </label>
+                    <label class="w-field" style="flex:1 1 12rem;min-width:10rem;">
+                        <span class="w-field__label" for="validationEntity"><lang>实体</lang></span>
+                        <select class="w-select" name="eav_entity_id" id="validationEntity" required="">
+                            <foreach name="entities">
+                                <option value="{{v.eav_entity_id}}" @if{group.eav_entity_id== v.eav_entity_id=> 'selected'}>{{v.name}}</option>
+                            </foreach>
+                        </select>
+                    </label>
+                    <label class="w-field" style="flex:1 1 12rem;min-width:10rem;">
+                        <span class="w-field__label" for="validationSet"><lang>属性集</lang></span>
+                        <select class="w-select" name="set_id" id="validationSet" required="required" data-selected="{{group.set_id}}">
+                            <if condition="group_set">
+                                <option value="{{group_set.set_id}}" selected>{{group_set.name}}</option>
+                            </if>
+                        </select>
+                    </label>
+                </div>
+                <div class="w-cluster" style="gap:0.5rem;">
+                    <button class="w-button" data-tone="primary" type="submit">
+                        <empty name="group"><lang>添加</lang><else/><lang>保存</lang></empty>
                     </button>
-                    <notempty name='group'>
-                        <a class='btn btn-info' href="@backend-url('*/backend/attribute/group/add')">
+                    <notempty name="group">
+                        <a class="w-button" data-tone="neutral" data-variant="outline" href="@backend-url('*/backend/attribute/group/add')">
                             <lang>继续新增</lang>
                         </a>
                     </notempty>
-                </w:form>
-            </div>
+                </div>
+            </w:form>
         </div>
-    </div> <!-- end col -->
-</div> <!-- end row -->
+    </section>
+</div>
 
 <js:part>
 (function() {
     'use strict';
-    
+
     var validationEntity = $('#validationEntity');
     var validationSet = $('#validationSet');
-    
+
     validationEntity.change(function () {
         var selectedOption = $(this).find(':selected').val();
         renderAttributeSet(selectedOption);
     });
-    
+
     var initSelected = validationEntity.find(':selected').val();
     if(!validationSet.find(':selected').val()){
         renderAttributeSet(initSelected);
