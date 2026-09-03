@@ -59,6 +59,15 @@ Common keys:
 List-style keys `schema_nodes`, `item_list`, `faqs`, and `qa_list` are appended to existing
 context. Other keys override or enrich existing context recursively.
 
+When Head is rendered with an isolated template instance, publish the product projection under
+`seo.product`. `PageSeoContextResolver` prefers a template-local `product` and falls back to
+`seo.product`; providers therefore receive the same product facts without a module-specific
+global bridge. Variant facts must remain in the owning module's canonical model (for Product,
+Product/Offer EAV); the SEO profile is a read-only projection, not a JSON specification store.
+When the nullable registry constructor argument is not injected, the resolver lazily creates
+`HeadProviderRegistry` through `ObjectManager`; runtime provider discovery must never depend on
+optional-constructor autowiring.
+
 ## Custom Slot Shape
 
 `<w:seo>` is not limited to head templates. It may appear in body, footer, or a
@@ -188,6 +197,8 @@ $this->setData('seo', [
 ```
 
 ## Minimal Provider
+
+Provider discovery is scoped to the `SeoProfileProvider` extension point before class resolution. Providers are initialized independently, so one broken optional provider is skipped without removing healthy peers. A provider must therefore return only its own page facts and must not depend on sitemap or other unrelated extension types being instantiable.
 
 ```php
 <?php

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Seo\Service\Head;
 
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Seo\Structure\Faq\FaqStructureNormalizer;
 
 class PageSeoContextResolver
@@ -28,7 +29,10 @@ class PageSeoContextResolver
         }
         $meta = $this->pageMeta($template);
         $seo = $this->toArray($this->readTemplate($template, 'seo'));
-        $product = $this->readTemplate($template, 'product');
+        $product = $this->firstNonEmpty([
+            $this->readTemplate($template, 'product'),
+            $this->read($seo, ['product']),
+        ]);
         $category = $this->readTemplate($template, 'category');
         $page = $this->readTemplate($template, 'page');
         $currentPost = $this->readTemplate($template, 'current_post');
@@ -757,11 +761,14 @@ class PageSeoContextResolver
      */
     private function resolveIntegrationContext($template, array $context): array
     {
-        if ($this->headIntegrationContextService === null) {
+        try {
+            $service = $this->headIntegrationContextService
+                ?? ObjectManager::getInstance(HeadIntegrationContextService::class);
+
+            return $service->resolve($template, $context);
+        } catch (\Throwable) {
             return [];
         }
-
-        return $this->headIntegrationContextService->resolve($template, $context);
     }
 
     /**
@@ -912,10 +919,14 @@ class PageSeoContextResolver
      */
     private function applySeoProfileProviders($template, array $context): array
     {
-        if (!$this->providerRegistry || !method_exists($this->providerRegistry, 'getSeoProfileProviders')) {
+        try {
+            $providerRegistry = $this->providerRegistry
+                ?? new HeadProviderRegistry(ObjectManager::getInstance());
+            $providers = $providerRegistry->getSeoProfileProviders();
+        } catch (\Throwable) {
             return $context;
         }
-        foreach ($this->providerRegistry->getSeoProfileProviders() as $provider) {
+        foreach ($providers as $provider) {
             try {
                 $provided = $provider->provideSeoProfile($template, $context);
                 if ($provided !== []) {
