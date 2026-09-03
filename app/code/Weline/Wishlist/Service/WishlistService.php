@@ -20,7 +20,10 @@ final class WishlistService
         if ($productId <= 0) {
             return $this->failure(__('无效的商品 ID'));
         }
-        $ids = $this->store->listIds();
+        if ($this->snapshots->resolve($productId) === null) {
+            return $this->failure(__('无效的商品 ID'));
+        }
+        $ids = $this->pruneInvalidIds();
         if (!in_array($productId, $ids, true)) {
             $ids[] = $productId;
             $this->store->saveIds($ids);
@@ -61,7 +64,7 @@ final class WishlistService
      */
     public function list(): array
     {
-        $ids = $this->store->listIds();
+        $ids = $this->pruneInvalidIds();
 
         return [
             'success' => true,
@@ -75,14 +78,14 @@ final class WishlistService
      */
     public function listPage(): array
     {
-        $ids = $this->store->listIds();
+        $entries = $this->resolveValidEntries();
+        $ids = [];
         $items = [];
-        foreach ($ids as $productId) {
-            $snapshot = $this->snapshots->resolve($productId);
-            if ($snapshot !== null) {
-                $items[] = $snapshot;
-            }
+        foreach ($entries as $entry) {
+            $ids[] = $entry['product_id'];
+            $items[] = $entry['snapshot'];
         }
+        $this->persistIfChanged($ids);
 
         return [
             'success' => true,
@@ -96,7 +99,7 @@ final class WishlistService
      */
     public function count(): array
     {
-        $ids = $this->store->listIds();
+        $ids = $this->pruneInvalidIds();
 
         return [
             'success' => true,
@@ -120,6 +123,52 @@ final class WishlistService
         $result['active'] = true;
 
         return $result;
+    }
+
+    /**
+     * Drop product IDs that no longer resolve to a published storefront offer.
+     *
+     * @return list<int>
+     */
+    private function pruneInvalidIds(): array
+    {
+        $ids = [];
+        foreach ($this->resolveValidEntries() as $entry) {
+            $ids[] = $entry['product_id'];
+        }
+        $this->persistIfChanged($ids);
+
+        return $ids;
+    }
+
+    /**
+     * @return list<array{product_id:int,snapshot:array<string,mixed>}>
+     */
+    private function resolveValidEntries(): array
+    {
+        $entries = [];
+        foreach ($this->store->listIds() as $productId) {
+            $snapshot = $this->snapshots->resolve($productId);
+            if ($snapshot !== null) {
+                $entries[] = [
+                    'product_id' => $productId,
+                    'snapshot' => $snapshot,
+                ];
+            }
+        }
+
+        return $entries;
+    }
+
+    /**
+     * @param list<int> $validIds
+     */
+    private function persistIfChanged(array $validIds): void
+    {
+        if ($validIds === $this->store->listIds()) {
+            return;
+        }
+        $this->store->saveIds($validIds);
     }
 
     /**

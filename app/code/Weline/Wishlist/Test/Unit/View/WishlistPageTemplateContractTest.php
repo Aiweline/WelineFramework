@@ -8,6 +8,22 @@ use PHPUnit\Framework\TestCase;
 
 final class WishlistPageTemplateContractTest extends TestCase
 {
+    public function testHeaderWishlistSurfacesUseConfiguredCopyI18nBoundary(): void
+    {
+        $widgetFile = dirname(__DIR__, 3) . '/view/theme/frontend/widgets/header/wishlist-icon/default.phtml';
+        $hookFile = dirname(__DIR__, 3) . '/view/hooks/header-account-links.phtml';
+        self::assertFileExists($widgetFile);
+        self::assertFileExists($hookFile);
+
+        $widget = (string)file_get_contents($widgetFile);
+        $hook = (string)file_get_contents($hookFile);
+        self::assertStringContainsString("WidgetI18n::label('我的收藏')", $widget);
+        self::assertStringContainsString("WidgetI18n::label('收藏')", $widget);
+        self::assertStringContainsString("WidgetI18n::label('我的收藏')", $hook);
+        self::assertStringNotContainsString("__('我的收藏')", $widget . $hook);
+        self::assertStringNotContainsString("__('收藏')", $widget);
+    }
+
     public function testWishlistPageUsesProductCardShopperActions(): void
     {
         $templateFile = dirname(__DIR__, 3) . '/view/templates/frontend/wishlist/index.phtml';
