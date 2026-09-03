@@ -139,31 +139,12 @@ class MetaAdminQueryProvider implements QueryProviderInterface
                 break;
             }
         }
-        $area = 'Backend';
-        $controllerSeg = 'Index';
-        $actionSeg = 'index';
-        if (preg_match('#^/[a-z0-9_-]+/(backend|admin|frontend)/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
-            $area = ucfirst(strtolower($mm[1]));
-            $controllerSeg = $mm[2];
-            $actionSeg = $mm[3] ?? 'index';
-        } elseif (preg_match('#^/[a-z0-9_-]+/([a-z0-9_-]+)(?:/([a-z0-9_-]+))?$#i', $normalized, $mm)) {
-            $controllerSeg = $mm[1];
-            $actionSeg = $mm[2] ?? 'index';
-        } else {
+        $resolved = $this->resolveControllerAction($normalized);
+        if ($resolved === null) {
             return ['success' => false, 'message' => 'Unsupported admin path: ' . $normalized];
         }
-        $controllerSeg = str_replace(['-', '_'], '', ucwords(str_replace(['-', '_'], ' ', $controllerSeg)));
-        $actionSeg = str_replace('-', '', $actionSeg);
-        $ns = 'Weline\Meta\Controller';
-        $class = $ns . '\\' . $area . '\\' . $controllerSeg;
-        if (!class_exists($class)) {
-            $classAlt = $ns . '\\' . $controllerSeg;
-            if (class_exists($classAlt)) {
-                $class = $classAlt;
-            } else {
-                return ['success' => false, 'message' => 'Controller missing: ' . $class];
-            }
-        }
+        [$class, $actionSeg] = $resolved;
+
         $queryParams = [];
         if (!empty($parts['query'])) {
             parse_str((string)$parts['query'], $queryParams);
@@ -195,6 +176,92 @@ class MetaAdminQueryProvider implements QueryProviderInterface
             $bodyParams,
             $method,
             $body
+        );
+    }
+
+    /**
+     * Resolve nested Meta backend controllers such as Backend\\Config\\File.
+     *
+     * @return null|array{0:string,1:string}
+     */
+    private function resolveControllerAction(string $normalized): ?array
+    {
+        $ns = 'Weline\\Meta\\Controller';
+        $area = null;
+        $rest = '';
+        if (preg_match('#^/[a-z0-9_-]+/(backend|admin|frontend)/(.+)$#i', $normalized, $mm)) {
+            $areaName = strtolower((string)$mm[1]);
+            $area = $areaName === 'admin' ? 'Backend' : ucfirst($areaName);
+            $rest = (string)$mm[2];
+        } elseif (preg_match('#^/[a-z0-9_-]+/(.+)$#i', $normalized, $mm)) {
+            $rest = (string)$mm[1];
+        } else {
+            return null;
+        }
+
+        $segments = array_values(array_filter(
+            explode('/', $rest),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+        if ($segments === []) {
+            return null;
+        }
+
+        // Prefer last segment as action when the preceding path maps to an existing controller.
+        if (count($segments) >= 2) {
+            $actionCandidate = str_replace('-', '', (string)$segments[count($segments) - 1]);
+            $controllerSegments = array_slice($segments, 0, -1);
+            $class = $this->buildControllerClass($ns, $area, $controllerSegments);
+            if ($class !== null && class_exists($class)) {
+                return [$class, $actionCandidate !== '' ? $actionCandidate : 'index'];
+            }
+            if ($area !== null) {
+                $classAlt = $this->buildControllerClass($ns, null, $controllerSegments);
+                if ($classAlt !== null && class_exists($classAlt)) {
+                    return [$classAlt, $actionCandidate !== '' ? $actionCandidate : 'index'];
+                }
+            }
+        }
+
+        $class = $this->buildControllerClass($ns, $area, $segments);
+        if ($class !== null && class_exists($class)) {
+            return [$class, 'index'];
+        }
+        if ($area !== null) {
+            $classAlt = $this->buildControllerClass($ns, null, $segments);
+            if ($classAlt !== null && class_exists($classAlt)) {
+                return [$classAlt, 'index'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<string> $segments
+     */
+    private function buildControllerClass(string $ns, ?string $area, array $segments): ?string
+    {
+        if ($segments === []) {
+            return null;
+        }
+        $parts = [];
+        foreach ($segments as $segment) {
+            $parts[] = $this->studly((string)$segment);
+        }
+        $suffix = implode('\\', $parts);
+
+        return $area !== null && $area !== ''
+            ? $ns . '\\' . $area . '\\' . $suffix
+            : $ns . '\\' . $suffix;
+    }
+
+    private function studly(string $value): string
+    {
+        return str_replace(
+            [' ', '-', '_'],
+            '',
+            ucwords(str_replace(['-', '_'], ' ', $value))
         );
     }
 }
