@@ -9,6 +9,10 @@
     min-height: 2.5rem;
 }
 
+.w-order-notice--summary {
+    margin: 0;
+}
+
 .w-order-notice {
     display: flex;
     flex-direction: column;

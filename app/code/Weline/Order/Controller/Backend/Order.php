@@ -140,10 +140,8 @@ class Order extends BackendController
         try {
             $order = $record['order'];
             $items = $this->orderService->getOrderItems($orderId);
-            
-            // 获取支付记录
-            $paymentService = ObjectManager::getInstance(\Weline\Order\Service\PaymentService::class);
-            $payments = $paymentService->getPaymentHistory($orderId);
+
+            // 支付记录由 Order 空槽 + Weline_Payment 部件/Hook 填充，禁止本控制器直灌。
             
             // 获取发货记录
             $fulfillmentService = ObjectManager::getInstance(\Weline\Order\Service\FulfillmentService::class);
@@ -169,10 +167,13 @@ class Order extends BackendController
             // 获取可用状态转换
             $currentStatus = $order->getData(OrderModel::schema_fields_STATUS);
             $availableTransitions = $this->stateMachine->getAvailableTransitions($currentStatus);
+
+            $customerPresent = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderListPresenter::class)
+                ->present($order);
             
             $this->assign('order', $order);
             $this->assign('items', $items);
-            $this->assign('payments', $payments);
+            $this->assign('customer_present', $customerPresent);
             $this->assign('shipments', $shipments);
             $this->assign('refunds', $refunds);
             $this->assign('invoices', $invoices);
