@@ -5,7 +5,10 @@
 # 保留这些目录
 !static/
 !static/.gitkeep
+# media：只保留目录占位 .gitkeep，禁止跟踪任何上传/生成的媒体文件
 !media/
+!media/.gitkeep
+media/**
 !media/.gitkeep
 !source/
 !source/**
