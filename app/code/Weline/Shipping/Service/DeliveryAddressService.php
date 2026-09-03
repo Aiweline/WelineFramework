@@ -51,6 +51,8 @@ class DeliveryAddressService
      */
     public function getListByCustomer(int $customerId, array $filters = []): array
     {
+        $this->ensureSoleDefaultByCustomer($customerId);
+
         $model = $this->getModel()->reset()
             ->where(DeliveryAddress::schema_fields_CUSTOMER_ID, $customerId);
         
@@ -140,6 +142,10 @@ class DeliveryAddressService
         $data[DeliveryAddress::schema_fields_CUSTOMER_ID] = $customerId;
         $data = $this->addressFormatter->normalize($data);
         $this->validate($data);
+
+        if ($this->countByCustomer($customerId) === 0) {
+            $data[DeliveryAddress::schema_fields_IS_DEFAULT] = 1;
+        }
         
         $model = $this->getModel()->reset();
         $model->setData($data);
@@ -206,8 +212,14 @@ class DeliveryAddressService
         if ($customerId !== null && $model->getCustomerId() !== $customerId) {
             throw new \Exception(__('无权操作此地址'));
         }
-        
-        return (bool) $model->delete()->fetch();
+
+        $ownerId = (int)$model->getCustomerId();
+        $deleted = (bool) $model->delete()->fetch();
+        if ($deleted) {
+            $this->ensureSoleDefaultByCustomer($ownerId);
+        }
+
+        return $deleted;
     }
 
     /**
@@ -297,6 +309,49 @@ class DeliveryAddressService
         }
         
         $model->update([DeliveryAddress::schema_fields_IS_DEFAULT => 0])->fetch();
+    }
+
+    private function countByCustomer(int $customerId): int
+    {
+        if ($customerId <= 0) {
+            return 0;
+        }
+
+        $collection = $this->getModel()->reset()
+            ->where(DeliveryAddress::schema_fields_CUSTOMER_ID, $customerId)
+            ->select()
+            ->fetch();
+
+        return count($collection->getItems());
+    }
+
+    /**
+     * 客户仅剩一条地址时强制为默认（修复历史脏数据与删后残留）。
+     */
+    private function ensureSoleDefaultByCustomer(int $customerId): void
+    {
+        if ($customerId <= 0) {
+            return;
+        }
+
+        $items = $this->getModel()->reset()
+            ->where(DeliveryAddress::schema_fields_CUSTOMER_ID, $customerId)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        if (count($items) !== 1) {
+            return;
+        }
+
+        /** @var DeliveryAddress $only */
+        $only = $items[0];
+        if ($only->isDefault()) {
+            return;
+        }
+
+        $only->setData(DeliveryAddress::schema_fields_IS_DEFAULT, 1);
+        $only->save();
     }
 
     /**
