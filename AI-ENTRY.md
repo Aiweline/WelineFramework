@@ -4,20 +4,20 @@
 
 ## 🚨 Read This First
 
-1. **Architecture diagrams** → `dev/ai/diagrams/00-INDEX.txt`
-2. **Module docs** → `dev/ai/diagrams/08-module-docs-index.txt`
-3. **Framework rules** → `CLAUDE.md`
+1. **MCP bootstrap & rules** → `AGENTS.md`
+2. **Architecture diagrams** → `dev/ai/diagrams/00-INDEX.txt`
+3. **Module docs** → `dev/ai/diagrams/08-module-docs-index.txt`
 4. **Skills** → `dev/ai/skills/_index.md` (on-demand)
 
 ## 📋 Reading Order
 
 ```
+Step 0: AGENTS.md（接通 weline_project_intelligence MCP）
 Step 1: dev/ai/diagrams/00-INDEX.txt + 01-framework-overview.txt
 Step 1b: app/code/Weline/Ai/doc/AI硬规则索引.md（任务路由）
 Step 2: dev/ai/diagrams/08-module-docs-index.txt → app/code/Weline/{Module}/doc/README.md
-Step 3: CLAUDE.md
-Step 4: dev/ai/skills/{skill}.md (on-demand)
-Step 5: Source code (LAST RESORT)
+Step 3: dev/ai/skills/{skill}.md (on-demand)
+Step 4: Source code (LAST RESORT)
 ```
 
 ## 🎯 Token Optimization
@@ -80,6 +80,6 @@ php bin/w server:stop -n ai-test-{unique-id}  # Stop and cleanup test instance (
 
 - Diagrams: `dev/ai/diagrams/00-INDEX.txt`
 - Module docs: `dev/ai/diagrams/08-module-docs-index.txt`
-- Framework: `CLAUDE.md`
+- MCP & framework entry: `AGENTS.md`
 - Skills: `dev/ai/skills/_index.md`
 - Full guide: `dev/ai/AI-开发与测试指南.md`
