@@ -1,7 +1,10 @@
 .w-currency-guide {
-    max-width: var(--weline-layout-content-max-width, 72rem);
-    margin: 0 auto;
-    padding: var(--weline-space-8, 2rem) var(--weline-layout-content-padding-inline, 1.25rem) var(--weline-space-12, 3rem);
+    /* Theme default 布局已有 .w-container；本块只填满，禁止再套版心 */
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    padding: var(--weline-space-8, 2rem) 0 var(--weline-space-12, 3rem);
 }
 
 .w-currency-guide__header {
