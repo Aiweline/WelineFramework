@@ -346,11 +346,11 @@ class Parser
                     // 从所有关联模块的词典读取（支持多模块）
                     $module_words = [];
                     foreach ($modules as $module_name) {
-                        $words = self::loadModuleWords($module_name, $lang);
+                        $words = self::loadModuleWordsForLocaleChain($module_name, $lang);
                         // 后加载的模块词典会覆盖先加载的（优先级：后添加的模块 > 先添加的模块）
                         $module_words = array_merge($module_words, $words);
                     }
-                    $all_words = self::loadLocaleWords($lang, $modules);
+                    $all_words = self::loadLocaleWordsForLocaleChain($lang, $modules);
                     
                     // 合并：模块词典优先，总词典作为补充（模块词典覆盖总词典）
                     // 先加载总词典，再加载模块词典，这样模块词典会覆盖总词典
@@ -466,10 +466,10 @@ class Parser
     {
         $module_words = [];
         foreach ($modules as $module_name) {
-            $module_words = \array_merge($module_words, self::loadModuleWords($module_name, $lang));
+            $module_words = \array_merge($module_words, self::loadModuleWordsForLocaleChain($module_name, $lang));
         }
 
-        return \array_merge(self::loadLocaleWords($lang, $modules, $includeGlobalDictionary), $module_words);
+        return \array_merge(self::loadLocaleWordsForLocaleChain($lang, $modules, $includeGlobalDictionary), $module_words);
     }
 
     private static function getCurrentLayeredWords(): array
@@ -532,7 +532,7 @@ class Parser
 
         $moduleLayers = [];
         foreach ($modules as $moduleName) {
-            $moduleLayers[$moduleName] = self::loadModuleWords($moduleName, $lang);
+            $moduleLayers[$moduleName] = self::loadModuleWordsForLocaleChain($moduleName, $lang);
         }
 
         return self::$workerLayeredWordsCache[$cacheKey] = [
@@ -540,7 +540,11 @@ class Parser
             'lang' => $lang,
             'modules' => $modules,
             'module_words' => $moduleLayers,
-            'locale_words' => self::loadLocaleWords($lang, $modules, $includeGlobalDictionary),
+            'locale_words' => self::loadLocaleWordsForLocaleChain(
+                $lang,
+                $modules,
+                $includeGlobalDictionary,
+            ),
             'global_words' => [],
         ];
     }
@@ -585,17 +589,18 @@ class Parser
             }
         }
 
-        $lang = (string)($layers['lang'] ?? '');
         if ($lang !== '') {
-            $globalTranslation = self::loadGlobalDictionaryWord($lang, $word);
-            if (\is_string($globalTranslation) && $globalTranslation !== '' && $globalTranslation !== $word) {
-                return self::rememberWorkerTranslatedWord($workerCacheKey, $globalTranslation);
-            }
-            if ($globalTranslation === false) {
-                // A transient cache/DB failure must not become a process-lifetime
-                // negative entry. The next request may retry after the shared
-                // single-flight owner has published the exact word.
-                return $word;
+            foreach (LocaleFallbackChain::candidates($lang, self::websiteDefaultLocale()) as $candidateLocale) {
+                $globalTranslation = self::loadGlobalDictionaryWord($candidateLocale, $word);
+                if (\is_string($globalTranslation) && $globalTranslation !== '' && $globalTranslation !== $word) {
+                    return self::rememberWorkerTranslatedWord($workerCacheKey, $globalTranslation);
+                }
+                if ($globalTranslation === false) {
+                    // A transient cache/DB failure must not become a process-lifetime
+                    // negative entry. The next request may retry after the shared
+                    // single-flight owner has published the exact word.
+                    return $word;
+                }
             }
         }
 
@@ -674,15 +679,17 @@ class Parser
     private static function getWordsCacheVersion(string $lang, array $modules): string
     {
         $parts = [];
-        $languageFile = Env::path_TRANSLATE_FILES_PATH . $lang . '.php';
-        $parts[] = $languageFile . ':' . self::getFileVersion($languageFile);
+        foreach (LocaleFallbackChain::candidates($lang, self::websiteDefaultLocale()) as $candidateLocale) {
+            $languageFile = Env::path_TRANSLATE_FILES_PATH . $candidateLocale . '.php';
+            $parts[] = $languageFile . ':' . self::getFileVersion($languageFile);
 
-        foreach ($modules as $moduleName) {
-            try {
-                $module = Env::getInstance()->getModuleInfo($moduleName);
-                $csvFile = ($module['base_path'] ?? '') . '/i18n/' . $lang . '.csv';
-                $parts[] = $csvFile . ':' . self::getFileVersion($csvFile);
-            } catch (\Throwable) {
+            foreach ($modules as $moduleName) {
+                try {
+                    $module = Env::getInstance()->getModuleInfo($moduleName);
+                    $csvFile = ($module['base_path'] ?? '') . '/i18n/' . $candidateLocale . '.csv';
+                    $parts[] = $csvFile . ':' . self::getFileVersion($csvFile);
+                } catch (\Throwable) {
+                }
             }
         }
 
@@ -780,11 +787,69 @@ class Parser
     }
     
     /**
+     * Load and merge translated module words from the deterministic locale chain.
+     *
+     * @return array<string, string>
+     */
+    private static function loadModuleWordsForLocaleChain(string $moduleName, string $lang): array
+    {
+        $words = [];
+        $locales = LocaleFallbackChain::candidates($lang, self::websiteDefaultLocale());
+        foreach (\array_reverse($locales) as $candidateLocale) {
+            $words = self::mergePreferTranslatedWords(
+                $words,
+                self::loadModuleWords($moduleName, $candidateLocale),
+            );
+        }
+
+        return $words;
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private static function loadLocaleWordsForLocaleChain(
+        string $lang,
+        array $modules,
+        bool $includeGlobalDictionary = true,
+    ): array {
+        $words = [];
+        $locales = LocaleFallbackChain::candidates($lang, self::websiteDefaultLocale());
+        foreach (\array_reverse($locales) as $candidateLocale) {
+            $words = self::mergePreferTranslatedWords(
+                $words,
+                self::loadLocaleWords($candidateLocale, $modules, $includeGlobalDictionary),
+            );
+        }
+
+        return $words;
+    }
+
+    private static function websiteDefaultLocale(): string
+    {
+        foreach (['website.language', 'locale', 'lang'] as $configKey) {
+            try {
+                $candidate = Env::get($configKey, '');
+                if (!\is_scalar($candidate)) {
+                    continue;
+                }
+                $candidate = LocaleFallbackChain::normalize((string)$candidate);
+                if ($candidate !== '') {
+                    return $candidate;
+                }
+            } catch (\Throwable) {
+            }
+        }
+
+        return LocaleFallbackChain::normalize(Env::default_LANGUAGE_CODE);
+    }
+
+    /**
      * 从模块的i18n目录加载翻译词
-     * 
+     *
      * @param string $module_name 模块名
      * @param string $lang 语言代码
-     * @return array
+     * @return array<string, string>
      */
     protected static function loadModuleWords(string $module_name, string $lang): array
     {

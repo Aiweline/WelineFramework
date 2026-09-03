@@ -313,8 +313,10 @@ final class DeviceRegistryFake implements AuthenticatedDeviceRegistryInterface
     public static int $registerCalls = 0;
     public static int $validateCalls = 0;
     public static int $revokeCalls = 0;
+    public static int $rebindCalls = 0;
     public static ?AuthenticatedDeviceContext $lastContext = null;
     public static ?AuthenticatedDeviceContext $lastRevokedContext = null;
+    public static ?AuthenticatedDeviceContext $lastRebindContext = null;
     public static ?AuthenticatedLoginContext $lastLoginContext = null;
     public static string $lastRevokeReason = '';
     public static ?AuthenticatedDeviceValidation $validation = null;
@@ -325,8 +327,10 @@ final class DeviceRegistryFake implements AuthenticatedDeviceRegistryInterface
         self::$registerCalls = 0;
         self::$validateCalls = 0;
         self::$revokeCalls = 0;
+        self::$rebindCalls = 0;
         self::$lastContext = null;
         self::$lastRevokedContext = null;
+        self::$lastRebindContext = null;
         self::$lastLoginContext = null;
         self::$lastRevokeReason = '';
         self::$validation = AuthenticatedDeviceValidation::valid('device_public_A');
@@ -364,6 +368,14 @@ final class DeviceRegistryFake implements AuthenticatedDeviceRegistryInterface
         self::$lastContext = $context;
         self::$lastRevokedContext = $context;
         self::$lastRevokeReason = $reason;
+    }
+
+    public function rebindToCurrentSession(AuthenticatedDeviceContext $context): AuthenticatedDeviceValidation
+    {
+        self::$rebindCalls++;
+        self::$lastRebindContext = $context;
+        self::$lastContext = $context;
+        return self::$validation ?? AuthenticatedDeviceValidation::valid((string)($context->deviceId ?: 'device_public_A'));
     }
 }
 
