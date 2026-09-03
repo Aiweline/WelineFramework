@@ -7,7 +7,7 @@
  *
  * @widget.code {product-add-to-cart}
  * @widget.name {加入购物车}
- * @widget.description {产品主要信息购买操作槽：Cart V2 addV2 加购按钮}
+ * @widget.description {产品主要信息购买操作槽：Cart add 加购按钮}
  * @widget.type {product}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -55,7 +55,7 @@ $buttonLabel = $quoteOnly
      weline-code="<?= $escape($scope->code) ?>">
     <button type="button"
             class="product-native-detail__add weline-pixel::add_to_cart"
-            data-action="add-v2"
+            data-action="add"
             data-testid="product-add-to-cart"
             data-default-label="<?= $escape($buttonLabel) ?>"
             data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"

@@ -5,73 +5,122 @@ declare(strict_types=1);
 namespace Weline\Cart\Service;
 
 use Weline\Cart\Api\CartItemSnapshotProviderInterface;
+use Weline\Cart\Api\Data\CartItemSnapshot;
+use Weline\Cart\Api\Data\OfferIdentity;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 
-class CartItemSnapshotProviderRegistry
+/**
+ * Provider registry：规范化 provider code → O(1)；重复 code fail-closed.
+ */
+final class CartItemSnapshotProviderRegistry
 {
     private const EXTENDS_PREFIX = 'extends/module/weline_cart/cartitemsnapshotprovider/';
 
-    /**
-     * @var list<array{class: class-string<CartItemSnapshotProviderInterface>, module: string}>|null
-     */
-    private ?array $providers = null;
+    public const ERROR_CODE_EMPTY = 'cart_provider_code_empty';
+    public const ERROR_CODE_DUPLICATE = 'cart_provider_code_duplicate';
+    public const ERROR_NOT_FOUND = 'cart_provider_not_found';
 
-    /**
-     * @param array<string, mixed> $params
-     * @return array<string, mixed>|null
-     */
-    public function resolve(int $productId, array $params = []): ?array
-    {
-        if ($productId <= 0) {
-            return null;
-        }
+    /** @var array<string, CartItemSnapshotProviderInterface> */
+    private array $byCode = [];
 
-        foreach ($this->all() as $definition) {
-            try {
-                $provider = ObjectManager::getInstance($definition['class']);
-                if (!$provider instanceof CartItemSnapshotProviderInterface) {
-                    continue;
-                }
+    private bool $extendsLoaded = false;
 
-                $snapshot = $provider->resolveCartItemSnapshot($productId, $params);
-                if (!is_array($snapshot)) {
-                    continue;
-                }
-
-                $sourceModule = $definition['module'];
-                if ($sourceModule !== '') {
-                    $snapshot['source_module'] = trim((string)($snapshot['source_module'] ?? '')) ?: $sourceModule;
-                    $snapshot['source_app'] = trim((string)($snapshot['source_app'] ?? ''))
-                        ?: $this->sourceAppFromModule($sourceModule);
-                }
-
-                return $snapshot;
-            } catch (\Throwable $throwable) {
-                if (function_exists('w_log_error')) {
-                    w_log_error(
-                        'Cart item snapshot provider failed: '
-                        . $definition['class']
-                        . ', error: '
-                        . $throwable->getMessage()
-                    );
-                }
-            }
-        }
-
-        return null;
+    public function __construct(
+        private readonly bool $autoLoadExtends = true,
+    ) {
     }
 
     /**
-     * @return list<array{class: class-string<CartItemSnapshotProviderInterface>, module: string}>
+     * @param list<CartItemSnapshotProviderInterface> $providers
      */
-    public function all(): array
+    public static function forTesting(array $providers = []): self
     {
-        if ($this->providers !== null) {
-            return $this->providers;
+        $reg = new self(autoLoadExtends: false);
+        foreach ($providers as $p) {
+            $reg->register($p);
+        }
+        $reg->extendsLoaded = true;
+        return $reg;
+    }
+
+    public function register(CartItemSnapshotProviderInterface $provider): void
+    {
+        $code = $this->normalize($provider->getProviderCode());
+        if ($code === '') {
+            throw new CartConflictException(
+                self::ERROR_CODE_EMPTY,
+                __('Cart Provider code 不能为空'),
+            );
+        }
+        if (isset($this->byCode[$code])) {
+            throw new CartConflictException(
+                self::ERROR_CODE_DUPLICATE,
+                __('重复的 Cart Provider code：%{1}', [$code]),
+                [
+                    'code' => $code,
+                    'existing' => $this->byCode[$code]::class,
+                    'incoming' => $provider::class,
+                ],
+            );
+        }
+        $this->byCode[$code] = $provider;
+    }
+
+    public function get(string $code): ?CartItemSnapshotProviderInterface
+    {
+        $this->boot();
+        return $this->byCode[$this->normalize($code)] ?? null;
+    }
+
+    /**
+     * @param array<string, scalar|null> $selection
+     */
+    public function resolve(
+        OfferIdentity $offer,
+        ScopeIdentity $scope,
+        array $selection = [],
+    ): CartItemSnapshot {
+        $this->boot();
+        $code = $this->normalize($offer->providerCode);
+        $provider = $this->byCode[$code] ?? null;
+        if ($provider !== null) {
+            $snapshot = $provider->resolveCartItemSnapshot($offer, $scope, $selection);
+            if ($snapshot instanceof CartItemSnapshot) {
+                return $snapshot;
+            }
         }
 
-        $definitions = [];
+        throw new CartConflictException(
+            self::ERROR_NOT_FOUND,
+            __('未找到 Cart Provider：%{1}', [$offer->providerCode]),
+            ['provider_code' => $offer->providerCode, 'offer' => $offer->toArray()],
+        );
+    }
+
+    /** @return list<string> */
+    public function codes(): array
+    {
+        $this->boot();
+        return array_keys($this->byCode);
+    }
+
+    public function clear(): void
+    {
+        $this->byCode = [];
+        $this->extendsLoaded = false;
+    }
+
+    private function boot(): void
+    {
+        if ($this->extendsLoaded || !$this->autoLoadExtends) {
+            return;
+        }
+        $this->extendsLoaded = true;
+        if (!class_exists(ExtendsData::class)) {
+            return;
+        }
         foreach (ExtendsData::getExtendedBy('Weline_Cart') as $sourceModule => $extensions) {
             foreach ($extensions as $extension) {
                 if (!is_array($extension)) {
@@ -81,31 +130,27 @@ class CartItemSnapshotProviderRegistry
                 if (!str_starts_with($relativePath, self::EXTENDS_PREFIX)) {
                     continue;
                 }
-
                 $className = $this->extensionClass((string)$sourceModule, $extension);
                 if ($className === '' || !is_subclass_of($className, CartItemSnapshotProviderInterface::class, true)) {
                     continue;
                 }
-
-                /** @var class-string<CartItemSnapshotProviderInterface> $className */
-                $definitions[$className] = [
-                    'class' => $className,
-                    'module' => (string)$sourceModule,
-                ];
+                try {
+                    $instance = ObjectManager::getInstance($className);
+                    if ($instance instanceof CartItemSnapshotProviderInterface) {
+                        $this->register($instance);
+                    }
+                } catch (CartConflictException $e) {
+                    throw $e;
+                } catch (\Throwable $e) {
+                    if (function_exists('w_log_error')) {
+                        w_log_error('Cart provider load failed: ' . $className . ' ' . $e->getMessage());
+                    }
+                }
             }
         }
-
-        return $this->providers = array_values($definitions);
     }
 
-    public function clear(): void
-    {
-        $this->providers = null;
-    }
-
-    /**
-     * @param array<string, mixed> $extension
-     */
+    /** @param array<string, mixed> $extension */
     private function extensionClass(string $sourceModule, array $extension): string
     {
         foreach (['class', 'class_name'] as $key) {
@@ -115,6 +160,7 @@ class CartItemSnapshotProviderRegistry
             }
         }
 
+        // ExtendsData 提供 relative_path / file_path，没有 legacy `file` 字段。
         $relativePath = str_replace('\\', '/', (string)($extension['relative_path'] ?? ''));
         if (!str_starts_with(strtolower($relativePath), 'extends/module/')) {
             return '';
@@ -123,7 +169,6 @@ class CartItemSnapshotProviderRegistry
         if (!str_ends_with(strtolower($classPath), '.php')) {
             return '';
         }
-
         $classPath = substr($classPath, 0, -4);
         $moduleNamespace = str_replace('_', '\\', trim($sourceModule));
         if ($moduleNamespace === '' || $classPath === '') {
@@ -133,10 +178,8 @@ class CartItemSnapshotProviderRegistry
         return $moduleNamespace . '\\Extends\\Module\\' . str_replace('/', '\\', $classPath);
     }
 
-    private function sourceAppFromModule(string $moduleName): string
+    private function normalize(string $code): string
     {
-        return str_contains($moduleName, '_')
-            ? (string)strstr($moduleName, '_', true)
-            : $moduleName;
+        return strtolower(trim($code));
     }
 }

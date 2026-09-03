@@ -17,14 +17,18 @@ use Weline\Theme\Service\WidgetDefaultInjectionService;
 
 final class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '1.2.2';
+    public const VERSION = '1.3.3';
 
     public function setup(Setup $setup, Context $context): void
     {
-        $this->seedMiniCartFooterExtrasDefaults();
+        $this->seedLayoutSlotDefaults('mini-cart', ['footer-extras']);
+        $this->seedLayoutSlotDefaults('cart', ['cart-summary-discount', 'cart-summary-note']);
     }
 
-    private function seedMiniCartFooterExtrasDefaults(): void
+    /**
+     * @param list<string> $slotIds
+     */
+    private function seedLayoutSlotDefaults(string $layoutType, array $slotIds): void
     {
         try {
             /** @var WidgetDefaultInjectionService $injectionService */
@@ -40,7 +44,7 @@ final class Upgrade implements UpgradeInterface
 
             $identity = [
                 'layout_option' => 'default',
-                'scope' => 'default.default.default',
+                'scope' => 'default.__store__.__channel__',
                 'locale_code' => '',
                 'target_type' => 'global',
                 'target_id' => 0,
@@ -55,23 +59,38 @@ final class Upgrade implements UpgradeInterface
                     continue;
                 }
 
-                $seeder->seedDefaultLayout($themeId, 'mini-cart', false);
+                $seeder->seedDefaultLayout($themeId, $layoutType, false);
 
                 foreach ([ThemeLayout::STATUS_DRAFT, ThemeLayout::STATUS_PUBLISHED] as $status) {
-                    $injectionService->initSlotDefaultInjections(
-                        $themeId,
-                        'mini-cart',
-                        $identity,
-                        'footer-extras',
-                        PreviewContextService::AREA_FRONTEND,
-                        $status,
-                    );
+                    foreach ($slotIds as $slotId) {
+                        $injectionService->initSlotDefaultInjections(
+                            $themeId,
+                            $layoutType,
+                            $identity,
+                            $slotId,
+                            PreviewContextService::AREA_FRONTEND,
+                            $status,
+                        );
+                    }
                 }
+
+                /** @var \Weline\Theme\Service\ThemeLayoutService $layoutService */
+                $layoutService = ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutService::class);
+                $layoutService->publishLayout(
+                    $themeId,
+                    $layoutType,
+                    $identity,
+                    true,
+                    [
+                        'reason' => 'cart coupon/note slot default injection publish',
+                        'actor' => 'system:Weline_Cart:Upgrade',
+                    ],
+                );
             }
         } catch (\Throwable $e) {
             throw new Exception(__(
-                '迷你购物车 footer-extras 默认部件迁移失败：%{1}',
-                [$e->getMessage()]
+                '购物车布局槽默认部件迁移失败（%{1}）：%{2}',
+                [$layoutType, $e->getMessage()]
             ), 0, $e);
         }
     }

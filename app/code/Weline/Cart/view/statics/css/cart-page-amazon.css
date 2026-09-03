@@ -343,23 +343,70 @@
     justify-content: space-between;
     gap: 12px;
     padding: 8px 0;
-    font-size: 18px;
+    font-size: 14px;
 }
 
-.weline-cart-shell--amazon .weline-cart-shell__summary-row.total {
+.weline-cart-shell--amazon .weline-cart-shell__summary-row--goods {
+    color: var(--cart-muted, #565959);
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__summary-row--goods span:last-child {
+    font-weight: 600;
+    color: var(--cart-text, #0f1111);
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__discount-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__discount-line {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 12px;
+    font-size: 12px;
+    color: var(--cart-muted, #565959);
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__discount-line strong {
+    font-size: 14px;
+    font-weight: 700;
+    color: #007600;
+    white-space: nowrap;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__discount-line--stack {
+    padding-left: 8px;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__summary-row.total,
+.weline-cart-shell--amazon .weline-cart-shell__summary-row--payable {
     font-size: 18px;
     font-weight: 700;
     padding-top: 10px;
     border-top: 1px solid var(--cart-border);
 }
 
-.weline-cart-shell--amazon .weline-cart-shell__summary-row.total strong {
+.weline-cart-shell--amazon .weline-cart-shell__summary-row.total strong,
+.weline-cart-shell--amazon .weline-cart-shell__summary-row--payable strong {
     color: var(--cart-price);
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__coupon-slot,
+.weline-cart-shell--amazon .weline-cart-shell__note-slot {
+    margin: 0 0 12px;
+}
+
+.weline-cart-shell--amazon .weline-cart-shell__totals {
+    margin-bottom: 4px;
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__checkout {
     min-height: 31px;
-    margin-top: 14px;
+    margin-top: 0;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -383,7 +430,7 @@
 }
 
 .weline-cart-shell--amazon .weline-cart-shell__summary-note {
-    margin-top: 12px;
+    margin: 4px 0 12px;
     font-size: 12px;
     line-height: 1.45;
     color: var(--cart-text-secondary);

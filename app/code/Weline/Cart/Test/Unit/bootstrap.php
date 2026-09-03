@@ -3,7 +3,7 @@
 declare(strict_types=1);
 
 /**
- * Minimal bootstrap for Cart V2 unit tests.
+ * Minimal bootstrap for Cart unit tests.
  */
 if (!\function_exists('__')) {
     function __(string $text, array $params = []): string

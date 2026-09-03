@@ -2,7 +2,7 @@
 
 declare(strict_types=1);
 
-use Weline\Cart\Service\CartV2HarnessCatalog;
+use Weline\Cart\Service\CartHarnessCatalog;
 use Weline\Framework\Database\Connection\Adapter\Pgsql\Connector as PgsqlConnector;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\SystemConfig\Model\SystemConfig;
@@ -43,7 +43,7 @@ $offerUuid = substr($offerHash, 0, 8) . '-'
 try {
     $database = r43_cart_require_isolated_postgresql();
     if ($action === 'prepare') {
-        CartV2HarnessCatalog::put($offerUuid, [
+        CartHarnessCatalog::put($offerUuid, [
             'currency' => 'CNY',
             'unit_price_minor' => 4300,
             'name' => 'R43 cart inspection fixture ' . $token,
@@ -63,8 +63,8 @@ try {
         exit(0);
     }
     if ($action === 'cleanup') {
-        CartV2HarnessCatalog::delete($offerUuid);
-        if (CartV2HarnessCatalog::get($offerUuid) !== null) {
+        CartHarnessCatalog::delete($offerUuid);
+        if (CartHarnessCatalog::get($offerUuid) !== null) {
             throw new RuntimeException('r43_cart_cleanup_offer_still_present');
         }
         echo json_encode(['ok'=>true,'database'=>$database,'token'=>$token,'missing'=>true], JSON_UNESCAPED_SLASHES) . "\n";

@@ -236,11 +236,33 @@
         return guestTokenPromise;
     }
 
+    function readEavSelection(button) {
+        const root = detailRoot(button);
+        if (!root) {
+            return {};
+        }
+
+        const selection = {};
+        root.querySelectorAll('[data-variant-option].is-selected').forEach(function (option) {
+            const axisCode = String(option.dataset.variantAxis || '').trim();
+            const axisValue = String(option.dataset.variantValue || '').trim();
+            if (axisCode !== '' && axisValue !== '') {
+                selection[axisCode] = axisValue;
+            }
+        });
+
+        return Object.keys(selection).sort().reduce(function (normalized, axisCode) {
+            normalized[axisCode] = selection[axisCode];
+            return normalized;
+        }, {});
+    }
+
     async function addOfferFromButton(button) {
-        const result = await (await waitForCartApi()).addV2({
+        const result = await (await waitForCartApi()).add({
             provider_code: button.dataset.providerCode || 'product',
             global_offer_uuid: button.dataset.globalOfferUuid || '',
             legacy_product_id: Number(button.dataset.productId || 0),
+            selection: readEavSelection(button),
             guest_token: await ensureGuestToken(),
             qty: Math.max(1, Number(button.dataset.qty || 1) || 1),
         }, { silent: true });
@@ -320,7 +342,8 @@
         host.style.insetBlockStart = '';
         host.style.insetInlineEnd = '';
         host.style.insetInlineStart = '';
-        host.style.width = 'min(22rem, calc(100dvw - 2rem))';
+        const noticeWidth = Math.min(22 * 16, Math.max(240, global.innerWidth - 32));
+        host.style.width = noticeWidth + 'px';
 
         const trigger = document.querySelector('[data-mini-cart-trigger]');
         if (!(trigger instanceof HTMLElement)) {
@@ -333,7 +356,10 @@
         const rect = trigger.getBoundingClientRect();
         const gap = 8;
         const top = Math.max(8, rect.bottom + gap);
-        const right = Math.max(16, global.innerWidth - rect.right);
+        let right = Math.max(16, global.innerWidth - rect.right);
+        if (right + noticeWidth > global.innerWidth - 16) {
+            right = Math.max(16, global.innerWidth - 16 - noticeWidth);
+        }
         host.style.top = top + 'px';
         host.style.right = right + 'px';
         host.style.left = 'auto';
@@ -578,7 +604,7 @@
 
             const feedback = purchaseFeedback(button);
             const message = feedback.message;
-            const isAddToCart = button.dataset.action === 'add-v2';
+            const isAddToCart = button.dataset.action === 'add';
             showPurchaseLoading(button, message, resolvedOptions.loadingText || '');
 
             try {
@@ -634,7 +660,7 @@
 
     function bindPurchaseButtons(scope) {
         const root = scope && scope.querySelector ? scope : document;
-        root.querySelectorAll('[data-action="add-v2"], [data-action="buy-now"]').forEach(function (button) {
+        root.querySelectorAll('[data-action="add"], [data-action="buy-now"]').forEach(function (button) {
             if (!detailRoot(button) && !widgetRoot(button)) {
                 return;
             }

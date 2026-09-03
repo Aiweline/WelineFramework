@@ -4,14 +4,14 @@ declare(strict_types=1);
 
 namespace Weline\Cart\Service;
 
-use Weline\Cart\Api\CartV2CartStoreInterface;
+use Weline\Cart\Api\CartStoreInterface;
 
 /**
  * 跨 Worker 共享车篮：w_cache Custom 全维度逃逸（键内已含 Scope）。
  */
-final class CartV2CacheStore implements CartV2CartStoreInterface
+final class CartCacheStore implements CartStoreInterface
 {
-    private const CACHE_IDENTITY = 'cart_v2';
+    private const CACHE_IDENTITY = 'cart';
     private const TTL = 604800; // 7d
     private const INDEX_PREFIX = 'idx:';
 

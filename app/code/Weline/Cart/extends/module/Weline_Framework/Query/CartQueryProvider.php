@@ -5,9 +5,8 @@ namespace Weline\Cart\Extends\Module\Weline_Framework\Query;
 
 use Weline\Cart\Service\CartCurrentCustomerResolver;
 use Weline\Cart\Service\CartScopeResolver;
+use Weline\Cart\Service\CartConflictException;
 use Weline\Cart\Service\CartService;
-use Weline\Cart\Service\CartV2ConflictException;
-use Weline\Cart\Service\CartV2Service;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
@@ -42,24 +41,18 @@ class CartQueryProvider implements QueryProviderInterface
             'summary' => $this->success('Cart summary loaded.', $this->storefrontSummaryPayload($params)),
             'count' => $this->success('Cart count loaded.', $this->cartCountPayload($params)),
             'items', 'miniItems' => $this->success('Cart items loaded.', $this->cartItemsPayload($params)),
-            'add' => $this->successFromSummary($this->cartService->add(
-                $this->withTrustedCustomer($params),
-            )),
-            'addV2' => $this->successFromSummary($this->cartService->add(
+            'add' => $this->successFromSummary($this->cartService->addFromParams(
                 $this->withTrustedCustomer(
                     $params + ['provider_code' => $params['provider_code'] ?? 'product'],
                 ),
             )),
             'mergeGuest' => $this->mergeGuest($params),
-            'getV2Cart' => $this->getV2Cart($params),
-            'updateV2' => $this->updateV2($params),
-            'removeV2' => $this->removeV2($params),
-            'clearV2' => $this->clearV2($params),
+            'getCart' => $this->getCart($params),
+            'update' => $this->update($params),
+            'remove' => $this->remove($params),
+            'clear' => $this->clear($params),
             'issueGuestToken' => $this->issueGuestToken(),
             'renewGuestSession' => $this->renewGuestSession($params),
-            'update' => $this->successFromSummary($this->cartService->update($params)),
-            'remove' => $this->successFromSummary($this->cartService->remove($params)),
-            'clear' => $this->successFromSummary($this->cartService->clear()),
             'options' => $this->success('Cart options loaded.', ['options' => []]),
             'previewDiscount' => $this->previewDiscount($params),
             default => throw new \InvalidArgumentException((string)__('Cart 查询器不支持的 operation：%{1}', $operation)),
@@ -72,10 +65,6 @@ class CartQueryProvider implements QueryProviderInterface
      */
     private function mergeGuest(array $params): array
     {
-        $v2 = $this->cartService->cartV2();
-        if ($v2 === null) {
-            return $this->success('Cart V2 unavailable.', ['success' => false, 'message' => (string)__('Cart V2 未启用')]);
-        }
         try {
             $customerId = $this->currentCustomer->currentCustomerId();
             if ($customerId === null) {
@@ -88,9 +77,9 @@ class CartQueryProvider implements QueryProviderInterface
             $scope = $this->scopeResolver->fromParams($params);
             $guestToken = trim((string)($params['guest_token'] ?? ''));
             if ($guestToken === '') {
-                $guestToken = trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE));
+                $guestToken = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
             }
-            $summary = $v2->mergeGuestIntoCustomer(
+            $summary = $this->cartService->mergeGuestIntoCustomer(
                 $scope,
                 $guestToken,
                 $customerId,
@@ -100,7 +89,7 @@ class CartQueryProvider implements QueryProviderInterface
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
-                'error_code' => $e instanceof CartV2ConflictException ? $e->errorCode() : 'cart_merge_failed',
+                'error_code' => $e instanceof CartConflictException ? $e->errorCode() : 'cart_merge_failed',
             ];
         }
     }
@@ -108,10 +97,9 @@ class CartQueryProvider implements QueryProviderInterface
     /** @return array<string, mixed> */
     private function issueGuestToken(): array
     {
-        $v2 = $this->cartService->cartV2();
-        $token = $v2?->issueGuestToken() ?? bin2hex(random_bytes(16));
+        $token = $this->cartService->issueGuestToken();
         Cookie::set(
-            CartV2Service::GUEST_TOKEN_COOKIE,
+            CartService::GUEST_TOKEN_COOKIE,
             $token,
             3600 * 24 * 7,
             [
@@ -136,7 +124,7 @@ class CartQueryProvider implements QueryProviderInterface
     {
         $guestToken = trim((string)($params['guest_token'] ?? ''));
         if ($guestToken === '') {
-            $guestToken = trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE));
+            $guestToken = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
         }
         if ($guestToken === '') {
             return $this->success('Guest session missing.', [
@@ -145,18 +133,15 @@ class CartQueryProvider implements QueryProviderInterface
             ]);
         }
 
-        $v2 = $this->cartService->cartV2();
-        if ($v2 !== null) {
-            try {
-                $scope = $this->scopeResolver->fromParams($params);
-                $v2->touchGuestCart($scope, $guestToken);
-            } catch (\Throwable) {
-                // Empty carts may not be persisted yet; cookie renew still proceeds.
-            }
+        try {
+            $scope = $this->scopeResolver->fromParams($params);
+            $this->cartService->touchGuestCart($scope, $guestToken);
+        } catch (\Throwable) {
+            // Empty carts may not be persisted yet; cookie renew still proceeds.
         }
 
         Cookie::set(
-            CartV2Service::GUEST_TOKEN_COOKIE,
+            CartService::GUEST_TOKEN_COOKIE,
             $guestToken,
             3600 * 24 * 7,
             [
@@ -178,27 +163,23 @@ class CartQueryProvider implements QueryProviderInterface
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
-    private function getV2Cart(array $params): array
+    private function getCart(array $params): array
     {
-        $v2 = $this->cartService->cartV2();
-        if ($v2 === null) {
-            return $this->success('Cart V2 unavailable.', ['success' => false, 'message' => (string)__('Cart V2 未启用')]);
-        }
         try {
             $scope = $this->scopeResolver->fromParams($params);
             $guestToken = isset($params['guest_token']) ? (string)$params['guest_token'] : null;
             $customerId = $this->currentCustomer->currentCustomerId();
             if ($customerId === null && ($guestToken === null || trim($guestToken) === '')) {
-                $guestToken = (string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE);
+                $guestToken = (string)Cookie::get(CartService::GUEST_TOKEN_COOKIE);
             }
-            $summary = $v2->getCart($scope, $guestToken, $customerId);
+            $summary = $this->cartService->getCart($scope, $guestToken, $customerId);
             $summary = $this->enrichSummaryWithDiscountPreview($summary, $params);
             return $this->successFromSummary($summary);
         } catch (\Throwable $e) {
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
-                'error_code' => $e instanceof CartV2ConflictException ? $e->errorCode() : 'cart_get_failed',
+                'error_code' => $e instanceof CartConflictException ? $e->errorCode() : 'cart_get_failed',
             ];
         }
     }
@@ -207,18 +188,18 @@ class CartQueryProvider implements QueryProviderInterface
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
-    private function updateV2(array $params): array
+    private function update(array $params): array
     {
-        return $this->mutateV2($params, false);
+        return $this->mutateCart($params, false);
     }
 
     /**
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
-    private function removeV2(array $params): array
+    private function remove(array $params): array
     {
-        return $this->mutateV2($params, true);
+        return $this->mutateCart($params, true);
     }
 
     /**
@@ -227,16 +208,8 @@ class CartQueryProvider implements QueryProviderInterface
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
-    private function mutateV2(array $params, bool $remove): array
+    private function mutateCart(array $params, bool $remove): array
     {
-        $v2 = $this->cartService->cartV2();
-        if ($v2 === null) {
-            return [
-                'success' => false,
-                'message' => (string)__('Cart V2 未启用'),
-                'error_code' => 'cart_v2_unavailable',
-            ];
-        }
 
         try {
             $scope = $this->scopeResolver->fromParams($params);
@@ -245,13 +218,13 @@ class CartQueryProvider implements QueryProviderInterface
             if ($customerId === null) {
                 $guestToken = trim((string)($params['guest_token'] ?? ''));
                 if ($guestToken === '') {
-                    $guestToken = trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE));
+                    $guestToken = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
                 }
             }
             $itemId = trim((string)($params['item_id'] ?? ''));
             $summary = $remove
-                ? $v2->removeItem($scope, $itemId, $guestToken, $customerId)
-                : $v2->updateItem(
+                ? $this->cartService->removeItem($scope, $itemId, $guestToken, $customerId)
+                : $this->cartService->updateItem(
                     $scope,
                     $itemId,
                     max(1, min(999, (int)($params['qty'] ?? 1))),
@@ -265,46 +238,38 @@ class CartQueryProvider implements QueryProviderInterface
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
-                'error_code' => $e instanceof CartV2ConflictException
+                'error_code' => $e instanceof CartConflictException
                     ? $e->errorCode()
-                    : ($remove ? 'cart_v2_remove_failed' : 'cart_v2_update_failed'),
+                    : ($remove ? 'cart_remove_failed' : 'cart_update_failed'),
             ];
         }
     }
 
     /**
-     * Clear only the server-owned current Cart V2 for the trusted identity.
+     * Clear only the server-owned current Cart for the trusted identity.
      *
      * @param array<string, mixed> $params
      * @return array<string, mixed>
      */
-    private function clearV2(array $params): array
+    private function clear(array $params): array
     {
-        $v2 = $this->cartService->cartV2();
-        if ($v2 === null) {
-            return [
-                'success' => false,
-                'message' => (string)__('Cart V2 未启用'),
-                'error_code' => 'cart_v2_unavailable',
-            ];
-        }
         try {
             $scope = $this->scopeResolver->fromParams($params);
             $customerId = $this->currentCustomer->currentCustomerId();
             $guestToken = $customerId === null
-                ? trim((string)Cookie::get(CartV2Service::GUEST_TOKEN_COOKIE))
+                ? trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE))
                 : null;
 
             return $this->successFromSummary(
-                $v2->clearCart($scope, $guestToken, $customerId),
+                $this->cartService->clearCart($scope, $guestToken, $customerId),
             );
         } catch (\Throwable $e) {
             return [
                 'success' => false,
                 'message' => $e->getMessage(),
-                'error_code' => $e instanceof CartV2ConflictException
+                'error_code' => $e instanceof CartConflictException
                     ? $e->errorCode()
-                    : 'cart_v2_clear_failed',
+                    : 'cart_clear_failed',
             ];
         }
     }
@@ -355,7 +320,7 @@ class CartQueryProvider implements QueryProviderInterface
     {
         $guestToken = trim((string)($params['guest_token'] ?? ''));
         if ($guestToken !== '' && $this->currentCustomer->currentCustomerId() === null) {
-            $v2Response = $this->getV2Cart(['guest_token' => $guestToken] + $params);
+            $v2Response = $this->getCart(['guest_token' => $guestToken] + $params);
             if (($v2Response['success'] ?? false) && \is_array($v2Response['items'] ?? null)) {
                 return $v2Response;
             }
@@ -396,7 +361,7 @@ class CartQueryProvider implements QueryProviderInterface
         }
 
         // When called from enrichSummaryWithDiscountPreview, reuse the already-loaded
-        // summary. Re-entering resolveStorefrontSummary/getV2Cart here recurses until OOM.
+        // summary. Re-entering resolveStorefrontSummary/getCart here recurses until OOM.
         $summary = $existingSummary ?? $this->resolveStorefrontSummary($params);
         $lines = [];
         foreach ((array)($summary['items'] ?? []) as $item) {
@@ -484,9 +449,13 @@ class CartQueryProvider implements QueryProviderInterface
      */
     private function enrichSummaryWithDiscountPreview(array $summary, array $params = []): array
     {
-        $preview = $this->buildDiscountPreview($params, $summary);
-        if ($preview !== null) {
-            $summary['discount_preview'] = $preview;
+        try {
+            $preview = $this->buildDiscountPreview($params, $summary);
+            if ($preview !== null) {
+                $summary['discount_preview'] = $preview;
+            }
+        } catch (\Throwable) {
+            // Discount quote is optional for cart reads/mutations.
         }
 
         return $summary;
@@ -576,6 +545,7 @@ class CartQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'summary',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
@@ -586,6 +556,7 @@ class CartQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'count',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
@@ -596,6 +567,7 @@ class CartQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'items',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
@@ -609,6 +581,7 @@ class CartQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'miniItems',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
@@ -628,35 +601,7 @@ class CartQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'add',
                     'frontend' => true,
-                    'mode' => 'write',
-                    'graph' => false,
-                    'cost' => 4,
-                    'params' => [
-                        'product_id' => ['type' => 'int', 'min' => 1],
-                        'id' => ['type' => 'int', 'min' => 1],
-                        'qty' => ['type' => 'int', 'min' => 1, 'max' => 999],
-                        'selected_options' => ['type' => 'array', 'max_items' => 50],
-                        'options' => ['type' => 'array', 'max_items' => 50],
-                        'name' => ['type' => 'string', 'max_length' => 160],
-                        'sku' => ['type' => 'string', 'max_length' => 80],
-                        'image' => ['type' => 'string', 'max_length' => 512],
-                        'price' => ['type' => 'number', 'min' => 0],
-                        'provider_code' => ['type' => 'string', 'max_length' => 64],
-                        'global_offer_uuid' => ['type' => 'string', 'max_length' => 64],
-                        'offer_uuid' => ['type' => 'string', 'max_length' => 64],
-                        'offer_id' => ['type' => 'int', 'min' => 1],
-                        'website_id' => ['type' => 'int', 'min' => 0],
-                        'store_id' => ['type' => 'int', 'min' => 0],
-                        'currency' => ['type' => 'string', 'max_length' => 8],
-                        'selection_hash' => ['type' => 'string', 'max_length' => 128],
-                        'guest_token' => ['type' => 'string', 'max_length' => 64],
-                    ],
-                    'returns' => $commonReturns,
-                    'summary' => 'Add item to cart session (V1 product_id or V2 OfferIdentity)',
-                ],
-                [
-                    'name' => 'addV2',
-                    'frontend' => true,
+                    'external' => true,
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 4,
@@ -677,11 +622,12 @@ class CartQueryProvider implements QueryProviderInterface
                         'legacy_product_id' => ['type' => 'int', 'min' => 1],
                     ],
                     'returns' => $commonReturns,
-                    'summary' => 'Add Cart V2 OfferIdentity line',
+                    'summary' => 'Add offer line to cart',
                 ],
                 [
                     'name' => 'mergeGuest',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 4,
@@ -698,8 +644,9 @@ class CartQueryProvider implements QueryProviderInterface
                     'summary' => 'Merge guest cart into the authenticated customer cart (same Scope)',
                 ],
                 [
-                    'name' => 'getV2Cart',
+                    'name' => 'getCart',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
@@ -713,31 +660,34 @@ class CartQueryProvider implements QueryProviderInterface
                         'scope' => ['type' => 'array', 'max_items' => 7],
                     ],
                     'returns' => $commonReturns,
-                    'summary' => 'Read the current guest or authenticated customer Cart V2 cart',
+                    'summary' => 'Read the current guest or authenticated customer cart',
                 ],
                 [
-                    'name' => 'updateV2',
+                    'name' => 'update',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 3,
-                    'params' => $this->v2MutationParams(includeQty: true),
+                    'params' => $this->mutationParams(includeQty: true),
                     'returns' => $commonReturns,
-                    'summary' => 'Update an item in the current trusted Cart V2',
+                    'summary' => 'Update an item in the current trusted cart',
                 ],
                 [
-                    'name' => 'removeV2',
+                    'name' => 'remove',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 3,
-                    'params' => $this->v2MutationParams(),
+                    'params' => $this->mutationParams(),
                     'returns' => $commonReturns,
-                    'summary' => 'Remove an item from the current trusted Cart V2',
+                    'summary' => 'Remove an item from the current trusted cart',
                 ],
                 [
                     'name' => 'issueGuestToken',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 1,
@@ -748,6 +698,7 @@ class CartQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'renewGuestSession',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 1,
@@ -756,8 +707,9 @@ class CartQueryProvider implements QueryProviderInterface
                     'summary' => 'Renew guest cart cookie/cache TTL for another week',
                 ],
                 [
-                    'name' => 'clearV2',
+                    'name' => 'clear',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'write',
                     'graph' => false,
                     'cost' => 2,
@@ -770,52 +722,12 @@ class CartQueryProvider implements QueryProviderInterface
                         'scope' => ['type' => 'array', 'max_items' => 7],
                     ],
                     'returns' => $commonReturns,
-                    'summary' => 'Clear the current trusted Cart V2',
-                ],
-                [
-                    'name' => 'update',
-                    'frontend' => true,
-                    'mode' => 'write',
-                    'graph' => false,
-                    'cost' => 3,
-                    'params' => [
-                        'item_id' => ['type' => 'string', 'max_length' => 64],
-                        'cart_item_id' => ['type' => 'string', 'max_length' => 64],
-                        'product_id' => ['type' => 'int', 'min' => 1],
-                        'id' => ['type' => 'int', 'min' => 1],
-                        'qty' => ['type' => 'int', 'min' => 0, 'max' => 999],
-                    ],
-                    'returns' => $commonReturns,
-                    'summary' => 'Update cart item quantity',
-                ],
-                [
-                    'name' => 'remove',
-                    'frontend' => true,
-                    'mode' => 'write',
-                    'graph' => false,
-                    'cost' => 3,
-                    'params' => [
-                        'item_id' => ['type' => 'string', 'max_length' => 64],
-                        'cart_item_id' => ['type' => 'string', 'max_length' => 64],
-                        'product_id' => ['type' => 'int', 'min' => 1],
-                        'id' => ['type' => 'int', 'min' => 1],
-                    ],
-                    'returns' => $commonReturns,
-                    'summary' => 'Remove cart item',
-                ],
-                [
-                    'name' => 'clear',
-                    'frontend' => true,
-                    'mode' => 'write',
-                    'graph' => false,
-                    'cost' => 3,
-                    'params' => [],
-                    'returns' => $commonReturns,
-                    'summary' => 'Clear cart session',
+                    'summary' => 'Clear the current trusted cart',
                 ],
                 [
                     'name' => 'previewDiscount',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 2,
@@ -828,6 +740,7 @@ class CartQueryProvider implements QueryProviderInterface
                 [
                     'name' => 'options',
                     'frontend' => true,
+                    'external' => true,
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 1,
@@ -842,7 +755,7 @@ class CartQueryProvider implements QueryProviderInterface
     }
 
     /** @return array<string, array<string, mixed>> */
-    private function v2MutationParams(bool $includeQty = false): array
+    private function mutationParams(bool $includeQty = false): array
     {
         $params = [
             'item_id' => ['type' => 'string', 'max_length' => 64],

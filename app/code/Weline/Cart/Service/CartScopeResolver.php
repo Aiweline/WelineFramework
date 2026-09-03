@@ -92,7 +92,7 @@ final class CartScopeResolver implements CartScopeResolverInterface
             return $trusted;
         }
 
-        throw new CartV2ConflictException(
+        throw new CartConflictException(
             'cart_scope_request_conflict',
             (string)__('购物车 Scope 与当前可信 Website/Store/Channel 请求不一致'),
             [
@@ -179,7 +179,7 @@ final class CartScopeResolver implements CartScopeResolverInterface
                 return null;
             }
 
-            return $installer->installNavigationScope($scheme . '://' . $authority . '/')->scope;
+            return $installer->installNavigationScope($scheme . '://' . $authority . '/')->identity;
         } catch (\Throwable) {
             return null;
         }
