@@ -86,7 +86,7 @@ class Cloudflare implements AdapterInterface
             'purge_everything' => true
         ], $credentials);
 
-        if ($response['success'] ?? false) {
+        if (($response['success'] ?? null) === true) {
             return [
                 'success' => true,
                 'message' => __('缓存清理成功')
@@ -104,123 +104,77 @@ class Cloudflare implements AdapterInterface
      */
     public function purgeUrls(string $zoneId, array $urls, array $credentials): array
     {
-        if (empty($urls)) {
-            return [
-                'success' => false,
-                'message' => __('URL列表不能为空')
-            ];
-        }
-
-        $url = self::API_BASE_URL . '/zones/' . $zoneId . '/purge_cache';
-        
-        $response = $this->makeRequest('POST', $url, [
-            'files' => $urls
-        ], $credentials);
-
-        if ($response['success'] ?? false) {
-            return [
-                'success' => true,
-                'message' => __('成功清理 %{count} 个URL', ['count' => count($urls)])
-            ];
-        }
-
-        return [
-            'success' => false,
-            'message' => $response['errors'][0]['message'] ?? __('URL清理失败')
-        ];
+        return $this->purgeBatches($zoneId, 'files', $urls, $credentials);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function purgeHosts(string $zoneId, array $hosts, array $credentials): array
     {
-        if (empty($hosts)) {
-            return [
-                'success' => false,
-                'message' => __('Host列表不能为空')
-            ];
-        }
-
-        $url = self::API_BASE_URL . '/zones/' . $zoneId . '/purge_cache';
-        
-        $response = $this->makeRequest('POST', $url, [
-            'hosts' => $hosts
-        ], $credentials);
-
-        if ($response['success'] ?? false) {
-            return [
-                'success' => true,
-                'message' => __('成功清理 %{count} 个Host', ['count' => count($hosts)])
-            ];
-        }
-
-        return [
-            'success' => false,
-            'message' => $response['errors'][0]['message'] ?? __('Host清理失败')
-        ];
+        return $this->purgeBatches($zoneId, 'hosts', $hosts, $credentials);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function purgeTags(string $zoneId, array $tags, array $credentials): array
     {
-        if (empty($tags)) {
-            return [
-                'success' => false,
-                'message' => __('Tag列表不能为空')
-            ];
-        }
-
-        $url = self::API_BASE_URL . '/zones/' . $zoneId . '/purge_cache';
-        
-        $response = $this->makeRequest('POST', $url, [
-            'tags' => $tags
-        ], $credentials);
-
-        if ($response['success'] ?? false) {
-            return [
-                'success' => true,
-                'message' => __('成功清理 %{count} 个Tag', ['count' => count($tags)])
-            ];
-        }
-
-        return [
-            'success' => false,
-            'message' => $response['errors'][0]['message'] ?? __('Tag清理失败')
-        ];
+        return $this->purgeBatches($zoneId, 'tags', $tags, $credentials);
     }
 
-    /**
-     * @inheritDoc
-     */
     public function purgeCacheKeys(string $zoneId, array $keys, array $credentials): array
     {
-        if (empty($keys)) {
-            return [
-                'success' => false,
-                'message' => __('Cache Key列表不能为空')
-            ];
+        return $this->purgeBatches($zoneId, 'prefixes', $keys, $credentials);
+    }
+
+    /** Optional URL-prefix capability; values are host/path without the scheme. */
+    public function purgePrefixes(string $zoneId, array $prefixes, array $credentials): array
+    {
+        return $this->purgeBatches($zoneId, 'prefixes', $prefixes, $credentials);
+    }
+
+    /** 100 operations is supported by every Cloudflare plan. */
+    private function purgeBatches(string $zoneId, string $field, array $items, array $credentials): array
+    {
+        if ($items === []) {
+            return ['success' => false, 'message' => __('清理列表不能为空'), 'purged_count' => 0];
         }
-
-        $url = self::API_BASE_URL . '/zones/' . $zoneId . '/purge_cache';
-        
-        $response = $this->makeRequest('POST', $url, [
-            'prefixes' => $keys
-        ], $credentials);
-
-        if ($response['success'] ?? false) {
-            return [
-                'success' => true,
-                'message' => __('成功清理 %{count} 个Cache Key', ['count' => count($keys)])
-            ];
+        $purged = 0;
+        $ids = [];
+        foreach (array_chunk(array_values($items), 100) as $batch) {
+            try {
+                $response = $this->makeRequest('POST', self::API_BASE_URL . '/zones/' . rawurlencode($zoneId) . '/purge_cache', [$field => $batch], $credentials);
+            } catch (\Throwable $e) {
+                return ['success' => false, 'message' => $e->getMessage(), 'purged_count' => $purged, 'requested_count' => count($items), 'purge_ids' => $ids];
+            }
+            if (($response['success'] ?? null) !== true) {
+                return ['success' => false, 'message' => $response['errors'][0]['message'] ?? __('缓存清理失败'), 'purged_count' => $purged, 'requested_count' => count($items), 'purge_ids' => $ids];
+            }
+            $purged += count($batch);
+            if (isset($response['result']['id'])) {
+                $ids[] = (string)$response['result']['id'];
+            }
         }
+        return ['success' => true, 'message' => __('缓存清理成功'), 'purged_count' => $purged, 'requested_count' => count($items), 'purge_ids' => $ids];
+    }
 
-        return [
-            'success' => false,
-            'message' => $response['errors'][0]['message'] ?? __('Cache Key清理失败')
-        ];
+    /** Read-only: token validity and optional zone access do not prove Cache Purge permission. */
+    public function testConnection(array $credentials, string $zoneId = '', string $domain = ''): array
+    {
+        $response = $this->makeRequest('GET', self::API_BASE_URL . '/user/tokens/verify', [], $credentials);
+        if (($response['success'] ?? null) !== true || ($response['result']['status'] ?? '') !== 'active') {
+            return ['success' => false, 'message' => $response['errors'][0]['message'] ?? __('Cloudflare Token 验证失败'), 'purge_verified' => false];
+        }
+        $result = ['success' => true, 'message' => __('Token 有效；清缓存权限需由实际清理结果确认'), 'token_verified' => true, 'zone_verified' => false, 'purge_verified' => false];
+        if ($zoneId !== '') {
+            $zone = $this->makeRequest('GET', self::API_BASE_URL . '/zones/' . rawurlencode($zoneId), [], $credentials);
+            $zoneName = strtolower(rtrim(trim((string)($zone['result']['name'] ?? '')), '.'));
+            $host = strtolower(rtrim(trim($domain), '.'));
+            if (($zone['success'] ?? null) !== true || ($zone['result']['id'] ?? '') !== $zoneId || $zoneName === ''
+                || ($host !== '' && $host !== $zoneName && !str_ends_with($host, '.' . $zoneName))) {
+                return ['success' => false, 'message' => __('Zone 不可访问或与域名不匹配'), 'token_verified' => true, 'zone_verified' => false, 'purge_verified' => false];
+            }
+            $result['zone_verified'] = true;
+            $result['zone_name'] = $zoneName;
+            $result['zone_id'] = $zoneId;
+            $result['message'] = __('Token 有效且 Zone 可访问；清缓存权限需由实际清理结果确认');
+        }
+        return $result;
     }
 
     /**
@@ -232,7 +186,7 @@ class Cloudflare implements AdapterInterface
         
         $response = $this->makeRequest('GET', $url, [], $credentials);
 
-        if ($response['success'] ?? false) {
+        if (($response['success'] ?? null) === true) {
             $rules = $response['result']['rules'] ?? [];
             return is_array($rules) ? $rules : [];
         }
@@ -295,7 +249,7 @@ class Cloudflare implements AdapterInterface
             ], $credentials);
         }
 
-        if ($response['success'] ?? false) {
+        if (($response['success'] ?? null) === true) {
             return [
                 'success' => true,
                 'message' => __('规则推送成功，共 %{count} 条', ['count' => count($formattedRules)]),
@@ -495,7 +449,7 @@ class Cloudflare implements AdapterInterface
         $url = self::API_BASE_URL . '/zones?name=' . urlencode($domain);
         $response = $this->makeRequest('GET', $url, [], $credentials);
 
-        if ($response['success'] ?? false) {
+        if (($response['success'] ?? null) === true) {
             $zones = $response['result'] ?? [];
             if (!empty($zones) && isset($zones[0])) {
                 return [
@@ -524,7 +478,7 @@ class Cloudflare implements AdapterInterface
                 'value' => 'under_attack'
             ], $credentials);
             
-            if ($response['success'] ?? false) {
+            if (($response['success'] ?? null) === true) {
                 // 可选：同时封禁攻击者 IP
                 $blockedIps = $this->blockAttackerIps($zoneId, $credentials, $attackData['attacker_ips'] ?? []);
                 
@@ -563,7 +517,7 @@ class Cloudflare implements AdapterInterface
                 'value' => 'medium'
             ], $credentials);
             
-            if ($response['success'] ?? false) {
+            if (($response['success'] ?? null) === true) {
                 return [
                     'success' => true,
                     'message' => __('Cloudflare 攻击防护模式已关闭'),
@@ -637,7 +591,7 @@ class Cloudflare implements AdapterInterface
                     'notes' => 'Auto-blocked by WLS attack detection at ' . \date('Y-m-d H:i:s'),
                 ], $credentials);
                 
-                if ($response['success'] ?? false) {
+                if (($response['success'] ?? null) === true) {
                     $blocked++;
                 } else {
                     $failed++;
@@ -771,7 +725,7 @@ class Cloudflare implements AdapterInterface
 
         $decodedResponse = json_decode($response, true);
         
-        if ($httpCode >= 400) {
+        if ($httpCode < 200 || $httpCode >= 300) {
             // 收集所有错误信息
             $errorMessages = [];
             if (isset($decodedResponse['errors']) && is_array($decodedResponse['errors'])) {
@@ -785,7 +739,9 @@ class Cloudflare implements AdapterInterface
             throw new Core($errorMessage);
         }
 
-        return is_array($decodedResponse) ? $decodedResponse : [];
+        if (!is_array($decodedResponse) || !array_key_exists('success', $decodedResponse)) {
+            throw new Core(__('Cloudflare 返回无效响应'));
+        }
+        return $decodedResponse;
     }
 }
-
