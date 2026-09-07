@@ -16,7 +16,7 @@ use Weline\Websites\Service\AiSiteDomainPurchaseAccountService;
  */
 class AiSiteDomainQueryProvider implements QueryProviderInterface
 {
-    private const LOCAL_ROOT_DOMAIN = 'weline.test';
+    private const LOCAL_ROOT_DOMAIN = 'test.weline.com';
     private const CANDIDATE_COUNT = 5;
 
     public function __construct(private readonly AiSiteDomainPurchaseAccountService $accountService)
@@ -462,6 +462,6 @@ class AiSiteDomainQueryProvider implements QueryProviderInterface
 
     private function isManagedLocalDomain(string $domain): bool
     {
-        return \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $domain) === 1;
+        return \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:test\.weline\.com|weline\.test)$/D', $domain) === 1;
     }
 }

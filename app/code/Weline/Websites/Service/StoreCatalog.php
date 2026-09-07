@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Context;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Api\Catalog\Data\StoreSummary;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 use Weline\Websites\Model\Store;
@@ -13,9 +16,12 @@ final class StoreCatalog implements StoreCatalogInterface
 {
     private const MAX_CATALOG_ID = 2147483647;
 
+    private bool $hotCacheResolved = false;
+
     public function __construct(
         private readonly Store $store,
         private readonly Website $website,
+        private ?StorefrontScopeHotCache $hotCache = null,
     ) {
     }
 
@@ -24,13 +30,22 @@ final class StoreCatalog implements StoreCatalogInterface
         $this->assertWebsiteId($websiteId);
         $this->assertWebsiteExists($websiteId);
 
-        $rows = $this->newStore()
-            ->where(Store::schema_fields_WEBSITE_ID, $websiteId)
-            ->order(Store::schema_fields_ID, 'ASC')
-            ->select()
-            ->fetchArray();
+        $key = 'website:' . $websiteId;
+        $stores = $this->remember($key, function () use ($websiteId): array {
+            $rows = $this->newStore()
+                ->where(Store::schema_fields_WEBSITE_ID, $websiteId)
+                ->order(Store::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetchArray();
 
-        return $this->mapRows($rows, $websiteId);
+            return $this->mapRows($rows, $websiteId);
+        }, StorefrontScopeCatalogCacheCoordinator::storePolicy());
+
+        if (is_array($stores)) {
+            $this->memoizeStoreSummaries($stores);
+        }
+
+        return $stores;
     }
 
     public function byCode(int $websiteId, string $storeCode): ?StoreSummary
@@ -42,14 +57,22 @@ final class StoreCatalog implements StoreCatalogInterface
         if ($storeCode === '') {
             return null;
         }
-        $rows = $this->newStore()
-            ->where(Store::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(Store::schema_fields_CODE, $storeCode)
-            ->select()
-            ->fetchArray();
-        $mapped = $this->mapRows($rows, $websiteId);
+        $key = 'code:' . $websiteId . ':' . $storeCode;
+        return $this->remember($key, function () use ($websiteId, $storeCode): ?StoreSummary {
+            $rows = $this->newStore()
+                ->where(Store::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(Store::schema_fields_CODE, $storeCode)
+                ->select()
+                ->fetchArray();
+            $mapped = $this->mapRows($rows, $websiteId);
 
-        return $this->singleOrNull($mapped, __('店铺代码在同一 Website 下不唯一'));
+            $summary = $this->singleOrNull($mapped, __('店铺代码在同一 Website 下不唯一'));
+            if ($summary instanceof StoreSummary) {
+                $this->memoizeStoreSummaries([$summary]);
+            }
+
+            return $summary;
+        }, StorefrontScopeCatalogCacheCoordinator::storePolicy());
     }
 
     public function byId(int $storeId): ?StoreSummary
@@ -58,14 +81,22 @@ final class StoreCatalog implements StoreCatalogInterface
             return null;
         }
         $this->assertPositiveCatalogId($storeId, __('店铺 ID'));
-        $rows = $this->newStore()
-            ->where(Store::schema_fields_ID, $storeId)
-            ->select()
-            ->fetchArray();
-        $mapped = $this->mapRows($rows);
-        $this->assertParentWebsitesExist($mapped);
+        $key = 'id:' . $storeId;
+        return $this->remember($key, function () use ($storeId): ?StoreSummary {
+            $rows = $this->newStore()
+                ->where(Store::schema_fields_ID, $storeId)
+                ->select()
+                ->fetchArray();
+            $mapped = $this->mapRows($rows);
+            $this->assertParentWebsitesExist($mapped);
 
-        return $this->singleOrNull($mapped, __('店铺 ID 不唯一'));
+            $summary = $this->singleOrNull($mapped, __('店铺 ID 不唯一'));
+            if ($summary instanceof StoreSummary) {
+                $this->memoizeStoreSummaries([$summary]);
+            }
+
+            return $summary;
+        }, StorefrontScopeCatalogCacheCoordinator::storePolicy());
     }
 
     public function defaultStore(int $websiteId): ?StoreSummary
@@ -73,34 +104,149 @@ final class StoreCatalog implements StoreCatalogInterface
         $this->assertWebsiteId($websiteId);
         $this->assertWebsiteExists($websiteId);
 
-        $rows = $this->newStore()
-            ->where(Store::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(Store::schema_fields_IS_DEFAULT, 1)
-            ->select()
-            ->fetchArray();
-        $mapped = $this->mapRows($rows, $websiteId);
-        $default = $this->singleOrNull($mapped, __('同一 Website 存在多个默认店铺'));
-        if ($default !== null) {
-            return $default;
-        }
-        $byCode = $this->byCode($websiteId, Store::CODE_DEFAULT);
-        if ($byCode !== null && !$byCode->isDefault) {
-            throw new \RuntimeException(__('code=default 的店铺缺少默认标记'));
-        }
-        return $byCode;
+        $key = 'default:' . $websiteId;
+        return $this->remember($key, function () use ($websiteId): ?StoreSummary {
+            $rows = $this->newStore()
+                ->where(Store::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(Store::schema_fields_IS_DEFAULT, 1)
+                ->select()
+                ->fetchArray();
+            $mapped = $this->mapRows($rows, $websiteId);
+            $default = $this->singleOrNull($mapped, __('同一 Website 存在多个默认店铺'));
+            if ($default !== null) {
+                $this->memoizeStoreSummaries([$default]);
+                return $default;
+            }
+            $byCode = $this->byCode($websiteId, Store::CODE_DEFAULT);
+            if ($byCode !== null && !$byCode->isDefault) {
+                throw new \RuntimeException(__('code=default 的店铺缺少默认标记'));
+            }
+            if ($byCode instanceof StoreSummary) {
+                $this->memoizeStoreSummaries([$byCode]);
+            }
+            return $byCode;
+        }, StorefrontScopeCatalogCacheCoordinator::storePolicy());
     }
 
     public function all(): array
     {
-        $rows = $this->newStore()
-            ->order(Store::schema_fields_ID, 'ASC')
-            ->select()
-            ->fetchArray();
+        return $this->remember('all', function (): array {
+            $rows = $this->newStore()
+                ->order(Store::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetchArray();
 
-        $mapped = $this->mapRows($rows);
-        $this->assertParentWebsitesExist($mapped);
+            $mapped = $this->mapRows($rows);
+            $this->assertParentWebsitesExist($mapped);
 
-        return $mapped;
+            return $mapped;
+        });
+    }
+
+    private function remember(string $logicalKey, callable $builder, ?\Weline\Framework\Cache\CachePolicy $policy = null): mixed
+    {
+        $hotCache = $this->hotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache) {
+            return $builder();
+        }
+
+        $value = $hotCache->rememberForRequest(
+            'websites.store_catalog',
+            $logicalKey,
+            $policy === null
+                ? $builder
+                : fn(): mixed => $hotCache->rememberPolicy($policy, $logicalKey, $builder),
+        );
+
+        return $this->rehydrateCachedValue($value);
+    }
+
+    /**
+     * Shared pools may JSON-round-trip DTO payloads into arrays; restore StoreSummary.
+     */
+    private function rehydrateCachedValue(mixed $value): mixed
+    {
+        if ($value instanceof StoreSummary || $value === null) {
+            return $value;
+        }
+        if (!\is_array($value)) {
+            throw new \RuntimeException((string)__('店铺目录缓存载荷类型无效'));
+        }
+        if ($value === [] || \array_is_list($value)) {
+            $restored = [];
+            foreach ($value as $item) {
+                $restored[] = $this->storeSummaryFromCached($item);
+            }
+
+            return $restored;
+        }
+
+        return $this->storeSummaryFromCached($value);
+    }
+
+    private function storeSummaryFromCached(mixed $item): StoreSummary
+    {
+        if ($item instanceof StoreSummary) {
+            return $item;
+        }
+        if (!\is_array($item)) {
+            throw new \RuntimeException((string)__('店铺目录缓存条目必须是数组或 StoreSummary'));
+        }
+
+        $tombstoned = $item['tombstoned_at'] ?? $item['tombstonedAt'] ?? null;
+        $url = $item['url'] ?? null;
+
+        return new StoreSummary(
+            (int)($item['store_id'] ?? $item['id'] ?? 0),
+            (int)($item['website_id'] ?? $item['websiteId'] ?? 0),
+            (string)($item['code'] ?? ''),
+            (string)($item['name'] ?? ''),
+            (string)($item['store_mode'] ?? $item['storeMode'] ?? Store::MODE_NORMAL),
+            (bool)($item['is_default'] ?? $item['isDefault'] ?? false),
+            (bool)($item['enabled'] ?? true),
+            (string)($item['lifecycle_status'] ?? $item['lifecycleStatus'] ?? Store::LIFECYCLE_ACTIVE),
+            \is_string($tombstoned) ? $tombstoned : null,
+            \is_string($url) ? $url : null,
+        );
+    }
+
+    private function hotCache(): ?StorefrontScopeHotCache
+    {
+        if ($this->hotCacheResolved) {
+            return $this->hotCache;
+        }
+        $this->hotCacheResolved = true;
+        if ($this->hotCache instanceof StorefrontScopeHotCache || !Context::hasCurrent()) {
+            return $this->hotCache;
+        }
+        try {
+            $this->hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+        } catch (\Throwable) {
+            $this->hotCache = null;
+        }
+
+        return $this->hotCache;
+    }
+
+    /** @param list<StoreSummary> $stores */
+    private function memoizeStoreSummaries(array $stores): void
+    {
+        $hotCache = $this->hotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache) {
+            return;
+        }
+        foreach ($stores as $store) {
+            $hotCache->rememberForRequest(
+                'websites.store_catalog',
+                'id:' . $store->id,
+                static fn(): StoreSummary => $store,
+            );
+            $hotCache->rememberForRequest(
+                'websites.store_catalog',
+                'code:' . $store->websiteId . ':' . $store->code,
+                static fn(): StoreSummary => $store,
+            );
+        }
     }
 
     /**
@@ -370,21 +516,36 @@ final class StoreCatalog implements StoreCatalogInterface
 
     private function assertWebsiteExists(int $websiteId): void
     {
-        $website = clone $this->website;
-        $row = $website->clearQuery()->clearData()
-            ->where(Website::schema_fields_ID, $websiteId)
-            ->find()
-            ->fetchArray();
-        if (!\is_array($row) || !\array_key_exists(Website::schema_fields_ID, $row)) {
-            throw new \RuntimeException(
-                (string)__('店铺目录引用了不存在的父 Website：%{1}', [$websiteId])
+        $hotCache = $this->hotCache();
+        $assert = function () use ($websiteId): void {
+            $website = clone $this->website;
+            $row = $website->clearQuery()->clearData()
+                ->where(Website::schema_fields_ID, $websiteId)
+                ->find()
+                ->fetchArray();
+            if (!\is_array($row) || !\array_key_exists(Website::schema_fields_ID, $row)) {
+                throw new \RuntimeException(
+                    (string)__('店铺目录引用了不存在的父 Website：%{1}', [$websiteId])
+                );
+            }
+            if ((int)$row[Website::schema_fields_ID] !== $websiteId) {
+                throw new \RuntimeException(
+                    (string)__('父 Website ID 与店铺目录查询范围不一致：%{1}', [$websiteId])
+                );
+            }
+        };
+        if ($hotCache instanceof StorefrontScopeHotCache) {
+            $hotCache->rememberForRequest(
+                'websites.store_catalog',
+                'website-exists:' . $websiteId,
+                static function () use ($assert): bool {
+                    $assert();
+                    return true;
+                },
             );
+            return;
         }
-        if ((int)$row[Website::schema_fields_ID] !== $websiteId) {
-            throw new \RuntimeException(
-                (string)__('父 Website ID 与店铺目录查询范围不一致：%{1}', [$websiteId])
-            );
-        }
+        $assert();
     }
 
     /** @param list<StoreSummary> $stores */

@@ -7,9 +7,11 @@ namespace Weline\Websites\Observer;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Api\Domain\LocalDomainPolicy;
+use Weline\Websites\Service\DefaultWebsiteService;
 use Weline\Websites\Service\WlsDomainPoolSyncService;
 
-/** WLS 本地域名注册完成后，同步写入 Websites 域名池。 */
+/** WLS 本地域名注册完成后，同步写入 Websites 域名池；标准项目 Host 绑定默认站。 */
 class SyncWlsLocalDomainPool implements ObserverInterface
 {
     public function execute(Event &$event): void
@@ -24,11 +26,22 @@ class SyncWlsLocalDomainPool implements ObserverInterface
         try {
             /** @var WlsDomainPoolSyncService $service */
             $service = ObjectManager::getInstance(WlsDomainPoolSyncService::class);
-            $service->syncFromWlsRegistration(
+            $result = $service->syncFromWlsRegistration(
                 $domain,
                 $ip,
                 (string)($data['status'] ?? ''),
             );
+
+            if (\class_exists(LocalDomainPolicy::class)
+                && LocalDomainPolicy::isStandardProjectHost($domain)
+            ) {
+                /** @var DefaultWebsiteService $defaultWebsite */
+                $defaultWebsite = ObjectManager::getInstance(DefaultWebsiteService::class);
+                $defaultWebsite->ensureWebsiteDomainBinding(
+                    $domain,
+                    (int)($result['pool_id'] ?? 0),
+                );
+            }
         } catch (\Throwable $e) {
             w_log_error(
                 '[SyncWlsLocalDomainPool] '

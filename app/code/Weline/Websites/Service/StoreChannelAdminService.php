@@ -113,6 +113,85 @@ final class StoreChannelAdminService
             ?? throw new \RuntimeException(__('销售渠道写入后无法通过目录回读'));
     }
 
+    /** @return array<string,mixed>|null */
+    public function getStore(int $storeId): ?array
+    {
+        if ($storeId < 0) {
+            throw new \InvalidArgumentException(__('store_id 不能为负'));
+        }
+        $store = $this->stores->byId($storeId);
+
+        return $store?->toArray();
+    }
+
+    /** @return array<string,mixed>|null */
+    public function getChannel(int $channelId): ?array
+    {
+        if ($channelId < 0) {
+            throw new \InvalidArgumentException(__('channel_id 不能为负'));
+        }
+        $channel = $this->channels->byId($channelId);
+
+        return $channel?->toArray();
+    }
+
+    public function updateStore(
+        int $storeId,
+        string $name,
+        string $mode,
+        ?string $url = null,
+    ): StoreSummary {
+        $existing = $this->stores->byId($storeId);
+        if ($existing === null) {
+            throw new \InvalidArgumentException(__('店铺不存在'));
+        }
+        $name = trim($name);
+        $mode = strtolower(trim($mode));
+        if ($name === '') {
+            throw new \InvalidArgumentException(__('店铺名称不能为空'));
+        }
+
+        $store = clone $this->storeModel;
+        $store->load($storeId);
+        if (!$store->hasData(Store::schema_fields_ID)
+            || (int)$store->getData(Store::schema_fields_ID) !== $storeId) {
+            throw new \InvalidArgumentException(__('店铺不存在'));
+        }
+        $store->setData(Store::schema_fields_NAME, $name)
+            ->setData(Store::schema_fields_STORE_MODE, $mode)
+            ->setData(
+                Store::schema_fields_URL,
+                $url !== null && trim($url) !== '' ? trim($url) : null
+            )
+            ->save();
+
+        return $this->stores->byId($storeId)
+            ?? throw new \RuntimeException(__('店铺更新后无法通过目录回读'));
+    }
+
+    public function updateChannel(int $channelId, string $name): SalesChannelSummary
+    {
+        $existing = $this->channels->byId($channelId);
+        if ($existing === null) {
+            throw new \InvalidArgumentException(__('销售渠道不存在'));
+        }
+        $name = trim($name);
+        if ($name === '') {
+            throw new \InvalidArgumentException(__('销售渠道名称不能为空'));
+        }
+
+        $channel = clone $this->channelModel;
+        $channel->load($channelId);
+        if (!$channel->hasData(SalesChannel::schema_fields_ID)
+            || (int)$channel->getData(SalesChannel::schema_fields_ID) !== $channelId) {
+            throw new \InvalidArgumentException(__('销售渠道不存在'));
+        }
+        $channel->setData(SalesChannel::schema_fields_NAME, $name)->save();
+
+        return $this->channels->byId($channelId)
+            ?? throw new \RuntimeException(__('销售渠道更新后无法通过目录回读'));
+    }
+
     private function assertWebsiteId(int $websiteId): void
     {
         if ($websiteId < 0) {

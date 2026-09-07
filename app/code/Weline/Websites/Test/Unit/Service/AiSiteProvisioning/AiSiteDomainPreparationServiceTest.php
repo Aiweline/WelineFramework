@@ -40,17 +40,17 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
         $hostsSyncService = $this->createMock(LocalWelineHostsSyncService::class);
         $hostsSyncService->expects(self::once())
             ->method('ensureHostsInjected')
-            ->with('demo-site.weline.test')
+            ->with('demo-site.test.weline.com')
             ->willReturn(['success' => true, 'message' => 'ok']);
         $certificateService = $this->createMock(LocalWelineWildcardCertificateService::class);
         $certificateService->expects(self::once())
             ->method('ensureWildcardCertificateForDomain')
-            ->with('demo-site.weline.test', Website::ID_DEFAULT)
+            ->with('demo-site.test.weline.com', Website::ID_DEFAULT)
             ->willReturn(['success' => true, 'message' => 'ok']);
         $websiteTargetResolver = $this->createMock(AiSiteWebsiteTargetResolver::class);
         $websiteTargetResolver->expects(self::once())
             ->method('resolve')
-            ->with(self::isInstanceOf(AiSiteProvisioningRequest::class), 'demo-site.weline.test', '')
+            ->with(self::isInstanceOf(AiSiteProvisioningRequest::class), 'demo-site.test.weline.com', '')
             ->willReturn(21);
 
         $beforeExternalPurchaseCalled = false;
@@ -58,14 +58,14 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
             $accountService,
             $purchaseService,
             $defaultWebsiteService,
-            $this->expectedLocalPool('demo-site.weline.test'),
+            $this->expectedLocalPool('demo-site.test.weline.com'),
             $this->bindingDomain(21),
             $hostsSyncService,
             $certificateService,
             $websiteTargetResolver,
             $this->unusedWebsite(),
         ))->prepare(
-            $this->request(AiSiteProvisioningRequest::DOMAIN_MODE_TEST, 'demo-site.weline.test'),
+            $this->request(AiSiteProvisioningRequest::DOMAIN_MODE_TEST, 'demo-site.test.weline.com'),
             static function () use (&$beforeExternalPurchaseCalled): void {
                 $beforeExternalPurchaseCalled = true;
             }
@@ -76,7 +76,7 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
         self::assertSame(0, $result['purchase_order_id']);
         self::assertTrue($result['local_ready']);
         self::assertSame([
-            'domain' => 'demo-site.weline.test',
+            'domain' => 'demo-site.test.weline.com',
             'available' => true,
             'simulated' => true,
         ], $result['availability']);
@@ -96,7 +96,7 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
         $hostsSyncService = $this->createMock(LocalWelineHostsSyncService::class);
         $hostsSyncService->expects(self::once())
             ->method('ensureHostsInjected')
-            ->with('demo-site.weline.test')
+            ->with('demo-site.test.weline.com')
             ->willReturn([
                 'success' => false,
                 'authorization_pending' => true,
@@ -119,14 +119,14 @@ final class AiSiteDomainPreparationServiceTest extends TestCase
             $websiteTargetResolver,
             $this->unusedWebsite(),
         ))->prepare(
-            $this->request(AiSiteProvisioningRequest::DOMAIN_MODE_TEST, 'demo-site.weline.test')
+            $this->request(AiSiteProvisioningRequest::DOMAIN_MODE_TEST, 'demo-site.test.weline.com')
         );
 
         self::assertTrue($result['authorization_pending']);
         self::assertFalse($result['authorization_already_started']);
         self::assertFalse($result['local_ready']);
         self::assertSame(0, $result['website_id']);
-        self::assertSame('demo-site.weline.test', $result['availability']['domain']);
+        self::assertSame('demo-site.test.weline.com', $result['availability']['domain']);
     }
 
     public function testPurchaseModeAcceptsOnlyAnExactSuccessfulDomainResult(): void

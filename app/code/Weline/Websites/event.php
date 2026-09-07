@@ -12,6 +12,16 @@ return [
         'description' => __('网站保存后触发，可用于更新缓存、通知等相关操作。'),
         'doc' => 'website_save_after.md',
     ],
+    'Weline_Websites::store_save_after' => [
+        'name' => __('店铺保存后'),
+        'description' => __('店铺编辑保存后触发；扩展模块可读取 post_data.extensions 写入自有表。'),
+        'doc' => 'store_save_after.md',
+    ],
+    'Weline_Websites::channel_save_after' => [
+        'name' => __('渠道保存后'),
+        'description' => __('渠道编辑保存后触发；扩展模块可读取 post_data.extensions 写入自有表。'),
+        'doc' => 'channel_save_after.md',
+    ],
     'Weline_Websites::domain::purchase_success' => [
         'name' => __('域名购买成功'),
         'description' => __('域名购买成功后触发，可用于通知、自动 DNS 解析、证书申请等后续操作。数据包含 domain、order_id、website_id、auto_create_site。'),

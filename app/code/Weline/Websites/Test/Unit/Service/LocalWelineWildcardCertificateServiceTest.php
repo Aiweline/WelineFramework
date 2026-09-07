@@ -12,13 +12,13 @@ final class LocalWelineWildcardCertificateServiceTest extends TestCase
     {
         $service = new LocalWelineWildcardCertificateService();
 
-        self::assertTrue($service->isEligibleDomain('apk-seo-d4de8e.weline.test'));
-        self::assertTrue($service->isEligibleDomain('demo-123.weline.test'));
+        self::assertTrue($service->isEligibleDomain('apk-seo-d4de8e.test.weline.com'));
+        self::assertTrue($service->isEligibleDomain('demo-123.test.weline.com'));
         self::assertTrue($service->isEligibleDomain('demo-123.weline.localhost'));
 
-        self::assertFalse($service->isEligibleDomain('weline.test'));
-        self::assertFalse($service->isEligibleDomain('*.weline.test'));
-        self::assertFalse($service->isEligibleDomain('foo.bar.weline.test'));
+        self::assertFalse($service->isEligibleDomain('test.weline.com'));
+        self::assertFalse($service->isEligibleDomain('*.test.weline.com'));
+        self::assertFalse($service->isEligibleDomain('foo.bar.test.weline.com'));
         self::assertFalse($service->isEligibleDomain('foo.local'));
         self::assertFalse($service->isEligibleDomain('foo.example.com'));
     }
@@ -41,7 +41,7 @@ final class LocalWelineWildcardCertificateServiceTest extends TestCase
             }
         );
 
-        $result = $service->ensureWildcardCertificateForDomain('apk-seo-d4de8e.weline.test', 88);
+        $result = $service->ensureWildcardCertificateForDomain('apk-seo-d4de8e.test.weline.com', 88);
 
         self::assertTrue((bool)($result['success'] ?? false));
         self::assertTrue((bool)($result['reused'] ?? false));
@@ -67,7 +67,7 @@ final class LocalWelineWildcardCertificateServiceTest extends TestCase
             }
         );
 
-        $result = $service->ensureWildcardCertificateForDomain('apk-seo-d4de8e.weline.test', 77);
+        $result = $service->ensureWildcardCertificateForDomain('apk-seo-d4de8e.test.weline.com', 77);
 
         self::assertTrue((bool)($result['success'] ?? false));
         self::assertSame(LocalWelineWildcardCertificateService::WILDCARD_DOMAIN, $result['wildcard_domain'] ?? null);

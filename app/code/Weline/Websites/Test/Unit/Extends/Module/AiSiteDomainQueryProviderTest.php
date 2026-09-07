@@ -28,10 +28,10 @@ final class AiSiteDomainQueryProviderTest extends TestCase
         self::assertTrue($result['local_runtime']);
         self::assertSame('ai', $result['recommendation_source']);
         self::assertFalse($result['fallback_used']);
-        self::assertSame('shanghai-coffee.weline.test', $result['domain']);
+        self::assertSame('shanghai-coffee.test.weline.com', $result['domain']);
         self::assertCount(5, $result['candidate_domains']);
         foreach ($result['candidate_domains'] as $candidate) {
-            self::assertMatchesRegularExpression('/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.weline\.test$/D', $candidate);
+            self::assertMatchesRegularExpression('/^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.(?:test\.weline\.com|weline\.test)$/D', $candidate);
         }
         self::assertSame(['inspectScenarioReadiness', 'generate'], \array_column($provider->calls, 'operation'));
         self::assertSame(
@@ -83,7 +83,7 @@ final class AiSiteDomainQueryProviderTest extends TestCase
         self::assertSame('fallback', $result['recommendation_source']);
         self::assertTrue($result['fallback_used']);
         self::assertSame('MODEL_BINDING_MISSING', $result['fallback_code']);
-        self::assertStringEndsWith('.weline.test', $result['domain']);
+        self::assertStringEndsWith('.test.weline.com', $result['domain']);
         self::assertNotSame('', \trim((string)$result['message']));
         self::assertSame(['inspectScenarioReadiness'], \array_column($provider->calls, 'operation'));
     }

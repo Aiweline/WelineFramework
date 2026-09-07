@@ -25,26 +25,26 @@ final class WebsiteEntryUrlServicePortContractTest extends TestCase
     public function testWithCurrentRequestPortAppendsLivePortWhenStoredUrlHasNone(): void
     {
         $this->previousHttpHost = $_SERVER['HTTP_HOST'] ?? null;
-        $_SERVER['HTTP_HOST'] = 'p05113ef3.weline.test:9555';
+        $_SERVER['HTTP_HOST'] = 'p05113ef3.test.weline.com:9555';
 
         $service = new WebsiteEntryUrlService(new \Weline\Websites\Model\WebsiteDomain());
 
         self::assertSame(
-            'http://p05113ef3.weline.test:9555',
-            $service->withCurrentRequestPort('http://p05113ef3.weline.test'),
+            'http://p05113ef3.test.weline.com:9555',
+            $service->withCurrentRequestPort('http://p05113ef3.test.weline.com'),
         );
     }
 
     public function testWithCurrentRequestPortLeavesExplicitPortUntouched(): void
     {
         $this->previousHttpHost = $_SERVER['HTTP_HOST'] ?? null;
-        $_SERVER['HTTP_HOST'] = 'p05113ef3.weline.test:9555';
+        $_SERVER['HTTP_HOST'] = 'p05113ef3.test.weline.com:9555';
 
         $service = new WebsiteEntryUrlService(new \Weline\Websites\Model\WebsiteDomain());
 
         self::assertSame(
-            'http://p05113ef3.weline.test:8080',
-            $service->withCurrentRequestPort('http://p05113ef3.weline.test:8080'),
+            'http://p05113ef3.test.weline.com:8080',
+            $service->withCurrentRequestPort('http://p05113ef3.test.weline.com:8080'),
         );
     }
 }
