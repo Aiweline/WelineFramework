@@ -2,7 +2,7 @@
 
 - 日期：2026-07-24
 - 浏览器：Cursor Browser（MCP）
-- 验收域名：`http://aisite-i18n-0724.weline.test:9524/`
+- 验收域名：`http://aisite-i18n-0724.test.weline.com:9524/`
 - website_id：`23`
 - WLS：`ai-test-i18n-9524b` port `9524`
 
