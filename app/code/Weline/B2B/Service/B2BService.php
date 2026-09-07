@@ -78,7 +78,7 @@ final class B2BService
     }
 
     /**
-     * @param array<string, int> $skuAmounts
+     * @param array<string, int|array<int, int>> $skuAmounts
      */
     public function seedPriceList(
         string $listId,
@@ -137,6 +137,15 @@ final class B2BService
     }
 
     /**
+     * @param list<array<string,mixed>> $lineRequests
+     * @return array<string,mixed>
+     */
+    public function issueQuoteSet(array $lineRequests): array
+    {
+        return $this->checkout->issueQuoteSet($lineRequests);
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function submit(
@@ -147,5 +156,18 @@ final class B2BService
     ): array
     {
         return $this->checkout->submit($tokenId, $customerId, $websiteId, $orderRef);
+    }
+
+    /**
+     * @param list<string> $tokenIds
+     * @return array<string,mixed>
+     */
+    public function submitQuoteSet(
+        array $tokenIds,
+        string $customerId,
+        int $websiteId,
+        string $orderRef,
+    ): array {
+        return $this->checkout->submitQuoteSet($tokenIds, $customerId, $websiteId, $orderRef);
     }
 }

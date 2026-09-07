@@ -135,6 +135,62 @@ final class B2BCheckoutRecheckService implements B2BCheckoutRecheckInterface
     }
 
     /**
+     * Issue one token per line for multi-line tob carts.
+     *
+     * @param list<array<string,mixed>> $lineRequests
+     * @return array{
+     *   ok:bool,
+     *   quote_set_id:?string,
+     *   tokens:list<array<string,mixed>>,
+     *   error?:string
+     * }
+     */
+    public function issueQuoteSet(array $lineRequests): array
+    {
+        if ($lineRequests === []) {
+            return [
+                'ok' => false,
+                'quote_set_id' => null,
+                'tokens' => [],
+                'error' => self::ERROR_CANDIDATE_REJECTED,
+            ];
+        }
+
+        $quoteSetId = 'qs_' . bin2hex(random_bytes(12));
+        $tokens = [];
+        foreach ($lineRequests as $index => $request) {
+            if (!is_array($request)) {
+                return [
+                    'ok' => false,
+                    'quote_set_id' => null,
+                    'tokens' => [],
+                    'error' => self::ERROR_CANDIDATE_REJECTED,
+                ];
+            }
+            $issued = $this->issueQuote($request);
+            if (!($issued['ok'] ?? false) || !is_array($issued['token'] ?? null)) {
+                return [
+                    'ok' => false,
+                    'quote_set_id' => null,
+                    'tokens' => [],
+                    'error' => (string)($issued['error'] ?? self::ERROR_CANDIDATE_REJECTED),
+                    'failed_line_index' => $index,
+                ];
+            }
+            $token = $issued['token'];
+            $token['quote_set_id'] = $quoteSetId;
+            $token['line_index'] = $index;
+            $tokens[] = $token;
+        }
+
+        return [
+            'ok' => true,
+            'quote_set_id' => $quoteSetId,
+            'tokens' => $tokens,
+        ];
+    }
+
+    /**
      * @return array{
      *   ok:bool,
      *   order_ref:?string,
@@ -234,6 +290,130 @@ final class B2BCheckoutRecheckService implements B2BCheckoutRecheckInterface
             'ok' => true,
             'order_ref' => $orderRef,
             'snapshot' => $snapshot->toArray(),
+        ];
+    }
+
+    /**
+     * Recheck and atomically consume every token; any drift rejects the whole order.
+     *
+     * @param list<string> $tokenIds
+     * @return array{
+     *   ok:bool,
+     *   order_ref:?string,
+     *   snapshots:list<array<string,mixed>>,
+     *   error?:string,
+     *   failed_token_id?:string
+     * }
+     */
+    public function submitQuoteSet(
+        array $tokenIds,
+        string $customerId,
+        int $websiteId,
+        string $orderRef,
+    ): array {
+        $orderRef = trim($orderRef);
+        $tokenIds = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $id): string => trim((string)$id),
+            $tokenIds,
+        ))));
+        if ($orderRef === '' || strlen($orderRef) > 64) {
+            return [
+                'ok' => false,
+                'order_ref' => null,
+                'snapshots' => [],
+                'error' => self::ERROR_ORDER_REF_INVALID,
+            ];
+        }
+        if ($tokenIds === []) {
+            return [
+                'ok' => false,
+                'order_ref' => null,
+                'snapshots' => [],
+                'error' => self::ERROR_QUOTE_NOT_FOUND,
+            ];
+        }
+
+        $nowEpoch = ($this->clock)();
+        $validated = [];
+        foreach ($tokenIds as $tokenId) {
+            $token = $this->quotes->get($tokenId);
+            if ($token === null) {
+                return $this->rejectSet($tokenId, self::ERROR_QUOTE_NOT_FOUND);
+            }
+            try {
+                $this->acl->assertCustomerOwnsQuote($customerId, $token->customerId);
+                $this->acl->assertWebsiteOwnsQuote($websiteId, $token->websiteId);
+                if ($token->groupId !== null) {
+                    $this->acl->assertGroupMembership($customerId, $websiteId, $token->groupId);
+                }
+            } catch (B2BConflictException $exception) {
+                return $this->rejectSet($tokenId, $exception->errorCode);
+            }
+            if ($token->status() !== B2BQuoteToken::STATUS_OPEN) {
+                return $this->rejectSet($tokenId, self::ERROR_QUOTE_NOT_OPEN);
+            }
+            if ($token->isExpired($nowEpoch)) {
+                return $this->rejectSet($tokenId, self::ERROR_QUOTE_EXPIRED);
+            }
+
+            $fresh = $this->engine->resolve([
+                'customer_id' => $customerId,
+                'website_id' => $websiteId,
+                'channel_id' => $token->channelId,
+                'sku' => $token->sku,
+                'retail_amount_minor' => $token->retailAmountMinor,
+                'claimed_price_list_id' => $token->priceListId,
+                'claimed_version' => $token->version,
+            ]);
+            if (!$this->matches($token, $fresh)) {
+                return $this->rejectSet($tokenId, self::ERROR_QUOTE_VERSION_CONFLICT);
+            }
+            $validated[] = $token;
+        }
+
+        $snapshots = [];
+        foreach ($validated as $index => $token) {
+            $lineRef = count($validated) === 1 ? $orderRef : $orderRef . '#' . ($index + 1);
+            $snapshots[] = $this->snapshot($lineRef, $token, $nowEpoch);
+        }
+
+        try {
+            $result = $this->quotes->consumeSetWith(
+                $tokenIds,
+                $orderRef,
+                $nowEpoch,
+                function (array $_tokens) use ($snapshots): void {
+                    foreach ($snapshots as $snapshot) {
+                        $this->snapshots->put($snapshot);
+                    }
+                },
+            );
+        } catch (B2BConflictException $exception) {
+            return $this->rejectSet(null, $exception->errorCode);
+        }
+
+        if ($result !== B2BQuoteTokenStore::RESULT_CONSUMED) {
+            $error = match ($result) {
+                B2BQuoteTokenStore::RESULT_NOT_FOUND => self::ERROR_QUOTE_NOT_FOUND,
+                B2BQuoteTokenStore::RESULT_EXPIRED => self::ERROR_QUOTE_EXPIRED,
+                default => self::ERROR_CONCURRENT_SUBMIT,
+            };
+            return $this->rejectSet(null, $error);
+        }
+
+        $this->submitAttempts[] = [
+            'order_ref' => $orderRef,
+            'outcome' => 'accepted',
+            'token_id' => implode(',', $tokenIds),
+        ];
+
+        return [
+            'ok' => true,
+            'order_ref' => $orderRef,
+            'snapshots' => array_map(
+                static fn (B2BOrderPriceSnapshot $s): array => $s->toArray(),
+                $snapshots,
+            ),
         ];
     }
 
@@ -394,6 +574,29 @@ final class B2BCheckoutRecheckService implements B2BCheckoutRecheckInterface
             $result['current_version'] = $currentVersion;
             $result['quoted_version'] = $quotedVersion;
         }
+        return $result;
+    }
+
+    /**
+     * @return array{ok:false,order_ref:null,snapshots:list<empty>,error:string,failed_token_id?:string}
+     */
+    private function rejectSet(?string $tokenId, string $error): array
+    {
+        $this->submitAttempts[] = [
+            'order_ref' => null,
+            'outcome' => 'rejected',
+            'token_id' => $tokenId,
+        ];
+        $result = [
+            'ok' => false,
+            'order_ref' => null,
+            'snapshots' => [],
+            'error' => $error,
+        ];
+        if ($tokenId !== null) {
+            $result['failed_token_id'] = $tokenId;
+        }
+
         return $result;
     }
 

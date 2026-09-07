@@ -1,5 +1,18 @@
 # Weline_B2B（P4C）
 
+## ToC/ToB 一期（文档合同）
+
+- **万能车/单**：不新建平行车/单；`Weline_Cart` / `Weline_Order` 各内置类型 SPI + Registry（默认 `toc`），**不**硬依赖 B2B。
+- **双注册**：B2B 启用后自动向 Cart **与** Order 注册 `tob`；卸载后 Registry 无 `tob`，零售继续，历史 tob 单只读 fail-soft。
+- **热路径**：未装/卸载后加车、列表价、结账 **零** B2B 类探测与 miss 重试税。
+- **SellingModePolicy**（`2.4.0`）：Website/Store ConfigStore 键 `selling_mode_toc_enabled` / `selling_mode_tob_enabled`（默认 true）；商品 flags fail-soft；会话仅偏好；MOQ/step 默认 5。
+- **身份申请**（`2.4.0`）：`MembershipApplicationService` + 表 `weline_b2b_membership_application`；前台 Query `b2b.membership.submit`；后台 ControlCenter 批准指定组；**不**改 Customer 注册。
+- **定金挂单**（仅 `order_type=tob`）：全面禁折后含税商品小计 × 30% 为定金；`hang_status`：`awaiting_deposit` → `awaiting_merchant_approval` → `awaiting_balance` → paid；先定金后审批再尾款。状态图见 [`hang-status-state.md`](hang-status-state.md)。
+- **数量档 / MOQ**：价目项 `min_qty`（旧行默认 1）；Engine `qty` 取最高档；tob 车默认 moq=5 / step=5（`B2BCartQtyPolicy`）。
+- **店面 Theme UI（2.6.0）**：PDP 价格旁 ToC/ToB 切换（cookie `weline_selling_mode`）；tob 数量 MOQ/step=5；迷你车类型徽章；结账定金说明+禁券；账户订单 hang CTA（`purpose=deposit|balance`）。
+- **店面价**：`B2BStorefrontPriceAdjustmentProvider`；含价缓存 vary `selling_mode` + tob `group_id`（详见 Product `storefront-offer-price.md`）。
+- 需求正文：`doc/需求.md`（`REQ-B2B-0002`…`0007`）；Cart 键与摘要：`Weline_Cart/doc/cart.md`；事件追加字段：`Weline_Order/doc/event/order_created.md` 等。
+
 ## 冻结
 
 | 项 | 值 |
@@ -100,7 +113,8 @@ php bin/w mig:foundation clone-destroy --database=mig_clone_p4cb2b_...
 - 使用完毕必须销毁 clone，并以 `mig:foundation clone-list` 的 `count=0`
   作为清理证据。
 
-模块版本：`2.3.0`。`TASK-P4C-001..002`、`TASK-MIG-P4C = ACCEPTED`。
+模块版本：`2.5.0`。`TASK-P4C-001..002`、`TASK-MIG-P4C = ACCEPTED`。
+ToC/ToB 一期：禁折门禁、多行 quote set、定金 hang 生命周期已落地（`REQ-B2B-0005` unit）。
 MIG 聚焦测试 `6/66`、完整模块测试 `29/240`、B2B E2E `2/2`；真实
 PostgreSQL full-clone apply/fresh verify/allowlist/rollback/replay 与资源
 清理通过，schema drift 和 B2B-local architecture finding 均为 `0`。
