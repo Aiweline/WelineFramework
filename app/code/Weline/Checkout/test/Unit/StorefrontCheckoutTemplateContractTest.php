@@ -94,9 +94,9 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('const cartIsEmpty = Boolean(checkoutState.cart.is_empty);', $template);
         self::assertStringContainsString('form.hidden = cartIsEmpty;', $template);
         self::assertStringContainsString('emptyState.hidden = !cartIsEmpty;', $template);
-        self::assertStringContainsString('--checkout-text: var(--color-text-primary, #0f1111);', $template);
-        self::assertStringContainsString('--checkout-link: var(--color-link, #007185);', $template);
-        self::assertStringContainsString('--checkout-cta-bg: #ffd814;', $template);
+        self::assertStringContainsString('--checkout-text: var(--color-text-primary);', $template);
+        self::assertStringContainsString('--checkout-link: var(--color-link);', $template);
+        self::assertStringContainsString('--checkout-cta-bg: var(--color-primary);', $template);
         self::assertStringNotContainsString('#2563eb', $template);
         self::assertMatchesRegularExpression(
             '/\.weline-checkout__empty-state h2\s*\{[^}]*color:\s*var\(--checkout-text\)/s',
@@ -112,12 +112,38 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         );
     }
 
+    public function testCheckoutAdoptsTheSharedGuestSessionBeforeLoadingCartData(): void
+    {
+        $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
+        $ensureGuestToken = strpos($template, 'async function ensureGuestToken()');
+        $loadCartModule = strpos($template, "await window.Weline.load('cart')", $ensureGuestToken ?: 0);
+        $rereadGuestToken = strpos($template, 'token = guestToken();', $loadCartModule ?: 0);
+        $issueGuestToken = strpos($template, '.issueGuestToken(', $rereadGuestToken ?: 0);
+        $loadCheckoutWithToken = strpos($template, 'guest_token: await ensureGuestToken()', $issueGuestToken ?: 0);
+
+        self::assertStringContainsString('data-weline-load="cart"', $template);
+        self::assertIsInt($ensureGuestToken);
+        self::assertIsInt($loadCartModule, 'Checkout must load the shared Cart browser session first.');
+        self::assertIsInt($rereadGuestToken, 'Checkout must re-read the token after Cart initializes.');
+        self::assertIsInt($issueGuestToken, 'Checkout may establish a session only after attempting adoption.');
+        self::assertIsInt($loadCheckoutWithToken, 'checkout.getData must receive the recovered guest token.');
+        self::assertLessThan($rereadGuestToken, $loadCartModule);
+        self::assertLessThan($issueGuestToken, $rereadGuestToken);
+        self::assertLessThan($loadCheckoutWithToken, $issueGuestToken);
+    }
+
     public function testCheckoutShippingAddressUsesSlotInsteadOfNakedRegionInputs(): void
     {
         $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
 
         self::assertStringContainsString('id="checkout-shipping-address"', $template);
         self::assertStringContainsString('class="weline-checkout__shipping-address-slot"', $template);
+        self::assertStringContainsString('.weline-checkout__shipping-address-slot', $template);
+        self::assertMatchesRegularExpression(
+            '/\.weline-checkout__shipping-address-slot\s*\{[^}]*margin-top:\s*16px/s',
+            $template,
+            'Shipping address slot must match options panel title spacing',
+        );
         self::assertStringContainsString("accept=\"checkout-shipping-address,shipping-address,delivery-address,address\"", $template);
         self::assertStringNotContainsString('<input name="country_code"', $template);
         self::assertStringNotContainsString('<input name="province"', $template);
@@ -135,6 +161,13 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('class="weline-checkout__coupon-slot"', $template);
         self::assertStringContainsString('id="checkout-summary-note"', $template);
         self::assertStringContainsString('class="weline-checkout__note-slot"', $template);
+        self::assertStringContainsString('weline-checkout__extras', $template);
+        self::assertStringContainsString('mini-cart-drawer__extras', $template);
+        self::assertStringContainsString('data-weline-load="miniCartExtras"', $template);
+        self::assertStringContainsString('discountAmountMajor', $template);
+        self::assertStringContainsString('data-checkout-discount-row', $template);
+        self::assertStringContainsString("weline:checkout:address-updated", $template);
+        self::assertStringContainsString("scheduleReload({ hardOnFailure: false })", $template);
         self::assertStringNotContainsString('<w:widget', $template);
         self::assertMatchesRegularExpression(
             '/\.weline-checkout__totals > \[role="listitem"\]/s',
@@ -180,7 +213,7 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('checkout-success-page', $template);
         self::assertStringContainsString('amz-order-confirm__banner', $template);
         self::assertStringContainsString('amz-order-confirm__btn--primary', $template);
-        self::assertStringContainsString('--amz-btn-primary-bg: #ffd814', $template);
+        self::assertStringContainsString('--amz-btn-primary-bg: var(--color-primary, #b84a3c)', $template);
         self::assertStringContainsString('--amz-success: #067d62', $template);
         self::assertStringContainsString('data-order-uuid="<?= $escape($requestOrderUuid) ?>"', $template);
         self::assertStringContainsString(
@@ -285,6 +318,28 @@ final class StorefrontCheckoutTemplateContractTest extends TestCase
         self::assertStringContainsString('color: var(--checkout-order-text);', $orderView);
         self::assertMatchesRegularExpression('/\.order-view-page h1\s*\{[^}]*color:\s*var\(--checkout-order-text\)/s', $orderView);
         self::assertStringContainsString('@media (max-width: 720px)', $orderView);
+    }
+
+    public function testCheckoutHeaderSubtitleIsConfigurableAndDoesNotExposeInternalModuleNames(): void
+    {
+        $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
+        $controller = $this->read('app/code/Weline/Checkout/Controller/Frontend/Checkout.php');
+
+        self::assertStringContainsString('$checkoutPageSubtitle = (string)($this->getData(\'checkout_page_subtitle\') ?? \'\');', $template);
+        self::assertStringContainsString('checkout_page_subtitle', $controller);
+        self::assertStringContainsString('确认收货地址、配送方式和支付信息后即可提交订单。', $controller);
+        self::assertStringNotContainsString('Weline 核心模块', $template);
+        self::assertStringNotContainsString('Weline 核心模块', $controller);
+    }
+
+    public function testCheckoutReloadsSummaryWhenMiniCartMutatesCart(): void
+    {
+        $template = $this->read('app/code/Weline/Checkout/view/frontend/checkout/index.phtml');
+
+        self::assertStringContainsString("window.addEventListener('weline:cart-updated'", $template);
+        self::assertStringContainsString('scheduleReload({ hardOnFailure: true })', $template);
+        self::assertStringContainsString('window.location.reload()', $template);
+        self::assertStringNotContainsString("loadCheckout().catch(function () {\n            /* keep current totals if refresh fails */", $template);
     }
 
     private function read(string $relativePath): string

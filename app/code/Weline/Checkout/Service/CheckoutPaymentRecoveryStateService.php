@@ -43,11 +43,46 @@ final class CheckoutPaymentRecoveryStateService
             throw new \RuntimeException('checkout_payment_recovery_session_conflict');
         }
         $outcome = strtolower(trim((string)($payment['outcome'] ?? '')));
-        if (!in_array($outcome, ['paid', 'pending', 'failed'], true)) {
+        if (!in_array($outcome, ['paid', 'pending', 'failed', 'partial'], true)) {
             throw new \InvalidArgumentException('checkout_payment_recovery_outcome_invalid');
+        }
+        $purpose = strtolower(trim((string)($payment['purpose'] ?? '')));
+        if ($purpose !== '' && !in_array($purpose, ['deposit', 'balance', 'full'], true)) {
+            throw new \InvalidArgumentException('checkout_payment_recovery_purpose_invalid');
+        }
+        $entries = is_array($session['payment_recovery_entries'] ?? null)
+            ? $session['payment_recovery_entries']
+            : [];
+        if ($purpose === 'deposit' || $purpose === 'balance') {
+            $entries[$purpose] = $payment;
+            $session['payment_recovery_entries'] = $entries;
         }
         $session['payment_result'] = $payment;
         $this->sessions->put(trim($quoteToken), $session);
+    }
+
+    /** @return array<string, mixed>|null */
+    public function getByPurpose(string $quoteToken, string $orderIdempotencyKey, string $purpose): ?array
+    {
+        $session = $this->submittedSession($quoteToken, $orderIdempotencyKey);
+        if ($session === null) {
+            return null;
+        }
+        $purpose = strtolower(trim($purpose));
+        $entries = is_array($session['payment_recovery_entries'] ?? null)
+            ? $session['payment_recovery_entries']
+            : [];
+        if (isset($entries[$purpose]) && is_array($entries[$purpose])) {
+            return $entries[$purpose];
+        }
+        $payment = $session['payment_result'] ?? null;
+        if (is_array($payment)
+            && strtolower(trim((string)($payment['purpose'] ?? ''))) === $purpose
+        ) {
+            return $payment;
+        }
+
+        return null;
     }
 
     public function canRetry(string $quoteToken, string $orderIdempotencyKey): bool

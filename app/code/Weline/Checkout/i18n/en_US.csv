@@ -67,15 +67,15 @@
 购物车为空，请先加入商品。,"The shopping cart is empty, please add products first."
 暂无可用配送方式。,"There are currently no shipping methods available."
 暂无可用支付方式。,"No payment methods available yet."
-配送信息已加载,配送信息已加载
-配送信息加载失败，请稍后重试或手动填写地址。,配送信息加载失败，请稍后重试或手动填写地址。
+配送信息已加载,"Delivery information loaded"
+配送信息加载失败，请稍后重试或手动填写地址。,"Failed to load delivery information. Please try again later or enter the address manually."
 选择国家/地址,"Select country/address"
-验证码已就绪,验证码已就绪
-配送国家已更新,配送国家已更新
-配送地址已选择,配送地址已选择
+验证码已就绪,"CAPTCHA is ready"
+配送国家已更新,"Shipping country updated"
+配送地址已选择,"Shipping address selected"
 验证码校验失败，请重试。,"Captcha verification failed. Please try again."
-配送地址已保存,配送地址已保存
-客户端折扣金额被拒绝，请使用结账优惠券。,客户端折扣金额被拒绝，请使用结账优惠券。
+配送地址已保存,"Shipping address saved"
+客户端折扣金额被拒绝，请使用结账优惠券。,"Client discount amount was rejected. Please use a checkout coupon."
 请补全收货信息并选择配送和支付方式。,"Please complete the delivery information and select the delivery and payment method."
 该商品暂不可售。,"This product is currently unavailable for sale."
 订单创建成功,"Order created successfully"
@@ -178,6 +178,7 @@
 无权操作此订单,"No permission to operate this order"
 订单已取消,"Order cancelled"
 取消订单失败：%{1},"Failed to cancel order: %{1}"
+确认收货地址、配送方式和支付信息后即可提交订单。,"Review your shipping and payment details"
 订单创建失败：%{1},"Order creation failed: %{1}"
 支付处理成功,"Payment processed successfully"
 支付处理失败：%{1},"Payment processing failed: %{1}"
@@ -244,7 +245,7 @@ SKU,SKU
 确定取消,"Confirm cancellation"
 保留订单,"reserve order"
 取消订单失败，请稍后重试,"Failed to cancel order, please try again later"
-优惠,优惠
+优惠,Discount
 该支付已取消，无需再次操作。,"This payment is already cancelled. No further action is needed."
 支付已取消成功，订单尚未完成付款。可返回结账页重新选择支付方式。,"Payment cancelled successfully. The order is not paid yet. You can return to checkout and choose a payment method again."
 感谢您的订购！,感谢您的订购！
@@ -268,8 +269,10 @@ SKU,SKU
 正在重试支付...,"Retrying payment..."
 订单编号,"Order reference"
 "Weline.Api 尚未就绪，请刷新页面后重试。","Weline.Api is not ready yet, please refresh the page and try again."
+无法恢复购物车会话，请刷新页面后重试。,"Unable to restore the cart session. Please refresh the page and try again."
+查看规格图,"View option image"
+关闭,Close
 安全结账,"Secure checkout"
-"购物车、配送、支付和订单创建都由 Weline 核心模块承接。","Shopping cart, shipping, payment and order creation are all handled by the Weline core module."
 返回购物车,"Return to cart"
 暂时无法结账,"Unable to checkout at the moment"
 购物车是空的,"Shopping cart is empty"
@@ -280,17 +283,28 @@ SKU,SKU
 支付状态待确认,"Payment status pending confirmation"
 快捷支付,"Express checkout"
 收货信息,"Receiving information"
-结账收货地址,结账收货地址
+结账收货地址,"Checkout shipping address"
 正在加载配送方式...,"Loading shipping methods..."
 支付方式,"Payment Method"
 正在加载支付方式...,"Loading payment methods..."
 订单摘要,"Order summary"
-结账优惠券,结账优惠券
-结账订单留言,结账订单留言
+优惠与留言,"Discounts and notes"
+结账优惠券,"Checkout coupon"
+结账订单留言,"Checkout order note"
 应付合计,"Total payable"
 请确认收货信息、配送方式和支付方式。,"Please confirm the delivery information, delivery method and payment method."
+全部,All
+请输入订单号,"Please enter order number"
+搜索,Search
+客户ID,"Customer ID"
+操作,Actions
+查看,View
+配送状态,"Shipping Status"
+订单项,"Order Items"
+总价,"Total Price"
+折扣,Discount
+返回列表,"Back to List"
 China,China
-关闭,Close
 国家/地区,Country/Region
 搜索国家/地区,"Search country/region"
 自动定位,Auto-detect
@@ -311,17 +325,6 @@ China,China
 定位完成，但当前未启用地址添加模块。,"Location completed"
 定位完成，已自动选择国家/省市区，请补全收货人信息并保存。,"Location applied. Country/region cascade selected. Please complete recipient details and save."
 自动定位失败，请手动选择国家并完善地址。,"Auto-detect failed. Please select a country and complete the address."
-全部,All
-请输入订单号,"Please enter order number"
-搜索,Search
-客户ID,"Customer ID"
-操作,Actions
-查看,View
-配送状态,"Shipping Status"
-订单项,"Order Items"
-总价,"Total Price"
-折扣,Discount
-返回列表,"Back to List"
 正在前往结账...,"Proceeding to checkout..."
 结账准备失败,"Checkout preparation failed"
 立即结账,"Proceed to checkout"
@@ -376,11 +379,12 @@ China,China
 客户端交易事实字段被拒绝：%{1},"Client transaction fact field rejected: %{1}"
 库存能力不可用，结账已阻断,"Inventory capacity is unavailable and checkout is blocked"
 已提交报价会话缺少冻结结果,"Submitted quote session is missing frozen results"
-折扣报价已失效，请重新报价确认,折扣报价已失效，请重新报价确认
-当前支付方式不支持已选优惠方式：%{1},当前支付方式不支持已选优惠方式：%{1}
-请选择国家/地区,请选择国家/地区
-请选择配送地址,请选择配送地址
-地址不存在,地址不存在
+批发结账禁止优惠与券,批发结账禁止优惠与券
+折扣报价已失效，请重新报价确认,"Discount quote expired. Please requote to confirm."
+当前支付方式不支持已选优惠方式：%{1},"The selected payment method does not support the chosen discount: %{1}"
+请选择国家/地区,"Please select a country/region"
+请选择配送地址,"Please select a shipping address"
+地址不存在,"Address not found"
 立即购买,"Buy Now"
 感谢您的购买！您的订单已成功创建。,"Thank you for your purchase! Your order has been created successfully."
 收货人,consignee
@@ -392,11 +396,11 @@ China,China
 详细地址,"Detailed address"
 邮编,"post code"
 配送至,"Ship to"
-快速添加地址,快速添加地址
-保存并使用,保存并使用
-定位能力不可用,定位能力不可用
-自动定位失败,自动定位失败
-已使用自动定位地址,已使用自动定位地址
+快速添加地址,"Quick add address"
+保存并使用,"Save and use"
+定位能力不可用,"Location services unavailable"
+自动定位失败,"Automatic location failed"
+已使用自动定位地址,"Using automatically detected address"
 订单已创建，正在打开结果页面。,"The order has been created and the results page is opening."
 订单已创建。,"The order has been created."
 "当前请求没有可结账的 Storefront Scope","There is no Storefront Scope available for checkout for the current request"

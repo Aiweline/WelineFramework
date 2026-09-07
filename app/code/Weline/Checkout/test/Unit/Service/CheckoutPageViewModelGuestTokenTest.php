@@ -2,6 +2,15 @@
 
 declare(strict_types=1);
 
+namespace {
+    if (!function_exists('w_env_cookie')) {
+        function w_env_cookie(?string $key = null, mixed $default = null): mixed
+        {
+            return \Weline\Framework\Env\WelineEnv::getCookie($key, $default);
+        }
+    }
+}
+
 namespace Weline\Checkout\Service {
     function w_query(string $provider, string $operation, array $params = []): mixed
     {
@@ -15,7 +24,10 @@ namespace Weline\Checkout\Service {
 
 namespace Weline\Checkout\Test\Unit\Service {
     use PHPUnit\Framework\TestCase;
+    use Weline\Cart\Service\CartService;
     use Weline\Checkout\Service\CheckoutPageViewModel;
+    use Weline\Framework\Context;
+    use Weline\Framework\Http\CookieScope;
 
     final class CheckoutPageViewModelQuerySpy
     {
@@ -48,6 +60,21 @@ namespace Weline\Checkout\Test\Unit\Service {
         protected function setUp(): void
         {
             CheckoutPageViewModelQuerySpy::$calls = [];
+            CookieScope::setPolicyResolverOverride(static fn(): array => [
+                'active' => false,
+                'name_suffix' => '',
+                'name_suffix_pattern' => '',
+                'mount_path' => '/',
+                'expire_unscoped_aliases' => false,
+                'revision' => 'checkout-guest-cart-test',
+            ]);
+            Context::current()->set('input.cookie', []);
+        }
+
+        protected function tearDown(): void
+        {
+            Context::current()->set('input.cookie', []);
+            CookieScope::setPolicyResolverOverride(null);
         }
 
         public function testCurrentCartForwardsGuestTokenToCartBoundary(): void
@@ -60,6 +87,22 @@ namespace Weline\Checkout\Test\Unit\Service {
                 'provider' => 'cart',
                 'operation' => 'getCart',
                 'params' => ['guest_token' => 'guest-token-123'],
+            ]], CheckoutPageViewModelQuerySpy::$calls);
+        }
+
+        public function testCurrentCartRecoversGuestTokenFromTrustedRequestCookie(): void
+        {
+            Context::current()->set('input.cookie', [
+                CartService::GUEST_TOKEN_COOKIE => 'guest-cookie-token-456',
+            ]);
+
+            $cart = (new CheckoutPageViewModel())->currentCart();
+
+            self::assertFalse($cart['is_empty']);
+            self::assertSame([[
+                'provider' => 'cart',
+                'operation' => 'getCart',
+                'params' => ['guest_token' => 'guest-cookie-token-456'],
             ]], CheckoutPageViewModelQuerySpy::$calls);
         }
     }

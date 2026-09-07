@@ -206,6 +206,7 @@ final class CheckoutDeliveryContextService
             'country_code' => $countryCode,
             'province' => trim((string)($address['province'] ?? '')),
             'city' => trim((string)($address['city'] ?? '')),
+            'district' => trim((string)($address['district'] ?? '')),
             'address1' => $street,
             'postal_code' => trim((string)($address['postal_code'] ?? '')),
         ];
@@ -386,14 +387,25 @@ final class CheckoutDeliveryContextService
             'country' => (string)($row['country'] ?? ''),
             'country_code' => (string)($row['country_code'] ?? $row['countryCode'] ?? ''),
             'province' => (string)($row['province'] ?? ''),
+            'province_code' => (string)($row['province_code'] ?? ''),
+            'province_region_id' => (int)($row['province_region_id'] ?? 0),
             'city' => (string)($row['city'] ?? ''),
+            'city_code' => (string)($row['city_code'] ?? ''),
+            'city_region_id' => (int)($row['city_region_id'] ?? 0),
             'district' => (string)($row['district'] ?? ''),
+            'district_code' => (string)($row['district_code'] ?? ''),
+            'district_region_id' => (int)($row['district_region_id'] ?? 0),
             'street' => (string)($row['street'] ?? $row['address1'] ?? ''),
+            'street_id' => (int)($row['street_id'] ?? 0),
             'postal_code' => (string)($row['postal_code'] ?? ''),
             'contact_name' => (string)($row['contact_name'] ?? $row['name'] ?? ''),
             'contact_phone' => (string)($row['contact_phone'] ?? $row['phone'] ?? ''),
-        ]);
-        $id = (string)($row['id'] ?? $row['delivery_address_id'] ?? $row[DeliveryAddress::schema_fields_ID] ?? '');
+        ], true);
+        // Prefer PK field: empty string "id" must not mask delivery_address_id (?? only skips null).
+        $id = trim((string)($row[DeliveryAddress::schema_fields_ID] ?? $row['delivery_address_id'] ?? ''));
+        if ($id === '') {
+            $id = trim((string)($row['id'] ?? $row['address_id'] ?? ''));
+        }
         $full = $this->addressFormatter->formatSingleLine($normalized);
         $name = trim((string)$normalized['contact_name']);
 
@@ -408,9 +420,16 @@ final class CheckoutDeliveryContextService
             'country_code' => self::normalizeCountryCode((string)$normalized['country_code']),
             'country' => (string)$normalized['country'],
             'province' => (string)$normalized['province'],
+            'province_code' => (string)($normalized['province_code'] ?? ''),
+            'province_region_id' => (int)($normalized['province_region_id'] ?? 0),
             'city' => (string)$normalized['city'],
+            'city_code' => (string)($normalized['city_code'] ?? ''),
+            'city_region_id' => (int)($normalized['city_region_id'] ?? 0),
             'district' => (string)$normalized['district'],
+            'district_code' => (string)($normalized['district_code'] ?? ''),
+            'district_region_id' => (int)($normalized['district_region_id'] ?? 0),
             'street' => (string)$normalized['street'],
+            'street_id' => (int)($normalized['street_id'] ?? 0),
             'postal_code' => (string)$normalized['postal_code'],
             'full_address' => $full,
             'is_selected' => $selected,
@@ -487,8 +506,14 @@ final class CheckoutDeliveryContextService
             $id = 'guest_' . bin2hex(random_bytes(8));
         }
 
+        // array + keeps left-hand keys: normalizeIncoming may leave id='', which would
+        // wipe the generated guest_* id and then guestBook() drops empty-id rows.
         $projected = $this->projectAddress(
-            $normalized + ['id' => $id, 'source' => 'guest', 'is_anonymous' => true],
+            array_merge($normalized, [
+                'id' => $id,
+                'source' => 'guest',
+                'is_anonymous' => true,
+            ]),
             'guest',
             true,
             true

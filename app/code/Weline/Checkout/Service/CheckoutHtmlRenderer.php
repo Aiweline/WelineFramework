@@ -24,13 +24,190 @@ final class CheckoutHtmlRenderer
             $name = (string)($item['name'] ?? $item['product_name'] ?? '');
             $qty = (float)($item['qty'] ?? $item['quantity'] ?? 1);
             $row = (float)($item['row_total'] ?? ((float)($item['price'] ?? 0) * $qty));
+            $unitMinor = max(0, (int)($item['unit_price_minor'] ?? (int)round(((float)($item['price'] ?? 0)) * 100)));
+            $compareAtMinor = max(0, (int)($item['compare_at_minor'] ?? 0));
+            $original = (float)($item['original_price'] ?? ($compareAtMinor > 0 ? $compareAtMinor / 100 : 0));
+            $hasDeal = !empty($item['has_deal'])
+                || ($compareAtMinor > $unitMinor && $unitMinor > 0)
+                || ($original > (float)($item['price'] ?? 0) && (float)($item['price'] ?? 0) > 0);
+            $campaignLabel = trim((string)($item['campaign_label'] ?? ''));
+            $campaignUrl = trim((string)($item['campaign_url'] ?? ''));
+            $sku = trim((string)($item['sku'] ?? ''));
+            $metaHtml = '';
+            if ($sku !== '') {
+                $metaHtml .= '<small class="weline-checkout__item-sku">SKU: ' . $this->e($sku) . '</small>';
+            }
+            $metaHtml .= $this->renderOptionsHtml($item);
+            $image = $this->resolveItemImage($item);
+            $thumbHtml = $image['src'] !== ''
+                ? '<img class="weline-checkout__item-thumb" src="' . $this->e($image['src']) . '" alt=""'
+                    . ' data-storefront-img="1"'
+                    . ' data-fallback="' . $this->e($image['fallback'] !== '' ? $image['fallback'] : $image['src']) . '"'
+                    . ' loading="lazy" decoding="async" width="64" height="64">'
+                : '<span class="weline-checkout__item-thumb weline-checkout__item-thumb--empty" aria-hidden="true"></span>';
+            $priceHtml = '<span class="weline-checkout__item-price">'
+                . '<span class="weline-checkout__item-price-row">'
+                . '<span class="weline-checkout__item-price-now">' . $this->e($this->money($currency, $row)) . '</span>';
+            if ($hasDeal && $original > 0) {
+                $priceHtml .= '<span class="weline-checkout__item-price-was">'
+                    . $this->e($this->money($currency, $original * max(1.0, $qty)))
+                    . '</span>';
+            }
+            $priceHtml .= '</span>';
+            if ($hasDeal && $original > 0 && $campaignLabel !== '') {
+                if ($campaignUrl !== '') {
+                    $priceHtml .= '<a class="weline-checkout__item-price-campaign" href="'
+                        . $this->e($campaignUrl) . '">' . $this->e($campaignLabel) . '</a>';
+                } else {
+                    $priceHtml .= '<span class="weline-checkout__item-price-campaign">'
+                        . $this->e($campaignLabel) . '</span>';
+                }
+            }
+            $priceHtml .= '</span>';
+            // Price floats top-right inside main so the title can use the
+            // full summary column width (wrapping around the price), instead
+            // of being crushed by a competing flex/grid track.
             $html .= '<div class="weline-checkout__item" data-checkout-item>'
-                . '<div><strong>' . $this->e($name) . '</strong>'
-                . '<small>x' . $this->e((string)$qty) . '</small></div>'
-                . '<span>' . $this->e($this->money($currency, $row)) . '</span>'
+                . $thumbHtml
+                . '<div class="weline-checkout__item-main">'
+                . $priceHtml
+                . '<strong class="weline-checkout__item-title">' . $this->e($name) . '</strong>'
+                . $metaHtml
+                . '<small class="weline-checkout__item-qty">x' . $this->e((string)$qty) . '</small>'
+                . '</div>'
                 . '</div>';
         }
         return $html;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @return array{src:string,fallback:string}
+     */
+    private function resolveItemImage(array $item): array
+    {
+        $imageSrc = trim((string)($item['image_src'] ?? $item['image'] ?? ''));
+        $imageFallback = trim((string)($item['image_fallback'] ?? ''));
+        $seed = (int)($item['product_id'] ?? 0);
+        if (class_exists(\Weline\Theme\Helper\StorefrontImagePlaceholder::class)) {
+            $resolved = \Weline\Theme\Helper\StorefrontImagePlaceholder::resolve($imageSrc, $seed);
+
+            return [
+                'src' => $resolved['src'],
+                'fallback' => $imageFallback !== '' ? $imageFallback : $resolved['fallback'],
+            ];
+        }
+
+        return [
+            'src' => $imageSrc,
+            'fallback' => $imageFallback !== '' ? $imageFallback : $imageSrc,
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function renderOptionsHtml(array $item): string
+    {
+        $options = is_array($item['options'] ?? null) ? $item['options'] : [];
+        $rows = [];
+        foreach ($options as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $label = trim((string)($option['label'] ?? $option['code'] ?? ''));
+            $value = trim((string)($option['value_label'] ?? $option['value'] ?? ''));
+            if ($label === '' || $value === '') {
+                continue;
+            }
+            $swatchHtml = '';
+            $swatchImage = trim((string)($option['swatch_image'] ?? ''));
+            $swatchColor = trim((string)($option['swatch_color'] ?? ''));
+            if ($this->isDisplayableSwatchUrl($swatchImage)) {
+                $previewLabel = (string)__('查看规格图');
+                $swatchHtml = '<button type="button" class="weline-checkout__item-option-swatch-btn"'
+                    . ' data-checkout-swatch-trigger data-checkout-swatch-src="' . $this->e($swatchImage) . '"'
+                    . ' aria-label="' . $this->e($previewLabel) . '">'
+                    . '<img class="weline-checkout__item-option-swatch" src="' . $this->e($swatchImage) . '" alt=""'
+                    . ' loading="lazy" decoding="async" width="16" height="16">'
+                    . '</button>';
+            } elseif ($swatchColor !== '' && preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $swatchColor) === 1) {
+                $swatchHtml = '<span class="weline-checkout__item-option-swatch weline-checkout__item-option-swatch--color"'
+                    . ' style="background-color:' . $this->e($swatchColor) . '" aria-hidden="true"></span>';
+            }
+            $rows[] = '<li class="weline-checkout__item-option">'
+                . '<span class="weline-checkout__item-option-label">' . $this->e($label) . '</span>'
+                . '<span class="weline-checkout__item-option-sep" aria-hidden="true">·</span>'
+                . '<span class="weline-checkout__item-option-value-wrap">'
+                . $swatchHtml
+                . '<span class="weline-checkout__item-option-value">' . $this->e($value) . '</span>'
+                . '</span></li>';
+        }
+        if ($rows !== []) {
+            return '<ul class="weline-checkout__item-options">' . implode('', $rows) . '</ul>';
+        }
+
+        $fallback = $this->formatOptionsFallback($item);
+        if ($fallback === '') {
+            return '';
+        }
+
+        return '<small class="weline-checkout__item-options">' . $this->e($fallback) . '</small>';
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     */
+    private function formatOptionsFallback(array $item): string
+    {
+        $parts = [];
+        $options = is_array($item['options'] ?? null) ? $item['options'] : [];
+        foreach ($options as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $label = trim((string)($option['label'] ?? $option['code'] ?? ''));
+            $value = trim((string)($option['value_label'] ?? $option['value'] ?? ''));
+            if ($label === '' || $value === '') {
+                continue;
+            }
+            $parts[] = $label . ': ' . $value;
+        }
+        if ($parts !== []) {
+            return implode(' · ', $parts);
+        }
+
+        $selection = is_array($item['selection'] ?? null) ? $item['selection'] : [];
+        $keys = array_keys($selection);
+        sort($keys, SORT_STRING);
+        foreach ($keys as $code) {
+            $code = trim((string)$code);
+            $value = trim((string)($selection[$code] ?? ''));
+            if ($code === '' || $value === '') {
+                continue;
+            }
+            $parts[] = $code . ': ' . $value;
+        }
+
+        return implode(' · ', $parts);
+    }
+
+    private function isDisplayableSwatchUrl(string $image): bool
+    {
+        $image = trim($image);
+        if ($image === '') {
+            return false;
+        }
+        if (str_starts_with(strtolower($image), 'asset://')) {
+            return false;
+        }
+        if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $image) === 1
+            && preg_match('#^(https?:)?//#i', $image) !== 1
+        ) {
+            return false;
+        }
+
+        return true;
     }
 
     /**

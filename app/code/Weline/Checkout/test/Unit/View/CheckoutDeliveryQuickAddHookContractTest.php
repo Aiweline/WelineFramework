@@ -29,6 +29,17 @@ final class CheckoutDeliveryQuickAddHookContractTest extends TestCase
         $this->assertStringContainsString("(string)__(trim((string)(\$this->getData('title') ?? '配送至')))", $content);
     }
 
+    public function testAddressListScrollsWhenExceedingFiveItems(): void
+    {
+        $widget = dirname(__DIR__, 3) . '/view/theme/frontend/widgets/header/checkout-delivery-context/default.phtml';
+        $content = (string) file_get_contents($widget);
+
+        $this->assertStringContainsString('.address-list {', $content);
+        $this->assertStringContainsString('max-height: calc((var(--address-item-h) * 5)', $content);
+        $this->assertStringContainsString('overflow-y: auto', $content);
+        $this->assertStringContainsString('overscroll-behavior: contain', $content);
+    }
+
     public function testWidgetRegistryDeclaresDefaultInjectionWithoutThemeInline(): void
     {
         $registry = dirname(__DIR__, 3) . '/extends/module/Weline_Widget/Weline_Checkout/widget.php';
