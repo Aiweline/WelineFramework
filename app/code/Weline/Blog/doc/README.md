@@ -9,6 +9,8 @@
 - `BlogSeoProfileProvider` / `BlogSitemapUrlProvider` / `BlogSearchProvider`：SEO、Sitemap、Search 扩展
 - 后台 `blog/backend/post/*`：S1 最小文章 CRUD
 
+Sitemap 提供器按目标 `website_id` 的规范 URL 输出完整 `loc`，保留端口与部署子路径；默认网站 `0` 有效。`BlogArticle.publicUrl` 仍是前端相对路径，仅在 Sitemap 边界补基址，不使用当前其他网站的请求 origin。多语言记录共享同一公开地址且没有独立 Sitemap locale 时，只保留现有 `resolveBySlug` 实际路由对应的文章和原 `url_key`；Post 优先于 CMS，不生成新的语言 URL。定向回归：`php app/code/Weline/Blog/Test/Regression/BlogSitemapOriginRegression.script.php`；运行同步与文件生成验收见 [SEO 开发日志](../../Seo/doc/开发日志.md)。
+
 ## 硬边界
 
 - **`GET /blog`**：Blog 列表（`blog_list`），不支持 CMS 独占 exact `/blog` landing

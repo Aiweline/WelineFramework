@@ -250,6 +250,16 @@ if ($coverImageValue !== '') {
                                 placeholder="<?= $escape(__('逗号分隔')) ?>"
                                 value="<?= $escape($postRow['keywords'] ?? '') ?>"
                             >
+                            <?php if ($postId > 0): ?>
+                                <div class="blog-post-keywords-local" data-testid="blog-post-keywords-local">
+                                    <local
+                                        model="Weline\Blog\Model\Post\LocalDescription"
+                                        field="keywords"
+                                        id="post.post_id"
+                                        name="post-keywords"
+                                    ><?= $escape($postRow['local_keywords'] ?? $postRow['keywords'] ?? '') ?></local>
+                                </div>
+                            <?php endif; ?>
                         </div>
                         <div class="blog-post-field blog-post-field-category">
                             <label class="w-field__label" for="blog-post-category"><lang>分类</lang></label>

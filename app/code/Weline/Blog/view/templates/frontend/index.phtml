@@ -32,6 +32,14 @@ $count = count($articles);
                 }
                 $title = trim((string)($article['title'] ?? ''));
                 $url = trim((string)($article['public_url'] ?? ''));
+                $href = '';
+                if ($url !== '') {
+                    if (preg_match('#^(?:https?:)?//#i', $url) === 1) {
+                        $href = $url;
+                    } else {
+                        $href = (string)$this->getUrl(ltrim($url, '/'));
+                    }
+                }
                 $excerpt = trim((string)($article['excerpt'] ?? ''));
                 $publishedAt = trim((string)($article['published_at'] ?? ''));
                 $author = trim((string)($article['author'] ?? ''));
@@ -46,15 +54,23 @@ $count = count($articles);
                 }
                 $sourceRef = is_array($article['source_ref'] ?? null) ? $article['source_ref'] : [];
                 $categoryUrl = trim((string)($sourceRef['category_url'] ?? ''));
+                $categoryHref = '';
+                if ($categoryUrl !== '') {
+                    if (preg_match('#^(?:https?:)?//#i', $categoryUrl) === 1) {
+                        $categoryHref = $categoryUrl;
+                    } else {
+                        $categoryHref = (string)$this->getUrl(ltrim($categoryUrl, '/'));
+                    }
+                }
                 $imageResolved = StorefrontImagePlaceholder::resolve(
                     (string)($article['cover_image'] ?? ''),
                     (int)($sourceRef['post_id'] ?? $sourceRef['cms_page_id'] ?? 0),
                 );
                 ?>
                 <article class="blog-storefront__card is-clickable" data-testid="storefront-blog-card">
-                    <?php if ($url !== ''): ?>
+                    <?php if ($href !== ''): ?>
                         <a class="blog-storefront__card-hit"
-                           href="<?= $escape($url) ?>"
+                           href="<?= $escape($href) ?>"
                            aria-label="<?= $escape($title !== '' ? $title : (string)__('博客文章')) ?>"></a>
                     <?php endif; ?>
                     <div class="blog-storefront__media">
@@ -76,8 +92,8 @@ $count = count($articles);
                                     <span aria-hidden="true">·</span>
                                 <?php endif; ?>
                                 <?php if ($categoryLabel !== ''): ?>
-                                    <?php if ($categoryUrl !== ''): ?>
-                                        <a class="blog-storefront__category" href="<?= $escape($categoryUrl) ?>"><?= $escape($categoryLabel) ?></a>
+                                    <?php if ($categoryHref !== ''): ?>
+                                        <a class="blog-storefront__category" href="<?= $escape($categoryHref) ?>"><?= $escape($categoryLabel) ?></a>
                                     <?php else: ?>
                                         <span class="blog-storefront__category"><?= $escape($categoryLabel) ?></span>
                                     <?php endif; ?>
