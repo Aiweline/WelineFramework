@@ -12,7 +12,10 @@ final class GoogleTaxonomyTranslationQueueTest extends TestCase
 {
     public function testBuildBizKeyNormalizesLocale(): void
     {
-        $service = new GoogleTaxonomyTranslationQueueService($this->createConfigStub());
+        $service = new GoogleTaxonomyTranslationQueueService(
+            $this->createConfigStub(),
+            $this->createMock(\Weline\Queue\Service\IdempotentQueueAdmission::class),
+        );
         self::assertSame(
             'google_taxonomy.ai_translation:zh_Hans_CN',
             $service->buildBizKey('zh-Hans-CN'),
@@ -28,7 +31,9 @@ final class GoogleTaxonomyTranslationQueueTest extends TestCase
         $source = (string)file_get_contents(
             dirname(__DIR__, 3) . '/Service/GoogleTaxonomyTranslationQueueService.php',
         );
-        self::assertStringContainsString('getLatestQueueByBizKey', $source);
+        self::assertStringContainsString('IdempotentQueueAdmission', $source);
+        self::assertStringContainsString('IDEMPOTENCY_SCOPE', $source);
+        self::assertStringContainsString("admission->admit", $source);
         self::assertStringContainsString("'batch_size'", $source);
         self::assertStringContainsString("'allow_key_only_words'", $source);
         self::assertStringContainsString("'word_prefix'", $source);
