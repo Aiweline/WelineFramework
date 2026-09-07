@@ -2,12 +2,13 @@
 
 return [
     "name" => 'Weline_Shipping',
-    "version" => '2.2.9',
+    "version" => '2.4.51',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Customer' => '*',
         'Weline_Framework' => '*',
         'Weline_I18n' => '*',
+        'Weline_Websites' => '*',
     ],
     "optional" => [
         'Weline_Frontend' => '*',
@@ -18,5 +19,6 @@ return [
         'view_warmup_contribution.Weline_Shipping' => \Weline\Shipping\Api\View\ViewWarmupContributionProvider::class,
         \Weline\Shipping\Api\Quote\ShippingQuoteServiceInterface::class
             => \Weline\Shipping\Service\ScopedShippingQuoteService::class,
+        'shipping.carrier_coverage.default' => \Weline\Shipping\Service\DefaultCarrierCoverageProvider::class,
     ],
 ];

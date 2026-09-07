@@ -2,7 +2,7 @@
 
 ## 概述
 
-Shipping模块是WelineFramework的配送管理系统，提供完整的配送服务配置、费用计算、免邮规则和物流跟踪功能。支持全球地区管理、配送区域配置、快递公司管理、费用模板配置、免邮规则配置和物流跟踪等功能。
+Shipping模块是WelineFramework的配送管理系统，提供完整的配送服务配置、费用计算、免邮规则和物流跟踪功能。支持全球地区管理、承运商覆盖与可售/禁运、快递公司管理、费用模板配置、免邮规则配置和物流跟踪等功能。
 
 I18n 为国家目录的必需提供方；Shipping 只通过
 `Weline\I18n\Api\Localization\CountryRepositoryInterface` 读取不可变国家 DTO，后台模板接收普通数组，
@@ -18,7 +18,7 @@ Frontend 仅用于后台地址页的客户候选列表；Shipping 通过
 
 - 公开契约：`ShippingQuoteServiceInterface::listOptions()` / `quote()`；
   所有金额使用 integer minor unit
-- `ScopedShippingQuoteService` 只读取激活的 ShippingService、Zone、
+- `ScopedShippingQuoteService` 只读取激活的 ShippingService、
   RateTemplate 与 FreeShippingRule 数据；缺服务、地区、模板或币种时
   fail closed
 - `activeConfigVersion()` 是上述有效配置的确定性 hash，不接受浏览器
@@ -46,8 +46,8 @@ Frontend 仅用于后台地址页的客户候选列表；Shipping 通过
 
 #### 2. 全球地区管理
 - **层级结构**：支持国家 → 省/州 → 市 → 区县
-- **i18n集成**：国家节点可从 I18n 同步；省市区来自 `data/regions/{CC}.json` 按需入库
-- **用到即入库**：配送选国家 / 地址组件拉列表时 `RegionCascadeEnsureService` 自动补齐缺失级联
+- **i18n集成**：国家节点可从 I18n 同步；省市区来自 `data/address-catalog/{CC}/*.tsv.gz`（G20/CSC/modood 保留包 + GeoNames ADM1/ADM2 fill-missing + 无 ADM2 时 `--fill-empty-cities` 合成市）经 `shipping:addresscatalog:import` 入库；**该目录须 Git 追踪**
+- **catalog_mode**：导入成功后 Ensure 写路径 no-op；未收录国（如 PY/EG）可选手填或国家级覆盖，不伪造级联
 - **邮政编码**：支持邮政编码格式配置
 
 #### 3. 配送区域配置
@@ -75,7 +75,7 @@ Frontend 仅用于后台地址页的客户候选列表；Shipping 通过
 - **混合条件**：支持AND/OR逻辑组合
 
 #### 7. 配送服务配置
-- **服务关联**：关联快递公司、配送区域、费用模板、免邮规则
+- **服务关联**：关联快递公司、费用模板、免邮规则（地理范围由承运商覆盖决定）
 - **自动匹配**：根据收货地址自动匹配可用配送服务
 - **费用计算**：自动计算配送费用，判断是否免邮
 
@@ -96,7 +96,6 @@ Frontend 仅用于后台地址页的客户候选列表；Shipping 通过
 - 发货地址管理（管理员可管理所有发货地址）
 - 运送地址管理（管理员可管理所有客户的收货地址）
 - 地区管理（树形结构展示）
-- 配送区域管理
 - 快递公司管理
 - 费用模板管理
 - 免邮规则管理
@@ -116,8 +115,6 @@ Frontend 仅用于后台地址页的客户候选列表；Shipping 通过
 
 ### 配送系统表
 - `w_shipping_regions` - 地区表
-- `w_shipping_zones` - 配送区域表
-- `w_shipping_zone_regions` - 配送区域地区关联表
 - `w_shipping_carriers` - 快递公司表
 - `w_shipping_rate_templates` - 配送费用模板表
 - `w_shipping_free_shipping_rules` - 免邮规则表
@@ -155,7 +152,6 @@ Frontend 仅用于后台地址页的客户候选列表；Shipping 通过
 
 **配送系统管理**：
 - `/shipping/backend/region` - 地区管理
-- `/shipping/backend/zone` - 配送区域管理
 - `/shipping/backend/carrier` - 快递公司管理
 - `/shipping/backend/ratetemplate` - 费用模板管理
 - `/shipping/backend/freeshippingrule` - 免邮规则管理
@@ -203,7 +199,7 @@ php bin/w module:upgrade --module Weline_Shipping
 1. **导入地区数据**：进入后台 **配送管理 > 配送系统**，切换至「地区管理」Tab，点击"从i18n同步"
 2. **配置快递公司**：进入 **配送管理 > 配送系统**，切换至「快递公司」Tab，添加常用快递公司
 3. **创建费用模板**：进入 **配送管理 > 配送系统**，切换至「费用模板」Tab，创建配送费用计算模板
-4. **配置配送区域**：进入 **配送管理 > 配送系统**，切换至「配送区域」Tab，创建配送覆盖区域
+4. **配置承运商覆盖**：进入承运商编辑「支持范围」；网站/店/渠道按需配置可售目的地与禁运
 5. **创建配送服务**：进入 **配送管理 > 配送系统**，切换至「配送服务」Tab，关联快递公司、区域和模板
 
 ### 3. 使用前端API
