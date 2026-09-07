@@ -34,6 +34,11 @@ class DocumentAiTranslation implements CronTaskInterface
 
     public function execute(): string
     {
+        $validation = $this->taskService->validateConfiguration(false);
+        if (!$validation['ok']) {
+            return (string)__('Document AI translation skipped: %{1}', [(string)($validation['message'] ?? 'blocked')]);
+        }
+
         $enqueue = $this->taskService->enqueueMissingAndStale();
         $run = $this->taskService->processBatch();
 

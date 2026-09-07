@@ -7,6 +7,7 @@ use Weline\Ai\Api\AiModel;
 use Weline\Ai\Api\AiRuntimeInterface;
 use Weline\Ai\Api\Configuration\ScenarioConfigurationInterface;
 use Weline\Ai\Api\Configuration\ScenarioRecord;
+use Weline\Ai\Service\TranslationConcurrencyGate;
 use Weline\DeveloperWorkspace\Model\Document;
 use Weline\DeveloperWorkspace\Model\Document\Catalog;
 use Weline\DeveloperWorkspace\Model\Document\Catalog\Translation as CatalogTranslation;
@@ -32,6 +33,7 @@ class DocumentTranslationTaskService
         private TranslationJob $jobModel,
         private ScenarioConfigurationInterface $scenarioConfiguration,
         private RuntimeProviderResolver $runtimeProviderResolver,
+        private TranslationConcurrencyGate $translationConcurrencyGate,
     ) {
     }
 
@@ -181,6 +183,11 @@ class DocumentTranslationTaskService
             } catch (\Throwable $throwable) {
                 $this->failJob($job, $throwable);
                 $result['failed']++;
+                // Busy/stuck model: stop this cron round; next schedule continues.
+                if ($this->translationConcurrencyGate->isBusyMarker($throwable->getMessage())) {
+                    $result['aborted_busy'] = true;
+                    break;
+                }
             }
         }
 
@@ -642,28 +649,35 @@ class DocumentTranslationTaskService
                 ? $requestId . '_c' . str_pad((string)($batchIndex + 1), 3, '0', STR_PAD_LEFT)
                 : $requestId;
 
-            $response = $this->aiRuntime()->generate(
-                'Translate DeveloperWorkspace document segments.',
-                $modelCode,
-                self::ADAPTER_CODE,
-                (string)$job->getData(TranslationJob::schema_fields_LOCALE),
-                [
-                    'source_locale' => $job->getData(TranslationJob::schema_fields_SOURCE_LOCALE),
-                    'target_locale' => $job->getData(TranslationJob::schema_fields_LOCALE),
-                    'format' => 'markdown',
-                    'segments' => $batchSegments,
-                    'protected_tokens' => $this->filterProtectedTokensForSegments($prepared['protected_tokens'], $batchSegments),
-                    'request_id' => $batchRequestId,
-                    'request_type' => self::REQUEST_TYPE,
-                    'scenario_code' => self::ADAPTER_CODE,
-                    'batch_index' => $batchIndex + 1,
-                    'batch_total' => $batchTotal,
-                    'temperature' => 0.1,
-                    'max_tokens' => (int)($batch['max_output_tokens'] ?? $budget['max_output_tokens']),
-                ],
-                null,
-                true
-            );
+            $this->translationConcurrencyGate->acquire();
+            try {
+                $response = $this->aiRuntime()->generate(
+                    'Translate DeveloperWorkspace document segments.',
+                    $modelCode,
+                    self::ADAPTER_CODE,
+                    (string)$job->getData(TranslationJob::schema_fields_LOCALE),
+                    [
+                        'source_locale' => $job->getData(TranslationJob::schema_fields_SOURCE_LOCALE),
+                        'target_locale' => $job->getData(TranslationJob::schema_fields_LOCALE),
+                        'format' => 'markdown',
+                        'segments' => $batchSegments,
+                        'protected_tokens' => $this->filterProtectedTokensForSegments($prepared['protected_tokens'], $batchSegments),
+                        'request_id' => $batchRequestId,
+                        'request_type' => self::REQUEST_TYPE,
+                        'scenario_code' => self::ADAPTER_CODE,
+                        'batch_index' => $batchIndex + 1,
+                        'batch_total' => $batchTotal,
+                        'temperature' => 0.1,
+                        'max_tokens' => (int)($batch['max_output_tokens'] ?? $budget['max_output_tokens']),
+                        // Align with TranslationService: fail the call instead of hanging the lock.
+                        'timeout_seconds' => 180,
+                    ],
+                    null,
+                    true
+                );
+            } finally {
+                $this->translationConcurrencyGate->release();
+            }
 
             foreach ($this->decodeTranslatedSegments($response) as $id => $text) {
                 if (isset($plan['part_map'][$id])) {
@@ -1033,6 +1047,7 @@ class DocumentTranslationTaskService
         $message = strtolower($message);
         foreach ([
             'timeout',
+            'ai_translation_busy',
             'rate limit',
             '429',
             '500',
