@@ -58,6 +58,14 @@ final class ProductCardAddToCartHookContractTest extends TestCase
         self::assertStringContainsString('weline-cart-product-card-add-to-cart', $template);
         self::assertStringContainsString('StorefrontOfferResolver::resolve', $template);
         self::assertStringContainsString('btn-add-to-cart', $template);
+        self::assertStringContainsString('StorefrontOfferDetailQuery::params', $template);
+        self::assertStringContainsString("\$quoteHrefParams['quote'] = '1'", $template);
+        self::assertStringContainsString('#quote', $template);
+        self::assertStringContainsString('data-quote-only="1"', $template);
+        self::assertStringContainsString('product-storefront__quote', $template);
+        self::assertStringContainsString('amz-card__quote', $template);
+        self::assertStringContainsString('btn-quote', $template);
+        self::assertStringNotContainsString("\$controlClass = 'product-storefront__buy-now'", $template);
     }
 
     public function testThemeHookRegistryPublishesProductCardAddToCartSlot(): void

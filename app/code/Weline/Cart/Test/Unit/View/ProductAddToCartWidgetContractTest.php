@@ -33,6 +33,8 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         );
         self::assertStringContainsString('data-testid="product-add-to-cart"', $template);
         self::assertStringContainsString('data-action="add"', $template);
+        self::assertStringContainsString('!$quoteOnly', $template);
+        self::assertStringContainsString('data-quote-only', $template);
         self::assertStringContainsString('data-weline-load="cart"', $template);
         self::assertStringNotContainsString('@static(Weline_Cart::js/widgets/product-purchase-actions.js)', $template);
         self::assertStringContainsString('data-purchase-loading', $template);
@@ -52,6 +54,9 @@ final class ProductAddToCartWidgetContractTest extends TestCase
         self::assertStringContainsString('notifyCartUpdated', $script);
         self::assertStringContainsString('weline:cart-updated', $script);
         self::assertStringContainsString('weline:cart:update', $script);
+        self::assertStringContainsString('rememberSummary', $script);
+        self::assertStringContainsString("load('miniCartIcon')", $script);
+        self::assertStringContainsString('applyCachedSummary', $script);
     }
 
     public function testPurchaseActionsSubmitSelectedEavVariantValues(): void

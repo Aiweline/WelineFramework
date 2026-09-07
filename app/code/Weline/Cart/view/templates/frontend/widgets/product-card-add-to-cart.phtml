@@ -6,6 +6,7 @@
  * @var \Weline\Framework\View\Template $this
  */
 
+use Weline\Product\Helper\StorefrontOfferDetailQuery;
 use Weline\Product\Helper\StorefrontOfferResolver;
 use Weline\Theme\Helper\WidgetUiScope;
 
@@ -27,7 +28,18 @@ $productId = max(0, (int)($offer['product_id'] ?? 0));
 $offerUuid = trim((string)($offer['global_offer_uuid'] ?? ''));
 $sellable = !empty($offer['sellable']);
 $quoteOnly = !empty($offer['quote_only']);
-$buttonEnabled = $isPreviewMode || ($sellable && $offerUuid !== '');
+// Quote-only never enables add-to-cart; expose Product-owned inquiry entry instead.
+$quoteHrefPath = '';
+$quoteHrefParams = [];
+if ($quoteOnly && $productId > 0) {
+    $slug = strtolower(trim((string)($offer['slug'] ?? '')));
+    $quoteHrefPath = $slug !== '' ? ('product/' . $slug) : ('product/' . $productId);
+    $quoteHrefParams = StorefrontOfferDetailQuery::params($offer);
+    $quoteHrefParams['quote'] = '1';
+}
+$buttonEnabled = $quoteOnly
+    ? ($quoteHrefPath !== '' && !$isPreviewMode)
+    : ($isPreviewMode || ($sellable && $offerUuid !== ''));
 
 $variant = trim((string)($this->getData('card_add_to_cart_variant') ?? 'cta'));
 $extraClass = trim((string)($this->getData('card_add_to_cart_button_class') ?? ''));
@@ -51,6 +63,22 @@ if ($variant === 'icon') {
 if ($extraClass !== '') {
     $buttonClass .= ' ' . $extraClass;
 }
+$controlClass = trim($quoteOnly ? str_replace(' weline-pixel::add_to_cart', '', $buttonClass) : $buttonClass);
+if ($quoteOnly) {
+    // Inquiry CTA: light/amber surface + dark readable text — not solid buy-now red.
+    if ($variant === 'storefront') {
+        $controlClass = 'product-storefront__quote';
+    } elseif ($variant === 'amz-card') {
+        $controlClass = 'amz-card__quote';
+    } elseif ($variant === 'icon') {
+        $controlClass = 'action-btn btn-quote';
+    } else {
+        $controlClass = 'btn-quote';
+    }
+    if ($extraClass !== '') {
+        $controlClass .= ' ' . $extraClass;
+    }
+}
 ?>
 <div class="weline-cart-product-card-add-to-cart"
      data-weline-load="cart"
@@ -64,26 +92,46 @@ if ($extraClass !== '') {
      data-cart-url="@url{'cart'}"
      data-cart-link-text="<?= $escape(__('前往购物车')) ?>"
      weline-code="<?= $escape($scope->code) ?>">
-    <button type="button"
-            class="<?= $escape(trim($buttonClass)) ?>"
-            data-action="add"
-            data-testid="product-card-add-to-cart"
-            data-default-label="<?= $escape($buttonLabel) ?>"
-            data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
-            data-product-id="<?= $productId ?>"
-            data-global-offer-uuid="<?= $escape($offerUuid) ?>"
-            data-qty="1"
-            <?= $buttonEnabled ? '' : 'disabled' ?>>
-        <?php if ($variant === 'icon'): ?>
-            <w:icon name="cart" size="sm"></w:icon>
-            <span class="visually-hidden"><?= $escape($buttonLabel) ?></span>
-        <?php else: ?>
-            <?php if ($variant === 'cta'): ?>
-                <w:icon name="cart" size="sm"></w:icon>
+    <?php if ($quoteOnly && $quoteHrefPath !== ''): ?>
+        <a class="<?= $escape($controlClass) ?>"
+           href="@url{$quoteHrefPath|$quoteHrefParams}#quote"
+           data-testid="product-card-add-to-cart"
+           data-default-label="<?= $escape($buttonLabel) ?>"
+           data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
+           data-product-id="<?= $productId ?>"
+           data-global-offer-uuid="<?= $escape($offerUuid) ?>"
+           data-quote-only="1"
+           <?php if (!$buttonEnabled): ?>aria-disabled="true" tabindex="-1"<?php endif; ?>>
+            <?php if ($variant === 'icon'): ?>
+                <w:icon name="message" size="sm"></w:icon>
+                <span class="visually-hidden"><?= $escape($buttonLabel) ?></span>
+            <?php else: ?>
+                <span data-card-add-label="1"><?= $escape($buttonLabel) ?></span>
             <?php endif; ?>
-            <span class="weline-pixel::add_to_cart" data-card-add-label="1"><?= $escape($buttonLabel) ?></span>
-        <?php endif; ?>
-    </button>
+        </a>
+    <?php else: ?>
+        <button type="button"
+                class="<?= $escape($controlClass) ?>"
+                data-action="add"
+                data-testid="product-card-add-to-cart"
+                data-default-label="<?= $escape($buttonLabel) ?>"
+                data-provider-code="<?= $escape($offer['provider_code'] ?? 'product') ?>"
+                data-product-id="<?= $productId ?>"
+                data-global-offer-uuid="<?= $escape($offerUuid) ?>"
+                data-qty="1"
+                data-quote-only="0"
+                <?= $buttonEnabled ? '' : 'disabled' ?>>
+            <?php if ($variant === 'icon'): ?>
+                <w:icon name="cart" size="sm"></w:icon>
+                <span class="visually-hidden"><?= $escape($buttonLabel) ?></span>
+            <?php else: ?>
+                <?php if ($variant === 'cta'): ?>
+                    <w:icon name="cart" size="sm"></w:icon>
+                <?php endif; ?>
+                <span class="weline-pixel::add_to_cart" data-card-add-label="1"><?= $escape($buttonLabel) ?></span>
+            <?php endif; ?>
+        </button>
+    <?php endif; ?>
     <?php if (!$quoteOnly && !$sellable && trim((string)($offer['message'] ?? '')) !== ''): ?>
         <small class="weline-cart-product-card-add-to-cart__message"><?= $escape($offer['message']) ?></small>
     <?php endif; ?>

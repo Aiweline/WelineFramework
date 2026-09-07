@@ -473,6 +473,11 @@ final class CartServiceTest extends TestCase
             'digital_download' => ['schema_version' => 'checkout-v2'],
         ];
 
+        $presented = $cart->getCart($scope, $guest);
+        self::assertSame(1250, $presented['items'][0]['unit_price_minor']);
+        self::assertSame(2500, $presented['items'][0]['row_total_minor']);
+        self::assertSame(2500, $presented['subtotal_minor']);
+
         $snapshot = (new CheckoutCartSnapshotService($cart))->freeze($scope, $guest);
         self::assertSame('CNY', $snapshot['currency']);
         self::assertSame('store', $snapshot['scope']['scope_kind']);

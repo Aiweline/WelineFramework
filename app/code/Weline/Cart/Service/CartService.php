@@ -7,6 +7,7 @@ namespace Weline\Cart\Service;
 use Weline\Cart\Api\CartStoreInterface;
 use Weline\Cart\Api\Data\CartItemSnapshot;
 use Weline\Cart\Api\Data\OfferIdentity;
+use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -21,6 +22,7 @@ final class CartService
     public const ERROR_NOT_SELLABLE = 'cart_item_not_sellable';
     public const ERROR_NOT_FOUND = 'cart_item_not_found';
     public const ERROR_GUEST_TOKEN = 'cart_guest_token_required';
+    public const ERROR_TYPE_MISMATCH = 'cart_type_mismatch';
 
     public const OWNER_GUEST = 'guest';
     public const OWNER_CUSTOMER = 'customer';
@@ -28,17 +30,37 @@ final class CartService
     public const GUEST_TOKEN_COOKIE = 'weline_cart_guest_token';
 
     private readonly CartStoreInterface $store;
+    private readonly CommerceCartTypeRegistry $typeRegistry;
+    private readonly SellingTypeResolver $sellingTypeResolver;
 
     public function __construct(
         private readonly CartItemSnapshotProviderRegistry $registry,
         ?CartStoreInterface $store = null,
+        ?CommerceCartTypeRegistry $typeRegistry = null,
+        ?SellingTypeResolver $sellingTypeResolver = null,
     ) {
         $this->store = $store ?? ObjectManager::getInstance(CartCacheStore::class);
+        $this->typeRegistry = $typeRegistry ?? ObjectManager::getInstance(CommerceCartTypeRegistry::class);
+        $this->sellingTypeResolver = $sellingTypeResolver
+            ?? new SellingTypeResolver($this->typeRegistry);
     }
 
-    public static function forTesting(CartItemSnapshotProviderRegistry $registry): self
-    {
-        return new self($registry, new CartMemoryStore());
+    public static function forTesting(
+        CartItemSnapshotProviderRegistry $registry,
+        ?CommerceCartTypeRegistry $typeRegistry = null,
+        ?SellingTypeResolver $sellingTypeResolver = null,
+    ): self {
+        $types = $typeRegistry ?? CommerceCartTypeRegistry::forTesting();
+
+        return new self(
+            $registry,
+            new CartMemoryStore(),
+            $types,
+            $sellingTypeResolver ?? SellingTypeResolver::forTesting(
+                $types,
+                static fn (string $_code): bool => true,
+            ),
+        );
     }
 
     public function registry(): CartItemSnapshotProviderRegistry
@@ -77,6 +99,7 @@ final class CartService
                 customerId: isset($params['customer_id']) ? (int)$params['customer_id'] : null,
                 clientSelectionHash: isset($params['selection_hash']) ? (string)$params['selection_hash'] : null,
                 currency: isset($params['currency']) ? (string)$params['currency'] : null,
+                cartTypePreference: $this->preferenceFromParams($params),
             );
             $result['subtotal'] = round(((int)($result['subtotal_minor'] ?? 0)) / 100, 2);
             $result['grand_total'] = round(((int)($result['grand_total_minor'] ?? 0)) / 100, 2);
@@ -135,7 +158,7 @@ final class CartService
         $scope = $scopeResolver instanceof CartScopeResolver
             ? $scopeResolver->fromParams([])
             : ScopeIdentity::channel(0, 'default', 'default', 'default', ScopeIdentity::MODE_NORMAL);
-        $summary = $this->getCart($scope, $guestToken, $customerId);
+        $summary = $this->getCart($scope, $guestToken, $customerId, $this->preferenceFromParams([]));
         $items = \is_array($summary['items'] ?? null) ? $summary['items'] : [];
         foreach ($items as &$item) {
             if (!\is_array($item)) {
@@ -143,6 +166,13 @@ final class CartService
             }
             $item['price'] = \round(((int)($item['unit_price_minor'] ?? 0)) / 100, 2);
             $item['row_total'] = \round(((int)($item['row_total_minor'] ?? 0)) / 100, 2);
+            $compareAtMinor = max(0, (int)($item['compare_at_minor'] ?? 0));
+            $item['compare_at_minor'] = $compareAtMinor;
+            $item['original_price'] = \round($compareAtMinor / 100, 2);
+            $item['has_deal'] = $compareAtMinor > (int)($item['unit_price_minor'] ?? 0)
+                && (int)($item['unit_price_minor'] ?? 0) > 0;
+            $item['campaign_label'] = trim((string)($item['campaign_label'] ?? ''));
+            $item['campaign_url'] = trim((string)($item['campaign_url'] ?? ''));
         }
         unset($item);
         $summary['items'] = $items;
@@ -155,13 +185,17 @@ final class CartService
     /**
      * Extend guest cart TTL (+ cookie) without rotating the token.
      */
-    public function touchGuestCart(ScopeIdentity $scope, string $guestToken): bool
-    {
+    public function touchGuestCart(
+        ScopeIdentity $scope,
+        string $guestToken,
+        ?string $cartTypePreference = null,
+    ): bool {
         $guestToken = \trim($guestToken);
         if ($guestToken === '') {
             return false;
         }
-        $key = $this->cartKey($scope, $guestToken, null);
+        $resolved = $this->resolveCartType($cartTypePreference, null, $scope);
+        $key = $this->cartKey($scope, $guestToken, null, $resolved['code']);
 
         return $this->store->touch($key);
     }
@@ -179,6 +213,7 @@ final class CartService
         ?int $customerId = null,
         ?string $clientSelectionHash = null,
         ?string $currency = null,
+        ?string $cartTypePreference = null,
     ): array {
         $qty = max(1, min(999, $qty));
         $selection = CartSelectionHash::normalizeSelection($selection);
@@ -188,6 +223,9 @@ final class CartService
             $selection,
         );
         CartSelectionHash::assertClientHashOrIgnore($clientSelectionHash, $serverHash);
+
+        $resolved = $this->resolveCartType($cartTypePreference, $customerId, $scope);
+        $cartType = $resolved['code'];
 
         $snapshot = $this->registry->resolve($offer, $scope, $selection);
         if (!$snapshot->found) {
@@ -213,8 +251,9 @@ final class CartService
             );
         }
 
-        $cartKey = $this->cartKey($scope, $guestToken, $customerId);
-        $cart = $this->store->get($cartKey) ?? $this->newCart($scope, $guestToken, $customerId, $currency ?? $snapshot->currency);
+        $cartKey = $this->cartKey($scope, $guestToken, $customerId, $cartType);
+        $cart = $this->loadCart($scope, $guestToken, $customerId, $cartType)
+            ?? $this->newCart($scope, $guestToken, $customerId, $currency ?? $snapshot->currency, $cartType);
         if ($cart['currency'] !== '' && $cart['currency'] !== $snapshot->currency) {
             throw new CartConflictException(
                 self::ERROR_CROSS_CURRENCY,
@@ -223,6 +262,7 @@ final class CartService
             );
         }
         $cart['currency'] = $snapshot->currency;
+        $cart['cart_type'] = $cartType;
 
         $adjusted = false;
         $requested = $qty;
@@ -247,6 +287,22 @@ final class CartService
             }
         }
 
+        $resultingQty = $qty;
+        foreach ($cart['items'] as $probe) {
+            if ((string)$probe['selection_hash'] === $serverHash) {
+                $resultingQty = (int)$probe['qty'] + $qty;
+                break;
+            }
+        }
+        $this->assertQtyPolicy(
+            $cartType,
+            $resultingQty,
+            (string)$snapshot->sku,
+            $scope,
+            $customerId,
+            (int)($snapshot->productId ?? 0),
+        );
+
         $merged = false;
         foreach ($cart['items'] as &$row) {
             if ((string)$row['selection_hash'] !== $serverHash) {
@@ -258,6 +314,9 @@ final class CartService
             $row['sku'] = $snapshot->sku;
             // Refresh presentation fields so stale asset:// snapshots do not stick after re-add.
             $row['image'] = $snapshot->image;
+            $row['options'] = $this->normalizeOptions(
+                $snapshot->options !== [] ? $snapshot->options : $this->optionsFromSelection($selection),
+            );
             $row['row_total_minor'] = (int)$row['qty'] * (int)$row['unit_price_minor'];
             $merged = true;
             break;
@@ -269,14 +328,20 @@ final class CartService
         }
 
         $this->store->set($cartKey, $cart);
-        return $this->summary($cart, true, $adjusted
+        $summary = $this->summary($cart, true, $adjusted
             ? (string)__('「%{1}」库存不足，已按当前可售数量加入购物车。', [$snapshot->name !== '' ? $snapshot->name : (string)__('该商品')])
             : (string)__('已加入购物车。'), [
             'quantity_adjusted' => $adjusted,
             'requested_quantity' => $requested,
             'adjusted_quantity' => $qty,
             'selection_hash' => $serverHash,
+        ], $scope);
+        $this->dispatchTypedCartEvent('Weline_Cart::cart_item_added', $summary, [
+            'selection_hash' => $serverHash,
+            'quantity_adjusted' => $adjusted,
         ]);
+
+        return $summary;
     }
 
     /**
@@ -288,6 +353,7 @@ final class CartService
         ScopeIdentity $scope,
         string $guestToken,
         int $customerId,
+        ?string $cartTypePreference = null,
     ): array {
         if (trim($guestToken) === '') {
             throw new CartConflictException(self::ERROR_GUEST_TOKEN, __('guest_token 不能为空'));
@@ -296,18 +362,30 @@ final class CartService
             throw new \InvalidArgumentException(__('customer_id 须 >0'));
         }
 
-        $guestKey = $this->cartKey($scope, $guestToken, null);
-        $customerKey = $this->cartKey($scope, null, $customerId);
-        $guest = $this->store->get($guestKey);
-        $customer = $this->store->get($customerKey);
+        $resolved = $this->resolveCartType($cartTypePreference, $customerId, $scope);
+        $cartType = $resolved['code'];
+        // tob 无游客车：仅落客户 typed 车，不跨类型吞 toc 游客车。
+        $allowGuestMerge = $cartType === CommerceCartTypeRegistry::CODE_TOC
+            && !$resolved['type']->requiresCustomerLogin();
+
+        $guestKey = $this->cartKey($scope, $guestToken, null, $cartType);
+        $customerKey = $this->cartKey($scope, null, $customerId, $cartType);
+        $guest = $allowGuestMerge
+            ? $this->loadCart($scope, $guestToken, null, $cartType, createIfMissing: false)
+            : null;
+        $customer = $this->loadCart($scope, null, $customerId, $cartType, createIfMissing: false);
 
         $truncateNotes = [];
         if ($guest !== null) {
+            $this->assertCartTypeMatch($guest, $cartType);
             if ($guest['scope_key'] !== $scope->canonicalKey()) {
                 throw new CartConflictException(self::ERROR_SCOPE_MISMATCH, __('游客车 Scope 不匹配'));
             }
             if ($customer !== null && $customer['scope_key'] !== $scope->canonicalKey()) {
                 throw new CartConflictException(self::ERROR_SCOPE_MISMATCH, __('客户车 Scope 不匹配'));
+            }
+            if ($customer !== null) {
+                $this->assertCartTypeMatch($customer, $cartType);
             }
             $guestCurrency = $this->validatedCartCurrency($guest, self::OWNER_GUEST);
             $customerCurrency = $customer === null
@@ -327,8 +405,9 @@ final class CartService
                 );
             }
             $mergedCurrency = $customerCurrency !== '' ? $customerCurrency : $guestCurrency;
-            $customer ??= $this->newCart($scope, null, $customerId, $mergedCurrency);
+            $customer ??= $this->newCart($scope, null, $customerId, $mergedCurrency, $cartType);
             $customer['currency'] = $mergedCurrency;
+            $customer['cart_type'] = $cartType;
 
             foreach ($guest['items'] as $line) {
                 $hash = (string)$line['selection_hash'];
@@ -373,9 +452,14 @@ final class CartService
                 }
             }
             $this->store->delete($guestKey);
+            $legacyGuestKey = $this->legacyCartKey($scope, $guestToken, null);
+            if ($legacyGuestKey !== $guestKey) {
+                $this->store->delete($legacyGuestKey);
+            }
         }
 
-        $customer ??= $this->newCart($scope, null, $customerId, '');
+        $customer ??= $this->newCart($scope, null, $customerId, '', $cartType);
+        $customer['cart_type'] = $cartType;
         $this->store->set($customerKey, $customer);
         $summary = $this->summary(
             $customer,
@@ -383,9 +467,16 @@ final class CartService
             $truncateNotes === []
                 ? (string)__('游客购物车已合并。')
                 : (string)__('游客购物车已合并；部分数量因可售上限被截断。'),
+            [],
+            $scope,
         );
         $summary['truncated_notes'] = $truncateNotes;
         $summary['quantity_truncated'] = $truncateNotes !== [];
+        $this->dispatchTypedCartEvent('Weline_Cart::cart_merged', $summary, [
+            'quantity_truncated' => $truncateNotes !== [],
+            'truncated_notes' => $truncateNotes,
+        ]);
+
         return $summary;
     }
 
@@ -422,15 +513,28 @@ final class CartService
     }
 
     /** @return array<string, mixed> */
-    public function getCart(ScopeIdentity $scope, ?string $guestToken = null, ?int $customerId = null): array
-    {
+    public function getCart(
+        ScopeIdentity $scope,
+        ?string $guestToken = null,
+        ?int $customerId = null,
+        ?string $cartTypePreference = null,
+    ): array {
         // Read-only: mini-cart / storefront may poll before issueGuestToken.
         if (($customerId === null || $customerId <= 0) && trim((string)$guestToken) === '') {
-            return $this->summary($this->newCart($scope, null, null, ''));
+            $resolved = $this->resolveCartType($cartTypePreference, null, $scope);
+            return $this->summary(
+                $this->newCart($scope, null, null, '', $resolved['code']),
+                true,
+                '',
+                [],
+                $scope,
+            );
         }
-        $key = $this->cartKey($scope, $guestToken, $customerId);
-        $cart = $this->store->get($key) ?? $this->newCart($scope, $guestToken, $customerId, '');
-        return $this->summary($cart);
+        $resolved = $this->resolveCartType($cartTypePreference, $customerId, $scope);
+        $cartType = $resolved['code'];
+        $cart = $this->loadCart($scope, $guestToken, $customerId, $cartType)
+            ?? $this->newCart($scope, $guestToken, $customerId, '', $cartType);
+        return $this->summary($cart, true, '', [], $scope);
     }
 
     /** @return array<string, mixed> */
@@ -440,14 +544,17 @@ final class CartService
         int $qty,
         ?string $guestToken = null,
         ?int $customerId = null,
+        ?string $cartTypePreference = null,
     ): array {
         $itemId = trim($itemId);
         if ($itemId === '') {
             throw new CartConflictException(self::ERROR_NOT_FOUND, __('请选择要更新的购物车商品。'));
         }
 
-        $key = $this->cartKey($scope, $guestToken, $customerId);
-        $cart = $this->store->get($key);
+        $resolved = $this->resolveCartType($cartTypePreference, $customerId, $scope);
+        $cartType = $resolved['code'];
+        $key = $this->cartKey($scope, $guestToken, $customerId, $cartType);
+        $cart = $this->loadCart($scope, $guestToken, $customerId, $cartType, createIfMissing: false);
         if ($cart === null) {
             throw new CartConflictException(self::ERROR_NOT_FOUND, __('未找到要更新的购物车商品。'));
         }
@@ -466,6 +573,14 @@ final class CartService
             if ($adjustedQty <= 0) {
                 throw new CartConflictException(self::ERROR_NOT_SELLABLE, __('该商品暂不可售'));
             }
+            $this->assertQtyPolicy(
+                $cartType,
+                $adjustedQty,
+                (string)($item['sku'] ?? ''),
+                $scope,
+                $customerId,
+                (int)($item['product_id'] ?? 0),
+            );
             $item['qty'] = $adjustedQty;
             $item['row_total_minor'] = $adjustedQty * (int)($item['unit_price_minor'] ?? 0);
             $updated = true;
@@ -477,6 +592,7 @@ final class CartService
             throw new CartConflictException(self::ERROR_NOT_FOUND, __('未找到要更新的购物车商品。'));
         }
 
+        $cart['cart_type'] = $cartType;
         $this->store->set($key, $cart);
         $updatedName = '';
         foreach ($cart['items'] as $row) {
@@ -496,6 +612,7 @@ final class CartService
                 'requested_quantity' => $requestedQty,
                 'adjusted_quantity' => $adjustedQty,
             ],
+            $scope,
         );
     }
 
@@ -505,14 +622,17 @@ final class CartService
         string $itemId,
         ?string $guestToken = null,
         ?int $customerId = null,
+        ?string $cartTypePreference = null,
     ): array {
         $itemId = trim($itemId);
         if ($itemId === '') {
             throw new CartConflictException(self::ERROR_NOT_FOUND, __('请选择要移除的购物车商品。'));
         }
 
-        $key = $this->cartKey($scope, $guestToken, $customerId);
-        $cart = $this->store->get($key);
+        $resolved = $this->resolveCartType($cartTypePreference, $customerId, $scope);
+        $cartType = $resolved['code'];
+        $key = $this->cartKey($scope, $guestToken, $customerId, $cartType);
+        $cart = $this->loadCart($scope, $guestToken, $customerId, $cartType, createIfMissing: false);
         if ($cart === null) {
             throw new CartConflictException(self::ERROR_NOT_FOUND, __('未找到要移除的购物车商品。'));
         }
@@ -526,8 +646,9 @@ final class CartService
             throw new CartConflictException(self::ERROR_NOT_FOUND, __('未找到要移除的购物车商品。'));
         }
 
+        $cart['cart_type'] = $cartType;
         $this->store->set($key, $cart);
-        return $this->summary($cart, true, (string)__('商品已从购物车移除。'));
+        return $this->summary($cart, true, (string)__('商品已从购物车移除。'), [], $scope);
     }
 
     /** @return array<string, mixed> */
@@ -535,15 +656,29 @@ final class CartService
         ScopeIdentity $scope,
         ?string $guestToken = null,
         ?int $customerId = null,
+        ?string $cartTypePreference = null,
     ): array {
-        $key = $this->cartKey($scope, $guestToken, $customerId);
+        $resolved = $this->resolveCartType($cartTypePreference, $customerId, $scope);
+        $cartType = $resolved['code'];
+        $key = $this->cartKey($scope, $guestToken, $customerId, $cartType);
         $this->store->delete($key);
+        if ($cartType === CommerceCartTypeRegistry::CODE_TOC) {
+            $legacy = $this->legacyCartKey($scope, $guestToken, $customerId);
+            if ($legacy !== $key) {
+                $this->store->delete($legacy);
+            }
+        }
 
-        return $this->summary(
-            $this->newCart($scope, $guestToken, $customerId, ''),
+        $summary = $this->summary(
+            $this->newCart($scope, $guestToken, $customerId, '', $cartType),
             true,
             (string)__('购物车已清空。'),
+            [],
+            $scope,
         );
+        $this->dispatchTypedCartEvent('Weline_Cart::cart_cleared', $summary);
+
+        return $summary;
     }
 
     /** @internal tests */
@@ -556,7 +691,35 @@ final class CartService
         return $n;
     }
 
-    private function cartKey(ScopeIdentity $scope, ?string $guestToken, ?int $customerId): string
+    /** @internal tests */
+    public function cartKeyForTesting(
+        ScopeIdentity $scope,
+        ?string $guestToken,
+        ?int $customerId,
+        string $cartType = CommerceCartTypeRegistry::CODE_TOC,
+    ): string {
+        return $this->cartKey($scope, $guestToken, $customerId, $cartType);
+    }
+
+    private function cartKey(
+        ScopeIdentity $scope,
+        ?string $guestToken,
+        ?int $customerId,
+        string $cartType = CommerceCartTypeRegistry::CODE_TOC,
+    ): string {
+        $cartType = strtolower(trim($cartType)) ?: CommerceCartTypeRegistry::CODE_TOC;
+        $typeSuffix = '|type:' . $cartType;
+        if ($customerId !== null && $customerId > 0) {
+            return $scope->canonicalKey() . '|customer:' . $customerId . $typeSuffix;
+        }
+        $token = trim((string)$guestToken);
+        if ($token === '') {
+            throw new CartConflictException(self::ERROR_GUEST_TOKEN, __('游客加购需要 guest_token'));
+        }
+        return $scope->canonicalKey() . '|guest:' . $token . $typeSuffix;
+    }
+
+    private function legacyCartKey(ScopeIdentity $scope, ?string $guestToken, ?int $customerId): string
     {
         if ($customerId !== null && $customerId > 0) {
             return $scope->canonicalKey() . '|customer:' . $customerId;
@@ -575,11 +738,18 @@ final class CartService
      *   owner_kind:string,
      *   owner_id:string,
      *   guest_token:?string,
+     *   cart_type:string,
      *   items:list<array<string,mixed>>
      * }
      */
-    private function newCart(ScopeIdentity $scope, ?string $guestToken, ?int $customerId, string $currency): array
-    {
+    private function newCart(
+        ScopeIdentity $scope,
+        ?string $guestToken,
+        ?int $customerId,
+        string $currency,
+        string $cartType = CommerceCartTypeRegistry::CODE_TOC,
+    ): array {
+        $cartType = strtolower(trim($cartType)) ?: CommerceCartTypeRegistry::CODE_TOC;
         if ($customerId !== null && $customerId > 0) {
             return [
                 'scope_key' => $scope->canonicalKey(),
@@ -587,6 +757,7 @@ final class CartService
                 'owner_kind' => self::OWNER_CUSTOMER,
                 'owner_id' => (string)$customerId,
                 'guest_token' => null,
+                'cart_type' => $cartType,
                 'items' => [],
             ];
         }
@@ -596,8 +767,153 @@ final class CartService
             'owner_kind' => self::OWNER_GUEST,
             'owner_id' => (string)$guestToken,
             'guest_token' => $guestToken,
+            'cart_type' => $cartType,
             'items' => [],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function preferenceFromParams(array $params): ?string
+    {
+        foreach (['cart_type', 'selling_mode', 'sellingMode'] as $key) {
+            if (!isset($params[$key])) {
+                continue;
+            }
+            $value = strtolower(trim((string)$params[$key]));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        $cookie = strtolower(trim((string)\Weline\Framework\Http\Cookie::get('weline_selling_mode')));
+        if ($cookie === 'toc' || $cookie === 'tob') {
+            return $cookie;
+        }
+
+        return null;
+    }
+
+    /**
+     * @return array{code:string,type:\Weline\Cart\Api\CommerceCartTypeInterface}
+     */
+    private function resolveCartType(
+        ?string $preference,
+        ?int $customerId,
+        ?ScopeIdentity $scope = null,
+    ): array {
+        $cid = $customerId !== null && $customerId > 0 ? $customerId : 0;
+
+        return $this->sellingTypeResolver->resolve(
+            $preference,
+            $cid > 0,
+            $cid,
+            $scope?->websiteId ?? 0,
+        );
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function loadCart(
+        ScopeIdentity $scope,
+        ?string $guestToken,
+        ?int $customerId,
+        string $cartType,
+        bool $createIfMissing = true,
+    ): ?array {
+        $key = $this->cartKey($scope, $guestToken, $customerId, $cartType);
+        $cart = $this->store->get($key);
+        if ($cart === null && $cartType === CommerceCartTypeRegistry::CODE_TOC) {
+            $legacyKey = $this->legacyCartKey($scope, $guestToken, $customerId);
+            $legacy = $this->store->get($legacyKey);
+            if ($legacy !== null) {
+                $legacy['cart_type'] = CommerceCartTypeRegistry::CODE_TOC;
+                $this->store->set($key, $legacy);
+                if ($legacyKey !== $key) {
+                    $this->store->delete($legacyKey);
+                }
+                $cart = $legacy;
+            }
+        }
+        if ($cart === null) {
+            return $createIfMissing
+                ? $this->newCart($scope, $guestToken, $customerId, '', $cartType)
+                : null;
+        }
+        $existingType = strtolower(trim((string)($cart['cart_type'] ?? '')));
+        if ($existingType === '') {
+            $cart['cart_type'] = CommerceCartTypeRegistry::CODE_TOC;
+            $existingType = CommerceCartTypeRegistry::CODE_TOC;
+        }
+        $this->assertCartTypeMatch($cart, $cartType);
+
+        return $cart;
+    }
+
+    /**
+     * @param array<string, mixed> $cart
+     */
+    private function assertCartTypeMatch(array $cart, string $expectedType): void
+    {
+        $actual = strtolower(trim((string)($cart['cart_type'] ?? CommerceCartTypeRegistry::CODE_TOC)));
+        $expected = strtolower(trim($expectedType)) ?: CommerceCartTypeRegistry::CODE_TOC;
+        if ($actual !== $expected) {
+            throw new CartConflictException(
+                self::ERROR_TYPE_MISMATCH,
+                __('购物车售卖类型不匹配'),
+                ['cart_type' => $actual, 'expected' => $expected],
+            );
+        }
+    }
+
+    private function assertQtyPolicy(
+        string $cartType,
+        int $qty,
+        string $sku,
+        ScopeIdentity $scope,
+        ?int $customerId,
+        int $productId = 0,
+    ): void {
+        $cartType = strtolower(trim($cartType));
+        if ($cartType === '' || $cartType === CommerceCartTypeRegistry::CODE_TOC) {
+            return;
+        }
+
+        try {
+            $resolver = ObjectManager::getInstance(\Weline\Framework\Runtime\RuntimeProviderResolver::class);
+            $resolution = $resolver->resolveDetailed(\Weline\Cart\Api\CommerceCartQtyPolicyInterface::class);
+        } catch (\Throwable) {
+            return;
+        }
+        if ($resolution->status === \Weline\Framework\Runtime\RuntimeProviderResolution::NOT_CONFIGURED) {
+            return;
+        }
+        if (!$resolution->isAvailable()
+            || !$resolution->provider instanceof \Weline\Cart\Api\CommerceCartQtyPolicyInterface
+        ) {
+            return;
+        }
+
+        $result = $resolution->provider->assertQty([
+            'cart_type' => $cartType,
+            'qty' => $qty,
+            'sku' => $sku,
+            'product_id' => $productId,
+            'website_id' => (int)($scope->websiteId ?? 0),
+            'store_code' => (string)($scope->storeCode ?? ''),
+            'customer_id' => $customerId,
+        ]);
+        if (($result['ok'] ?? false) === true) {
+            return;
+        }
+
+        throw new CartConflictException(
+            (string)($result['error_code'] ?? 'cart_qty_policy_rejected'),
+            (string)($result['message'] ?? __('购物车数量不符合规则')),
+            is_array($result['detail'] ?? null) ? $result['detail'] : [],
+        );
     }
 
     /**
@@ -610,16 +926,23 @@ final class CartService
         string $selectionHash,
         int $qty,
     ): array {
+        $options = $this->normalizeOptions(
+            $snapshot->options !== [] ? $snapshot->options : $this->optionsFromSelection($selection),
+        );
         $line = [
             'item_id' => 'v2-' . substr($selectionHash, 0, 16),
             'selection_hash' => $selectionHash,
             'selection' => $selection,
+            'options' => $options,
             'offer' => $snapshot->offer->toArray(),
             'name' => $snapshot->name,
             'sku' => $snapshot->sku,
             'image' => $snapshot->image,
             'currency' => $snapshot->currency,
             'unit_price_minor' => $snapshot->unitPriceMinor,
+            'compare_at_minor' => max(0, $snapshot->compareAtMinor),
+            'campaign_label' => trim($snapshot->campaignLabel),
+            'campaign_url' => trim($snapshot->campaignUrl),
             'qty' => $qty,
             'stock' => $snapshot->stock,
             'product_type' => $snapshot->productType,
@@ -642,12 +965,41 @@ final class CartService
     }
 
     /**
+     * @param array<string, mixed> $summary
+     * @param array<string, mixed> $extra
+     */
+    private function dispatchTypedCartEvent(string $eventName, array $summary, array $extra = []): void
+    {
+        try {
+            /** @var EventsManager $events */
+            $events = ObjectManager::getInstance(EventsManager::class);
+        } catch (\Throwable) {
+            return;
+        }
+
+        $payload = CartTypeEventEnvelope::append([
+            'summary' => $summary,
+            'cart' => $summary,
+        ] + $extra, $summary, $this->typeRegistry);
+        $events->dispatch($eventName, $payload);
+    }
+
+    /**
      * @param array<string, mixed> $cart
      * @param array<string, mixed> $extra
      * @return array<string, mixed>
      */
-    private function summary(array $cart, bool $success = true, string $message = '', array $extra = []): array
-    {
+    private function summary(
+        array $cart,
+        bool $success = true,
+        string $message = '',
+        array $extra = [],
+        ?ScopeIdentity $scope = null,
+    ): array {
+        $cartType = strtolower(trim((string)($cart['cart_type'] ?? '')));
+        if ($cartType === '') {
+            $cartType = CommerceCartTypeRegistry::CODE_TOC;
+        }
         $count = 0;
         $subtotal = 0;
         $items = [];
@@ -655,9 +1007,9 @@ final class CartService
             if (!is_array($item)) {
                 continue;
             }
+            $item = $this->presentLine($item, $scope, $cartType);
             $count += (int)$item['qty'];
             $subtotal += (int)$item['row_total_minor'];
-            $item['image'] = $this->presentableImage(trim((string)($item['image'] ?? '')));
             $items[] = $item;
         }
         return [
@@ -668,6 +1020,8 @@ final class CartService
             'owner_kind' => $cart['owner_kind'],
             'owner_id' => $cart['owner_id'],
             'guest_token' => $cart['guest_token'],
+            'cart_type' => $cartType,
+            'type_payload' => $this->typePayload($cartType),
             'items' => $items,
             'cart_count' => $count,
             'item_count' => $count,
@@ -676,6 +1030,200 @@ final class CartService
             'grand_total_minor' => $subtotal,
             'is_empty' => $items === [],
         ] + $extra;
+    }
+
+    /**
+     * @return array{discounts_applied:bool,extras:array<string,mixed>}
+     */
+    private function typePayload(string $cartType): array
+    {
+        $type = $this->typeRegistry->get($cartType)
+            ?? $this->typeRegistry->require(CommerceCartTypeRegistry::CODE_TOC);
+
+        return [
+            'discounts_applied' => !$type->disablesStorefrontDiscounts(),
+            'extras' => [],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @return array<string, mixed>
+     */
+    private function presentLine(
+        array $item,
+        ?ScopeIdentity $scope,
+        string $cartType = CommerceCartTypeRegistry::CODE_TOC,
+    ): array {
+        $item['cart_type'] = $cartType;
+        $item['image'] = $this->presentableImage(trim((string)($item['image'] ?? '')));
+        $selection = is_array($item['selection'] ?? null) ? $item['selection'] : [];
+        $existingOptions = $this->normalizeOptions(is_array($item['options'] ?? null) ? $item['options'] : []);
+
+        // One snapshot resolve: refresh options + Assembler unit price so mini-cart
+        // follows PDP/checkout (activity deals baked via Product provider).
+        $snapshot = null;
+        if ($scope !== null && is_array($item['offer'] ?? null)) {
+            try {
+                $snapshot = $this->registry->resolve(
+                    OfferIdentity::fromArray($item['offer']),
+                    $scope,
+                    CartSelectionHash::normalizeSelection($selection),
+                );
+            } catch (\Throwable) {
+                $snapshot = null;
+            }
+        }
+
+        if ($snapshot !== null && $snapshot->found) {
+            $fromSnapshot = $this->normalizeOptions($snapshot->options);
+            $item['options'] = $fromSnapshot !== [] ? $fromSnapshot : (
+                $existingOptions !== [] ? $existingOptions : $this->optionsFromSelection($selection)
+            );
+            $preserveWholesale = $cartType === 'tob'
+                && (
+                    array_key_exists('b2b_amount_minor', $item)
+                    || trim((string)($item['b2b_price_list_id'] ?? '')) !== ''
+                );
+            if ($snapshot->sellable && $snapshot->unitPriceMinor >= 0) {
+                $qty = max(0, (int)($item['qty'] ?? 0));
+                if (!$preserveWholesale) {
+                    $item['unit_price_minor'] = $snapshot->unitPriceMinor;
+                    $item['row_total_minor'] = $qty * $snapshot->unitPriceMinor;
+                    $item['compare_at_minor'] = max(0, $snapshot->compareAtMinor);
+                    $item['campaign_label'] = trim($snapshot->campaignLabel);
+                    $item['campaign_url'] = trim($snapshot->campaignUrl);
+                    $item['original_price'] = round($item['compare_at_minor'] / 100, 2);
+                    $item['has_deal'] = $item['compare_at_minor'] > $snapshot->unitPriceMinor
+                        && $snapshot->unitPriceMinor > 0;
+                    $item['price'] = round($snapshot->unitPriceMinor / 100, 2);
+                    $item['row_total'] = round(((int)$item['row_total_minor']) / 100, 2);
+                    if ($snapshot->currency !== '') {
+                        $item['currency'] = $snapshot->currency;
+                    }
+                } else {
+                    $unit = (int)($item['unit_price_minor'] ?? 0);
+                    $item['row_total_minor'] = $qty * $unit;
+                    $item['price'] = round($unit / 100, 2);
+                    $item['row_total'] = round(((int)$item['row_total_minor']) / 100, 2);
+                }
+                if ($snapshot->name !== '') {
+                    $item['name'] = $snapshot->name;
+                }
+                if ($snapshot->image !== '') {
+                    $item['image'] = $this->presentableImage($snapshot->image);
+                }
+            }
+        } else {
+            $item['options'] = $this->presentLineOptions($item, $scope);
+        }
+
+        return $item;
+    }
+
+    /**
+     * @param array<string, mixed> $item
+     * @return list<array{code:string,label:string,value:string,value_label:string}>
+     */
+    private function presentLineOptions(array $item, ?ScopeIdentity $scope): array
+    {
+        $existing = $this->normalizeOptions(is_array($item['options'] ?? null) ? $item['options'] : []);
+        $selection = is_array($item['selection'] ?? null) ? $item['selection'] : [];
+        if ($selection === []) {
+            return $existing;
+        }
+
+        // Prefer fresh catalog options so private-option swatches and labels stay
+        // aligned with the PDP even for cart lines persisted before swatch fields.
+        if ($scope !== null && is_array($item['offer'] ?? null)) {
+            try {
+                $snapshot = $this->registry->resolve(
+                    OfferIdentity::fromArray($item['offer']),
+                    $scope,
+                    CartSelectionHash::normalizeSelection($selection),
+                );
+                $fromSnapshot = $this->normalizeOptions($snapshot->options);
+                if ($fromSnapshot !== []) {
+                    return $fromSnapshot;
+                }
+            } catch (\Throwable) {
+                // Fall through to persisted / selection-code presentation.
+            }
+        }
+
+        if ($existing !== []) {
+            return $existing;
+        }
+
+        return $this->optionsFromSelection($selection);
+    }
+
+    /**
+     * @param array<string, scalar|null> $selection
+     * @return list<array{code:string,label:string,value:string,value_label:string}>
+     */
+    private function optionsFromSelection(array $selection): array
+    {
+        $options = [];
+        foreach (CartSelectionHash::normalizeSelection($selection) as $code => $value) {
+            $code = trim((string)$code);
+            $value = trim((string)$value);
+            if ($code === '' || $value === '') {
+                continue;
+            }
+            $options[] = [
+                'code' => $code,
+                'label' => $code,
+                'value' => $value,
+                'value_label' => $value,
+            ];
+        }
+
+        return $options;
+    }
+
+    /**
+     * @param list<mixed>|array<int|string, mixed> $options
+     * @return list<array{code:string,label:string,value:string,value_label:string,swatch_image?:string,swatch_color?:string}>
+     */
+    private function normalizeOptions(array $options): array
+    {
+        $normalized = [];
+        foreach ($options as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $code = trim((string)($option['code'] ?? ''));
+            $value = trim((string)($option['value'] ?? ''));
+            if ($code === '' || $value === '') {
+                continue;
+            }
+            $label = trim((string)($option['label'] ?? ''));
+            $valueLabel = trim((string)($option['value_label'] ?? ''));
+            $row = [
+                'code' => $code,
+                'label' => $label !== '' ? $label : $code,
+                'value' => $value,
+                'value_label' => $valueLabel !== '' ? $valueLabel : $value,
+            ];
+            $swatchImage = trim((string)($option['swatch_image'] ?? ''));
+            if ($swatchImage !== ''
+                && !str_starts_with(strtolower($swatchImage), 'asset://')
+                && !(
+                    preg_match('#^[a-z][a-z0-9+.-]*:#i', $swatchImage) === 1
+                    && preg_match('#^(https?:)?//#i', $swatchImage) !== 1
+                )
+            ) {
+                $row['swatch_image'] = $swatchImage;
+            }
+            $swatchColor = trim((string)($option['swatch_color'] ?? ''));
+            if ($swatchColor !== '' && preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $swatchColor) === 1) {
+                $row['swatch_color'] = $swatchColor;
+            }
+            $normalized[] = $row;
+        }
+
+        return $normalized;
     }
 
     /**

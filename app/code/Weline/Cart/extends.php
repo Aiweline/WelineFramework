@@ -6,6 +6,18 @@ return [
     'type' => 'module',
     'documentation' => 'doc/README.md',
     'extends' => [
+        'CommerceCartType' => [
+            'path' => 'extends/module/Weline_Cart/CommerceCartType',
+            'interface' => 'Weline\\Cart\\Api\\CommerceCartTypeInterface',
+            'description' => '购物车售卖类型 SPI（toc 内置；tob 等由业务模块扩展）。',
+            'required' => false,
+            'multiple' => true,
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Cart/CommerceCartType/{TypeName}.php',
+                ],
+            ],
+        ],
         'CartItemSnapshotProvider' => [
             'path' => 'extends/module/Weline_Cart/CartItemSnapshotProvider',
             'interface' => 'Weline\\Cart\\Api\\CartItemSnapshotProviderInterface',
