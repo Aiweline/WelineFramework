@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use Weline\Framework\Runtime\ScopeEnvelope;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Queue\Api\QueueTaskContextInterface;
+use Weline\Search\Api\SearchProjectionPendingDrainerInterface;
 use Weline\Search\Queue\SearchIndexIncrementalQueue;
 use Weline\Search\Service\ArrayProductSearchProjectionSource;
 use Weline\Search\Service\SearchIndexBuilder;
@@ -30,9 +31,19 @@ final class SearchIndexIncrementalQueueTest extends TestCase
         ]);
         $stores = $this->createMock(StoreCatalogInterface::class);
         $stores->method('byCode')->with(0, 'store-a')->willReturn($this->store());
+        $noopDrainer = new class implements SearchProjectionPendingDrainerInterface {
+            public function drainSiblings(
+                SearchIndexIncrementalQueue $consumer,
+                int $excludeQueueId,
+                int $limit,
+            ): array {
+                return ['drained' => 0, 'failed' => 0, 'remaining' => 0];
+            }
+        };
         $consumer = new SearchIndexIncrementalQueue(
             SearchIndexIncrementalApplier::forTesting($builder),
             $stores,
+            $noopDrainer,
         );
         $queue = $this->queue(
             $this->payload(),
@@ -66,6 +77,15 @@ final class SearchIndexIncrementalQueueTest extends TestCase
         $consumer = new SearchIndexIncrementalQueue(
             SearchIndexIncrementalApplier::forTesting($builder),
             $this->createMock(StoreCatalogInterface::class),
+            new class implements SearchProjectionPendingDrainerInterface {
+                public function drainSiblings(
+                    SearchIndexIncrementalQueue $consumer,
+                    int $excludeQueueId,
+                    int $limit,
+                ): array {
+                    return ['drained' => 0, 'failed' => 0, 'remaining' => 0];
+                }
+            },
         );
         $payload = $this->payload() + [
             'website_id' => 99,
@@ -136,6 +156,19 @@ final class SearchIndexIncrementalQueueTest extends TestCase
             'active',
             null,
         );
+    }
+
+    private function noopDrainer(): SearchProjectionPendingDrainerInterface
+    {
+        return new class implements SearchProjectionPendingDrainerInterface {
+            public function drainSiblings(
+                SearchIndexIncrementalQueue $consumer,
+                int $excludeQueueId,
+                int $limit,
+            ): array {
+                return ['drained' => 0, 'failed' => 0, 'remaining' => 0];
+            }
+        };
     }
 
     /**

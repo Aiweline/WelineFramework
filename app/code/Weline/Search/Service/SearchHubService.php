@@ -41,6 +41,23 @@ final class SearchHubService
 
         try {
             $engineCode = $this->engineResolver->resolve()->code();
+            if (trim($request->q) === '') {
+                $elapsed = (hrtime(true) - $started) / 1e6;
+                $empty = new SearchResult(
+                    ok: true,
+                    type: $request->isAllTypes() ? 'all' : $request->type,
+                    hits: [],
+                    hitCount: 0,
+                    sections: [],
+                    meta: ['empty_query' => true],
+                    elapsedMs: round($elapsed, 2),
+                    engine: $engineCode,
+                );
+                $this->analytics->recordQuery($request, $empty);
+
+                return $empty;
+            }
+
             $result = $request->isAllTypes()
                 ? $this->searchAll($request, $autocomplete)
                 : $this->searchSingle($request);
@@ -86,12 +103,13 @@ final class SearchHubService
 
     private function searchSingle(SearchRequest $request): SearchResult
     {
-        $provider = $this->registry->get($request->type);
+        $area = $this->requestArea($request);
+        $provider = $this->registry->get($request->type, $area);
         if ($provider === null) {
             return SearchResult::fail(
                 SearchParamGuard::ERROR_PARAMS,
                 (string)__('未知搜索类型：%{1}', [$request->type]),
-                ['type' => $request->type],
+                ['type' => $request->type, 'area' => $area],
             );
         }
 
@@ -117,10 +135,11 @@ final class SearchHubService
         $sectionSize = $autocomplete
             ? min($request->pageSize, self::ALL_SECTION_SIZE)
             : min($request->pageSize, self::ALL_SECTION_SIZE);
+        $area = $this->requestArea($request);
 
         $sections = [];
         $totalHits = 0;
-        foreach ($this->registry->all() as $code => $provider) {
+        foreach ($this->registry->all(area: $area) as $code => $provider) {
             $sectionRequest = new SearchRequest(
                 q: $request->q,
                 type: $code,
@@ -131,7 +150,7 @@ final class SearchHubService
                 channelId: $request->channelId,
                 locale: $request->locale,
                 currency: $request->currency,
-                extras: [],
+                extras: ['__area' => $area],
             );
             $expression = $provider->expression($sectionRequest);
             $providerResult = $provider->execute($sectionRequest, $expression);
@@ -152,10 +171,17 @@ final class SearchHubService
     }
 
     /**
-     * @return list<array{code:string,label:string}>
+     * @return list<array{code:string,label:string,children?:list<array<string,mixed>>}>
      */
-    public function listTypes(): array
+    public function listTypes(?string $area = null): array
     {
-        return $this->registry->listTypes();
+        return $this->registry->listTypes(area: $area);
+    }
+
+    private function requestArea(SearchRequest $request): string
+    {
+        $area = strtolower(trim((string)($request->extras['__area'] ?? 'frontend')));
+
+        return in_array($area, ['frontend', 'backend'], true) ? $area : 'frontend';
     }
 }

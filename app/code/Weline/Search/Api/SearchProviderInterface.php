@@ -21,7 +21,15 @@ interface SearchProviderInterface
     /** Lower runs earlier when type=all sections are ordered. */
     public function sortOrder(): int;
 
+    /**
+     * Areas this provider serves. Values: frontend | backend.
+     *
+     * @return list<string>
+     */
+    public function areas(): array;
+
     public function expression(SearchRequest $request): SearchExpression;
+
 
     /**
      * Extra client params allowed when type === code() (name => constraint).
