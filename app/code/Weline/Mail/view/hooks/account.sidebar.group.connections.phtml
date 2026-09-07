@@ -14,7 +14,7 @@ use Weline\Mail\Service\MailCustomerAccountService;
 /** @var MailCustomerAccountService $mailService */
 $mailService = ObjectManager::getInstance(MailCustomerAccountService::class);
 $customerId = $mailService->resolveFrontendCustomerId($user ?? $this->getData('user'));
-if (!$mailService->hasActiveAccountForCustomer($customerId)) {
+if ($mailService->getAccountsForCustomer($customerId) === []) {
     return;
 }
 

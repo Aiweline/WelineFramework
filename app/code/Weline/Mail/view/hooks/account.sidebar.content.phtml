@@ -11,6 +11,7 @@
 use Weline\Customer\Service\AccountSidebarContentGate;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Mail\Service\MailCustomerAccountService;
+use Weline\Mail\Service\MailFrontendFeatureConfig;
 
 if (!AccountSidebarContentGate::accepts('mail')) {
     return;
@@ -19,10 +20,21 @@ if (!AccountSidebarContentGate::accepts('mail')) {
 /** @var MailCustomerAccountService $mailService */
 $mailService = ObjectManager::getInstance(MailCustomerAccountService::class);
 $customerId = $mailService->resolveFrontendCustomerId($user ?? $this->getData('user'));
-if (!$mailService->hasActiveAccountForCustomer($customerId)) {
+$hasActive = $mailService->hasActiveAccountForCustomer($customerId);
+$hasManaged = $mailService->getAccountsForCustomer($customerId) !== [];
+$registerEnabled = ObjectManager::getInstance(MailFrontendFeatureConfig::class)->isRegisterEnabled();
+if (!$hasActive && !$hasManaged && !$registerEnabled) {
     return;
 }
 ?>
 <section class="account-hook-section account-index__section motor-account-section" id="mail-section" data-account-section="mail" hidden weline-code="mail.account_sidebar_content.mail_section">
-    <?= $this->fetch('Weline_Mail::templates/frontend/account/mail-client.phtml') ?>
+    <?php if ($hasActive || $hasManaged): ?>
+        <?= $this->fetch('Weline_Mail::templates/frontend/account/mail-client.phtml') ?>
+    <?php else: ?>
+        <header class="motor-account-section__header">
+            <h2 class="motor-account-section__title"><lang>企业邮箱</lang></h2>
+            <p class="motor-account-section__desc"><lang>尚未开通企业邮箱，可在下方申请本站邮箱。</lang></p>
+        </header>
+        <?= $this->setData('mail_register_variant', 'card')->fetch('Weline_Mail::templates/frontend/widgets/account-mail-register.phtml') ?>
+    <?php endif; ?>
 </section>

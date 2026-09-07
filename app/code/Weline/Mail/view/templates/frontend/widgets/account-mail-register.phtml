@@ -1,0 +1,94 @@
+<?php
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Mail\Service\MailCustomerAccountService;
+use Weline\Mail\Service\MailFrontendFeatureConfig;
+
+$feature = ObjectManager::getInstance(MailFrontendFeatureConfig::class);
+if (!$feature->isRegisterEnabled()) {
+    return;
+}
+$domains = ObjectManager::getInstance(MailCustomerAccountService::class)->getActiveDomains();
+if ($domains === []) {
+    return;
+}
+$auxRequired = $feature->isAuxEmailVerifyEnabled();
+$safe = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8');
+$variant = strtolower(trim((string)($this->getData('mail_register_variant') ?? 'card')));
+if ($variant !== 'panel') {
+    $variant = 'card';
+}
+?>
+<?php if ($variant === 'panel'): ?>
+<div class="w-auth-login__mail-panel" data-w-component="account-mail-register" weline-code="mail.account.register">
+<?php else: ?>
+<section class="w-card w-auth-login__mail-card" data-w-component="account-mail-register" weline-code="mail.account.register">
+    <header class="w-card__header">
+        <h2 class="w-card__title" style="margin:0;font-size:1rem;"><lang>申请本站企业邮箱</lang></h2>
+    </header>
+    <div class="w-card__body">
+<?php endif; ?>
+        <p class="w-text" data-tone="muted" data-size="sm"><lang>注册并登录后可申请本站企业邮箱；开启辅助验证时须验证真人邮箱。</lang></p>
+        <form class="w-form" data-mail-register-form method="post" action="@url{'weline_mail/frontend/account/register/apply'}">
+            <label class="w-field"><span class="w-field__label"><lang>邮箱域名</lang></span>
+                <select class="w-select" name="domain_id" required>
+                    <?php foreach ($domains as $domain): ?>
+                        <option value="<?= (int)$domain->getId() ?>"><?= $safe($domain->getData('domain_name')) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </label>
+            <label class="w-field"><span class="w-field__label"><lang>邮箱前缀</lang></span>
+                <input class="w-input" type="text" name="local_part" required pattern="[a-z0-9][a-z0-9._-]{1,62}" placeholder="name">
+            </label>
+            <label class="w-field"><span class="w-field__label"><lang>企业邮箱密码</lang></span>
+                <input class="w-input" type="password" name="password" required minlength="8" autocomplete="new-password">
+            </label>
+            <?php if ($auxRequired): ?>
+                <label class="w-field"><span class="w-field__label"><lang>辅助验证邮箱</lang></span>
+                    <input class="w-input" type="email" name="aux_email" required>
+                </label>
+            <?php endif; ?>
+            <button class="w-button" data-tone="primary" type="submit"><lang>申请企业邮箱</lang></button>
+            <p class="w-text" data-tone="danger" data-size="sm" data-mail-register-msg hidden></p>
+        </form>
+        <form class="w-form" data-mail-register-confirm method="post" action="@url{'weline_mail/frontend/account/register/confirm'}" hidden style="margin-top:.75rem;">
+            <label class="w-field"><span class="w-field__label"><lang>验证码</lang></span>
+                <input class="w-input" type="text" name="code" required>
+            </label>
+            <button class="w-button" type="submit"><lang>确认开通</lang></button>
+        </form>
+<?php if ($variant === 'panel'): ?>
+</div>
+<?php else: ?>
+    </div>
+</section>
+<?php endif; ?>
+<script>
+(function () {
+  function bind(form, confirmForm) {
+    if (!form) return;
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var msg = form.querySelector('[data-mail-register-msg]');
+      var fd = new FormData(form);
+      var res = await fetch(form.action, { method: 'POST', body: fd, credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+      var data = await res.json().catch(function () { return {}; });
+      if (msg) { msg.hidden = false; msg.textContent = data.message || ''; }
+      if (data.needs_verify && confirmForm) confirmForm.hidden = false;
+    });
+  }
+  var root = document.querySelector('[data-w-component="account-mail-register"]');
+  if (!root) return;
+  bind(root.querySelector('[data-mail-register-form]'), root.querySelector('[data-mail-register-confirm]'));
+  var confirmForm = root.querySelector('[data-mail-register-confirm]');
+  if (confirmForm) {
+    confirmForm.addEventListener('submit', async function (e) {
+      e.preventDefault();
+      var fd = new FormData(confirmForm);
+      var res = await fetch(confirmForm.action, { method: 'POST', body: fd, credentials: 'same-origin', headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' } });
+      var data = await res.json().catch(function () { return {}; });
+      var msg = root.querySelector('[data-mail-register-msg]');
+      if (msg) { msg.hidden = false; msg.textContent = data.message || ''; }
+    });
+  }
+})();
+</script>
