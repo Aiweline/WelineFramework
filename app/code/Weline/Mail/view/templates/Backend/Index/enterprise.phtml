@@ -19,6 +19,15 @@ $websiteOptions = $website_domain_options ?? [];
 $managementReady = (bool)($management_ready ?? false);
 $basePath = 'weline_mail/backend';
 $cloudflareConnectParams = ['return_route' => 'weline_mail/backend'];
+$composeOpen = (bool)($compose_open ?? false);
+$composeTo = (string)($compose_to ?? '');
+$composeSubject = (string)($compose_subject ?? '');
+$composeBody = (string)($compose_body ?? '');
+$composeSource = (string)($compose_source ?? '');
+$composeSourceId = (int)($compose_source_id ?? 0);
+$composeAccountId = (int)($compose_account_id ?? $selectedAccountId);
+$composeAccountLocked = (bool)($compose_account_locked ?? false);
+$composeCanPickAccount = (bool)($compose_can_pick_account ?? false);
 ?>
 <style data-no-extract="true">
 .mail-enterprise{display:grid;gap:var(--weline-space-5);max-width:1440px;margin:0 auto;font-family:Inter,var(--weline-font-family)}
@@ -70,19 +79,43 @@ $cloudflareConnectParams = ['return_route' => 'weline_mail/backend'];
         </div>
 
         <div class="mail-enterprise__card">
-            <details>
+            <details <?= $composeOpen ? 'open' : '' ?>>
                 <summary class="mail-enterprise__card-head"><?= __('使用当前邮箱发送邮件') ?></summary>
                 <div class="mail-enterprise__card-body">
+                    <?php if ($composeAccountLocked && $composeAccountId <= 0): ?>
+                        <div class="w-alert" data-tone="warning"><?= __('当前账号邮箱不是本机企业邮箱，需外部发送。') ?></div>
+                    <?php else: ?>
                     <w:form method="post" action="@backend-url{'weline_mail/backend/index/send-as'}">
                         <input type="hidden" name="return_view" value="mailbox"><input type="hidden" name="folder" value="sent">
+                        <?php if ($composeSource !== ''): ?>
+                            <input type="hidden" name="source" value="<?= $escape($composeSource) ?>">
+                            <input type="hidden" name="source_id" value="<?= $composeSourceId ?>">
+                        <?php endif; ?>
                         <div class="mail-enterprise__form-grid">
-                            <label class="w-field"><span class="w-field__label"><?= __('发件账号') ?></span><select class="w-select" name="account_id" required><?php foreach ($mailboxAccounts as $account): ?><option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $selectedAccountId ? 'selected' : '' ?>><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?></option><?php endforeach; ?></select></label>
-                            <label class="w-field"><span class="w-field__label"><?= __('收件人') ?></span><input class="w-input" type="text" name="to_email" required></label>
-                            <label class="w-field is-wide"><span class="w-field__label"><?= __('主题') ?></span><input class="w-input" type="text" name="subject" maxlength="180" required></label>
-                            <label class="w-field is-wide"><span class="w-field__label"><?= __('正文') ?></span><textarea class="w-textarea" name="body" rows="7" required></textarea></label>
+                            <label class="w-field"><span class="w-field__label"><?= __('发件账号') ?></span>
+                                <?php if ($composeAccountLocked): ?>
+                                    <input type="hidden" name="account_id" value="<?= $composeAccountId ?>">
+                                    <input class="w-input" type="text" value="<?php
+                                        $lockedLabel = '';
+                                        foreach ($mailboxAccounts as $account) {
+                                            if ((int)$account->getId() === $composeAccountId) {
+                                                $lockedLabel = (string)$account->getData(MailAccount::schema_fields_EMAIL);
+                                                break;
+                                            }
+                                        }
+                                        echo $escape($lockedLabel);
+                                    ?>" readonly>
+                                <?php else: ?>
+                                    <select class="w-select" name="account_id" required><?php foreach ($mailboxAccounts as $account): ?><option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $composeAccountId ? 'selected' : '' ?>><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?></option><?php endforeach; ?></select>
+                                <?php endif; ?>
+                            </label>
+                            <label class="w-field"><span class="w-field__label"><?= __('收件人') ?></span><input class="w-input" type="text" name="to_email" value="<?= $escape($composeTo) ?>" required></label>
+                            <label class="w-field is-wide"><span class="w-field__label"><?= __('主题') ?></span><input class="w-input" type="text" name="subject" value="<?= $escape($composeSubject) ?>" maxlength="180" required></label>
+                            <label class="w-field is-wide"><span class="w-field__label"><?= __('正文') ?></span><textarea class="w-textarea" name="body" rows="7" required><?= $escape($composeBody) ?></textarea></label>
                         </div>
                         <button class="w-button" data-tone="primary" type="submit"><?= __('发送邮件') ?></button>
                     </w:form>
+                    <?php endif; ?>
                 </div>
             </details>
         </div>

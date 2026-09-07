@@ -57,6 +57,65 @@ class MailSmtpAccountService
         return $this->buildAccountConfig($account);
     }
 
+    /**
+     * Resolve whether an email is an active local enterprise mailbox.
+     *
+     * @return array{local:bool,mailbox:?array<string,mixed>}
+     */
+    public function resolveLocalMailboxByEmail(string $email): array
+    {
+        $email = strtolower(trim($email));
+        if ($email === '' || filter_var($email, FILTER_VALIDATE_EMAIL) === false) {
+            return ['local' => false, 'mailbox' => null];
+        }
+
+        /** @var MailAccount $account */
+        $account = ObjectManager::getInstance(MailAccount::class)->clear()
+            ->where(MailAccount::schema_fields_EMAIL, $email)
+            ->where(MailAccount::schema_fields_STATUS, 'active')
+            ->find()
+            ->fetch();
+        if (!$account->getId()) {
+            return ['local' => false, 'mailbox' => null];
+        }
+
+        $config = $this->buildAccountConfig($account);
+        if ($config === null) {
+            return ['local' => false, 'mailbox' => null];
+        }
+
+        return ['local' => true, 'mailbox' => $this->toPublicMailbox($config)];
+    }
+
+    /**
+     * @return list<array<string,mixed>>
+     */
+    public function listLocalMailboxes(int $limit = 100): array
+    {
+        $items = [];
+        foreach ($this->searchAccounts('', $limit) as $config) {
+            $items[] = $this->toPublicMailbox($config);
+        }
+
+        return $items;
+    }
+
+    /**
+     * @param array<string,mixed> $config
+     * @return array{account_id:int,email:string,display_name:string,domain_name:string,is_fake:bool,label:string}
+     */
+    public function toPublicMailbox(array $config): array
+    {
+        return [
+            'account_id' => (int)($config['account_id'] ?? 0),
+            'email' => (string)($config['email'] ?? ''),
+            'display_name' => (string)($config['display_name'] ?? ''),
+            'domain_name' => (string)($config['domain_name'] ?? ''),
+            'is_fake' => !empty($config['is_fake']),
+            'label' => (string)($config['label'] ?? ($config['email'] ?? '')),
+        ];
+    }
+
     public function sendViaAccount(int $accountId, string|array $to, string $subject, string $content): array
     {
         $config = $this->getAccountConfig($accountId);
@@ -80,7 +139,9 @@ class MailSmtpAccountService
         int $accountId,
         string|array $to,
         string $subject,
-        string $content
+        string $content,
+        string $source = '',
+        int $sourceId = 0
     ): array {
         $config = $this->getAccountConfig($accountId);
         if ($config === null) {
@@ -90,7 +151,7 @@ class MailSmtpAccountService
         if (!empty($config['is_fake'])) {
             /** @var MailFakeMailboxService $fakeMailbox */
             $fakeMailbox = ObjectManager::getInstance(MailFakeMailboxService::class);
-            return $fakeMailbox->sendFromAccount($accountId, $to, $subject, $content);
+            return $fakeMailbox->sendFromAccount($accountId, $to, $subject, $content, $source, $sourceId);
         }
 
         try {

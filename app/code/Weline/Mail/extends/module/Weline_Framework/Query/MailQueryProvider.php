@@ -4,12 +4,14 @@ declare(strict_types=1);
 namespace Weline\Mail\Extends\Module\Weline_Framework\Query;
 
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Mail\Service\MailComposerService;
 use Weline\Mail\Service\MailSmtpAccountService;
 
 class MailQueryProvider implements QueryProviderInterface
 {
     public function __construct(
-        private readonly MailSmtpAccountService $smtpAccountService
+        private readonly MailSmtpAccountService $smtpAccountService,
+        private readonly MailComposerService $composerService
     ) {
     }
 
@@ -24,6 +26,10 @@ class MailQueryProvider implements QueryProviderInterface
             'getSmtpAccounts' => $this->getSmtpAccounts($params),
             'getSmtpAccountConfig' => $this->getSmtpAccountConfig($params),
             'sendViaSmtpAccount' => $this->sendViaSmtpAccount($params),
+            'resolveLocalMailboxByEmail' => $this->resolveLocalMailboxByEmail($params),
+            'listLocalMailboxes' => $this->listLocalMailboxes($params),
+            'listThreadBySource' => $this->listThreadBySource($params),
+            'sendComposerMessage' => $this->sendComposerMessage($params),
             default => throw new \InvalidArgumentException(
                 (string)__('Mail 查询器不支持的操作：%{1}', $operation)
             ),
@@ -69,6 +75,53 @@ class MailQueryProvider implements QueryProviderInterface
         );
     }
 
+    private function resolveLocalMailboxByEmail(array $params): array
+    {
+        $resolved = $this->smtpAccountService->resolveLocalMailboxByEmail(
+            (string)($params['email'] ?? '')
+        );
+
+        return [
+            'success' => true,
+            'local' => !empty($resolved['local']),
+            'mailbox' => $resolved['mailbox'] ?? null,
+        ];
+    }
+
+    private function listLocalMailboxes(array $params): array
+    {
+        return [
+            'success' => true,
+            'items' => $this->smtpAccountService->listLocalMailboxes(
+                (int)($params['limit'] ?? 100)
+            ),
+        ];
+    }
+
+    private function listThreadBySource(array $params): array
+    {
+        return [
+            'success' => true,
+            'items' => $this->composerService->listThreadBySource(
+                (string)($params['source'] ?? ''),
+                (int)($params['source_id'] ?? 0),
+                (int)($params['limit'] ?? 50)
+            ),
+        ];
+    }
+
+    private function sendComposerMessage(array $params): array
+    {
+        return $this->composerService->send(
+            (int)($params['account_id'] ?? 0),
+            (string)($params['to'] ?? ''),
+            (string)($params['subject'] ?? ''),
+            (string)($params['body'] ?? $params['content'] ?? ''),
+            (string)($params['source'] ?? ''),
+            (int)($params['source_id'] ?? 0)
+        );
+    }
+
     public function getDescriptor(): array
     {
         return [
@@ -100,6 +153,40 @@ class MailQueryProvider implements QueryProviderInterface
                         ['name' => 'to', 'type' => 'string|array', 'required' => true, 'description' => __('收件人')],
                         ['name' => 'subject', 'type' => 'string', 'required' => true, 'description' => __('主题')],
                         ['name' => 'content', 'type' => 'string', 'required' => true, 'description' => __('正文')],
+                    ],
+                ],
+                [
+                    'name' => 'resolveLocalMailboxByEmail',
+                    'description' => __('判断邮箱是否为本机已启用企业邮箱账号'),
+                    'params' => [
+                        ['name' => 'email', 'type' => 'string', 'required' => true, 'description' => __('邮箱地址')],
+                    ],
+                ],
+                [
+                    'name' => 'listLocalMailboxes',
+                    'description' => __('列出本机已启用企业邮箱账号（无凭据）'),
+                    'params' => [
+                        ['name' => 'limit', 'type' => 'int', 'required' => false, 'description' => __('返回数量')],
+                    ],
+                ],
+                [
+                    'name' => 'listThreadBySource',
+                    'description' => __('按业务来源加载邮件沟通线程'),
+                    'params' => [
+                        ['name' => 'source', 'type' => 'string', 'required' => true, 'description' => __('业务来源')],
+                        ['name' => 'source_id', 'type' => 'int', 'required' => true, 'description' => __('业务来源ID')],
+                    ],
+                ],
+                [
+                    'name' => 'sendComposerMessage',
+                    'description' => __('写信浮层发送并写入业务线程'),
+                    'params' => [
+                        ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('发件账号')],
+                        ['name' => 'to', 'type' => 'string', 'required' => true, 'description' => __('收件人')],
+                        ['name' => 'subject', 'type' => 'string', 'required' => true, 'description' => __('主题')],
+                        ['name' => 'body', 'type' => 'string', 'required' => true, 'description' => __('正文')],
+                        ['name' => 'source', 'type' => 'string', 'required' => false, 'description' => __('业务来源')],
+                        ['name' => 'source_id', 'type' => 'int', 'required' => false, 'description' => __('业务来源ID')],
                     ],
                 ],
             ],

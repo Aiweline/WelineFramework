@@ -16,7 +16,13 @@ php bin/w mail:service:status
 php bin/w mail:dns:check example.com mail.example.com
 ```
 
-后台入口默认展示 Stalwart 真实收件箱，`?view=config` 展示域名、DNS 与账号设置。前台账号中心仅对 `customer_id` 明确绑定了 active 邮箱账号的登录用户展示“我的邮箱”；JMAP 读取固定走本机回环地址，并使用服务器上的密封读取凭据。\n\n`mail:env:install` 默认只展示安装计划；真实依赖安装优先走框架入口。Stalwart 在框架环境检测中属于推荐依赖，不阻断 Weline_Mail 模块安装：
+后台入口默认展示 Stalwart 真实收件箱。**推荐写信入口**：`<w:mail-composer/>` + `WelineMailComposer.open`（见 [mail-composer-taglib.md](mail-composer-taglib.md)）。企业邮箱管理页仍保留代发表单与深链预填兼容：`?compose=1&to=&subject=&body=&account=&source=&source_id=`（询价等业务主路径勿再依赖 GET body）。普通后台用户只能使用本人资料邮箱对应的本机 active 账号；超管（`user_id=1`）或 ACL `Weline_Mail::mail_send_as` 可任选本机账号（含 fake 测试号）。发信成功派发 `Weline_Mail::mail_message_sent`。
+
+Query：`resolveLocalMailboxByEmail`、`listLocalMailboxes`、`listThreadBySource`、`sendComposerMessage`（只读列表无凭据）。
+
+前台：SystemConfig `mail/frontend_register/*`；开启且有域名时，注册页用 Weline UI tabs（账户注册 / 企业邮箱），`account-mail-register` 以 `mail_register_variant=panel` 挂第二 Tab；未开启则单表单。个人中心侧栏用 `card` 变体。站内登录统一走 Customer 普通登录（不提供独立企业邮箱登录入口）。
+
+`mail:env:install` 默认只展示安装计划；真实依赖安装优先走框架入口。Stalwart 在框架环境检测中属于推荐依赖，不阻断 Weline_Mail 模块安装：
 
 ```bash
 php bin/w env:install stalwart-mail-server -y
@@ -40,6 +46,8 @@ Mail 后台允许开通多个邮箱域名。域名候选通过 `w_query('website
 ## 前台个人中心
 
 个人中心的邮箱账号申请、暂停、恢复、测试收信和 fake 发信都必须绑定当前前台登录用户。控制器和模板读取客户 ID 时以登录用户模型 ID 为优先值；如果模型 ID 为空或为 0，则回退到前台 Session 的用户 ID，避免账号列表为空或发信时误判为未拥有邮箱账号。
+
+已开通邮箱时侧栏「我的邮箱」进入 `#mail` 工作台：收件箱/已发送、读信「回复」预填写邮件表单，以及折叠区暂停/恢复账号；不另建回复管理子菜单。
 
 fake 引擎仅用于 `.test` / `.invalid` 域名的本地业务冒烟。fake 账号发信会写入本地发件箱；如果收件人也是可用 fake 账号，会同步投递到本地收件箱。
 
