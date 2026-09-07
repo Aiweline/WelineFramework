@@ -150,6 +150,11 @@
 
         var applyDefaultLabel = String(applyBtn.textContent || '').trim();
 
+        function i18n(attr, fallback) {
+            var value = String(root.getAttribute(attr) || '').trim();
+            return value || fallback;
+        }
+
         function setApplyLoading(loading) {
             applyBtn.disabled = loading;
             applyBtn.classList.toggle('is-loading', loading);
@@ -273,13 +278,13 @@
         function applyCouponCode(code) {
             var normalized = String(code || '').trim().toUpperCase();
             if (!normalized) {
-                setMessage('请输入优惠券代码', true);
+                setMessage(i18n('data-i18n-enter-code', '请输入优惠券代码'), true);
                 return Promise.resolve(null);
             }
             var existingTags = tagsEl.querySelectorAll('[data-marketing-coupon-tag]');
             for (var i = 0; i < existingTags.length; i++) {
                 if (String(existingTags[i].getAttribute('data-marketing-coupon-tag') || '').toUpperCase() === normalized) {
-                    setMessage('该优惠券已应用', true);
+                    setMessage(i18n('data-i18n-already-applied', '该优惠券已应用'), true);
                     input.value = '';
                     return Promise.resolve(null);
                 }
@@ -290,7 +295,7 @@
             // applyCoupon descriptor only accepts coupon_code; quote with cart lines afterwards.
             return client.applyCoupon({ coupon_code: normalized }, { silent: true }).then(function (response) {
                 if (!response || !response.success) {
-                    setMessage((response && response.message) || '优惠券不可用', true);
+                    setMessage((response && response.message) || i18n('data-i18n-unavailable', '优惠券不可用'), true);
                     return null;
                 }
                 var appliedCode = String(response.coupon_code || normalized);
@@ -299,13 +304,13 @@
                 return quoteSavedCoupon(appliedCode).then(function (quoteResponse) {
                     var discount = quoteResponse && quoteResponse.success ? quoteResponse.discount : null;
                     if (!discount || Number(discount.amount_minor || 0) <= 0) {
-                        setMessage('优惠券无效、不可用或已达使用上限', true);
+                        setMessage(i18n('data-i18n-invalid-limit', '优惠券无效、不可用或已达使用上限'), true);
                     }
                     notifyCartDiscountChanged();
                     return quoteResponse;
                 });
             }).catch(function () {
-                setMessage('营销服务暂时不可用', true);
+                setMessage(i18n('data-i18n-service-unavailable', '营销服务暂时不可用'), true);
                 return null;
             }).finally(function () {
                 miniCartBusyDelta(-1);
@@ -318,10 +323,10 @@
             miniCartBusyDelta(1);
             return client.removeCoupon({}, { silent: true }).then(function (response) {
                 clearAppliedState();
-                setMessage((response && response.message) || '已移除优惠券', false);
+                setMessage((response && response.message) || i18n('data-i18n-removed', '已移除优惠券'), false);
                 notifyCartDiscountChanged();
             }).catch(function () {
-                setMessage('营销服务暂时不可用', true);
+                setMessage(i18n('data-i18n-service-unavailable', '营销服务暂时不可用'), true);
             }).finally(function () {
                 miniCartBusyDelta(-1);
                 setRemoving(false);

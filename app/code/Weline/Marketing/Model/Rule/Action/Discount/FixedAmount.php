@@ -37,6 +37,15 @@ class FixedAmount extends AbstractAction
 
     public function execute(array $action, array $context): array
     {
+        if (!empty($action['external_managed'])
+            && (string)($action['source_type'] ?? '') === 'promotion_activity_theme'
+        ) {
+            return [
+                'discount_amount' => 0,
+                'messages' => [],
+            ];
+        }
+
         $discountValue = (float)($action['discount_value'] ?? 0);
         $applyTo = $action['apply_to'] ?? 'subtotal';
 
