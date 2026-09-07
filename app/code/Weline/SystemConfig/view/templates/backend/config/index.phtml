@@ -28,9 +28,10 @@ $targetWebsite = (string)($targetScope['website_code'] ?? 'default');
 $targetStore = (string)($targetScope['store_code'] ?? '');
 $targetChannel = (string)($targetScope['channel_code'] ?? '');
 $targetKind = (string)($targetScope['kind'] ?? 'global');
-$scopeReadOnly = $targetKind === 'global';
+$isGlobalScope = $targetKind === 'global';
+// Global（default.default.default）是基线可写层；Website/Store/Channel 再覆盖。
 $expectedGrantVersion = (int)($expected_grant_version ?? 0);
-$wscWebsiteValue = $targetKind === 'global' ? '' : $targetWebsite;
+$wscWebsiteValue = $isGlobalScope ? '' : $targetWebsite;
 $wscModuleFilterEmpty = (string)__('全部模块');
 $wscModuleFilterPlaceholder = (string)__('搜索模块名称');
 $wscWebsiteEmpty = (string)__('Global（全部站点）');
@@ -41,6 +42,7 @@ $wscChannelEmpty = (string)__('Store 层');
 $wscChannelPlaceholder = (string)__('搜索 Channel');
 $wscLocaleEmpty = (string)__('default');
 $wscLocalePlaceholder = (string)__('搜索语言或代码...');
+$wscGlobalStorageScope = \Weline\SystemConfig\Model\SystemConfig::SCOPE_GLOBAL;
 $wscModuleOptions = [];
 foreach ($modules as $moduleRow) {
     if (!is_array($moduleRow)) {
@@ -74,7 +76,7 @@ foreach ($scopeCatalog as $websiteOpt) {
         'meta' => $wCode,
         'website_id' => (int)($websiteOpt['website_id'] ?? 0),
     ];
-    if ($targetKind === 'global' || $wCode !== $targetWebsite) {
+    if ($isGlobalScope || $wCode !== $targetWebsite) {
         continue;
     }
     foreach (($websiteOpt['stores'] ?? []) as $storeOpt) {
@@ -115,7 +117,7 @@ $wscWebsiteOptionsJson = json_encode($wscWebsiteOptions, JSON_UNESCAPED_UNICODE 
 $wscStoreOptionsJson = json_encode($wscStoreOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 $wscChannelOptionsJson = json_encode($wscChannelOptions, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
 $wscFilterAreaLabel = $selectedArea === 'backend' ? (string)__('后台') : (string)__('前台');
-$wscFilterScopeLabel = $scopeReadOnly
+$wscFilterScopeLabel = $isGlobalScope
     ? (string)__('Global（全部站点）')
     : ($targetChannel !== '' && $targetChannel !== 'default'
         ? $targetWebsite . ' / ' . $targetStore . ' / ' . $targetChannel
@@ -130,9 +132,12 @@ $wscFilterSummary = trim(implode(' · ', array_filter([
 $postPath = 'weline_systemconfig/backend/config';
 $postUrl = (string)($post_url ?? '');
 if ($postUrl === '') {
-    // configUrl() 仍在 PHP 内拼接导航 href（data-wsc-guide-href），保留 getBackendUrl。
-    $postUrl = (string)$this->getBackendUrl($postPath);
+    // GET 链接仍用带后台前缀的 path；表单 action 见 $formAction。
+    $postUrl = (string)$this->getBackendUrlPath($postPath);
 }
+// 空 action = POST 当前文档 URL。页面有 <base href=".../后台前缀/"> 时，若 action 误写成
+// `/weline_systemconfig/...`（丢前缀）会进前台 404；贴当前页可避免。
+$formAction = '';
 $formKeyHtml = method_exists($this, 'getFormKey') ? (string)$this->getFormKey($postPath) : '';
 $guideData = is_array($this->getData('guide')) ? $this->getData('guide') : [];
 $assignedGuideParams = is_array($guide_params ?? null) ? $guide_params : [];
@@ -224,6 +229,54 @@ $parseOptions = static function (string $options): array {
         }
     }
     return $result;
+};
+$resolveFieldOptions = static function (array $field) use ($parseOptions): array {
+    $options = $parseOptions((string)($field['options'] ?? ''));
+    $source = strtolower(trim((string)($field['options-source'] ?? $field['options_source'] ?? '')));
+    if ($source === 'i18n:countries' || $source === 'countries') {
+        try {
+            /** @var \Weline\I18n\Model\I18n $i18n */
+            $i18n = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\I18n\Model\I18n::class);
+            $locale = (string)(\Weline\Framework\App\State::getLangLocal() ?: 'zh_Hans_CN');
+            $countries = $i18n->getCountries($locale);
+            if (is_array($countries) && $countries !== []) {
+                $resolved = [];
+                foreach ($countries as $code => $name) {
+                    $code = strtoupper(trim((string)$code));
+                    if ($code === '' || !preg_match('/\A[A-Z]{2}\z/D', $code)) {
+                        continue;
+                    }
+                    $label = trim((string)$name);
+                    $resolved[$code] = $label !== '' ? ($label . ' (' . $code . ')') : $code;
+                }
+                if ($resolved !== []) {
+                    asort($resolved, SORT_NATURAL | SORT_FLAG_CASE);
+                    return $resolved;
+                }
+            }
+        } catch (\Throwable) {
+            // Fall through to literal options / empty.
+        }
+    }
+    return $options;
+};
+$splitCsvValues = static function (string $raw): array {
+    $parts = preg_split('/[\s,;]+/', trim($raw), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+    $values = [];
+    foreach ($parts as $part) {
+        $values[trim((string)$part)] = true;
+    }
+    return array_keys($values);
+};
+$optionsToSearchSelectJson = static function (array $options): string {
+    $list = [];
+    foreach ($options as $optionValue => $optionLabel) {
+        $list[] = [
+            'value' => (string)$optionValue,
+            'label' => (string)$optionLabel,
+        ];
+    }
+    return (string)(json_encode($list, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]');
 };
 $guideParams = [];
 if ($guideActive) {
@@ -320,13 +373,33 @@ $adapterScopeParams = array_filter([
     'locale' => ($locale !== '' && $locale !== 'default') ? $locale : '',
 ], static fn(string $value): bool => $value !== '');
 $adapterCallbackUrl = static function (array $adapter) use ($templateInstance, $scope): string {
-    $callbackPath = ltrim(trim((string)($adapter['callback-path'] ?? '')), '/');
-    if ($callbackPath === '' || $scope === '') {
+    $callbackPathRaw = ltrim(trim((string)($adapter['callback-path'] ?? '')), '/');
+    $fragment = '';
+    $callbackPath = $callbackPathRaw;
+    if (str_contains($callbackPathRaw, '#')) {
+        [$callbackPath, $fragment] = \explode('#', $callbackPathRaw, 2);
+        $callbackPath = ltrim(trim($callbackPath), '/');
+        $fragment = trim($fragment);
+    }
+    $asOriginRaw = strtolower(trim((string)($adapter['callback-as-origin'] ?? '0')));
+    $asOrigin = \in_array($asOriginRaw, ['1', 'true', 'yes', 'on'], true);
+    $asHostRaw = strtolower(trim((string)($adapter['callback-as-host'] ?? '0')));
+    $asHost = \in_array($asHostRaw, ['1', 'true', 'yes', 'on'], true);
+    if ($callbackPath === '' && !$asOrigin && !$asHost) {
+        return '';
+    }
+
+    $appendScopeRaw = strtolower(trim((string)($adapter['callback-append-scope'] ?? '1')));
+    $appendScope = !\in_array($appendScopeRaw, ['0', 'false', 'no', 'off'], true);
+    if ($appendScope && !$asOrigin && !$asHost && $scope === '') {
         return '';
     }
 
     // 与支付 OAuth redirect_uri 同源，避免展示地址与实际授权不一致
-    if ((str_starts_with($callbackPath, 'payment/frontend/callback/')
+    if (!$asOrigin
+        && !$asHost
+        && $appendScope
+        && (str_starts_with($callbackPath, 'payment/frontend/callback/')
             && !str_contains($callbackPath, '/return/')
             && !str_ends_with($callbackPath, '.cancel')
             && $callbackPath !== 'payment/frontend/callback/notify')
@@ -344,15 +417,37 @@ $adapterCallbackUrl = static function (array $adapter) use ($templateInstance, $
         }
     }
 
+    $resolvePath = $callbackPath !== '' ? $callbackPath : 'customer/account/login';
     $base = '';
     if (method_exists($templateInstance, 'getFrontendUrl')) {
-        $base = trim((string)$templateInstance->getFrontendUrl($callbackPath));
+        $base = trim((string)$templateInstance->getFrontendUrl($resolvePath));
     }
     if ($base === '') {
-        $base = trim((string)$templateInstance->getUrl($callbackPath));
+        $base = trim((string)$templateInstance->getUrl($resolvePath));
     }
     if ($base === '' || !preg_match('#^https?://#i', $base)) {
         return '';
+    }
+
+    if ($asOrigin || $asHost) {
+        $parts = parse_url($base);
+        if (!\is_array($parts) || empty($parts['scheme']) || empty($parts['host'])) {
+            return '';
+        }
+        if ($asHost) {
+            // Meta「应用域名」通常只要 host（不含 scheme/port/path）
+            return (string)$parts['host'];
+        }
+        $origin = $parts['scheme'] . '://' . $parts['host'];
+        if (isset($parts['port'])) {
+            $origin .= ':' . $parts['port'];
+        }
+
+        return $origin;
+    }
+
+    if (!$appendScope) {
+        return $fragment !== '' ? ($base . '#' . $fragment) : $base;
     }
 
     $parts = parse_url($base);
@@ -375,6 +470,8 @@ $adapterCallbackUrl = static function (array $adapter) use ($templateInstance, $
     $rebuilt .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
     if (!empty($parts['fragment'])) {
         $rebuilt .= '#' . $parts['fragment'];
+    } elseif ($fragment !== '') {
+        $rebuilt .= '#' . $fragment;
     }
 
     return $rebuilt;
@@ -553,7 +650,7 @@ $guideConfigJson = json_encode([
                                 <td><?= htmlspecialchars((string)($version['created_at'] ?? '')) ?></td>
                                 <td>
                                     <?php if ($rollbackable): ?>
-                                        <w:form method="post" action="@backend-url{$postPath}" data-w-display="inline">
+                                        <w:form method="post" action="<?= htmlspecialchars($formAction, ENT_QUOTES, 'UTF-8') ?>" data-w-display="inline">
                                             <?= $formKeyHtml ?>
                                             <input type="hidden" name="form_action" value="rollback">
                                             <input type="hidden" name="version_id" value="<?= (int)($version['version_id'] ?? 0) ?>">
@@ -701,6 +798,29 @@ $flashToastFn = match ($flashTone) {
         <w:form method="get" class="w-system-config__filters w-auto-grid" id="wsc-filter-form">
                     <input type="hidden" name="scope" id="wsc-filter-scope" value="<?= htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" name="target_scope" id="wsc-filter-target-scope" value="<?= htmlspecialchars($scope, ENT_QUOTES, 'UTF-8') ?>">
+                    <script>
+                    window.wscOnWebsiteFilterChange = function () {
+                        var w = document.getElementById('wsc-website-code_value');
+                        var s = document.getElementById('wsc-store-code');
+                        var c = document.getElementById('wsc-channel-code');
+                        var ts = document.getElementById('wsc-filter-target-scope');
+                        var sc = document.getElementById('wsc-filter-scope');
+                        var website = (w && typeof w.value === 'string') ? String(w.value).trim() : '';
+                        if (s) { s.value = ''; }
+                        if (c) { c.value = ''; }
+                        if (website === '') {
+                            // 选择 Global 时显式提交全局 storage scope，避免空 website_code 被丢掉后回落 session。
+                            var globalScope = <?= json_encode($wscGlobalStorageScope, JSON_THROW_ON_ERROR) ?>;
+                            if (ts) { ts.value = globalScope; }
+                            if (sc) { sc.value = globalScope; }
+                        } else {
+                            if (ts) { ts.value = ''; }
+                            if (sc) { sc.value = ''; }
+                        }
+                        var f = document.getElementById('wsc-filter-form');
+                        if (f) { f.requestSubmit ? f.requestSubmit() : f.submit(); }
+                    };
+                    </script>
                     <?php foreach ($guideParams as $guideParamKey => $guideParamValue): ?>
                         <input type="hidden" name="<?= htmlspecialchars($guideParamKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars((string)$guideParamValue, ENT_QUOTES, 'UTF-8') ?>">
                     <?php endforeach; ?>
@@ -744,7 +864,7 @@ $flashToastFn = match ($flashTone) {
                             empty-label="wscWebsiteEmpty"
                             placeholder="wscWebsitePlaceholder"
                             form="wsc-filter-form"
-                            on-change="var s=document.getElementById('wsc-store-code');var c=document.getElementById('wsc-channel-code');var ts=document.getElementById('wsc-filter-target-scope');var sc=document.getElementById('wsc-filter-scope');if(s){s.value='';}if(c){c.value='';}if(ts){ts.value='';}if(sc){sc.value='';}var f=document.getElementById('wsc-filter-form');if(f){f.requestSubmit?f.requestSubmit():f.submit();}"
+                            on-change="window.wscOnWebsiteFilterChange&&window.wscOnWebsiteFilterChange()"
                         />
                         </div>
                     </div>
@@ -885,7 +1005,7 @@ $flashToastFn = match ($flashTone) {
                                         <code class="w-system-config__template-code"><?= htmlspecialchars((string)($template['code'] ?? '')) ?></code>
                                     </div>
 
-                                    <w:form method="post" action="@backend-url{$postPath}" data-testid="system-config-template-form" data-template-code="<?= htmlspecialchars((string)($template['code'] ?? '')) ?>">
+                                    <w:form method="post" enctype="multipart/form-data" action="<?= htmlspecialchars($formAction, ENT_QUOTES, 'UTF-8') ?>" data-testid="system-config-template-form" data-w-system-config-save-form="1" data-template-code="<?= htmlspecialchars((string)($template['code'] ?? '')) ?>">
                                         <?= $formKeyHtml ?>
                                         <input type="hidden" name="form_action" value="save">
                                         <input type="hidden" name="module" value="<?= htmlspecialchars((string)($moduleRow['module'] ?? '')) ?>">
@@ -901,12 +1021,12 @@ $flashToastFn = match ($flashTone) {
                                         <?php foreach ($guideParams as $guideParamKey => $guideParamValue): ?>
                                             <input type="hidden" name="<?= htmlspecialchars($guideParamKey, ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars((string)$guideParamValue, ENT_QUOTES, 'UTF-8') ?>">
                                         <?php endforeach; ?>
-                                        <div class="w-alert w-system-config__scope-banner" data-tone="<?= $scopeReadOnly ? 'warning' : 'info' ?>" role="note">
+                                        <div class="w-alert w-system-config__scope-banner" data-tone="info" role="note">
                                             <w:icon name="info" size="sm"></w:icon>
                                             <div class="w-alert__content">
                                                 <span><lang>显式提交到</lang> <code><?= htmlspecialchars($scope) ?></code>（<?= htmlspecialchars($targetKind) ?>）</span>
-                                                <?php if ($scopeReadOnly): ?>
-                                                    <div class="w-text" data-tone="muted" data-size="sm"><lang>Global 层仅查看继承值，请选择具体 Website / Store / Channel 后再覆盖保存。</lang></div>
+                                                <?php if ($isGlobalScope): ?>
+                                                    <div class="w-text" data-tone="muted" data-size="sm"><lang>Global 为全站基线配置；未在 Website / Store / Channel 覆盖的站点将继承此处保存值。</lang></div>
                                                 <?php endif; ?>
                                             </div>
                                         </div>
@@ -970,9 +1090,9 @@ $flashToastFn = match ($flashTone) {
                                                     ? ' target="' . htmlspecialchars($adapterTarget, ENT_QUOTES, 'UTF-8') . '"'
                                                     : '';
                                                 $adapterRelAttr = $adapterTarget === '_blank' ? ' rel="noopener noreferrer"' : '';
-                                                // Global 字段只读，但适配入口（OAuth/测连等）仍需可点；写目标由后端规范化 storage_scope。
+                                                // Global / 子 Scope 下适配入口（OAuth 控制台、测连等）均可点；写目标由当前 storage_scope 决定。
                                                 $adapterBlocked = false;
-                                                $adapterBlockedReason = (string)__('Global 层不可执行此操作，请先选择 Website / Store / Channel。');
+                                                $adapterBlockedReason = '';
                                                 $adapterCode = (string)($adapter['code'] ?? '');
                                                 $adapterGuideKey = $adapterCode !== '' ? 'adapter:' . $adapterCode : '';
                                                 $adapterGuideTarget = $adapterGuideKey !== '' && isset($guideKeySet[$adapterGuideKey]);
@@ -1090,23 +1210,38 @@ $flashToastFn = match ($flashTone) {
                                                             $effectiveValue = (string)($field['effective_value'] ?? ($field['default'] ?? ''));
                                                             $baseVersion = (int)($field['base_version'] ?? 0);
                                                             $source = is_array($field['effective_source'] ?? null) ? $field['effective_source'] : null;
-                                                            $options = $parseOptions((string)($field['options'] ?? ''));
+                                                            $options = $resolveFieldOptions($field);
+                                                            $selectedValues = $splitCsvValues($effectiveValue);
+                                                            $optionsSource = strtolower(trim((string)($field['options-source'] ?? $field['options_source'] ?? '')));
+                                                            $useAddressCountries = in_array($fieldType, ['address_countries', 'address_country_multi'], true)
+                                                                || (
+                                                                    in_array($fieldType, ['multiselect', 'select_multi'], true)
+                                                                    && in_array($optionsSource, ['i18n:countries', 'countries'], true)
+                                                                );
                                                             $sourceKind = (string)($field['source_kind'] ?? ($source ? 'fallback' : 'default'));
                                                             $isLocked = !empty($field['locked']);
                                                             $isSuppressed = !empty($field['suppressed']);
                                                             $hasOverride = !empty($field['has_override']);
                                                             $isSensitiveField = !empty($field['is_sensitive']);
+                                                            $isImportFileField = $fieldType === 'import_file';
                                                             $isInherited = !$hasOverride && !$isSuppressed;
-                                                            $fieldDisabled = $isLocked || $scopeReadOnly || $isInherited;
+                                                            $fieldDisabled = $isLocked || ($isInherited && !$isImportFileField);
                                                             $inheritChecked = $isInherited;
-                                                            $inheritDisabled = $isLocked || $scopeReadOnly;
+                                                            $inheritDisabled = $isLocked || $isImportFileField;
+                                                            $sensitiveConfigured = $isSensitiveField && $effectiveValue !== '' && $effectiveValue !== '0';
+                                                            $sensitiveInputValue = ($isSensitiveField && ($effectiveValue === '***' || $sensitiveConfigured))
+                                                                ? ''
+                                                                : $effectiveValue;
+                                                            $sensitivePlaceholder = $sensitiveConfigured
+                                                                ? (string)__('已配置，留空则保持不变')
+                                                                : '';
                                                             $fieldGuideTarget = isset($guideKeySet[$fieldKey]);
                                                             $fieldGuideIndex = $fieldGuideTarget ? (int)($guideKeyIndex[$fieldKey] ?? 0) : -1;
                                                             $fieldGuideCurrent = $fieldGuideTarget && $fieldKey === $guideLocate;
                                                             $fieldGuideId = $fieldGuideTarget ? 'wsc-guide-target-' . $fieldGuideIndex : '';
                                                             ?>
                                                             <tr data-testid="system-config-field" data-config-key="<?= htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') ?>" data-search-text="<?= htmlspecialchars(trim((string)($field['label'] ?? $fieldKey) . ' ' . $fieldKey . ' ' . (string)($field['description'] ?? '')), ENT_QUOTES, 'UTF-8') ?>"
-                                                                class="<?= $fieldGuideTarget ? 'is-guide-target' : '' ?><?= $fieldGuideCurrent ? ' is-focused' : '' ?><?= $isInherited ? ' is-inherited' : '' ?><?= $scopeReadOnly ? ' is-scope-readonly' : '' ?><?= $isLocked ? ' is-locked' : '' ?>"
+                                                                class="<?= $fieldGuideTarget ? 'is-guide-target' : '' ?><?= $fieldGuideCurrent ? ' is-focused' : '' ?><?= $isInherited ? ' is-inherited' : '' ?><?= $isLocked ? ' is-locked' : '' ?>"
                                                                 <?= $fieldGuideTarget ? ' id="' . htmlspecialchars($fieldGuideId, ENT_QUOTES, 'UTF-8') . '" data-guide-key="' . htmlspecialchars($fieldKey, ENT_QUOTES, 'UTF-8') . '"' : '' ?>
                                                             >
                                                                 <td>
@@ -1145,24 +1280,263 @@ $flashToastFn = match ($flashTone) {
                                                                     <div class="w-field w-system-config__field-control">
                                                                         <div class="w-field__control">
                                                                     <?php if ($fieldType === 'select' && $options !== []): ?>
-                                                                        <select class="w-select" name="values[<?= htmlspecialchars($fieldKey) ?>]" data-size="sm"<?= $fieldDisabled ? ' disabled' : '' ?>>
-                                                                            <?php foreach ($options as $optionValue => $optionLabel): ?>
-                                                                                <option value="<?= htmlspecialchars((string)$optionValue) ?>" <?= (string)$optionValue === $effectiveValue ? 'selected' : '' ?>>
-                                                                                    <?= htmlspecialchars((string)$optionLabel) ?>
-                                                                                </option>
-                                                                            <?php endforeach; ?>
-                                                                        </select>
+                                                                        <?php
+                                                                        $ssId = 'wsc-ss-' . substr(hash('sha256', $fieldKey), 0, 12);
+                                                                        $ssOptionsJson = $optionsToSearchSelectJson($options);
+                                                                        ?>
+                                                                        <w:theme:search-select
+                                                                            id="<?= htmlspecialchars($ssId, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            name="values[<?= htmlspecialchars($fieldKey) ?>]"
+                                                                            value="<?= htmlspecialchars($effectiveValue, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            options-json="<?= htmlspecialchars($ssOptionsJson, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            placeholder="<?= htmlspecialchars((string)__('请选择或搜索...'), ENT_QUOTES, 'UTF-8') ?>"
+                                                                            clearable="true"
+                                                                            disabled="<?= $isLocked ? 'true' : 'false' ?>"
+                                                                        />
+                                                                    <?php elseif ($useAddressCountries): ?>
+                                                                        <?php
+                                                                        $addrInputId = 'wsc-addr-' . substr(hash('sha256', $fieldKey), 0, 12);
+                                                                        $addrCode = 'wsc-countries-' . substr(hash('sha256', $fieldKey), 0, 12);
+                                                                        $countrySeed = [];
+                                                                        foreach ($selectedValues as $code) {
+                                                                            $code = strtoupper(trim((string)$code));
+                                                                            if ($code === '' || !preg_match('/\A[A-Z]{2}\z/D', $code)) {
+                                                                                continue;
+                                                                            }
+                                                                            $label = (string)($options[$code] ?? $code);
+                                                                            $countrySeed[] = [
+                                                                                'country_code' => $code,
+                                                                                'region_code' => $code,
+                                                                                'region_type' => 'country',
+                                                                                'region_name' => $label,
+                                                                                'label' => $label,
+                                                                            ];
+                                                                        }
+                                                                        $countrySeedJson = (string)json_encode($countrySeed, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                                                                        ?>
+                                                                        <div
+                                                                            class="w-stack"
+                                                                            data-w-system-config-address-countries="1"
+                                                                            data-input-id="<?= htmlspecialchars($addrInputId, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            data-seed="<?= htmlspecialchars($countrySeedJson, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            style="--w-gap:var(--weline-space-2);"
+                                                                        >
+                                                                            <input
+                                                                                type="hidden"
+                                                                                id="<?= htmlspecialchars($addrInputId, ENT_QUOTES, 'UTF-8') ?>"
+                                                                                name="values[<?= htmlspecialchars($fieldKey) ?>]"
+                                                                                value="<?= htmlspecialchars($effectiveValue) ?>"
+                                                                                <?= $fieldDisabled ? ' disabled' : '' ?>
+                                                                            >
+                                                                            <div class="w-stack" data-w-system-config-address-shell="1" style="--w-gap:var(--weline-space-2);">
+                                                                                <w:theme:address
+                                                                                    selection="multi"
+                                                                                    multi-levels="country"
+                                                                                    levels="country"
+                                                                                    catalog="global"
+                                                                                    searchable="true"
+                                                                                    cascade="false"
+                                                                                    street="false"
+                                                                                    code="<?= htmlspecialchars($addrCode, ENT_QUOTES, 'UTF-8') ?>"
+                                                                                />
+                                                                            </div>
+                                                                            <script>
+                                                                            (function () {
+                                                                                var wrap = document.currentScript && document.currentScript.closest
+                                                                                    ? document.currentScript.closest('[data-w-system-config-address-countries="1"]')
+                                                                                    : null;
+                                                                                if (!wrap) {
+                                                                                    return;
+                                                                                }
+                                                                                var root = wrap.querySelector('[data-w-address]');
+                                                                                if (!root) {
+                                                                                    return;
+                                                                                }
+                                                                                root.setAttribute('data-multi-seed', wrap.getAttribute('data-seed') || '[]');
+                                                                            })();
+                                                                            </script>
+                                                                            <div class="w-text" data-tone="muted" data-size="sm">
+                                                                                <lang>使用主题国家选择器搜索添加；保存为逗号分隔国家码</lang>
+                                                                            </div>
+                                                                        </div>
+                                                                    <?php elseif (in_array($fieldType, ['multiselect', 'select_multi'], true) && $options !== []): ?>
+                                                                        <?php
+                                                                        $ssId = 'wsc-ssm-' . substr(hash('sha256', $fieldKey), 0, 12);
+                                                                        $ssOptionsJson = $optionsToSearchSelectJson($options);
+                                                                        ?>
+                                                                        <w:theme:search-select
+                                                                            id="<?= htmlspecialchars($ssId, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            name="values[<?= htmlspecialchars($fieldKey) ?>]"
+                                                                            value="<?= htmlspecialchars($effectiveValue, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            options-json="<?= htmlspecialchars($ssOptionsJson, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            placeholder="<?= htmlspecialchars((string)__('搜索并多选...'), ENT_QUOTES, 'UTF-8') ?>"
+                                                                            clearable="true"
+                                                                            multiple="true"
+                                                                            disabled="<?= $isLocked ? 'true' : 'false' ?>"
+                                                                        />
+                                                                        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);">
+                                                                            <lang>可搜索多选；保存为逗号分隔值</lang>
+                                                                        </div>
+                                                                    <?php elseif ($fieldType === 'country_provider_map'): ?>
+                                                                        <?php
+                                                                        $providerOptions = $parseOptions((string)($field['value-options'] ?? $field['value_options'] ?? ''));
+                                                                        if ($providerOptions === []) {
+                                                                            $providerOptions = [
+                                                                                'tencent_captcha' => (string)__('腾讯云验证码'),
+                                                                                'google_enterprise' => 'Google reCAPTCHA Enterprise',
+                                                                                'local_image' => (string)__('本地图形验证码'),
+                                                                            ];
+                                                                        }
+                                                                        $mapRows = [];
+                                                                        foreach (preg_split('/\R/', $effectiveValue) ?: [] as $line) {
+                                                                            $line = trim((string)$line);
+                                                                            if ($line === '' || str_starts_with($line, '#') || !str_contains($line, '=')) {
+                                                                                continue;
+                                                                            }
+                                                                            [$countryCode, $providerCode] = array_map('trim', explode('=', $line, 2));
+                                                                            $countryCode = strtoupper($countryCode);
+                                                                            $providerCode = strtolower($providerCode);
+                                                                            if ($countryCode === '' || $providerCode === '') {
+                                                                                continue;
+                                                                            }
+                                                                            $mapRows[] = ['country' => $countryCode, 'provider' => $providerCode];
+                                                                        }
+                                                                        $mapInputId = 'wsc-map-' . substr(hash('sha256', $fieldKey), 0, 12);
+                                                                        if ($mapRows === []) {
+                                                                            $mapRows = [['country' => '', 'provider' => '']];
+                                                                        }
+                                                                        $providerOptionsJson = $optionsToSearchSelectJson($providerOptions);
+                                                                        $providerPlaceholder = (string)__('选择或搜索供应商...');
+                                                                        ?>
+                                                                        <div
+                                                                            class="w-stack"
+                                                                            data-w-system-config-country-provider-map="1"
+                                                                            data-input-id="<?= htmlspecialchars($mapInputId, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            data-provider-options-json="<?= htmlspecialchars($providerOptionsJson, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            data-provider-placeholder="<?= htmlspecialchars($providerPlaceholder, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            style="--w-gap:var(--weline-space-2);"
+                                                                        >
+                                                                            <textarea
+                                                                                id="<?= htmlspecialchars($mapInputId, ENT_QUOTES, 'UTF-8') ?>"
+                                                                                name="values[<?= htmlspecialchars($fieldKey) ?>]"
+                                                                                hidden
+                                                                                data-w-system-config-map-value="1"
+                                                                                <?= $fieldDisabled ? ' disabled' : '' ?>
+                                                                            ><?= htmlspecialchars($effectiveValue) ?></textarea>
+                                                                            <div class="w-stack w-system-config__map-rows" data-w-map-rows="1" style="--w-gap:var(--weline-space-2);">
+                                                                                <?php foreach ($mapRows as $rowIndex => $row): ?>
+                                                                                    <?php
+                                                                                    $mapCountry = (string)($row['country'] ?? '');
+                                                                                    $mapProvider = (string)($row['provider'] ?? '');
+                                                                                    $addrCode = 'wsc-map-' . substr(hash('sha256', $fieldKey . ':' . $rowIndex . ':' . $mapCountry), 0, 12);
+                                                                                    ?>
+                                                                                    <div class="w-system-config__map-row" data-w-map-row="1" data-w-system-config-address-shell="1">
+                                                                                        <?php
+                                                                                        $mapCountrySeed = [];
+                                                                                        if ($mapCountry !== '' && preg_match('/\A[A-Z]{2}\z/D', $mapCountry)) {
+                                                                                            $mapCountrySeed[] = [
+                                                                                                'country_code' => $mapCountry,
+                                                                                                'region_code' => $mapCountry,
+                                                                                                'region_type' => 'country',
+                                                                                                'region_name' => $mapCountry,
+                                                                                                'label' => $mapCountry,
+                                                                                            ];
+                                                                                        }
+                                                                                        $mapCountrySeedJson = (string)json_encode($mapCountrySeed, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+                                                                                        ?>
+                                                                                        <div
+                                                                                            class="w-system-config__map-country"
+                                                                                            data-w-map-country-host="1"
+                                                                                            data-initial-country="<?= htmlspecialchars($mapCountry, ENT_QUOTES, 'UTF-8') ?>"
+                                                                                            data-seed="<?= htmlspecialchars($mapCountrySeedJson, ENT_QUOTES, 'UTF-8') ?>"
+                                                                                        >
+                                                                                            <input type="hidden" data-w-map-country="1" value="<?= htmlspecialchars($mapCountry, ENT_QUOTES, 'UTF-8') ?>">
+                                                                                            <w:theme:address
+                                                                                                selection="multi"
+                                                                                                multi-levels="country"
+                                                                                                levels="country"
+                                                                                                catalog="global"
+                                                                                                searchable="true"
+                                                                                                cascade="false"
+                                                                                                street="false"
+                                                                                                code="<?= htmlspecialchars($addrCode, ENT_QUOTES, 'UTF-8') ?>"
+                                                                                            />
+                                                                                            <script>
+                                                                                            (function () {
+                                                                                                var host = document.currentScript && document.currentScript.closest
+                                                                                                    ? document.currentScript.closest('[data-w-map-country-host="1"]')
+                                                                                                    : null;
+                                                                                                if (!host) { return; }
+                                                                                                var root = host.querySelector('[data-w-address]');
+                                                                                                if (!root) { return; }
+                                                                                                root.setAttribute('data-multi-seed', host.getAttribute('data-seed') || '[]');
+                                                                                            })();
+                                                                                            </script>
+                                                                                        </div>
+                                                                                        <div
+                                                                                            class="w-system-config__map-provider"
+                                                                                            data-w-map-provider-host="1"
+                                                                                            data-initial-provider="<?= htmlspecialchars($mapProvider, ENT_QUOTES, 'UTF-8') ?>"
+                                                                                        ></div>
+                                                                                        <button type="button" class="w-btn w-system-config__map-remove" data-tone="neutral" data-size="sm" data-w-map-remove="1" <?= $fieldDisabled ? ' disabled' : '' ?>><lang>删除</lang></button>
+                                                                                    </div>
+                                                                                <?php endforeach; ?>
+                                                                            </div>
+                                                                            <?php if (!$fieldDisabled): ?>
+                                                                                <div class="w-system-config__map-actions">
+                                                                                    <button type="button" class="w-btn" data-tone="primary" data-size="sm" data-w-map-add="1"><lang>添加覆盖</lang></button>
+                                                                                </div>
+                                                                            <?php endif; ?>
+                                                                            <?php /* 勿用 HTML <template>：Framework Taglib 会当成 include 路径 */ ?>
+                                                                            <div hidden data-w-map-row-template="1">
+                                                                                <div class="w-system-config__map-row" data-w-map-row="1" data-w-system-config-address-shell="1">
+                                                                                    <div class="w-system-config__map-country" data-w-map-country-host="1" data-initial-country="">
+                                                                                        <input type="hidden" data-w-map-country="1" value="">
+                                                                                        <div data-w-map-country-slot="1"></div>
+                                                                                    </div>
+                                                                                    <div
+                                                                                        class="w-system-config__map-provider"
+                                                                                        data-w-map-provider-host="1"
+                                                                                        data-initial-provider=""
+                                                                                    ></div>
+                                                                                    <button type="button" class="w-btn w-system-config__map-remove" data-tone="neutral" data-size="sm" data-w-map-remove="1"><lang>删除</lang></button>
+                                                                                </div>
+                                                                            </div>
+                                                                            <div class="w-text" data-tone="muted" data-size="sm">
+                                                                                <lang>可搜索添加国家（同行多国共享供应商）；或点「添加覆盖」分多行。须国家与供应商齐套后再保存</lang>
+                                                                            </div>
+                                                                        </div>
                                                                     <?php elseif (in_array($fieldType, ['switch', 'checkbox', 'boolean'], true)): ?>
                                                                         <input type="hidden" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="0">
                                                                         <label class="w-switch w-system-config__switch">
                                                                             <input type="checkbox" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="1" <?= in_array($effectiveValue, ['1', 'true', 'on', 'yes'], true) ? 'checked' : '' ?><?= $fieldDisabled ? ' disabled' : '' ?>>
                                                                         </label>
+                                                                    <?php elseif ($fieldType === 'import_file'): ?>
+                                                                        <?php
+                                                                        $importAccept = trim((string)($field['accept'] ?? '.json,application/json'));
+                                                                        $importInputName = $fieldKey === 'customer/social_login/google/oauth_client_json'
+                                                                            ? 'google_oauth_client_json_file'
+                                                                            : ('import_files[' . $fieldKey . ']');
+                                                                        ?>
+                                                                        <input
+                                                                            class="w-input"
+                                                                            type="file"
+                                                                            name="<?= htmlspecialchars($importInputName, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            accept="<?= htmlspecialchars($importAccept, ENT_QUOTES, 'UTF-8') ?>"
+                                                                            data-size="sm"
+                                                                            data-w-google-oauth-json-file="<?= $fieldKey === 'customer/social_login/google/oauth_client_json' ? '1' : '0' ?>"
+                                                                            data-testid="<?= $fieldKey === 'customer/social_login/google/oauth_client_json' ? 'google-oauth-json-file' : 'system-config-import-file' ?>"
+                                                                            <?= $fieldDisabled ? ' disabled' : '' ?>
+                                                                        >
+                                                                        <div class="w-text" data-tone="muted" data-size="sm" style="--w-mt:var(--weline-space-1);" data-w-google-oauth-json-status>
+                                                                            <lang>选择后立即解析填入下方 Client ID / Secret；文件内容不落库，仍需点保存</lang>
+                                                                        </div>
                                                                     <?php elseif ($fieldType === 'textarea'): ?>
                                                                         <textarea class="w-textarea" name="values[<?= htmlspecialchars($fieldKey) ?>]" rows="2" data-size="sm"<?= $fieldDisabled ? ' disabled' : '' ?>><?= htmlspecialchars($effectiveValue) ?></textarea>
                                                                     <?php elseif ($fieldType === 'number'): ?>
                                                                         <input class="w-input" type="number" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="<?= htmlspecialchars($effectiveValue) ?>" data-size="sm"<?= $fieldDisabled ? ' disabled' : '' ?>>
                                                                     <?php elseif (in_array($fieldType, ['password', 'secret'], true) || $isSensitiveField): ?>
-                                                                        <input class="w-input" type="password" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="<?= htmlspecialchars($effectiveValue) ?>" data-size="sm" autocomplete="off"<?= $fieldDisabled ? ' disabled' : '' ?>>
+                                                                        <input class="w-input" type="password" name="values[<?= htmlspecialchars($fieldKey) ?>]" value="<?= htmlspecialchars($sensitiveInputValue) ?>" placeholder="<?= htmlspecialchars($sensitivePlaceholder, ENT_QUOTES, 'UTF-8') ?>" data-size="sm" autocomplete="off" data-lpignore="true" data-1p-ignore="true" data-form-type="other" data-w-system-config-sensitive="1"<?= $fieldDisabled ? ' disabled' : '' ?>>
                                                                     <?php elseif (in_array($fieldType, ['image', 'file'], true)): ?>
                                                                         <?php
                                                                         $wscImageInputId = 'wsc-cfg-' . substr(hash('sha256', $fieldKey), 0, 16);
@@ -1213,9 +1587,13 @@ $flashToastFn = match ($flashTone) {
                                                                     <?php endif; ?>
                                                                 </td>
                                                                 <td class="w-system-config__inherit-cell">
+                                                                    <?php if ($isImportFileField): ?>
+                                                                        <span class="w-text" data-tone="muted" data-size="sm">—</span>
+                                                                    <?php else: ?>
                                                                     <div class="w-check">
                                                                         <input type="checkbox" name="inherit_keys[]" value="<?= htmlspecialchars($fieldKey) ?>" data-w-system-config-inherit-toggle="1"<?= $inheritChecked ? ' checked' : '' ?><?= $inheritDisabled ? ' disabled' : '' ?>>
                                                                     </div>
+                                                                    <?php endif; ?>
                                                                 </td>
                                                             </tr>
                                                         <?php endforeach; ?>
@@ -1228,7 +1606,7 @@ $flashToastFn = match ($flashTone) {
                                         </div>
                                     <?php endforeach; ?>
 
-                                            <?php if (!empty($template['fields']) && !$scopeReadOnly): ?>
+                                            <?php if (!empty($template['fields'])): ?>
                                             <?php
                                             $templateHasSensitive = false;
                                             foreach ($template['fields'] as $tf) {
@@ -1238,23 +1616,48 @@ $flashToastFn = match ($flashTone) {
                                                 }
                                             }
                                             ?>
-                                            <div class="w-system-config__form-actions" style="--w-mt:var(--weline-space-4);">
-                                                <div class="w-field">
-                                                    <div class="w-field__control">
-                                                        <input class="w-input" name="reason" placeholder="<?= __('保存原因') ?>" data-size="sm">
-                                                    </div>
-                                                </div>
-                                                <?php if ($templateHasSensitive): ?>
+                                            <div class="w-system-config__form-actions w-system-config__form-actions--dock" data-w-system-config-save-dock="1" style="--w-mt:var(--weline-space-4);">
+                                                <div class="w-system-config__form-actions-main">
                                                     <div class="w-field">
                                                         <div class="w-field__control">
-                                                            <input class="w-input" type="password" name="reauth_password" autocomplete="current-password" placeholder="<?= __('敏感配置：重新输入登录密码') ?>" data-size="sm">
+                                                            <input class="w-input" name="reason" placeholder="<?= __('保存原因') ?>" data-size="sm" data-testid="system-config-save-reason">
                                                         </div>
                                                     </div>
+                                                    <?php if ($templateHasSensitive): ?>
+                                                        <div class="w-field w-system-config__reauth-field" data-w-system-config-reauth-panel="1" hidden>
+                                                            <label class="w-label w-visually-hidden" for="wsc-reauth-password-<?= htmlspecialchars((string)($template['code'] ?? 'cfg'), ENT_QUOTES, 'UTF-8') ?>">
+                                                                <lang>敏感配置确认密码</lang>
+                                                            </label>
+                                                            <div class="w-field__control">
+                                                                <input
+                                                                    id="wsc-reauth-password-<?= htmlspecialchars((string)($template['code'] ?? 'cfg'), ENT_QUOTES, 'UTF-8') ?>"
+                                                                    class="w-input"
+                                                                    type="password"
+                                                                    name="reauth_password"
+                                                                    autocomplete="off"
+                                                                    disabled
+                                                                    placeholder="<?= __('修改敏感项必填：当前后台登录密码（不是 API Key）') ?>"
+                                                                    data-size="sm"
+                                                                    data-testid="system-config-reauth-password"
+                                                                    data-w-system-config-reauth="1"
+                                                                    data-lpignore="true"
+                                                                    data-1p-ignore="true"
+                                                                    data-form-type="other"
+                                                                >
+                                                            </div>
+                                                        </div>
+                                                    <?php endif; ?>
+                                                    <button class="w-button" type="submit" data-tone="primary" data-size="sm" data-w-system-config-save-submit="1">
+                                                        <w:icon name="save" size="sm"></w:icon><lang>保存配置</lang>
+                                                    </button>
+                                                </div>
+                                                <?php if ($templateHasSensitive): ?>
+                                                    <div class="w-text w-system-config__form-actions-hint" data-tone="muted" data-size="sm" data-w-system-config-reauth-hint="1" hidden>
+                                                        <lang>修改密码类敏感配置时，须填写当前登录管理员的后台密码再保存（不是 Google API Key / Client Secret）</lang>
+                                                    </div>
                                                 <?php endif; ?>
-                                                <button class="w-button" type="submit" data-tone="primary" data-size="sm">
-                                                    <w:icon name="save" size="sm"></w:icon><lang>保存配置</lang>
-                                                </button>
                                             </div>
+                                            <div class="w-system-config__form-actions-spacer" aria-hidden="true"></div>
                                         <?php endif; ?>
                                     </w:form>
                                 </div>

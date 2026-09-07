@@ -184,6 +184,8 @@ app/code/{Vendor}/{Module}/extends/module/Weline_SystemConfig/Config/{area}/{cod
   - 字段：完整 field key，例如 `payment/method/paypal/sandbox_credentials_source`
   - 适配器：`adapter:{code}`，例如 `adapter:paypal.sandbox.authorize`（对应 `<w:config:adapter code="…">`）
 - `guide_locate`: 当前要定位的 key（多目标时用于标记「当前定位」；缺省为第一个 key）
+
+后台顶栏万能搜索（`<w:search area="backend" />`）通过本模块 `SystemConfigSearchProvider`（`Searcher`）命中配置字段；点击结果打开上述深链并定位字段。索引构建见 `SystemConfigNavSearchIndexService`。
 - `guide_title`: 顶部引导卡片标题
 - `guide_summary`: 顶部引导卡片说明
 - `guide_step`: 向导步骤编号或短标签

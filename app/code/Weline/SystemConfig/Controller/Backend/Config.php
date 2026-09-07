@@ -89,12 +89,7 @@ class Config extends BackendController
             guideParams: $guideParams,
         );
         if ($this->configCenterShareQueryNeedsSync($canonicalQuery)) {
-            return $this->redirect(
-                $this->request->getUrlBuilder()->getBackendUrl(
-                    'weline_systemconfig/backend/config',
-                    $canonicalQuery,
-                ),
-            );
+            return $this->redirect('weline_systemconfig/backend/config', $canonicalQuery);
         }
 
         $modules = $templateService->getModules($selectedArea, $selectedSearch);
@@ -123,7 +118,7 @@ class Config extends BackendController
         $this->assign('scope_catalog', $targetScopeService->catalogOptions());
         $this->assign('locale', $normalizedLocale);
         $this->assign('fallback_scopes', $systemConfig->getFallbackScopes($normalizedScope));
-        $this->assign('post_url', $this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config'));
+        $this->assign('post_url', $this->request->getUrlBuilder()->getBackendUrlPath('weline_systemconfig/backend/config'));
         $this->assign('guide_params', $guideParams);
         $this->assign('guide_key', (string)($guideParams['guide_key'] ?? ''));
         $this->assign('guide_keys', $guideKeys);
@@ -161,7 +156,7 @@ class Config extends BackendController
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError(__('跨站请求被拒绝，配置未写入。'));
             $this->request->getResponse()->setCode(403);
-            return $this->redirect($this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config'));
+            return $this->redirect('weline_systemconfig/backend/config');
         }
 
         $action = trim((string)$this->request->getPost('form_action', 'save'));
@@ -183,12 +178,12 @@ class Config extends BackendController
             ], allowSessionFallback: false);
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError(__('TargetScope 无效，配置未写入。'));
-            return $this->redirect($this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config', array_merge([
+            return $this->redirect('weline_systemconfig/backend/config', array_merge([
                 'module' => $module,
                 'area' => $area,
                 'locale' => $locale,
                 'search' => $search,
-            ], $guideParams)));
+            ], $guideParams));
         }
         $scope = $target['storage_scope'];
         $targetScopeService->rememberSession($target);
@@ -240,37 +235,64 @@ class Config extends BackendController
                 $inheritKeys = $this->request->getPost('inherit_keys', []);
                 $baseVersions = $this->request->getPost('base_versions', []);
                 $values = is_array($values) ? $values : [];
-                $reauthError = $this->assertReauthIfSensitive($module, $area, $code, $values, $configCenterService);
-                if ($reauthError !== null) {
-                    $this->getMessageManager()->addError($reauthError);
-                    $this->request->getResponse()->setCode(403);
+                $inheritKeys = array_values(array_map('strval', is_array($inheritKeys) ? $inheritKeys : []));
+                try {
+                    $googleJsonImport = $this->expandGoogleOAuthClientJsonImport($values, $inheritKeys);
+                } catch (\InvalidArgumentException $uploadError) {
+                    $googleJsonImport = [
+                        'values' => $values,
+                        'inherit_keys' => $inheritKeys,
+                        'imported' => false,
+                        'error' => $uploadError->getMessage(),
+                    ];
+                }
+                $values = $googleJsonImport['values'];
+                $inheritKeys = $googleJsonImport['inherit_keys'];
+                if ($googleJsonImport['error'] !== null) {
+                    $this->getMessageManager()->addError(__(
+                        'Google OAuth JSON 无法识别：%{1}',
+                        [$googleJsonImport['error']],
+                    ));
+                    $this->request->getResponse()->setCode(400);
                 } else {
-                    $this->objectAuthorizationGuard()->requireSubmitForQuery(
-                        ObjectAction::UPDATE,
-                        $target['identity'],
-                        $this->expectedGrantVersion(),
-                    );
-                    $result = $configCenterService->saveTemplateConfig(
-                        module: $module,
-                        area: $area,
-                        code: $code,
-                        values: $values,
-                        inheritKeys: array_values(array_map('strval', is_array($inheritKeys) ? $inheritKeys : [])),
-                        baseVersions: is_array($baseVersions) ? $baseVersions : [],
-                        scope: $scope,
-                        locale: $locale,
-                        options: array_merge($this->actorOptions(), [
-                            'scope_identity' => $target['identity'],
-                        ])
-                    );
-                    if (!empty($result['success'])) {
-                        $this->getMessageManager()->addSuccess(__('配置已保存，版本批次：%{1}', (string)($result['version_id'] ?? '')));
+                    $reauthError = $this->assertReauthIfSensitive($module, $area, $code, $values, $configCenterService);
+                    if ($reauthError !== null) {
+                        $this->getMessageManager()->addError($reauthError);
+                        $this->request->getResponse()->setCode(403);
                     } else {
-                        $status = (string)($result['status'] ?? '');
-                        if ($status === 'conflict') {
-                            $this->getMessageManager()->addError(__('版本冲突，请刷新后重试。'));
+                        $this->objectAuthorizationGuard()->requireSubmitForQuery(
+                            ObjectAction::UPDATE,
+                            $target['identity'],
+                            $this->expectedGrantVersion(),
+                        );
+                        $result = $configCenterService->saveTemplateConfig(
+                            module: $module,
+                            area: $area,
+                            code: $code,
+                            values: $values,
+                            inheritKeys: $inheritKeys,
+                            baseVersions: is_array($baseVersions) ? $baseVersions : [],
+                            scope: $scope,
+                            locale: $locale,
+                            options: array_merge($this->actorOptions(), [
+                                'scope_identity' => $target['identity'],
+                            ])
+                        );
+                        if (!empty($result['success'])) {
+                            $message = __('配置已保存，版本批次：%{1}', (string)($result['version_id'] ?? ''));
+                            if ($googleJsonImport['imported']) {
+                                $message = __('已从 Google OAuth JSON 导入 Client ID/Secret，并保存配置（版本批次：%{1}）', [
+                                    (string)($result['version_id'] ?? ''),
+                                ]);
+                            }
+                            $this->getMessageManager()->addSuccess($message);
                         } else {
-                            $this->getMessageManager()->addError((string)($result['message'] ?? __('配置保存失败，当前配置未改变。')));
+                            $status = (string)($result['status'] ?? '');
+                            if ($status === 'conflict') {
+                                $this->getMessageManager()->addError(__('版本冲突，请刷新后重试。'));
+                            } else {
+                                $this->getMessageManager()->addError((string)($result['message'] ?? __('配置保存失败，当前配置未改变。')));
+                            }
                         }
                     }
                 }
@@ -282,7 +304,7 @@ class Config extends BackendController
             $this->getMessageManager()->addError($throwable->getMessage());
         }
 
-        $this->redirect($this->request->getUrlBuilder()->getBackendUrl('weline_systemconfig/backend/config', array_merge([
+        $this->redirect('weline_systemconfig/backend/config', array_merge([
             'module' => $module,
             'area' => $area,
             'scope' => $scope,
@@ -292,7 +314,7 @@ class Config extends BackendController
             'channel_code' => $target['channel_code'],
             'locale' => $locale,
             'search' => $search,
-        ], $guideParams)));
+        ], $guideParams));
 
         return '';
     }
@@ -385,6 +407,10 @@ class Config extends BackendController
                             || in_array($type, ['password', 'secret', 'encrypted'], true)
                             || in_array($valueType, ['secret', 'encrypted', 'secret_ref'], true);
                         if ($isSensitive) {
+                            $posted = $values[$key] ?? null;
+                            if ($this->isSensitiveUnchangedPlaceholder($posted)) {
+                                continue;
+                            }
                             $sensitiveKeys[] = $key;
                         }
                     }
@@ -394,22 +420,70 @@ class Config extends BackendController
         if ($sensitiveKeys === []) {
             return null;
         }
+        // Must match Admin Login: raw password string (no trim). Leading/trailing spaces are significant.
         $password = (string)$this->request->getPost('reauth_password', '');
         if ($password === '') {
             return (string)__('保存敏感配置需要重新输入登录密码。');
         }
         $backendUser = $this->session->getUser();
-        $userId = $backendUser && \method_exists($backendUser, 'getId') ? (int)$backendUser->getId() : 0;
+        $userId = 0;
+        $username = '';
+        if ($backendUser) {
+            if (\method_exists($backendUser, 'getAuthIdentifier')) {
+                $userId = (int)$backendUser->getAuthIdentifier();
+            } elseif (\method_exists($backendUser, 'getId')) {
+                $userId = (int)$backendUser->getId();
+            }
+            if (\method_exists($backendUser, 'getUsername')) {
+                $username = \trim((string)$backendUser->getUsername());
+            }
+        }
         if ($userId <= 0) {
             return (string)__('无法验证当前管理员身份。');
         }
         /** @var BackendInteractiveAuthInterface $auth */
         $auth = ObjectManager::getInstance(BackendInteractiveAuthInterface::class);
-        if (!$auth->verifyPassword($userId, $password)) {
-            return (string)__('密码验证失败，敏感配置未写入。');
+        $ok = $auth->verifyPassword($userId, $password);
+        if (!$ok) {
+            $leadingWs = $password !== '' && \preg_match('/^\s/u', $password) === 1;
+            $trailingWs = $password !== '' && \preg_match('/\s$/u', $password) === 1;
+            @\file_put_contents(
+                BP . '/var/log/systemconfig-reauth.log',
+                \date('c')
+                . ' user_id=' . $userId
+                . ' username=' . $username
+                . ' password_len=' . \strlen($password)
+                . ' leading_ws=' . ($leadingWs ? '1' : '0')
+                . ' trailing_ws=' . ($trailingWs ? '1' : '0')
+                . ' sensitive_keys=' . \implode(',', $sensitiveKeys)
+                . ' verify=0'
+                . "\n",
+                \FILE_APPEND
+            );
+            if ($username !== '') {
+                return (string)__('密码验证失败（当前账号：%{1}）。二次校验与后台登录使用同一套 password_verify；请确认输入的就是该账号密码。若登录页用同一密码也无法登录，请重置密码后再保存。', [$username]);
+            }
+
+            return (string)__('密码验证失败，敏感配置未写入。二次校验与后台登录相同；若登录页也无法用该密码登录，请重置后再试。');
         }
 
         return null;
+    }
+
+    private function isSensitiveUnchangedPlaceholder(mixed $value): bool
+    {
+        if (!\is_scalar($value) && $value !== null) {
+            return false;
+        }
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return true;
+        }
+        if ($raw === '***' || $raw === '********') {
+            return true;
+        }
+
+        return (bool)preg_match('/^\*+$/', $raw);
     }
 
     /**
@@ -546,6 +620,14 @@ class Config extends BackendController
             if ($this->request->hasGet($key)) {
                 $input[$key] = (string)$this->request->getGet($key, '');
             }
+        }
+
+        // 显式 Global storage scope：即使空 website_code 被路由丢掉，也不得回落到 session 网站层。
+        $explicitScope = strtolower(trim((string)($input['target_scope'] ?? $input['scope'] ?? '')));
+        if ($explicitScope === SystemConfig::SCOPE_GLOBAL) {
+            $input['website_code'] = '';
+            $input['store_code'] = '';
+            $input['channel_code'] = '';
         }
 
         return $input;
@@ -887,6 +969,97 @@ class Config extends BackendController
         }
 
         return $url;
+    }
+
+    /**
+     * Soft-expand Google Cloud client_secret_*.json into client_id/secret when Customer module is present.
+     * Prefers multipart upload; never persists the JSON body.
+     *
+     * @param array<string,mixed> $values
+     * @param list<string> $inheritKeys
+     * @return array{values:array<string,mixed>,inherit_keys:list<string>,imported:bool,error:?string}
+     */
+    private function expandGoogleOAuthClientJsonImport(array $values, array $inheritKeys): array
+    {
+        $class = '\\Weline\\Customer\\Service\\SocialLogin\\GoogleOAuthClientJsonImporter';
+        if (!\class_exists($class)) {
+            return [
+                'values' => $values,
+                'inherit_keys' => $inheritKeys,
+                'imported' => false,
+                'error' => null,
+            ];
+        }
+
+        $uploadJson = $this->readUploadedGoogleOAuthClientJson($class::UPLOAD_FILE_INPUT);
+        $relevant = $uploadJson !== null
+            || \array_key_exists($class::JSON_FIELD_KEY, $values)
+            || \array_key_exists($class::CLIENT_ID_KEY, $values)
+            || \array_key_exists($class::CLIENT_SECRET_KEY, $values)
+            || \in_array($class::JSON_FIELD_KEY, $inheritKeys, true)
+            || \in_array($class::CLIENT_ID_KEY, $inheritKeys, true)
+            || \in_array($class::CLIENT_SECRET_KEY, $inheritKeys, true);
+        if (!$relevant) {
+            return [
+                'values' => $values,
+                'inherit_keys' => $inheritKeys,
+                'imported' => false,
+                'error' => null,
+            ];
+        }
+
+        if ($uploadJson !== null) {
+            $values[$class::JSON_FIELD_KEY] = $uploadJson;
+        } else {
+            // Never accept pasted JSON as a persisted config value.
+            unset($values[$class::JSON_FIELD_KEY]);
+        }
+
+        /** @var array{values:array<string,mixed>,inherit_keys:list<string>,imported:bool,error:?string} $result */
+        $result = $class::expandPostedValues($values, $inheritKeys);
+
+        return $result;
+    }
+
+    private function readUploadedGoogleOAuthClientJson(string $inputName): ?string
+    {
+        $upload = $this->request->getFile($inputName);
+        if (!\is_array($upload)) {
+            $all = $this->request->getFiles();
+            $upload = \is_array($all[$inputName] ?? null) ? $all[$inputName] : null;
+        }
+        if (!\is_array($upload)) {
+            return null;
+        }
+        $error = (int)($upload['error'] ?? \UPLOAD_ERR_NO_FILE);
+        if ($error === \UPLOAD_ERR_NO_FILE) {
+            return null;
+        }
+        if ($error !== \UPLOAD_ERR_OK) {
+            throw new \InvalidArgumentException('上传失败');
+        }
+        $tmp = (string)($upload['tmp_name'] ?? '');
+        $size = (int)($upload['size'] ?? 0);
+        $name = (string)($upload['name'] ?? '');
+        $tmpReal = $tmp !== '' && \is_file($tmp) ? (\realpath($tmp) ?: $tmp) : '';
+        $tmpOk = $tmpReal !== ''
+            && \is_readable($tmpReal)
+            && (
+                \is_uploaded_file($tmp)
+                || \str_starts_with($tmpReal, \rtrim((string)\sys_get_temp_dir(), DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR)
+            );
+        if (!$tmpOk || $size <= 0 || $size > 200000) {
+            throw new \InvalidArgumentException('上传文件无效');
+        }
+        if ($name !== '' && !\str_ends_with(\strtolower($name), '.json')) {
+            throw new \InvalidArgumentException('请上传 .json 文件');
+        }
+        $raw = \file_get_contents($tmpReal);
+        if (!\is_string($raw) || \trim($raw) === '') {
+            throw new \InvalidArgumentException('上传文件为空');
+        }
+
+        return $raw;
     }
 
     /**
