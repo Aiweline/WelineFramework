@@ -22,11 +22,11 @@ final class MenuRenderServiceComparableUrlTest extends TestCase
 
         $withLocale = $method->invoke(
             $service,
-            'https://p05113ef3.weline.test:9555/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/zh_Hans_CN/eav/backend/manager'
+            'https://p05113ef3.test.weline.com:9555/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/zh_Hans_CN/eav/backend/manager'
         );
         $withoutLocale = $method->invoke(
             $service,
-            'https://p05113ef3.weline.test:9555/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/eav/backend/manager'
+            'https://p05113ef3.test.weline.com:9555/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/eav/backend/manager'
         );
 
         self::assertSame('eav/backend/manager', $withLocale);
