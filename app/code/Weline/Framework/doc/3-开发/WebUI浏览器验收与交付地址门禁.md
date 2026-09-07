@@ -34,12 +34,29 @@
 
 1. **先有用例**：URL、步骤、期望结果（来自 `doc/需求.md` 或 TaskContract）；禁止先写代码后补「随便点一下」。
 2. **起真实 WLS**（测试实例），确认 Worker/静态资源已加载本次改动。
-3. **打开当前宿主可用的真实 Browser**，按用例逐步操作（点击、填写、提交、看 Toast/跳转）。
+3. **打开当前宿主可用的真实 Browser，且打开即禁用 HTTP 缓存（硬，`browser_cache_disabled_on_open`）**，再按用例逐步操作（点击、填写、提交、看 Toast/跳转）。
 4. **禁止替代物**：
    - 禁止只用 `curl` / `http:request` 宣称页面可用
    - 禁止只用 PHPUnit / 契约测试宣称 UI 完成
    - 禁止「代码已改，请用户自己打开看」代替 AI 自测（宿主无 Browser 时除外，须明确标注未完成）
+   - 禁止带着默认磁盘缓存验收本回合改过的 CSS/JS/HTML（易误判「没改到」）
 5. 未跑通用例时，汇报只能写：**「代码已改，WebUI 验收未完成」**，禁止写「已完成 / 已交付」。
+
+### 打开即禁用缓存（WB-CACHE，硬）
+
+每次**打开或导航**验收页之前必须禁用该会话的 HTTP 缓存；不要求清空整个浏览器用户配置缓存（宿主常禁止）。
+
+| 宿主示例 | 推荐动作（按序） |
+|----------|------------------|
+| Cursor ide-browser | `Network.enable` → `Network.setCacheDisabled({cacheDisabled:true})` → `browser_navigate`；若 `setCacheDisabled` 被拒，对该次加载 `Page.reload({ignoreCache:true})` 并注明降级 |
+| Playwright / Puppeteer / 其它 CDP | 等价 CDP `Network.setCacheDisabled`，或会话级禁用缓存后再导航 |
+| 无 CDP 能力 | 至少对验收 URL 使用强制绕过缓存的刷新；仍须在日志注明限制 |
+
+打开顺序（机器契约 `closeout_delivery_reminder.browser_open_order`）：
+
+```text
+disable_http_cache_for_session → navigate_or_reload_ignore_cache → run_wb_op_and_optional_wb_vis
+```
 
 ## 门禁 B：视觉证据（WB-VIS）
 
@@ -52,13 +69,24 @@
 
 ## 门禁 C：交付地址汇报（每次功能完成必报）
 
+### 本机默认 Host（硬）
+
+| 项 | 规则 |
+|---|---|
+| **默认主 Host** | `{project_hash}.test.weline.com`（例：`p05113ef3.test.weline.com`） |
+| **主链形态** | `http://{project_hash}.test.weline.com:{port}/path`（本机常为 http，勿伪造 https） |
+| **禁止作主验收** | `*.weline.test`（例：`p05113ef3.weline.test`）——即使 `/etc/hosts` 也解析，也不得作为交付主链 |
+| **回退** | 仅当不存在可用的 `*.test.weline.com` 时，才用 `127.0.0.1` / `localhost` |
+| **MCP 契约** | `agent_guidance.feature_delivery_urls`（含 `default_local_host` / `forbidden_primary_hosts`）、`closeout_delivery_reminder`、`hard_constraints.feature_delivery_urls` |
+| **技能 / 规则** | Cursor 技能 `local-browser-urls`；仓库 `.cursor/rules/local-browser-urls.mdc` |
+
 面向用户的**最终/阶段性交付回复末尾**必须有独立小节：
 
 ```markdown
 ## 交付地址
 
-- [后台系统配置](http://实例Host:端口/后台前缀/system-config/...)
-- [前台某某页](http://实例Host:端口/path)
+- [后台系统配置](http://p05113ef3.test.weline.com:9555/后台前缀/system-config/...)
+- [前台某某页](http://p05113ef3.test.weline.com:9555/path)
 - API / Query：`w_query ...` 或 N/A
 ```
 
@@ -68,6 +96,7 @@
 |----|------|
 | 小节标题 | `交付地址`（或 `Delivery URLs`） |
 | 主验收链接 | 可点击 Markdown `[名称](http(s)://完整URL)`（本机 WLS 常为 `http://`） |
+| 默认 Host | `{project_hash}.test.weline.com`（例：`p05113ef3.test.weline.com`）；**禁止**把 `*.weline.test` 当作主验收 Host |
 | 探活 | 交付前对字面 URL `curl` 探活；失败不得交死链 |
 | 覆盖面 | 本功能涉及的全部前台页、后台页；有 API 一并列出 |
 | 无 UI | 写 `N/A` + CLI/接口入口，**禁止省略整节** |
@@ -77,7 +106,8 @@
 - 省略「交付地址」小节
 - 臆造路由 / Host
 - 主链用仅某客户端可点的伪协议（如 `command:simpleBrowser.api.open`）——主链用标准 `http(s)://…` Markdown 链接；宿主 opener 仅可作辅链
-- 有可用 `*.weline.test` Host 时强行改成 `127.0.0.1`
+- 有可用 `*.test.weline.com` Host 时强行改成 `127.0.0.1`
+- 有可用 `*.test.weline.com` 时把主验收写成 `*.weline.test`（即使 `/etc/hosts` 也解析后者）
 - 仅变色「打开」文字、无 Markdown 链接语法
 - 把源码路径拼成假 URL（如 `…/app/code/.../*.php`）
 
@@ -88,11 +118,23 @@
 ```text
 1. 用例已定义（URL + 步骤 + 期望）
 2. 代码 / Schema / i18n:collect / setup:upgrade 等前置完成
-3. AI 用当前宿主真实 Browser 跑完 WB-OP（必要时 WB-VIS 截图）
+3. AI 用当前宿主真实 Browser：**先禁用 HTTP 缓存**，再跑完 WB-OP（必要时 WB-VIS 截图）
 4. curl 探活交付 URL
 5. 用户可见回复：结论 + 证据摘要 + 末尾「交付地址」
-6. 开发日志写入：用例结果、截图路径、URL 清单、所用 Browser 工具名
+6. **立即关闭**本回合打开的全部验收 Browser 标签/webview（硬：`browser_release_after_delivery`）
+7. 开发日志写入：用例结果、截图路径、URL 清单、所用 Browser 工具名、缓存禁用方式、已关闭验收 Browser
 ```
+
+## 门禁 D：汇报交付地址后关闭 Browser（WB-REL，硬）
+
+顺序固定：**先写「交付地址」，再关 Browser**。禁止测完不关、禁止把空转标签留给用户手动清。
+
+1. 凡本回合为验收打开过宿主真实 Browser（含 Cursor Glass / Simple Browser / ide-browser、Playwright 会话等），在面向用户的「交付地址」小节写出之后，**必须立即关闭**这些标签/会话。
+2. Cursor：先 `browser_lock` unlock（若已锁），再对验收标签逐个 `browser_tabs` `action=close`；不得只 unlock 不关。
+3. 其它宿主：结束/关闭等价操作员浏览器会话，不留后台空转进程。
+4. **例外**：仅当用户**明确**要求保留标签时可不关，并在汇报中注明「按用户要求保留 Browser」。
+5. 本回合从未打开过 Browser（纯逻辑 / N/A）：本门禁记 `N/A`。
+6. 违规形态：交付后仍挂着 Browser 标签导致 Renderer 空转占 CPU——视为收口未完成。
 
 ## 会话纠正清单
 
@@ -100,9 +142,12 @@
 |------|----------|
 | 「代码改完了」无 Browser | 补跑 WB-OP；未跑则改口为验收未完成 |
 | 只 curl 200 就交 UI | curl 只探活；交互必须真实 Browser |
+| 带着默认缓存验本回合 CSS/JS | 打开前 `setCacheDisabled` 或 `ignoreCache` 重载 |
 | 交付不写地址 | 末尾补「交付地址」小节 |
-| 让用户自己找路由 | AI 列出探活过的完整 https 链接 |
+| 让用户自己找路由 | AI 列出探活过的完整 http(s) 链接 |
+| 主 Host 写成 `*.weline.test` | 改用 `{project_hash}.test.weline.com` |
 | 规范写死某一 IDE Browser | 改用「宿主可用真实 Browser」表述 |
+| 写完交付地址仍不关 Browser | 立即 unlock + close 本回合验收标签；用户未要求保留则不得留下 |
 
 ## 相关
 

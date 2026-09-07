@@ -220,7 +220,7 @@ WLS 禁止在 Worker READY 或普通请求阶段加载某个 locale 的全模块
 
 ## 2026-07-12 macOS Direct 项目 Host 与业务预热解耦
 
-环境：macOS、PHP 8.4.22、4 Direct Worker、`shared_fd + ext-event + stream TLS`，专用端口 9855，目标 Host `p05113ef3.weline.test`。默认 warmup 路径从硬编码的演示商品/分类列表收敛为仅 `/`；业务模块通过 `etc/module.php` 声明的 `ViewWarmupContributionProviderInterface` 编译 Provider 提交 `fpcPaths`，或使用显式 `wls.worker.fpc_warmup_paths` 配置。Worker 启动热路径不再通过运行期 warmup event 发现模块路由。
+环境：macOS、PHP 8.4.22、4 Direct Worker、`shared_fd + ext-event + stream TLS`，专用端口 9855，目标 Host `p05113ef3.test.weline.com`。默认 warmup 路径从硬编码的演示商品/分类列表收敛为仅 `/`；业务模块通过 `etc/module.php` 声明的 `ViewWarmupContributionProviderInterface` 编译 Provider 提交 `fpcPaths`，或使用显式 `wls.worker.fpc_warmup_paths` 配置。Worker 启动热路径不再通过运行期 warmup event 发现模块路由。
 
 | 模式 / 并发 / 样本 | 成功 | QPS | p95 | p99 | max |
 | --- | ---: | ---: | ---: | ---: | ---: |

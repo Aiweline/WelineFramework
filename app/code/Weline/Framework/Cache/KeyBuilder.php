@@ -205,6 +205,54 @@ class KeyBuilder
         return $dimensions;
     }
 
+    /** @return array<string, string> */
+    public static function policyDimensions(CachePolicy $policy, ?StorefrontCacheKeyContext $context = null): array
+    {
+        $context ??= StorefrontCacheKeyContext::currentOrRequestFence();
+        $dimensions = ['schema' => 'cache-policy-v1', 'scope' => $policy->scope];
+        if ($policy->scope !== 'global' && !$context->hasCompleteFrozenScope()) {
+            // Preserve request isolation; an incomplete scope is never a default tenant.
+            $dimensions['scope_state'] = 'request-fence';
+            $dimensions['request_fence'] = $context->cacheKeyFingerprint;
+        } else {
+            $dimensions['scope_state'] = $policy->scope === 'global' ? 'global' : 'frozen';
+            $identity = $context->scopeIdentity;
+            if ($policy->scope !== 'global') {
+                $dimensions['website'] = (string)$identity->websiteCode;
+                $dimensions['context_version'] = $identity->contextVersion;
+            }
+            if ($policy->scope === 'store' || $policy->scope === 'channel') {
+                $dimensions['store'] = (string)$identity->storeCode;
+                $dimensions['store_mode'] = (string)$identity->storeMode;
+            }
+            if ($policy->scope === 'channel') {
+                $dimensions['channel'] = (string)$identity->channelCode;
+            }
+        }
+        foreach ($policy->vary as $dimension) {
+            $dimensions[$dimension] = match ($dimension) {
+                'lang' => $context->lang,
+                'currency' => $context->currency,
+                'area' => self::getAreaKey(),
+            };
+        }
+        return $dimensions;
+    }
+
+    public static function policyKey(
+        CachePolicy $policy,
+        string $logicalKey,
+        string $dependencyFingerprint = '',
+        ?StorefrontCacheKeyContext $context = null,
+    ): string {
+        return 'policy:' . $policy->resource . ':' . hash('sha256', self::stableEncode([
+            'policy' => $policy->toArray(),
+            'key' => $logicalKey,
+            'dimensions' => self::policyDimensions($policy, $context),
+            'dependencies' => $dependencyFingerprint,
+        ]));
+    }
+
     /**
      * Resolve the canonical store_code for cache keys (P1a scope isolation).
      * Unresolved context falls back to default store.

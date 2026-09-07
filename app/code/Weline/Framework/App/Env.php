@@ -1067,6 +1067,65 @@ class Env extends DataObject
     }
 
     /**
+     * Re-read app/etc/env.php into this process without writing.
+     * WLS workers need this after another process bumps keys such as theme_static_version.
+     */
+    public function reloadPersistentConfigFromDisk(): bool
+    {
+        if (!\is_file(self::path_ENV_FILE)) {
+            return false;
+        }
+
+        if (\function_exists('opcache_invalidate')) {
+            @\opcache_invalidate(self::path_ENV_FILE, true);
+        }
+        \clearstatcache(true, self::path_ENV_FILE);
+
+        $envConfig = $this->includeEnvFileFresh(self::path_ENV_FILE);
+        if (!\is_array($envConfig)) {
+            return false;
+        }
+
+        $this->persistentConfig = \array_replace_recursive(self::default_CONFIG, $envConfig);
+        $this->hasGetConfig = [];
+        self::$mergedCacheConfig = null;
+        $this->rebuildEffectiveConfig();
+
+        return true;
+    }
+
+    /**
+     * Include env.php avoiding sticky OPcache entries that survive a peer process rewrite.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function includeEnvFileFresh(string $path): ?array
+    {
+        $real = \realpath($path) ?: $path;
+        if (\function_exists('opcache_invalidate')) {
+            @\opcache_invalidate($real, true);
+        }
+        \clearstatcache(true, $real);
+
+        $tmpDir = \dirname($real);
+        $tmp = $tmpDir . \DIRECTORY_SEPARATOR . '.env.reload.' . \getmypid() . '.' . \str_replace('.', '', (string)\microtime(true)) . '.php';
+        if (!@\copy($real, $tmp)) {
+            $included = include $real;
+            return \is_array($included) ? $included : null;
+        }
+
+        try {
+            if (\function_exists('opcache_invalidate')) {
+                @\opcache_invalidate($tmp, true);
+            }
+            $included = include $tmp;
+            return \is_array($included) ? $included : null;
+        } finally {
+            @\unlink($tmp);
+        }
+    }
+
+    /**
      * @return resource|false
      */
     private function acquireConfigWriteLock()

@@ -18,6 +18,7 @@ use Weline\Framework\Cache\KeyBuilder;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Exception\Core;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\Runtime;
 use Weline\Framework\View\Data\DataInterface;
 use Weline\Framework\View\Data\HtmlInterface;
 
@@ -129,16 +130,29 @@ trait TraitTemplate
             # 文件目录
             $file_dir = str_replace($pre_module_name . '::', '', $file_dir);
         } else {
-            $view_dir = $this->getRequest()->getModulePath() . 'view' . DS;
-            $template_dir = $view_dir . Data\DataInterface::view_TEMPLATE_DIR . DS;
-            if (PROD) {
-                $module_path_arr = explode(DS, trim($this->getRequest()->getModulePath(), DS));
-                $module = array_pop($module_path_arr);
-                $vendor = array_pop($module_path_arr);
-                $module_path = $vendor . DS . $module . DS;
-                $compile_dir = Env::path_framework_generated_complicate . $module_path . Data\DataInterface::dir . DS;
+            // Empty module_path must never become CWD-relative "view/tpl" (lands under BP).
+            $modulePath = rtrim((string)$this->getRequest()->getModulePath(), '/\\');
+            if ($modulePath === '' || !\is_dir($modulePath)) {
+                $unscopedBase = Env::path_framework_generated_complicate
+                    . '_unscoped' . DS . Data\DataInterface::dir . DS;
+                $view_dir = $unscopedBase;
+                $template_dir = $unscopedBase . Data\DataInterface::dir_type_TEMPLATE . DS;
+                $compile_dir = $unscopedBase . Data\DataInterface::dir_type_TEMPLATE_COMPILE . DS;
             } else {
-                $compile_dir = $view_dir . Data\DataInterface::view_TEMPLATE_COMPILE_DIR . DS;
+                $view_dir = $modulePath . DS . Data\DataInterface::dir . DS;
+                $template_dir = $view_dir . Data\DataInterface::view_TEMPLATE_DIR . DS;
+                if (PROD) {
+                    $module_path_arr = explode(DS, trim($modulePath, DS));
+                    $module = array_pop($module_path_arr);
+                    $vendor = array_pop($module_path_arr);
+                    $module_path = (($vendor !== null && $vendor !== '') ? $vendor . DS : '')
+                        . (($module !== null && $module !== '') ? $module . DS : '');
+                    $compile_dir = Env::path_framework_generated_complicate
+                        . ($module_path !== '' ? $module_path : '_unscoped' . DS)
+                        . Data\DataInterface::dir . DS;
+                } else {
+                    $compile_dir = $view_dir . Data\DataInterface::view_TEMPLATE_COMPILE_DIR . DS;
+                }
             }
         }
         return [$fileName, $file_dir, $view_dir, $template_dir, $compile_dir];
@@ -396,8 +410,12 @@ trait TraitTemplate
             return 'preview_' . substr($previewToken, 0, 8);
         }
         
-        // 2. 读取系统配置的静态版本号
-        $staticVersion = Env::getInstance()->getConfig('theme.static_version');
+        // 2. 读取系统配置的静态版本号（发布时更新）
+        // 优先顶层 theme_static_version：不被 WelineTheme 整表写入 theme 元数据覆盖。
+        $staticVersion = Env::getInstance()->getConfig('theme_static_version');
+        if (!$staticVersion) {
+            $staticVersion = Env::getInstance()->getConfig('theme.static_version');
+        }
         if ($staticVersion) {
             return $staticVersion;
         }
@@ -408,7 +426,7 @@ trait TraitTemplate
     /**
      * 开发环境使用资源内容指纹，避免固定 URL 在浏览器短缓存期内继续执行旧 UI。
      *
-     * 生产环境仍由 theme.static_version 或发布清单统一控制，不在请求期计算文件哈希。
+     * 生产环境仍由 theme_static_version / theme.static_version 或发布清单统一控制，不在请求期计算文件哈希。
      */
     private function getDevelopmentStaticResourceVersion(string $source, string $url): ?string
     {
@@ -659,6 +677,19 @@ trait TraitTemplate
         }
         $path = $path . DS;
         if (!empty($path) and !is_dir($path)) {
+            $normalized = \str_replace(['/', '\\'], DS, $path);
+            // 勿用 `/` 作 preg 定界符：字符类内未转义的 `/` 会提前结束模式并触发 Unknown modifier ]。
+            $isAbsolute = \preg_match('#^[A-Za-z]:/#', $normalized) === 1
+                || \str_starts_with($normalized, '/')
+                || \str_starts_with($normalized, '\\');
+            $repoViewRoot = \rtrim(\str_replace(['/', '\\'], DS, BP), DS) . DS . DataInterface::dir . DS;
+            $underRepoView = \str_starts_with(\rtrim($normalized, DS) . DS, $repoViewRoot);
+            // Refuse CWD-relative paths and accidental repository-root view/ mkdir.
+            if (!$isAbsolute || $underRepoView) {
+                throw new Exception(
+                    __('拒绝在不安全路径创建模板目录：%{1}', [$path])
+                );
+            }
             mkdir($path, 0770, true);
         }
 
@@ -765,7 +796,11 @@ trait TraitTemplate
         $cache_key = $filename . '|' . $this->viewEnvironmentCacheSuffix('fetch-file') . '|' . $this->resolveThemeCacheKeyForFetchFile($filename);
         $forceModuleThemeSource = (bool)$this->getData('__weline_force_module_theme_source');
         $skipCache = $forceModuleThemeSource || (isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache'));
-        if (!$skipCache) {
+        // In a persistent development worker, Template owns a bounded process-local
+        // path map. Avoid a shared-memory round trip on every first-time resolution;
+        // production keeps the shared cache for cross-worker reuse.
+        $useSharedViewFileCache = !$skipCache && (PROD || !(defined('DEV') && DEV && Runtime::isPersistent()));
+        if ($useSharedViewFileCache) {
             $cache_filename = $this->viewCache->get($cache_key);
             if ($cache_filename && is_file($cache_filename)) {
                 return $cache_filename;
@@ -778,7 +813,7 @@ trait TraitTemplate
             $fileData
         );
         $event_filename = $fileData->getData('filename');
-        if (!$skipCache) {
+        if ($useSharedViewFileCache) {
             $this->viewCache->set($cache_key, $event_filename);
         }
         return $event_filename;

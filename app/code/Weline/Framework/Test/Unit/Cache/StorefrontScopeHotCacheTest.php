@@ -7,6 +7,7 @@ namespace Weline\Framework\Test\Unit\Cache;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Cache\CacheManager;
 use Weline\Framework\Cache\Contract\CacheAdapterInterface;
+use Weline\Framework\Cache\Contract\SingleFlightInterface;
 use Weline\Framework\Cache\Pool\CachePool;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Runtime\PostResponseTaskQueue;
@@ -45,6 +46,19 @@ final class StorefrontScopeHotCacheTest extends TestCase
         self::assertSame('payload-2', $service->remember('unit_scope_hot', 'demo.key', 60, $builder, []));
         self::assertSame(2, $calls);
     }
+
+    public function testColdMissDoesNotWaitForAContendedSingleFlightLock(): void
+    {
+        $adapter = new InMemoryAdapter();
+        $pool = new CachePool('unit_scope_hot_contended', $adapter, jitterRatio: 0.0);
+        $cacheManager = $this->createMock(CacheManager::class);
+        $cacheManager->method('pool')->willReturn($pool);
+        $flight = new ImmediateSingleFlight();
+        $service = new StorefrontScopeHotCache($cacheManager, null, $flight);
+
+        self::assertSame('fresh', $service->remember('unit_scope_hot_contended', 'demo.key', 60, static fn(): string => 'fresh', []));
+        self::assertSame(0, $flight->lastTimeoutMs);
+    }
 }
 
 final class InMemoryAdapter implements CacheAdapterInterface
@@ -81,5 +95,23 @@ final class InMemoryAdapter implements CacheAdapterInterface
     public function has(string $key): bool
     {
         return \array_key_exists($key, $this->data);
+    }
+}
+
+final class ImmediateSingleFlight implements SingleFlightInterface
+{
+    public int $lastTimeoutMs = -1;
+
+    public function acquire(string $key, int $timeoutMs = 1500, int $ttlSeconds = 30): ?string
+    {
+        unset($key, $ttlSeconds);
+        $this->lastTimeoutMs = $timeoutMs;
+
+        return 'immediate-token';
+    }
+
+    public function release(string $key, string $token): void
+    {
+        unset($key, $token);
     }
 }

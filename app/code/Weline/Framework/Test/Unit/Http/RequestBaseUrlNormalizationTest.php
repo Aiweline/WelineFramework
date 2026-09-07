@@ -120,10 +120,10 @@ final class RequestBaseUrlNormalizationTest extends TestCase
             'REQUEST_METHOD' => 'GET',
             'REQUEST_SCHEME' => 'https',
             'HTTPS' => 'on',
-            'HTTP_HOST' => 'ai-test.example.weline.test:27152',
-            'SERVER_NAME' => 'ai-test.example.weline.test',
+            'HTTP_HOST' => 'ai-test.example.test.weline.com:27152',
+            'SERVER_NAME' => 'ai-test.example.test.weline.com',
             'SERVER_PORT' => '27152',
-            'WELINE_WEBSITE_URL' => 'https://ai-test.example.weline.test/aisite_accept_ok',
+            'WELINE_WEBSITE_URL' => 'https://ai-test.example.test.weline.com/aisite_accept_ok',
         ];
         $_SERVER = $server;
         WelineEnv::getInstance()->initFromSnapshot([], [], [], [], $server);
@@ -132,7 +132,7 @@ final class RequestBaseUrlNormalizationTest extends TestCase
         };
 
         self::assertSame(
-            'https://ai-test.example.weline.test:27152/aisite_accept_ok',
+            'https://ai-test.example.test.weline.com:27152/aisite_accept_ok',
             $request->getBaseHost()
         );
     }

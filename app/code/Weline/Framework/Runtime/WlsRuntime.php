@@ -451,15 +451,28 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      */
     private function buildDynamicFirstRenderReadyProof(array $result): array
     {
+        $fallback = null;
         foreach ((array)($result['samples'] ?? []) as $sample) {
-            if (!\is_array($sample) || (string)($sample['path'] ?? '') !== '/') {
+            if (!\is_array($sample) || \trim((string)($sample['path'] ?? '')) === '') {
+                continue;
+            }
+
+            // `/` was the only critical path when this proof was introduced.
+            // Storefront providers can now publish a business path as the
+            // bounded READY-gate target, so keep the homepage preference while
+            // accepting the first valid business sample when `/` is absent.
+            $fallback ??= $sample;
+            if ((bool)($sample['ready'] ?? false) || (string)($sample['path'] ?? '') === '/') {
+                $fallback = $sample;
+            }
+            if ((string)($sample['path'] ?? '') !== '/') {
                 continue;
             }
 
             return [
                 'ready' => (bool)($sample['ready'] ?? false),
                 'host' => (string)($sample['host'] ?? ''),
-                'path' => '/',
+                'path' => (string)($sample['path'] ?? '/'),
                 'status_code' => (int)($sample['status'] ?? 0),
                 'body_length' => (int)($sample['body_length'] ?? 0),
                 'elapsed_ms' => (float)($sample['elapsed_ms'] ?? 0.0),
@@ -471,7 +484,23 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             ];
         }
 
-        return [];
+        if (!\is_array($fallback)) {
+            return [];
+        }
+
+        return [
+            'ready' => (bool)($fallback['ready'] ?? false),
+            'host' => (string)($fallback['host'] ?? ''),
+            'path' => (string)($fallback['path'] ?? ''),
+            'status_code' => (int)($fallback['status'] ?? 0),
+            'body_length' => (int)($fallback['body_length'] ?? 0),
+            'elapsed_ms' => (float)($fallback['elapsed_ms'] ?? 0.0),
+            'target_ms' => (float)($fallback['target_ms'] ?? 0.0),
+            'attempts' => (int)($fallback['attempts'] ?? 0),
+            'fpc_status' => \strtoupper((string)($fallback['fpc_status'] ?? '')),
+            'cache' => (string)($fallback['cache'] ?? ''),
+            'reason' => (string)($fallback['reason'] ?? ''),
+        ];
     }
 
     /**
@@ -1018,6 +1047,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         $runFpcBuildAheadWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredFpcBuildAheadWarmup();
         $runFpcProcessPullWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredFpcProcessPullWarmup();
         $runDynamicFirstRenderWarmup = $roleCanRunGeneralDeferred && $this->shouldRunDeferredDynamicFirstRenderWarmup();
+        $runStorefrontCriticalWarmup = $this->shouldRunDeferredStorefrontCriticalWarmup();
         if ($this->readyGateWorkerRegistryWarmupCompleted) {
             $runRegistryWarmup = false;
             $runUrlMetadataWarmup = false;
@@ -1029,6 +1059,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             && !$runFpcBuildAheadWarmup
             && !$runFpcProcessPullWarmup
             && !$runDynamicFirstRenderWarmup
+            && !$runStorefrontCriticalWarmup
         ) {
             return;
         }
@@ -1046,6 +1077,13 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                 Url::preloadWorkerRoutingMetadata();
             }, 'url metadata');
         }
+        if ($runStorefrontCriticalWarmup) {
+            // Warm the bounded public catalog path before the broad backend
+            // warmup. This runs after Worker READY, uses the local listener,
+            // and lets the shared FPC build lock publish one response without
+            // holding the control-plane READY handshake open.
+            $this->runDeferredStorefrontCriticalWarmup();
+        }
         if ($runBackendFirstRenderWarmup) {
             $this->runDeferredBackendFirstRenderWarmup();
         }
@@ -1058,6 +1096,302 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         if ($runDynamicFirstRenderWarmup) {
             $this->runDeferredDynamicFirstRenderWarmup();
         }
+    }
+
+    private function shouldRunDeferredStorefrontCriticalWarmup(): bool
+    {
+        if (!$this->canRunDynamicFirstRenderWarmupForCurrentRole()) {
+            return false;
+        }
+
+        $rawFlag = \getenv('WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_ENABLED');
+        if ($rawFlag === false || \trim((string)$rawFlag) === '') {
+            $rawFlag = Env::get('wls.worker.storefront_deferred_warmup_enabled', '1');
+        }
+
+        if (!\in_array(
+            \strtolower(\trim((string)$rawFlag)),
+            ['1', 'true', 'yes', 'on', 'async', 'deferred'],
+            true
+        )) {
+            return false;
+        }
+
+        // A cold storefront render is expensive and publishes to shared FPC.
+        // Elect one Worker so the remaining Workers do not render the same
+        // path concurrently and wait on the shared build lock.
+        return $this->isDynamicFirstRenderWarmupOwnerWorker(
+            'WLS_WORKER_STOREFRONT_DEFERRED_WARMUP_OWNER_WORKER_ID',
+            'wls.worker.storefront_deferred_warmup_owner_worker_id',
+            1
+        );
+    }
+
+    /**
+     * Warm one bounded public storefront path in the elected Worker after READY.
+     *
+     * The provider is the single source of truth for public paths. This uses
+     * the normal FullPageCacheCoordinator build path so one Worker publishes
+     * the response and peers can hydrate their process cache from the shared
+     * payload instead of independently rendering the same page.
+     */
+    private function runDeferredStorefrontCriticalWarmup(): void
+    {
+        $startedAt = \microtime(true);
+        $paths = [];
+        foreach ($this->readyGateDynamicCriticalWarmupPaths() as $path) {
+            $path = $this->normalizeInternalWarmupPath((string)$path);
+            if ($path !== '/') {
+                $paths[$path] = $path;
+            }
+        }
+        $maxPaths = (int)(Env::get('wls.worker.storefront_deferred_warmup_max_paths', 1) ?: 1);
+        $paths = \array_slice(\array_values($paths), 0, \max(1, \min(8, $maxPaths)));
+        if ($paths === []) {
+            $this->logDeferredStorefrontWarmupStage('skipped', [
+                'reason' => 'no-provider-path',
+                'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+            ]);
+            return;
+        }
+
+        $hosts = $this->resolveProcessLocalDynamicWarmupHosts();
+        $this->logDeferredStorefrontWarmupStage('begin', [
+            'paths' => $paths,
+            'hosts' => $hosts,
+            'max_paths' => $maxPaths,
+        ]);
+
+        $result = $this->runStorefrontFpcWarmupInternal($paths, $hosts);
+        if ((int)($result['failed'] ?? 0) > 0) {
+            $this->logDeferredStorefrontWarmupStage('failed', [
+                'paths' => $paths,
+                'hosts' => $hosts,
+                'warmed' => (int)($result['warmed'] ?? 0),
+                'failed' => (int)($result['failed'] ?? 0),
+                'elapsed_ms' => (float)($result['elapsed_ms'] ?? 0.0),
+                'samples' => \array_slice(\is_array($result['samples'] ?? null) ? $result['samples'] : [], 0, 4),
+                'errors' => \array_slice(\is_array($result['errors'] ?? null) ? $result['errors'] : [], 0, 4),
+            ]);
+            if (\function_exists('w_log_warning')) {
+                \w_log_warning('[WlsRuntime] deferred storefront critical warmup incomplete: ' . \json_encode([
+                    'warmed' => (int)($result['warmed'] ?? 0),
+                    'failed' => (int)($result['failed'] ?? 0),
+                    'errors' => \array_slice(\is_array($result['errors'] ?? null) ? $result['errors'] : [], 0, 4),
+                ], \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE));
+            }
+            return;
+        }
+
+        $this->logDeferredStorefrontWarmupStage('done', [
+            'paths' => $paths,
+            'hosts' => $hosts,
+            'warmed' => (int)($result['warmed'] ?? 0),
+            'failed' => (int)($result['failed'] ?? 0),
+            'elapsed_ms' => (float)($result['elapsed_ms'] ?? 0.0),
+            'samples' => \array_slice(\is_array($result['samples'] ?? null) ? $result['samples'] : [], 0, 4),
+        ]);
+
+        if (\function_exists('w_log_info')) {
+            \w_log_info('[WlsRuntime] deferred storefront critical warmup done warmed='
+                . (int)($result['warmed'] ?? 0)
+                . ' elapsed_ms=' . (float)($result['elapsed_ms'] ?? 0.0));
+        }
+    }
+
+    /**
+     * @param list<string> $paths
+     * @param list<string> $hosts
+     * @return array{warmed:int,failed:int,errors:list<string>,samples:list<array<string,mixed>>,elapsed_ms:float}
+     */
+    private function runStorefrontFpcWarmupInternal(array $paths, array $hosts): array
+    {
+        $startedAt = \microtime(true);
+        $warmed = 0;
+        $failed = 0;
+        $errors = [];
+        $samples = [];
+        $sequence = 0;
+
+        foreach ($hosts as $host) {
+            foreach ($paths as $path) {
+                $sequence++;
+                try {
+                    $warmupMeta = $this->runStorefrontFpcWarmupAttempt($host, $path, $sequence);
+                    $statusCode = (int)($warmupMeta['status_code'] ?? 0);
+                    $bodyLength = (int)($warmupMeta['body_length'] ?? 0);
+                    $headers = \is_array($warmupMeta['headers'] ?? null) ? $warmupMeta['headers'] : [];
+                    $fpcStatus = \strtoupper(
+                        $this->warmupHeaderValue($headers, 'X-WLS-FPC-Status')
+                        ?: $this->warmupHeaderValue($headers, 'X-Weline-FPC')
+                    );
+                    $cacheSource = \strtolower($this->warmupHeaderValue(
+                        $headers,
+                        'X-WLS-Performance-FPC-Source'
+                    ));
+                    $cookieCount = (int)($warmupMeta['set_cookie_count'] ?? 0);
+                    $sample = [
+                        'host' => $host,
+                        'path' => $path,
+                        'status' => $statusCode,
+                        'body_length' => $bodyLength,
+                        'elapsed_ms' => (float)($warmupMeta['elapsed_ms'] ?? 0.0),
+                        'fpc_status' => $fpcStatus,
+                        'fpc_source' => $cacheSource,
+                        'set_cookie_count' => $cookieCount,
+                    ];
+
+                    if ($statusCode < 200 || $statusCode >= 400 || $bodyLength <= 0 || $cookieCount > 0) {
+                        $failed++;
+                        $reason = 'status=' . $statusCode
+                            . ' body=' . $bodyLength
+                            . ' cookies=' . $cookieCount;
+                        $errors[] = $host . $path . ': ' . $reason;
+                        $sample['ready'] = false;
+                        $sample['reason'] = $reason;
+                        $samples[] = $sample;
+                        continue;
+                    }
+
+                    // A build response itself does not always expose a cache
+                    // status header. A second request must be a real FPC hit;
+                    // this proves that the first render was published and
+                    // prevents a cold public request from repeating it.
+                    $sequence++;
+                    $probeMeta = $this->runStorefrontFpcWarmupAttempt($host, $path, $sequence);
+                    $probeHeaders = \is_array($probeMeta['headers'] ?? null) ? $probeMeta['headers'] : [];
+                    $probeStatus = \strtoupper(
+                        $this->warmupHeaderValue($probeHeaders, 'X-WLS-FPC-Status')
+                        ?: $this->warmupHeaderValue($probeHeaders, 'X-Weline-FPC')
+                    );
+                    $probeSource = \strtolower($this->warmupHeaderValue(
+                        $probeHeaders,
+                        'X-WLS-Performance-FPC-Source'
+                    ));
+                    $probeBodyLength = (int)($probeMeta['body_length'] ?? 0);
+                    $sample['probe'] = [
+                        'status' => (int)($probeMeta['status_code'] ?? 0),
+                        'body_length' => $probeBodyLength,
+                        'elapsed_ms' => (float)($probeMeta['elapsed_ms'] ?? 0.0),
+                        'fpc_status' => $probeStatus,
+                        'fpc_source' => $probeSource,
+                    ];
+                    if ($probeStatus !== 'HIT' || $probeBodyLength <= 0) {
+                        $failed++;
+                        $reason = 'probe fpc=' . ($probeStatus !== '' ? $probeStatus : 'missing')
+                            . ' body=' . $probeBodyLength;
+                        $errors[] = $host . $path . ': ' . $reason;
+                        $sample['ready'] = false;
+                        $sample['reason'] = $reason;
+                        $samples[] = $sample;
+                        continue;
+                    }
+
+                    $warmed++;
+                    $sample['ready'] = true;
+                    $sample['reason'] = 'ready:fpc-hit';
+                    $samples[] = $sample;
+                } catch (\Throwable $e) {
+                    $failed++;
+                    $message = $host . $path . ': ' . $e->getMessage();
+                    $errors[] = $message;
+                    $samples[] = [
+                        'host' => $host,
+                        'path' => $path,
+                        'ready' => false,
+                        'reason' => $e->getMessage(),
+                    ];
+                }
+
+                SchedulerSystem::yield();
+            }
+        }
+
+        return [
+            'warmed' => $warmed,
+            'failed' => $failed,
+            'errors' => \array_slice($errors, 0, 8),
+            'samples' => \array_slice($samples, 0, 8),
+            'elapsed_ms' => \round((\microtime(true) - $startedAt) * 1000, 2),
+        ];
+    }
+
+    /**
+     * @return array{headers: array<string,mixed>, status_code:int, body_length:int, elapsed_ms:float}
+     */
+    private function runStorefrontFpcWarmupAttempt(string $host, string $path, int $sequence): array
+    {
+        return $this->runInternalWarmupRequest(
+            $host,
+            $path,
+            $sequence,
+            'storefront-fpc-warmup',
+            [
+                'WLS_INTERNAL_STOREFRONT_WARMUP' => '1',
+            ],
+            [
+                'User-Agent' => 'WLS-Storefront-FpcWarmup/1.0',
+                'Accept-Encoding' => 'identity',
+                'X-WLS-Storefront-Warmup' => '1',
+            ],
+        );
+    }
+
+    /** @return list<string> */
+    private function resolveProcessLocalDynamicWarmupHosts(): array
+    {
+        return [$this->selectStorefrontWarmupHost($this->resolveCurrentInstanceWarmupHosts())];
+    }
+
+    /**
+     * Keep the warmup dispatch in-process while matching the public FPC host.
+     * The cache key includes the authority, so a loopback Host would warm a
+     * different entry even though the request is handled by this Worker.
+     *
+     * @param list<string> $hosts
+     */
+    private function selectStorefrontWarmupHost(array $hosts): string
+    {
+        $fallback = null;
+        foreach ($hosts as $host) {
+            $normalized = $this->normalizeInternalWarmupHost($host);
+            if ($normalized === null) {
+                continue;
+            }
+            $fallback ??= $normalized;
+            if (!\preg_match('/^(?:localhost|127(?:\.\d{1,3}){3}|\[?::1\]?)(?::\d+)?$/iD', $normalized)) {
+                return $normalized;
+            }
+        }
+
+        return $fallback ?? '127.0.0.1';
+    }
+
+    /**
+     * Persist a compact, append-only startup marker for cold storefront
+     * diagnosis. This is intentionally separate from request timing.log so a
+     * restart can be correlated without scanning the high-volume request log.
+     *
+     * @param array<string, mixed> $data
+     */
+    private function logDeferredStorefrontWarmupStage(string $stage, array $data = []): void
+    {
+        if (!\defined('BP')) {
+            return;
+        }
+
+        $row = [
+            'ts' => \date('c'),
+            'pid' => \getmypid(),
+            'worker_id' => $this->currentWorkerId(),
+            'stage' => $stage,
+            'data' => $data,
+        ];
+        @\file_put_contents(
+            BP . 'var' . DIRECTORY_SEPARATOR . 'log' . DIRECTORY_SEPARATOR . 'wls-storefront-warmup.log',
+            (\json_encode($row, \JSON_UNESCAPED_UNICODE | \JSON_UNESCAPED_SLASHES) ?: '{}') . PHP_EOL,
+            FILE_APPEND
+        );
     }
 
     /**
@@ -1101,9 +1435,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
 
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_READY_GATE_ENABLED');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            // Dynamic first-render is valuable warmup, but it must not block
-            // worker admission by default. The READY gate is the process-local
-            // homepage FPC proof; strict deployments can opt in explicitly.
+            // Storefront modules publish bounded anonymous catalog paths
+            // through FpcWarmupProviderInterface. Keep the full business
+            // render after READY by default: rendering a catalog page while
+            // the Worker is still reporting its IPC READY lease can starve the
+            // control socket and leave a rolling restart with one Worker.
+            // Operators can opt into the strict pre-READY gate explicitly.
             $rawFlag = Env::get('wls.worker.dynamic_ready_gate_enabled', '0');
         }
 
@@ -1114,7 +1451,9 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
     {
         $rawFlag = \getenv('WLS_WORKER_DYNAMIC_READY_GATE_FAIL_OPEN');
         if ($rawFlag === false || \trim((string)$rawFlag) === '') {
-            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_fail_open', '0');
+            // A warmup failure must not take a healthy WLS instance out of
+            // service. Strict admission remains an explicit opt-in.
+            $rawFlag = Env::get('wls.worker.dynamic_ready_gate_fail_open', '1');
         }
 
         return \in_array(\strtolower(\trim((string)$rawFlag)), ['1', 'true', 'yes', 'on', 'fail_open'], true);
@@ -1189,6 +1528,14 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             return $paths;
         }
 
+        // A single critical storefront path is the contract used to make the
+        // first public request fast. Router, template and controller state is
+        // process-local, so sharding that path would leave most workers cold
+        // and move the latency spike to whichever worker receives the request.
+        if (\count($paths) <= 1) {
+            return $paths;
+        }
+
         $workerId = $this->currentWorkerId();
         $workerCount = $this->currentWorkerCount();
         if ($workerId <= 0 || $workerCount <= 1) {
@@ -1252,10 +1599,30 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      */
     private function readyGateDynamicCriticalWarmupPaths(): array
     {
-        // Framework only owns the universal homepage contract. Business
-        // Modules publish their own business paths through the runtime adapter
-        // or explicit instance configuration.
-        return ['/'];
+        // Framework keeps the universal homepage fallback, while storefront
+        // modules publish public paths through the same provider used by FPC
+        // build-ahead. Put business paths first: the homepage FPC gate already
+        // handles `/`, and the bounded default slot should warm the catalog.
+        $paths = [];
+        try {
+            $warmup = $this->runtimeProvider(FpcWarmupProviderInterface::class);
+            if ($warmup instanceof FpcWarmupProviderInterface) {
+                foreach ($warmup->warmupPaths() as $path) {
+                    foreach ($this->normalizeDynamicWarmupPathList([$path]) as $normalized) {
+                        if ($normalized !== '/') {
+                            $paths[$normalized] = $normalized;
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // Warmup path discovery is an optimization boundary. The
+            // universal homepage fallback remains safe if a provider is
+            // unavailable during early bootstrap.
+        }
+
+        $paths['/'] = '/';
+        return \array_values($paths);
     }
 
     /**
@@ -1908,7 +2275,12 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
      * @param array{enabled: bool, warmed: int, failed: int, paths: list<string>, hosts: list<string>, errors: list<string>, samples: list<array<string, mixed>>, elapsed_ms: float} $result
      * @return array{enabled: bool, warmed: int, failed: int, paths: list<string>, hosts: list<string>, errors: list<string>, samples: list<array<string, mixed>>, elapsed_ms: float}
      */
-    private function runDynamicFirstRenderWarmupInternal(int $effectiveMaxPaths, array $result, ?array $pathsOverride = null): array
+    private function runDynamicFirstRenderWarmupInternal(
+        int $effectiveMaxPaths,
+        array $result,
+        ?array $pathsOverride = null,
+        ?array $hostsOverride = null,
+    ): array
     {
         $result['enabled'] = true;
         $startedAt = \microtime(true);
@@ -1926,7 +2298,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             }
         }
 
-        $hosts = $this->resolveDynamicFirstRenderWarmupHosts();
+        $hosts = $hostsOverride ?? $this->resolveDynamicFirstRenderWarmupHosts();
         if ($paths === ['/'] && $hosts !== []) {
             $hosts = [$this->resolveCanonicalHomepageWarmupHost($hosts)];
         }
@@ -1994,6 +2366,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                                     || $attempts >= $maxAttempts
                                     || $targetMs <= 0.0
                                     || $elapsedMs < $targetMs
+                                    || !$this->shouldBlockDynamicWarmupOnTargetMs()
                                 ) {
                                     break;
                                 }
@@ -2020,6 +2393,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                                     || $attempts >= $maxAttempts
                                     || $targetMs <= 0.0
                                     || $elapsedMs < $targetMs
+                                    || !$this->shouldBlockDynamicWarmupOnTargetMs()
                                 ) {
                                     break;
                                 }
@@ -3177,6 +3551,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
             'dynamic-first-render',
             [
                 'WLS_INTERNAL_DYNAMIC_WARMUP' => '1',
+                'WLS_INTERNAL_STOREFRONT_CHAIN_WARMUP' => '1',
                 'WLS_FPC_BYPASS' => '1',
                 'HTTP_X_WLS_DYNAMIC_WARMUP' => '1',
                 'HTTP_X_WLS_FPC_BYPASS' => '1',
@@ -3217,7 +3592,16 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
         }
 
         if ($requireControllerCache && !$this->dynamicWarmupCacheIsReady($cache)) {
-            return ['ok' => false, 'reason' => 'cache=' . ($cache !== '' ? $cache : 'missing'), 'cache' => $cache];
+            // Not every storefront controller owns a separate controller
+            // cache (Product's public catalog is one example). A successful
+            // non-FPC render still warms the process-local router/template
+            // chain, and the absence of an optional observability header must
+            // not make READY render the same path repeatedly.
+            if ($cache === '' && $bodyLength > 0) {
+                $cache = 'rendered';
+            } else {
+                return ['ok' => false, 'reason' => 'cache=' . ($cache !== '' ? $cache : 'missing'), 'cache' => $cache];
+            }
         }
         if (!$requireControllerCache && $bodyLength <= 0) {
             return ['ok' => false, 'reason' => 'empty-body', 'cache' => $cache];
@@ -5097,6 +5481,7 @@ class WlsRuntime implements RuntimeInterface, RequestPipelineStageListenerInterf
                     $timing['trace_top'] = $this->summarizeTraceSpans($traceSpans, $traceTopLimit);
                     $timing['trace_db_top'] = $this->summarizeTraceSpansByCategory($traceSpans, 'db', $traceDbTopLimit);
                     $timing['trace_category_totals'] = $this->summarizeTraceCategoryTotals($traceSpans);
+                    $timing['trace_summary'] = RequestLifecycleTrace::getAggregateSummary();
                     unset($traceSpans);
                 }
             } catch (\Throwable $e) {

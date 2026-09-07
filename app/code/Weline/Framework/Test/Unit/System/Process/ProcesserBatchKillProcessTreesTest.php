@@ -115,6 +115,54 @@ final class ProcesserBatchKillProcessTreesTest extends TestCase
         }
     }
 
+    public function testStalePidCleanupDropsMalformedLegacyNameIndexEntries(): void
+    {
+        $method = new \ReflectionMethod(Processer::class, 'filterNameIndexEntriesForRemovedPid');
+        $method->setAccessible(true);
+
+        self::assertSame(
+            [
+                [
+                    'pid' => 456,
+                    'jsonPath' => '/var/process/other.json',
+                ],
+            ],
+            $method->invoke(null, [
+                30281,
+                'legacy-corruption',
+                [
+                    'pid' => 123,
+                    'jsonPath' => '/var/process/target.json',
+                ],
+                [
+                    'pid' => 456,
+                    'jsonPath' => '/var/process/other.json',
+                ],
+            ], 123, '/var/process/target.json')
+        );
+    }
+
+    public function testManagedLeaseRegistrationMigratesLegacyNameIndexRecordShape(): void
+    {
+        $method = new \ReflectionMethod(Processer::class, 'normalizeNameIndexEntriesForUpdate');
+        $method->setAccessible(true);
+
+        self::assertSame(
+            [
+                [
+                    'pid' => 30142,
+                    'jsonPath' => '/var/process/session.json',
+                ],
+            ],
+            $method->invoke(null, [
+                'pid' => 30142,
+                'time' => 1788540133,
+                'pname' => '--name=weline-session --launch-id=legacy',
+                'jsonPath' => '/var/process/session.json',
+            ])
+        );
+    }
+
     public function testPrepareProcessLogFileForWriteRecoversReadOnlyLog(): void
     {
         if (PHP_OS_FAMILY === 'Windows') {

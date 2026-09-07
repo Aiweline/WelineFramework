@@ -44,9 +44,9 @@ final class WlsRuntimeProcessUrlParseFullUriTest extends TestCase
     {
         $_SERVER = [
             'REQUEST_SCHEME' => 'https',
-            'HTTP_HOST' => 'p11005ce4.weline.test',
+            'HTTP_HOST' => 'p11005ce4.test.weline.com',
             'REQUEST_URI' => '/pagebuilder/backend/preview/full?page_id=152&visual_editor=1',
-            'WELINE_FULL_REQUEST_URI' => 'https://p11005ce4.weline.test/pagebuilder/backend/ai-site-agent/stream-sse?public_id=stale',
+            'WELINE_FULL_REQUEST_URI' => 'https://p11005ce4.test.weline.com/pagebuilder/backend/ai-site-agent/stream-sse?public_id=stale',
             'WELINE_ORIGIN_REQUEST_URI' => '/pagebuilder/backend/ai-site-agent/stream-sse?public_id=stale',
         ];
         $_GET = [];
@@ -57,7 +57,7 @@ final class WlsRuntimeProcessUrlParseFullUriTest extends TestCase
             'uri' => '/pagebuilder/backend/preview/full?page_id=152&visual_editor=1',
             'server' => [
                 'REQUEST_SCHEME' => 'https',
-                'HTTP_HOST' => 'p11005ce4.weline.test',
+                'HTTP_HOST' => 'p11005ce4.test.weline.com',
                 'REQUEST_URI' => '/pagebuilder/backend/preview/full?page_id=152&visual_editor=1',
                 'QUERY_STRING' => 'page_id=152&visual_editor=1',
                 'WELINE_AREA' => 'backend',
@@ -70,7 +70,7 @@ final class WlsRuntimeProcessUrlParseFullUriTest extends TestCase
         $method->invoke($runtime, $parse);
 
         self::assertSame(
-            'https://p11005ce4.weline.test/pagebuilder/backend/preview/full?page_id=152&visual_editor=1',
+            'https://p11005ce4.test.weline.com/pagebuilder/backend/preview/full?page_id=152&visual_editor=1',
             $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null
         );
         self::assertSame(
@@ -87,7 +87,7 @@ final class WlsRuntimeProcessUrlParseFullUriTest extends TestCase
 
         $request = WlsRequest::fromRaw(
             "GET /U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/CNY/zh_Hans_CN/pagebuilder/backend/page/index HTTP/1.1\r\n"
-            . "Host: p11005ce4.weline.test\r\n\r\n"
+            . "Host: p11005ce4.test.weline.com\r\n\r\n"
         );
 
         $parse = [
@@ -95,7 +95,7 @@ final class WlsRuntimeProcessUrlParseFullUriTest extends TestCase
             'uri' => '/pagebuilder/backend/page/index',
             'server' => [
                 'REQUEST_SCHEME' => 'https',
-                'HTTP_HOST' => 'p11005ce4.weline.test',
+                'HTTP_HOST' => 'p11005ce4.test.weline.com',
                 'REQUEST_URI' => '/pagebuilder/backend/page/index',
                 'QUERY_STRING' => '',
                 'WELINE_AREA' => 'backend',
@@ -169,7 +169,7 @@ final class WlsRuntimeProcessUrlParseFullUriTest extends TestCase
     {
         $_SERVER = [
             'REQUEST_SCHEME' => 'https',
-            'HTTP_HOST' => 'p11005ce4.weline.test',
+            'HTTP_HOST' => 'p11005ce4.test.weline.com',
             'REQUEST_URI' => '/privacy',
             'QUERY_STRING' => '',
             'WELINE_AREA' => 'frontend',
@@ -182,7 +182,7 @@ final class WlsRuntimeProcessUrlParseFullUriTest extends TestCase
             'uri' => '/pagebuilder/backend/ai-site-agent/index?legacy=1',
             'server' => [
                 'REQUEST_SCHEME' => 'https',
-                'HTTP_HOST' => 'p11005ce4.weline.test',
+                'HTTP_HOST' => 'p11005ce4.test.weline.com',
                 'WELINE_AREA' => 'backend',
             ],
         ];
@@ -196,7 +196,7 @@ final class WlsRuntimeProcessUrlParseFullUriTest extends TestCase
         self::assertSame('legacy=1', $_SERVER['QUERY_STRING'] ?? null);
         self::assertSame('/pagebuilder/backend/ai-site-agent/index?legacy=1', WelineEnv::get('request.uri'));
         self::assertSame(
-            'https://p11005ce4.weline.test/pagebuilder/backend/ai-site-agent/index?legacy=1',
+            'https://p11005ce4.test.weline.com/pagebuilder/backend/ai-site-agent/index?legacy=1',
             $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null
         );
     }

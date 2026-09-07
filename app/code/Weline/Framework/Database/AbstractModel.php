@@ -1576,7 +1576,11 @@ abstract class AbstractModel extends DataObject
         $this->setQuery($this->getQuery()->pagination($page, $pageSize, $params, $max_limit, $total));
         
         $this->pagination = $this->getQuery()->pagination;
-        $this->setData('pagination', $this->getPagination());
+        // CLI/queue must not render pagination jump forms: empty base host yields
+        // unsafe actions like http://?page=... and FormRenderer aborts the job.
+        if (!\in_array(\PHP_SAPI, ['cli', 'phpdbg'], true)) {
+            $this->setData('pagination', $this->getPagination());
+        }
         return $this;
     }
 

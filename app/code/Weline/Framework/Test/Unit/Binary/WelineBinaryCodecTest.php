@@ -5,10 +5,25 @@ declare(strict_types=1);
 namespace Weline\Framework\Test\Unit\Binary;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Binary\Limits;
 use Weline\Framework\Binary\WelineBinaryCodec;
 
 final class WelineBinaryCodecTest extends TestCase
 {
+    public function testListItemLimitAllowsTwoThousandItemsForAddressCatalogs(): void
+    {
+        self::assertSame(2000, Limits::LIST_ITEMS);
+        self::assertSame('List exceeds 2000 item limit.', Limits::LIST_ITEMS_ERROR);
+
+        $codec = new WelineBinaryCodec();
+        $ok = \range(1, Limits::LIST_ITEMS);
+        self::assertSame($ok, $codec->decodePacket($codec->encodePacket($ok)));
+
+        $this->expectException(\InvalidArgumentException::class);
+        $this->expectExceptionMessage(Limits::LIST_ITEMS_ERROR);
+        $codec->encodePacket(\range(1, Limits::LIST_ITEMS + 1));
+    }
+
     public function testV1GoldenPacketRemainsWireCompatible(): void
     {
         $codec = new WelineBinaryCodec();

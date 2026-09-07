@@ -45,6 +45,10 @@ final class StorefrontCacheKeyContextIntegrationTest extends TestCase
         self::assertMatchesRegularExpression('/^[a-f0-9]{64}$/D', (string)$context->namespaceFingerprint);
         self::assertSame($context->namespaceFingerprint, $context->cacheKeyFingerprint);
         self::assertSame('default', $context->keyDimensions()['website']);
-        self::assertCount(8, $resolver->namespacePaths('default'));
+        self::assertCount(10, $resolver->namespacePaths('default'));
+        self::assertContains(
+            'global/storefront/auth',
+            $resolver->namespacePaths('default'),
+        );
     }
 }

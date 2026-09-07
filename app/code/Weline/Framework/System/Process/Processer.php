@@ -3810,6 +3810,202 @@ class Processer
     }
 
     /**
+     * Fast orphan sweep for dead *-pid.json without per-PID shell probes.
+     *
+     * Queue workers and other short-lived managed processes can leave thousands of
+     * dead leases when shutdown finalizers miss (SIGKILL) or historically failed
+     * Unicode identity removal. The full {@see cleanupStalePidFiles()} path is too
+     * expensive for Stop residual recovery; this method uses posix existence checks
+     * only, unlinks dead JSON files, then compacts indexes once under the managed lock.
+     */
+    public static function cleanupDeadPidJsonOrphansFast(): int
+    {
+        $dir = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
+        if (!\is_dir($dir)) {
+            return 0;
+        }
+
+        $handle = @\opendir($dir);
+        if (!\is_resource($handle)) {
+            return 0;
+        }
+
+        $removedPaths = [];
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if ($leaf === '.' || $leaf === '..' || $leaf === '' || !\str_ends_with($leaf, '-pid.json')) {
+                    continue;
+                }
+                $path = $dir . $leaf;
+                if (!\is_file($path) || \is_link($path)) {
+                    continue;
+                }
+                $raw = @\file_get_contents($path);
+                $data = \is_string($raw) ? \json_decode($raw, true) : null;
+                $pid = \is_array($data) ? (int)($data['pid'] ?? 0) : 0;
+                if ($pid > 0 && self::isPidPresentForFastOrphanSweep($pid)) {
+                    continue;
+                }
+                if (@\unlink($path)) {
+                    $removedPaths[$path] = $pid > 0 ? $pid : 0;
+                }
+            }
+        } finally {
+            @\closedir($handle);
+        }
+
+        if ($removedPaths === []) {
+            return 0;
+        }
+
+        $removedPids = [];
+        foreach ($removedPaths as $pid) {
+            if ($pid > 0) {
+                $removedPids[$pid] = true;
+                self::untrustPid($pid);
+            }
+        }
+
+        self::withManagedIndexLock(static function () use ($removedPaths, $removedPids): void {
+            $pidIndex = self::readPidIndex();
+            $nameIndex = self::readNameIndex();
+            $changed = false;
+
+            foreach ($pidIndex as $pid => $entry) {
+                $pid = (int)$pid;
+                $path = \is_array($entry) ? (string)($entry['jsonPath'] ?? '') : '';
+                if (isset($removedPids[$pid])
+                    || ($path !== '' && isset($removedPaths[$path]))
+                    || ($path !== '' && !\is_file($path))
+                ) {
+                    unset($pidIndex[$pid]);
+                    $changed = true;
+                }
+            }
+
+            foreach ($nameIndex as $owner => $entries) {
+                if (!\is_array($entries)) {
+                    unset($nameIndex[$owner]);
+                    $changed = true;
+                    continue;
+                }
+                $filtered = [];
+                foreach ($entries as $entry) {
+                    if (!\is_array($entry)) {
+                        continue;
+                    }
+                    $entryPid = (int)($entry['pid'] ?? 0);
+                    $jsonPath = (string)($entry['jsonPath'] ?? '');
+                    if (isset($removedPids[$entryPid])
+                        || ($jsonPath !== '' && isset($removedPaths[$jsonPath]))
+                        || ($jsonPath !== '' && !\is_file($jsonPath))
+                    ) {
+                        $changed = true;
+                        continue;
+                    }
+                    $filtered[] = $entry;
+                }
+                if ($filtered === []) {
+                    unset($nameIndex[$owner]);
+                    $changed = true;
+                } else {
+                    $nameIndex[$owner] = $filtered;
+                }
+            }
+
+            if ($changed) {
+                self::writePidIndex($pidIndex);
+                self::writeNameIndex($nameIndex);
+            }
+        }, true);
+
+        return \count($removedPaths);
+    }
+
+    private static function isPidPresentForFastOrphanSweep(int $pid): bool
+    {
+        if ($pid <= 0) {
+            return false;
+        }
+        if (\function_exists('posix_kill')) {
+            if (@\posix_kill($pid, 0)) {
+                return true;
+            }
+            // EPERM means the process exists but is not signalable by this uid.
+            return \function_exists('posix_get_last_error') && \posix_get_last_error() === 1;
+        }
+
+        return self::processExists($pid);
+    }
+
+    /**
+     * @param array<mixed> $entries
+     * @return list<array{pid:int,jsonPath:string}>
+     */
+    private static function filterNameIndexEntriesForRemovedPid(
+        array $entries,
+        int $pid,
+        string $expectedPath
+    ): array {
+        $filtered = [];
+        foreach ($entries as $entry) {
+            if (!\is_array($entry)) {
+                continue;
+            }
+
+            $entryPid = (int)($entry['pid'] ?? 0);
+            $jsonPath = (string)($entry['jsonPath'] ?? '');
+            if ($entryPid <= 0 || $jsonPath === '') {
+                continue;
+            }
+            if ($entryPid === $pid && $jsonPath === $expectedPath) {
+                continue;
+            }
+
+            $filtered[] = [
+                'pid' => $entryPid,
+                'jsonPath' => $jsonPath,
+            ];
+        }
+
+        return $filtered;
+    }
+
+    /**
+     * Migrate the legacy owner => process-record shape to the current
+     * owner => list<{pid,jsonPath}> shape without weakening validation for
+     * arbitrary malformed index data.
+     *
+     * @param array<mixed> $entries
+     * @return list<array{pid:int,jsonPath:string}>|null
+     */
+    private static function normalizeNameIndexEntriesForUpdate(array $entries): ?array
+    {
+        if (\array_key_exists('pid', $entries) || \array_key_exists('jsonPath', $entries)) {
+            $entries = [$entries];
+        }
+
+        $normalized = [];
+        foreach ($entries as $entry) {
+            if (!\is_array($entry)) {
+                return null;
+            }
+
+            $pid = (int)($entry['pid'] ?? 0);
+            $jsonPath = \trim((string)($entry['jsonPath'] ?? ''));
+            if ($pid <= 0 || $jsonPath === '') {
+                return null;
+            }
+            $normalized[] = [
+                'pid' => $pid,
+                'jsonPath' => $jsonPath,
+            ];
+        }
+
+        return $normalized;
+    }
+
+    /**
      * Cleanup only PID records touched by the current operation.
      *
      * The full cleanupStalePidFiles() path scans every *-pid.json and may need
@@ -3877,11 +4073,11 @@ class Processer
 
                 unset($pidIndex[$pid]);
                 foreach ($nameIndex as $owner => $entries) {
-                    $nameIndex[$owner] = \array_values(\array_filter(
+                    $nameIndex[$owner] = self::filterNameIndexEntriesForRemovedPid(
                         (array) $entries,
-                        static fn(array $entry): bool => (int) ($entry['pid'] ?? 0) !== $pid
-                            || (string) ($entry['jsonPath'] ?? '') !== $expectedPath
-                    ));
+                        $pid,
+                        $expectedPath
+                    );
                     if ($nameIndex[$owner] === []) {
                         unset($nameIndex[$owner]);
                     }
@@ -12117,7 +12313,17 @@ POWERSHELL;
 
         if ($name === '') {
             $redacted = \trim(self::redactSensitiveProcessText($source));
-            if ($redacted !== '' && \preg_match('/^[a-zA-Z0-9_.:@-]+$/D', $redacted) === 1) {
+            // Bare task/process tokens (no whitespace/path/flag) may include Unicode
+            // queue names such as queue-i18n-ai翻译-*. Never hash those to weline-cmd-*:
+            // lease removal passes the same bare token and must resolve the real --name=.
+            if ($redacted !== ''
+                && !\str_contains($redacted, ' ')
+                && !\str_contains($redacted, "\t")
+                && !\str_contains($redacted, '/')
+                && !\str_contains($redacted, '\\')
+                && !\str_starts_with($redacted, '-')
+                && \preg_match('/^[\p{L}\p{N}_.:@-]+$/u', $redacted) === 1
+            ) {
                 $name = $redacted;
             } else {
                 $name = self::generateNameFromCommand($redacted !== '' ? $redacted : 'process');
@@ -12474,13 +12680,12 @@ POWERSHELL;
             if (!\is_string($identity) || !\is_array($entries)) {
                 return null;
             }
+            $entries = self::normalizeNameIndexEntriesForUpdate($entries);
+            if ($entries === null) {
+                return null;
+            }
             $filtered = [];
             foreach ($entries as $entry) {
-                if (!\is_array($entry)
-                    || (int)($entry['pid'] ?? 0) <= 0
-                    || \trim((string)($entry['jsonPath'] ?? '')) === '') {
-                    return null;
-                }
                 if ((int)$entry['pid'] !== $pid) {
                     $filtered[] = $entry;
                 }
