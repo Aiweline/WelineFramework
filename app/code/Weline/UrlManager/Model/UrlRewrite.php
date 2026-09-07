@@ -76,47 +76,32 @@ class UrlRewrite extends Model
     public function findLatestByWebsiteAndPath(int $websiteId, string $path): ?array
     {
         $fingerprint = self::pathFingerprint($path);
-        $rows = $this->newQuery()
-            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(self::schema_fields_PATH_FINGERPRINT, $fingerprint)
-            ->order(self::schema_fields_ID, 'DESC')
-            ->select()
-            ->fetchArray();
-
-        $exact = $this->findExactPathRow($rows, $path, $fingerprint, false);
-        if ($exact !== null) {
-            return $exact;
-        }
-
-        // Phase-1 migration compatibility: only rows with a missing derived
-        // value may use the legacy path predicate. A non-empty mismatched
-        // fingerprint fails closed instead of silently bypassing integrity.
-        $legacyRows = $this->newQuery()
-            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
+        $query = $this->newQuery();
+        // Preserve the AND/OR order: each candidate arm is website-scoped.
+        // This disables framework condition reordering, not database indexes.
+        $query->_index_sort_keys = [];
+        $rows = $query
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId, '=', 'AND')
+            ->where(self::schema_fields_PATH_FINGERPRINT, [$fingerprint, ''], 'IN', 'OR')
+            ->where(self::schema_fields_WEBSITE_ID, $websiteId, '=', 'AND')
             ->where(self::schema_fields_PATH_FINGERPRINT, null, 'IS NULL')
             ->order(self::schema_fields_ID, 'DESC')
             ->select()
             ->fetchArray();
-        $exact = $this->findExactPathRow($legacyRows, $path, $fingerprint, true);
-        if ($exact !== null) {
-            return $exact;
-        }
 
-        $legacyEmptyRows = $this->newQuery()
-            ->where(self::schema_fields_WEBSITE_ID, $websiteId)
-            ->where(self::schema_fields_PATH_FINGERPRINT, '')
-            ->order(self::schema_fields_ID, 'DESC')
-            ->select()
-            ->fetchArray();
-
-        return $this->findExactPathRow($legacyEmptyRows, $path, $fingerprint, true);
+        // Keep migration precedence independent of the overall ID ordering:
+        // matching fingerprint, then NULL legacy rows, then empty legacy rows.
+        // Non-empty mismatched fingerprints never enter the legacy fallback.
+        return $this->findExactPathRow($rows, $path, $fingerprint)
+            ?? $this->findExactPathRow($rows, $path, null)
+            ?? $this->findExactPathRow($rows, $path, '');
     }
 
     /**
      * @param mixed $rows
      * @return array<string, mixed>|null
      */
-    private function findExactPathRow(mixed $rows, string $path, string $fingerprint, bool $missingFingerprintOnly): ?array
+    private function findExactPathRow(mixed $rows, string $path, ?string $fingerprint): ?array
     {
         if (!\is_array($rows)) {
             return null;
@@ -135,13 +120,10 @@ class UrlRewrite extends Model
             }
 
             $storedFingerprint = $row[self::schema_fields_PATH_FINGERPRINT] ?? null;
-            if ($missingFingerprintOnly) {
-                if ($storedFingerprint === null || $storedFingerprint === '') {
-                    return $row;
-                }
-                continue;
+            if ($fingerprint === null && $storedFingerprint === null) {
+                return $row;
             }
-            if (\is_string($storedFingerprint) && \hash_equals($fingerprint, $storedFingerprint)) {
+            if ($fingerprint !== null && \is_string($storedFingerprint) && \hash_equals($fingerprint, $storedFingerprint)) {
                 return $row;
             }
         }
