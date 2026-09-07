@@ -21,7 +21,33 @@ final class FormSchemaServiceTest extends TestCase
         self::assertSame('country', $schema['fields'][1]['key']);
         self::assertSame('country', $schema['fields'][1]['type']);
         self::assertSame('global', $schema['fields'][1]['validation']['catalog']);
+        self::assertSame('country|province|city|district', $schema['fields'][1]['validation']['levels']);
+        self::assertSame('single', $schema['fields'][1]['validation']['selection']);
         self::assertSame('company_website', $schema['honeypot']);
+    }
+
+    public function testCountryCatalogAcceptsTopLevelAttribute(): void
+    {
+        $schema = (new FormSchemaService())->normalize(['fields' => [
+            ['key' => 'country', 'type' => 'country', 'required' => true, 'catalog' => 'global'],
+        ]]);
+        self::assertSame('global', $schema['fields'][0]['validation']['catalog']);
+        self::assertSame('country|province|city|district', $schema['fields'][0]['validation']['levels']);
+        self::assertSame('single', $schema['fields'][0]['validation']['selection']);
+    }
+
+    public function testCountryLevelsCanBeCountryOnly(): void
+    {
+        $schema = (new FormSchemaService())->normalize(['fields' => [
+            [
+                'key' => 'country',
+                'type' => 'country',
+                'required' => true,
+                'validation' => ['catalog' => 'global', 'levels' => 'country', 'selection' => 'single'],
+            ],
+        ]]);
+        self::assertSame('country', $schema['fields'][0]['validation']['levels']);
+        self::assertSame('single', $schema['fields'][0]['validation']['selection']);
     }
 
     public function testRejectsDuplicateKeysAndEmptyOptions(): void

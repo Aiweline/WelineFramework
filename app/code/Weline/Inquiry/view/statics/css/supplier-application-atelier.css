@@ -1,0 +1,344 @@
+/**
+ * Supplier application page — atelier split layout (final).
+ * Left narrative + right InquiryRenderer form; tokens align with YunShang ink/gold.
+ */
+.w-inquiry-suppliers--atelier {
+    --ink: #141413;
+    --ink-soft: #2a2926;
+    --gold: #c4a35a;
+    --gold-dim: rgba(196, 163, 90, 0.35);
+    --paper: #f7f5f0;
+    --paper-card: #fffcf7;
+    --muted: #6b6760;
+    --line: #ddd6c8;
+    --focus: #8a6b2e;
+    --cta: #1f1e1b;
+    --cta-text: #f7f5f0;
+    box-sizing: border-box;
+    width: min(100%, 68rem);
+    margin-inline: auto;
+    padding-block: clamp(1.5rem, 4vw, 3rem);
+    padding-inline: clamp(0.75rem, 2.5vw, 1.5rem);
+    color: var(--ink);
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__shell {
+    display: grid;
+    grid-template-columns: minmax(16rem, 0.92fr) minmax(20rem, 1.08fr);
+    align-items: stretch;
+    gap: 0;
+    border: 1px solid var(--line);
+    background: var(--paper-card);
+    overflow: hidden;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__story {
+    position: relative;
+    box-sizing: border-box;
+    align-self: stretch;
+    padding: clamp(1.5rem, 3vw, 2.5rem);
+    background:
+        linear-gradient(165deg, rgba(196, 163, 90, 0.12), transparent 42%),
+        radial-gradient(ellipse at 20% 0%, rgba(255, 255, 255, 0.06), transparent 55%),
+        var(--ink);
+    color: #f3efe6;
+    /* Match the form column via grid stretch; never clip shorter than the application card. */
+    max-height: none;
+    overflow: visible;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__story::after {
+    content: "";
+    position: absolute;
+    inset: 1rem;
+    border: 1px solid var(--gold-dim);
+    pointer-events: none;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__eyebrow {
+    margin: 0 0 0.75rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--gold);
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__story-title {
+    margin: 0 0 1rem;
+    max-width: 12ch;
+    font-family: "Songti SC", "STSong", "Noto Serif SC", Georgia, serif;
+    font-size: clamp(1.75rem, 3.2vw, 2.35rem);
+    font-weight: 600;
+    line-height: 1.25;
+    color: #fff8ea;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__story-lead {
+    margin: 0 0 1.15rem;
+    max-width: 36ch;
+    font-size: 0.9375rem;
+    line-height: 1.65;
+    color: rgba(243, 239, 230, 0.78);
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__toc {
+    display: grid;
+    gap: 0.25rem;
+    margin: 0 0 1.25rem;
+    padding: 0.75rem 0;
+    border-top: 1px solid rgba(196, 163, 90, 0.28);
+    border-bottom: 1px solid rgba(196, 163, 90, 0.28);
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__toc a {
+    color: rgba(243, 239, 230, 0.82);
+    text-decoration: none;
+    font-size: 0.8125rem;
+    line-height: 1.4;
+    padding: 0.2rem 0;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__toc a:hover,
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__toc a:focus-visible {
+    color: var(--gold);
+    outline: none;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__guide {
+    display: grid;
+    gap: 1.15rem;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__section {
+    scroll-margin-top: 0.75rem;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__section h2 {
+    margin: 0 0 0.55rem;
+    padding-left: 0.55rem;
+    border-left: 3px solid var(--gold);
+    font-size: 0.9375rem;
+    font-weight: 650;
+    color: #fff8ea;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__section p,
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__section li {
+    margin: 0 0 0.55rem;
+    font-size: 0.8125rem;
+    line-height: 1.6;
+    color: rgba(243, 239, 230, 0.72);
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__section ul {
+    margin: 0.2rem 0 0.55rem;
+    padding-left: 1.15rem;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__process-list {
+    margin: 0 0 0.55rem;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 0.45rem;
+    counter-reset: step;
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__process-list li {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 0.5rem;
+    align-items: start;
+    font-size: 0.8125rem;
+    line-height: 1.45;
+    color: rgba(243, 239, 230, 0.72);
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__process-list li::before {
+    counter-increment: step;
+    content: counter(step);
+    display: inline-grid;
+    place-items: center;
+    width: 1.25rem;
+    height: 1.25rem;
+    border: 1px solid rgba(196, 163, 90, 0.45);
+    font-size: 0.6875rem;
+    font-weight: 700;
+    color: var(--gold);
+}
+
+.w-inquiry-suppliers--atelier .w-inquiry-suppliers__card {
+    box-sizing: border-box;
+    padding: clamp(1.25rem, 2.5vw, 2rem);
+    background: var(--paper-card);
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__modal {
+    display: block;
+    position: relative;
+    inset: auto;
+    padding: 0;
+    place-items: unset;
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__backdrop,
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon.weline-inquiry--inline .weline-inquiry__close {
+    display: none !important;
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__dialog {
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    box-shadow: none;
+    background: transparent;
+    overflow: visible;
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__body {
+    display: grid;
+    gap: 0.85rem;
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__body > h2,
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__title {
+    margin: 0;
+    font-family: "Songti SC", "STSong", "Noto Serif SC", Georgia, serif;
+    font-size: 1.65rem;
+    font-weight: 600;
+    line-height: 1.25;
+    color: var(--ink);
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__body > p:not(.weline-inquiry__message),
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__description {
+    margin: 0;
+    font-size: 0.875rem;
+    line-height: 1.55;
+    color: var(--muted);
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__form {
+    display: grid;
+    gap: 0.9rem;
+    margin: 0.25rem 0 0;
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field {
+    display: grid;
+    gap: 0.35rem;
+    margin: 0;
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field > label,
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-address__label {
+    font-size: 0.8125rem;
+    font-weight: 650;
+    color: var(--ink-soft);
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field input:not([type="checkbox"]):not([type="radio"]):not([type="file"]),
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field textarea,
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field select,
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-address__control {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.5rem;
+    padding: 0.55rem 0.7rem;
+    border: 1px solid var(--line);
+    border-radius: 0;
+    background: #fff;
+    box-shadow: none;
+    color: var(--ink);
+    font: inherit;
+    font-size: 0.9375rem;
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field textarea {
+    min-height: 6.5rem;
+    resize: vertical;
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field input:focus,
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field textarea:focus,
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field select:focus,
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-address__control:focus-within {
+    border-color: var(--gold);
+    outline: none;
+    box-shadow: 0 0 0 2px rgba(196, 163, 90, 0.28);
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__field--country .w-address__input {
+    min-height: 2.5rem;
+    padding: 0.55rem 0.7rem;
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"],
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__submit {
+    box-sizing: border-box;
+    width: 100%;
+    min-height: 2.75rem;
+    margin-top: 0.35rem;
+    border: 1px solid var(--ink);
+    border-radius: 0;
+    background: var(--cta);
+    color: var(--cta-text);
+    font: inherit;
+    font-size: 0.9375rem;
+    font-weight: 650;
+    letter-spacing: 0.04em;
+    cursor: pointer;
+    transition: background 160ms ease, color 160ms ease;
+}
+
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"]:hover:not(:disabled),
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__submit:hover:not(:disabled),
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"]:focus-visible,
+.w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__submit:focus-visible {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: var(--ink);
+    outline: none;
+}
+
+@media (max-width: 52rem) {
+    .w-inquiry-suppliers--atelier .w-inquiry-suppliers__shell {
+        grid-template-columns: 1fr;
+    }
+
+    .w-inquiry-suppliers--atelier .w-inquiry-suppliers__story {
+        align-self: auto;
+    }
+
+    .w-inquiry-suppliers--atelier .w-inquiry-suppliers__story::after {
+        inset: 0.75rem;
+    }
+
+    .w-inquiry-suppliers--atelier .w-inquiry-suppliers__story-title {
+        max-width: none;
+    }
+
+    .w-inquiry-suppliers--atelier .w-inquiry-suppliers__toc {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 0.2rem 0.75rem;
+    }
+}
+
+@media (max-width: 28rem) {
+    .w-inquiry-suppliers--atelier .w-inquiry-suppliers__toc {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__form > button[type="submit"],
+    .w-inquiry-suppliers--atelier .weline-inquiry--amazon .weline-inquiry__submit {
+        transition: none;
+    }
+}

@@ -1,8 +1,8 @@
 ﻿"Inquiry 查询器不支持：%{1}","Inquiry 查询器不支持：%{1}"
 询盘表单,"Inquiry forms"
-"已发布表单查询、公共提交和受 ACL 保护的后台编辑","已发布表单查询、公共提交和受 ACL 保护的后台编辑"
+"已发布表单查询、公共提交和受 ACL 保护的后台编辑","Published form query, public submit, and ACL-protected backend editing"
 circle,circle
-管理询盘表单,"Manage inquiry form"
+管理询盘表单,"Manage inquiry forms"
 询盘表单列表,"Inquiry form list"
 list,list
 查看询盘表单,"View inquiry form"
@@ -15,45 +15,163 @@ edit,edit
 code,code
 编辑已受系统开关控制的可信脚本,"Edit trusted scripts that are already controlled by system switches"
 供应商申请,"Supplier application"
-新建表单,新建表单
-名称,名称
-状态,状态
-默认语言,默认语言
-操作,操作
-编辑,编辑
-可视化编辑询盘表单,可视化编辑询盘表单
-返回列表,返回列表
-内部名称,内部名称
-字段,字段
-添加字段,添加字段
-翻译,翻译
-保存草稿,保存草稿
-发布,发布
-已发布,已发布
-草稿已保存,草稿已保存
-保存失败,保存失败
+合作说明,"Partnership guide"
+"云裳 · 供应合作","YunShang · Supplier partnerships"
+把好工艺带进更多衣橱,"Bring craft into more wardrobes"
+本页说明合作准入、样品与质检、交期产能、结算对账与禁止事项。填写右侧资料后，采购会按品类与产能评估合作意向。,"This page covers eligibility, samples and QC, lead times and capacity, settlement, and prohibited conduct. After you submit the form, merchandising reviews fit by category and capacity."
+合作说明目录,"Partnership guide contents"
+一、合作对象,"1. Who we partner with"
+二、准入与资料,"2. Eligibility and materials"
+三、样品与质检,"3. Samples and quality control"
+四、交期与产能,"4. Lead times and capacity"
+五、结算与对账,"5. Settlement and reconciliation"
+六、禁止事项,"6. Prohibited conduct"
+七、申请流程,"7. Application process"
+我们优先寻找面料、成衣与配饰伙伴，尤其具备汉服/新中式相关工艺与稳定复购产能的工厂或品牌方。,"We prioritize fabric, garment, and accessory partners—especially factories or brands with hanfu / neo-Chinese craft and reliable reorder capacity."
+"品类清晰：写明形制、材质与主力 SKU，方便对口选品。","Clear assortment: describe silhouettes, materials, and core SKUs so the right buyer can review."
+响应及时：完整联系方式可显著缩短首轮沟通周期。,"Responsive contact: complete business details shorten the first review cycle."
+长期合作：优先稳定交付与可复购产能，而非一次性出货。,"Long-term fit: we prefer stable delivery and reorder capacity over one-off shipments."
+首轮评估通常需要：营业执照或主体信息、主要品类与产能区间、代表性产品图或链接、商务联系人邮箱与电话。必要时会补充询价单、质检报告或验厂资料。,"Initial review usually needs entity details, category and capacity range, representative product images or links, and a business email/phone. Quotes, QC reports, or factory audits may follow."
+请使用真实商务邮箱与电话；虚假主体、无法核验的联系方式将直接终止评估。,"Use a real business email and phone. Fake entities or unverifiable contacts end the review."
+进入样品环节时，双方约定样品费用、寄送与留样规则。大货需与确认样一致；色差、工艺缺陷、尺寸偏差等按双方确认的质检标准处理。,"In sampling, both sides agree on sample cost, shipping, and retention. Bulk must match the approved sample; shade, workmanship, and sizing issues follow the agreed QC standard."
+若商品涉及特殊工艺或定制，以书面确认的工艺单与验收标准为准。,"For special crafts or made-to-order items, the written tech pack and acceptance criteria control."
+请在申请中如实填写常规交期与可承诺产能。确认订单后的交期变更须提前书面沟通；多次失信或严重延期可能影响后续合作。,"State realistic lead times and commitable capacity. Post-PO date changes need advance written notice; repeated misses can affect future work."
+结算方式、账期与开票要求以双方书面协议为准。申请阶段请说明期望结算方式；未签订合作协议前，本站不承诺具体账期或预付款条款。,"Payment terms, credit period, and invoicing follow the written agreement. Share preferred settlement at application; we do not promise payment terms before a signed partnership."
+假冒伪劣、侵权仿制、无授权使用他人商标或设计。,"Counterfeits, infringing copies, or unauthorized use of another brand or design."
+隐瞒关键质量风险、虚假产能或伪造资质证明。,"Concealing material quality risks, false capacity claims, or forged credentials."
+绕过约定渠道向终端顾客推销或泄露订单隐私信息。,"Bypassing agreed channels to sell to end customers or leaking order privacy."
+核对公司与联系信息,"Verify company and contact details"
+按供应类型分发给对口采购,"Route to the matching merchandising buyer"
+需要时约样品或产能沟通,"Arrange samples or capacity talks when needed"
+提交后我们将尽快回复；若资料不完整，采购可能先补齐信息再进入样品或报价环节。,"We reply as soon as we can. Incomplete files may need follow-up before sampling or quoting."
+新建表单,"New form"
+名称,Name
+状态,Status
+默认语言,"Default language"
+操作,Actions
+编辑,Edit
+未命名表单,未命名表单
+返回列表,"Back to list"
+保存草稿,"Save draft"
+发布,Publish
+配置步骤,配置步骤
+"① 基本信息：填内部名称、对外编码、默认语言（先写完默认语言文案再翻其它语言）。","① 基本信息：填内部名称、对外编码、默认语言（先写完默认语言文案再翻其它语言）。"
+"② 字段结构：添加字段并设置键名/类型/必填；键名决定前台提交参数，改键名后请同步改文案区标签。","② 字段结构：添加字段并设置键名/类型/必填；键名决定前台提交参数，改键名后请同步改文案区标签。"
+"③ 前台文案：用语言页签填写标题、按钮与字段标签；不必手改 JSON。空语言可用「AI 填充其它语言」。","③ 前台文案：用语言页签填写标题、按钮与字段标签；不必手改 JSON。空语言可用「AI 填充其它语言」。"
+"④ 保存草稿预览无误后点发布。","④ 保存草稿预览无误后点发布。"
+基本信息,基本信息
+"编码发布后尽量不要改；默认语言是 AI 翻译的源语言","编码发布后尽量不要改；默认语言是 AI 翻译的源语言"
+内部名称,"Internal name"
+例如：供应商申请,例如：供应商申请
+仅后台列表显示，不影响前台标题,仅后台列表显示，不影响前台标题
+对外编码,对外编码
+"小写英文与连字符，如 supplier-application","小写英文与连字符，如 supplier-application"
+"如 zh_Hans_CN、en_US；文案区应先填齐该语言","如 zh_Hans_CN、en_US；文案区应先填齐该语言"
+字段结构,字段结构
+添加字段,"Add field"
+顺序,顺序
+字段键名,字段键名
+类型,类型
+必填,必填
+"类型选「国家/地区」时会渲染官方地址级联；建议另配 province / city / district 文本字段用于落库快照。","类型选「国家/地区」时会渲染官方地址级联；建议另配 province / city / district 文本字段用于落库快照。"
+前台文案,前台文案
+"按语言填写用户看到的标题、说明、按钮与字段标签。切换语言页签即可；高级 JSON 仅排错时展开。","按语言填写用户看到的标题、说明、按钮与字段标签。切换语言页签即可；高级 JSON 仅排错时展开。"
+强制覆盖已有译文,强制覆盖已有译文
+"AI 填充其它语言","AI 填充其它语言"
+新语言代码,新语言代码
+添加语言,添加语言
+表单标题,表单标题
+前台页面大标题,前台页面大标题
+提交按钮,提交按钮
+例如：提交申请,例如：提交申请
+表单说明,表单说明
+标题下方的简短说明,标题下方的简短说明
+提交成功提示,提交成功提示
+用户提交成功后看到的提示,用户提交成功后看到的提示
+字段标签,字段标签
+与上方字段结构一一对应；选项型字段可写每个选项的显示名。,与上方字段结构一一对应；选项型字段可写每个选项的显示名。
+"高级：原始翻译 JSON（一般无需编辑）","高级：原始翻译 JSON（一般无需编辑）"
+"翻译 JSON","翻译 JSON"
+单行文本,单行文本
+多行文本,多行文本
+邮箱,邮箱
+电话,电话
+数字,数字
+下拉选择,下拉选择
+单选,单选
+多选,多选
+文件上传,文件上传
+国家/地区,国家/地区
+隐藏字段,隐藏字段
+删除字段,删除字段
+选项值（每行一个，提交用；显示名在下方文案区填写）,选项值（每行一个，提交用；显示名在下方文案区填写）
+地址目录,地址目录
+全球国家,全球国家
+站点已安装地区,站点已安装地区
+级联层级,级联层级
+选择方式,选择方式
+默认,默认
+显示标签,显示标签
+选项显示名,选项显示名
+省/州标签,省/州标签
+城市标签,城市标签
+区县标签,区县标签
+"翻译 JSON 无法解析，请检查高级区语法","翻译 JSON 无法解析，请检查高级区语法"
+"请输入语言代码，如 en_US","请输入语言代码，如 en_US"
+"正在 AI 填充…","正在 AI 填充…"
+"AI 填充失败","AI 填充失败"
+"AI 填充完成","AI 填充完成"
+已发布,Published
+草稿已保存,"Draft saved"
+保存失败,"Save failed"
 人机验证失败或已过期，请重试,"Human verification failed or expired. Please try again."
-无效的幂等提交键,无效的幂等提交键
-提交成功，我们会尽快联系您。,提交成功，我们会尽快联系您。
-请填写：%{1},请填写：%{1}
-邮箱格式不正确,邮箱格式不正确
-选择项无效,选择项无效
-填写内容过短,填写内容过短
-填写内容过长,填写内容过长
-填写格式不正确,填写格式不正确
-未找到已发布的询盘表单,未找到已发布的询盘表单
-获取报价,获取报价
-关闭,关闭
-正在加载表单…,正在加载表单…
-表单加载失败，请稍后重试。,表单加载失败，请稍后重试。
-提交成功,提交成功
-提交失败，请稍后重试。,提交失败，请稍后重试。
+无效的幂等提交键,"Invalid idempotency key"
+提交成功，我们会尽快联系您。,"Submitted. We will contact you soon."
+请填写：%{1},"Please fill in: %{1}"
+邮箱格式不正确,"Invalid email format"
+选择项无效,"Invalid selection"
+填写内容过短,"Value is too short"
+填写内容过长,"Value is too long"
+填写格式不正确,"Invalid format"
+未找到已发布的询盘表单,"Published inquiry form not found"
+获取报价,"Get a quote"
+关闭,Close
+正在加载表单…,"Loading form..."
+表单加载失败，请稍后重试。,"Failed to load the form. Please try again later."
+提交成功,Submitted
+提交失败，请稍后重试。,"Submission failed. Please try again later."
 人机验证加载失败，请稍后重试,"Failed to load human verification. Please try again later."
-"请选择国家 / 地区","请选择国家 / 地区"
-"表单名称和 code 不合法","表单名称和 code 不合法"
-表单不存在,表单不存在
-"表单首次发布后 code 不可修改","表单首次发布后 code 不可修改"
-没有可发布的草稿,没有可发布的草稿
-默认语言必须填写表单标题和提交按钮文案,默认语言必须填写表单标题和提交按钮文案
+"请选择国家 / 地区","Please select a country / region"
+"表单名称和 code 不合法","Form name or code is invalid"
+表单不存在,"Form not found"
+"表单首次发布后 code 不可修改","Form code cannot change after first publish"
+没有可发布的草稿,"No draft available to publish"
+默认语言必须填写表单标题和提交按钮文案,"Default language must include title and submit label"
+默认语言不能为空,默认语言不能为空
+默认语言翻译为空，请先填写母本文案,默认语言翻译为空，请先填写母本文案
+默认语言没有可翻译的文案叶子,默认语言没有可翻译的文案叶子
+"没有可填充的目标语言。请配置网站关联语言并在 I18n AI 翻译中启用目标语言。","没有可填充的目标语言。请配置网站关联语言并在 I18n AI 翻译中启用目标语言。"
+目标语言文案均已存在，未覆盖。如需重翻请勾选强制。,目标语言文案均已存在，未覆盖。如需重翻请勾选强制。
+"AI 翻译调用失败","AI 翻译调用失败"
+"AI 翻译未返回可用结果","AI 翻译未返回可用结果"
+"已填充 %{1} 条文案到 %{2} 个语言","已填充 %{1} 条文案到 %{2} 个语言"
+可视化编辑询盘表单,"Visual inquiry form editor"
+字段,Fields
+翻译,Translations
+我们寻找面料、成衣与配饰伙伴。填写右侧资料后，采购会按品类与产能评估合作意向。,"We look for fabric, garment, and accessory partners. After you submit the form, merchandising reviews fit by category and capacity."
+品类清晰,"Clear assortment"
+"写明形制、材质与主力 SKU，方便对口选品。","Describe silhouettes, materials, and core SKUs so the right buyer can review."
+响应及时,"Responsive contact"
+完整联系方式可显著缩短首轮沟通周期。,"Complete business details shorten the first review cycle."
+长期合作,"Long-term partnership"
+优先稳定交付与可复购产能，而非一次性出货。,"Prefer stable delivery and reorder capacity over one-off shipments."
+供应商入驻,"Supplier onboarding"
+一次提交公司、联系人与供应能力。我们会按品类评估并尽快回复。,"Submit company, contact, and supply capability once. We review by category and reply soon."
+申请流程,"Application process"
+申请后会发生什么,"What happens after you apply"
+请使用真实商务邮箱与电话，便于首轮回访。,"Use a real business email and phone for the first follow-up."
+原型布局切换,"Prototype layout switch"
+"原型 · 左右键切换","Prototype · use arrow keys"
+上一个布局,"Previous layout"
+下一个布局,"Next layout"
 欢迎成为平台供应商。请填写以下申请信息，我们会尽快评估并与您联系。,"Become a supplier. Complete the application below and our team will follow up."
-"""Inquiry 查询器不支持：%{1}""","Inquiry 查询器不支持：%{1}"
