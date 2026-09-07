@@ -295,7 +295,8 @@ class PixelMarkerAuditService
     {
         $host = (string)(\parse_url($url, \PHP_URL_HOST) ?: '');
         $isLocalTest = $host !== '' && (
-            \str_ends_with(\strtolower($host), '.weline.test')
+            \str_ends_with(\strtolower($host), '.test.weline.com')
+            || \str_ends_with(\strtolower($host), '.weline.test')
             || $host === 'localhost'
             || $host === '127.0.0.1'
         );
@@ -434,7 +435,7 @@ class PixelMarkerAuditService
     }
 
     /**
-     * *.weline.test without explicit port often hits a non-WLS listener (thin HTML).
+     * *.test.weline.com without explicit port often hits a non-WLS listener (thin HTML).
      * Prefer a live local WLS HTTP port so audit does not false-red.
      */
     private function preferLocalWlsUrl(string $url): string
@@ -444,7 +445,9 @@ class PixelMarkerAuditService
             return $url;
         }
         $host = \strtolower((string)($parts['host'] ?? ''));
-        if ($host === '' || !\str_ends_with($host, '.weline.test')) {
+        if ($host === ''
+            || (!\str_ends_with($host, '.test.weline.com') && !\str_ends_with($host, '.weline.test'))
+        ) {
             return $url;
         }
         if (!empty($parts['port'])) {

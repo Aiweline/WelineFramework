@@ -132,7 +132,13 @@ if ($__pixel_env_json === false) {
 }
 
 if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
-    $__pixel_script_url = '@static(Weline_Visitor::js/pixel.js)';
+    // Resolve static URL in PHP. Do not put the static tag inside a quoted PHP
+    // assignment — the template compiler expands that tag and breaks the file.
+    $__pixel_script_url = htmlspecialchars(
+        (string) $this->fetchTagSource('statics', 'Weline_Visitor::js/pixel.js'),
+        ENT_QUOTES | ENT_SUBSTITUTE,
+        'UTF-8'
+    );
     ?>
 <script>
 (function () {
@@ -162,7 +168,7 @@ if ($__visitor_pixel_enabled || $__visitor_ga4_enabled) {
                 || window.__WELINE_DEBUG__
                 || host === 'localhost'
                 || host === '127.0.0.1'
-                || /\.weline\.test$/i.test(host));
+                || /\.(?:test\.weline\.com|weline\.test)$/i.test(host));
         } catch (e) {
             return !!(window.DEV || window.WELINE_ENV === 'DEV');
         }

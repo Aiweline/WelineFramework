@@ -122,7 +122,7 @@ class PixelBootstrapHtmlService
                 || window.__WELINE_DEBUG__
                 || host === 'localhost'
                 || host === '127.0.0.1'
-                || /\\.weline\\.test$/i.test(host));
+                || /\\.(?:test\\.weline\\.com|weline\\.test)$/i.test(host));
         } catch (e) {
             return !!(window.DEV || window.WELINE_ENV === 'DEV');
         }
