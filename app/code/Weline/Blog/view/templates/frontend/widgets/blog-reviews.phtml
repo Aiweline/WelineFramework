@@ -148,6 +148,13 @@ if ($entityUuid === '' || $isPreviewMode) {
 
 $messages = [
     'loading' => __('正在加载评论...'),
+    'listRegion' => __('评论列表'),
+    'pagerLabel' => __('评论分页'),
+    'prevPage' => __('上一页'),
+    'nextPage' => __('下一页'),
+    'pageLabelPrefix' => __('第'),
+    'pageLabelMiddle' => '/',
+    'pageLabelSuffix' => __('页'),
     'loadFailed' => __('评论加载失败，请稍后重试。'),
     'empty' => __('暂时还没有已审核的评论，欢迎分享第一条真实体验。'),
     'countSuffix' => __('条评论'),
@@ -172,7 +179,7 @@ $messages = [
 ];
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Review::css/widgets/product-reviews.css)&v=20260826-review-dialog2"
+      href="@static(Weline_Review::css/widgets/product-reviews.css)&v=20260904-review-pager2"
       data-no-extract="true">
 
 <section class="<?= $esc($reviewRootClasses) ?>"
@@ -211,6 +218,7 @@ $messages = [
             <div class="weline-review__items" data-review-items aria-live="polite">
                 <p class="weline-review__empty"><?= __('正在加载评论...') ?></p>
             </div>
+            <nav class="weline-review__pager" data-review-pager hidden aria-label="<?= $esc(__('评论分页')) ?>"></nav>
             <?php if ($formCollapsed): ?>
                 <button type="button"
                         class="weline-review__write-toggle"

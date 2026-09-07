@@ -55,6 +55,8 @@ final class BlogNewsCategoryBootstrap
         $categoryId = $create->getCategoryId();
         if ($categoryId > 0) {
             $this->categoryAttributes->writeName($websiteId, $categoryId, self::NEWS_NAME, '');
+            $this->categoryAttributes->writeName($websiteId, $categoryId, self::NEWS_NAME, 'zh_Hans_CN');
+            $this->categoryAttributes->writeName($websiteId, $categoryId, 'News Center', 'en_US');
             $this->categoryAttributes->writeCode($websiteId, $categoryId, self::NEWS_SLUG, '');
         }
 

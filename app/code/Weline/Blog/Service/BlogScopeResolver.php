@@ -22,7 +22,11 @@ final class BlogScopeResolver
 
     public function locale(): string
     {
-        $locale = trim(State::getLang());
+        // Prefer getLangLocal(): I18n maps path casing (en_us) to installed code (en_US).
+        $locale = trim(State::getLangLocal());
+        if ($locale === '') {
+            $locale = trim(State::getLang());
+        }
         if ($locale === '') {
             return 'zh_Hans_CN';
         }

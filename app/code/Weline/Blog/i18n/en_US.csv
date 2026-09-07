@@ -56,6 +56,12 @@
 全部文章,"All Posts"
 展开/收起,展开/收起
 正在加载评论...,"Loading reviews..."
+评论列表,"Review list"
+评论分页,评论分页
+上一页,上一页
+下一页,下一页
+第,第
+页,页
 评论加载失败，请稍后重试。,"Reviews could not be loaded. Please try again later."
 暂时还没有已审核的评论，欢迎分享第一条真实体验。,"No approved reviews yet. Be the first to share your experience."
 条评论,reviews
@@ -101,9 +107,7 @@
 更新时间,"Updated At"
 全部状态,全部状态
 文章分页,文章分页
-上一页,上一页
 "第 %{1} / %{2} 页","第 %{1} / %{2} 页"
-下一页,下一页
 返回列表,"Back to list"
 预览,Preview
 文章设置,"Post Settings"
@@ -153,6 +157,9 @@ Slug,Slug
 技术分享,"Tech Sharing"
 产品动态,"Product Updates"
 公司新闻,"Company News"
+正在加载更多评论...,"Loading more reviews..."
+继续下滑加载更多评论,"Scroll for more reviews"
+已显示全部评论,"All reviews loaded"
 "前台路径为 /blog/{slug}；AI 处理会按当前语言生成对应 slug。","前台路径为 /blog/{slug}；AI 处理会按当前语言生成对应 slug。"
 "AI 生成博客 slug","AI 生成博客 slug"
 "网站 ID","Website ID"

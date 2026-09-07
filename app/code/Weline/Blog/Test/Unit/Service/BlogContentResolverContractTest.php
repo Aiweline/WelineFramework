@@ -24,7 +24,7 @@ final class BlogContentResolverContractTest extends TestCase
             dirname(__DIR__, 3) . '/Service/BlogScopeResolver.php',
         );
 
-        self::assertStringContainsString('State::getLang()', $source);
+        self::assertStringContainsString('State::getLangLocal()', $source);
         self::assertStringContainsString("str_replace('-', '_', \$locale)", $source);
         self::assertStringNotContainsString('$scope->localeCode', $source);
         self::assertStringNotContainsString("w_env('lang'", $source);

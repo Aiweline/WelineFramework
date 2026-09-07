@@ -15,6 +15,18 @@ final class BlogFrontendTemplateContractTest extends TestCase
         self::assertStringContainsString('blog-storefront__card', $template);
         self::assertStringContainsString('data-testid="blog-list"', $template);
         self::assertStringContainsString('StorefrontImagePlaceholder', $template);
+        self::assertStringContainsString("\$this->getUrl(ltrim(\$url, '/')", $template);
+        self::assertStringContainsString("\$this->getUrl(ltrim(\$categoryUrl, '/')", $template);
+    }
+
+    public function testCategoryFilterTemplateUsesFrameworkUrl(): void
+    {
+        $template = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/templates/frontend/partials/category-filter.phtml'
+        );
+        self::assertStringContainsString('data-testid="blog-category-filter"', $template);
+        self::assertStringContainsString("\$template->getUrl(ltrim(\$path, '/')", $template);
+        self::assertStringContainsString("\$buildUrl", $template);
     }
 
     public function testDetailTemplateRendersAmazonArticle(): void
@@ -26,6 +38,11 @@ final class BlogFrontendTemplateContractTest extends TestCase
         self::assertStringContainsString('amazon-blog-article__content', $template);
         self::assertStringContainsString('amazon-blog-article__author-inline', $template);
         self::assertStringContainsString('amazon-blog-article__keywords', $template);
+
+        $form = (string)file_get_contents(dirname(__DIR__, 3) . '/view/templates/backend/post-admin/form.phtml');
+        self::assertStringContainsString('Weline\\Blog\\Model\\Post\\LocalDescription', $form);
+        self::assertStringContainsString('data-testid="blog-post-keywords-local"', $form);
+        self::assertStringContainsString('field="keywords"', $form);
     }
 
     public function testBlogReviewsWidgetRegistersDefaultInjection(): void
@@ -109,5 +126,10 @@ final class BlogFrontendTemplateContractTest extends TestCase
         self::assertStringContainsString('blog:post:', $template);
         self::assertStringContainsString('data-weline-load="productReviews"', $template);
         self::assertStringNotContainsString('product-reviews.js', $template);
+
+        $upgrade = (string)file_get_contents(dirname(__DIR__, 3) . '/Setup/Upgrade.php');
+        self::assertStringContainsString('ensureBlogReviewsPublished', $upgrade);
+        self::assertStringContainsString('publishLayout', $upgrade);
+        self::assertStringContainsString('applyRequiredMissingForIdentity', $upgrade);
     }
 }
