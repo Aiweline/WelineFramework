@@ -139,7 +139,7 @@ Sitemap 首页是纯读取页，打开时不生成 XML。同步、生成、提�
 界面只消费 publisher manifest/read model，不根据文件名反解业务身份。站点卡片按真实发布关系展示
 `当前站点 /sitemap.xml → canonical/平台索引 → locale + module + scope → XML shard` 树；主入口、目标索引和
 每个 shard 都提供一键复制。主入口由站点配置 URL 构建；系统默认站若仍是 `http://localhost` /
-`127.0.0.1` 占位，则改用当前请求解析出的项目入口（如 `https://p{hash}.weline.test:{port}`），
+`127.0.0.1` 占位，则改用当前请求解析出的项目入口（如 `https://p{hash}.test.weline.com:{port}`），
 不得把任意后台代理 Host 覆盖到已配置真实域名的普通站点。
 每层明确展示覆盖 URL 数、下级索引/分片数；每个 shard 独立展示 manifest locale、文件名、URL 数、字节数和内容更新时间，
 空 locale 必须标记为“默认桶（locale 未声明）”，不得伪装成已知具体语言。

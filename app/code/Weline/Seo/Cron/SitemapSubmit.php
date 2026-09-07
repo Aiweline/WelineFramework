@@ -75,6 +75,7 @@ class SitemapSubmit implements CronTaskInterface
 
             // ========== 步骤1：调用所有 Provider 同步 URL 数据到数据库 ==========
             $syncStats = $syncService->syncAll(true);
+            $failedWebsiteIds = \Weline\Seo\Service\SitemapRefreshService::failedWebsiteIds($syncStats);
             $stats['collected_websites'] = count($syncStats['changed_websites'] ?? []);
             $stats['synced_urls'] = (int)($syncStats['inserted'] ?? 0)
                 + (int)($syncStats['updated'] ?? 0)
@@ -88,15 +89,23 @@ class SitemapSubmit implements CronTaskInterface
 
             // ========== 步骤2：为所有站点生成 sitemap 文件 ==========
             $websites = $websiteDirectory->listWebsites();
+            $generatedWebsites = [];
 
             foreach ($websites as $website) {
                 $websiteId = (int)($website['website_id'] ?? 0);
-                if ($websiteId <= 0) {
+                if ($websiteId < 0 || in_array($websiteId, $failedWebsiteIds, true)) {
                     continue;
                 }
 
                 try {
                     $result = $webSitemapData->generateSitemapFiles($websiteId);
+                    if (empty($result['success'])) {
+                        throw new \RuntimeException((string)($result['message'] ?? 'Sitemap generation failed'));
+                    }
+                    if (!empty($result['hard_gate'])) {
+                        continue;
+                    }
+                    $generatedWebsites[$websiteId] = true;
                     $stats['generated_files'] += ($result['total_files'] ?? 0);
 
                     $hasAutoSubmit = $bindingService->getSitemapSubmitAccounts($websiteId) !== [];
@@ -116,7 +125,7 @@ class SitemapSubmit implements CronTaskInterface
             // ========== 步骤3：提交 sitemap URL 到搜索引擎（只提交已绑定的）==========
             foreach ($websites as $website) {
                 $websiteId = (int)($website['website_id'] ?? 0);
-                if ($websiteId <= 0) {
+                if ($websiteId < 0 || !isset($generatedWebsites[$websiteId])) {
                     continue;
                 }
                 foreach ($bindingService->getSitemapSubmitAccounts($websiteId) as $bindingInfo) {
@@ -131,7 +140,7 @@ class SitemapSubmit implements CronTaskInterface
                         $adapter = $bindingInfo['adapter'] ?? null;
 
                         // 获取该平台的 sitemap 索引 URL
-                        $sitemapUrl = $webSitemapData->getPlatformSitemapUrl($websiteId, $platformCode);
+                        $sitemapUrl = rtrim($websiteDirectory->effectivePublicBaseUrl($website), '/') . '/sitemap.xml';
                         if (empty($sitemapUrl)) {
                             continue;
                         }

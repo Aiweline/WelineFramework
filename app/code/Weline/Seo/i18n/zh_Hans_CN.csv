@@ -69,42 +69,43 @@ SEO管理,SEO管理
 "SEO 资源变更任务登记失败","SEO 资源变更任务登记失败"
 "website_id 必须是非负整数","website_id 必须是非负整数"
 "website_id 不能为负数","website_id 不能为负数"
-"缺少 IndexNow Key","缺少 IndexNow Key"
-"Sitemap URL 缺少主机名","Sitemap URL 缺少主机名"
-"IndexNow 请求失败：%{1}","IndexNow 请求失败：%{1}"
-"已通过 IndexNow 通知 %{1}","已通过 IndexNow 通知 %{1}"
-"IndexNow 返回错误码：%{1}","IndexNow 返回错误码：%{1}"
-"缺少百度站长平台 Token","缺少百度站长平台 Token"
-"百度 API 请求失败：%{1}","百度 API 请求失败：%{1}"
-"百度返回错误：%{1} - %{2}","百度返回错误：%{1} - %{2}"
-快速收录,快速收录
-普通收录,普通收录
-"已成功通过%{1} API提交到百度，成功 %{2} 条","已成功通过%{1} API提交到百度，成功 %{2} 条"
-"百度 API 返回异常","百度 API 返回异常"
-"百度提交完成：成功 %{1} 条，剩余配额 %{2}","百度提交完成：成功 %{1} 条，剩余配额 %{2}"
 "Google Ping 方式已于 2023 年弃用。请配置 Service Account 使用 Search Console API 提交。","Google Ping 方式已于 2023 年弃用。请配置 Service Account 使用 Search Console API 提交。"
+"未填写 Search Console 站点属性 URL。请填写与 GSC 完全一致的属性（如 https://www.example.com/ 或 sc-domain:example.com），再到 Google Search Console 验证该属性。","未填写 Search Console 站点属性 URL。请填写与 GSC 完全一致的属性（如 https://www.example.com/ 或 sc-domain:example.com），再到 Google Search Console 验证该属性。"
+"Google 身份验证失败，请检查 Service Account 凭证","Google 身份验证失败，请检查 Service Account 凭证"
+"无法连接 Google Search Console API（超时）。凭证已读到，请检查服务器出网/代理（浏览器能开 Google 不等于 PHP/WLS 能出网），再到 GSC 确认属性权限。","无法连接 Google Search Console API（超时）。凭证已读到，请检查服务器出网/代理（浏览器能开 Google 不等于 PHP/WLS 能出网），再到 GSC 确认属性权限。"
+"无法连接 Google Search Console API：%{1}。请检查服务器出网/代理后重试。","无法连接 Google Search Console API：%{1}。请检查服务器出网/代理后重试。"
+"Google Search Console 站点权限验证通过","Google Search Console 站点权限验证通过"
+"（当前 JSON 中的 client_email）","（当前 JSON 中的 client_email）"
+"GSC 属性「%{1}」对该服务账号不可见（HTTP 404），且该账号下暂无任何属性。请先在 Google Search Console 验证域名/网址前缀，再将 %{2} 加成「所有者」，并把本处属性 URL 改成与 GSC 完全一致后再验证。前往：%{3}","GSC 属性「%{1}」对该服务账号不可见（HTTP 404），且该账号下暂无任何属性。请先在 Google Search Console 验证域名/网址前缀，再将 %{2} 加成「所有者」，并把本处属性 URL 改成与 GSC 完全一致后再验证。前往：%{3}"
+"属性 URL 不一致：本处填写「%{1}」，但服务账号 %{2} 当前可见的是「%{3}」。说明账号多半已加入 GSC，请把本处改成与 GSC 左侧属性名完全相同的字符串（常见：域名属性要用 sc-domain:example.com，不能写成 https://www.example.com）。改完保存后再点验证。前往：%{4}","属性 URL 不一致：本处填写「%{1}」，但服务账号 %{2} 当前可见的是「%{3}」。说明账号多半已加入 GSC，请把本处改成与 GSC 左侧属性名完全相同的字符串（常见：域名属性要用 sc-domain:example.com，不能写成 https://www.example.com）。改完保存后再点验证。前往：%{4}"
+"服务账号 %{1} 无权访问 GSC 属性「%{2}」（HTTP 403）。请到 Search Console → 设置 → 用户和权限，将其加成「所有者」。前往：%{3}","服务账号 %{1} 无权访问 GSC 属性「%{2}」（HTTP 403）。请到 Search Console → 设置 → 用户和权限，将其加成「所有者」。前往：%{3}"
+"GSC 属性「%{1}」当前权限为 %{2}，需要 siteOwner 或 siteFullUser。请将服务账号 %{3} 加成「所有者」。前往：%{4}","GSC 属性「%{1}」当前权限为 %{2}，需要 siteOwner 或 siteFullUser。请将服务账号 %{3} 加成「所有者」。前往：%{4}"
+"请确认属性已验证、URL 一致，且 Service Account 已是所有者。","请确认属性已验证、URL 一致，且 Service Account 已是所有者。"
+"Google Search Console 站点权限验证失败（HTTP %{1}）。%{2} 前往：%{3}","Google Search Console 站点权限验证失败（HTTP %{1}）。%{2} 前往：%{3}"
 "Ping 请求失败：%{1}","Ping 请求失败：%{1}"
 "已成功通知 Google 更新 sitemap","已成功通知 Google 更新 sitemap"
 "Ping 请求返回错误码：%{1}","Ping 请求返回错误码：%{1}"
 "缺少 Service Account 配置（client_email 或 private_key）","缺少服务帐号配置（client_email 或 private_key）"
 "缺少 Search Console 站点属性 URL","缺少 Search Console 站点属性 URL"
 "获取 Google Access Token 失败","获取 Google Access Token 失败"
-"Google Search Console API 请求失败：%{1}","Google Search Console API 请求失败：%{1}"
+"Google Search Console API 连接失败","Google Search Console API 连接失败"
 未知错误,未知错误
 "权限被拒绝：请确保 Service Account 已在 Search Console 中被添加为站点所有者","权限被拒绝：请确保 Service Account 已在 Search Console 中被添加为站点所有者"
-"Google Search Console API 错误：%{1}","Google 搜索控制台 API 错误：%{1}"
+"Google Search Console API 请求失败（HTTP %{1}）","Google Search Console API 请求失败（HTTP %{1}）"
 "已通过 Google Search Console API 提交 Sitemap","通过 Google Search Console API 已提交 站点地图"
 "Google Search Console API 返回错误码：%{1}","Google Search Console API 返回错误码：%{1}"
-提交异常：%{1},提交异常：%{1}
+"Google Sitemap 提交失败，请检查账户配置和网络连接","Google Sitemap 提交失败，请检查账户配置和网络连接"
+"未读取到 Service Account（client_email/private_key 为空），请重新上传 JSON 凭证","未读取到 Service Account（client_email/private_key 为空），请重新上传 JSON 凭证"
+"Service Account 私钥无法解析，请检查 JSON 中 private_key 是否完整","Service Account 私钥无法解析，请检查 JSON 中 private_key 是否完整"
+"Service Account JWT 签名失败，请检查私钥","Service Account JWT 签名失败，请检查私钥"
+"无法连接 Google OAuth（oauth2.googleapis.com 超时）。凭证已读到，请检查服务器出网/代理，而非重新上传 JSON","无法连接 Google OAuth（oauth2.googleapis.com 超时）。凭证已读到，请检查服务器出网/代理，而非重新上传 JSON"
+"无法连接 Google OAuth：%{1}","无法连接 Google OAuth：%{1}"
+"Google OAuth 拒绝令牌（HTTP %{1}）：%{2}","Google OAuth 拒绝令牌（HTTP %{1}）：%{2}"
+"Google OAuth 拒绝令牌（HTTP %{1}），请检查 Service Account 与 API 启用状态","Google OAuth 拒绝令牌（HTTP %{1}），请检查 Service Account 与 API 启用状态"
+"Google OAuth 响应缺少 access_token","Google OAuth 响应缺少 access_token"
 "缺少 Service Account 配置","缺少 Service Account 配置"
 "成功获取 Google Search Console 统计数据","成功获取 Google Search Console 统计数据"
 获取统计数据失败：%{1},获取统计数据失败：%{1}
-"缺少 Bing Webmaster API Key","缺少 Bing 网站管理员 API 密钥"
-"API 请求失败：%{1}","API 请求失败：%{1}"
-"已成功提交 sitemap 到 Bing Webmaster","已成功提交 sitemap 到 Bing Webmaster"
-"API 请求返回错误码：%{1}","API 请求返回错误码：%{1}"
-"已通过 IndexNow 通知 Bing 更新","已通过 IndexNow 通知 Bing 更新"
-"IndexNow 请求返回错误码：%{1}","IndexNow 请求返回错误码：%{1}"
 该平台不支持自动提交,该平台不支持自动提交
 该平台不支持统计数据获取,该平台不支持统计数据获取
 加载失败：%{1},加载失败：%{1}
@@ -139,9 +140,8 @@ sparkles,闪闪发光
 账户名称不能为空,账户名称不能为空
 平台不能为空,平台不能为空
 平台未注册：%{1},平台未注册：%{1}
-请填写：%{1},请填写：%{1}
 账户保存成功,账户保存成功
-账户保存失败：%{1},账户保存失败：%{1}
+账户保存失败，请检查配置后重试,账户保存失败，请检查配置后重试
 账户ID无效,账户ID无效
 获取站点列表失败：%{1},获取站点列表失败：%{1}
 未接收到请求数据,未接收到请求数据
@@ -182,7 +182,9 @@ save,节省
 trash,trash
 加载Sitemap管理失败：%{1},加载Sitemap管理失败：%{1}
 生成Sitemap失败：%{1},生成Sitemap失败：%{1}
+"部分 Provider 同步失败，请查看明细","部分 Provider 同步失败，请查看明细"
 生成失败：%{1},生成失败：%{1}
+生成Sitemap失败,生成Sitemap失败
 "成功生成 %{1} 个平台的 sitemap，共 %{2} 个文件","成功生成 %{1} 个平台的 sitemap，共 %{2} 个文件"
 概览,概览
 "同步 URL 总数：%{1}","同步 URL 总数：%{1}"
@@ -668,6 +670,7 @@ SEO主体总数,SEO主体总数
 账户名称,账户名称
 强制要求填写用户名的格式是：,强制要求填写用户名的格式是：
 支持的功能,支持的功能
+出网依赖,出网依赖
 字段预览,字段预览
 示意结构，请在下方填写真实值,示意结构，请在下方填写真实值
 账户配置,账户配置
@@ -677,6 +680,7 @@ SEO主体总数,SEO主体总数
 启用账户,启用账户
 启用URL定时推送,启用URL定时推送
 启用Sitemap定时提交,启用Sitemap定时提交
+验证配置与连接,验证配置与连接
 "标准 XML Sitemap 生成","标准 XML Sitemap 生成"
 站点绑定后生成独立平台目录,站点绑定后生成独立平台目录
 "IndexNow 自动通知","IndexNow 自动通知"
@@ -687,13 +691,21 @@ SEO主体总数,SEO主体总数
 "1. 生成 8-128 位 IndexNow Key","1. 生成 8-128 位 IndexNow Key"
 "2. 在网站根目录放置 Key 文件，文件内容只包含该 Key","2. 在网站根目录放置 Key 文件，文件内容只包含该 Key"
 "3. 在下方配置中填写 indexnow_key 和 key_location","3. 在下方配置中填写 indexnow_key 和 key_location"
-"4. 保存账户、绑定站点，并启用 URL/Sitemap 自动提交","4. 保存账户、绑定站点，并启用 URL/Sitemap 自动提交"
+"4. 保存账户、绑定站点，并启用 URL 自动推送；Sitemap 通过 robots.txt 声明","4. 保存账户、绑定站点，并启用 URL 自动推送；Sitemap 通过 robots.txt 声明"
 "1. 保存账户并绑定站点","1. 保存账户并绑定站点"
 "2. 运行 Sitemap 生成或等待定时任务生成平台目录","2. 运行 Sitemap 生成或等待定时任务生成平台目录"
 "3. 将 %{1} 提交到对应站长平台","3. 将 %{1} 提交到对应站长平台"
 "4. 保持 robots.txt 中的 Sitemap 入口可访问","4. 保持 robots.txt 中的 Sitemap 入口可访问"
+保存中…,保存中…
+验证中…,验证中…
+配置验证通过,配置验证通过
+验证失败,验证失败
+"去 Google Search Console","去 Google Search Console"
 确认操作,确认操作
 确定,确定
+"当前平台不支持 URL 定时推送；Google 普通页面请改用 Sitemap 定时提交","当前平台不支持 URL 定时推送；Google 普通页面请改用 Sitemap 定时提交"
+"当前平台不支持 Sitemap 定时提交","当前平台不支持 Sitemap 定时提交"
+已配置，留空保留原凭证,已配置，留空保留原凭证
 "上传 JSON 文件","上传 JSON 文件"
 "请上传 JSON 文件","请上传 JSON 文件"
 "文件大小不能超过 5MB","文件大小不能超过 5MB"
@@ -730,7 +742,6 @@ SEO主体总数,SEO主体总数
 "已删除 %{1} 条 URL；Provider 同步会重建其提供的 URL，长期排除请改用停用","已删除 %{1} 条 URL；Provider 同步会重建其提供的 URL，长期排除请改用停用"
 "Sitemap URL 同步完成：新增 %{1}、更新 %{2}、停用 %{3}、未变化 %{4}","Sitemap URL 同步完成：新增 %{1}、更新 %{2}、停用 %{3}、未变化 %{4}"
 "Sitemap URL 同步失败：%{1}","Sitemap URL 同步失败：%{1}"
-"部分 Provider 同步失败，请查看明细","部分 Provider 同步失败，请查看明细"
 "站点 %{1} 生成失败：%{2}","站点 %{1} 生成失败：%{2}"
 "Canonical Sitemap 生成完成","Canonical Sitemap 生成完成"
 "部分 Sitemap 生成失败","部分 Sitemap 生成失败"
@@ -797,21 +808,32 @@ SEO主体总数,SEO主体总数
 "服务器未启用 cURL 扩展，无法调用 Google Indexing API","服务器未启用 cURL 扩展，无法调用 Google Indexing API"
 "请求失败: %{1}","请求失败: %{1}"
 "HTTP错误: %{1}","HTTP错误: %{1}"
-"Bing API 请求失败：%{1}","Bing API 请求失败：%{1}"
-"Bing API 返回错误码：%{1}","Bing API 返回错误码：%{1}"
+"Bing Webmaster URL API 不提供删除接口，请配置 IndexNow 通知删除","Bing Webmaster URL API 不提供删除接口，请配置 IndexNow 通知删除"
+"请配置 Bing Webmaster API Key 和已验证站点 URL","请配置 Bing Webmaster API Key 和已验证站点 URL"
+"Bing URL 必须属于已配置站点","Bing URL 必须属于已配置站点"
+"Sitemap 必须属于已配置站点","Sitemap 必须属于已配置站点"
+"Bing 已接收提交","Bing 已接收提交"
+"Bing 请求失败（HTTP %{1}），请检查账户权限与配额","Bing 请求失败（HTTP %{1}），请检查账户权限与配额"
+"Bing 账户与站点权限验证通过","Bing 账户与站点权限验证通过"
 "已在 Bing Webmaster Tools 验证的站点 URL","已在 Bing Webmaster Tools 验证的站点 URL"
 "Bing Webmaster API Key","Bing Webmaster API Key"
 "在 Bing Webmaster Tools → Settings → API Access 生成","在 Bing Webmaster Tools → Settings → API Access 生成"
 "已验证站点 URL","已验证站点 URL"
 "从网站列表选择；须与 Bing Webmaster Tools 已验证站点一致","从网站列表选择；须与 Bing Webmaster Tools 已验证站点一致"
-"已成功向 Bing 提交 %{1} 个 URL","已成功向 Bing 提交 %{1} 个 URL"
+"使用 IndexNow 推送页面 URL","使用 IndexNow 推送页面 URL"
+"Key 文件公开地址","Key 文件公开地址"
+"提交结果：已接收 %{1}，待验证 %{2}，未接收 %{3}","提交结果：已接收 %{1}，待验证 %{2}，未接收 %{3}"
+"请配置有效的 IndexNow Key（8-128 位字母、数字或连字符）","请配置有效的 IndexNow Key（8-128 位字母、数字或连字符）"
 "URL 列表为空","URL 列表为空"
-"已通过 IndexNow 提交 %{1} 个 URL","已通过 IndexNow 提交 %{1} 个 URL"
-"URL 缺少主机名：%{1}","URL 缺少主机名：%{1}"
+"IndexNow Key 文件必须与提交 URL 同主机","IndexNow Key 文件必须与提交 URL 同主机"
+"IndexNow URL 必须属于同一已配置站点","IndexNow URL 必须属于同一已配置站点"
+"IndexNow URL 不在 Key 文件验证范围内","IndexNow URL 不在 Key 文件验证范围内"
+"IndexNow 端点必须为 HTTPS URL","IndexNow 端点必须为 HTTPS URL"
+"IndexNow 请求失败（HTTP %{1}）","IndexNow 请求失败（HTTP %{1}）"
+"IndexNow 仅通知页面 URL 变更；Sitemap 请通过 robots.txt 或站长平台提交","IndexNow 仅通知页面 URL 变更；Sitemap 请通过 robots.txt 或站长平台提交"
 "IndexNow Key",现在索引键
 "可公开访问的 IndexNow Key 文件地址","可公开访问的 IndexNow Key 文件地址"
 "网站根目录 Key 文件内容须与此一致","网站根目录 Key 文件内容须与此一致"
-"Key 文件公开地址","Key 文件公开地址"
 "IndexNow Endpoint（可选）","IndexNow Endpoint（可选）"
 "留空则使用平台默认 IndexNow 端点","留空则使用平台默认 IndexNow 端点"
 "缺少 Naver Search Advisor Access Token","缺少 Naver 搜索顾问访问令牌"
@@ -823,16 +845,18 @@ SEO主体总数,SEO主体总数
 "提交类型：update 或 delete","提交类型：update 或 delete"
 提交类型,提交类型
 "可选 update 或 delete，默认 update","可选 update 或 delete，默认 update"
-"Google Search Console API 不提供通用 URL 推送，请使用 Google Indexing API 或 Sitemap 提交","Google Search Console API 不提供通用 URL 推送，请使用 Google Indexing API 或 Sitemap 提交"
+"Google 普通页面请使用 Search Console Sitemap 提交；Indexing API 仅适用于招聘信息或直播视频","Google 普通页面请使用 Search Console Sitemap 提交；Indexing API 仅适用于招聘信息或直播视频"
 "Google Service Account JSON 凭据内容","Google 服务帐户 JSON 凭据内容"
 "Search Console 中已验证的站点属性 URL","Search Console 中已验证的站点属性 URL"
-"可粘贴完整 JSON，或上传 Google Cloud 下载的密钥文件","可粘贴完整 JSON，或上传 Google Cloud 下载的密钥文件"
+"先下载 JSON；把其中的 client_email 在 GSC「用户和权限」加成所有者后，再粘贴到此处","先下载 JSON；把其中的 client_email 在 GSC「用户和权限」加成所有者后，再粘贴到此处"
 "Search Console 站点属性 URL","Search Console 站点属性 URL"
-"从网站列表选择；须与 Search Console 已验证站点属性一致","从网站列表选择；须与 Search Console 已验证站点属性一致"
+"可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。也可直接填 GSC 域名属性。请先在 GSC 验证属性并把服务账号加成所有者，再点验证","可填 https 域名，保存时自动转为 sc-domain:example.com（去掉 www）。也可直接填 GSC 域名属性。请先在 GSC 验证属性并把服务账号加成所有者，再点验证"
 百度站长平台,百度站长平台
-"缺少百度站点 URL","缺少百度站点 URL"
-"已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}","已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}"
-"百度 URL 提交失败","百度 URL 提交失败"
+"请配置百度 Token 和已验证站点 URL","请配置百度 Token 和已验证站点 URL"
+百度普通链接提交不提供删除接口，请在资源平台处理死链,百度普通链接提交不提供删除接口，请在资源平台处理死链
+"百度 URL 必须属于已配置站点","百度 URL 必须属于已配置站点"
+"百度部分接收 %{1} 个 URL，无法确定其余 URL；请在资源平台核对后再提交","百度部分接收 %{1} 个 URL，无法确定其余 URL；请在资源平台核对后再提交"
+"百度未提供公开 Sitemap 提交 API，请在搜索资源平台提交 Sitemap；链接 API 仅推送页面 URL","百度未提供公开 Sitemap 提交 API，请在搜索资源平台提交 Sitemap；链接 API 仅推送页面 URL"
 "百度站长平台 API Token","百度站长平台 API Token"
 "已在百度站长平台验证的站点 URL","已在百度站长平台验证的站点 URL"
 "百度站长平台 Token","百度站长平台 Token"
@@ -840,6 +864,8 @@ SEO主体总数,SEO主体总数
 从网站列表选择；须与百度站长平台已验证站点一致,从网站列表选择；须与百度站长平台已验证站点一致
 启用快速收录（需配额）,启用快速收录（需配额）
 开启后走百度快速收录接口；无配额时请关闭,开启后走百度快速收录接口；无配额时请关闭
+"百度请求失败（HTTP %{1}），请检查 Token、站点权限与配额","百度请求失败（HTTP %{1}），请检查 Token、站点权限与配额"
+"百度拒绝部分 URL（无效 URL 或不属于该站点）","百度拒绝部分 URL（无效 URL 或不属于该站点）"
 "Sitemap 暂不可用，请稍后重试","Sitemap 暂不可用，请稍后重试"
 "Sitemap 文件不存在","Sitemap 文件不存在"
 "Sitemap 文件不可读或超过协议限制","Sitemap 文件不可读或超过协议限制"
@@ -855,6 +881,11 @@ SEO主体总数,SEO主体总数
 "Sitemap XML 条目数无效","Sitemap XML 条目数无效"
 "Sitemap loc 不是有效绝对 URL","Sitemap loc 不是有效绝对 URL"
 "Sitemap loc 与当前站点不同源","Sitemap loc 与当前站点不同源"
+"百度配置字段有效；平台无不扣额 Token 验证接口，凭证权限需通过实际页面提交结果确认","百度配置字段有效；平台无不扣额 Token 验证接口，凭证权限需通过实际页面提交结果确认"
+"请填写可公开访问的 IndexNow Key 文件地址","请填写可公开访问的 IndexNow Key 文件地址"
+"IndexNow Key 文件可访问且内容匹配；搜索引擎验证状态以提交响应为准","IndexNow Key 文件可访问且内容匹配；搜索引擎验证状态以提交响应为准"
+"IndexNow Key 文件无法访问或内容不匹配","IndexNow Key 文件无法访问或内容不匹配"
+该平台没有公开自动提交接口，请通过站长平台验证,该平台没有公开自动提交接口，请通过站长平台验证
 "SEO sitemap Provider 定向同步失败：%{1}","SEO sitemap Provider 定向同步失败：%{1}"
 "Store mode hard gate：dev/test 禁止生成可索引 Sitemap","Store mode hard gate：dev/test 禁止生成可索引 Sitemap"
 "站点 %{1} 缺少可用基础 URL","站点 %{1} 缺少可用基础 URL"
@@ -889,10 +920,61 @@ Canonical,典范
 "metadata 必须是 JSON 对象或数组","metadata 必须是 JSON 对象或数组"
 "%{1} 为空、过长或包含控制字符","%{1} 为空、过长或包含控制字符"
 "%{1} 不是有效 UTF-8","%{1} 不是有效 UTF-8"
+请填写：%{1},请填写：%{1}
+"URL 格式无效：%{1}","URL 格式无效：%{1}"
+"Google Service Account JSON 或私钥无效","Google Service Account JSON 或私钥无效"
+"请填写 Search Console 已验证的 URL 或 sc-domain 站点属性","请填写 Search Console 已验证的 URL 或 sc-domain 站点属性"
+"请填写 Bing Webmaster API Key","请填写 Bing Webmaster API Key"
+"IndexNow Key 必须为 8-128 位字母、数字或连字符","IndexNow Key 必须为 8-128 位字母、数字或连字符"
+"IndexNow Key 文件 URL 无效","IndexNow Key 文件 URL 无效"
+"IndexNow Key 文件必须与已配置站点同主机","IndexNow Key 文件必须与已配置站点同主机"
 "Sitemap 提交提示","Sitemap 提交提示"
 "以下站点未绑定 SEO 账户，无法自动提交 sitemap：","以下站点未绑定 SEO 账户，无法自动提交 sitemap："
 "请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。","请前往""SEO管理 > Sitemap管理""或""站点管理""绑定 SEO 账户。"
 SEO账户配置,SEO账户配置
+"须与 GSC 左侧属性名完全一致（含 sc-domain: / https / www / 末尾 /）。先在 GSC 验证该属性，再把服务账号加成所有者，填对后再点「验证配置与连接」","须与 GSC 左侧属性名完全一致（含 sc-domain: / https / www / 末尾 /）。先在 GSC 验证该属性，再把服务账号加成所有者，填对后再点「验证配置与连接」"
+"该服务账号下目前没有任何 GSC 属性。","该服务账号下目前没有任何 GSC 属性。"
+"该服务账号可见属性：%{1}。请确认本处填写的属性 URL 与其中某一项完全一致。","该服务账号可见属性：%{1}。请确认本处填写的属性 URL 与其中某一项完全一致。"
+"GSC 属性「%{1}」对该服务账号不可见（HTTP 404）。%{2}请打开 Google Search Console 验证该域名/网址前缀，再将 %{3} 加成「所有者」；属性 URL 须与本处完全一致（含 https、www、或 sc-domain:）。前往：%{4}","GSC 属性「%{1}」对该服务账号不可见（HTTP 404）。%{2}请打开 Google Search Console 验证该域名/网址前缀，再将 %{3} 加成「所有者」；属性 URL 须与本处完全一致（含 https、www、或 sc-domain:）。前往：%{4}"
+"可粘贴完整 JSON，或上传 Google Cloud 下载的密钥文件","可粘贴完整 JSON，或上传 Google Cloud 下载的密钥文件"
+"须与 Search Console 属性完全一致；支持 https://example.com/ 或 sc-domain:example.com","须与 Search Console 属性完全一致；支持 https://example.com/ 或 sc-domain:example.com"
+"Google Search Console 站点权限验证失败（HTTP %{1}）","Google Search Console 站点权限验证失败（HTTP %{1}）"
+"验证与提交依赖服务器访问 Google（oauth2.googleapis.com）。若运行环境无法出网或未配置代理，验证会超时失败；凭证已读到时请检查网络/代理，勿重复上传 JSON。","验证与提交依赖服务器访问 Google（oauth2.googleapis.com）。若运行环境无法出网或未配置代理，验证会超时失败；凭证已读到时请检查网络/代理，勿重复上传 JSON。"
+"需要配置 Google Service Account JSON；验证需服务器可访问 oauth2.googleapis.com","需要配置 Google Service Account JSON；验证需服务器可访问 oauth2.googleapis.com"
+"缺少 IndexNow Key","缺少 IndexNow Key"
+"Sitemap URL 缺少主机名","Sitemap URL 缺少主机名"
+"IndexNow 请求失败：%{1}","IndexNow 请求失败：%{1}"
+"已通过 IndexNow 通知 %{1}","已通过 IndexNow 通知 %{1}"
+"IndexNow 返回错误码：%{1}","IndexNow 返回错误码：%{1}"
+"缺少百度站长平台 Token","缺少百度站长平台 Token"
+"百度 API 请求失败：%{1}","百度 API 请求失败：%{1}"
+"百度返回错误：%{1} - %{2}","百度返回错误：%{1} - %{2}"
+快速收录,快速收录
+普通收录,普通收录
+"已成功通过%{1} API提交到百度，成功 %{2} 条","已成功通过%{1} API提交到百度，成功 %{2} 条"
+"百度 API 返回异常","百度 API 返回异常"
+"百度提交完成：成功 %{1} 条，剩余配额 %{2}","百度提交完成：成功 %{1} 条，剩余配额 %{2}"
+"Google Search Console API 请求失败：%{1}","Google Search Console API 请求失败：%{1}"
+"Google Search Console API 错误：%{1}","Google 搜索控制台 API 错误：%{1}"
+提交异常：%{1},提交异常：%{1}
+"缺少 Bing Webmaster API Key","缺少 Bing 网站管理员 API 密钥"
+"API 请求失败：%{1}","API 请求失败：%{1}"
+"已成功提交 sitemap 到 Bing Webmaster","已成功提交 sitemap 到 Bing Webmaster"
+"API 请求返回错误码：%{1}","API 请求返回错误码：%{1}"
+"已通过 IndexNow 通知 Bing 更新","已通过 IndexNow 通知 Bing 更新"
+"IndexNow 请求返回错误码：%{1}","IndexNow 请求返回错误码：%{1}"
+账户保存失败：%{1},账户保存失败：%{1}
+"4. 保存账户、绑定站点，并启用 URL/Sitemap 自动提交","4. 保存账户、绑定站点，并启用 URL/Sitemap 自动提交"
+"Bing API 请求失败：%{1}","Bing API 请求失败：%{1}"
+"Bing API 返回错误码：%{1}","Bing API 返回错误码：%{1}"
+"已成功向 Bing 提交 %{1} 个 URL","已成功向 Bing 提交 %{1} 个 URL"
+"已通过 IndexNow 提交 %{1} 个 URL","已通过 IndexNow 提交 %{1} 个 URL"
+"URL 缺少主机名：%{1}","URL 缺少主机名：%{1}"
+"Google Search Console API 不提供通用 URL 推送，请使用 Google Indexing API 或 Sitemap 提交","Google Search Console API 不提供通用 URL 推送，请使用 Google Indexing API 或 Sitemap 提交"
+"从网站列表选择；须与 Search Console 已验证站点属性一致","从网站列表选择；须与 Search Console 已验证站点属性一致"
+"缺少百度站点 URL","缺少百度站点 URL"
+"已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}","已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}"
+"百度 URL 提交失败","百度 URL 提交失败"
 """SEO subject created""","“已创建 SEO 主题”"
 字段预览：,字段预览：
 须与百度站长平台已验证站点一致,须与百度站长平台已验证站点一致

@@ -9,6 +9,8 @@ use Weline\Seo\Model\SeoWebsiteAccount;
 use Weline\Seo\Service\Database\SeoTransactionRunner;
 use Weline\Seo\Model\SeoWebsiteStats;
 use Weline\Seo\Service\SeoPlatformCapabilityService;
+use Weline\Seo\Service\SeoAccountConfig;
+use Weline\Seo\Service\SeoAccountVerifier;
 use Weline\Seo\Service\SeoWebsiteAccountBindingService;
 use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Service\SitemapAdapterRegistry;
@@ -62,6 +64,17 @@ final class SeoAdminAccountService
             || (array_key_exists('config_json', $params) && trim((string)$params['config_json']) !== '');
         $config = $this->decodeConfig($params['config'] ?? $params['config_json'] ?? null);
 
+        if (($params['config_action'] ?? '') === 'verify') {
+            $account = clone $this->accounts;
+            $account->reset();
+            if ($accountId > 0) {
+                $account->load($accountId);
+                if (!$account->getId()) { throw new \InvalidArgumentException((string)__('账户不存在')); }
+            }
+            $verifiedConfig = $this->prepareConfig($account, $platform, $config, $capability);
+            return (new SeoAccountVerifier())->verify($platform, $verifiedConfig);
+        }
+
         return $this->transactions->run($this->accounts->getConnection(), function () use (
             $accountId,
             $name,
@@ -79,6 +92,7 @@ final class SeoAdminAccountService
                     throw new \InvalidArgumentException((string)__('账户不存在'));
                 }
             }
+            $config = $this->prepareConfig($account, $platform, $config, $capability);
             $enablePush = !empty($capability['supports_url_push']) ? (int)!empty($params['enable_cron_push_urls']) : 0;
             $enableSitemap = !empty($capability['supports_sitemap_submit']) ? (int)!empty($params['enable_cron_sitemap']) : 0;
             $account->setData(SeoAccount::schema_fields_NAME, $name)
@@ -86,7 +100,7 @@ final class SeoAdminAccountService
                 ->setData(SeoAccount::schema_fields_PROVIDER, $platform)
                 ->setData(SeoAccount::schema_fields_SCOPE, '')
                 ->setData(SeoAccount::schema_fields_DESCRIPTION, trim((string)($params['description'] ?? '')))
-                ->setData(SeoAccount::schema_fields_IS_ACTIVE, (int)($params['is_active'] ?? SeoAccount::STATUS_ACTIVE))
+                ->setData(SeoAccount::schema_fields_IS_ACTIVE, (int)($params['is_active'] ?? SeoAccount::STATUS_INACTIVE))
                 ->setData(SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS, $enablePush)
                 ->setData(SeoAccount::schema_fields_ENABLE_CRON_SITEMAP, $enableSitemap);
             if ($configProvided) {
@@ -95,6 +109,21 @@ final class SeoAdminAccountService
             $account->save();
             return $this->result(__('账户保存成功'), ['account_id' => (int)$account->getId()]);
         });
+    }
+
+    private function prepareConfig(SeoAccount $account, string $platform, array $posted, array $capability): array
+    {
+        $boundary = new SeoAccountConfig();
+        $fields = (array)($capability['config_fields'] ?? []);
+        $existing = $account->getId() && $account->getPlatform() === $platform ? $account->getConfigArray() : [];
+        $config = $boundary->merge($existing, $posted, $fields);
+        if (in_array($platform, ['google', 'google_search_console', 'google_indexing_api'], true)
+            && isset($config['site_url']) && is_string($config['site_url'])) {
+            $config['site_url'] = SeoAccountConfig::normalizeGoogleSiteProperty($config['site_url']);
+        }
+        $errors = $boundary->validate($platform, $config, $fields);
+        if ($errors !== []) { throw new \InvalidArgumentException(implode('；', $errors)); }
+        return $config;
     }
 
     /** @param array<string,mixed> $params @return array<string,mixed> */

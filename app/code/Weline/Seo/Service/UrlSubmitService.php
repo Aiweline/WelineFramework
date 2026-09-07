@@ -153,7 +153,11 @@ class UrlSubmitService
                     continue;
                 }
                 $openFingerprints[$knownKey] = true;
-                $pending[] = [
+                $parts = parse_url($url) ?: [];
+                $scheme = strtolower((string)($parts['scheme'] ?? ''));
+                $origin = $scheme . '://' . strtolower((string)($parts['host'] ?? ''))
+                    . ':' . (int)($parts['port'] ?? ($scheme === 'https' ? 443 : 80));
+                $pending[$origin][] = [
                     'url' => $url,
                     'submit_fingerprint' => $submitFingerprint,
                     'url_fingerprint' => $this->urlFingerprint($url),
@@ -164,10 +168,13 @@ class UrlSubmitService
                 continue;
             }
 
-            foreach (array_chunk($pending, self::BATCH_SIZE) as $chunk) {
-                $taskId = $this->createTask($accountInfo, $chunk, $scope, $websiteId, $extra);
-                if ($taskId > 0) {
-                    $stats['created_tasks']++;
+            // A provider may reject an obsolete store host; keep other origins independently runnable.
+            foreach ($pending as $originUrls) {
+                foreach (array_chunk($originUrls, self::BATCH_SIZE) as $chunk) {
+                    $taskId = $this->createTask($accountInfo, $chunk, $scope, $websiteId, $extra);
+                    if ($taskId > 0) {
+                        $stats['created_tasks']++;
+                    }
                 }
             }
         }
