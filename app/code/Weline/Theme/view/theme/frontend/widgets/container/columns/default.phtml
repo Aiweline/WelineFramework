@@ -1,0 +1,48 @@
+<?php
+/**
+ * @widget.code {columns}
+ * @widget.name {通用分栏容器}
+ * @widget.description {可嵌套其他部件的双栏容器，移动端自动纵向排列}
+ * @widget.type {container}
+ * @widget.area {frontend}
+ * @widget.position {["content","sidebar","footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * @widget.is_container {true}
+ * @widget.exclusive {false}
+ * @widget.slots {"columns-left":{"name":"左栏","position":"content","accept":["*"],"max":20},"columns-right":{"name":"右栏","position":"content","accept":["*"],"max":20}}
+ * @param layout {default="equal",type="select",label="列宽",options={equal:"等宽",wide-left:"左宽右窄",wide-right:"左窄右宽"}}
+ * @param slot_key {default="",type="string",label="固定插槽标识",description="手写模板重复放置时填写不同标识；可视化编辑器自动使用实例 ID"}
+ */
+
+use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Helper\WidgetI18n;
+
+$scope = WidgetUiScope::forWidget('columns');
+$esc = [Block::class, 'escape'];
+$t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::text($value)));
+$layout = Block::choice($this->getData('layout'), ['equal','wide-left','wide-right'], 'equal');
+$children = $this->getData('children') ?? ($children ?? []);
+$children = is_array($children) ? $children : [];
+// A persisted node identity stays fixed when the container is edited or moved.
+// Unsaved library previews are intentionally ephemeral; hand-written placements can set slot_key.
+$identity = Block::text($this->getData('node_uid') ?? $this->getData('_node_uid'));
+if ($identity === '') $identity = Block::text($this->getData('layout_id') ?? $this->getData('_layout_id'));
+if ($identity === '' || $identity === '0') $identity = Block::text($this->getData('slot_key'));
+$slotSuffix = $identity !== '' ? substr(hash('sha256', $identity), 0, 20) : $scope->uid;
+$leftSlot = 'columns-left-' . $slotSuffix;
+$rightSlot = 'columns-right-' . $slotSuffix;
+?>
+
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<section class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <div class="sb-grid columns-<?= $layout === 'equal' ? '2' : $esc($layout) ?>">
+        <w:slot id="<?= $esc($leftSlot) ?>" name="左栏" accept="*" multiple="true" position="content" wrapper="div" class="sb-column" weline-code="theme.widgets.columns_left">
+            <?php foreach (($children['left'] ?? []) as $child): ?><?= $child['html'] ?? '' ?><?php endforeach; ?>
+        </w:slot>
+        <w:slot id="<?= $esc($rightSlot) ?>" name="右栏" accept="*" multiple="true" position="content" wrapper="div" class="sb-column" weline-code="theme.widgets.columns_right">
+            <?php foreach (($children['right'] ?? []) as $child): ?><?= $child['html'] ?? '' ?><?php endforeach; ?>
+        </w:slot>
+    </div>
+</section>

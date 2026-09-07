@@ -67,6 +67,37 @@ final class SharedChromeInheritContractTest extends TestCase
         self::assertStringContainsString('function withLayoutType(string $layoutType): self', $src);
     }
 
+    public function testUpgradePurgeUsesTypedGlobalScopeContext(): void
+    {
+        $path = dirname(__DIR__, 2) . '/Setup/Upgrade.php';
+        $src = (string)file_get_contents($path);
+
+        self::assertStringContainsString("VERSION = '2.2.189'", $src);
+        self::assertStringContainsString('ScopeIdentity::global()', $src);
+        self::assertStringContainsString('ScopeHierarchyInterface', $src);
+        self::assertStringContainsString('new ThemeEditorContext(', $src);
+        self::assertStringContainsString('restoreNonCarrierLayouts(', $src);
+        self::assertStringNotContainsString('ThemeEditorContextFactory', $src);
+        self::assertStringNotContainsString('theme_editor_typed_scope_required', $src);
+    }
+
+    public function testPublishFlushesSharedChromeCarrierAlongsideBusinessLayout(): void
+    {
+        $path = dirname(__DIR__, 2) . '/Service/Scoped/ThemeScopedWorkspaceRequestService.php';
+        $src = (string)file_get_contents($path);
+
+        self::assertStringContainsString('function publishSharedChromeCarrierIfPending(', $src);
+        self::assertStringContainsString('isChromeCarrierPageType(', $src);
+        self::assertStringContainsString('PAGE_TYPE_HOME', $src);
+        self::assertStringContainsString("shared_chrome_carrier", $src);
+        self::assertStringContainsString('publishSharedChromeCarrierIfPending(', $src);
+        self::assertGreaterThan(
+            1,
+            substr_count($src, 'publishSharedChromeCarrierIfPending('),
+            'publish and publishBatch must both flush the chrome carrier',
+        );
+    }
+
     public function testThemeEditorUiWiresSharedChromeInheritControls(): void
     {
         $js = file_get_contents(dirname(__DIR__, 2) . '/view/statics/ui/pages/weline-theme-editor.js');

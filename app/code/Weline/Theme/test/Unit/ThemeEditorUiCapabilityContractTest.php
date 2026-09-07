@@ -97,7 +97,12 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
         self::assertStringNotContainsString('editor-compact-mode .editor-main {\n        grid-template-columns: minmax(0, 1fr);', $editorCss);
         self::assertStringNotContainsString('editor-compact-mode .editor-config-panel,\n    .theme-editor-container.editor-compact-mode .editor-widget-panel {\n        position: absolute;', $editorCss);
         $editorTemplate = $this->read('app/code/Weline/Theme/view/templates/backend/ThemeEditor/index.phtml');
-        self::assertStringContainsString('weline-theme-editor.css?v=20260901-widget-library-header-v3', $editorTemplate);
+        self::assertStringContainsString('<css>Weline_Theme::ui/pages/weline-theme-editor.css</css>', $editorTemplate);
+        self::assertDoesNotMatchRegularExpression(
+            '/@static\(Weline_Theme::[^)]+\)\?v=/',
+            $editorTemplate,
+            'Editor template must not hardcode @static ?v=; framework theme.static_version applies at render.',
+        );
         self::assertStringContainsString('.panel-header.widget-library-panel-header', $editorCss);
         self::assertStringContainsString('.widget-library-type-chip.is-active', $editorCss);
         self::assertStringContainsString('id="wAiWidgetButton"', $editorTemplate);
@@ -463,7 +468,14 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
             );
         }
 
-        self::assertStringContainsString('20260903-slot-full-widgets-v2', $template);
+        self::assertStringContainsString(
+            '@static(Weline_Theme::ui/pages/weline-theme-editor.js)',
+            $template,
+        );
+        self::assertDoesNotMatchRegularExpression(
+            '/@static\(Weline_Theme::ui\/pages\/weline-theme-editor\.js\)\?v=/',
+            $template,
+        );
     }
 
     public function testVisualPreviewDragDropKeepsInsideBeforeAndAfterFeedback(): void
@@ -950,18 +962,20 @@ final class ThemeEditorUiCapabilityContractTest extends TestCase
 
     private function assertEditorBundleVersionedLinksMatch(string $template): void
     {
-        $matches = [];
-        $count = preg_match_all(
-            '/Weline_Theme::ui\/pages\/weline-theme-editor\.js\)\?v=([a-zA-Z0-9._-]+)/',
+        $preload = substr_count(
             $template,
-            $matches,
+            'rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor.js)"',
         );
-        self::assertNotFalse($count, 'Theme editor bundle URLs must carry a cache version.');
-        self::assertGreaterThanOrEqual(2, $count, 'Both modulepreload and script URLs must be versioned.');
-        self::assertCount(
-            1,
-            array_unique($matches[1] ?? []),
-            'Theme editor modulepreload and script URLs must share the same cache version.',
+        $script = substr_count(
+            $template,
+            'src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)"',
+        );
+        self::assertGreaterThanOrEqual(1, $preload, 'Editor modulepreload must use bare @static path.');
+        self::assertGreaterThanOrEqual(1, $script, 'Editor script must use bare @static path.');
+        self::assertDoesNotMatchRegularExpression(
+            '/Weline_Theme::ui\/pages\/weline-theme-editor\.js\)\?v=/',
+            $template,
+            'Hardcoded ?v= on editor bundle is forbidden; publish bumps theme.static_version.',
         );
     }
 

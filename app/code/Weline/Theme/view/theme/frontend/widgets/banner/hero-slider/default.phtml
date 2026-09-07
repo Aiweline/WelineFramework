@@ -19,7 +19,7 @@
  * @param show_dots {default=true,type="bool",label="显示指示点"}
  * @param show_arrows {default=true,type="bool",label="显示箭头"}
  * @param effect {default="slide",type="select",label="切换效果",options={slide:"滑动",fade:"淡入淡出"}}
- * @param height {default="500px",type="string",label="轮播高度"}
+ * @param height {default="var(--size-hero-height)",type="string",label="轮播高度"}
  */
 
 use Weline\Theme\Helper\WidgetUiScope;
@@ -38,18 +38,15 @@ if (!is_array($slides)) {
 }
 // 部件 CSS/尺寸自我完全：始终用配置 height。库卡片缩略由编辑器外壳 viewport+scale 完成，
 // 禁止按 preview_mode/editor_mode 压高度，也禁止选择外部编辑器类名。
-$autoplay = (bool)($this->getData('autoplay') ?? $this->getData('auto_play') ?? true);
+$autoplay = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('autoplay') ?? $this->getData('auto_play'), true);
 $autoplaySpeed = max(1000, min(600000, (int)($this->getData('autoplay_speed') ?? $this->getData('interval') ?? 5000)));
-$showDots = (bool)($this->getData('show_dots') ?? true);
-$showArrows = (bool)($this->getData('show_arrows') ?? true);
+$showDots = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('show_dots'), true);
+$showArrows = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('show_arrows'), true);
 $effect = strtolower(trim((string)($this->getData('effect') ?? 'slide')));
 if (!in_array($effect, ['slide', 'fade'], true)) {
     $effect = 'slide';
 }
-$height = trim((string)($this->getData('height') ?? '500px'));
-if (preg_match('/^(?:0|[0-9]+(?:\\.[0-9]+)?(?:px|rem|em|%|vh|vw|svh|lvh|dvh))$/D', $height) !== 1) {
-    $height = '500px';
-}
+$height = \Weline\Theme\Helper\SiteBlockConfig::length($this->getData('height'), 'var(--size-hero-height)');
 $placeholder = '';
 try {
     $placeholder = \Weline\Theme\Helper\StorefrontImagePlaceholder::url();
@@ -178,10 +175,13 @@ if (empty($slides)) {
 
 ?>
 
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
 <section class="<?= $esc($wc) ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-weline-load="siteBlocks" data-site-block="hero"
+         data-autoplay="<?= $autoplay ? 'true' : 'false' ?>" data-autoplay-speed="<?= $autoplaySpeed ?>"
          style="height: <?= $esc($height) ?>;">
     <div class="slider-container effect-<?= htmlspecialchars($effect ?? '') ?>">
         <div class="slider-wrapper">
@@ -217,7 +217,7 @@ if (empty($slides)) {
                                 <p class="slide-subtitle"><?= htmlspecialchars($slide['subtitle'] ?? '') ?></p>
                             <?php endif; ?>
                             <?php if (!empty($slide['button_text'])): ?>
-                                <a href="<?= htmlspecialchars($slideLink, ENT_QUOTES, 'UTF-8') ?>" class="slide-button">
+                                <a href="<?= htmlspecialchars($slideLink, ENT_QUOTES, 'UTF-8') ?>" class="slide-button w-button w-button-primary">
                                     <?= htmlspecialchars($slide['button_text'] ?? '') ?>
                                 </a>
                             <?php endif; ?>
@@ -242,9 +242,12 @@ if (empty($slides)) {
                     <button class="dot <?= $index === 0 ? 'active' : '' ?>" 
                             data-index="<?= $index ?>"
                             type="button"
-                            aria-label="<?= __('第%d张', $index + 1) ?>"></button>
+                            aria-label="<?= htmlspecialchars(sprintf((string)__('第%d张'), $index + 1), ENT_QUOTES, 'UTF-8') ?>"></button>
                 <?php endforeach; ?>
             </div>
+        <?php endif; ?>
+        <?php if ($autoplay && count($slides) > 1): ?>
+            <button type="button" class="slider-pause w-button w-button-outline" data-slider-pause aria-pressed="false" data-play-label="@lang{播放轮播}" data-pause-label="@lang{暂停轮播}"><lang>暂停轮播</lang></button>
         <?php endif; ?>
     </div>
 
@@ -433,7 +436,8 @@ if (empty($slides)) {
     color: var(--weline-theme-text);
 }
 
-.<?= $wc ?>:hover .slider-arrow {
+.<?= $wc ?>:hover .slider-arrow,
+.<?= $wc ?>:focus-within .slider-arrow {
     opacity: 1;
 }
 
@@ -449,6 +453,8 @@ if (empty($slides)) {
 .<?= $wc ?> .slider-next {
     right: var(--weline-space-5);
 }
+
+.<?= $wc ?> .slider-pause { position: absolute; bottom: var(--spacing-md); inset-inline-end: var(--spacing-md); z-index: 10; }
 
 /* 指示点 */
 .<?= $wc ?> .slider-dots {
@@ -515,105 +521,4 @@ if (empty($slides)) {
 }
 </style>
 
-<script>
-(function() {
-    const slider = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
-    if (!slider) return;
-    
-    const slides = slider.querySelectorAll('.slide');
-    const dots = slider.querySelectorAll('.dot');
-    const prevBtn = slider.querySelector('.slider-prev');
-    const nextBtn = slider.querySelector('.slider-next');
-    
-    let currentIndex = 0;
-    let autoplayInterval = null;
-    const autoplay = <?= $autoplay ? 'true' : 'false' ?>;
-    const autoplaySpeed = <?= $autoplaySpeed ?>;
-    
-    function goToSlide(index) {
-        slides[currentIndex].classList.remove('active');
-        if (dots[currentIndex]) dots[currentIndex].classList.remove('active');
-        
-        currentIndex = (index + slides.length) % slides.length;
-        
-        slides[currentIndex].classList.add('active');
-        if (dots[currentIndex]) dots[currentIndex].classList.add('active');
-    }
-    
-    function nextSlide() {
-        goToSlide(currentIndex + 1);
-    }
-    
-    function prevSlide() {
-        goToSlide(currentIndex - 1);
-    }
-    
-    function startAutoplay() {
-        if (autoplay && slides.length > 1) {
-            autoplayInterval = setInterval(nextSlide, autoplaySpeed);
-        }
-    }
-    
-    function stopAutoplay() {
-        if (autoplayInterval) {
-            clearInterval(autoplayInterval);
-            autoplayInterval = null;
-        }
-    }
-    
-    // 事件绑定
-    if (prevBtn) prevBtn.addEventListener('click', function() {
-        prevSlide();
-        stopAutoplay();
-        startAutoplay();
-    });
-    
-    if (nextBtn) nextBtn.addEventListener('click', function() {
-        nextSlide();
-        stopAutoplay();
-        startAutoplay();
-    });
-    
-    dots.forEach(function(dot, index) {
-        dot.addEventListener('click', function() {
-            goToSlide(index);
-            stopAutoplay();
-            startAutoplay();
-        });
-    });
-    
-    // 鼠标悬停暂停
-    slider.addEventListener('mouseenter', stopAutoplay);
-    slider.addEventListener('mouseleave', startAutoplay);
-    
-    // 触摸支持
-    let touchStartX = 0;
-    let touchEndX = 0;
-    
-    slider.addEventListener('touchstart', function(e) {
-        touchStartX = e.changedTouches[0].screenX;
-        stopAutoplay();
-    }, { passive: true });
-    
-    slider.addEventListener('touchend', function(e) {
-        touchEndX = e.changedTouches[0].screenX;
-        handleSwipe();
-        startAutoplay();
-    }, { passive: true });
-    
-    function handleSwipe() {
-        const diff = touchStartX - touchEndX;
-        if (Math.abs(diff) > 50) {
-            if (diff > 0) {
-                nextSlide();
-            } else {
-                prevSlide();
-            }
-        }
-    }
-    
-    // 启动自动播放
-    startAutoplay();
-})();
-</script>
 </section>

@@ -47,6 +47,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
         <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
     </if>
 
+    <div class="search-layout__surface w-surface-body" data-surface="body">
     <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-before</w:hook>
     <w:block class="Weline\Theme\Block\Partials" area="frontend" type="breadcrumb" default-option="default"/>
     <w:hook>Weline_Theme::frontend::layouts::base::breadcrumb-after</w:hook>
@@ -126,9 +127,12 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
                         wrapper="section"
                         class="search-layout__recommendations"
                         weline-code="theme.search.search_recommendations">
-                    <w:hook>Weline_Theme::frontend::layouts::search::recommendations<else/>
-                        <w:widget type="product" name="bestsellers" />
-                    </w:hook>
+                    <?php
+                    // Do not sync-render bestsellers here: cold publishedOffers() rebuilds the
+                    // full storefront catalog and dominates /search TTFB. Theme injections via
+                    // this hook/slot remain available when explicitly configured.
+                    ?>
+                    <w:hook>Weline_Theme::frontend::layouts::search::recommendations</w:hook>
                 </w:slot>
             </w:slot>
             <w:hook>Weline_Theme::frontend::layouts::search::main-after</w:hook>
@@ -136,6 +140,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
 
         <w:hook>Weline_Theme::frontend::layouts::search::content-after</w:hook>
         <w:hook>Weline_Theme::frontend::layouts::base::content-after</w:hook>
+    </div>
     </div>
 
     <if condition="meta.showFooter">
@@ -151,6 +156,11 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
 <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
 
 <style>
+    .weline-page-wrapper.search-layout {
+        color: var(--w-surface-fg, var(--weline-theme-body-text, var(--color-text-primary)));
+        background-color: var(--w-surface-bg, var(--weline-theme-body-bg, #ffffff));
+    }
+
     .search-layout .search-main,
     .search-layout .search-main__content-root-slot {
         background: transparent;
@@ -189,7 +199,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
         display: grid;
         gap: var(--weline-space-4, 1rem);
         align-content: start;
-        color: var(--weline-theme-body-text, #0f1111);
+        color: var(--weline-theme-body-text, var(--color-text-primary));
         padding: var(--weline-space-4, 1rem);
         border: 1px solid var(--weline-theme-border-subtle, #e7e7e7);
         border-radius: var(--weline-radius-lg, 12px);
@@ -233,13 +243,13 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
 
     .search-layout__recommendations .product-card {
         background: var(--weline-chrome-bg-primary, #ffffff);
-        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
         border-color: var(--weline-theme-border-subtle, #e7e7e7);
     }
 
     .search-layout__recommendations .product-info,
     .search-layout__recommendations .product-name a {
-        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
     }
 
     .search-layout__recommendations .product-rating,
@@ -253,7 +263,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
     }
 
     .search-layout__recommendations .btn-add-to-cart {
-        background: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
+        background: var(--color-primary);
         border-color: #fcd200;
         color: #0f1111;
     }
@@ -265,7 +275,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
     }
 
     .storefront-search {
-        color: var(--weline-theme-body-text, #0f1111);
+        color: var(--weline-theme-body-text, var(--color-text-primary));
     }
 
     .storefront-search__header {
@@ -279,7 +289,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
         font-size: clamp(1.35rem, 2vw, 1.75rem);
         font-weight: 700;
         line-height: 1.25;
-        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
     }
 
     .storefront-search__meta {
@@ -326,14 +336,14 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
     }
 
     .storefront-search__breadcrumb-item a {
-        color: var(--weline-theme-body-link, #007185);
+        color: var(--weline-theme-body-link, var(--color-link));
         text-decoration: none;
         border-radius: 0.25rem;
     }
 
     .storefront-search__breadcrumb-item a:hover {
         text-decoration: underline;
-        color: var(--weline-theme-body-link-hover, #c45500);
+        color: var(--weline-theme-body-link-hover, var(--color-link-hover));
     }
 
     .storefront-search__breadcrumb-item.is-current span {
@@ -363,7 +373,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
         letter-spacing: 0.04em;
         text-transform: uppercase;
         line-height: 1.3;
-        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
     }
 
     .storefront-search__type-tree {
@@ -414,7 +424,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
 
     .storefront-search__type-toggle:hover {
         background: var(--weline-theme-surface-muted, #f1f5f9);
-        color: var(--weline-theme-body-link, #007185);
+        color: var(--weline-theme-body-link, var(--color-link));
     }
 
     .storefront-search__type-toggle-icon {
@@ -438,7 +448,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
         padding: 0.4rem 0.55rem;
         border-radius: var(--weline-radius-md, 8px);
         cursor: pointer;
-        color: var(--weline-theme-body-text, #0f1111);
+        color: var(--weline-theme-body-text, var(--color-text-primary));
         font-size: var(--weline-font-size-sm, 0.875rem);
         line-height: 1.35;
         transition: background-color 0.15s ease, color 0.15s ease, box-shadow 0.15s ease;
@@ -446,18 +456,18 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
 
     .storefront-search__type-option:hover {
         background: var(--weline-theme-surface-muted, #f1f5f9);
-        color: var(--weline-theme-body-link, #007185);
+        color: var(--weline-theme-body-link, var(--color-link));
     }
 
     .storefront-search__type-option.is-active {
-        background: color-mix(in srgb, var(--weline-theme-primary, #ff9900) 12%, #ffffff);
-        color: var(--weline-theme-body-text, #0f1111);
+        background: color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 12%, #ffffff);
+        color: var(--weline-theme-body-text, var(--color-text-primary));
         font-weight: 600;
-        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weline-theme-primary, #ff9900) 40%, transparent);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 40%, transparent);
     }
 
     .storefront-search__type-option.is-active:hover {
-        color: var(--weline-theme-body-link, #007185);
+        color: var(--weline-theme-body-link, var(--color-link));
     }
 
     .storefront-search__type-option-text {
@@ -475,7 +485,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
         flex-shrink: 0;
         width: 0.95rem;
         height: 0.95rem;
-        accent-color: var(--weline-theme-primary, #ff9900);
+        accent-color: var(--weline-theme-primary, var(--color-primary));
     }
 
     .storefront-search__type-children[hidden] {
@@ -632,7 +642,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
         min-height: 30px;
         border: 1px solid #fcd200;
         border-radius: 20px;
-        background: #ffd814;
+        background: var(--color-primary);
         color: #0f1111;
         font: inherit;
         font-size: 12px;
@@ -808,7 +818,7 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
         margin: 0 0 var(--weline-space-3, 0.75rem);
         font-size: var(--weline-font-size-lg, 1.125rem);
         font-weight: 600;
-        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+        color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
     }
 
     .storefront-search__card {
@@ -820,27 +830,27 @@ $searchBodyClass = 'search-layout__body' . ($showSearchTypeFilter ? ' search-lay
     }
 
     .storefront-search__card:hover {
-        border-color: color-mix(in srgb, var(--weline-theme-primary, #ff9900) 45%, var(--weline-theme-border, #e2e8f0));
+        border-color: color-mix(in srgb, var(--weline-theme-primary, var(--color-primary)) 45%, var(--weline-theme-border, #e2e8f0));
         box-shadow: var(--weline-theme-shadow-sm, 0 2px 8px rgba(15, 23, 42, 0.08));
     }
 
     .storefront-search__card h3 {
         margin: 0;
         font-size: var(--weline-font-size-base, 1rem);
-        color: var(--weline-theme-body-text, #0f1111);
+        color: var(--weline-theme-body-text, var(--color-text-primary));
     }
 
     .storefront-search__card a {
-        color: var(--weline-theme-body-text, #0f1111);
+        color: var(--weline-theme-body-text, var(--color-text-primary));
         text-decoration: none;
     }
 
     .storefront-search__card a:hover {
-        color: var(--weline-theme-body-link-hover, var(--weline-theme-primary, #ff9900));
+        color: var(--weline-theme-body-link-hover, var(--weline-theme-primary, var(--color-primary)));
     }
 
     .storefront-search__section-more a {
-        color: var(--weline-theme-body-link, #007185);
+        color: var(--weline-theme-body-link, var(--color-link));
         font-size: var(--weline-font-size-sm, 0.875rem);
         font-weight: 600;
         text-decoration: none;

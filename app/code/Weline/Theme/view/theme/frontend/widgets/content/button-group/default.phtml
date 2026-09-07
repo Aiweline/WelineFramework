@@ -1,0 +1,44 @@
+<?php
+/**
+ * @widget.code {button-group}
+ * @widget.name {按钮与行动号召}
+ * @widget.description {主次按钮组合，可用于活动入口、咨询、下载与内容导航}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content","sidebar","footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * @param title {default="",type="string",label="标题"}
+ * @param subtitle {default="",type="textarea",label="副标题"}
+ * @param items {default=[],type="site_button_items",label="按钮"}
+ * @param alignment {default="left",type="select",label="对齐方式",options={left:"左对齐",center:"居中",right:"右对齐"}}
+ */
+
+use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Helper\WidgetI18n;
+
+$scope = WidgetUiScope::forWidget('button-group');
+$esc = [Block::class, 'escape'];
+$t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::text($value)));
+$title = Block::text($this->getData('title') ?? '');
+$subtitle = Block::text($this->getData('subtitle'));
+$items = Block::items($this->getData('items'));
+$alignment = Block::choice($this->getData('alignment'), ['left','center','right'], 'left');
+?>
+
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<section class="<?= $esc($scope->cssClass) ?> weline-site-block align-<?= $esc($alignment) ?>" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <?php if ($title !== '' || $subtitle !== ''): ?>
+        <header class="sb-header">
+            <?php if ($title !== ''): ?><h2 class="sb-title"><?= $t($title) ?></h2><?php endif; ?>
+            <?php if ($subtitle !== ''): ?><p class="sb-lead"><?= $t($subtitle) ?></p><?php endif; ?>
+        </header>
+    <?php endif; ?>
+    <div class="sb-actions">
+        <?php foreach ($items as $item): $url = Block::link($item['link'] ?? ''); $label = Block::text($item['label'] ?? ''); $variant = Block::choice($item['variant'] ?? '', ['primary','outline','link'], 'primary'); ?>
+            <?php if ($url !== '' && $label !== ''): ?><a class="w-button w-button-<?= $esc($variant) ?>" data-tone="<?= $variant === 'link' ? 'quiet' : ($variant === 'outline' ? 'neutral' : 'primary') ?>"<?= $variant === 'outline' ? ' data-variant="outline"' : '' ?> href="<?= $esc($url) ?>"><?= $t($label) ?></a><?php endif; ?>
+        <?php endforeach; ?>
+    </div>
+    <?php if ($items === []): ?><p class="sb-empty"><lang>请在部件配置中添加真实内容</lang></p><?php endif; ?>
+</section>

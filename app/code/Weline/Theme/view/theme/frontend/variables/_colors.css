@@ -12,58 +12,64 @@
  */
 
 :root {
-    /* ========== 品牌色 ========== */
-    --color-primary: #f0c14b;
-    --color-primary-light: #f4d078;
-    --color-primary-dark: #e7b92e;
-    --color-primary-border: #a88734;
+    /* ========== 品牌色（与 colors/_ink 对齐；盘加载前兜底） ========== */
+    --color-primary: #b84a3c;
+    --color-primary-light: #d4786a;
+    --color-primary-dark: #963b30;
+    --color-primary-border: #963b30;
+    --color-primary-hover: #963b30;
+    --color-primary-active: #7a3028;
+    --color-primary-bg-subtle: #f8ede9;
+    --color-primary-border-subtle: #e8c4bc;
+    --color-primary-text-emphasis: #7a3028;
+    --color-on-primary: #f7f4ef;
 
     /* ========== 文本色 ========== */
-    --color-text-primary: #111;
-    --color-text-amazon-body: #0f1111;
-    --color-text-secondary: #767676;
-    --color-text-tertiary: #a6a6a6;
-    --color-text-disabled: #c7c7c7;
-    --color-text-dark: #1e293b;
-    --color-text-muted: #475569;
-    --color-text-placeholder: #9ca3af;
-    --color-text-light: #f1f5f9;
-    --color-text-light-secondary: #cbd5e1;
+    --color-text-primary: #1c1c1c;
+    --color-text-amazon-body: #1c1c1c;
+    --color-text-secondary: #4a4a48;
+    --color-text-tertiary: #7a7874;
+    --color-text-disabled: #b8b4ac;
+    --color-text-dark: #1c1c1c;
+    --color-text-muted: #5c5a56;
+    --color-text-placeholder: #9a968e;
+    --color-text-light: #f7f4ef;
+    --color-text-light-secondary: #d4cfc5;
 
     /* ========== 背景色 ========== */
-    --color-bg-canvas: #ffffff;
-    --color-bg-primary: #fff;
-    --color-bg-secondary: #f8f9fa;
-    --color-bg-tertiary: #e7e7e7;
-    --color-bg-dark: #232f3e;
-    --color-bg-dark-secondary: #1e293b;
-    --color-bg-dark-tertiary: #334155;
+    --color-bg-canvas: #f7f4ef;
+    --color-bg-primary: #fffefa;
+    --color-bg-secondary: #ede9e1;
+    --color-bg-tertiary: #e0dbd2;
+    --color-bg-dark: #1f2124;
+    --color-bg-dark-secondary: #16181a;
+    --color-bg-dark-tertiary: #2c3034;
 
     /* ========== 边框色 ========== */
-    --color-border-default: #ddd;
-    --color-border-emphasis: #a6a6a6;
-    --color-border-focus: #e77600;
-    --color-border-light: #e5e7eb;
+    --color-border-default: #d4cfc5;
+    --color-border-emphasis: #a8a299;
+    --color-border-focus: #b84a3c;
+    --color-border-light: #e8e4dc;
 
-    /* ========== 强调色（蓝色系，用于交互元素） ========== */
-    --color-accent: #3b82f6;
-    --color-accent-hover: #2563eb;
-    --color-accent-light: rgba(59, 130, 246, 0.05);
-    --color-accent-medium: rgba(59, 130, 246, 0.1);
-    --color-accent-dark: rgba(59, 130, 246, 0.15);
+    /* ========== 强调色（与主色同族） ========== */
+    --color-accent: #b84a3c;
+    --color-accent-hover: #963b30;
+    --color-accent-light: rgba(184, 74, 60, 0.08);
+    --color-accent-medium: rgba(184, 74, 60, 0.14);
+    --color-accent-dark: rgba(184, 74, 60, 0.22);
 
     /* ========== 功能色 ========== */
-    --color-success: #28a745;
-    --color-warning: #ffc107;
-    --color-error: #dc3545;
-    --color-error-hover: #ef4444;
-    --color-error-light: rgba(239, 68, 68, 0.05);
-    --color-info: #17a2b8;
+    --color-success: #4a7c59;
+    --color-warning: #c4893f;
+    --color-error: #a63d3d;
+    --color-error-hover: #8b3333;
+    --color-error-light: rgba(166, 61, 61, 0.08);
+    --color-info: #4a6b8a;
 
     /* ========== 链接色 ========== */
-    --color-link: #0066c0;
-    --color-link-hover: #c45500;
-    --color-link-visited: #551a8b;
+    --color-link: #3d6b78;
+    --color-link-hover: #b84a3c;
+    --color-link-visited: #5c4a6e;
 
     /* ========== 滚动条色系（默认，可被具体主题覆盖） ========== */
     --scrollbar-thumb: #a2adb7;
@@ -71,8 +77,8 @@
     --scrollbar-track: transparent;
 
     /* ========== REQ-THEME-0007 语义补充色 ========== */
-    --color-brand-orange: #ff9900;
-    --color-brand-orange-hover: #e88b00;
+    --color-brand-orange: #b84a3c;
+    --color-brand-orange-hover: #963b30;
     --color-bg-muted: #f3f3f3;
     --color-bg-slate: #f8fafc;
     --color-text-slate: #111827;
@@ -83,7 +89,7 @@
     --color-border-muted: #dee2e6;
     --color-border-slate: #e4e8f0;
     --color-accent-indigo: #556ee6;
-    --color-accent-teal: #0f766e;
+    --color-accent-teal: #3d6b78;
     --color-overlay-soft: rgba(0, 0, 0, 0.06);
     --color-overlay-light: rgba(0, 0, 0, 0.1);
     --color-overlay-medium: rgba(0, 0, 0, 0.12);
@@ -127,8 +133,8 @@
     --color-warning-glow: rgba(245, 158, 11, 0.22);
     --color-primary-rgb: 15, 118, 110;
 
-    --color-primary-soft: rgba(240, 193, 75, 0.16);
-    --color-primary-glow: rgba(240, 193, 75, 0.4);
+    --color-primary-soft: rgba(15, 118, 110, 0.16);
+    --color-primary-glow: rgba(15, 118, 110, 0.4);
     --color-on-dark-06: rgba(255, 255, 255, 0.06);
     --color-on-dark-12: rgba(255, 255, 255, 0.12);
     --color-on-dark-15: rgba(255, 255, 255, 0.15);
@@ -144,49 +150,49 @@
     --color-info-ink-2: #1e40af;
     --color-info-soft-3: #93c5fd;
     --color-slate-glow: rgba(148, 163, 184, 0.35);
-    --color-bg-amazon: #131921;
+    --color-bg-amazon: #111827;
     --color-overlay-50: rgba(0, 0, 0, 0.5);
 
-    /* ========== Amazon 页头/页尾 chrome（对齐 partials $colors 回退值） ========== */
-    --weline-chrome-primary: var(--color-brand-orange, #ff9900);
-    --weline-chrome-primary-light: var(--token-color-febd69, #febd69);
-    --weline-chrome-primary-dark: var(--token-color-e68900, #e68900);
-    --weline-chrome-bg-dark: var(--color-bg-amazon, #131921);
-    --weline-chrome-bg-dark-secondary: var(--color-bg-dark, #232f3e);
-    --weline-chrome-bg-primary: var(--color-bg-primary, #ffffff);
+    /* ========== 页头/页尾 chrome（对齐 colors/_default） ========== */
+    --weline-chrome-primary: var(--color-primary);
+    --weline-chrome-primary-light: var(--color-primary-light);
+    --weline-chrome-primary-dark: var(--color-primary-dark);
+    --weline-chrome-bg-dark: var(--color-bg-dark-secondary);
+    --weline-chrome-bg-dark-secondary: var(--color-bg-dark);
+    --weline-chrome-bg-primary: var(--color-bg-primary);
     /* Page body canvas — distinct from menu/card surface (bg-primary); color panel edits --color-bg-canvas */
-    --weline-chrome-body-bg: var(--color-bg-canvas, #ffffff);
-    --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--color-bg-canvas, #ffffff));
-    --weline-chrome-bg-secondary: var(--color-bg-muted, #f3f3f3);
-    --weline-chrome-bg-tertiary: var(--color-bg-tertiary, #e7e7e7);
-    --weline-chrome-border-default: var(--color-border-default, #dddddd);
-    --weline-chrome-border-focus: var(--weline-chrome-primary, #ff9900);
-    --weline-chrome-text-primary: var(--color-text-primary, #111111);
-    --weline-chrome-text-secondary: var(--color-text-gray, #565959);
-    --weline-chrome-text-muted: var(--color-text-faint, #999999);
-    --weline-chrome-text-light: #ffffff;
-    --weline-chrome-text-light-secondary: #dddddd;
-    /* Body 内容区文字（Amazon 白底深字 #0F1111；与 header text-light 区分） */
-    --weline-chrome-body-text: var(--color-text-amazon-body, var(--color-text-primary, #0f1111));
-    --weline-chrome-body-text-secondary: var(--color-text-secondary, #565959);
-    --weline-chrome-body-text-muted: var(--color-text-gray-mid, #666666);
-    --weline-chrome-body-text-heading: var(--color-text-dark, #1e293b);
-    --weline-chrome-body-border: var(--color-border-default, #dddddd);
-    --weline-chrome-body-link: var(--color-link, #0066c0);
-    --weline-chrome-body-link-hover: var(--weline-chrome-primary, #ff9900);
+    --weline-chrome-body-bg: var(--color-bg-canvas);
+    --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--color-bg-canvas));
+    --weline-chrome-bg-secondary: var(--color-bg-secondary);
+    --weline-chrome-bg-tertiary: var(--color-bg-tertiary);
+    --weline-chrome-border-default: var(--color-border-default);
+    --weline-chrome-border-focus: var(--color-border-focus);
+    --weline-chrome-text-primary: var(--color-text-primary);
+    --weline-chrome-text-secondary: var(--color-text-secondary);
+    --weline-chrome-text-muted: var(--color-text-placeholder);
+    --weline-chrome-text-light: var(--color-text-light);
+    --weline-chrome-text-light-secondary: var(--color-text-light-secondary);
+    /* Body 内容区文字（白底深字；与 header text-light 区分） */
+    --weline-chrome-body-text: var(--color-text-amazon-body, var(--color-text-primary));
+    --weline-chrome-body-text-secondary: var(--color-text-secondary);
+    --weline-chrome-body-text-muted: var(--color-text-muted);
+    --weline-chrome-body-text-heading: var(--color-text-dark);
+    --weline-chrome-body-border: var(--color-border-default);
+    --weline-chrome-body-link: var(--color-link);
+    --weline-chrome-body-link-hover: var(--color-link-hover);
     /* 顶栏 hover 下拉 / Mega Menu 面板文字（白底深字，与 text-light 区分） */
-    --weline-chrome-menu-panel-text: var(--color-text-primary, #111111);
-    --weline-chrome-menu-panel-text-heading: var(--color-text-dark, #1e293b);
-    --weline-chrome-menu-panel-text-muted: var(--color-text-gray-mid, #666666);
-    --weline-chrome-menu-panel-text-hover: var(--weline-chrome-primary, #ff9900);
-    --weline-chrome-menu-panel-border: var(--color-border-default, #dddddd);
+    --weline-chrome-menu-panel-text: var(--color-text-primary);
+    --weline-chrome-menu-panel-text-heading: var(--color-text-dark);
+    --weline-chrome-menu-panel-text-muted: var(--color-text-muted);
+    --weline-chrome-menu-panel-text-hover: var(--color-primary);
+    --weline-chrome-menu-panel-border: var(--color-border-default);
     /* Mega Menu 左侧顶级：字色默认白；hover 背景默认半透明白（叠在深色侧栏上） */
-    --weline-chrome-mega-menu-top-hover-color: #ffffff;
-    --weline-chrome-mega-menu-top-hover-bg: var(--color-on-dark-15, rgba(255, 255, 255, 0.15));
-    --weline-chrome-footer-bg: #232f3e;
-    --weline-chrome-footer-bg-deep: #131a22;
-    --weline-chrome-footer-back-top-bg: #37475a;
-    --weline-chrome-footer-border: #3a4553;
+    --weline-chrome-mega-menu-top-hover-color: var(--color-text-light);
+    --weline-chrome-mega-menu-top-hover-bg: var(--color-on-dark-15);
+    --weline-chrome-footer-bg: var(--color-bg-dark);
+    --weline-chrome-footer-bg-deep: var(--color-bg-dark-secondary);
+    --weline-chrome-footer-back-top-bg: var(--color-bg-dark-tertiary);
+    --weline-chrome-footer-border: var(--color-header-border-hover, #374151);
 
     /* ========== 语义桥接叶子（theme.css / 组件直接引用，不可空） ========== */
     --color-bg-overlay: rgb(15 23 42 / 0.42);

@@ -1,304 +1,56 @@
 <?php
 /**
- * FAQ折叠面板部件
- *
- * @var \Weline\Framework\View\Template $this
- *
  * @widget.code {faq-accordion}
  * @widget.name {FAQ折叠}
- * @widget.description {常见问题折叠面板，支持展开收起交互}
+ * @widget.description {通用常见问题，支持键盘展开、搜索与单项或多项展开}
  * @widget.type {faq}
  * @widget.area {frontend}
- * @widget.position {["content"]}
- * @widget.page_layouts {["cms_page", "product"]}
+ * @widget.position {["content","sidebar"]}
+ * @widget.page_layouts {["*"]}
  * @widget.supports {["layout-contact-faq","layout-contact-content","layout-cms-content","layout-default-content","faq"]}
  * @widget.compatible {true}
- *
  * @param title {default="常见问题",type="string",label="标题"}
  * @param subtitle {default="",type="string",label="副标题"}
- * @param faqs {default=[],type="array",label="FAQ列表",description="每项包含question和answer"}
+ * @param faqs {default=[],type="site_faq_items",label="FAQ列表"}
  * @param expand_first {default=true,type="bool",label="默认展开第一个"}
  * @param allow_multiple {default=false,type="bool",label="允许同时展开多个"}
+ * @param search_enabled {default=false,type="bool",label="显示搜索"}
  */
 
-use Weline\Theme\Helper\ThemeUiColor;
+use Weline\Theme\Helper\SiteBlockConfig as Block;
 use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Helper\WidgetI18n;
 
 $scope = WidgetUiScope::forWidget('faq-accordion');
-$wc = $scope->cssClass;
-$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
-
-$isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
-$title = $this->getData('title') ?? __('常见问题');
-$subtitle = $this->getData('subtitle') ?? '';
-$faqs = $this->getData('faqs') ?? [];
-$explicitFaqs = $faqs;
-$expandFirst = (bool)($this->getData('expand_first') ?? true);
-$allowMultiple = (bool)($this->getData('allow_multiple') ?? false);
-$searchEnabled = (bool)($this->getData('search_enabled') ?? false);
-
-if (empty($faqs)) {
-    $faqs = [
-        ['question' => __('如何下单购买？'), 'answer' => __('您可以浏览商品，选择心仪的产品加入购物车，然后前往结算页面完成支付即可。')],
-        ['question' => __('支持哪些支付方式？'), 'answer' => __('我们支持支付宝、微信支付、银联卡、信用卡等多种支付方式。')],
-        ['question' => __('多久可以收到商品？'), 'answer' => __('一般情况下，付款后1-3个工作日发货，根据您的地址不同，快递时间为1-5天。')],
-        ['question' => __('如何申请退换货？'), 'answer' => __('收到商品7天内，如有质量问题或其他原因需要退换，请联系客服申请退换货。')],
-        ['question' => __('如何联系客服？'), 'answer' => __('您可以通过在线客服、客服电话或邮件联系我们，客服工作时间为每天9:00-21:00。')],
-    ];
-}
-
-if ($explicitFaqs !== [] && method_exists($this, 'setData')) {
-    $pageFaqs = $this->getData('faqs') ?? [];
-    if (!is_array($pageFaqs)) {
-        $pageFaqs = [];
-    }
-    $this->setData('faqs', array_values(array_merge($pageFaqs, $explicitFaqs)));
-}
+$esc = [Block::class, 'escape'];
+$t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::text($value)));
+$title = Block::text($this->getData('title') ?? '常见问题');
+$subtitle = Block::text($this->getData('subtitle'));
+$faqs = Block::items($this->getData('faqs'));
+$expandFirst = Block::boolean($this->getData('expand_first'), true);
+$allowMultiple = Block::boolean($this->getData('allow_multiple'));
+$searchEnabled = Block::boolean($this->getData('search_enabled'));
 ?>
-
-<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
-         weline-code="<?= $esc($scope->code) ?>"
-         data-uid="<?= $esc($scope->uid) ?>"
-         data-js-ns="<?= $esc($scope->jsNs) ?>"
-         data-allow-multiple="<?= $allowMultiple ? 'true' : 'false' ?>">
-
-    <?php if ($title || $subtitle): ?>
-        <div class="widget-header">
-            <?php if ($title): ?>
-                <h2 class="widget-title"><?= $esc((string)$title) ?></h2>
-            <?php endif; ?>
-            <?php if ($subtitle): ?>
-                <p class="widget-subtitle"><?= $esc((string)$subtitle) ?></p>
-            <?php endif; ?>
-        </div>
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<section class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>"
+         data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-weline-load="siteBlocks" data-site-block="faq" data-allow-multiple="<?= $allowMultiple ? 'true' : 'false' ?>">
+    <?php if ($title !== '' || $subtitle !== ''): ?>
+        <header class="sb-header">
+            <?php if ($title !== ''): ?><h2 class="sb-title"><?= $t($title) ?></h2><?php endif; ?>
+            <?php if ($subtitle !== ''): ?><p class="sb-lead"><?= $t($subtitle) ?></p><?php endif; ?>
+        </header>
     <?php endif; ?>
-
     <?php if ($searchEnabled): ?>
-        <div class="faq-search">
-            <input type="text" class="faq-search-input" placeholder="<?= __('搜索问题...') ?>">
-            <w:icon name="search" size="sm"></w:icon>
-        </div>
+        <input type="search" class="w-input sb-search" data-faq-search aria-label="@lang{搜索问题}" placeholder="@lang{搜索问题}">
     <?php endif; ?>
-
-    <div class="faq-list">
+    <div class="w-card sb-card">
         <?php foreach ($faqs as $index => $faq): ?>
-            <div class="faq-item <?= ($expandFirst && $index === 0) ? 'expanded' : '' ?>" data-index="<?= $index ?>">
-                <button class="faq-question" type="button">
-                    <span class="question-text"><?= $esc((string)$faq['question']) ?></span>
-                    <span class="question-icon">
-                        <w:icon name="plus" size="sm"></w:icon>
-                    </span>
-                </button>
-                <div class="faq-answer">
-                    <div class="answer-content">
-                        <?= nl2br($esc((string)$faq['answer'])) ?>
-                    </div>
-                </div>
-            </div>
+            <details class="sb-faq" <?= !$allowMultiple ? 'name="' . $esc($scope->uid) . '-faq"' : '' ?> <?= $expandFirst && $index === 0 ? 'open' : '' ?>>
+                <summary><?= $t($faq['question'] ?? '') ?></summary>
+                <div class="sb-copy"><?= $t($faq['answer'] ?? '') ?></div>
+            </details>
         <?php endforeach; ?>
     </div>
+    <p class="sb-empty" data-faq-empty <?= $faqs !== [] ? 'hidden' : '' ?>><lang>暂无匹配的问题</lang></p>
 </section>
-
-<style>
-.<?= $wc ?> {
-    max-width: var(--token-size-800px);
-    margin: 0 auto;
-    padding: var(--weline-space-10) 0;
-}
-
-.<?= $wc ?> .widget-header {
-    text-align: center;
-    margin-bottom: var(--weline-space-8);
-}
-
-.<?= $wc ?> .widget-title {
-    font-size: var(--weline-font-size-3xl);
-    font-weight: 700;
-    margin: 0 0 var(--weline-space-2);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .widget-subtitle {
-    font-size: var(--weline-font-size-base);
-    color: var(--weline-theme-text-muted);
-    margin: 0;
-}
-
-.<?= $wc ?> .faq-search {
-    position: relative;
-    margin-bottom: var(--weline-space-8);
-}
-
-.<?= $wc ?> .faq-search-input {
-    width: 100%;
-    padding: var(--weline-space-4) var(--weline-space-5) var(--weline-space-4) var(--size-control-50);
-    border: var(--border-width-medium) solid var(--weline-theme-border);
-    border-radius: var(--weline-radius-lg);
-    font-size: var(--weline-font-size-base);
-    outline: none;
-    transition: border-color var(--weline-theme-transition-base);
-    background: var(--weline-theme-surface-raised);
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .faq-search-input:focus {
-    border-color: var(--weline-theme-primary);
-}
-
-.<?= $wc ?> .faq-search i {
-    position: absolute;
-    left: var(--spacing-4_5);
-    top: 50%;
-    transform: translateY(-50%);
-    font-size: var(--weline-font-size-xl);
-    color: var(--weline-theme-text-muted);
-}
-
-.<?= $wc ?> .faq-list {
-    border-radius: var(--weline-radius-lg);
-    overflow: hidden;
-    box-shadow: var(--weline-theme-shadow-sm);
-}
-
-.<?= $wc ?> .faq-item {
-    background: var(--weline-theme-surface-raised);
-    border-bottom: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
-}
-
-.<?= $wc ?> .faq-item:last-child {
-    border-bottom: none;
-}
-
-.<?= $wc ?> .faq-question {
-    width: 100%;
-    padding: var(--weline-space-5) var(--weline-space-6);
-    border: none;
-    background: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: var(--weline-space-4);
-    text-align: left;
-    transition: background-color var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .faq-question:hover {
-    background: var(--weline-theme-surface-muted);
-}
-
-.<?= $wc ?> .question-text {
-    font-size: var(--weline-font-size-base);
-    font-weight: 600;
-    color: var(--weline-theme-text);
-}
-
-.<?= $wc ?> .question-icon {
-    width: var(--size-control-xs);
-    height: var(--size-control-xs);
-    background: var(--weline-theme-primary);
-    color: var(--weline-theme-on-primary);
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    transition: transform var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .question-icon i {
-    font-size: var(--weline-font-size-lg);
-    transition: transform var(--weline-theme-transition-base);
-}
-
-.<?= $wc ?> .faq-item.expanded .question-icon i {
-    transform: rotate(45deg);
-}
-
-.<?= $wc ?> .faq-item:not(.expanded) .faq-answer {
-    display: none;
-}
-
-.<?= $wc ?> .faq-answer {
-    overflow: hidden;
-}
-
-.<?= $wc ?> .answer-content {
-    padding: 0 var(--weline-space-6) var(--weline-space-6);
-    font-size: var(--weline-font-size-base);
-    line-height: 1.7;
-    color: var(--weline-theme-text-muted);
-}
-
-.<?= $wc ?> .faq-item.hidden {
-    display: none;
-}
-
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    padding: var(--weline-space-4) 0;
-}
-
-@media (max-width: 576px) {
-    .<?= $wc ?> .widget-title {
-        font-size: var(--weline-font-size-2xl);
-    }
-
-    .<?= $wc ?> .faq-question {
-        padding: var(--weline-space-4) var(--weline-space-5);
-    }
-
-    .<?= $wc ?> .question-text {
-        font-size: var(--weline-font-size-sm);
-    }
-
-    .<?= $wc ?> .answer-content {
-        padding: 0 var(--weline-space-5) var(--weline-space-5);
-        font-size: var(--weline-font-size-sm);
-    }
-}
-</style>
-
-<script>
-(function () {
-    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
-    if (!root) return;
-
-    var allowMultiple = root.dataset.allowMultiple === 'true';
-    var items = root.querySelectorAll('.faq-item');
-    var searchInput = root.querySelector('.faq-search-input');
-
-    items.forEach(function (item) {
-        var question = item.querySelector('.faq-question');
-
-        question.addEventListener('click', function () {
-            if (!allowMultiple) {
-                items.forEach(function (other) {
-                    if (other !== item) {
-                        other.classList.remove('expanded');
-                    }
-                });
-            }
-
-            item.classList.toggle('expanded');
-        });
-    });
-
-    if (searchInput) {
-        searchInput.addEventListener('input', function () {
-            var keyword = this.value.toLowerCase().trim();
-
-            items.forEach(function (item) {
-                var question = item.querySelector('.question-text').textContent.toLowerCase();
-                var answer = item.querySelector('.answer-content').textContent.toLowerCase();
-
-                if (keyword === '' || question.includes(keyword) || answer.includes(keyword)) {
-                    item.classList.remove('hidden');
-                } else {
-                    item.classList.add('hidden');
-                }
-            });
-        });
-    }
-})();
-</script>

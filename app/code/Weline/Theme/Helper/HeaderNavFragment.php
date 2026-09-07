@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Theme\Helper;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\View\Template;
 use Weline\Theme\Service\AllMenu\MenuTreeNormalizer;
 use Weline\Theme\Service\StorefrontHeaderNavFragmentCache;
@@ -23,23 +24,47 @@ final class HeaderNavFragment
     public static function fetchMegaMenuPanel(Template $template, array $params): string
     {
         $item = \is_array($params['item'] ?? null) ? $params['item'] : [];
-        if ($item === [] || self::shouldBypass($template)) {
-            return (string)$template->fetch(self::MEGA_PANEL_TEMPLATE, $params);
-        }
-
         $panelId = \trim((string)($params['panel_id'] ?? ''));
         $drawerFlyout = !empty($params['drawer_flyout']);
+        if ($item === [] || self::shouldBypass($template)) {
+            return (string)RequestLifecycleTrace::measurePhase(
+                'theme.header.mega_panel.render',
+                static fn(): string => (string)$template->fetch(self::MEGA_PANEL_TEMPLATE, $params),
+                [
+                    'panel_id' => $panelId,
+                    'drawer' => $drawerFlyout,
+                    'cache' => 'bypass',
+                ],
+            );
+        }
+
         $showBannerWithChildren = self::coerceBool($params['show_banner_with_children'] ?? true, true);
 
         /** @var StorefrontHeaderNavFragmentCache $cache */
         $cache = ObjectManager::getInstance(StorefrontHeaderNavFragmentCache::class);
 
-        return $cache->rememberMegaMenuPanel(
-            $panelId,
-            $drawerFlyout,
-            $item,
-            static fn(): string => (string)$template->fetch(self::MEGA_PANEL_TEMPLATE, $params),
-            $showBannerWithChildren,
+        return (string)RequestLifecycleTrace::measurePhase(
+            'theme.header.mega_panel.cache',
+            static fn(): string => $cache->rememberMegaMenuPanel(
+                $panelId,
+                $drawerFlyout,
+                $item,
+                static fn(): string => (string)RequestLifecycleTrace::measurePhase(
+                    'theme.header.mega_panel.render',
+                    static fn(): string => (string)$template->fetch(self::MEGA_PANEL_TEMPLATE, $params),
+                    [
+                        'panel_id' => $panelId,
+                        'drawer' => $drawerFlyout,
+                        'cache' => 'miss',
+                    ],
+                ),
+                $showBannerWithChildren,
+            ),
+            [
+                'panel_id' => $panelId,
+                'drawer' => $drawerFlyout,
+                'children' => \count(\is_array($item['children'] ?? null) ? $item['children'] : []),
+            ],
         );
     }
 
@@ -50,15 +75,35 @@ final class HeaderNavFragment
     {
         $items = \is_array($params['items'] ?? null) ? $params['items'] : [];
         if ($items === [] || self::shouldBypass($template)) {
-            return (string)$template->fetch(self::SIDEBAR_NAV_TEMPLATE, $params);
+            return (string)RequestLifecycleTrace::measurePhase(
+                'theme.header.sidebar.render',
+                static fn(): string => (string)$template->fetch(self::SIDEBAR_NAV_TEMPLATE, $params),
+                [
+                    'items' => \count($items),
+                    'cache' => 'bypass',
+                ],
+            );
         }
 
         /** @var StorefrontHeaderNavFragmentCache $cache */
         $cache = ObjectManager::getInstance(StorefrontHeaderNavFragmentCache::class);
 
-        return $cache->rememberCategoriesSidebarNav(
-            $items,
-            static fn(): string => (string)$template->fetch(self::SIDEBAR_NAV_TEMPLATE, $params),
+        return (string)RequestLifecycleTrace::measurePhase(
+            'theme.header.sidebar.cache',
+            static fn(): string => $cache->rememberCategoriesSidebarNav(
+                $items,
+                static fn(): string => (string)RequestLifecycleTrace::measurePhase(
+                    'theme.header.sidebar.render',
+                    static fn(): string => (string)$template->fetch(self::SIDEBAR_NAV_TEMPLATE, $params),
+                    [
+                        'items' => \count($items),
+                        'cache' => 'miss',
+                    ],
+                ),
+            ),
+            [
+                'items' => \count($items),
+            ],
         );
     }
 

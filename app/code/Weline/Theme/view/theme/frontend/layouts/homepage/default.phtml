@@ -148,6 +148,19 @@ $semanticTitle = $configuredTitle === $defaultBrandTitle ? $localizedBrandTitle 
                         </w:hook>
                     </w:slot>
 
+                    <w:slot id="homepage-brands"
+                            name="Homepage brands"
+                            accept="layout-homepage-brands,brand-list,brands,textile-heritage,content"
+                            multiple="true"
+                            position="content"
+                            wrapper="section"
+                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_brands">
+                        <!-- Theme textile-heritage default_injections 优先；未应用时由同一 Theme 部件兜底 -->
+                        <w:hook>Weline_Theme::frontend::layouts::homepage::brands<else/>
+                            <w:widget type="content" name="textile-heritage" />
+                        </w:hook>
+                    </w:slot>
+
                     <w:slot id="homepage-featured"
                             name="Homepage featured"
                             accept="layout-homepage-featured,featured-products,product-carousel,product,content,cards"
@@ -205,19 +218,6 @@ $semanticTitle = $configuredTitle === $defaultBrandTitle ? $localizedBrandTitle 
                             class="homepage-section" weline-code="theme.homepage.homepage_bestsellers">
                         <w:hook>Weline_Theme::frontend::layouts::homepage::bestsellers<else/>
                             <w:widget type="product" name="bestsellers" />
-                        </w:hook>
-                    </w:slot>
-
-                    <w:slot id="homepage-brands"
-                            name="Homepage brands"
-                            accept="layout-homepage-brands,brand-list,brands,textile-heritage,content"
-                            multiple="true"
-                            position="content"
-                            wrapper="section"
-                            class="homepage-section homepage-section--soft" weline-code="theme.homepage.homepage_brands">
-                        <!-- 优先 default_injections（Product textile-heritage）；未注入时 else 兜底同部件 -->
-                        <w:hook>Weline_Theme::frontend::layouts::homepage::brands<else/>
-                            <w:widget type="content" name="textile-heritage" />
                         </w:hook>
                     </w:slot>
 

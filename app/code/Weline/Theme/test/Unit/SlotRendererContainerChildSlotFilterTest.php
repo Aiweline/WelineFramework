@@ -40,4 +40,14 @@ final class SlotRendererContainerChildSlotFilterTest extends TestCase
         self::assertStringContainsString('FooterDefaultLinksHelper::standardExtensionSlotIds()', $src);
         self::assertStringContainsString('发布态 filter 仍须保留这些子槽', $src);
     }
+
+    public function testHtmlSlotExtractionUsesOneAttributePass(): void
+    {
+        $src = $this->readService();
+
+        self::assertStringContainsString('data-wslot|data-slot-id', $src);
+        self::assertStringContainsString('foreach ($matches[3] as $slotId)', $src);
+        self::assertStringNotContainsString("preg_match_all('/\\bdata-wslot\\s*=", $src);
+        self::assertStringNotContainsString("preg_match_all('/\\bdata-slot-id\\s*=", $src);
+    }
 }

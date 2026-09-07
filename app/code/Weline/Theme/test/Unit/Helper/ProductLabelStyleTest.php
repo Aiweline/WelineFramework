@@ -50,6 +50,18 @@ final class ProductLabelStyleTest extends TestCase
         self::assertFalse(ProductLabelStyle::resolveFlags(['is_new' => 0, 'is_sale' => 0], 1)['is_demo']);
     }
 
+    public function testResolveFlagsDoesNotFabricateByIndex(): void
+    {
+        $flags = ProductLabelStyle::resolveFlags([], 0);
+        self::assertFalse($flags['is_new']);
+        self::assertFalse($flags['is_sale']);
+        self::assertFalse($flags['is_demo']);
+
+        $flags = ProductLabelStyle::resolveFlags([], 3);
+        self::assertFalse($flags['is_new']);
+        self::assertFalse($flags['is_sale']);
+    }
+
     public function testSanitizeUsesThemeUiColor(): void
     {
         self::assertTrue(ThemeUiColor::isValid(ProductLabelStyle::globalBgToken(ProductLabelStyle::KIND_NEW)));

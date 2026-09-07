@@ -56,7 +56,8 @@ final class EditorModeAssetInjectorTest extends TestCase
         $result = $injector->inject($html);
 
         self::assertStringContainsString('/Weline/Theme/view/statics/ui/pages/weline-theme-preview.css', $result);
-        self::assertStringContainsString('/Weline/Theme/view/statics/ui/pages/weline-theme-preview.js?v=20260901-theme-editor-virtual-gate-v1', $result);
+        self::assertStringContainsString('/Weline/Theme/view/statics/ui/pages/weline-theme-preview.js', $result);
+        self::assertStringNotContainsString('theme-editor-virtual-gate', $result);
         self::assertStringNotContainsString('product-card-purchase-actions', $result);
         self::assertLessThan(
             strpos($result, '</head>'),
@@ -69,7 +70,7 @@ final class EditorModeAssetInjectorTest extends TestCase
         );
     }
 
-    public function testInjectUsesAmpersandWhenSourceAlreadyHasQuery(): void
+    public function testInjectPreservesFetchTagSourceVersionWithoutExtraHardcodedStamp(): void
     {
         $moduleRoot = dirname(__DIR__, 3);
         if (!class_exists(IconRegistry::class, false)) {
@@ -90,9 +91,11 @@ final class EditorModeAssetInjectorTest extends TestCase
         $result = $injector->inject('<html><head></head><body><button class="btn-buy-now">Buy</button></body></html>');
 
         self::assertStringContainsString(
-            'weline-theme-preview.js?v=preview_x&amp;v=20260901-theme-editor-virtual-gate-v1',
+            'weline-theme-preview.js?v=preview_x',
             $result
         );
+        self::assertStringNotContainsString('&amp;v=', $result);
+        self::assertStringNotContainsString('theme-editor-virtual-gate', $result);
         self::assertStringNotContainsString('data-weline-product-card-purchase-actions', $result);
         self::assertStringNotContainsString('?v=preview_x?v=', $result);
     }

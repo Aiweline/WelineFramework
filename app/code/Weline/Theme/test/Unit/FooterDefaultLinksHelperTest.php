@@ -9,6 +9,36 @@ use Weline\Theme\Helper\FooterDefaultLinksHelper;
 
 final class FooterDefaultLinksHelperTest extends TestCase
 {
+    public function testRelativeFooterLinksKeepTheirQueryAndAnchorWhileTheTaglibAddsTheActivePrefixOnce(): void
+    {
+        foreach ([
+            '/guide/shipping?country=US#customs',
+            '/USD/en_US/guide/shipping?country=US#customs',
+        ] as $url) {
+            self::assertSame(
+                ['url' => '', 'url_path' => 'guide/shipping?country=US#customs'],
+                FooterDefaultLinksHelper::splitUrlForTaglib($url, '/USD/en_US'),
+            );
+        }
+    }
+
+    public function testFooterExternalContactAndSamePageLinksRemainDirectUrls(): void
+    {
+        foreach ([
+            'https://partner.example/policy?ref=hanfu#terms',
+            '//partner.example/policy',
+            'mailto:service@example.com',
+            'tel:+861234567890',
+            '#contact-service',
+            '?preferences=1',
+        ] as $url) {
+            self::assertSame(
+                ['url' => $url, 'url_path' => ''],
+                FooterDefaultLinksHelper::splitUrlForTaglib($url, '/en_US'),
+            );
+        }
+    }
+
     public function testPartialLinkGroupsUseTextItems(): void
     {
         $groups = FooterDefaultLinksHelper::partialLinkGroups();
@@ -58,6 +88,25 @@ final class FooterDefaultLinksHelperTest extends TestCase
         );
     }
 
+    public function testNormalizeSocialItemsOnlyReturnsActionableProfileLinks(): void
+    {
+        self::assertSame([], FooterDefaultLinksHelper::normalizeSocialItems(null));
+
+        self::assertSame(
+            [[
+                'name' => 'Instagram',
+                'icon' => 'fab fa-instagram',
+                'url' => 'https://www.instagram.com/yunshang-hanfu',
+            ]],
+            FooterDefaultLinksHelper::normalizeSocialItems([
+                ['name' => 'Instagram', 'icon' => 'fab fa-instagram', 'url' => 'https://www.instagram.com/yunshang-hanfu'],
+                ['name' => 'Pinterest', 'icon' => 'fab fa-pinterest', 'url' => '#'],
+                ['name' => 'TikTok', 'icon' => 'fab fa-tiktok', 'url' => ''],
+                ['name' => 'Unsafe', 'icon' => 'fas fa-link', 'url' => 'javascript:alert(1)'],
+            ]),
+        );
+    }
+
     public function testLegalLinksPresent(): void
     {
         $links = FooterDefaultLinksHelper::legalLinks();
@@ -73,6 +122,6 @@ final class FooterDefaultLinksHelperTest extends TestCase
         $this->assertSame('/terms', $byText['使用条件'] ?? null);
         $this->assertSame('/privacy', $byText['隐私声明'] ?? null);
         $this->assertSame('/cookies', $byText['Cookie 政策'] ?? null);
-        $this->assertSame('/ads-preferences', $byText['广告偏好'] ?? null);
+        $this->assertArrayNotHasKey('广告偏好', $byText);
     }
 }

@@ -453,28 +453,45 @@ readonly class ThemeLayoutVersionService
     }
     
     /**
-     * 更新静态资源版本号
-     * 
+     * 按主题版本 bump 静态资源 URL 版本号（可视化/布局发布后调用）。
+     *
      * 版本号格式：{themeVersion}_{timestamp}
      * 例如：1.0.0_1738500000
-     * 
-     * @param int $themeId 主题ID
+     *
+     * @return string 写入的 theme.static_version；失败时返回空串
      */
-    private function updateStaticVersion(int $themeId): void
+    public function bumpStaticVersion(int $themeId): string
     {
         try {
-            // 获取主题版本号
+            if ($themeId <= 0) {
+                return '';
+            }
             $theme = $this->welineTheme->reset()->load($themeId);
-            $themeVersion = $theme->getData('version') ?: '1.0.0';
-            
-            // 生成静态版本号：主题版本_时间戳
+            $themeVersion = (string)($theme->getData('version') ?: '1.0.0');
+            if ($themeVersion === '') {
+                $themeVersion = '1.0.0';
+            }
+
             $staticVersion = $themeVersion . '_' . time();
-            
-            // 保存到系统配置
-            Env::getInstance()->setConfig('theme.static_version', $staticVersion);
-        } catch (\Exception $e) {
+            // 顶层键：避免被 WelineTheme::setConfig('theme', row) 整表覆盖。
+            Env::getInstance()->setConfig('theme_static_version', $staticVersion);
+            // 兼容旧读者；可能被主题元数据刷新冲掉，不以它为准。
+            try {
+                Env::getInstance()->setConfig('theme.static_version', $staticVersion);
+            } catch (\Throwable) {
+            }
+
+            return $staticVersion;
+        } catch (\Throwable) {
             // 静默失败，不影响发布流程
+            return '';
         }
+    }
+
+    /** @deprecated 使用 bumpStaticVersion */
+    private function updateStaticVersion(int $themeId): void
+    {
+        $this->bumpStaticVersion($themeId);
     }
 
     /**

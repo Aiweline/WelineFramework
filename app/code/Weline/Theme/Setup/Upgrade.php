@@ -5,18 +5,19 @@ declare(strict_types=1);
 namespace Weline\Theme\Setup;
 
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Framework\Setup\Data;
 use Weline\Framework\Setup\UpgradeInterface;
 use Weline\Backend\Setup\Ui\IconDataMigrator;
+use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
-use Weline\Theme\Api\Scoped\ThemeEditorContextFactory;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\SharedChromeService;
 
 class Upgrade implements UpgradeInterface
 {
-    public const VERSION = '2.2.98';
+    public const VERSION = '2.2.189';
 
     public function setup(Data\Setup $setup, Data\Context $context): void
     {
@@ -39,6 +40,7 @@ class Upgrade implements UpgradeInterface
 
     /**
      * 历史 * 默认注入在各业务布局留下的本地 chrome 副本，阻断全局共享；升级时清空非载体布局占用。
+     * 使用 ScopeIdentity::global() 直接构造 ThemeEditorContext，避免旧 fromInput 缺 typed scope 时静默跳过。
      */
     private function purgeLegacyLocalSharedChrome(): void
     {
@@ -53,11 +55,19 @@ class Upgrade implements UpgradeInterface
                     $items[] = $row;
                 }
             }
+            if ($items === []) {
+                $fallback = clone $themeModel;
+                $fallback->clearData()->clearQuery()->load(1);
+                if ((int)$fallback->getId() > 0) {
+                    $items[] = $fallback;
+                }
+            }
 
-            /** @var ThemeEditorContextFactory $factory */
-            $factory = ObjectManager::getInstance(ThemeEditorContextFactory::class);
+            /** @var ScopeHierarchyInterface $scopes */
+            $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
             /** @var SharedChromeService $chrome */
             $chrome = ObjectManager::getInstance(SharedChromeService::class);
+            $scope = $scopes->contextFromIdentity(ScopeIdentity::global());
 
             foreach ($items as $theme) {
                 $themeId = 0;
@@ -70,16 +80,14 @@ class Upgrade implements UpgradeInterface
                     continue;
                 }
 
-                $context = $factory->fromInput([
-                    'theme_id' => $themeId,
-                    'layout_type' => ThemeLayout::PAGE_TYPE_HOME,
-                    'page_type' => ThemeLayout::PAGE_TYPE_HOME,
-                    'layout_option' => 'default',
-                    'editor_area' => 'frontend',
-                    'preview_area' => 'frontend',
-                    'target_type' => 'website',
-                    'target_id' => 0,
-                ], ThemeEditorContext::RESOURCE_LAYOUT);
+                $context = new ThemeEditorContext(
+                    scope: $scope,
+                    area: 'frontend',
+                    resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+                    themeId: $themeId,
+                    layoutType: ThemeLayout::PAGE_TYPE_HOME,
+                    layoutOption: 'default',
+                );
 
                 $chrome->restoreNonCarrierLayouts(
                     $context,

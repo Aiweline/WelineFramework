@@ -5,7 +5,7 @@
 - **Hook 名称**：`header-account-links`
 - **显示名称**：页头账户菜单链接
 - **Hook 类型**：简单格式 Hook（向后兼容）
-- **功能说明**：在页头账户下拉菜单中显示账户相关链接，允许其他模块自定义账户菜单项。
+- **功能说明**：在页头账户下拉菜单中显示账户**导航**链接，允许其他模块自定义账户菜单项。**退出登录不是菜单项**，由 Theme 账户宿主（`widgets/header/account`、`header-account`、移动端 my-menu）在 hook 之后固定渲染，贡献方勿再输出 logout。
 
 ## 使用方法
 
@@ -35,7 +35,6 @@ if ($isLoggedIn) {
     <li role="none"><a href="/customer/account/orders" role="menuitem"><?= __('我的订单') ?></a></li>
     <li role="none"><a href="/customer/account/settings" role="menuitem"><?= __('账户设置') ?></a></li>
     <li role="none"><a href="/customer/account/profile" role="menuitem"><?= __('个人资料') ?></a></li>
-    <li role="none"><a href="/customer/account/logout" role="menuitem"><?= __('退出登录') ?></a></li>
     <?php
 } else {
     ?>
@@ -61,7 +60,8 @@ if ($isLoggedIn) {
 - 个人资料 - 跳转到个人资料页面
 - 收货地址 - 跳转到收货地址管理
 - 修改密码 - 跳转到修改密码页面
-- 退出登录 - 退出登录
+
+> **退出登录**：由宿主模板固定在菜单底部，勿在本 hook 中贡献。
 
 ### 未登录状态
 - 登录 - 跳转到登录页面

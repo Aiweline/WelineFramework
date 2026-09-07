@@ -113,11 +113,23 @@ $uniqueId = 'product-card-' . uniqid();
             <?php endif; ?>
 
             <?php if ($showPrice): ?>
-                <div class="product-card-partial__price">
-                    <?php if ($productOriginalPrice > $productPrice): ?>
-                        <span class="product-card-partial__price-original">¥<?= number_format($productOriginalPrice, 2) ?></span>
+                <?php
+                $dealCurrency = trim((string)($product['currency'] ?? 'CNY')) ?: 'CNY';
+                $dealCampaign = trim((string)($product['campaign_label'] ?? ''));
+                $dealCampaignUrl = trim((string)($product['campaign_url'] ?? ''));
+                ?>
+                <div class="product-card-partial__price product-price">
+                    <span class="product-card-partial__price-current price-current"><?= htmlspecialchars($dealCurrency, ENT_QUOTES, 'UTF-8') ?> <?= number_format($productPrice, 2) ?></span>
+                    <?php if ($productOriginalPrice > $productPrice && $productPrice > 0): ?>
+                        <span class="product-card-partial__price-original price-original"><?= htmlspecialchars($dealCurrency, ENT_QUOTES, 'UTF-8') ?> <?= number_format($productOriginalPrice, 2) ?></span>
+                        <?php if ($dealCampaign !== ''): ?>
+                            <?php if ($dealCampaignUrl !== ''): ?>
+                                <a class="price-campaign" href="<?= htmlspecialchars($dealCampaignUrl, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($dealCampaign, ENT_QUOTES, 'UTF-8') ?></a>
+                            <?php else: ?>
+                                <span class="price-campaign"><?= htmlspecialchars($dealCampaign, ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                        <?php endif; ?>
                     <?php endif; ?>
-                    <span class="product-card-partial__price-current">¥<?= number_format($productPrice, 2) ?></span>
                 </div>
             <?php endif; ?>
 

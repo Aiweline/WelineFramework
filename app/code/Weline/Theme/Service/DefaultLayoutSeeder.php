@@ -302,7 +302,7 @@ class DefaultLayoutSeeder
                     'widget_type' => 'product',
                     'config' => [
                         'title' => '最近浏览 · Recently Viewed',
-                        'limit' => 4,
+                        'limit' => 24,
                         'columns' => 4,
                     ],
                     'sort_order' => 1,

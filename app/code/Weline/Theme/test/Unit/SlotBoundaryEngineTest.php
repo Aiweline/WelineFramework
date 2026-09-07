@@ -12,6 +12,7 @@ use Weline\Theme\Service\ThemeRuntimeLayoutResolver;
 use Weline\Theme\Service\SlotBoundaryMarkers;
 use Weline\Theme\Service\SlotBoundaryScanner;
 use Weline\Theme\Service\SlotHtmlOpaqueParker;
+use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Service\ThemePreviewContentRenderer;
 use Weline\Theme\Taglib\Slot;
 
@@ -57,6 +58,27 @@ HTML;
         $this->assertSame('logo', $regions[0]['id']);
         $this->assertSame('header', $regions[1]['id']);
         $this->assertGreaterThan($regions[1]['depth'], $regions[0]['depth']);
+    }
+
+    public function testSiblingBoundaryRegionsCanBeFilteredAfterOneMarkerPairingPass(): void
+    {
+        $html = SlotBoundaryMarkers::open('header')
+            . '<header data-wslot="header">H</header>'
+            . SlotBoundaryMarkers::close('header')
+            . SlotBoundaryMarkers::open('footer')
+            . '<footer data-wslot="footer">F</footer>'
+            . SlotBoundaryMarkers::close('footer');
+
+        $scanner = new SlotBoundaryScanner();
+        $all = $scanner->enumerateRegions($html);
+        $filtered = $scanner->enumerateRegions($html, 'footer');
+
+        $this->assertSame(['header', 'footer'], array_column($all, 'id'));
+        $this->assertSame(['footer'], array_column($filtered, 'id'));
+        $this->assertSame(
+            $all[1]['inner_start'],
+            $filtered[0]['inner_start'],
+        );
     }
 
     public function testProdStripRemovesBoundaryCommentsOnly(): void
@@ -136,5 +158,29 @@ HTML;
         );
         $this->assertTrue($requires);
         $this->assertFalse(SlotBoundaryMarkers::hasMarkers('<div data-wslot="content">Default</div>'));
+    }
+
+    public function testDistinctSiblingBoundaryRegionsBatchInDescendingOffsetOrder(): void
+    {
+        $service = (new \ReflectionClass(SlotRendererService::class))->newInstanceWithoutConstructor();
+        $method = new \ReflectionMethod(SlotRendererService::class, 'selectBoundaryBatches');
+        $method->setAccessible(true);
+        $regions = [
+            ['id' => 'left', 'depth' => 1, 'region_start' => 10],
+            ['id' => 'right', 'depth' => 1, 'region_start' => 100],
+        ];
+
+        $batch = $method->invoke($service, $regions, [
+            'left' => [['widget_code' => 'left']],
+            'right' => [['widget_code' => 'right']],
+        ], []);
+
+        $this->assertSame(['right', 'left'], array_column($batch[0] ?? [], 'id'));
+
+        $duplicateBatch = $method->invoke($service, [
+            ['id' => 'same', 'depth' => 1, 'region_start' => 10],
+            ['id' => 'same', 'depth' => 1, 'region_start' => 100],
+        ], ['same' => [['widget_code' => 'same']]], []);
+        $this->assertSame([10], array_column($duplicateBatch[0] ?? [], 'region_start'));
     }
 }

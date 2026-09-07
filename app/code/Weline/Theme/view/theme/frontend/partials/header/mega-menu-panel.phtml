@@ -13,6 +13,7 @@
  * @var bool|string|int|null $show_banner_with_children
  */
 use Weline\Theme\Helper\ThemeDemoCatalog;
+use Weline\Theme\Helper\HeaderNavFragment;
 use Weline\Theme\Helper\WidgetI18n;
 
 $item = is_array($item ?? null) ? $item : [];
@@ -58,6 +59,7 @@ $escDesc = is_callable($esc_desc ?? null)
         }
     };
 $escAttr = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
+$sourceUrl = HeaderNavFragment::localizeHref((string)($item['url'] ?? '#'));
 
 $resolveLocale = static function (): string {
     try {
@@ -106,7 +108,7 @@ $resolveDescription = static function (array $node, string $label) use ($resolve
         return $escDesc($description);
     }
 
-    $fallback = (string)__('浏览 %{1} 相关商品与配件', [$label]);
+    $fallback = WidgetI18n::label('浏览 %{1} 相关商品与配件', '', [$label]);
 
     return htmlspecialchars($fallback, ENT_QUOTES, 'UTF-8');
 };
@@ -156,6 +158,7 @@ $resolveName = static function (array $node) use ($resolveLocale, $esc): string 
      data-w-popover-panel
      data-w-mega-menu
      data-mega-menu
+     data-mega-source-url="<?= $escAttr($sourceUrl) ?>"
      data-w-gap="0"
      data-show-banner-with-children="<?= $showBannerWithChildren ? '1' : '0' ?>"
      <?= $drawerFlyout ? 'data-drawer-flyout="1"' : '' ?>
@@ -254,13 +257,12 @@ $resolveName = static function (array $node) use ($resolveLocale, $esc): string 
                                     continue;
                                 }
                                 $gcTextHtml = $resolveName($grandchild);
-                                $gcTextPlain = trim((string)($grandchild['text'] ?? $grandchild['name'] ?? ''));
                                 $gcUrl = \Weline\Theme\Helper\HeaderNavFragment::localizeHref((string)($grandchild['url'] ?? '#'));
                                 if ($gcTextHtml === '') {
                                     continue;
                                 }
                                 $gcImage = $resolveImage($grandchild, ($index + 1) * 17 + (int)$gcIndex);
-                                $gcDesc = $resolveDescription($grandchild, $gcTextPlain !== '' ? (string)__($gcTextPlain) : strip_tags($gcTextHtml));
+                                $gcDesc = $resolveDescription($grandchild, html_entity_decode(strip_tags($gcTextHtml), ENT_QUOTES | ENT_HTML5, 'UTF-8'));
                                 $gcChildren = is_array($grandchild['children'] ?? null) ? $grandchild['children'] : [];
                                 $hasExpand = $gcChildren !== [];
                                 ?>

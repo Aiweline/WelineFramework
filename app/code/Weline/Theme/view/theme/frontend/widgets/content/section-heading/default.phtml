@@ -1,0 +1,37 @@
+<?php
+/**
+ * @widget.code {section-heading}
+ * @widget.name {标题与简介}
+ * @widget.description {可复用的分区标题、眉题与说明，支持语义标题层级}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content","sidebar","footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * @param title {default="内容标题",type="string",label="标题"}
+ * @param subtitle {default="",type="textarea",label="副标题"}
+ * @param eyebrow {default="",type="string",label="眉题"}
+ * @param level {default="h2",type="select",label="标题层级",options={h1:"H1",h2:"H2",h3:"H3",h4:"H4"}}
+ * @param alignment {default="left",type="select",label="对齐方式",options={left:"左对齐",center:"居中",right:"右对齐"}}
+ */
+
+use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Helper\WidgetI18n;
+
+$scope = WidgetUiScope::forWidget('section-heading');
+$esc = [Block::class, 'escape'];
+$t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::text($value)));
+$title = Block::text($this->getData('title') ?? '内容标题');
+$subtitle = Block::text($this->getData('subtitle'));
+$level = Block::choice($this->getData('level'), ['h1','h2','h3','h4'], 'h2');
+$alignment = Block::choice($this->getData('alignment'), ['left','center','right'], 'left');
+$eyebrow = Block::text($this->getData('eyebrow'));
+?>
+
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<section class="<?= $esc($scope->cssClass) ?> weline-site-block sb-heading align-<?= $esc($alignment) ?>" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <?php if ($eyebrow !== ''): ?><p class="sb-eyebrow"><?= $t($eyebrow) ?></p><?php endif; ?>
+    <<?= $level ?> class="sb-title"><?= $t($title) ?></<?= $level ?>>
+    <?php if ($subtitle !== ''): ?><p class="sb-lead"><?= $t($subtitle) ?></p><?php endif; ?>
+</section>

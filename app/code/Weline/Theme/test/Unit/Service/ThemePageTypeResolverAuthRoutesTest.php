@@ -119,4 +119,58 @@ final class ThemePageTypeResolverAuthRoutesTest extends TestCase
             $resolver->resolvePageTypeFromUri('/products')
         );
     }
+
+    public function testLocalizedStorefrontMatrixKeepsDedicatedPageTypes(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+        $cases = [
+            '/USD/en_US/' => ThemeLayout::PAGE_TYPE_HOME,
+            '/en_US/USD/promotion/deals' => ThemeLayout::PAGE_TYPE_PROMOTION,
+            '/ar_SA/USD/activity/autumn' => ThemeLayout::PAGE_TYPE_ACTIVITY,
+            '/CNY/zh_Hans_CN/checkout/success' => ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS,
+            '/CNY/zh_Hans_CN/checkout/failer' => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
+            '/en_US/USD/checkout/failure' => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
+            '/en_US/help' => ThemeLayout::PAGE_TYPE_HELP,
+            '/USD/en_US/guide/payment/alipay' => ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE,
+            '/en_US/USD/guide/shipping' => ThemeLayout::PAGE_TYPE_GUIDE,
+            '/about' => ThemeLayout::PAGE_TYPE_ABOUT,
+            '/contact' => ThemeLayout::PAGE_TYPE_CONTACT,
+            '/review' => ThemeLayout::PAGE_TYPE_REVIEW,
+            '/qa' => ThemeLayout::PAGE_TYPE_QA,
+            '/rma' => ThemeLayout::PAGE_TYPE_RMA,
+            '/privacy' => ThemeLayout::PAGE_TYPE_POLICY,
+            '/terms-and-conditions' => ThemeLayout::PAGE_TYPE_TERMS,
+            '/not-found' => ThemeLayout::PAGE_TYPE_NOT_FOUND,
+            '/dashboard' => ThemeLayout::PAGE_TYPE_DASHBOARD,
+            '/page/hanfu-care' => ThemeLayout::PAGE_TYPE_CMS,
+        ];
+
+        foreach ($cases as $uri => $expected) {
+            self::assertSame($expected, $resolver->resolvePageTypeFromUri($uri), $uri);
+        }
+    }
+
+    public function testLegacyCheckoutFailerAliasCanonicalizesToCheckoutFailure(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+
+        self::assertSame(
+            ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
+            $resolver->mapLayoutTypeToPageType('checkout_failer')
+        );
+        self::assertSame(
+            ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
+            $resolver->mapLayoutTypeToPageType(ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE)
+        );
+    }
+
+    public function testUnknownContentUriUsesCmsFallbackWhenRequested(): void
+    {
+        $resolver = new ThemePageTypeResolver();
+
+        self::assertSame(
+            ThemeLayout::PAGE_TYPE_CMS,
+            $resolver->resolvePageTypeFromUri('/editorial/hanfu-care', ThemeLayout::PAGE_TYPE_CMS)
+        );
+    }
 }

@@ -91,6 +91,10 @@
     --size-panel-300: 300px;
     --size-content-640: 640px;
     --size-content-1180: 1180px;
+    --size-modal-sm: 420px;
+    --size-modal-md: var(--size-content-640);
+    --size-modal-lg: 860px;
+    --size-modal-xl: 1120px;
     --breakpoint-xs: 480px;
 
     --spacing-0_2: 0.2rem;
@@ -159,6 +163,8 @@
     --z-index-drawer: 1045;
     --loader-border-width: 3px;
     --container-max-width: var(--layout-max-width);
+    /* 可视化 Banner 默认高度；部件实例可用主题 token 或历史 CSS 长度覆盖。 */
+    --size-hero-height: 500px;
 
     /* ========== weshop / 历史桥接别名（布局不得空） ========== */
     --weshop-spacing-xs: var(--spacing-xs);

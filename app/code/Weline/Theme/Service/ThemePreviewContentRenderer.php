@@ -61,6 +61,8 @@ class ThemePreviewContentRenderer
     /**
      * Header/footer chrome slots belong to partials; dumping them into preview
      * content duplicates Amazon header search/nav and breaks exclusive slots.
+     * Missing chrome stays missing and must never spill into the content fragment.
+     * isChromeSlotId also mirrors SharedChromeService header-/footer- prefixes plus top-bar-.
      *
      * @var array<string,true>
      */
@@ -161,6 +163,112 @@ class ThemePreviewContentRenderer
             'status' => $resolvedStatus,
             'used_seed' => $usedSeed,
         ];
+    }
+
+    /**
+     * Product-layout Theme Editor canvas: render non-chrome slots only into a
+     * minimal document. Skips product/default Partials head/header/footer SSR.
+     *
+     * @return array{html:string,page_type:string,status:string,slot_count:int}
+     */
+    public function buildProductEditorCanvasHtml(
+        int $themeId,
+        string $layoutType,
+        string $status = ThemeLayout::STATUS_DRAFT,
+        ?int $versionId = null,
+        ?ThemeEditorContext $editorContext = null,
+    ): array {
+        $baseLayoutType = $this->pageTypeResolver->extractBaseLayoutType($layoutType);
+        if ($baseLayoutType === '') {
+            $baseLayoutType = ThemeLayout::PAGE_TYPE_DEFAULT;
+        }
+
+        $pageType = $this->pageTypeResolver->mapLayoutTypeToPageType($baseLayoutType);
+        $versionLayout = null;
+        if ($versionId !== null && $versionId > 0) {
+            $versionLayout = $this->versionService->getVersionSnapshot($themeId, $pageType, $versionId, []);
+            [$layout, $resolvedPageType, $resolvedStatus] = [
+                $versionLayout ?? [],
+                $pageType,
+                'version',
+            ];
+        } elseif ($editorContext instanceof ThemeEditorContext) {
+            if ($editorContext->themeId !== $themeId
+                || $editorContext->layoutType !== $pageType
+            ) {
+                throw new \InvalidArgumentException('theme_scoped_preview_context_mismatch');
+            }
+            $resolvedStatus = $status === ThemeLayout::STATUS_PUBLISHED
+                ? ThemeLayout::STATUS_PUBLISHED
+                : ThemeLayout::STATUS_DRAFT;
+            $layout = $this->getScopedPreviewResolver()->resolveLayout($editorContext, $resolvedStatus);
+            $resolvedPageType = $pageType;
+        } else {
+            [$layout, $resolvedPageType, $resolvedStatus] = $this->resolvePreviewLayout($themeId, $pageType, $status, []);
+        }
+
+        $orderedSlotIds = \array_values(\array_filter(
+            $this->collectOrderedSlotIds($layout),
+            fn(string $slotId): bool => !$this->isChromeSlotId($slotId),
+        ));
+
+        $markers = '';
+        foreach ($orderedSlotIds as $slotId) {
+            $slotIdEscaped = \htmlspecialchars($slotId, ENT_QUOTES, 'UTF-8');
+            $markers .= SlotBoundaryMarkers::open($slotId);
+            $markers .= '<div data-preview-slot="' . $slotIdEscaped . '" data-wslot="' . $slotIdEscaped . '"></div>';
+            $markers .= SlotBoundaryMarkers::close($slotId);
+        }
+
+        $layoutData = $versionLayout ?? $layout;
+        if (\is_array($layoutData) && $layoutData !== []) {
+            $layoutData['page_type'] = $resolvedPageType;
+            $processed = $this->slotRendererService->processSlotsWithLayout(
+                $markers,
+                $layoutData,
+                true,
+                $themeId,
+                $this->resolvePreviewArea(),
+            );
+        } else {
+            $processed = $this->slotRendererService->processSlots(
+                $markers,
+                $themeId,
+                $resolvedPageType,
+                $resolvedStatus === 'version' ? ThemeLayout::STATUS_DRAFT : $resolvedStatus,
+                $this->resolvePreviewArea(),
+            );
+        }
+
+        $processed = $this->slotRendererService->finalizePreviewWidgetHealth($processed);
+
+        return [
+            'html' => $this->wrapProductEditorDocument($processed),
+            'page_type' => $resolvedPageType,
+            'status' => $resolvedStatus,
+            'slot_count' => \count($orderedSlotIds),
+        ];
+    }
+
+    private function wrapProductEditorDocument(string $bodyInner): string
+    {
+        return '<!DOCTYPE html>'
+            . '<html lang="zh-CN">'
+            . '<head>'
+            . '<meta charset="utf-8">'
+            . '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            . '<title>Product Layout</title>'
+            . '</head>'
+            . '<body class="theme-preview-product-editor" data-product-layout-editor="1">'
+            . '<div class="weline-page-wrapper">'
+            . '<div class="weline-main-content">'
+            . '<main class="product-detail-layout__main" id="product-detail-main" data-layout="product-detail">'
+            . $bodyInner
+            . '</main>'
+            . '</div>'
+            . '</div>'
+            . '</body>'
+            . '</html>';
     }
 
     /**
@@ -467,18 +575,33 @@ class ThemePreviewContentRenderer
 
     private function isChromeSlotId(string $slotId): bool
     {
-        $slotId = trim($slotId);
+        $slotId = strtolower(trim($slotId));
         if ($slotId === '') {
             return false;
-        }
-        if (isset(self::CHROME_SLOT_IDS[$slotId])) {
-            return true;
         }
 
         // Component-instance chrome (for example search:279) stays out of content dump.
         $base = preg_replace('/:[1-9][0-9]*$/', '', $slotId) ?: $slotId;
+        if (isset(self::CHROME_SLOT_IDS[$slotId]) || isset(self::CHROME_SLOT_IDS[$base])) {
+            return true;
+        }
 
-        return isset(self::CHROME_SLOT_IDS[$base]);
+        // Align with SharedChromeService nested chrome ownership (header-/footer- prefixes).
+        foreach (['header', 'footer'] as $root) {
+            if ($base === $root
+                || str_starts_with($base, $root . '-')
+                || str_starts_with($base, $root . '_')
+            ) {
+                return true;
+            }
+        }
+
+        // Header notice strip nests without a header- prefix.
+        if ($base === 'top-bar' || str_starts_with($base, 'top-bar-')) {
+            return true;
+        }
+
+        return false;
     }
 
     /**

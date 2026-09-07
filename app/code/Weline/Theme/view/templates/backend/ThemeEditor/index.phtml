@@ -39,6 +39,10 @@ if ($layout_editor_locked) {
 if ($layout_lock_source === 'cms') {
     $editorShellClasses[] = 'theme-editor-cms-embed';
 }
+if (!empty($layout_editor_lock['product_layout_mode']) || !empty($layout_editor_lock['hide_chrome_editing']) || $layout_lock_source === 'product') {
+    $editorShellClasses[] = 'theme-editor-product-layout';
+    $editorShellClasses[] = 'theme-editor-hide-chrome';
+}
 if ($scope_legacy_readonly) {
     $editorShellClasses[] = 'theme-editor-scope-readonly';
 }
@@ -133,21 +137,16 @@ if ($layout_editor_locked) {
 $initialPreviewToken = trim((string)($this->getData('initial_preview_token') ?: ''));
 $initialPreviewPath = '';
 $initialPreviewArea = '';
+// Always start blank: a server-rendered content URL without typed editor_context
+// races the JS authorized preview and can hang a worker until the browser aborts it.
 $initialPreviewUrl = 'about:blank';
 if ($theme_id) {
-    /** @var \Weline\Framework\Http\Url $themeEditorUrl */
-    $themeEditorUrl = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Http\Url::class);
     if ($editor_area === 'frontend') {
-        if ($initialPreviewToken !== '') {
-            $previewParams['weline_preview_token'] = $initialPreviewToken;
-        }
         $initialPreviewPath = 'theme/frontend/theme-preview/content';
         $initialPreviewArea = 'frontend';
-        $initialPreviewUrl = (string)$themeEditorUrl->getFrontendUrl($initialPreviewPath, $previewParams);
     } else {
         $initialPreviewPath = 'theme/backend/theme-editor/layout-preview';
         $initialPreviewArea = 'backend';
-        $initialPreviewUrl = (string)$themeEditorUrl->getBackendUrl($initialPreviewPath, $previewParams);
     }
 }
 $initialPreviewUrlSafe = htmlspecialchars($initialPreviewUrl, ENT_QUOTES, 'UTF-8');
@@ -200,12 +199,13 @@ $contentStructureHtml = (string)($structureWidgetsHtml['content'] ?? '');
 $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 
 ?>
-<css>Weline_Theme::ui/pages/weline-theme-editor.css?v=20260901-widget-library-header-v3</css>
-<css>Weline_Theme::ui/pages/weline-theme-editor-widget-config.css?v=20260825-config-panel-v3</css>
+<css>Weline_Theme::ui/pages/weline-theme-editor.css</css>
+<css>Weline_Theme::ui/pages/weline-theme-editor-widget-config.css</css>
 <css>Weline_Theme::ui/pages/weline-theme-editor-widget-param.css</css>
+<css>Weline_Theme::css/widgets/site-blocks.css</css>
 <!-- Critical path: discover editor JS while HTML continues parsing (avoid late bottom-of-page waterfall). -->
-<link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260903-slot-full-widgets-v2" fetchpriority="high">
-<link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)?v=20260901-widget-library-header-v3" fetchpriority="high">
+<link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor.js)" fetchpriority="high">
+<link rel="modulepreload" href="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)" fetchpriority="high">
 
 <div class="<?= $editorShellClassSafe ?>" id="themeEditor"
      data-theme-id="<?= $themeIdSafe ?>"
@@ -235,6 +235,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-layout-lock-source="<?= $layoutLockSourceSafe ?>"
      data-layout-lock="<?= $layoutEditorLockJsonSafe ?>"
      data-api-base="@url{'theme/backend/theme-editor'}"
+     data-api-resolve-navigation="@url{'theme/backend/theme-editor/resolve-navigation'}"
      data-api-save-widget="@url{'theme/backend/theme-editor/save-widget'}"
      data-api-update-config="@url{'theme/backend/theme-editor/update-config'}"
      data-api-delete-widget="@url{'theme/backend/theme-editor/remove-widget'}"
@@ -300,9 +301,13 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
      data-api-disk-delete="@url{'theme/backend/theme-editor/disk-delete'}"
      data-api-scoped-workspace="@url{'theme/backend/theme-editor/scoped-workspace'}"
      data-api-publish-scoped-workspace="@url{'theme/backend/theme-editor/publish-scoped-workspace'}"
+     data-api-publish-scoped-release-batch="@url{'theme/backend/theme-editor/publish-scoped-release-batch'}"
+     data-api-scoped-release-batch="@url{'theme/backend/theme-editor/scoped-release-batch'}"
+     data-api-retry-scoped-release-batch-cache="@url{'theme/backend/theme-editor/retry-scoped-release-batch-cache'}"
+     data-api-rollback-scoped-release-batch="@url{'theme/backend/theme-editor/rollback-scoped-release-batch'}"
      data-initial-preview-url="<?= $initialPreviewUrlSafe ?>"
      data-initial-preview-token="<?= $initialPreviewTokenSafe ?>"
-     data-editor-overlay-css="@static(Weline_Theme::ui/pages/weline-theme-editor-overlay.css)?v=20260901-widget-hover-direct-child">
+     data-editor-overlay-css="@static(Weline_Theme::ui/pages/weline-theme-editor-overlay.css)">
     <div class="editor-chrome-strip" id="themeEditorChromeStrip" hidden>
         <span class="editor-chrome-strip__title">@lang{主题编辑器}</span>
         <span class="editor-chrome-strip__scope" id="themeChromeStripScope" data-chrome-scope-label>@lang{作用范围}</span>
@@ -462,6 +467,21 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
                     <w:icon name="palette" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{全局外观}</span>
                 </button>
             </div>
+            <span id="themeReleaseBatchStatus"
+                  class="w-badge"
+                  data-tone="neutral"
+                  role="status"
+                  aria-live="polite"
+                  hidden>
+                <span data-release-batch-label></span>
+                <button type="button"
+                        class="w-button"
+                        data-tone="warning"
+                        data-variant="link"
+                        data-size="sm"
+                        data-release-batch-cache-retry
+                        hidden>@lang{重试缓存}</button>
+            </span>
             <button type="button" class="w-button" data-tone="primary" id="btnPublish" data-w-toolbar-overflow-pin title="@lang{发布当前版本到前台}">
                 <w:icon name="upload" size="sm"></w:icon><span class="w-theme-editor-toolbar-button-text">@lang{发布}</span>
             </button>
@@ -913,7 +933,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 <!-- Weline UI 2.0 theme editor route style block 1 extracted -->
 
 <!-- Widget param types are secondary; load async so they never block editor shell boot. -->
-<script type="module" async src="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)?v=20260901-widget-library-header-v3"></script>
+<script type="module" async src="@static(Weline_Theme::ui/pages/weline-theme-editor-widget-param.js)"></script>
 
 <!-- 基础信息（Scope 品牌）：作用范围旁入口打开 —— 布局对齐原型上传卡片 -->
 <aside id="themeBrandBasicsDrawer" class="w-drawer w-theme-brand-basics-drawer" hidden
@@ -939,7 +959,7 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
         <section class="w-theme-brand-identity" id="themeBrandIdentitySlot"
                  data-w-brand-identity-slot
                  hidden>
-            <w:hook>Weline_Theme::backend::theme-editor::brand-basics::identity<else/>
+            <w:hook>Weline_Theme::backend::partials::theme-editor-brand-basics::identity<else/>
                 <h6 class="w-theme-brand-field__title" data-w-identity-label>@lang{身份信息}</h6>
                 <div class="w-theme-brand-identity__fields" data-w-identity-fields></div>
             </w:hook>
@@ -1111,4 +1131,4 @@ $footerStructureHtml = (string)($structureWidgetsHtml['footer'] ?? '');
 </aside>
 
 <!-- Editor shell first: execute before async widget-param; modulepreload already warmed the fetch. -->
-<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)?v=20260903-slot-full-widgets-v2"></script>
+<script type="module" src="@static(Weline_Theme::ui/pages/weline-theme-editor.js)"></script>

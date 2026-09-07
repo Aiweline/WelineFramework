@@ -17,6 +17,21 @@ final class FooterDefaultLinksHelper
     public const SLOT_HELP = 'footer-help-links';
 
     /**
+     * Keep contact/same-page links intact; let @url localize internal routes.
+     *
+     * @return array{url:string,url_path:string}
+     */
+    public static function splitUrlForTaglib(string $url, ?string $prefix = null): array
+    {
+        $url = trim($url);
+        if (preg_match('#^(?:[a-z][a-z0-9+.-]*:|[?\#])#i', $url) === 1) {
+            return ['url' => $url, 'url_path' => ''];
+        }
+
+        return ProductCardUrl::splitForTaglib($url, $prefix);
+    }
+
+    /**
      * @return list<string>
      */
     public static function standardExtensionSlotIds(): array
@@ -152,7 +167,7 @@ final class FooterDefaultLinksHelper
             'payment' => [
                 'id' => self::SLOT_PAYMENT,
                 'name' => '支付与账户扩展',
-                'accept' => 'footer-payment-methods-link,footer-currency-rates-link,footer-campaign-link,layout-footer-payment-account-links',
+                'accept' => 'footer-payment-methods-link,footer-social-login-link,footer-currency-rates-link,footer-campaign-link,layout-footer-payment-account-links',
                 'section_class' => 'footer-section--payment',
             ],
             'help' => [
@@ -235,7 +250,6 @@ final class FooterDefaultLinksHelper
             ['text' => '使用条件', 'url' => '/terms', 'open_in_new' => false],
             ['text' => '隐私声明', 'url' => '/privacy', 'open_in_new' => false],
             ['text' => 'Cookie 政策', 'url' => '/cookies', 'open_in_new' => false],
-            ['text' => '广告偏好', 'url' => '/ads-preferences', 'open_in_new' => false],
         ];
     }
 
@@ -442,7 +456,7 @@ final class FooterDefaultLinksHelper
     {
         $list = self::decodeList($raw);
         if ($list === []) {
-            return self::defaultSocialItems();
+            $list = self::defaultSocialItems();
         }
         $out = [];
         foreach ($list as $row) {
@@ -451,13 +465,16 @@ final class FooterDefaultLinksHelper
             }
             $name = trim((string)($row['name'] ?? $row['label'] ?? ''));
             $url = trim((string)($row['url'] ?? ''));
-            if ($name === '' && $url === '') {
+            $scheme = strtolower((string)(parse_url($url, PHP_URL_SCHEME) ?? ''));
+            $isProfileUrl = in_array($scheme, ['http', 'https'], true)
+                || str_starts_with($url, '//');
+            if (($name === '' && $url === '') || !$isProfileUrl) {
                 continue;
             }
             $out[] = [
                 'name' => $name !== '' ? $name : $url,
                 'icon' => trim((string)($row['icon'] ?? '')),
-                'url' => $url !== '' ? $url : '#',
+                'url' => $url,
             ];
         }
 

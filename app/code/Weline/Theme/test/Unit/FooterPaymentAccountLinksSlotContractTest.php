@@ -19,7 +19,7 @@ final class FooterPaymentAccountLinksSlotContractTest extends TestCase
 
         self::assertStringContainsString('<w:slot id="footer-payment-account-links"', $src);
         self::assertStringContainsString(
-            'accept="footer-payment-methods-link,footer-currency-rates-link,footer-campaign-link,layout-footer-payment-account-links"',
+            'accept="footer-payment-methods-link,footer-social-login-link,footer-currency-rates-link,footer-campaign-link,layout-footer-payment-account-links"',
             $src
         );
         self::assertStringContainsString("\$groupKey === 'payment'", $src);

@@ -75,22 +75,7 @@ final class ThemeRuntimeCacheCleaner
             Partials::clearAllCaches();
         });
         $this->runStep($result, 'storefront_chrome_hot_cache', static function (): void {
-            if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
-                return;
-            }
-            $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
-            $hotCache->purgeProcessCacheForLogicalKey('theme.chrome.');
-            foreach (['footer', 'header', 'head'] as $chromeType) {
-                try {
-                    $hotCache->forget(
-                        'weline_theme_storefront_chrome',
-                        'theme.chrome.' . $chromeType,
-                        ['website' => true, 'lang' => true],
-                    );
-                } catch (\Throwable) {
-                }
-            }
-            \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+            self::purgeStorefrontChromeHotCachePool();
         });
         foreach ($this->themeCacheServices() as $step => $serviceClass) {
             $this->runStep($result, $step, static function () use ($serviceClass): void {
@@ -100,6 +85,20 @@ final class ThemeRuntimeCacheCleaner
                 }
             });
         }
+        $this->runStep($result, 'compiled_template_cache', static function (): void {
+            if (\class_exists(\Weline\Framework\View\TemplateCacheManager::class)) {
+                \Weline\Framework\View\TemplateCacheManager::getInstance()->clearAll();
+            }
+        });
+        $this->runStep($result, 'module_view_tpl_compiled', function (): void {
+            $this->purgeModuleCompiledViewTpl();
+        });
+        $this->runStep($result, 'taglib_cache_pool', static function (): void {
+            ObjectManager::getInstance(CacheManager::class)->pool('taglib')->clear();
+        });
+        $this->runStep($result, 'view_cache_pool', static function (): void {
+            ObjectManager::getInstance(CacheManager::class)->pool('view')->clear();
+        });
         $this->runStep($result, 'fpc_process_cache', static function (): void {
             if (\class_exists(FullPageCacheCoordinator::class)) {
                 FullPageCacheCoordinator::clearProcessCache();
@@ -113,6 +112,16 @@ final class ThemeRuntimeCacheCleaner
             if ($state instanceof SharedCacheStateInterface) {
                 $state->clearNamespace('theme_runtime');
             }
+        });
+        $this->runStep($result, 'runtime_cache_broadcast', function (): void {
+            $instanceName = $this->currentRuntimeInstanceName();
+            $broadcaster = $this->runtimeProvider(RuntimeControlBroadcasterInterface::class);
+            if ($broadcaster instanceof RuntimeControlBroadcasterInterface) {
+                $broadcaster->cacheClear($instanceName);
+            }
+        });
+        $this->runStep($result, 'router_fpc_payload_files', function (): void {
+            $this->purgeRouterFpcPayloadFiles();
         });
 
         return $result;
@@ -182,6 +191,21 @@ final class ThemeRuntimeCacheCleaner
             });
         }
 
+        $this->runStep($result, 'compiled_template_cache', static function (): void {
+            if (\class_exists(\Weline\Framework\View\TemplateCacheManager::class)) {
+                \Weline\Framework\View\TemplateCacheManager::getInstance()->clearAll();
+            }
+        });
+        $this->runStep($result, 'module_view_tpl_compiled', function (): void {
+            $this->purgeModuleCompiledViewTpl();
+        });
+        $this->runStep($result, 'taglib_cache_pool', static function (): void {
+            ObjectManager::getInstance(CacheManager::class)->pool('taglib')->clear();
+        });
+        $this->runStep($result, 'view_cache_pool', static function (): void {
+            ObjectManager::getInstance(CacheManager::class)->pool('view')->clear();
+        });
+
         $this->runStep($result, 'fpc_process_cache', static function (): void {
             if (\class_exists(FullPageCacheCoordinator::class)) {
                 FullPageCacheCoordinator::clearProcessCache();
@@ -202,12 +226,7 @@ final class ThemeRuntimeCacheCleaner
         });
 
         $this->runStep($result, 'storefront_chrome_hot_cache', static function (): void {
-            if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
-                return;
-            }
-            $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
-            $hotCache->purgeProcessCacheForLogicalKey('theme.chrome.');
-            \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+            self::purgeStorefrontChromeHotCachePool();
         });
 
         $this->runStep($result, 'runtime_cache_broadcast', function (): void {
@@ -223,6 +242,26 @@ final class ThemeRuntimeCacheCleaner
         });
 
         return $result;
+    }
+
+    /**
+     * Drop every storefront chrome envelope. Keys are theme.chrome.{type}.{sha1}, so
+     * forget(theme.chrome.header) alone leaves nested widget HTML (e.g. account avatar) stale.
+     */
+    private static function purgeStorefrontChromeHotCachePool(): void
+    {
+        if (!\class_exists(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class)) {
+            return;
+        }
+        $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
+        $hotCache->purgeProcessCacheForLogicalKey('theme.chrome.');
+        \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+        try {
+            ObjectManager::getInstance(CacheManager::class)
+                ->pool('weline_theme_storefront_chrome')
+                ->clear();
+        } catch (\Throwable) {
+        }
     }
 
     private function runtimeProvider(string $contract): ?object
@@ -341,6 +380,57 @@ final class ThemeRuntimeCacheCleaner
                 @\rmdir($item->getPathname());
             } else {
                 @\unlink($item->getPathname());
+            }
+        }
+    }
+
+    /**
+     * Delete module-local view/tpl compile products. @static/?v= is baked there at
+     * compile time; TemplateCacheManager only covers var/cache/template.
+     */
+    private function purgeModuleCompiledViewTpl(): void
+    {
+        $codeRoot = BP . 'app' . \DIRECTORY_SEPARATOR . 'code';
+        $codeReal = \realpath($codeRoot);
+        if ($codeReal === false || !\is_dir($codeReal)) {
+            return;
+        }
+
+        $prefix = \strtolower(\rtrim(\str_replace('\\', '/', $codeReal), '/') . '/');
+        $pattern = $codeRoot
+            . \DIRECTORY_SEPARATOR . '*'
+            . \DIRECTORY_SEPARATOR . '*'
+            . \DIRECTORY_SEPARATOR . 'view'
+            . \DIRECTORY_SEPARATOR . 'tpl';
+        foreach (\glob($pattern, \GLOB_ONLYDIR) ?: [] as $tplDir) {
+            $resolved = \realpath($tplDir);
+            if ($resolved === false || !\is_dir($resolved)) {
+                continue;
+            }
+            $dirNormalized = \strtolower(\rtrim(\str_replace('\\', '/', $resolved), '/'));
+            if (!\str_starts_with($dirNormalized . '/', $prefix)) {
+                continue;
+            }
+            if (!\str_ends_with($dirNormalized, '/view/tpl')) {
+                continue;
+            }
+
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($resolved, \FilesystemIterator::SKIP_DOTS),
+                \RecursiveIteratorIterator::CHILD_FIRST
+            );
+            foreach ($iterator as $item) {
+                $path = $item->getPathname();
+                $real = \realpath($path) ?: $path;
+                $realNorm = \strtolower(\str_replace('\\', '/', $real));
+                if (!\str_starts_with($realNorm, \rtrim($prefix, '/'))) {
+                    continue;
+                }
+                if ($item->isDir()) {
+                    @\rmdir($path);
+                } else {
+                    @\unlink($path);
+                }
             }
         }
     }

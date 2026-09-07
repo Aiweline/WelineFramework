@@ -116,7 +116,7 @@ $searchPlaceholder = (string)__('搜索帮助主题，例如：退货、运费�
             border-radius: 8px;
             background:
                 radial-gradient(ellipse at top right, rgba(255, 153, 0, .14), transparent 46%),
-                linear-gradient(135deg, #131921 0%, #232f3e 58%, #37475a 100%);
+                linear-gradient(135deg, var(--color-bg-dark-secondary) 0%, var(--color-bg-dark) 58%, var(--color-bg-dark-tertiary) 100%);
             color: #fff;
             box-sizing: border-box;
         }
@@ -213,7 +213,7 @@ $searchPlaceholder = (string)__('搜索帮助主题，例如：退货、运费�
             margin: 0 0 1rem;
             font-size: 1.2rem;
             font-weight: 700;
-            border-left: 4px solid #ff9900;
+            border-left: 4px solid var(--color-primary);
             padding-left: .65rem;
             color: #0f1111;
         }
@@ -234,7 +234,7 @@ $searchPlaceholder = (string)__('搜索帮助主题，例如：退货、运费�
             transition: border-color .15s ease, box-shadow .15s ease, background .15s ease;
         }
         .help-layout__topic:hover {
-            border-color: #ff9900;
+            border-color: var(--color-primary);
             background: #fff;
             box-shadow: 0 1px 3px rgba(15, 17, 17, .08);
             text-decoration: none;
@@ -259,7 +259,7 @@ $searchPlaceholder = (string)__('搜索帮助主题，例如：退货、运费�
             display: block;
             margin-bottom: .4rem;
             color: #0f1111;
-            border-left: 3px solid #ff9900;
+            border-left: 3px solid var(--color-primary);
             padding-left: .55rem;
         }
         .help-layout__faq-item p {
@@ -295,7 +295,7 @@ $searchPlaceholder = (string)__('搜索帮助主题，例如：退货、运费�
             margin: 0 0 .9rem;
             font-size: 1.05rem;
             font-weight: 700;
-            border-left: 4px solid #ff9900;
+            border-left: 4px solid var(--color-primary);
             padding-left: .55rem;
             writing-mode: horizontal-tb;
             white-space: normal;
@@ -303,8 +303,8 @@ $searchPlaceholder = (string)__('搜索帮助主题，例如：退货、运费�
         }
         .help-layout__contact { display: grid; gap: .55rem; color: #565959; line-height: 1.6; }
         .help-layout__contact p { margin: 0; }
-        .help-layout__contact a { color: #007185; text-decoration: none; }
-        .help-layout__contact a:hover { color: #c45500; text-decoration: underline; }
+        .help-layout__contact a { color: var(--color-link); text-decoration: none; }
+        .help-layout__contact a:hover { color: var(--color-link-hover); text-decoration: underline; }
         .help-layout__contact-cta {
             display: inline-flex;
             align-items: center;
@@ -313,7 +313,7 @@ $searchPlaceholder = (string)__('搜索帮助主题，例如：退货、运费�
             min-height: 2.45rem;
             padding: 0 1rem;
             border-radius: 8px;
-            background: #ff9900;
+            background: var(--color-primary);
             color: #111 !important;
             font-weight: 700;
             text-decoration: none !important;
@@ -342,8 +342,8 @@ $searchPlaceholder = (string)__('搜索帮助主题，例如：退货、运费�
             white-space: nowrap;
         }
         .help-layout__quick-link:hover {
-            border-color: #ff9900;
-            color: #c45500;
+            border-color: var(--color-primary);
+            color: var(--color-link-hover);
             background: #fff;
             text-decoration: none;
         }

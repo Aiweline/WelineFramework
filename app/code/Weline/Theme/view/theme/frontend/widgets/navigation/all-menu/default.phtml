@@ -65,10 +65,9 @@ if ($menuTree === []) {
 AllMenuTreeRegistry::publish($menuTree);
 ?>
 
-<a href="#"
+<button type="button"
    class="<?= $esc($wc) ?> hamburger-menu-btn js-header-drawer-trigger<?= $isPreviewMode ? ' is-preview' : '' ?>"
    id="hamburger-menu"
-   role="button"
    aria-label="<?= $esc(WidgetI18n::label('打开所有类别菜单')) ?>"
    aria-expanded="false"
    aria-controls="categories-sidebar"
@@ -78,7 +77,7 @@ AllMenuTreeRegistry::publish($menuTree);
         <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
     </svg>
     <span class="hamburger-label"><?= $esc($label) ?></span>
-</a>
+</button>
 
 <style>
 .<?= $wc ?> {
@@ -89,6 +88,11 @@ AllMenuTreeRegistry::publish($menuTree);
     white-space: nowrap;
     text-decoration: none;
     color: inherit;
+    border: 0;
+    background: transparent;
+    padding: 0;
+    font: inherit;
+    cursor: pointer;
 }
 
 .<?= $wc ?> .hamburger-label {

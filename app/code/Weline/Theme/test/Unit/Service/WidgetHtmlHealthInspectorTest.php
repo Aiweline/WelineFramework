@@ -35,6 +35,25 @@ final class WidgetHtmlHealthInspectorTest extends TestCase
         self::assertSame('ok', $this->inspector->worstSeverity($issues));
     }
 
+    public function testEmptyHtmlWarnsByDefault(): void
+    {
+        $issues = $this->inspector->inspect('', ['code' => 'hero-slider']);
+        self::assertTrue($this->hasCode($issues, 'empty_html'));
+        self::assertSame('warning', $this->inspector->worstSeverity($issues));
+    }
+
+    public function testEmptyPurchaseActionWidgetsAreAllowed(): void
+    {
+        foreach (['product-add-to-cart', 'product-buy-now', 'product-card-buy-now'] as $code) {
+            $issues = $this->inspector->inspect('', [
+                'code' => $code,
+                'slot_id' => 'product-purchase-actions',
+            ]);
+            self::assertSame([], $issues, $code);
+            self::assertSame('ok', $this->inspector->worstSeverity($issues));
+        }
+    }
+
     public function testDetectsUnclosedAndMismatch(): void
     {
         $unclosed = $this->inspector->inspect('<div class="a"><span>x');

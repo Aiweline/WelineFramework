@@ -1034,9 +1034,9 @@ return [
     ],
 
     // ==================== Theme Editor — Brand Basics ====================
-    'Weline_Theme::backend::theme-editor::brand-basics::identity' => [
+    'Weline_Theme::backend::partials::theme-editor-brand-basics::identity' => [
         'name' => __('主题编辑器基础信息 · 身份槽'),
         'description' => __('主题编辑器「基础信息」Drawer 的身份字段扩展槽。Website / Store / Channel 等模块应通过 BrandBasicsIdentityProviderInterface 挂载真实名称与简介，并由本 Hook 可选注入自定义 UI；权威读写走 identity API，不写入 appearance.brand。'),
-        'doc' => 'backend/theme-editor/brand-basics-identity.md',
+        'doc' => 'backend/partials/theme-editor-brand-basics/identity.md',
     ],
 ];

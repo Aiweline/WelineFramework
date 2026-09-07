@@ -1,0 +1,53 @@
+<?php
+/**
+ * @widget.code {contact-info}
+ * @widget.name {联系信息}
+ * @widget.description {地址、营业时间、邮箱、电话与地图入口，不发送未配置的表单}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content","sidebar","footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * @param title {default="联系我们",type="string",label="标题"}
+ * @param subtitle {default="",type="textarea",label="副标题"}
+ * @param address {default="",type="textarea",label="联系地址"}
+ * @param hours {default="",type="textarea",label="营业时间"}
+ * @param email {default="",type="string",label="邮箱"}
+ * @param phone {default="",type="string",label="电话"}
+ * @param map_link {default="",type="url",label="地图链接"}
+ */
+
+use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Helper\WidgetI18n;
+
+$scope = WidgetUiScope::forWidget('contact-info');
+$esc = [Block::class, 'escape'];
+$t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::text($value)));
+$title = Block::text($this->getData('title') ?? '联系我们');
+$subtitle = Block::text($this->getData('subtitle'));
+$email = Block::text($this->getData('email'));
+$phone = Block::text($this->getData('phone'));
+$emailLink = Block::link('mailto:' . $email);
+$phoneLink = Block::link('tel:' . $phone);
+$mapLink = Block::link($this->getData('map_link'));
+?>
+
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<section class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <?php if ($title !== '' || $subtitle !== ''): ?>
+        <header class="sb-header">
+            <?php if ($title !== ''): ?><h2 class="sb-title"><?= $t($title) ?></h2><?php endif; ?>
+            <?php if ($subtitle !== ''): ?><p class="sb-lead"><?= $t($subtitle) ?></p><?php endif; ?>
+        </header>
+    <?php endif; ?>
+    <div class="w-card sb-card"><div class="sb-body">
+        <address class="sb-address"><?= $t($this->getData('address')) ?></address>
+        <?php if (Block::text($this->getData('hours')) !== ''): ?><p class="sb-copy"><?= $t($this->getData('hours')) ?></p><?php endif; ?>
+        <div class="sb-actions">
+            <?php if ($emailLink !== ''): ?><a class="sb-link" href="<?= $esc($emailLink) ?>"><?= $esc($email) ?></a><?php endif; ?>
+            <?php if ($phoneLink !== ''): ?><a class="sb-link" href="<?= $esc($phoneLink) ?>"><?= $esc($phone) ?></a><?php endif; ?>
+            <?php if ($mapLink !== ''): ?><a class="w-button w-button-outline" data-tone="neutral" data-variant="outline" href="<?= $esc($mapLink) ?>"><lang>查看地图</lang></a><?php endif; ?>
+        </div>
+    </div></div>
+</section>

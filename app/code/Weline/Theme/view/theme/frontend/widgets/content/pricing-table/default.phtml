@@ -1,0 +1,61 @@
+<?php
+/**
+ * @widget.code {pricing-table}
+ * @widget.name {价格与方案}
+ * @widget.description {可配置的方案比较卡片，仅展示信息与跳转入口}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content","sidebar","footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * @param title {default="价格与方案",type="string",label="标题"}
+ * @param subtitle {default="",type="textarea",label="副标题"}
+ * @param columns {default="3",type="select",label="每行列数",options={1:"1列",2:"2列",3:"3列",4:"4列"}}
+ * @param items {default=[],type="site_pricing_items",label="展示项目"}
+ */
+
+use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Helper\WidgetI18n;
+
+$scope = WidgetUiScope::forWidget('pricing-table');
+$esc = [Block::class, 'escape'];
+$t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::text($value)));
+$title = Block::text($this->getData('title') ?? '价格与方案');
+$subtitle = Block::text($this->getData('subtitle'));
+$columns = Block::choice($this->getData('columns'), ['1','2','3','4'], '3');
+$items = Block::items($this->getData('items'));
+?>
+
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<section class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>">
+    <?php if ($title !== '' || $subtitle !== ''): ?>
+        <header class="sb-header">
+            <?php if ($title !== ''): ?><h2 class="sb-title"><?= $t($title) ?></h2><?php endif; ?>
+            <?php if ($subtitle !== ''): ?><p class="sb-lead"><?= $t($subtitle) ?></p><?php endif; ?>
+        </header>
+    <?php endif; ?>
+    <div class="sb-grid columns-<?= $esc($columns) ?>">
+        <?php foreach ($items as $index => $item):
+            $image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($item['image'] ?? '');
+            $mediaHtml = Block::mediaHtml($item['image_file_html'] ?? '', $item['title'] ?? '');
+            $url = Block::link($item['link'] ?? '');
+        ?>
+            <article class="w-card sb-card<?= Block::boolean($item['featured'] ?? false) ? ' sb-featured' : '' ?>">
+                <div class="sb-body">
+                    <?php if (!empty($item['badge'])): ?><span class="sb-badge"><?= $t($item['badge']) ?></span><?php endif; ?>
+                    <h3 class="sb-card-title"><?= $t($item['title'] ?? '') ?></h3>
+                    <p class="sb-number"><?= $t($item['price'] ?? '') ?></p>
+                    <?php if (!empty($item['period'])): ?><p class="sb-copy sb-muted"><?= $t($item['period']) ?></p><?php endif; ?>
+                    <ul class="sb-checklist">
+                        <?php foreach (preg_split('/\R/u', Block::text($item['features'] ?? '')) ?: [] as $feature): if (trim($feature) === '') continue; ?>
+                            <li><?= $t($feature) ?></li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <?php if ($url !== '' && !empty($item['label'])): ?><div class="sb-actions"><a class="w-button" data-tone="<?= Block::boolean($item['featured'] ?? false) ? 'primary' : 'neutral' ?>"<?= Block::boolean($item['featured'] ?? false) ? '' : ' data-variant="outline"' ?> href="<?= $esc($url) ?>"><?= $t($item['label']) ?></a></div><?php endif; ?>
+                </div>
+            </article>
+        <?php endforeach; ?>
+    </div>
+    <?php if ($items === []): ?><p class="sb-empty"><lang>请在部件配置中添加真实内容</lang></p><?php endif; ?>
+</section>

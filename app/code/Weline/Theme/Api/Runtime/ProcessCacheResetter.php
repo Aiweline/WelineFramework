@@ -15,6 +15,7 @@ use Weline\Theme\Observer\ControllerFetchFileBefore;
 use Weline\Theme\Service\RuntimeTemplateMaterializer;
 use Weline\Theme\Service\SlotRendererService;
 use Weline\Theme\Taglib\ThemeTemplate;
+use Weline\Framework\View\Template;
 
 final class ProcessCacheResetter implements ProcessCacheResetterInterface, MemoryStoreInterface
 {
@@ -31,6 +32,7 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             LayoutDependencyTracker::clearCache();
             RuntimeTemplateMaterializer::clearProcessCache();
             \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+            Template::clearProcessViewFileCache();
             return 8;
         }
 
@@ -53,7 +55,8 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
             + SlotRendererService::processCacheItemCount()
             + ThemeTemplate::processCacheItemCount()
             + LayoutDependencyTracker::processCacheItemCount()
-            + RuntimeTemplateMaterializer::processCacheItemCount();
+            + RuntimeTemplateMaterializer::processCacheItemCount()
+            + Template::processViewFileCacheItemCount();
     }
 
     public function getMaxItems(): int
@@ -86,6 +89,7 @@ final class ProcessCacheResetter implements ProcessCacheResetterInterface, Memor
         LayoutDependencyTracker::clearCache();
         RuntimeTemplateMaterializer::clearProcessCache();
         \Weline\Framework\Cache\Service\StorefrontScopeHotCache::resetProcessCache();
+        Template::clearProcessViewFileCache();
     }
 
     public function warmUp(int $limit = 1000): int

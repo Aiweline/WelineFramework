@@ -31,6 +31,23 @@ final class ThemeLayoutScopeSlotMergeContractTest extends TestCase
         self::assertStringContainsString('storefront_chrome_hot_cache', $source);
         self::assertStringContainsString('theme.chrome.', $source);
         self::assertStringContainsString('StorefrontScopeHotCache', $source);
+        self::assertStringContainsString('weline_theme_storefront_chrome', $source);
+        self::assertStringContainsString('purgeStorefrontChromeHotCachePool', $source);
+        self::assertStringContainsString('->clear()', $source);
+        self::assertStringContainsString('compiled_template_cache', $source);
+        self::assertStringContainsString('module_view_tpl_compiled', $source);
+        self::assertStringContainsString('purgeModuleCompiledViewTpl', $source);
+        self::assertStringContainsString('TemplateCacheManager::getInstance()->clearAll()', $source);
+        self::assertStringContainsString("pool('taglib')->clear()", $source);
+        self::assertStringContainsString('router_fpc_payload_files', $source);
+
+        $workspace = $this->read('app/code/Weline/Theme/Service/Scoped/ThemeScopedWorkspace.php');
+        self::assertStringContainsString('dispatchScopedPublishResourceChange(', $workspace);
+        self::assertStringContainsString('\\w_changed($change)', $workspace);
+
+        $observer = $this->read('app/code/Weline/Theme/Observer/ResourceChanged.php');
+        self::assertStringContainsString('clearScopedCaches($scope', $observer);
+        self::assertStringContainsString('scopeFromChange(', $observer);
     }
 
     private function read(string $relative): string

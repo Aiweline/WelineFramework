@@ -1,10 +1,10 @@
 /**
  * 色系：default
  *
- * 默认主题品牌色板（与页头 Amazon chrome 橙色一致）
+ * Weline 框架默认品牌色板：中性电商（石青绿主色 + slate 顶栏），非 Amazon / 非水墨默认身份
  * 字段
  * @meta.name {default="default",name="default",description="default，用于描述色系的名称"}
- * @meta.description {default="默认主题品牌色：Amazon 橙色主色与暖色交互面，对齐页头 chrome",name="默认主题品牌色：Amazon 橙色主色与暖色交互面，对齐页头 chrome",description="默认主题品牌色：Amazon 橙色主色与暖色交互面，对齐页头 chrome，用于描述色系的用途"}
+ * @meta.description {default="默认主题品牌色：石青绿主色与中性 slate 交互面，对齐框架默认店面",name="默认主题品牌色：石青绿主色与中性 slate 交互面，对齐框架默认店面",description="默认主题品牌色：石青绿主色与中性 slate 交互面，对齐框架默认店面，用于描述色系的用途"}
  * @meta.theme {default="default",name="主题标识",description="主题标识，用于标识该色系对应的主题名称"}
  * @meta.panel {default="color",name="panel",description="panel"}
  * @meta.disk_kind {default="colors",name="disk_kind",description="disk_kind"}
@@ -14,78 +14,77 @@
 :root,
 [data-theme="default"],
 [data-theme="light"] {
-    /* ========== 品牌色（Amazon 橙色，对齐 chrome primary） ========== */
-    --color-primary: #ff9900;
-    --color-primary-light: #febd69;
-    --color-primary-dark: #e68900;
-    --color-primary-border: #cc7700;
-    --color-primary-rgb: 255, 153, 0;
-    --color-primary-hover: #e68900;
-    --color-primary-active: #cc7700;
-    --color-primary-bg-subtle: #fff4e0;
-    --color-primary-border-subtle: #ffd699;
-    --color-primary-text-emphasis: #c45500;
-    --color-on-primary: #111111;
+    /* ========== 品牌色（石青绿） ========== */
+    --color-primary: #0f766e;
+    --color-primary-light: #14b8a6;
+    --color-primary-dark: #0d5f59;
+    --color-primary-border: #0a4f4a;
+    --color-primary-rgb: 15, 118, 110;
+    --color-primary-hover: #0d5f59;
+    --color-primary-active: #0a4f4a;
+    --color-primary-bg-subtle: #f0fdfa;
+    --color-primary-border-subtle: #99f6e4;
+    --color-primary-text-emphasis: #115e59;
+    --color-on-primary: #f8fafc;
 
     /* ========== 文本色 ========== */
-    --color-text-primary: #0f1111;
-    --color-text-secondary: #565959;
-    --color-text-tertiary: #767676;
+    --color-text-primary: #111827;
+    --color-text-secondary: #4b5563;
+    --color-text-tertiary: #6b7280;
     --color-text-disabled: #c7c7c7;
-    --color-text-dark: #0f1111;
-    --color-text-muted: #565959;
-    --color-text-placeholder: #999999;
-    --color-text-light: #ffffff;
-    --color-text-light-secondary: #dddddd;
+    --color-text-dark: #111827;
+    --color-text-muted: #4b5563;
+    --color-text-placeholder: #9ca3af;
+    --color-text-light: #f8fafc;
+    --color-text-light-secondary: #e5e7eb;
 
     /* ========== 背景色 ========== */
-    /* Body 画布=亚马逊白；secondary=浅灰底板（卡片间隔可选）；卡片/菜单用 bg-primary */
     --color-bg-canvas: #ffffff;
     --color-bg-canvas-rgb: 255, 255, 255;
     --weline-chrome-body-bg: var(--color-bg-canvas);
     --weline-theme-canvas: var(--color-bg-canvas);
     --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--color-bg-canvas));
     --color-bg-primary: #ffffff;
-    --color-bg-secondary: #eaeded;
-    --color-bg-tertiary: #e7e7e7;
-    --color-bg-dark: #232f3e;
-    --color-bg-dark-secondary: #131921;
-    --color-bg-dark-tertiary: #37475a;
-    --color-surface-hover: #f3f3f3;
+    --color-bg-secondary: #f3f4f6;
+    --color-bg-tertiary: #e5e7eb;
+    --color-bg-dark: #1f2937;
+    --color-bg-dark-secondary: #111827;
+    --color-bg-dark-tertiary: #374151;
+    --color-surface-hover: #f3f4f6;
 
     /* ========== 边框色 ========== */
-    --color-border-default: #dddddd;
-    --color-border-emphasis: #a6a6a6;
-    --color-border-focus: #ff9900;
-    --color-border-light: #e7e7e7;
+    --color-border-default: #e5e7eb;
+    --color-border-emphasis: #9ca3af;
+    --color-border-focus: #0f766e;
+    --color-border-light: #f3f4f6;
 
     /* ========== 强调色 ========== */
-    --color-accent: #ff9900;
-    --color-accent-hover: #e68900;
-    --color-accent-light: rgba(255, 153, 0, 0.08);
-    --color-accent-medium: rgba(255, 153, 0, 0.14);
-    --color-accent-dark: rgba(255, 153, 0, 0.2);
+    --color-accent: #0f766e;
+    --color-accent-hover: #0d5f59;
+    --color-accent-light: rgba(15, 118, 110, 0.08);
+    --color-accent-medium: rgba(15, 118, 110, 0.14);
+    --color-accent-dark: rgba(15, 118, 110, 0.22);
 
     /* ========== 功能色 ========== */
-    --color-success: #28a745;
-    --color-warning: #ffc107;
-    --color-error: #dc3545;
-    --color-error-hover: #c82333;
-    --color-error-light: rgba(220, 53, 69, 0.08);
-    --color-info: #007185;
+    --color-success: #15803d;
+    --color-warning: #d97706;
+    --color-error: #dc2626;
+    --color-error-hover: #b91c1c;
+    --color-error-light: rgba(220, 38, 38, 0.08);
+    --color-info: #0369a1;
 
-    /* ========== 链接色（Amazon：青绿链接 + 橙色 hover） ========== */
-    --color-link: #007185;
-    --color-link-hover: #c45500;
-    --color-link-visited: #551a8b;
+    /* ========== 链接色（与主色同族） ========== */
+    --color-link: #0f766e;
+    --color-link-hover: #115e59;
+    --color-link-visited: #5b21b6;
 
-    /* ========== Header ========== */
-    --color-header-bg: #131921;
-    --color-header-bg-hover: #232f3e;
-    --color-header-border-hover: #3a4553;
-    --color-header-shadow: rgba(0, 0, 0, 0.18);
-    --color-header-focus-ring: rgba(255, 153, 0, 0.35);
-    --color-header-dropdown-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    /* ========== Header（slate） ========== */
+    --color-header-bg: #111827;
+    --color-header-bg-hover: #1f2937;
+    --color-header-border-hover: #374151;
+    --color-header-shadow: rgba(17, 24, 39, 0.18);
+    --color-header-focus-ring: rgba(15, 118, 110, 0.35);
+    --color-header-dropdown-shadow: 0 4px 12px rgba(17, 24, 39, 0.15);
 
     /* ========== chrome 同步 ========== */
     --weline-chrome-primary: var(--color-primary);
@@ -94,11 +93,25 @@
     --weline-chrome-border-focus: var(--color-border-focus);
     --weline-chrome-body-link-hover: var(--color-primary);
     --weline-chrome-menu-panel-text-hover: var(--color-primary);
+    --weline-chrome-bg-dark: var(--color-bg-dark-secondary);
+    --weline-chrome-bg-dark-secondary: var(--color-bg-dark);
+    --weline-chrome-bg-primary: var(--color-bg-primary);
+    --weline-chrome-body-bg: var(--color-bg-canvas);
+    --weline-theme-canvas: var(--color-bg-canvas);
+    --weline-theme-body-bg: var(--weline-chrome-body-bg, var(--color-bg-canvas));
+    --weline-chrome-bg-secondary: var(--color-bg-secondary);
+    --weline-chrome-bg-tertiary: var(--color-bg-tertiary);
+    --weline-chrome-border-default: var(--color-border-default);
+    --weline-chrome-text-primary: var(--color-text-primary);
+    --weline-chrome-text-secondary: var(--color-text-secondary);
+    --weline-chrome-text-muted: var(--color-text-placeholder);
+    --weline-chrome-text-light: var(--color-text-light);
+    --weline-chrome-text-light-secondary: var(--color-text-light-secondary);
 
     /* ========== 商品标签色 ========== */
-    --color-product-label-new-bg: #e6f2e6;
-    --color-product-label-new-text: #007600;
-    --color-product-label-sale-bg: #fde8ec;
+    --color-product-label-new-bg: #ecfdf5;
+    --color-product-label-new-text: #047857;
+    --color-product-label-sale-bg: #fef2f2;
     --color-product-label-sale-text: #9f1239;
     --weline-product-label-new-bg: var(--color-product-label-new-bg);
     --weline-product-label-new-text: var(--color-product-label-new-text);

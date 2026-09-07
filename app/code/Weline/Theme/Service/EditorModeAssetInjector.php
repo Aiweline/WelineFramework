@@ -9,9 +9,6 @@ use Weline\Theme\Service\Ui\IconRegistry;
 
 final class EditorModeAssetInjector
 {
-    /** Cache-bust for preview CSS/JS; bump when health/report behavior changes. */
-    private const ASSET_VERSION = '20260901-theme-editor-virtual-gate-v1';
-
     public function __construct(
         private readonly Template $template,
         private readonly IconRegistry $icons,
@@ -71,15 +68,10 @@ HTML;
             throw new \InvalidArgumentException(__('Weline UI 预览资源路径无效'));
         }
 
+        // fetchTagSource 已按 preview token / theme.static_version / dev 指纹附加 ?v=
         $url = (string)$this->template->fetchTagSource('statics', 'Weline_Theme::ui/' . $relative);
-        // fetchTagSource may already append ?v=preview_* — never produce ?v=a?v=b.
-        $sep = str_contains($url, '?') ? '&' : '?';
 
-        return htmlspecialchars(
-            $url . $sep . 'v=' . self::ASSET_VERSION,
-            ENT_QUOTES,
-            'UTF-8',
-        );
+        return htmlspecialchars($url, ENT_QUOTES, 'UTF-8');
     }
 
     private function previewNotice(string $previewExitUrl): string

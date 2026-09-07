@@ -15,17 +15,17 @@ const lazyComponentSources = new Map([
     ['dependent-field', './weline-ui-advanced.js'],
     ['language-select', './components/weline-language-select.js'],
     ['currency-select', './components/weline-currency-select.js'],
-    ['language-switcher', './components/weline-language-switcher.js?v=locale-nav-22'],
+    ['language-switcher', './components/weline-language-switcher.js'],
     ['online-translation-collector', './components/weline-online-translation-collector.js'],
     ['scope-persistence', './components/weline-scope-persistence.js'],
     ['file-preview', './components/weline-file-picker.js'],
     ['file-picker', './components/weline-file-picker.js'],
-    ['local-translation', './components/weline-local-translation.js?v=20260828-base-star1'],
-    ['mega-menu', './components/weline-mega-menu.js?v=20260829-cat-click1'],
+    ['local-translation', './components/weline-local-translation.js'],
+    ['mega-menu', './components/weline-mega-menu.js'],
     ['account-recovery', './pages/weline-customer-account-recovery.js'],
-    ['account-login', './pages/weline-customer-account-login.js?v=20260829-login-docpost1'],
-    ['account-register', './pages/weline-customer-account-login.js?v=20260829-login-docpost1'],
-    ['account-challenge', './pages/weline-customer-account-challenge.js?v=20260830-challenge-btn2'],
+    ['account-login', './pages/weline-customer-account-login.js'],
+    ['account-register', './pages/weline-customer-account-login.js'],
+    ['account-challenge', './pages/weline-customer-account-challenge.js'],
 ]);
 const lazyComponentStyles = new Map([
     ['language-select', './components/weline-language-select.css'],
@@ -35,9 +35,9 @@ const lazyComponentStyles = new Map([
     ['local-translation', '../../../../I18n/view/statics/css/local-translation.css'],
     ['mega-menu', './components/weline-mega-menu.css'],
     ['account-recovery', './pages/weline-customer-account-recovery.css'],
-    ['account-login', './pages/weline-customer-account-login.css?v=20260830-challenge-btn2'],
-    ['account-register', './pages/weline-customer-account-login.css?v=20260830-challenge-btn2'],
-    ['account-challenge', './pages/weline-customer-account-login.css?v=20260830-challenge-btn2'],
+    ['account-login', './pages/weline-customer-account-login.css'],
+    ['account-register', './pages/weline-customer-account-login.css'],
+    ['account-challenge', './pages/weline-customer-account-login.css'],
 ]);
 const lazyComponentLoads = new Map();
 const lazyStyleLoads = new Map();
@@ -547,6 +547,27 @@ function effectiveStackZ(element) {
     return 0;
 }
 
+/** Max ancestor hops when resolving the component container stack level. */
+const FLOATING_CONTAINER_Z_DEPTH = 4;
+
+/**
+ * Theme UI popup rule: from the component's parent container, walk up to
+ * maxDepth ancestors and return the first explicit numeric z-index.
+ * Auto / missing are skipped; null means no container z was found.
+ */
+function resolveContainerStackZ(from, maxDepth = FLOATING_CONTAINER_Z_DEPTH) {
+    let node = from instanceof Element ? from.parentElement : null;
+    let depth = 0;
+    const limit = Math.max(1, Number(maxDepth) || FLOATING_CONTAINER_Z_DEPTH);
+    while (node && depth < limit) {
+        const z = readNumericZIndex(node);
+        if (z != null) return z;
+        node = node.parentElement;
+        depth += 1;
+    }
+    return null;
+}
+
 function clearFloatingStackElevation(floating) {
     if (!(floating instanceof HTMLElement)) return;
     delete floating.dataset.wFloatingPortal;
@@ -554,20 +575,30 @@ function clearFloatingStackElevation(floating) {
 }
 
 /**
- * Popup layer rule: always host z-index + 1.
- * - Hosted in dialog/drawer: shell (or nearest explicit z) + 1
- * - Hosted on body: max(open overlays, token floor - 1) + 1
- * - Nested popups on the same host: each new portal is max(siblings) + 1
+ * Popup layer rule: always container/host z-index + 1.
+ * - Prefer the first explicit z-index within 4 parent containers of the
+ *   component origin (hamburger sidebar, drawer shell, …).
+ * - Hosted in dialog: also max with shell stacking context.
+ * - Hosted on body: also max(open overlays, token floor - 1).
+ * - Nested popups on the same host: each new portal is max(siblings) + 1.
  */
-function applyFloatingStackElevation(floating, host) {
+function applyFloatingStackElevation(floating, host, origin = null) {
     if (!(floating instanceof HTMLElement)) return;
     floating.dataset.wFloatingPortal = 'true';
+    const originRoot = origin instanceof Element
+        ? origin
+        : floating;
     let base = 0;
+    const containerZ = resolveContainerStackZ(originRoot, FLOATING_CONTAINER_Z_DEPTH);
+    if (containerZ != null) {
+        base = containerZ;
+    }
     if (host instanceof Element && host !== document.body) {
-        base = effectiveStackZ(host);
+        base = Math.max(base, effectiveStackZ(host));
     } else {
         document.querySelectorAll(
-            '.w-overlay, .w-dialog[data-state="open"], .w-drawer[data-state="open"], dialog[open]',
+            '.w-overlay, .w-dialog[data-state="open"], .w-drawer[data-state="open"], dialog[open],'
+            + ' #categories-sidebar:not([aria-hidden="true"]), .categories-sidebar:not([aria-hidden="true"])',
         ).forEach((element) => {
             base = Math.max(base, effectiveStackZ(element));
         });
@@ -942,10 +973,13 @@ function createFloatingPortal(floating, name = 'floating') {
     };
     return {
         mount() {
-            const host = resolveFloatingHost(marker.parentElement || marker);
+            const origin = marker.parentElement instanceof Element
+                ? marker.parentElement
+                : null;
+            const host = resolveFloatingHost(origin || marker);
             record.mounted = true;
             record.order = ++floatingPortalOrder;
-            applyFloatingStackElevation(floating, host);
+            applyFloatingStackElevation(floating, host, origin);
             if (floating.parentNode !== host) host.append(floating);
         },
         restore,
@@ -2127,6 +2161,7 @@ function registerNavFilter() {
                     item instanceof HTMLAnchorElement
                     && item.hasAttribute('href')
                     && !item.closest('[data-menu-source-ref]')
+                    && !item.closest('[data-w-nav-filter-source]')
                 );
                 canonicalLinks.forEach((link) => {
                     const menuSegments = routeSegments(link.getAttribute('href'));
@@ -2193,6 +2228,12 @@ function registerNavFilter() {
             }
             syncCurrentRouteAndScroll();
         };
+        const isFilterSourceEntry = (entry) => (
+            entry instanceof HTMLElement && entry.hasAttribute('data-w-nav-filter-source')
+        );
+        const isFilterSourceGroup = (group) => (
+            group instanceof HTMLElement && group.hasAttribute('data-w-nav-filter-source-group')
+        );
         const directEntryLabel = (entry) => {
             const directItem = entry.querySelector(
                 ':scope > a.w-backend-nav__item, :scope > .w-backend-nav__item, :scope > details.w-backend-nav__disclosure > summary.w-backend-nav__item',
@@ -2208,11 +2249,34 @@ function registerNavFilter() {
                 ':scope > .w-backend-nav__list > .w-backend-nav__entry, :scope > details > .w-backend-nav__list > .w-backend-nav__entry',
             ),
         ];
+        const entryMatchesOwnLabel = (entry, query) => {
+            if (query === '') {
+                return false;
+            }
+            const searchText = (entry.getAttribute('data-search-text') || '').trim().toLocaleLowerCase();
+            if (searchText !== '' && searchText.includes(query)) {
+                return true;
+            }
+            return directEntryLabel(entry).includes(query);
+        };
+        const hasMatchingAncestor = (entry, query) => {
+            let node = entry.parentElement;
+            while (node && node !== list) {
+                if (
+                    node.classList.contains('w-backend-nav__entry')
+                    && entryMatchesOwnLabel(node, query)
+                ) {
+                    return true;
+                }
+                node = node.parentElement;
+            }
+            return false;
+        };
         const matchesSubtree = (entry, query) => {
             if (query === '') {
                 return true;
             }
-            if (directEntryLabel(entry).includes(query)) {
+            if (entryMatchesOwnLabel(entry, query)) {
                 return true;
             }
             return childEntries(entry).some((child) => matchesSubtree(child, query));
@@ -2226,7 +2290,7 @@ function registerNavFilter() {
                 disclosure.open = false;
             });
         };
-        const setEntryExpandedForFilter = (entry) => {
+        const setEntryExpandedForFilter = (entry, expandDescendants = false) => {
             let node = entry.parentElement;
             while (node && node !== list) {
                 if (node instanceof HTMLDetailsElement) {
@@ -2237,6 +2301,11 @@ function registerNavFilter() {
             const disclosure = entry.querySelector(':scope > details.w-backend-nav__disclosure');
             if (disclosure instanceof HTMLDetailsElement) {
                 disclosure.open = true;
+            }
+            if (expandDescendants) {
+                entry.querySelectorAll('details.w-backend-nav__disclosure').forEach((nested) => {
+                    nested.open = true;
+                });
             }
         };
         const shell = element.closest('.w-backend-shell');
@@ -2377,20 +2446,23 @@ function registerNavFilter() {
             } else {
                 element.removeAttribute('data-w-nav-filtering');
                 allEntries.forEach((entry) => {
-                    entry.hidden = false;
+                    entry.hidden = isFilterSourceEntry(entry);
                 });
                 groups.forEach((group) => {
-                    group.hidden = false;
+                    group.hidden = isFilterSourceGroup(group);
                 });
             }
 
             if (isFiltering) {
                 allEntries.forEach((entry) => {
-                    const match = matchesSubtree(entry, query);
+                    const selfMatch = entryMatchesOwnLabel(entry, query);
+                    const match = matchesSubtree(entry, query) || hasMatchingAncestor(entry, query);
                     entry.hidden = !match;
                     if (match) {
                         visible += 1;
-                        setEntryExpandedForFilter(entry);
+                        if (!isFilterSourceEntry(entry)) {
+                            setEntryExpandedForFilter(entry, selfMatch);
+                        }
                     }
                 });
                 groups.forEach((group) => {
@@ -3399,9 +3471,11 @@ const createdUI = {
         },
     },
     stack: {
-        /** Portal / dialog floatings: host z-index + 1 */
+        /** Portal floatings: origin container z-index (≤4 parents) + 1 */
         apply: applyFloatingStackElevation,
         clear: clearFloatingStackElevation,
+        /** Resolve first explicit z-index within 4 parent containers */
+        containerZ: resolveContainerStackZ,
         /** In-place hover/open layers: scope above siblings, layer = scope + 1 */
         elevate: applyElevateLayer,
         clearElevate: clearElevateLayer,

@@ -50,6 +50,7 @@
 正确示例：映射到 `--color-bg-tertiary` / `--color-border-subtle`，或在 `_colors.css` + `_light.css` 新增语义名并给叶子值。
 
 语义角色 × 强度矩阵、Foundation 桥接与 `data-tone` 约定见 [`theme-semantic-color-matrix.md`](./theme-semantic-color-matrix.md)。
+店面间距/圆角/字号**消费约定**见 [`theme-storefront-token-consumption.md`](./theme-storefront-token-consumption.md)。
 
 ## 禁止
 

@@ -27,6 +27,7 @@ use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeDirectoryResolver;
+use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 
 /**
  * Partials Block
@@ -145,7 +146,8 @@ class Partials extends Block
                 }
             }
             
-            return $this->renderPartials($area, $type, $data, $defaultOption);
+            $html = $this->renderPartials($area, $type, $data, $defaultOption);
+            return $html;
         }
         
         // 如果没有指定 type，返回空（保持向后兼容）
@@ -202,20 +204,20 @@ class Partials extends Block
             }
         }
 
-        // Frontend header/footer: L1 miss → scope hot cache (cross-worker SWR).
+        // Frontend head/header/footer: L1 miss → scope hot cache (cross-worker SWR).
         // Backend chrome stays process-local; historical theme_runtime IPC was too
         // expensive under pool pressure, so shared writes stay on the storefront path only.
         if ($this->shouldUseSharedStorefrontChromeCache($area, $type)) {
             try {
                 /** @var \Weline\Framework\Cache\Service\StorefrontScopeHotCache $hotCache */
                 $hotCache = ObjectManager::getInstance(\Weline\Framework\Cache\Service\StorefrontScopeHotCache::class);
-                $html = $hotCache->remember(
-                    'weline_theme_storefront_chrome',
+                $html = $hotCache->rememberPolicy(
+                    StorefrontThemeCacheCoordinator::storefrontChromePolicy(
+                        \max(60, (int)$policy['ttl']),
+                        $this->partialOutputStaleTtl(),
+                    ),
                     'theme.chrome.' . \strtolower($type) . '.' . $cacheKey,
-                    \max(60, (int)$policy['ttl']),
                     fn(): string => $this->renderCompiledPartial($fileName, $dictionary),
-                    ['website' => true, 'lang' => true],
-                    $this->partialOutputStaleTtl(),
                 );
                 if (\is_string($html) && !$this->isEmptyPartialHtml($html)) {
                     $this->rememberPartialOutput($cacheKey, $html, 'fresh', $policy['ttl']);
@@ -247,7 +249,7 @@ class Partials extends Block
     private function shouldUseSharedStorefrontChromeCache(string $area, string $type): bool
     {
         return \strtolower($area) === 'frontend'
-            && \in_array(\strtolower($type), ['header', 'footer'], true);
+            && \in_array(\strtolower($type), ['head', 'header', 'footer'], true);
     }
 
     /**
@@ -432,7 +434,11 @@ class Partials extends Block
             }
 
             return KeyBuilder::environmentHash([
-                'schema' => 'chrome-partial-v4',
+                // v9: language-switcher SSR no longer inlines flags; bust stale SVG chrome.
+                'schema' => 'chrome-partial-v9',
+                'nested_widgets' => ($area === 'frontend' && $type === 'header')
+                    ? $this->frontendHeaderNestedChromeFingerprint()
+                    : '',
                 'area' => $area,
                 'type' => $type,
                 'option' => $defaultOption,
@@ -457,6 +463,11 @@ class Partials extends Block
                         ? \Weline\I18n\Taglib\LanguageSwitcher::backendLocaleCatalogFingerprint()
                         : '')
                     : '',
+                // Frontend/backend chrome embeds the storefront language switcher; markup
+                // contract changes (SSR flags → placeholders) must invalidate shared HTML.
+                'i18n_switcher_markup' => \class_exists(\Weline\I18n\Taglib\LanguageSwitcher::class)
+                    ? (string)\Weline\I18n\Taglib\LanguageSwitcher::SWITCHER_MARKUP_VERSION
+                    : '',
                 'layout_type' => (string)($themeData['layoutType'] ?? ''),
                 'layout_option' => (string)($themeData['layoutOption'] ?? ''),
                 'data' => $this->resolveChromePartialCacheDataContext($area, $type, $data),
@@ -474,6 +485,29 @@ class Partials extends Block
         } catch (\Throwable) {
             return null;
         }
+    }
+
+    /**
+     * Header chrome HTML embeds placeable widgets (account avatar shell). Fingerprint
+     * those sources so widget-only edits do not keep serving stale shared chrome.
+     */
+    private function frontendHeaderNestedChromeFingerprint(): string
+    {
+        $files = [
+            \dirname(__DIR__) . '/view/theme/frontend/widgets/header/account/default.phtml',
+            \dirname(__DIR__) . '/view/theme/frontend/partials/header/categories-horizontal-nav.phtml',
+            \dirname(__DIR__) . '/view/theme/frontend/partials/header/categories-sidebar-nav.phtml',
+            \dirname(__DIR__) . '/view/theme/frontend/partials/header/mega-menu-panel.phtml',
+        ];
+        $fingerprints = [];
+        foreach ($files as $file) {
+            $stat = @\stat($file);
+            $fingerprints[] = \is_array($stat)
+                ? (int)$stat['mtime'] . '|' . (int)$stat['size']
+                : '0|0';
+        }
+
+        return \implode(';', $fingerprints);
     }
 
     private function resolveChromePartialCacheDataContext(
@@ -1101,7 +1135,16 @@ class Partials extends Block
 
             return $this->traceCall(
                 $tracePrefix . '::fetch_html',
-                fn() => $this->fetchCachedPartialHtml($path, $data, $area, $type, $defaultOption)
+                fn() => RequestLifecycleTrace::measurePhase(
+                    'theme.partials.fetch.' . match ($type) {
+                        'header' => 'header',
+                        'head' => 'head',
+                        'footer' => 'footer',
+                        default => 'other',
+                    },
+                    fn() => $this->fetchCachedPartialHtml($path, $data, $area, $type, $defaultOption),
+                    ['partial_type' => $type],
+                )
             );
         });
     }

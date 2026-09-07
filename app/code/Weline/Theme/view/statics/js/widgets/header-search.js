@@ -16,9 +16,28 @@
         }
     }
 
-    function suggestionLabels(result, query) {
+    function suggestionHits(result) {
         var payload = result && result.data && typeof result.data === 'object' ? result.data : result;
-        var hits = payload && Array.isArray(payload.hits) ? payload.hits : [];
+        var hits = [];
+        if (payload && Array.isArray(payload.hits)) {
+            hits = payload.hits.slice();
+        }
+        if (payload && payload.sections && typeof payload.sections === 'object') {
+            Object.keys(payload.sections).forEach(function (code) {
+                var sectionHits = payload.sections[code];
+                if (!Array.isArray(sectionHits)) return;
+                sectionHits.forEach(function (hit) {
+                    if (!hit || typeof hit !== 'object') return;
+                    if (!hit.type) hit.type = code;
+                    hits.push(hit);
+                });
+            });
+        }
+        return hits;
+    }
+
+    function suggestionLabels(result, query) {
+        var hits = suggestionHits(result);
         var labels = [];
         var seen = Object.create(null);
 
@@ -26,18 +45,129 @@
             if (!hit || typeof hit !== 'object') return;
             var title = String(hit.title || hit.name || '').trim();
             if (!title) return;
-            var key = title.toLowerCase();
-            if (seen[key]) return;
-            seen[key] = true;
-            labels.push(title);
+            var url = String(hit.url || '').trim();
+            var entityId = String(hit.entity_id || hit.key || '').trim();
+            var dedupe = (url || entityId || title).toLowerCase();
+            if (seen[dedupe]) return;
+            seen[dedupe] = true;
+            var moduleName = String(hit.module || (hit.payload && hit.payload.module) || '').trim();
+            var templateTitle = String(hit.template_title || (hit.payload && hit.payload.template_title) || '').trim();
+            var areaLabel = String(hit.area_label || (hit.payload && hit.payload.area_label) || '').trim();
+            var keyPath = String(hit.key || (hit.payload && hit.payload.key) || entityId || '').trim();
+            var group = String(hit.group || (hit.payload && hit.payload.group) || moduleName || hit.type || '').trim();
+            var breadcrumb = String(hit.breadcrumb || (hit.payload && hit.payload.breadcrumb) || '').trim();
+            if (!breadcrumb) {
+                breadcrumb = [moduleName, areaLabel, templateTitle].filter(Boolean).join(' › ');
+            }
+            labels.push({
+                title: title,
+                url: url,
+                subtitle: String(hit.subtitle || breadcrumb || keyPath || '').trim(),
+                type: String(hit.type || hit.indexer || '').trim(),
+                module: moduleName,
+                template: templateTitle,
+                area: areaLabel,
+                key: keyPath,
+                group: group || '结果',
+                breadcrumb: breadcrumb
+            });
         });
 
         if (labels.length) {
-            return labels.slice(0, 8);
+            return labels.slice(0, 16);
         }
 
         // 无真实命中时不造假建议，保持空列表
         return [];
+    }
+
+    function appendSuggestionRows(list, labels) {
+        if (!list || !labels || !labels.length) return;
+
+        var hasHierarchy = labels.some(function (row) {
+            return !!(row.module || row.template || row.key || row.group);
+        });
+        if (!hasHierarchy) {
+            labels.forEach(function (row) {
+                list.appendChild(buildSuggestionItem(row));
+            });
+            return;
+        }
+
+        var groups = [];
+        var groupMap = Object.create(null);
+        labels.forEach(function (row) {
+            var groupKey = row.group || row.module || row.type || '结果';
+            if (!groupMap[groupKey]) {
+                groupMap[groupKey] = {
+                    key: groupKey,
+                    label: groupKey,
+                    items: []
+                };
+                groups.push(groupMap[groupKey]);
+            }
+            groupMap[groupKey].items.push(row);
+        });
+
+        groups.forEach(function (group) {
+            var section = document.createElement('div');
+            section.className = 'suggestion-group';
+            section.setAttribute('data-suggestion-group', group.key);
+
+            var heading = document.createElement('div');
+            heading.className = 'suggestion-group__label';
+            heading.textContent = escapeText(group.label);
+            section.appendChild(heading);
+
+            group.items.forEach(function (row) {
+                section.appendChild(buildSuggestionItem(row));
+            });
+            list.appendChild(section);
+        });
+    }
+
+    function buildSuggestionItem(row) {
+        var item = document.createElement('div');
+        item.className = 'suggestion-item';
+        if (row.url) {
+            item.setAttribute('data-url', row.url);
+        }
+        if (row.subtitle) {
+            item.title = row.subtitle;
+        }
+
+        var titleEl = document.createElement('div');
+        titleEl.className = 'suggestion-item__title';
+        titleEl.textContent = escapeText(row.title);
+        item.appendChild(titleEl);
+
+        var metaBits = [];
+        if (row.template) metaBits.push(row.template);
+        if (row.area) metaBits.push(row.area);
+        if (metaBits.length || row.key) {
+            var metaEl = document.createElement('div');
+            metaEl.className = 'suggestion-item__meta';
+            if (metaBits.length) {
+                var pathEl = document.createElement('span');
+                pathEl.className = 'suggestion-item__path';
+                pathEl.textContent = escapeText(metaBits.join(' · '));
+                metaEl.appendChild(pathEl);
+            }
+            if (row.key) {
+                var keyEl = document.createElement('code');
+                keyEl.className = 'suggestion-item__key';
+                keyEl.textContent = escapeText(row.key);
+                metaEl.appendChild(keyEl);
+            }
+            item.appendChild(metaEl);
+        } else if (row.subtitle) {
+            var subEl = document.createElement('div');
+            subEl.className = 'suggestion-item__subtitle';
+            subEl.textContent = escapeText(row.subtitle);
+            item.appendChild(subEl);
+        }
+
+        return item;
     }
 
     function mountThemeMenu(root) {
@@ -195,6 +325,21 @@
         var searchInput = root.querySelector('.search-input');
         var suggestions = root.querySelector('.search-suggestions');
         var autoComplete = root.getAttribute('data-autocomplete') === 'true';
+        var navigateHits = root.getAttribute('data-navigate-hits') === 'true';
+        var searchArea = String(root.getAttribute('data-search-area') || 'frontend').trim() || 'frontend';
+        var form = root.querySelector('form');
+
+        if (form && form.getAttribute('data-w-search-backend-form') === '1') {
+            form.addEventListener('submit', function (event) {
+                if (!navigateHits) return;
+                event.preventDefault();
+                var first = suggestions && suggestions.querySelector('.suggestion-item[data-url]');
+                var url = first ? first.getAttribute('data-url') : '';
+                if (url) {
+                    window.location.href = url;
+                }
+            });
+        }
 
         if (!autoComplete || !searchInput || !suggestions) {
             return;
@@ -222,18 +367,15 @@
                         suggestions.hidden = true;
                         return;
                     }
-                    var result = await api.search({ q: query });
+                    var typeInput = root.querySelector('input[name="type"]');
+                    var type = typeInput ? String(typeInput.value || 'all') : 'all';
+                    var result = await api.search({ q: query, type: type, area: searchArea, page_size: searchArea === 'backend' ? 24 : 12 });
                     var labels = suggestionLabels(result, query);
                     if (!labels.length) {
                         suggestions.hidden = true;
                         return;
                     }
-                    labels.forEach(function (label) {
-                        var item = document.createElement('div');
-                        item.className = 'suggestion-item';
-                        item.textContent = escapeText(label);
-                        list.appendChild(item);
-                    });
+                    appendSuggestionRows(list, labels);
                     suggestions.hidden = false;
                 } catch (e) {
                     suggestions.hidden = true;
@@ -244,10 +386,16 @@
         suggestions.addEventListener('click', function (e) {
             var target = e.target && e.target.closest ? e.target.closest('.suggestion-item') : null;
             if (!target) return;
-            searchInput.value = target.textContent || '';
+            var url = target.getAttribute('data-url') || '';
+            if (navigateHits && url) {
+                suggestions.hidden = true;
+                window.location.href = url;
+                return;
+            }
+            searchInput.value = (target.querySelector('.suggestion-item__title') || target).textContent || '';
             suggestions.hidden = true;
-            var form = searchInput.closest('form');
-            if (form) form.submit();
+            var formEl = searchInput.closest('form');
+            if (formEl) formEl.submit();
         });
 
         document.addEventListener('click', function (e) {

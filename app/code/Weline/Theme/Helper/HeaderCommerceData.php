@@ -4,9 +4,12 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Helper;
 
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Search\Service\SearchProviderRegistry;
 use Weline\Theme\Service\AllMenu\AllMenuTreeRegistry;
+use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 
 /**
  * 页头商务数据：优先 Query 真实数据；仅在无数据/不可用时回落主题演示默认值。
@@ -164,30 +167,36 @@ final class HeaderCommerceData
     public static function resolveHotWords(int $limit = 8): array
     {
         $limit = max(1, min(20, $limit));
-        try {
-            if (\function_exists('w_query')) {
-                $result = \w_query('search', 'hotWords', ['limit' => $limit], 'frontend');
-                if (\is_array($result) && ($result['success'] ?? false)) {
-                    $words = $result['words'] ?? ($result['data']['words'] ?? []);
-                    $normalized = self::normalizeHotWords($words, $limit);
-                    if ($normalized !== []) {
-                        return [
-                            'words' => $normalized,
-                            'source' => (string)($result['source'] ?? $result['data']['source'] ?? 'search'),
-                            'is_demo' => false,
-                        ];
+        return self::rememberRequestMemo(
+            'theme.header.hot_words',
+            (string)$limit,
+            static function () use ($limit): array {
+                try {
+                    if (\function_exists('w_query')) {
+                        $result = \w_query('search', 'hotWords', ['limit' => $limit], 'frontend');
+                        if (\is_array($result) && ($result['success'] ?? false)) {
+                            $words = $result['words'] ?? ($result['data']['words'] ?? []);
+                            $normalized = self::normalizeHotWords($words, $limit);
+                            if ($normalized !== []) {
+                                return [
+                                    'words' => $normalized,
+                                    'source' => (string)($result['source'] ?? $result['data']['source'] ?? 'search'),
+                                    'is_demo' => false,
+                                ];
+                            }
+                        }
                     }
+                } catch (\Throwable) {
+                    // fall through to demo defaults
                 }
-            }
-        } catch (\Throwable) {
-            // fall through to demo defaults
-        }
 
-        return [
-            'words' => \array_slice(self::defaultHotWords(), 0, $limit),
-            'source' => 'theme_demo',
-            'is_demo' => true,
-        ];
+                return [
+                    'words' => \array_slice(self::defaultHotWords(), 0, $limit),
+                    'source' => 'theme_demo',
+                    'is_demo' => true,
+                ];
+            },
+        );
     }
 
     /**
@@ -372,23 +381,68 @@ final class HeaderCommerceData
      */
     public static function resolveSearchTypes(): array
     {
+        return self::rememberRequestMemo(
+            'theme.header.search_types',
+            'default',
+            static function (): array {
+                try {
+                    /** @var SearchProviderRegistry $registry */
+                    $registry = ObjectManager::getInstance(SearchProviderRegistry::class);
+                    $types = $registry->listTypes();
+                    if ($types !== []) {
+                        return $types;
+                    }
+                } catch (\Throwable) {
+                    // fall through
+                }
+
+                return [
+                    [
+                        'code' => 'all',
+                        'label' => (string)__('全部'),
+                        'children' => [],
+                    ],
+                ];
+            },
+            StorefrontThemeCacheCoordinator::headerSearchTypesPolicy(),
+            'theme.header.search_types.v1',
+        );
+    }
+
+    private static function rememberRequestMemo(
+        string $resource,
+        string $logicalKey,
+        callable $builder,
+        mixed $policy = null,
+        ?string $sharedLogicalKey = null,
+    ): mixed
+    {
         try {
-            /** @var SearchProviderRegistry $registry */
-            $registry = ObjectManager::getInstance(SearchProviderRegistry::class);
-            $types = $registry->listTypes();
-            if ($types !== []) {
-                return $types;
-            }
+            /** @var StorefrontScopeHotCache $cache */
+            $cache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
         } catch (\Throwable) {
-            // fall through
+            return $builder();
         }
 
-        return [
-            [
-                'code' => 'all',
-                'label' => (string)__('全部'),
-                'children' => [],
-            ],
-        ];
+        return $cache->rememberForRequest(
+            $resource,
+            $logicalKey,
+            function () use ($cache, $policy, $sharedLogicalKey, $resource, $logicalKey, $builder): mixed {
+                if ($policy !== null) {
+                    try {
+                        return $cache->rememberPolicy(
+                            $policy,
+                            $sharedLogicalKey ?? $logicalKey,
+                            static fn(): mixed => RequestLifecycleTrace::measurePhase($resource, $builder),
+                        );
+                    } catch (\Throwable) {
+                        // Shared metadata is an optimization boundary; preserve the
+                        // request result if the optional cache service is unavailable.
+                    }
+                }
+
+                return RequestLifecycleTrace::measurePhase($resource, $builder);
+            },
+        );
     }
 }

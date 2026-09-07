@@ -5,6 +5,11 @@ declare(strict_types=1);
 namespace Weline\Theme\Test\Unit\View;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Backend\Api\Config\BackendConfigStore;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Context;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Theme\Helper\SiteBrand;
 
 final class ThemeBrandBasicsContractTest extends TestCase
 {
@@ -16,7 +21,7 @@ final class ThemeBrandBasicsContractTest extends TestCase
         self::assertStringContainsString('id="btnThemeBrandBasics"', $template);
         self::assertStringContainsString('id="themeBrandBasicsDrawer"', $template);
         self::assertStringContainsString('id="themeBrandIdentitySlot"', $template);
-        self::assertStringContainsString('Weline_Theme::backend::theme-editor::brand-basics::identity', $template);
+        self::assertStringContainsString('Weline_Theme::backend::partials::theme-editor-brand-basics::identity', $template);
         self::assertStringContainsString('data-w-brand-identity-slot', $template);
         self::assertStringContainsString('id="btnThemeChromeCollapse"', $template);
         self::assertStringContainsString('id="themeEditorChromeStrip"', $template);
@@ -79,7 +84,7 @@ final class ThemeBrandBasicsContractTest extends TestCase
             \dirname(__DIR__, 3) . '/hook.php'
         );
         self::assertStringContainsString(
-            'Weline_Theme::backend::theme-editor::brand-basics::identity',
+            'Weline_Theme::backend::partials::theme-editor-brand-basics::identity',
             $hook
         );
         $interface = (string)\file_get_contents(
@@ -101,6 +106,22 @@ final class ThemeBrandBasicsContractTest extends TestCase
         );
         self::assertStringNotContainsString("'site_name'", $resolver);
         self::assertStringNotContainsString("'site_description'", $resolver);
+
+        $editor = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Controller/Backend/ThemeEditor.php'
+        );
+        self::assertSame(1, \preg_match(
+            '/#\[Acl\((?P<body>[\s\S]*?)\)\]\s*public function getBrandBasicsIdentity\(/',
+            $editor,
+            $matches
+        ));
+        $aclBody = (string)($matches['body'] ?? '');
+        self::assertStringContainsString("'Weline_Theme::theme_visual_editor_scope_read'", $aclBody);
+        self::assertStringContainsString("'Weline_Theme::theme_visual_editor'", $aclBody);
+        self::assertStringNotContainsString(
+            "'Weline_Theme::theme_visual_editor',\n        '读取主题基础信息身份'",
+            $aclBody
+        );
     }
 
     public function testSiteBrandPrefersThemeScopeResolver(): void
@@ -118,6 +139,30 @@ final class ThemeBrandBasicsContractTest extends TestCase
             \dirname(__DIR__, 3) . '/Service/ThemeBrandResolver.php'
         );
         self::assertStringContainsString("\$includeDraft ? 'draft_payload' : 'published_payload'", $resolver);
+    }
+
+    public function testSiteBrandConfigReadsAreMemoizedWithinOneRequest(): void
+    {
+        $backendConfig = $this->getMockBuilder(BackendConfigStore::class)
+            ->disableOriginalConstructor()
+            ->onlyMethods(['getConfig'])
+            ->getMock();
+        $backendConfig->expects(self::once())
+            ->method('getConfig')
+            ->with('site_icon', SiteBrand::CONFIG_MODULE)
+            ->willReturn('/pub/media/site-icon.png');
+
+        $context = new Context(['meta' => ['type' => 'request', 'mode' => 'fpm']]);
+        Context::enter($context);
+        RequestContext::setId('site-brand-config-memo');
+        try {
+            $siteBrand = new SiteBrand($backendConfig, new StorefrontScopeHotCache());
+            self::assertSame('/pub/media/site-icon.png', $siteBrand->getRawConfig('site_icon'));
+            self::assertSame('/pub/media/site-icon.png', $siteBrand->getRawConfig('site_icon'));
+        } finally {
+            RequestContext::cleanup();
+            Context::leave();
+        }
     }
 
     public function testFooterLocaleBrandUsesSiteBrandWebsiteName(): void
