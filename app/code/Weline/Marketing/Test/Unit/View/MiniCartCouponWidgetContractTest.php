@@ -31,5 +31,7 @@ final class MiniCartCouponWidgetContractTest extends TestCase
         self::assertStringContainsString('w-marketing-checkout-coupon--mini-cart', $source);
         self::assertStringContainsString('data-marketing-coupon-input', $source);
         self::assertStringContainsString('data-mini-cart-tab-label-source', $source);
+        self::assertStringContainsString('data-i18n-invalid-limit=', $source);
+        self::assertStringContainsString('data-i18n-enter-code=', $source);
     }
 }
