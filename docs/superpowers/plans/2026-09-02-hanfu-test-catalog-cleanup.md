@@ -29,10 +29,10 @@
 
 | File | Responsibility |
 |---|---|
-| `Service/HanfuCleanup/HanfuTestCatalogSelection.php` | 冻结 ID、规范化快照和稳定摘要 |
-| `Service/HanfuCleanup/HanfuIdentityCleanupService.php` | 只清理无其他网站引用的产品/offer/SKU 身份 |
-| `Service/HanfuCleanup/HanfuCatalogMediaQuarantine.php` | 独占对象判定、隔离、恢复和最终删除 |
-| `Service/HanfuCleanup/HanfuCatalogCleanupService.php` | preview/apply/verify 编排和后置条件 |
+| `Sample/HanfuCleanup/HanfuTestCatalogSelection.php` | 冻结 ID、规范化快照和稳定摘要 |
+| `Sample/HanfuCleanup/HanfuIdentityCleanupService.php` | 只清理无其他网站引用的产品/offer/SKU 身份 |
+| `Sample/HanfuCleanup/HanfuCatalogMediaQuarantine.php` | 独占对象判定、隔离、恢复和最终删除 |
+| `Sample/HanfuCleanup/HanfuCatalogCleanupService.php` | preview/apply/verify 编排和后置条件 |
 | Product repositories listed in Task 2 | 精确 ID 集合的从属行清理 |
 | `Inventory/Api/InventoryCatalogMaintenanceInterface.php` | Product 可依赖的库存目录维护窄写契约 |
 | `InventoryService.php` | 实现库存预检、受保护引用和精确 offer 清理；不得由 Product 直接依赖 |
@@ -76,8 +76,8 @@ Exit codes are fixed: `0` success, `2` invalid arguments, `3` selection drift, `
 
 **Files:**
 
-- Create: `app/code/Weline/Product/Service/HanfuCleanup/HanfuTestCatalogSelection.php`
-- Create: `app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuTestCatalogSelectionTest.php`
+- Create: `app/code/Weline/Product/Sample/HanfuCleanup/HanfuTestCatalogSelection.php`
+- Create: `app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuTestCatalogSelectionTest.php`
 
 **Interfaces:**
 
@@ -123,7 +123,7 @@ public function testDigestIgnoresAssociativeKeyOrderButNotCatalogDrift(): void
 - [ ] **Step 2: Run the focused test and confirm red**
 
 ```bash
-php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuTestCatalogSelectionTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuTestCatalogSelectionTest.php
 ```
 
 Expected: failure because `HanfuTestCatalogSelection` does not exist.
@@ -170,8 +170,8 @@ Expected: `OK (2 tests)`.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/code/Weline/Product/Service/HanfuCleanup/HanfuTestCatalogSelection.php \
-  app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuTestCatalogSelectionTest.php
+git add app/code/Weline/Product/Sample/HanfuCleanup/HanfuTestCatalogSelection.php \
+  app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuTestCatalogSelectionTest.php
 git commit -m "test: 冻结汉服测试商品清理选择"
 ```
 
@@ -333,8 +333,8 @@ git commit -m "feat: 增加测试商品依赖清理仓储能力"
 - Create: `app/code/Weline/Inventory/Api/InventoryCatalogMaintenanceInterface.php`
 - Modify: `app/code/Weline/Inventory/Service/InventoryService.php`
 - Create: `app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php`
-- Create: `app/code/Weline/Product/Service/HanfuCleanup/HanfuIdentityCleanupService.php`
-- Create: `app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuIdentityCleanupServiceTest.php`
+- Create: `app/code/Weline/Product/Sample/HanfuCleanup/HanfuIdentityCleanupService.php`
+- Create: `app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuIdentityCleanupServiceTest.php`
 
 **Interfaces:**
 
@@ -401,7 +401,7 @@ public function testCrossWebsiteIdentityIsPreserved(): void
 
 ```bash
 php vendor/bin/phpunit --bootstrap app/code/Weline/Inventory/Test/Unit/bootstrap.php app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php
-php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
 ```
 
 - [ ] **Step 4: Implement guarded purge behavior**
@@ -441,7 +441,7 @@ Any inventory ledger event is reported as a protected audit reference by `previe
 
 ```bash
 php vendor/bin/phpunit --bootstrap app/code/Weline/Inventory/Test/Unit/bootstrap.php app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php
-php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
 php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Model/ProductShardRegistryTest.php
 ```
 
@@ -453,8 +453,8 @@ Expected: all commands exit `0`.
 git add app/code/Weline/Inventory/Api/InventoryCatalogMaintenanceInterface.php \
   app/code/Weline/Inventory/Service/InventoryService.php \
   app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php \
-  app/code/Weline/Product/Service/HanfuCleanup/HanfuIdentityCleanupService.php \
-  app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
+  app/code/Weline/Product/Sample/HanfuCleanup/HanfuIdentityCleanupService.php \
+  app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuIdentityCleanupServiceTest.php
 git commit -m "feat: 清理测试商品库存与孤立身份"
 ```
 
@@ -464,8 +464,8 @@ git commit -m "feat: 清理测试商品库存与孤立身份"
 
 **Files:**
 
-- Create: `app/code/Weline/Product/Service/HanfuCleanup/HanfuCatalogMediaQuarantine.php`
-- Create: `app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuCatalogMediaQuarantineTest.php`
+- Create: `app/code/Weline/Product/Sample/HanfuCleanup/HanfuCatalogMediaQuarantine.php`
+- Create: `app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuCatalogMediaQuarantineTest.php`
 
 **Interfaces:**
 
@@ -512,7 +512,7 @@ public function testOnlyExclusiveUnreferencedObjectIsQuarantined(): void
 - [ ] **Step 2: Run the focused test and confirm red**
 
 ```bash
-php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuCatalogMediaQuarantineTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuCatalogMediaQuarantineTest.php
 ```
 
 - [ ] **Step 3: Implement with the existing FileManager API**
@@ -551,8 +551,8 @@ Expected: all quarantine cases pass and unit tests touch no real files.
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/code/Weline/Product/Service/HanfuCleanup/HanfuCatalogMediaQuarantine.php \
-  app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuCatalogMediaQuarantineTest.php
+git add app/code/Weline/Product/Sample/HanfuCleanup/HanfuCatalogMediaQuarantine.php \
+  app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuCatalogMediaQuarantineTest.php
 git commit -m "feat: 隔离测试商品独占媒体"
 ```
 
@@ -562,8 +562,8 @@ git commit -m "feat: 隔离测试商品独占媒体"
 
 **Files:**
 
-- Create: `app/code/Weline/Product/Service/HanfuCleanup/HanfuCatalogCleanupService.php`
-- Create: `app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuCatalogCleanupServiceTest.php`
+- Create: `app/code/Weline/Product/Sample/HanfuCleanup/HanfuCatalogCleanupService.php`
+- Create: `app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuCatalogCleanupServiceTest.php`
 
 **Interfaces:**
 
@@ -628,7 +628,7 @@ public function testDatabaseFailureRestoresQuarantine(): void
 - [ ] **Step 2: Run the focused test and confirm red**
 
 ```bash
-php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuCatalogCleanupServiceTest.php
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuCatalogCleanupServiceTest.php
 ```
 
 - [ ] **Step 3: Implement preview**
@@ -703,7 +703,7 @@ public function verify(int $websiteId, string $runId, string $selectionDigest): 
 - [ ] **Step 6: Run focused and adjacent tests**
 
 ```bash
-php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup
 php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Repository/HanfuCatalogPurgeRepositoryTest.php
 php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/ProductAdminReadServiceCategoryCatalogContractTest.php
 ```
@@ -713,8 +713,8 @@ Expected: all commands exit `0`.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add app/code/Weline/Product/Service/HanfuCleanup/HanfuCatalogCleanupService.php \
-  app/code/Weline/Product/Test/Unit/Service/HanfuCleanup/HanfuCatalogCleanupServiceTest.php
+git add app/code/Weline/Product/Sample/HanfuCleanup/HanfuCatalogCleanupService.php \
+  app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup/HanfuCatalogCleanupServiceTest.php
 git commit -m "feat: 编排汉服测试目录安全清理"
 ```
 
@@ -808,7 +808,7 @@ git commit -m "feat: 增加汉服测试目录清理命令"
 - [ ] **Step 1: Run all scoped tests**
 
 ```bash
-php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Service/HanfuCleanup
+php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Sample/HanfuCleanup
 php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Repository/HanfuCatalogPurgeRepositoryTest.php
 php vendor/bin/phpunit --bootstrap app/code/Weline/Product/Test/Unit/bootstrap.php app/code/Weline/Product/Test/Unit/Script/HanfuTestCatalogCleanupScriptContractTest.php
 php vendor/bin/phpunit --bootstrap app/code/Weline/Inventory/Test/Unit/bootstrap.php app/code/Weline/Inventory/Test/Unit/Service/InventoryCatalogPurgeTest.php
