@@ -16,9 +16,9 @@ final class LazyCaptchaClientRuntime
 {
     public const REQUEST_INJECTED_KEY = 'captcha.client_runtime.injected';
 
-    public const SCRIPT_SOURCE = 'Weline_Captcha::js/captcha-lazy.js?v=20260831-layout-fix1';
+    public const SCRIPT_SOURCE = 'Weline_Captcha::js/captcha-lazy.js?v=20260907-pending1';
 
-    public const STYLESHEET_SOURCE = 'Weline_Captcha::css/captcha-local.css?v=20260831-layout-fix1';
+    public const STYLESHEET_SOURCE = 'Weline_Captcha::css/captcha-local.css?v=20260907-pending1';
 
     public static function onceScriptHtml(): string
     {
@@ -50,7 +50,7 @@ final class LazyCaptchaClientRuntime
         }
 
         // Match storefront module static URL shape used by Theme/Currency assets.
-        return '/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260831-layout-fix1';
+        return '/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260907-pending1';
     }
 
     public static function resolveStylesheetUrl(): string
@@ -65,6 +65,6 @@ final class LazyCaptchaClientRuntime
         } catch (\Throwable) {
         }
 
-        return '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260831-layout-fix1';
+        return '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260907-pending1';
     }
 }

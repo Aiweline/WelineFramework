@@ -7,6 +7,8 @@ namespace Weline\Captcha\Controller\Backend;
 use Weline\Captcha\Service\GoogleOAuthService;
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\RedirectException;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\Message;
 
@@ -37,7 +39,11 @@ final class Google extends BackendController
                 }
             }
             $result = $this->oauth->start($scope);
-            return $this->redirect($result['authorization_url']);
+            // Direct RedirectException bypasses Backend open-redirect host filter
+            // (same pattern as Payment Connect OAuth authorize).
+            throw new RedirectException((string)$result['authorization_url'], 302);
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $exception) {
             Message::error($exception->getMessage());
             return $this->redirect($this->configUrl());
@@ -63,7 +69,7 @@ final class Google extends BackendController
         }
         if (($result['needs_project'] ?? false) === true) {
             return $this->redirect($this->url->getBackendUrl(
-                'captcha/backend/google/projects',
+                'weline_captcha/backend/google/projects',
                 ['scope' => (string)($result['scope'] ?? '')],
             ));
         }
