@@ -1,0 +1,281 @@
+<?php
+/**
+ * @meta.title {default="顾客社媒登录",description="Google / Facebook / Instagram 等 SocialLoginProvider 的 OAuth 凭据与激活"}
+ * @meta.description {default="提供商由 extends SocialLoginProvider 注册。Google 支持上传 client_secret_*.json 解析写入凭据；也可逐项填写 Client ID/Secret。先配凭据再开启「激活前台入口」。"}
+ * @config.area {frontend}
+ * @config.sort {45}
+ * @config.acl {Weline_Customer::customer}
+ */
+?>
+
+<w:config:group code="customer_social_login_outbound" label="出站代理（可选）" description="服务器无法直连 Google/Meta 时，为 token / userinfo 请求配置 HTTP 或 SOCKS5 代理。浏览器跳转授权不受此影响。" sort="5">
+    <w:config:hint type="info" code="customer.social_login.outbound.guide">
+【出站代理】
+- 店面授权页由用户浏览器访问 Google/Meta，通常可走本机/系统代理。
+- 回调后由**服务器**向 oauth2.googleapis.com 等交换授权码；若机房/本机直连超时，会出现「回站后未登录、也无绑定选择」。
+- 填写例如 `http://127.0.0.1:7892` 或 `socks5://127.0.0.1:7890`。留空则直连；也可依赖进程环境变量 HTTPS_PROXY / HTTP_PROXY。
+    </w:config:hint>
+    <w:config:field
+        key="customer/social_login/http_proxy"
+        label="OAuth 出站代理"
+        description="示例：http://127.0.0.1:7892。留空=直连。仅用于服务端 token/userinfo，不改变 redirect_uri。"
+        type="text"
+        value-type="string"
+        default=""
+        scope="global,website"
+        validation="max:255" />
+    <w:config:field
+        key="customer/social_login/http_proxy_type"
+        label="代理类型"
+        description="http（默认，含 HTTPS CONNECT）或 socks5。"
+        type="select"
+        value-type="string"
+        default="http"
+        scope="global,website"
+        options="http:HTTP,socks5:SOCKS5" />
+</w:config:group>
+
+<w:config:group code="customer_social_login_google" label="Google 登录" description="内置 SocialLoginProvider（GoogleProvider）。推荐上传 Google 下载的 client_secret_*.json 一键解析；也可逐项填写。" sort="10">
+    <w:config:hint type="info" code="customer.social_login.google.guide">
+【Google 登录 · 两种配置方式】
+
+方式 A（推荐 · 上传 JSON 解析）
+1. 打开下方「打开 Google Cloud 凭据」，创建「Web 应用」OAuth 客户端。
+2. 把下方「JavaScript 来源」「授权重定向 URI」原样登记到 Google。
+3. 创建完成后下载 `client_secret_….apps.googleusercontent.com.json`。
+4. 在本页「上传 Google OAuth JSON」选择该文件，选择后会立即解析填入 Client ID / Secret。
+5. 填写下方敏感配置密码后点「保存配置」（JSON 文件内容不落库）。再开启「激活前台入口」并保存。
+
+方式 B（逐项填写）
+1. 同样先登记 Origin / Redirect URI。
+2. 在 Google 控制台复制 Client ID、Client Secret，分别填入下方两个字段（取消「继承」）。
+3. 开启「激活前台入口」并保存。
+    </w:config:hint>
+
+    <w:config:adapter
+        code="customer.social_login.google.console"
+        label="打开 Google Cloud 凭据"
+        description="跳转 Google Cloud Console → API 和服务 → 凭据，创建 Web 应用 OAuth 客户端。"
+        external-url="https://console.cloud.google.com/apis/credentials"
+        target="_blank"
+        action-label="打开控制台" />
+
+    <w:config:adapter
+        code="customer.social_login.google.origin"
+        label="JavaScript 来源"
+        description="填到 Google「已获授权的 JavaScript 来源」：仅 origin，禁止带 /path。"
+        callback-path="customer/account/login"
+        callback-as-origin="true"
+        callback-append-scope="false"
+        callback-label="登记到 Google「已获授权的 JavaScript 来源」" />
+
+    <w:config:adapter
+        code="customer.social_login.google.callback"
+        label="授权重定向 URI"
+        description="填到 Google「已获授权的重定向 URI」：须与店面 OAuth redirect_uri 完全一致。"
+        callback-path="customer/account/social-login/callback"
+        callback-append-scope="false"
+        callback-label="登记到 Google「已获授权的重定向 URI」" />
+
+    <w:config:field
+        key="customer/social_login/google/oauth_client_json"
+        label="上传 Google OAuth JSON"
+        description="选择 Google 下载的 client_secret_*.apps.googleusercontent.com.json；选择后立即解析填入 Client ID/Secret，文件内容不落库，仍需保存。"
+        type="import_file"
+        value-type="string"
+        default=""
+        scope="global,website"
+        accept=".json,application/json"
+        validation="max:0" />
+
+    <w:config:field key="customer/social_login/google/client_id" label="OAuth Client ID" type="text" value-type="string" default="" scope="global,website" validation="max:255" />
+    <w:config:field key="customer/social_login/google/client_secret" label="OAuth Client Secret" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512" />
+    <w:config:field
+        key="customer/social_login/google/enabled"
+        label="激活前台入口"
+        description="须先填写 Client ID 与 Secret（或 JSON 上传解析成功）。未配置凭据时开启无效，登录页不会展示 Google。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website" />
+    <w:config:field
+        key="customer/social_login/google/quick_prompt"
+        label="未登录 One Tap（需点击确认）"
+        description="未登录时在全站弹出 Google One Tap 账户芯片，须用户点击确认后才登录（关闭静默 auto_select）。登录页 Logo 仍可点选授权。已登录本站时不会弹出。须在 Google 控制台登记 Authorized JavaScript origins（含端口）。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website" />
+</w:config:group>
+
+<w:config:group code="customer_social_login_facebook" label="Facebook 登录" description="内置 SocialLoginProvider（FacebookProvider）。Meta：选「其他/消费者」或「无用例」→ 添加 Facebook Login → 保存 Valid OAuth Redirect URI + 开启 JS SDK/允许域名 → 填凭据 → 激活。" sort="20">
+    <w:config:hint type="info" code="customer.social_login.facebook.guide">
+【Facebook 登录 · 配置指南】
+1. 打开下方「打开 Meta 开发者后台」→「创建应用」（或选用已有应用）。
+2. 「用例」步骤：精选/全部列表里通常看不到「Facebook 登录」——正常。推荐底部「其他」→「消费者 (Consumer)」；或「创建一个没有用例的应用」。不要勾广告类用例。
+3. 仪表盘 →「添加产品」→「Facebook Login」（不要选 Facebook Login for Business）。
+4. 打开 Facebook Login → 设置（Client OAuth Settings），按下方两项「可复制地址」登记并点「保存更改」：
+   - 把「OAuth 回调 URL」原样粘贴进「有效 OAuth 跳转 URI / Valid OAuth Redirect URIs」（可多行）。注意：下方「跳转 URI 验证器」只是测试框，不会自动写入列表；列表为空时验证器永远报「无效」。严格模式开启时须完全一致（含 `:9555` 端口与路径）。
+   - 将「使用 JavaScript SDK 登录」设为「是」；把「JS SDK 允许域名」粘贴进「Allowed Domains for the JavaScript SDK」（本站 Facebook One Tap / FB.init FedCM 需要）。若 Meta 保存时丢掉端口，可先填无端口的 `https://主机名`，Logo 跳转授权仍依赖上面的完整回调 URI。开启「未登录 Facebook One Tap」后，回访用户走浏览器原生 FedCM 芯片（Chrome 131+）；首次授权仍点 Logo。
+5. 「应用设置 → 基本」按下方「应用基本信息」可复制地址填写（Provider 指南/政策页）：
+   - 应用域名 ←「应用域名」
+   - 隐私政策网址 ←「隐私政策网址」
+   - 服务条款网址 ←「服务条款网址」
+   - 用户数据删除 → 选「数据删除说明网址」←「用户数据删除说明网址」
+6. 【本站请求的权限（必须）】OAuth scope 固定为 `email,public_profile`（与 FacebookProvider 一致），授权弹窗会显示：
+   - `public_profile` →「姓名和头像」
+   - `email` →「邮箱」
+   在 Meta「应用审核 / 权限与功能」确认这两项。开发模式仅应用角色与测试用户可测；对普通顾客上线前须将应用切 Live，并对上述权限申请 Advanced Access / 完成「登录审核」（提交登录审核）。若授权页顶部出现「提交登录审核」红条，表示尚未通过审核——测试者可继续点继续，公开上线前必须提交。
+7. 「应用设置 → 基本」复制 App ID / App Secret，填入下方字段；开启「激活前台入口」后保存。
+    </w:config:hint>
+
+    <w:config:adapter
+        code="customer.social_login.facebook.console"
+        label="打开 Meta 开发者后台"
+        description="创建应用时若用例列表无「登录」，请选底部「其他」(Consumer) 或「没有用例」；创建后添加 Facebook Login，并在设置里保存回调 URI + JS SDK 域名。"
+        external-url="https://developers.facebook.com/apps/"
+        target="_blank"
+        action-label="打开控制台" />
+
+    <w:config:adapter
+        code="customer.social_login.facebook.callback"
+        label="OAuth 回调 URL"
+        description="粘贴到「有效 OAuth 跳转 URI」。校验器只测不写；须与店面 redirect_uri 完全一致（含端口）。"
+        callback-path="customer/account/social-login/callback"
+        callback-append-scope="false"
+        callback-label="登记到 Valid OAuth Redirect URIs 并保存" />
+
+    <w:config:adapter
+        code="customer.social_login.facebook.js_sdk_domain"
+        label="JS SDK 允许域名"
+        description="开启「使用 JavaScript SDK 登录」后，粘贴到 Allowed Domains for the JavaScript SDK（仅 origin，无路径）。"
+        callback-path="customer/account/login"
+        callback-as-origin="true"
+        callback-append-scope="false"
+        callback-label="登记到 Allowed Domains for the JavaScript SDK" />
+
+    <w:config:adapter
+        code="customer.social_login.facebook.app_domain"
+        label="应用域名"
+        description="粘贴到 Meta「应用设置 → 基本 → 应用域名」。仅主机名（无 https://、无端口、无路径）；与 SocialLoginProvider 前台 Origin 同源。"
+        callback-path="customer/account/login"
+        callback-as-host="true"
+        callback-append-scope="false"
+        callback-label="登记到应用域名" />
+
+    <w:config:adapter
+        code="customer.social_login.facebook.privacy_policy"
+        label="隐私政策网址"
+        description="粘贴到 Meta「应用设置 → 基本 → 隐私政策网址」。对应 Provider `getStorefrontPrivacyPolicyPath()`（本站 Facebook 登录政策页）。"
+        callback-path="guide/social-login/facebook/policy"
+        callback-append-scope="false"
+        callback-label="登记到隐私政策网址" />
+
+    <w:config:adapter
+        code="customer.social_login.facebook.terms"
+        label="服务条款网址"
+        description="粘贴到 Meta「应用设置 → 基本 → 服务条款网址」。对应 Provider `getStorefrontTermsPath()`（本站服务条款）。"
+        callback-path="terms"
+        callback-append-scope="false"
+        callback-label="登记到服务条款网址" />
+
+    <w:config:adapter
+        code="customer.social_login.facebook.data_deletion"
+        label="用户数据删除说明网址"
+        description="粘贴到 Meta「应用设置 → 基本 → 用户数据删除 → 数据删除说明网址」。对应 Provider `getStorefrontDataDeletionPath()`（登录政策页「用户数据删除」段）。"
+        callback-path="guide/social-login/facebook/policy#data-deletion"
+        callback-append-scope="false"
+        callback-label="登记到数据删除说明网址" />
+
+    <w:config:field key="customer/social_login/facebook/client_id" label="App ID" type="text" value-type="string" default="" scope="global,website" validation="max:255" />
+    <w:config:field key="customer/social_login/facebook/client_secret" label="App Secret" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512" />
+    <w:config:field
+        key="customer/social_login/facebook/enabled"
+        label="激活前台入口"
+        description="须先填写 App ID 与 App Secret。未配置凭据时开启无效，登录页不会展示 Facebook。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website" />
+    <w:config:field
+        key="customer/social_login/facebook/quick_prompt"
+        label="未登录 Facebook One Tap（FedCM，需点击）"
+        description="未登录且 Google One Tap 未完成/未展示时，启用 Meta FedCM 芯片（FB.init fedCM.autoPrompt；须用户点击，不做静默会话自动完成）。依赖已开启「使用 JavaScript SDK 登录」并登记 Allowed Domains。首次用户或 Safari 等请点 Logo。已登录本站时不触发。"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website" />
+</w:config:group>
+
+<w:config:group code="customer_social_login_instagram" label="Instagram 登录" description="内置 SocialLoginProvider（InstagramProvider）。Meta：添加 Instagram → API setup with Instagram login → 登记回调 → 填 Instagram App ID/Secret → 激活。仅专业号（Business/Creator）。" sort="30">
+    <w:config:hint type="info" code="customer.social_login.instagram.guide">
+【Instagram 登录 · 配置指南】
+1. Meta「Instagram Basic Display」已于 2024-12-04 下线，后台不要再找该产品。请使用当前产品：**Instagram API with Instagram Login**（Business Login for Instagram）。
+2. 打开下方「打开 Meta 开发者后台」→ 创建或选用应用（推荐 Business 类型）→「添加产品」→ **Instagram** → 进入「API setup with Instagram login / 使用 Instagram 登录配置 API」。
+3. 在 Business login settings 把下方「OAuth 回调 URL」原样登记为 Valid OAuth Redirect URI（须与店面 redirect_uri 完全一致，含端口）。
+4. 同页复制 **Instagram App ID** 与 **Instagram App Secret**（不要用 Facebook App ID/Secret）填入下方字段。
+5. 「应用设置 → 基本」按下方可复制项填写应用域名 / 隐私政策 / 服务条款 / 用户数据删除说明（可与 Facebook 共用同一 Meta 应用）。
+6. 【本站请求的权限】OAuth scope 固定为 `instagram_business_basic`（读取 Instagram 专业账户基本资料）。开发模式仅测试角色可测；对普通顾客上线前须应用 Live，并完成权限审核（如需 Advanced Access）。
+7. **仅 Instagram 专业账户（Business / Creator）可授权登录**；个人号不再被 Meta 支持。开启「激活前台入口」后保存。
+    </w:config:hint>
+
+    <w:config:adapter
+        code="customer.social_login.instagram.console"
+        label="打开 Meta 开发者后台"
+        description="添加 Instagram 产品后，使用「API setup with Instagram login」，不要再找已下线的 Basic Display。"
+        external-url="https://developers.facebook.com/apps/"
+        target="_blank"
+        action-label="打开控制台" />
+
+    <w:config:adapter
+        code="customer.social_login.instagram.callback"
+        label="OAuth 回调 URL"
+        description="须与店面 OAuth redirect_uri 完全一致。"
+        callback-path="customer/account/social-login/callback"
+        callback-append-scope="false"
+        callback-label="登记到 Instagram 应用的 OAuth Redirect URI" />
+
+    <w:config:adapter
+        code="customer.social_login.instagram.app_domain"
+        label="应用域名"
+        description="Meta「应用设置 → 基本 → 应用域名」；仅主机名。"
+        callback-path="customer/account/login"
+        callback-as-host="true"
+        callback-append-scope="false"
+        callback-label="登记到应用域名" />
+
+    <w:config:adapter
+        code="customer.social_login.instagram.privacy_policy"
+        label="隐私政策网址"
+        description="对应 Provider Instagram 登录政策页。"
+        callback-path="guide/social-login/instagram/policy"
+        callback-append-scope="false"
+        callback-label="登记到隐私政策网址" />
+
+    <w:config:adapter
+        code="customer.social_login.instagram.terms"
+        label="服务条款网址"
+        description="对应本站服务条款页。"
+        callback-path="terms"
+        callback-append-scope="false"
+        callback-label="登记到服务条款网址" />
+
+    <w:config:adapter
+        code="customer.social_login.instagram.data_deletion"
+        label="用户数据删除说明网址"
+        description="对应 Instagram 登录政策页「用户数据删除」段。"
+        callback-path="guide/social-login/instagram/policy#data-deletion"
+        callback-append-scope="false"
+        callback-label="登记到数据删除说明网址" />
+
+    <w:config:field key="customer/social_login/instagram/client_id" label="Instagram App ID" type="text" value-type="string" default="" scope="global,website" validation="max:255" />
+    <w:config:field key="customer/social_login/instagram/client_secret" label="Instagram App Secret" type="password" value-type="string" default="" scope="global,website" sensitive="1" validation="max:512" />
+    <w:config:field
+        key="customer/social_login/instagram/enabled"
+        label="激活前台入口"
+        description="须先填写 Instagram App ID 与 Secret。未配置凭据时开启无效，登录页不会展示 Instagram。仅专业号（Business/Creator）可完成授权。"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website" />
+</w:config:group>

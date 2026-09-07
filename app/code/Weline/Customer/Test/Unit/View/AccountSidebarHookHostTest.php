@@ -27,25 +27,49 @@ final class AccountSidebarHookHostTest extends TestCase
         $this->assertStringContainsString('data-account-section="security"', $content);
         $this->assertStringContainsString('data-account-section="login-info"', $content);
         $this->assertStringContainsString('data-weline-load="api,account,customerAccount"', $content);
-        $this->assertStringContainsString('20260701-sidebar-content-loop-guard-1', $content);
+        $this->assertStringContainsString('20260906-profile-header-sync-1', $content);
+        $this->assertStringContainsString('data-account-pending-section', $content);
+        $this->assertStringContainsString('sectionLoading', $content);
+        $this->assertStringContainsString('hideBuiltinSections', $content);
+        $this->assertStringContainsString('__welineAccountIndexInitialized', $content);
+        $this->assertStringNotContainsString('function syncFromHash()', $content);
 
         $this->assertStringContainsString('function parseAccountHash()', $script);
         $this->assertStringContainsString('function hasNavSection(section)', $script);
         $this->assertStringContainsString('function syncFromHash()', $script);
         $this->assertStringContainsString("targetId = 'profile';", $script);
+        $this->assertStringContainsString('function ensureSectionLoadingPlaceholder(sectionName)', $script);
+        $this->assertStringContainsString('function revealAccountSection(sectionName)', $script);
+        $this->assertStringContainsString('function markSectionLoadFailed(sectionName, message)', $script);
+        $this->assertStringContainsString('data-account-section-loading', $script);
+        $this->assertStringContainsString('function clearPendingSectionFlag(sectionName)', $script);
+        // FB OAuth often lands on #social-login; switching to profile must clear pending
+        // or CSS keeps display:none on the profile form (blank main pane).
+        $this->assertStringContainsString(
+            "document.documentElement.removeAttribute('data-account-pending-section');",
+            $script
+        );
+        $this->assertStringNotContainsString('if (!sectionName || pending === sectionName)', $script);
         $this->assertStringContainsString("activeParent = nav.getAttribute('data-account-nav-parent') || '';", $script);
         $this->assertStringContainsString("var isActiveParent = activeParent && nav.getAttribute('data-section') === activeParent;", $script);
         $this->assertStringContainsString("nav.classList.remove('account-sidebar__nav-link--active');", $script);
         $this->assertStringContainsString('function buildSidebarContentUrl(sectionName)', $script);
         $this->assertStringContainsString("'section=' + encodeURIComponent(sectionName)", $script);
-        $this->assertStringContainsString('loadSidebarContent(targetId)', $script);
+        $this->assertStringContainsString('loadSidebarContent(targetId, loadingState === \'failed\' ? { force: true } : {})', $script);
         $this->assertStringContainsString('function sanitizeSidebarHtml(html)', $script);
         $this->assertStringContainsString('function loadTrustedSidebarStyles(html)', $script);
         $this->assertStringContainsString('loadTrustedSidebarStyles(payload.html)', $script);
-        $this->assertStringContainsString("insertAdjacentHTML('beforeend', sanitizeSidebarHtml(payload.html))", $script);
+        $this->assertStringContainsString("existing.insertAdjacentHTML('afterend', safeHtml)", $script);
+        $this->assertStringContainsString("sidebarContentMount.insertAdjacentHTML('beforeend', safeHtml)", $script);
         $this->assertStringContainsString('function loadDeclaredSidebarModules(root)', $script);
         $this->assertStringContainsString('loadDeclaredSidebarModules(sidebarContentMount)', $script);
         $this->assertStringContainsString('function reloadSidebarSection(sectionName)', $script);
+        $this->assertStringContainsString('loadSidebarContent(sectionName, { force: true })', $script);
+        $this->assertStringContainsString('function openOrdersSectionViaBinQuery(orderUuid)', $script);
+        $this->assertStringContainsString('function bindAccountOrdersSoftNavigation(root)', $script);
+        $this->assertStringContainsString('[data-order-detail-link="true"]', $script);
+        $this->assertStringContainsString('[data-account-orders-back="true"]', $script);
+        $this->assertStringContainsString("api.resource('account').getSidebarSection(sidebarPayload)", $script);
         $this->assertStringContainsString("weline:account-sidebar-section-reload", $script);
         $this->assertStringNotContainsString('executeInsertedScripts', $script);
     }
@@ -114,7 +138,7 @@ final class AccountSidebarHookHostTest extends TestCase
         $css = (string) file_get_contents($cssFile);
         $template = (string) file_get_contents($templateFile);
 
-        $this->assertStringContainsString('20260701-sidebar-content-loop-guard-1', $template);
+        $this->assertStringContainsString('20260906-profile-header-sync-1', $template);
         $this->assertStringContainsString('.account-index__user-info', $css);
         $this->assertStringContainsString('max-width: 100%;', $css);
         $this->assertStringContainsString('.account-index__username', $css);

@@ -19,6 +19,7 @@ final class ViewWarmupContributionProvider implements ViewWarmupContributionProv
             staticFiles: [
                 'app/code/Weline/Customer/view/statics/css/account-index.css',
                 'app/code/Weline/Customer/view/statics/css/account-sidebar.css',
+                'app/code/Weline/Customer/view/statics/css/account-social-bindings.css',
                 'app/code/Weline/Customer/view/statics/js/account-index.js',
             ],
         );

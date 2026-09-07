@@ -15,7 +15,7 @@ class AuthRedirectTerminateRethrowContractTest extends TestCase
     public function testForgotPasswordRethrowsResponseTerminateException(): void
     {
         $src = (string)file_get_contents(
-            BP . '/app/code/Weline/Customer/Controller/Account/ForgotPassword.php'
+            \dirname(__DIR__, 4) . '/Controller/Account/ForgotPassword.php'
         );
 
         self::assertStringContainsString(
@@ -33,7 +33,7 @@ class AuthRedirectTerminateRethrowContractTest extends TestCase
     public function testRegisterRethrowsResponseTerminateException(): void
     {
         $src = (string)file_get_contents(
-            BP . '/app/code/Weline/Customer/Controller/Account/Register.php'
+            \dirname(__DIR__, 4) . '/Controller/Account/Register.php'
         );
 
         self::assertStringContainsString(
@@ -46,5 +46,30 @@ class AuthRedirectTerminateRethrowContractTest extends TestCase
             strpos($src, 'MessageManager::success(__(\'注册成功，欢迎加入。\'))'),
             strpos($src, 'catch (ResponseTerminateException $terminate)')
         );
+    }
+
+    public function testSocialLoginRethrowsResponseTerminateException(): void
+    {
+        $src = (string)file_get_contents(
+            \dirname(__DIR__, 4) . '/Controller/Account/SocialLogin.php'
+        );
+
+        self::assertStringContainsString(
+            'use Weline\\Framework\\Http\\ResponseTerminateException;',
+            $src
+        );
+        self::assertGreaterThanOrEqual(2, substr_count($src, 'catch (ResponseTerminateException $terminate)'));
+        self::assertStringContainsString('throw $terminate;', $src);
+        self::assertStringContainsString('use Weline\\Framework\\Http\\RedirectException;', $src);
+        self::assertStringContainsString(
+            "throw new RedirectException((string) \$started['authorization_url'], 302);",
+            $src
+        );
+        self::assertStringContainsString('getChoose', $src);
+        self::assertStringContainsString('postBindExisting', $src);
+        self::assertStringContainsString('postCreateNew', $src);
+        self::assertStringContainsString('postUnbind', $src);
+        self::assertStringContainsString('INTENT_BIND', $src);
+        self::assertStringContainsString('storePending', $src);
     }
 }

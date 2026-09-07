@@ -1,0 +1,68 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$entry = (array) ($this->getData('social_login_guide_entry') ?? []);
+$policyRoute = (string) ($entry['policy_route'] ?? '');
+?>
+<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/sidebar.phtml'); ?>
+
+<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="social-login-guide-google" weline-code="customer.social_login.guide.google">
+    <header class="amazon-payment-guide-article__header">
+        <p class="amazon-payment-guide-article__badge">Google</p>
+        <h1 class="amazon-payment-guide-article__title"><lang>Google 登录指南</lang></h1>
+        <p class="amazon-payment-guide-article__lead"><lang>使用 Google 账户授权后，可一键登录本站顾客账户，或把 Google 绑定到已有账户，无需重复输入密码。</lang></p>
+    </header>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.google.prepare">
+        <h2><lang>开始前准备</lang></h2>
+        <ul>
+            <li><lang>准备可用的 Google 账户，并允许浏览器弹出 Google 授权窗口。</lang></li>
+            <li><lang>商户须在后台「顾客社媒登录」填写 Google OAuth Client ID/Secret，并开启「激活前台入口」；未激活时登录页不会显示 Google Logo。</lang></li>
+            <li><lang>首次授权时，若该 Google 尚未绑定本站账户，可选择「绑定已有账户」或「新建账户」。</lang></li>
+        </ul>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.google.steps">
+        <h2><lang>登录步骤</lang></h2>
+        <ol>
+            <li><lang>打开本站登录页，在「快捷登录」区域点击 Google Logo。</lang></li>
+            <li><lang>跳转到 Google 安全授权页，选择账户并确认允许本站读取基础资料（邮箱、姓名、头像等）。</lang></li>
+            <li><lang>授权成功后自动返回本站：已绑定则直接登录；未绑定则进入选择页完成绑定或新建。</lang></li>
+            <li><lang>之后可在个人中心「连接与应用」查看绑定状态，或随时解绑。</lang></li>
+        </ol>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.google.bind">
+        <h2><lang>绑定与解绑</lang></h2>
+        <ul>
+            <li><lang>已登录顾客可在个人中心发起「绑定」，完成 Google 授权后写入绑定关系。</lang></li>
+            <li><lang>解绑不会删除本站账户，仅移除 Google 一键登录能力；仍可用邮箱/密码登录。</lang></li>
+            <li><lang>同一 Google 账户通常只能绑定一个本站顾客；已被他人绑定时需先解绑或联系客服。</lang></li>
+        </ul>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.google.faq">
+        <h2><lang>常见问题</lang></h2>
+        <ul class="social-login-guide-article__faq amazon-payment-guide-article__faq">
+            <li>
+                <strong><lang>登录页看不到 Google Logo？</lang></strong>
+                <p><lang>请确认后台已填写凭据并开启「激活前台入口」；主题部件也未关闭 enable_google。</lang></p>
+            </li>
+            <li>
+                <strong><lang>授权后提示状态无效或失败？</lang></strong>
+                <p><lang>请勿重复使用过期回调链接；关闭多余标签页后从登录页重新点击 Google Logo。</lang></p>
+            </li>
+            <li>
+                <strong><lang>不想再用 Google 登录？</lang></strong>
+                <p><lang>在个人中心解绑即可；也可在 Google 账户安全设置中撤销对本站的应用授权。</lang></p>
+            </li>
+        </ul>
+    </section>
+
+    <?php if ($policyRoute !== ''): ?>
+        <footer class="amazon-payment-guide-article__footer">
+            <a href="@url{$policyRoute}"><lang>查看 Google 登录政策</lang></a>
+        </footer>
+    <?php endif; ?>
+</article>
+<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/shell-close.phtml'); ?>

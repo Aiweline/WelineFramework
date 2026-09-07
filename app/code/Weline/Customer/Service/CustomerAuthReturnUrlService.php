@@ -31,6 +31,7 @@ final class CustomerAuthReturnUrlService
         'customer/account/forgot-password',
         'customer/account/challenge',
         'customer/account/logout',
+        'customer/account/social-login',
     ];
 
     public function __construct(private readonly Request $request) {

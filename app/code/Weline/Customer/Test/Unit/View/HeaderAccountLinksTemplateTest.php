@@ -26,7 +26,10 @@ final class HeaderAccountLinksTemplateTest extends TestCase
         $this->assertStringNotContainsString("@url{'customer/account/profile'}", $content);
         $this->assertStringNotContainsString("@url{'customer/account/address'}", $content);
         $this->assertStringNotContainsString("@url{'customer/account/password'}", $content);
-        $this->assertStringContainsString("@url{'customer/account/logout'}", $content);
+        // Logout is host-owned (Theme account widget / header-account), not a hook menu item.
+        $this->assertStringNotContainsString("@url{'customer/account/logout'}", $content);
+        $this->assertStringNotContainsString('data-account-logout-confirm', $content);
+        $this->assertStringNotContainsString('退出登录', $content);
         $this->assertStringContainsString("@url{'customer/account/login'}", $content);
         $this->assertStringContainsString("@url{'customer/account/register'}", $content);
         $this->assertStringContainsString('data-account-menu-auth="signed-in"', $content);
