@@ -43,6 +43,26 @@ final class FileAssetLocaleTranslationContractTest extends TestCase
         self::assertStringContainsString('isAutoTranslationEnabled()', $cron);
         self::assertStringContainsString('enqueueAutoFill', $cron);
         self::assertStringContainsString('processPendingBatch', $queue);
+        self::assertStringContainsString('enqueueContinuation', $queue);
+        $queueService = (string)file_get_contents($root . '/Service/FileAssetLocaleTranslationQueueService.php');
+        self::assertStringContainsString('function enqueueContinuation', $queueService);
+        self::assertStringContainsString('function findActiveFamilyQueueId', $queueService);
+        self::assertStringContainsString('IdempotentQueueAdmission', $queueService);
+        self::assertStringContainsString('IDEMPOTENCY_SCOPE', $queueService);
+        self::assertStringContainsString("admission->admit", $queueService);
+        self::assertStringContainsString(':offset:%', $queueService);
+        self::assertStringContainsString("'offset' => \$offset", $queueService);
+        self::assertStringContainsString('hasGapFillWork', $service);
+        self::assertStringContainsString('assetNeedsGapFill', $service);
+        self::assertStringContainsString('next_offset', $service);
+        self::assertStringContainsString('assetNeedsGapFill($asset)', $service);
+        self::assertStringContainsString('aborted_busy', $service);
+        self::assertStringContainsString('AI_TRANSLATION_BUSY', $service);
+        self::assertStringContainsString("'continuation' => !\$abortedBusy && !\$exhausted", $service);
+        self::assertStringContainsString('next_offset', $queue);
+        self::assertStringContainsString('aborted_busy', $queue);
+        self::assertStringContainsString("empty(\$result['aborted_busy'])", $queue);
+        self::assertStringContainsString('不立刻续队', $queue);
 
         self::assertStringContainsString('FileAssetLocaleTranslationInterface', $module);
         self::assertStringContainsString('FileAssetLocaleTranslationService', $module);

@@ -126,6 +126,49 @@ final class FileAssetLibraryBoundaryTest extends TestCase
         self::assertStringContainsString('schema_fields_ASSET_REVISION', $library);
     }
 
+    public function testAssetMetadataMutationUsesTheSameGuardedDataOnlyBoundary(): void
+    {
+        $contract = new \ReflectionClass(FileAssetLibraryInterface::class);
+        self::assertTrue($contract->hasMethod('saveAssetMetadata'));
+        $method = $contract->getMethod('saveAssetMetadata');
+        self::assertSame('array', (string)$method->getReturnType());
+        $access = $method->getParameters()[4];
+        self::assertSame('access', $access->getName());
+        self::assertSame('Weline\\FileManager\\Api\\Data\\FileAccessContext', (string)$access->getType());
+        self::assertFalse($access->allowsNull());
+        self::assertFalse($access->isOptional());
+
+        $library = (string)file_get_contents(
+            dirname(__DIR__, 7) . '/app/code/Weline/FileManager/Service/FileAssetLibrary.php',
+        );
+        self::assertStringContainsString('public function saveAssetMetadata(', $library);
+        self::assertStringContainsString('$this->accessPolicy->assertCanManage($asset, $access)', $library);
+        self::assertStringContainsString(
+            '$current = $this->lockAssetForMetadataMutation($asset, $expectedRevision)',
+            $library,
+        );
+        self::assertStringContainsString('FileAsset::schema_fields_METADATA', $library);
+        self::assertStringContainsString("'asset_metadata_sha256'", $library);
+    }
+
+    public function testReferenceCountIsExposedThroughTheAuthorizedDataOnlyBoundary(): void
+    {
+        $contract = new \ReflectionClass(FileAssetLibraryInterface::class);
+        self::assertTrue($contract->hasMethod('referenceCount'));
+        $method = $contract->getMethod('referenceCount');
+        self::assertSame('int', (string)$method->getReturnType());
+        $access = $method->getParameters()[1];
+        self::assertSame('access', $access->getName());
+        self::assertSame('Weline\\FileManager\\Api\\Data\\FileAccessContext', (string)$access->getType());
+
+        $root = dirname(__DIR__, 7);
+        $library = (string)file_get_contents($root . '/app/code/Weline/FileManager/Service/FileAssetLibrary.php');
+        $indexer = (string)file_get_contents($root . '/app/code/Weline/FileManager/Service/FileAssetReferenceIndexer.php');
+        self::assertStringContainsString('public function referenceCount(', $library);
+        self::assertStringContainsString('$this->references->countForAsset(', $library);
+        self::assertStringContainsString('public function countForAsset(', $indexer);
+    }
+
     public function testDescriptorsAndUploadsRequireAnExplicitAccessContext(): void
     {
         $contract = new \ReflectionClass(FileAssetLibraryInterface::class);

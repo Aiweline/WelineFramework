@@ -71,6 +71,27 @@ interface FileAssetLibraryInterface
         array $metadata,
     ): array;
 
+    /**
+     * Replace asset-level provenance metadata behind the same identity,
+     * authorization, revision-lock, and data-only boundary as locale metadata.
+     *
+     * @param array<string,mixed> $metadata
+     * @param int $expectedRevision Revision returned by describe(); stale edits fail closed.
+     * @return array<string,mixed>
+     */
+    public function saveAssetMetadata(
+        string $assetId,
+        string $diskCode,
+        string $objectKey,
+        string $localeCode,
+        FileAccessContext $access,
+        int $expectedRevision,
+        array $metadata,
+    ): array;
+
+    /** Return the current derived-reference count after management authorization. */
+    public function referenceCount(string $assetId, FileAccessContext $access): int;
+
     public function moveObject(
         string $diskCode,
         string $from,

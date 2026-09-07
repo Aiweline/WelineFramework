@@ -161,46 +161,153 @@ class FileAssetLocaleTranslationService implements FileAssetLocaleTranslationInt
             return 0;
         }
 
+        if (!$force) {
+            $activeId = $this->queueService->findActiveFamilyQueueId();
+            if ($activeId > 0) {
+                return $activeId;
+            }
+            // No AI calls here: only metadata gap probe. Avoid hourly empty scans.
+            if (!$this->hasGapFillWork()) {
+                return 0;
+            }
+        }
+
         return $this->queueService->enqueue($requestedBy, $force);
+    }
+
+    /**
+     * True when at least one READY asset has a missing (empty) target locale row.
+     * Does not call the AI translator.
+     */
+    public function hasGapFillWork(int $pageSize = 50): bool
+    {
+        $pageSize = max(1, min(100, $pageSize));
+        $offset = 0;
+        while (true) {
+            $query = clone $this->assets;
+            $items = array_values($query->clearData()->reset()
+                ->where(FileAsset::schema_fields_LIFECYCLE_STATE, FileAsset::STATE_READY)
+                ->order(FileAsset::schema_fields_UPDATED_AT, 'ASC')
+                ->limit($pageSize, $offset)
+                ->select()
+                ->fetch()
+                ->getItems());
+            if ($items === []) {
+                return false;
+            }
+            foreach ($items as $asset) {
+                if (!$asset instanceof FileAsset || $asset->getAssetId() === '' || $asset->isDeleted()) {
+                    continue;
+                }
+                if ($this->assetNeedsGapFill($asset)) {
+                    return true;
+                }
+            }
+            if (count($items) < $pageSize) {
+                return false;
+            }
+            $offset += $pageSize;
+        }
+    }
+
+    private function assetNeedsGapFill(FileAsset $asset): bool
+    {
+        try {
+            $sourceLocale = FileAssetManager::normalizeLocale($asset->getDefaultLocale());
+        } catch (\Throwable) {
+            return false;
+        }
+        $source = $this->findLocale($asset->getAssetId(), $sourceLocale);
+        if ($source === null || !$this->localeHasContent($source)) {
+            return false;
+        }
+        foreach ($this->resolveTargetLocales($sourceLocale) as $targetLocale) {
+            $existing = $this->findLocale($asset->getAssetId(), $targetLocale);
+            if ($existing === null || !$this->localeHasContent($existing)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function processPendingBatch(int $offset = 0, int $limit = 20): array
     {
         $offset = max(0, $offset);
         $limit = max(1, min(100, $limit));
-        $query = clone $this->assets;
-        $items = array_values($query->clearData()->reset()
-            ->where(FileAsset::schema_fields_LIFECYCLE_STATE, FileAsset::STATE_READY)
-            ->order(FileAsset::schema_fields_UPDATED_AT, 'ASC')
-            ->limit($limit, $offset)
-            ->select()
-            ->fetch()
-            ->getItems());
-
+        // Walk past already-complete assets; only AI-call gap assets up to $limit.
+        // Otherwise early pages are all skipped (filled=0) while real gaps sit deeper.
+        $scanPage = max($limit, 50);
+        $maxScan = max($scanPage, min(1000, $limit * 50));
+        $cursor = $offset;
+        $scanned = 0;
         $processed = 0;
         $filled = 0;
         $skipped = 0;
         $errors = [];
-        foreach ($items as $asset) {
-            if (!$asset instanceof FileAsset || $asset->getAssetId() === '' || $asset->isDeleted()) {
-                continue;
+        $exhausted = false;
+        $abortedBusy = false;
+
+        while ($processed < $limit && $scanned < $maxScan) {
+            $query = clone $this->assets;
+            $items = array_values($query->clearData()->reset()
+                ->where(FileAsset::schema_fields_LIFECYCLE_STATE, FileAsset::STATE_READY)
+                ->order(FileAsset::schema_fields_UPDATED_AT, 'ASC')
+                ->limit($scanPage, $cursor)
+                ->select()
+                ->fetch()
+                ->getItems());
+            if ($items === []) {
+                $exhausted = true;
+                break;
             }
-            $processed++;
-            $sourceLocale = $asset->getDefaultLocale();
-            $access = new FileAccessContext(
-                ScopeIdentity::global(),
-                $sourceLocale,
-                null,
-                [],
-                'metadata_edit',
-            );
-            try {
-                $result = $this->translateMissing($asset->getAssetId(), $sourceLocale, $access, null);
-                $filled += count($result['filled']);
-                $skipped += count($result['skipped']);
-                $errors = array_merge($errors, $result['errors']);
-            } catch (\Throwable $throwable) {
-                $errors[] = $asset->getAssetId() . ': ' . $throwable->getMessage();
+            foreach ($items as $asset) {
+                $scanned++;
+                $cursor++;
+                if (!$asset instanceof FileAsset || $asset->getAssetId() === '' || $asset->isDeleted()) {
+                    continue;
+                }
+                if (!$this->assetNeedsGapFill($asset)) {
+                    continue;
+                }
+                $processed++;
+                $sourceLocale = $asset->getDefaultLocale();
+                $access = new FileAccessContext(
+                    ScopeIdentity::global(),
+                    $sourceLocale,
+                    null,
+                    [],
+                    'metadata_edit',
+                );
+                try {
+                    $result = $this->translateMissing($asset->getAssetId(), $sourceLocale, $access, null);
+                    $filled += count($result['filled']);
+                    $skipped += count($result['skipped']);
+                    $errors = array_merge($errors, $result['errors']);
+                    if ($this->errorsIndicateBusy($result['errors'])) {
+                        // Retry this asset later — do not keep hammering a saturated model.
+                        $cursor--;
+                        $processed--;
+                        $abortedBusy = true;
+                        break 2;
+                    }
+                } catch (\Throwable $throwable) {
+                    $message = $throwable->getMessage();
+                    $errors[] = $asset->getAssetId() . ': ' . $message;
+                    if (str_contains($message, 'AI_TRANSLATION_BUSY')) {
+                        $cursor--;
+                        $processed--;
+                        $abortedBusy = true;
+                        break 2;
+                    }
+                }
+                if ($processed >= $limit) {
+                    break;
+                }
+            }
+            if (count($items) < $scanPage) {
+                $exhausted = true;
+                break;
             }
         }
 
@@ -209,8 +316,28 @@ class FileAssetLocaleTranslationService implements FileAssetLocaleTranslationInt
             'filled' => $filled,
             'skipped' => $skipped,
             'errors' => array_values(array_unique($errors)),
-            'continuation' => count($items) >= $limit,
+            // next_offset is the catalog cursor after this walk (skips included).
+            'next_offset' => $cursor,
+            'aborted_busy' => $abortedBusy,
+            // Continue while catalog remains, even if this window found 0 gaps
+            // (maxScan cap) so the chain can reach deeper gap assets.
+            // Busy/error abort: stop this round — next cron continues when free.
+            'continuation' => !$abortedBusy && !$exhausted,
         ];
+    }
+
+    /**
+     * @param list<string> $errors
+     */
+    private function errorsIndicateBusy(array $errors): bool
+    {
+        foreach ($errors as $error) {
+            if (str_contains((string)$error, 'AI_TRANSLATION_BUSY')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -242,6 +369,12 @@ class FileAssetLocaleTranslationService implements FileAssetLocaleTranslationInt
             $this->eventsManager->dispatch('Weline_I18n::machine_translate', $eventData);
         } catch (\Throwable) {
             return null;
+        }
+        foreach ((array)($eventData['errors'] ?? []) as $error) {
+            if (str_contains((string)$error, 'AI_TRANSLATION_BUSY')) {
+                // Surface busy to the batch walker so it can stop instead of waiting per locale.
+                throw new \RuntimeException((string)$error);
+            }
         }
         if (empty($eventData['success']) || !is_array($eventData['translations'] ?? null)) {
             return null;
