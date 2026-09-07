@@ -8,7 +8,7 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     productReviews: {
         paths: [
-            "Weline_Review::js/widgets/product-reviews.js"
+            "Weline_Review::js/widgets/product-reviews.v20260904-pager2.js"
         ],
         globalVar: "WelineReviewProductWidget",
         description: "万能评论部件（商品/博客共用）"
