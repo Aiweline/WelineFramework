@@ -28,7 +28,7 @@ final class PayPalSandboxPublicOriginServiceTest extends TestCase
         $origin = $service->resolvePublicOrigin();
 
         self::assertNotSame('', $origin);
-        self::assertStringContainsString('weline.test', $origin);
+        self::assertStringContainsString('test.weline.com', $origin);
         self::assertStringContainsString(':9555', $origin);
     }
 
@@ -54,6 +54,6 @@ final class PayPalSandboxPublicOriginServiceTest extends TestCase
         self::assertFalse((bool) $method->invoke($service, 'http:'));
         self::assertFalse((bool) $method->invoke($service, 'https:'));
         self::assertFalse((bool) $method->invoke($service, ''));
-        self::assertTrue((bool) $method->invoke($service, 'https://p05113ef3.weline.test:9555'));
+        self::assertTrue((bool) $method->invoke($service, 'https://p05113ef3.test.weline.com:9555'));
     }
 }

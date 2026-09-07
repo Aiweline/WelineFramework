@@ -46,7 +46,7 @@ PayPal,PayPal
 "仅本地可停止静默 worker。","仅本地可停止静默 worker。"
 仅本地面板可代发探针。,仅本地面板可代发探针。
 "请先启用 DevRelay。","请先启用 DevRelay。"
-"搜索并选择支付方式后，复制线上官方回调到对应支付后台 Webhook（勿填本机 *.weline.test，勿填 /payment/dev-relay/*）","After selecting a payment method, copy the official online Webhook URL (shell notify: /payment/frontend/callback/notify?endpoint_code=…; do not use local *.weline.test or /payment/dev-relay/*)"
+"搜索并选择支付方式后，复制线上官方回调到对应支付后台 Webhook（勿填本机 *.test.weline.com，勿填 /payment/dev-relay/*）","After selecting a payment method, copy the official online Webhook URL (shell notify: /payment/frontend/callback/notify?endpoint_code=…; do not use local *.test.weline.com or /payment/dev-relay/*)"
 "Payment method, payable ID and amount are required.","Payment method, payable ID and amount are required."
 Payment,Payment
 "Payment transaction created.","Payment transaction created."
@@ -608,6 +608,7 @@ More,More
 "PayPal Developer Sandbox REST App Client ID","PayPal Developer Sandbox REST App Client ID"
 "PayPal Developer Sandbox REST App Secret","PayPal Developer Sandbox REST App Secret"
 仅检查平台沙箱凭据是否已就绪,仅检查平台沙箱凭据是否已就绪
+"共 %{1} 个支付供应商","%{1} payment provider(s)"
 "缺少 method_code 或 shell_token","缺少 method_code 或 shell_token"
 "【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回 shell_token / method_code / 网关参数；直接打开不会完成支付。生产环境空参访问会跳转首页。","【开发环境提示】此地址是支付模块统一浏览器回跳入口，已就绪。正常支付或 OAuth 授权会自动带回 shell_token / method_code / 网关参数；直接打开不会完成支付。生产环境空参访问会跳转首页。"
 "PayPal 一键授权","PayPal 一键授权"
@@ -651,7 +652,7 @@ login,login
 "本机静默 SSE 中继状态（后台运行时可在此监控）","本机静默 SSE 中继状态（后台运行时可在此监控）"
 "本机填写线上站点完整地址与用户 Token 后后台挂接 SSE；事件按官方 inbound 重放。子路径站点请使用完整站点地址，不要只填裸域名。","本机填写线上站点完整地址与用户 Token 后后台挂接 SSE；事件按官方 inbound 重放。子路径站点请使用完整站点地址，不要只填裸域名。"
 "无法启动 DevRelay worker 进程。","无法启动 DevRelay worker 进程。"
-"线上 staging 固定接收 Provider Webhook；本地浏览器通过 SSE 拉取事件并重放到本机 inbound。线上服务器不会直接访问 *.weline.test。","Staging receives Provider webhooks; the local browser pulls events via SSE and replays them to local inbound. The online server never calls *.weline.test directly."
+"线上 staging 固定接收 Provider Webhook；本地浏览器通过 SSE 拉取事件并重放到本机 inbound。线上服务器不会直接访问 *.test.weline.com。","Staging receives Provider webhooks; the local browser pulls events via SSE and replays them to local inbound. The online server never calls *.test.weline.com directly."
 "粘贴本地后台复制的 inbound 地址。","Paste the inbound URL copied from the local backend."
 "SSE 控制台","SSE console"
 "本地 Relay 客户端","Local relay client"
@@ -667,7 +668,6 @@ login,login
 支付政策,"Payment policy"
 支付指南,"Payment guide"
 "平台 PayPal 沙箱应用尚未就绪。请联系运维配置 WELINE_PAYPAL_SANDBOX_CLIENT_ID / WELINE_PAYPAL_SANDBOX_CLIENT_SECRET 或 app/etc/env.php 的 payment.paypal.platform.sandbox；商户无需手动创建 PayPal App。","Platform PayPal sandbox app is not ready. Ask ops to configure WELINE_PAYPAL_SANDBOX_* or payment.paypal.platform.sandbox in app/etc/env.php. Merchants do not need to create a PayPal App manually."
-"共 %{1} 个支付供应商","%{1} payment provider(s)"
 支付指南导航,"Payment guide navigation"
 支付政策导航,"Payment policy navigation"
 支付供应商导航,"Payment provider navigation"
