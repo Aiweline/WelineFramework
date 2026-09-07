@@ -78,6 +78,22 @@ final class CheckoutOrderPaymentService
                 continue;
             }
             $amountMinor = (int)($order->money['grand_total_minor'] ?? 0);
+            $hangPurpose = strtolower(trim((string)($context['hang_purpose'] ?? $context['purpose'] ?? '')));
+            $typePayload = $order->typePayload;
+            if (isset($context['deposit_amount_minor']) && (int)$context['deposit_amount_minor'] > 0
+                && ($hangPurpose === 'deposit' || $hangPurpose === '')
+            ) {
+                $amountMinor = (int)$context['deposit_amount_minor'];
+                $hangPurpose = 'deposit';
+            } elseif (isset($context['balance_amount_minor']) && (int)$context['balance_amount_minor'] > 0
+                && $hangPurpose === 'balance'
+            ) {
+                $amountMinor = (int)$context['balance_amount_minor'];
+            } elseif ($hangPurpose === 'deposit' && isset($typePayload['deposit_amount_minor'])) {
+                $amountMinor = (int)$typePayload['deposit_amount_minor'];
+            } elseif ($hangPurpose === 'balance' && isset($typePayload['balance_amount_minor'])) {
+                $amountMinor = (int)$typePayload['balance_amount_minor'];
+            }
             if ($amountMinor <= 0) {
                 throw new \RuntimeException('checkout_payment_amount_invalid');
             }
@@ -104,8 +120,12 @@ final class CheckoutOrderPaymentService
                 'metadata' => [
                     'checkout_group_uuid' => $order->checkoutGroupUuid,
                     'display_number' => $order->displayNumber,
+                    'purpose' => $hangPurpose !== '' ? $hangPurpose : 'full',
+                    'hang_purpose' => $hangPurpose !== '' ? $hangPurpose : 'full',
+                    'order_type' => $order->orderType,
                 ],
-                'idempotency_key' => $idempotencyKey . ':' . $order->orderUuid,
+                'idempotency_key' => $idempotencyKey . ':' . $order->orderUuid
+                    . ($hangPurpose !== '' ? ':' . $hangPurpose : ''),
             ];
             foreach (['country_code', 'language_code', 'locale', 'timezone', 'scope', 'environment'] as $key) {
                 if (array_key_exists($key, $context) && !is_array($context[$key])) {
