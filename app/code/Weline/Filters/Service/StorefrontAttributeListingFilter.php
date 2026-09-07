@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Filters\Service;
 
+use Weline\Framework\Http\Url;
+use Weline\Framework\Manager\ObjectManager;
+
 /**
  * Applies storefront attribute facet query params (af_<code>=value) to offer rows.
  *
@@ -191,21 +194,66 @@ final class StorefrontAttributeListingFilter
     }
 
     /**
+     * Build a storefront listing href that keeps currency/language path prefixes.
+     *
      * @param array<string, string> $selected
      * @param array<string, scalar|array|null> $extra
      */
     public function buildListingUrl(string $basePath, array $selected, array $extra = []): string
     {
-        $params = $extra;
+        $params = [];
+        foreach ($extra as $key => $value) {
+            if ($value === null || is_array($value)) {
+                continue;
+            }
+            $text = trim((string)$value);
+            if ($text === '') {
+                continue;
+            }
+            $params[(string)$key] = $text;
+        }
         foreach ($selected as $code => $value) {
             $params[self::QUERY_PREFIX . $code] = $value;
         }
-        $basePath = '/' . ltrim(trim($basePath), '/');
-        if ($params === []) {
-            return $basePath;
+
+        $route = ltrim(trim($basePath), '/');
+        // Drop any existing currency/lang segments so Url::getFrontendUrl can
+        // re-attach the current request locale without doubling prefixes.
+        $segments = $route === '' ? [] : explode('/', $route);
+        while ($segments !== []) {
+            $first = (string)$segments[0];
+            if (\Weline\Framework\App\State::isAllowedCurrencyCode($first)
+                || \Weline\Framework\App\State::isAllowedLanguageCode($first)
+            ) {
+                array_shift($segments);
+                continue;
+            }
+            break;
+        }
+        $route = implode('/', $segments);
+        if ($route === '') {
+            $route = 'categories';
         }
 
-        return $basePath . '?' . http_build_query($params);
+        try {
+            /** @var Url $url */
+            $url = ObjectManager::getInstance(Url::class);
+            $built = (string)$url->getFrontendUrl($route, $params);
+            $path = parse_url($built, PHP_URL_PATH);
+            $query = parse_url($built, PHP_URL_QUERY);
+            if (is_string($path) && $path !== '') {
+                return is_string($query) && $query !== '' ? $path . '?' . $query : $path;
+            }
+        } catch (\Throwable) {
+            // Fall back to a bare path when Url is unavailable (CLI/unit without request).
+        }
+
+        $fallback = '/' . $route;
+        if ($params === []) {
+            return $fallback;
+        }
+
+        return $fallback . '?' . http_build_query($params);
     }
 
     private function normalizeComparable(string $value): string
