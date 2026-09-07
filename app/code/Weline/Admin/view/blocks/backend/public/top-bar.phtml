@@ -38,6 +38,19 @@ $storefrontUrl = trim((string)($this->getData('storefront_url') ?? ''));
         </a>
     </div>
 
+    <div class="w-backend-topbar__center">
+        <w:search
+            area="backend"
+            placeholder="搜索配置…"
+            show-hot-words="false"
+            navigate-hits="true"
+            auto-complete="true"
+            class="w-backend-topbar-search"
+            id="w-backend-universal-search"
+        />
+        <script src="@static(Weline_Theme::js/widgets/header-search.js)" defer></script>
+    </div>
+
     <div class="w-backend-topbar__actions">
         <?php if ($storefrontUrl !== ''): ?>
             <a
