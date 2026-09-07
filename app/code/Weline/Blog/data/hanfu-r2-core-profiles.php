@@ -10,7 +10,7 @@ declare(strict_types=1);
  *
  * @return array<string,array<string,string>>
  */
-return json_decode(<<<'JSON'
+$profiles = json_decode(<<<'JSON'
 {
   "tiktok-shop-hanfu-guide": {
     "subject_zh": "TikTok Shop 汉服渠道",
@@ -94,7 +94,7 @@ return json_decode(<<<'JSON'
     "risk_zh": "只给正面造型照、混用 cosplay 与汉服标签、缺少成衣尺寸，会让分类和合身度都无法验证。",
     "risk_en": "Front-only styling photos, mixed cosplay/Hanfu labels and missing finished measurements make both classification and fit unverifiable.",
     "practice_zh": "为每个候选款写下“形制、纤维、成衣尺寸、售后”四项证据，任何一项为空都先询问再付款。",
-    "practice_en": "Record four evidence fields—form, fiber, finished measurements and after-sales terms—for every candidate, and ask before paying when any field is blank."
+    "practice_en": "For every candidate, compare form, fiber, finished measurements and after-sales terms, and ask before paying whenever one of them is missing."
   },
   "hanfu-story-review": {
     "subject_zh": "Hanfu Story 渠道",
@@ -471,14 +471,14 @@ return json_decode(<<<'JSON'
   "hanfu-styling-complete-guide": {
     "subject_zh": "汉服完整穿搭路径",
     "subject_en": "a complete Hanfu styling path",
-    "definition_zh": "专业穿搭从形制身份、身体比例和场合动作出发，颜色、发型与配饰在结构确定后进入。",
-    "definition_en": "Professional styling begins with garment form, body proportion and occasion movement; color, hair and accessories follow after structure is settled.",
-    "evidence_zh": "依次确认领型与襟向、上衣下装关系、腰线、裙长、袖口活动量、鞋履和配饰固定点。",
-    "evidence_en": "Confirm neckline and lapel direction, upper/lower relationship, waistline, hem length, sleeve mobility, footwear and accessory anchors in order.",
-    "risk_zh": "先按短视频妆造抄整套，会出现圆领配交领内搭、马面裙门偏位、配饰遮住结构等图文错配。",
-    "risk_en": "Copying a short-video look first can pair yuanling with an incompatible inner collar, misalign mamian panels or hide key construction under accessories.",
-    "practice_zh": "完成基础层试穿后拍正、侧、背三面，再用一件主饰修正视觉重心；最后做坐走抬手测试。",
-    "practice_en": "After fitting the base layers, photograph front, side and back, use one focal accessory to adjust visual balance, then test sitting, walking and arm movement."
+    "definition_zh": "一套汉服穿得舒服、看着利落，关键在领口贴服、腰线稳定、裙长合适，配饰反而可以最后再选。",
+    "definition_en": "Comfortable Hanfu starts with a collar that sits well, a secure waist and a hem that works with your shoes.",
+    "evidence_zh": "马面裙最值得先整理的，是前后平整裙门与两侧褶裥的关系。",
+    "evidence_en": "For a mamian skirt, pay attention to the relationship between the flat front and back panels and the pleated areas at the sides.",
+    "risk_zh": "轻薄不一定凉快，层数、里料和织物密度都会影响体感。",
+    "risk_en": "A lightweight-looking garment is not necessarily cool: lining, weave density and the number of layers also matter.",
+    "practice_zh": "最后拍正面、侧面和背面三张自然站立照，检查领口是否偏斜、腰带是否卷起、前后下摆是否意外高低不一。",
+    "practice_en": "Finish with front, side and back photographs in a natural stance."
   },
   "hanfu-menswear-guide": {
     "subject_zh": "汉服男装入门",
@@ -590,3 +590,570 @@ return json_decode(<<<'JSON'
   }
 }
 JSON, true, 512, JSON_THROW_ON_ERROR);
+
+/** Assign an editorial responsibility before rendering; these are not marketing labels. */
+foreach ($profiles as $slug => &$profile) {
+    $role = match (true) {
+        str_contains($slug, 'tiktok') || str_contains($slug, 'aliexpress') || str_contains($slug, 'shopee') || str_contains($slug, 'lazada') || str_contains($slug, 'temu') => 'platform_due_diligence',
+        str_contains($slug, 'new-chinese') || str_contains($slug, 'shein') || str_contains($slug, 'designer') => 'new_chinese_boundary',
+        str_contains($slug, 'yuanling') || str_contains($slug, 'ruqun') || str_contains($slug, 'mamian') || str_contains($slug, 'what-is-hanfu') || str_contains($slug, 'dynasties') || str_contains($slug, 'styles') => 'garment_form_history',
+        str_contains($slug, 'fabric') || str_contains($slug, 'sizing') || str_contains($slug, 'care') => 'fabric_craft_sizing_care',
+        str_contains($slug, 'styling') || str_contains($slug, 'wedding') || str_contains($slug, 'occasion') => 'occasion_styling',
+        str_contains($slug, 'factory') || str_contains($slug, 'brand') || str_contains($slug, 'story') => 'brand_factory_claim_audit',
+        str_contains($slug, 'compare') || str_contains($slug, 'global') || str_contains($slug, 'traditional-clothing') || str_contains($slug, 'world-ethnic') || str_contains($slug, 'kimono') || str_contains($slug, 'sari') || str_contains($slug, 'mena-africa') || str_contains($slug, 'european-folk') => 'global_traditional_clothing_comparison',
+        str_contains($slug, 'buy') || str_contains($slug, 'review') || str_contains($slug, 'store') || str_contains($slug, 'ebay') => 'purchase_decision',
+        default => 'china_56_ethnic_dress_hub',
+    };
+    $profile['editorial_role'] = $role;
+    $profile['evidence_keys'] = match ($role) {
+        'garment_form_history' => ['palace-ming-yuanling', 'cns-mamian-skirt', 'met-chinese-textiles'],
+        'fabric_craft_sizing_care' => ['unesco-sericulture-silk', 'unesco-nanjing-yunjin', 'met-chinese-textiles'],
+        'china_56_ethnic_dress_hub' => ['unesco-li-textile', 'met-chinese-textiles'],
+        'platform_due_diligence', 'purchase_decision', 'brand_factory_claim_audit' => ['consumer-listing-verification', 'retailer-claim-boundary'],
+        default => ['met-chinese-textiles', 'unesco-sericulture-silk'],
+    };
+}
+unset($profile);
+
+$profiles['hanfu-styling-complete-guide']['evidence_keys'] = ['cns-mamian-skirt', 'met-skirt-open-view'];
+
+/**
+ * Pure role contract used by the generator and unit tests; marketplace roles
+ * deliberately describe current-state evidence rather than museum authority.
+ * @param array<string,string> $context
+ * @return array{framing:string,headers:list<string>,rows:list<list<string>>,diagnostic:list<string>,checklist:list<string>,evidence_boundary:string,conclusion:string}
+ */
+function hanfuR3CoreRoleBody(string $role, bool $en, array $context): array
+{
+    $subject = trim((string)($context['subject'] ?? ''));
+    $definition = trim((string)($context['definition'] ?? ''));
+    $evidence = trim((string)($context['evidence'] ?? ''));
+    $risk = trim((string)($context['risk'] ?? ''));
+    $practice = trim((string)($context['practice'] ?? ''));
+    if (in_array('', [$subject, $definition, $evidence, $risk, $practice], true)) {
+        throw new InvalidArgumentException('Incomplete core role context.');
+    }
+
+    $specs = $en ? [
+        'platform_due_diligence' => [
+            'framing' => 'Treat ' . $subject . ' as a dated platform audit: seller, exact variant, destination, checkout total, delivery promise, and return route are separate facts.',
+            'headers' => ['Listing checkpoint', 'Evidence to capture', 'Stop rule'],
+            'rows' => [
+                ['Seller and fulfiller', 'Legal/store identity and destination shown for ' . $subject, 'Identity or destination terms change between listing and checkout'],
+                ['Exact SKU and variant', 'Timestamped structure images, specification fields, and this requirement: ' . $evidence, 'Reviews or measurements belong to another colour, size, or bundle'],
+                ['Delivery and return', 'Landed cost, dispatch promise, carrier handoff, return address, and deadline', 'No workable return route before the risk occurs: ' . $risk],
+            ],
+            'diagnostic' => ['Open the listing, cart, and return page side by side; record every field that changes with destination.', 'A badge, rating, or delivery estimate is not evidence for garment form, fibre, measurements, or set contents.'],
+            'checklist' => ['Name the seller and fulfiller for the exact variant.', 'Save front, back, closure, and lower-garment views.', 'Record finished centimetre measurements and fibre wording verbatim.', 'Calculate tax, shipping, return postage, and deadline.', 'Apply this stop rule before payment: ' . $practice],
+            'evidence_boundary' => 'Only dated, SKU-level records can support a platform conclusion about ' . $subject . '; museum or heritage sources cannot verify a seller, stock state, delivery promise, or return policy.',
+            'conclusion' => 'Publish a platform recommendation only with a date, destination, exact variant, and explicit re-check instruction.',
+        ],
+        'new_chinese_boundary' => [
+            'framing' => 'Read ' . $subject . ' on two axes: the visible modern design and the historical clothing terms it references; resemblance does not make those labels interchangeable.',
+            'headers' => ['Design layer', 'Visible construction evidence', 'Honest label'],
+            'rows' => [
+                ['Silhouette and styling', 'Record hem, waist, sleeve, layer, and intended movement', 'Atmosphere is used as proof of historical form'],
+                ['Collar and closure', $evidence, 'A standing collar, zip, or modern one-piece is relabelled as a historical Hanfu form'],
+                ['Reference and adaptation', 'Name the specific borrowed element and the modern pattern or material choice', 'The copy claims reconstruction without an object or documented pattern source'],
+            ],
+            'diagnostic' => ['Describe the garment in neutral construction terms before using Hanfu, guofeng, or new-Chinese-style labels.', 'Keep inspiration, adaptation, reconstruction, and stage costume as four different editorial claims.'],
+            'checklist' => ['Identify the actual collar and closure.', 'State whether upper and lower parts are separate.', 'Name the modern pattern, zip, dart, or fabric when visible.', 'Attribute a historical reference only to a bounded source.', 'Use the practical label required here: ' . $practice],
+            'evidence_boundary' => 'Historical sources may explain the referenced element in ' . $subject . ', but they do not convert a modern garment into a reconstruction or certify a retail claim.',
+            'conclusion' => 'A useful boundary statement tells the reader what is historical reference, what is contemporary design, and what remains unverified.',
+        ],
+        'garment_form_history' => [
+            'framing' => 'Start ' . $subject . ' from garment construction and an attributable object, image, or text; dynasty mood and modern styling come after the form is established.',
+            'headers' => ['Form question', 'Object or diagram evidence', 'Reconstruction limit'],
+            'rows' => [
+                ['Collar and opening', 'Complete neckline, overlap direction, closure points, and body panels', 'The key opening is cropped or replaced by a modern collar'],
+                ['Upper/lower relation', $evidence, 'A single skirt, top, or accessory is presented as a complete system'],
+                ['Date and reconstruction', 'Collection number, excavation or publication context, date range, and stated reconstruction choices', 'One late or ceremonial object is made universal for an era'],
+            ],
+            'diagnostic' => ['Draw the visible pieces and fastening sequence for ' . $subject . ' before assigning a period name.', 'Separate surviving-object evidence, transmitted imagery, institutional text, and modern reconstruction; they answer different questions.'],
+            'checklist' => ['Retain full front and back views.', 'Mark neckline and closure direction.', 'Identify separate garments and dressing order.', 'Cite an object, museum record, or bounded publication.', 'State this reconstruction limit: ' . $risk],
+            'evidence_boundary' => 'A historical source supports only its documented object, period, status, and construction claim; it is not proof for every modern garment called ' . $subject . '.',
+            'conclusion' => 'Conclude with the form that the evidence supports, the views still missing, and the modern choices that are reconstructions rather than surviving facts.',
+        ],
+        'fabric_craft_sizing_care' => [
+            'framing' => 'For ' . $subject . ', separate fibre, yarn, weave, finish, embroidery or appliqué, finished measurements, and care instructions before making a quality claim.',
+            'headers' => ['Material layer', 'Test or measurement', 'Care and claim risk'],
+            'rows' => [
+                ['Fibre and weave', 'Composition label plus close front/back views and this evidence: ' . $evidence, 'A visual sheen is treated as fibre certification'],
+                ['Fit and construction', 'Finished garment measurements, method, seam allowance, lining, and planned underlayers', 'Only body height/weight or a size letter is supplied'],
+                ['Surface work and care', 'Reverse embroidery, loose threads, dye-transfer test, maker care label, and component-specific storage', '“Handmade” or “dry-clean only” is repeated without process detail'],
+            ],
+            'diagnostic' => ['Test the weakest material or attached component first; a garment is not safely washable merely because one fibre is.', 'Compare measurements with a garment that already fits and test sitting, walking, and arm lift.'],
+            'checklist' => ['Copy the fibre percentages exactly.', 'Record weave, lining, embroidery, and metal separately.', 'Measure the finished garment flat with a stated method.', 'Ask for the reverse and seam close-ups.', 'Follow this material-specific practice: ' . $practice],
+            'evidence_boundary' => 'Museum and heritage sources can explain a named technique in ' . $subject . '; only the maker or laboratory record can certify the fibre and making method of the item being sold.',
+            'conclusion' => 'The final care and fit advice must be component-specific, measurement-based, and conditional on the actual label and construction.',
+        ],
+        'occasion_styling' => [
+            'framing' => 'Build ' . $subject . ' from occasion, movement, weather, duration, and dressing sequence; colour and accessories refine an already coherent garment base.',
+            'headers' => ['Wear sequence', 'Movement rehearsal', 'Adjustment or stop'],
+            'rows' => [
+                ['Base garments', 'Correct inner layer, collar/closure, upper-lower relation, waist position, and hem', 'An accessory hides or contradicts the garment structure'],
+                ['Action and duration', 'Sit, walk, climb, lift arms, and repeat the real event movement', 'Hem, sleeve, belt, or headwear cannot remain secure'],
+                ['Weather and social setting', 'Temperature, rain plan, footwear surface, photography, and local dress guidance', 'Comfort, modesty, safety, or host guidance cannot be met'],
+            ],
+            'diagnostic' => ['Photograph front, side, and back after the base layer is fitted; correct structure before adding a focal ornament.', 'Rehearse the longest or most demanding movement for the actual event, not only a static mirror pose.'],
+            'checklist' => ['Confirm garment form and dressing order.', 'Set waist and hem before hair or jewellery.', 'Secure one focal accessory without covering construction.', 'Test footwear, sleeves, seating, and weather.', 'Make the practical adjustment specified here: ' . $practice],
+            'evidence_boundary' => 'Historical evidence may guide a form in ' . $subject . ', while the present occasion, wearer, organiser, and safety conditions determine the final styling decision.',
+            'conclusion' => 'A finished look is acceptable only after structure, movement, comfort, safety, and context have all been checked.',
+        ],
+        'purchase_decision' => [
+            'framing' => 'Turn ' . $subject . ' into a purchase gate: intended use, body and reference-garment measurements, budget, deadline, evidence quality, and return route decide the answer.',
+            'headers' => ['Decision gate', 'Comparable evidence', 'Walk-away rule'],
+            'rows' => [
+                ['Use and non-negotiables', 'Occasion, movement, deadline, fibre limits, and required garment form', 'The listing cannot meet a non-negotiable need'],
+                ['Exact item comparison', 'Same set contents, construction, measurements, fibre, shipping, tax, and return cost', 'Price is compared across unlike bundles or missing specifications'],
+                ['Arrival test', 'Flat measurements, contents, defects, movement, colour transfer, and documented seller answer', 'Tags must be removed before fit or condition can be checked'],
+            ],
+            'diagnostic' => ['Write the walk-away conditions for ' . $subject . ' before opening marketplaces.', 'A lower price is not comparable when return exposure, missing pieces, material, or construction differs.'],
+            'checklist' => ['Define occasion, deadline, and budget ceiling.', 'Record body and reference-garment measurements.', 'Require the structure described here: ' . $evidence, 'Compare landed cost and executable returns.', 'Stop or proceed using this rule: ' . $practice],
+            'evidence_boundary' => 'The recommendation for ' . $subject . ' is valid only for the dated SKU, seller, destination, measurements, and conditions actually checked.',
+            'conclusion' => 'Choose only when every non-negotiable has evidence; otherwise record the missing fact and stop.',
+        ],
+        'brand_factory_claim_audit' => [
+            'framing' => 'Audit ' . $subject . ' by splitting brand story, company identity, product specification, manufacturing step, quality-control record, and after-sales responsibility.',
+            'headers' => ['Public claim', 'Primary record required', 'Unverified status'],
+            'rows' => [
+                ['Company or factory identity', 'Current legal entity, address, responsibility, and dated relationship to the product', 'A workshop photograph or founder story is the only link'],
+                ['Material or craft claim', 'Batch/SKU specification, supplier or process record, inspection point, and exception handling', 'The claim cannot be tied to this item or batch'],
+                ['Price or direct-channel claim', 'Comparable specification, included services, landed cost, and after-sales owner', '“Factory direct” is used as automatic proof of value or quality'],
+            ],
+            'diagnostic' => ['Convert every adjective about ' . $subject . ' into a claim with a responsible party, date, product scope, and inspectable record.', 'Mark self-reported evidence, third-party evidence, and unresolved statements separately.'],
+            'checklist' => ['Name the legal and trading entities.', 'Tie each claim to a product or batch.', 'Record the claimed production step and inspector.', 'Separate owned, partner, and sourced production.', 'Publish this unresolved risk plainly: ' . $risk],
+            'evidence_boundary' => 'Company materials are primary evidence for what the company said about ' . $subject . ', not independent proof that the claim is true; museum sources cannot validate a factory.',
+            'conclusion' => 'Publish a dated claim matrix showing supported, self-reported, contradicted, and still-unverified statements.',
+        ],
+        'global_traditional_clothing_comparison' => [
+            'framing' => 'Compare ' . $subject . ' only after each tradition is described in its own terminology, locality, date, garment system, material practice, and use context.',
+            'headers' => ['Local term and source', 'Comparable construction dimension', 'Non-comparable context'],
+            'rows' => [
+                ['Garment system', 'Each tradition’s own term plus full views of pieces, closure, layering, and dressing order', 'Visual resemblance is treated as shared identity or origin'],
+                ['Material and making', 'Fibre, weave, dye, surface technique, maker/place, and object date for each side', 'A single Chinese textile source is used to explain another tradition'],
+                ['Social use', 'Who wears it, where, when, and under whose guidance', 'Religion, gender, colonial history, or living protocol is reduced to style'],
+            ],
+            'diagnostic' => ['Build separate evidence cards before placing traditions side by side.', 'Use neutral dimensions such as panel, wrap, closure, layer, fibre, and occasion; return to local names in the conclusion.'],
+            'checklist' => ['Name every tradition in its own terms.', 'Use a source from each community or collection.', 'Compare the same structural dimension.', 'State exchange without assuming common origin.', 'Apply this boundary to the comparison: ' . $practice],
+            'evidence_boundary' => 'A Hanfu or Chinese-textile source supports only the Chinese side of ' . $subject . '; every other tradition needs its own attributable source and context.',
+            'conclusion' => 'A respectful comparison explains bounded similarities and differences without ranking age, authenticity, or cultural value.',
+        ],
+        'china_56_ethnic_dress_hub' => [
+            'framing' => 'Organise ' . $subject . ' as 56 entry points to living, locally varied dress records, not as 56 timeless costumes or extensions of Hanfu.',
+            'headers' => ['Community record', 'Dress-system clue', 'Photo and editorial boundary'],
+            'rows' => [
+                ['Name and locality', 'Community self-name where available, region, date, source, and local variation', 'An administrative label is treated as one uniform wardrobe'],
+                ['Garment and material', 'Pieces, fastening, wearing order, fibre/technique, maker, and documented use', 'Colour, motif, or accessory alone is used to identify a group'],
+                ['Image and permission', 'Creator, licence/consent, crop note, visible facts, and separately attributed interpretation', 'An illustration is cited as field evidence or dress is relabelled Hanfu'],
+            ],
+            'diagnostic' => ['For ' . $subject . ', distinguish what the image shows from what a community or collection source says.', 'Treat county, branch, age, gender, faith, season, occasion, and contemporary change as part of the record, not noise.'],
+            'checklist' => ['Start with the named community and region.', 'Describe structure before motif.', 'Separate fibre, technique, and ornament.', 'State what the photograph cannot establish.', 'Follow this editorial practice: ' . $practice],
+            'evidence_boundary' => 'National overview sources are orientation only; local and object-level claims in ' . $subject . ' require a dated community, museum, maker, or field record, and none grants image rights automatically.',
+            'conclusion' => 'The hub should lead readers to attributable local records and explicitly prevent any ethnic dress photograph from being automatically classified as Hanfu.',
+        ],
+    ] : [
+        'platform_due_diligence' => [
+            'framing' => '把“' . $subject . '”当作带日期的平台核验：卖家、具体变体、目的地、结算总价、交付承诺和退货路径必须分别记录。',
+            'headers' => ['商品页核验点', '应保存的证据', '停止条件'],
+            'rows' => [['卖家与履约方', '对应“' . $subject . '”及目的地的主体信息', '商品页与结算页主体或目的地条款变化'], ['具体 SKU 与变体', '带时间的结构图、规格字段及“' . $evidence . '”', '评论或尺寸属于其他颜色、尺码或套装'], ['配送与退货', '到手总价、发货承诺、承运节点、退货地址和期限', '在“' . $risk . '”发生前没有可执行退路']],
+            'diagnostic' => ['并排打开商品页、购物车与退货条款，记录所有随目的地变化的字段。', '平台徽标、评分或时效预估不能证明形制、纤维、成衣尺寸与套装件数。'],
+            'checklist' => ['确认具体变体的卖家和履约方。', '保存正面、背面、闭合与下装结构图。', '逐字记录厘米成衣尺寸与纤维字段。', '计算税费、运费、退货邮费与最后期限。', '付款前执行该停止规则：' . $practice],
+            'evidence_boundary' => '只有带日期的 SKU 级记录可以支持“' . $subject . '”的平台结论；博物馆或非遗资料不能核验卖家、库存、时效与退货政策。',
+            'conclusion' => '平台建议必须同时写明日期、目的地、具体变体和下单日重新核验指令。',
+        ],
+        'new_chinese_boundary' => [
+            'framing' => '从现代设计与历史服装术语两条轴阅读“' . $subject . '”；外观相似不等于名称可以互换。',
+            'headers' => ['设计层', '可见结构证据', '诚实标签'],
+            'rows' => [['轮廓与造型', '记录衣长、腰线、袖型、层次与活动方式', '把氛围当作历史形制证据'], ['领型与闭合', $evidence, '把立领、拉链或现代连衣式样改称历史汉服形制'], ['借鉴与改良', '写明具体借鉴元素及现代纸样或材料', '没有实物或版型来源却声称复原']],
+            'diagnostic' => ['使用汉服、国风或新中式标签前，先用中性结构词描述服装。', '把灵感借鉴、现代改良、历史复原和舞台服分成四类声明。'],
+            'checklist' => ['确认实际领型与闭合。', '说明上下装是否分体。', '写出现代纸样、拉链、省道或材料。', '历史借鉴只对应有边界的资料。', '采用该实践标签：' . $practice],
+            'evidence_boundary' => '历史资料可以解释“' . $subject . '”借鉴的元素，但不能把现代服装自动变成复原品，也不能认证零售声明。',
+            'conclusion' => '有效边界说明应分别写出历史参考、当代设计和仍未核实的部分。',
+        ],
+        'garment_form_history' => [
+            'framing' => '“' . $subject . '”应从服装结构和可署名实物、图像或文本开始，朝代氛围与现代造型必须排在形制确认之后。',
+            'headers' => ['形制问题', '实物或结构图证据', '复原限度'],
+            'rows' => [['领型与开合', '完整领口、衽向、闭合点与衣身裁片', '关键开合被裁掉或替换为现代领型'], ['上下装关系', $evidence, '把单独裙、上衣或配饰当作完整系统'], ['年代与复原', '藏品号、出土或出版语境、日期范围及复原取舍', '用一件晚期或礼仪实物代表整个时代']],
+            'diagnostic' => ['先画出“' . $subject . '”可见衣片与穿着顺序，再写年代名称。', '把传世实物、图像、制度文本与现代复原分别标级，它们回答不同问题。'],
+            'checklist' => ['保留完整正背面。', '标记领型与闭合方向。', '识别分体衣物与穿着顺序。', '引用藏品、博物馆记录或有边界出版物。', '写明该复原限度：' . $risk],
+            'evidence_boundary' => '历史来源只支持其记录的实物、时期、身份和结构结论，不能证明所有名为“' . $subject . '”的现代商品。',
+            'conclusion' => '结论应写明证据支持的形制、仍缺少的视角，以及哪些现代处理属于复原推定。',
+        ],
+        'fabric_craft_sizing_care' => [
+            'framing' => '判断“' . $subject . '”时，把纤维、纱线、织法、后整理、刺绣或贴饰、成衣尺寸和护理说明逐项分开。',
+            'headers' => ['材料层', '测试或测量', '护理与声明风险'],
+            'rows' => [['纤维与织法', '成分标签、正反近照及“' . $evidence . '”', '用视觉光泽代替纤维证明'], ['合身与结构', '成衣尺寸、测量方法、缝份、里料和计划内搭', '只提供身高体重或尺码字母'], ['表面工艺与护理', '绣背、线头、移色测试、制作者护理标签及分部件收纳', '没有流程细节却复述“纯手工”或统一干洗']],
+            'diagnostic' => ['先测试最脆弱的材料或附加部件；一项纤维可水洗不代表整件安全。', '用已经合身的衣服对照成衣尺寸，并测试坐、走与抬手。'],
+            'checklist' => ['逐字抄录纤维百分比。', '分开记录织法、里料、刺绣与金属。', '用明确方法平铺测量成衣。', '索取反面与接缝近照。', '执行该材料实践：' . $practice],
+            'evidence_boundary' => '博物馆与非遗资料可以解释“' . $subject . '”中的具名技艺；只有制作者或检测记录能认证在售物品的纤维和制作方法。',
+            'conclusion' => '最终护理与合身建议必须按部件、按尺寸，并以实物标签和结构为条件。',
+        ],
+        'occasion_styling' => [
+            'framing' => '“' . $subject . '”应从场合、动作、天气、时长与穿着顺序开始；色彩和配饰只修正已经成立的服装基础。',
+            'headers' => ['穿着顺序', '动作排练', '调整或停止'],
+            'rows' => [['基础衣物', '内层、领襟、上下装关系、腰线与裙长正确', '配饰遮挡或违背服装结构'], ['动作与时长', '按真实活动测试坐、走、上下台阶与抬手', '裙摆、袖、腰带或头饰无法保持安全'], ['天气与社会场景', '温度、雨备、鞋底、拍摄与主办方着装指引', '舒适、端庄、安全或地方指引无法满足']],
+            'diagnostic' => ['基础层合身后拍正、侧、背三面，先修正结构再加主饰。', '按真实活动中最久或最难的动作排练，不能只看镜前静态姿势。'],
+            'checklist' => ['确认形制与穿着顺序。', '先定腰线和裙长再做发饰。', '一件主饰不得遮住结构。', '测试鞋履、袖口、坐姿和天气。', '执行该现场调整：' . $practice],
+            'evidence_boundary' => '历史证据可以指导“' . $subject . '”的形制；当下场合、穿着者、主办方和安全条件决定最终造型。',
+            'conclusion' => '只有结构、动作、舒适、安全与场合全部通过，整套造型才算完成。',
+        ],
+        'purchase_decision' => [
+            'framing' => '把“' . $subject . '”变成购买闸门：用途、身体与参考衣尺寸、预算、期限、证据质量和退货路径共同决定答案。',
+            'headers' => ['决策闸门', '可比证据', '放弃规则'],
+            'rows' => [['用途与不可妥协项', '场合、活动量、期限、纤维限制与必需形制', '商品页不能满足任一不可妥协项'], ['具体商品比较', '同件数、结构、尺寸、纤维、物流、税费与退货成本', '不同套装或缺规格商品只比价格'], ['收货测试', '平铺尺寸、件数、瑕疵、活动量、移色及卖家答复', '必须拆吊牌才能检查合身或状态']],
+            'diagnostic' => ['打开平台前先写下“' . $subject . '”的放弃条件。', '当退货风险、包含件数、材料或结构不同，低价不构成可比。'],
+            'checklist' => ['确定场合、期限和预算上限。', '记录身体与参考衣尺寸。', '要求该结构证据：' . $evidence, '比较到手总价和可执行退货。', '按该规则停止或继续：' . $practice],
+            'evidence_boundary' => '“' . $subject . '”的推荐只对实际核验的日期、SKU、卖家、目的地、尺寸与条件有效。',
+            'conclusion' => '只有全部不可妥协项都有证据才购买，否则记录缺口并停止。',
+        ],
+        'brand_factory_claim_audit' => [
+            'framing' => '审计“' . $subject . '”时，把品牌故事、公司主体、商品规格、制造步骤、质检记录与售后责任拆开。',
+            'headers' => ['公开声明', '所需原始记录', '未核实状态'],
+            'rows' => [['公司或工厂主体', '当前法律主体、地址、责任及与商品的带日期关系', '只有车间照片或创始人故事建立联系'], ['材料或工艺声明', '批次/SKU 规格、供应或流程记录、质检点与异常处理', '声明无法对应当前物品或批次'], ['价格或直达声明', '同规格、包含服务、到手成本与售后责任人', '用“工厂直达”自动证明价值或质量']],
+            'diagnostic' => ['把“' . $subject . '”的每个形容词改写为有责任主体、日期、商品范围和可核记录的声明。', '把企业自述、第三方证据和未解决陈述分别标注。'],
+            'checklist' => ['写明法律主体与交易主体。', '每项声明对应商品或批次。', '记录声称的生产步骤和检验者。', '区分自有、合作和采购生产。', '公开写出该未核风险：' . $risk],
+            'evidence_boundary' => '企业材料只能证明企业对“' . $subject . '”说过什么，不是声明真实的独立证明；博物馆资料也不能验证工厂。',
+            'conclusion' => '发布带日期的声明矩阵，分别标出已支持、企业自述、相互矛盾和仍未核实。',
+        ],
+        'global_traditional_clothing_comparison' => [
+            'framing' => '比较“' . $subject . '”前，先用各传统自身术语、地区、年代、服装系统、材料工艺和使用语境分别描述。',
+            'headers' => ['地方术语与来源', '可比结构维度', '不可合并语境'],
+            'rows' => [['服装系统', '各自名称及衣片、闭合、层次与穿着顺序全景', '把外观相似当作同一身份或同源'], ['材料与制作', '双方各自的纤维、织法、染色、表面工艺、制作者/地点与日期', '用一条中国纺织来源解释其他传统'], ['社会使用', '谁在何时何地、依据谁的指引穿着', '把宗教、性别、殖民历史或活态礼俗压成风格']],
+            'diagnostic' => ['并置之前，先为每一种传统整理各自有出处的说明。', '比较裁片、围裹、闭合、层次、纤维与场合等中性维度，结论回到地方名称。'],
+            'checklist' => ['用自身术语命名每种传统。', '每一方都使用本社区或藏品来源。', '只比较同一结构维度。', '说明交流但不假定同源。', '执行该比较边界：' . $practice],
+            'evidence_boundary' => '汉服或中国纺织来源只支持“' . $subject . '”中的中国一侧；其他传统必须有自己的可署名来源与语境。',
+            'conclusion' => '尊重的比较只解释有限相似与差异，不排列年代、真伪或文化价值。',
+        ],
+        'china_56_ethnic_dress_hub' => [
+            'framing' => '把“' . $subject . '”组织成进入活态地方服饰记录的 56 个入口，而不是 56 套永恒制服或汉服分支。',
+            'headers' => ['社区记录', '服装系统线索', '照片与编辑边界'],
+            'rows' => [['名称与地域', '优先社区自称、地区、日期、来源和地方差异', '把行政民族名称写成一套统一衣橱'], ['服装与材料', '衣片、系结、穿着顺序、纤维/工艺、制作者和有记录用途', '只凭颜色、纹样或配饰判断族属'], ['影像与授权', '创作者、许可/同意、裁切、可见事实及单独署名解释', '把说明图当田野证据或把民族服饰改称汉服']],
+            'diagnostic' => ['讨论“' . $subject . '”时，分开画面可见内容与社区或藏品来源提供的解释。', '把县域、支系、年龄、性别、信仰、季节、场合和当代变化视为记录的一部分。'],
+            'checklist' => ['从具体社区与地区开始。', '先描述结构再谈纹样。', '分开纤维、工艺与饰物。', '明确照片不能证明什么。', '执行该编辑实践：' . $practice],
+            'evidence_boundary' => '全国概况只用于导览；“' . $subject . '”的地方或实物结论需要带日期的社区、博物馆、制作者或田野记录，且任何资料都不会自动授予图片权利。',
+            'conclusion' => '导览应把读者带向可署名地方资料，并明确阻止把民族服饰照片自动归为汉服。',
+        ],
+    ];
+
+    return $specs[$role] ?? throw new InvalidArgumentException('Unknown core editorial role: ' . $role);
+}
+
+/**
+ * Reader-facing copy by editorial role. Internal verification instructions
+ * stay in hanfuR3CoreRoleBody(); this layer turns the verified profile facts
+ * into prose that belongs on a shop-owned magazine.
+ *
+ * @return array{headings:list<string>,paragraphs:list<string>}
+ */
+function hanfuR4CoreRoleVoice(string $role, bool $en): array
+{
+    $voices = $en ? [
+        'platform_due_diligence' => [
+            'headings' => ['Know who is actually selling', 'Read the exact garment, not the search card', 'Fit, fabric, and set contents', 'Delivery and return risk', 'Compare the real total', 'A sensible order decision'],
+            'paragraphs' => [
+                'A marketplace name tells you where the transaction happens, but not who made the garment or who will answer if the order is wrong. Start with the seller, fulfiller, destination, and exact colour-size bundle shown at checkout; those details can change even when the product photographs look identical.',
+                'Open the detail page rather than relying on a search thumbnail. Useful photographs show the full front and back, neckline, closure, waist, lower garment, and the reverse of important decoration. Reviews help only when they clearly refer to the same variant and include enough context to identify what arrived.',
+                'Size letters are not comparable across shops. Finished-garment measurements, fibre percentages, lining, included pieces, and room for underlayers matter far more than a model height alone. Compare them with a garment that already fits and rehearse the movement required by the intended occasion.',
+                'The cheapest listing can become the most expensive when tax, delayed dispatch, missing pieces, return postage, or an overseas return address is added. Work backward from the event date and the final usable return day, leaving time for a full try-on rather than trusting an optimistic arrival estimate.',
+                'A fair comparison uses the same garment form, number of pieces, material disclosure, measurement detail, delivery destination, and return route. If one listing omits a decisive field, treat that omission as a cost and risk instead of filling the gap with the seller’s rating.',
+                'Order only when the exact variant meets the occasion, fit, material, timing, and return requirements at the same time. Save the final page and seller answer for your own reference, then repeat the time-sensitive checks on the day of payment because stock and fulfilment terms can move quickly.',
+            ],
+        ],
+        'new_chinese_boundary' => [
+            'headings' => ['Start with the garment in front of you', 'Collar and closure reveal the pattern', 'Historical reference or modern design', 'Fabric, proportion, and movement', 'Style it under an honest name', 'Choose the setting that suits it'],
+            'paragraphs' => [
+                'New-Chinese-style, Han-inspired fashion, and historically named Hanfu can all be beautiful, but they describe different design relationships. Begin with the visible garment—its pieces, seams, collar, closure, waist, and hem—before deciding which cultural or historical term is accurate.',
+                'A stand collar, frog fastening, diagonal front, zip, dart, or one-piece dress changes how a garment is constructed and worn. None of these details is inferior; naming them plainly simply prevents a modern pattern from being mistaken for a historical form because of embroidery or a campaign setting.',
+                'A designer may quote a sleeve line, textile, motif, or fastening without attempting reconstruction. A reconstruction makes a stronger claim and therefore needs a bounded object, image, pattern, or institutional source. Inspiration should remain inspiration when the surviving evidence does not support more.',
+                'Modern fabrics and tailoring can improve ease, durability, or care, while also changing drape and proportion. Check whether the garment allows sitting, walking, reaching, and layering in the intended setting instead of judging only the still photograph chosen for the product page.',
+                'The most convincing styling follows the garment’s actual structure. Contemporary shoes, a restrained bag, or simple hair can suit a modern adaptation better than borrowed historical accessories that conflict with the collar, waist, or fastening. An honest label gives the wearer more freedom, not less.',
+                'Use historically named Hanfu when the form and occasion call for it, and use new-Chinese-style or Han-inspired fashion when modern design is the point. The useful question is not which label sounds grander, but which description helps the wearer understand what they are buying and how it will behave.',
+            ],
+        ],
+        'garment_form_history' => [
+            'headings' => ['See the complete garment system', 'Read collar, opening, and separate pieces', 'What historical sources can establish', 'Proportion, fabric, and dressing order', 'Where modern reconstruction begins', 'How to reach a careful conclusion'],
+            'paragraphs' => [
+                'A Hanfu form is more than a familiar outline. It is a system of separate pieces, collar and opening, fastening points, waist control, length, and dressing order. Looking at the complete system prevents a skirt, accessory, or atmospheric portrait from standing in for the whole garment.',
+                'The neckline and opening are the quickest structural clues, but they must be read with the body panels and lower garment. A cropped photograph may hide the decisive feature; a front view alone can also conceal tie direction, back construction, or whether two apparent layers are actually one modern piece.',
+                'Museum objects, excavated material, paintings, institutional essays, and transmitted texts answer different questions. A dated object can support its own construction and context, while an image may clarify wearing appearance without revealing every seam. No single source represents an entire dynasty or every social setting.',
+                'When a modern maker turns fragmentary evidence into a wearable garment, proportion and material require judgment. Sleeve width, hem, lining, fabric weight, and underlayers affect movement as much as the named form. A good reconstruction explains these choices instead of hiding them behind a dynasty label.',
+                'Modern zips, elastic, synthetic blends, simplified layers, and adjusted lengths may make everyday wear easier. They are not automatically wrong, but they should be described as adaptations. That distinction lets buyers choose between study, ceremony, photography, stage use, and ordinary daily wear with clear expectations.',
+                'A careful conclusion names the form supported by visible structure, cites the source that supports the limited historical point, and identifies what remains a modern choice. This approach is slower than matching a silhouette to a mood board, but it gives the reader a result that can be checked and used.',
+            ],
+        ],
+        'fabric_craft_sizing_care' => [
+            'headings' => ['Fibre is only the first layer', 'Construction changes how cloth behaves', 'Measure the finished garment', 'Plan care by component', 'Understand craft claims', 'Choose for long-term wear'],
+            'paragraphs' => [
+                'Silk, cotton, linen, regenerated fibre, and polyester describe fibre content, not the whole character of a garment. Yarn, weave, density, finish, lining, embroidery, metallic thread, and applied ornament all change drape, heat, shine, durability, and price.',
+                'The same-looking cloth can behave differently once cut into a full skirt, lined robe, narrow sleeve, or layered set. Examine seams, stress points, hems, fastening, embroidery reverse, and contact between rough decoration and delicate fabric. These details often explain comfort and lifespan better than a broad material name.',
+                'Use finished measurements and a consistent flat-measure method. Compare bust, waist, garment length, sleeve reach, rise, and hem with an item that already fits, then add the underlayers required by the outfit. Height and weight charts are only a starting point because body proportions and preferred ease differ.',
+                'Care follows the most vulnerable component, not the strongest fibre in the composition line. Dark dye, adhesive trim, metal, beadwork, brocade, and embroidery may each need different handling. Test only where appropriate, prevent snagging and colour transfer, and store heavy ornament without pulling the base cloth out of shape.',
+                'Terms such as handmade, heritage craft, brocade, or embroidery should point to a visible process and responsible maker. Machine assistance does not automatically reduce quality, just as handwork does not guarantee neat construction. The useful description explains which step was done, with what material, and to what standard.',
+                'A strong purchase balances appearance with movement, climate, care time, repairability, and repeat use. Ask how the garment will feel after several hours and what happens after the first cleaning, not only how it photographs on arrival. That is where material knowledge becomes practical value.',
+            ],
+        ],
+        'occasion_styling' => [
+            'headings' => ['Begin with the occasion', 'Build a sound garment base', 'Use proportion before decoration', 'Rehearse weather, fit, and movement', 'Secure accessories with restraint', 'Make the final adjustment'],
+            'paragraphs' => [
+                'A successful Hanfu outfit starts with what the wearer will actually do. A wedding guest, museum visit, outdoor festival, stage performance, and long train journey demand different movement, weather protection, formality, and dressing time even when the same garment looks attractive in a photograph.',
+                'Confirm the inner layer, collar and opening, upper-lower relationship, waist position, skirt orientation, hem, and footwear before adding jewellery or hair ornaments. If the base is wrong, accessories only make the mismatch busier and can hide the structural detail that should remain visible.',
+                'Proportion comes from the relationship among neckline, shoulder, sleeve, waist, skirt length, and visual weight. Choose one main focus and let the remaining elements support it. Repeating every motif in the hair, belt, bag, and shoes usually weakens the outfit instead of making it richer.',
+                'Try the complete base layer while sitting, walking, climbing steps, lifting the arms, and repeating the longest action in the event. Check heat, rain, wind, floor surface, restroom practicality, and the time needed to dress. A mirror pose cannot reveal these pressures.',
+                'Hair ornaments, belts, pendants, bags, and fans must remain secure without dragging the collar, twisting the skirt, or catching the sleeve. One well-placed main ornament is often enough. Historical inspiration is most convincing when it respects the garment form rather than covering it.',
+                'Photograph the outfit from the front, side, and back after the movement test. Correct the waist, hem, collar, and balance first; only then adjust colour or ornament. The finished look should still feel comfortable and coherent after an hour, not merely for the first photograph.',
+            ],
+        ],
+        'purchase_decision' => [
+            'headings' => ['Define what the garment must do', 'Read the exact product evidence', 'Compare like with like', 'Fit and construction before price', 'Ask the seller useful questions', 'Know when to walk away'],
+            'paragraphs' => [
+                'Before browsing, decide the occasion, deadline, climate, activity, budget ceiling, required garment form, and any fibre or care limits. These are the non-negotiables. Without them, attractive photographs and temporary discounts can make almost any listing look suitable.',
+                'A usable product page identifies the exact colour-size variant, included pieces, finished measurements, fibre content, lining, closure, and full garment views. If reviews cover another bundle or the photographs change when a variant is selected, treat the information as a lead rather than proof for your choice.',
+                'Compare the same number of pieces, construction level, material disclosure, delivery destination, and return route. A cheaper set that omits an underlayer, uses a different skirt, or cannot be returned is not the same offer. Total value includes the cost of correcting what the listing leaves out.',
+                'Place the measurements beside a garment that already fits and test whether the planned underlayers have room. Look for tension at ties, waist, armhole, and seat, as well as enough hem clearance for the intended shoe. These checks prevent a nominally correct size from failing in movement.',
+                'Ask questions that can be answered with a number, photograph, material line, or policy: the finished measurement, reverse of embroidery, closure, included pieces, dispatch date, and return address. A vague reassurance is not equal to a specific answer tied to the selected variant.',
+                'Walk away when a non-negotiable remains unknown, the deadline leaves no fitting buffer, the return route is unusable, or the seller’s answer conflicts with the page. Missing a discount is cheaper than owning a garment that cannot serve the event for which it was bought.',
+            ],
+        ],
+        'brand_factory_claim_audit' => [
+            'headings' => ['Separate the story from the garment', 'Connect claims to a specific product', 'Understand who performs each step', 'Material, measurement, and quality control', 'What factory-direct can and cannot mean', 'Judge the offer on disclosed facts'],
+            'paragraphs' => [
+                'A founder story, workshop portrait, or heritage statement can explain a brand’s intention, but it does not describe every product automatically. Buyers need to know which legal or trading entity stands behind the order and which facts apply to the exact SKU on the page.',
+                'Material, craft, origin, and quality claims become useful when they connect to a batch, specification, process photograph, maker, or inspection point. A beautiful general video may show genuine work while still saying nothing about the colour or size currently being sold.',
+                'Design, pattern making, fibre sourcing, weaving, cutting, sewing, embroidery, finishing, inspection, packing, and dispatch may happen at different sites. A transparent brand names those relationships without turning a partner factory into an owned factory or a single workshop into proof for the whole catalogue.',
+                'Finished measurements, tolerances, fibre percentages, lining, seam treatment, inspection criteria, and defect handling reveal more than words such as premium. Consistency is especially important for pleats, paired motifs, tie placement, and sets whose separate pieces must align in wear.',
+                'Factory-direct can describe a shorter sales route, but it does not guarantee the lowest price, historical accuracy, or superior workmanship. Compare the actual specification, service, alteration support, return responsibility, and landed cost rather than treating the phrase itself as a quality grade.',
+                'The strongest offer is the one whose product facts, maker relationships, and after-sales owner remain clear when examined separately. Where a claim is still only the company’s own statement, read it as context—not as independent certification—and decide whether the remaining uncertainty matters to the purchase.',
+            ],
+        ],
+        'global_traditional_clothing_comparison' => [
+            'headings' => ['Begin with each tradition’s own name', 'Compare garment systems, not silhouettes alone', 'Materials need sources on both sides', 'Use and social context matter', 'Similarity does not prove shared origin', 'Return to local terminology'],
+            'paragraphs' => [
+                'Traditional dress should first be understood in the terms used by its own community, collection, or scholarship. Place, date, wearer, garment pieces, and occasion belong to the description; a global category or translated shopping keyword is too broad to carry that work.',
+                'Visual comparison is most useful when it follows the same structural question on both sides: wrap direction, panel, closure, layer, waist control, sleeve, or dressing order. Comparing one garment’s construction with another garment’s colour produces a resemblance, not an explanation.',
+                'Fibre, weave, dye, embroidery, surface work, and maker knowledge need attributable sources for every tradition being discussed. A Chinese textile source can illuminate the Chinese garment, but it cannot silently stand in for the history or technique of another community.',
+                'Who wears a garment, in what season, for which work or ceremony, and under whose guidance can matter as much as the cut. Religion, gender, migration, trade, colonial history, revival, and contemporary fashion should not be flattened into a decorative style board.',
+                'Trade and cultural exchange can produce meaningful connections, yet a similar wrap, motif, or textile does not prove common origin by itself. A responsible comparison states the limited similarity, the important difference, and the evidence that would be needed for a stronger historical claim.',
+                'The conclusion should return every garment to its local name and context rather than ranking age, authenticity, or cultural value. Readers gain more from understanding how each clothing system works than from being told that one is a version of another.',
+            ],
+        ],
+        'china_56_ethnic_dress_hub' => [
+            'headings' => ['Fifty-six starting points, not fixed uniforms', 'See complete clothing systems', 'Material and technique are different questions', 'Dress changes with place and occasion', 'What a photograph cannot tell you', 'Continue with local sources'],
+            'paragraphs' => [
+                'China’s officially recognized ethnic categories are useful navigation points, but none represents a single timeless wardrobe. County, branch, age, gender, livelihood, faith, season, family history, and contemporary change can all shape what people wear and how a garment is named.',
+                'Begin with the full relationship among upper and lower pieces, robe or wrap, trousers, outer layer, fastening, belt, footwear, and headwear. A striking colour or ornament may be important, but it cannot identify a community or explain the complete wearing system on its own.',
+                'Fibre, weave, dye, embroidery, appliqué, beadwork, metal, fur, and repair are separate material questions. Naming the technique matters because similar-looking surfaces can be made in different ways, while one community may use several materials across regions and occasions.',
+                'Daily work, market visits, weddings, festivals, religious participation, performance, and tourism can produce very different levels of formality. A modern adaptation or revival garment belongs to the living story too; it should not be dismissed simply because it differs from an older photograph.',
+                'A photograph may show silhouette, colour, visible fastening, and some surface detail. It usually cannot prove subgroup identity, ritual rank, marital status, exact fibre, handmade production, or the meaning of every motif. Those claims need a captioned local, maker, museum, or community source.',
+                'Use the hub to choose a community and region, then continue with dated local material rather than treating an overview as the final word. Ethnic dress should not be relabelled as Hanfu merely because it appears in China, and an editorial illustration should never be mistaken for field documentation.',
+            ],
+        ],
+    ] : [
+        'platform_due_diligence' => [
+            'headings' => ['先弄清真正的卖家是谁', '看具体商品，不看搜索卡片', '尺码、面料与套装件数', '物流和退货才是隐形成本', '比较真正的到手条件', '什么时候值得下单'],
+            'paragraphs' => [
+                '平台名称只能说明交易发生在哪里，不能自动说明谁制作、谁发货、谁承担售后。同一张商品图可能被多家店铺使用，结算时的卖家、履约方、目的地和颜色尺码组合，才是这一次订单真正对应的对象。',
+                '不要只看搜索页缩略图。有效的商品图应覆盖完整正背面、领型、开合、腰部、下装和关键装饰反面；买家实拍也只有在能确认同一变体、同一套装时才有参考价值，不能拿其他颜色或旧版尺寸替代。',
+                '不同店铺的尺码字母没有直接可比性。应看厘米成衣尺寸、纤维比例、里料、套装件数以及给内搭留下的余量，再与一件已经合身的衣服对照；模特身高只能辅助理解，不能代替自己的比例和活动量。',
+                '低价常被税费、延迟发货、缺件、跨境退货邮费或境外退货地址抵消。为节庆或婚礼购买时，应从最晚试穿和可退日期向前倒排，给换码、修改与真实穿着测试留出余量，而不是只盯预计到货日。',
+                '公平比较必须同时满足形制、件数、材质披露、尺寸完整度、收货目的地和退货路径一致。如果某个商品缺少决定性信息，就把这项不确定性当作成本，而不是用店铺评分或销量替它补答案。',
+                '只有具体变体同时满足场合、合身、面料、时效和售后要求时才值得下单。付款当天还要重新确认库存、发货承诺和退货条款，因为这些内容比文章和评价变化得更快。',
+            ],
+        ],
+        'new_chinese_boundary' => [
+            'headings' => ['先看眼前这件衣服', '领型与开合最能说明结构', '历史借鉴不等于历史复原', '面料、比例与活动量', '用准确名称完成搭配', '让服装回到合适场景'],
+            'paragraphs' => [
+                '新中式、汉元素和有明确形制名称的汉服都可以很好看，但它们描述的是不同的设计关系。判断时先看衣片、接缝、领型、开合、腰线和下摆，再决定使用哪个文化或历史名称，避免只凭刺绣和拍摄氛围分类。',
+                '立领、盘扣、斜襟、拉链、省道或连衣式纸样都会改变衣服的制作和穿着方式。这些现代结构并不低一等，准确说出它们，反而能避免一件当代设计因为背景像古画就被误称为历史形制。',
+                '设计师可以借用袖线、纹样、织物或闭合元素，而不必声称复原。只有提出复原时，才需要对应到有边界的实物、图像、版型或机构资料；当资料只能支持“受到启发”，就应停在这个准确程度。',
+                '现代纸样与面料可能改善活动、耐穿和护理，也会改变垂坠、腰线与层次。选购时要测试坐、走、抬手和计划中的内搭，而不是只判断模特静止时的轮廓是否漂亮。',
+                '最耐看的搭配会顺着真实结构走。现代改良款往往更适合简洁鞋包和克制发饰；若强行叠加与领型、腰线不相容的历史配饰，反而会遮住设计本身。准确名称给穿着者的是自由，不是限制。',
+                '需要形制表达和礼仪语境时选择结构明确的汉服；强调当代剪裁和日常通勤时，就诚实使用新中式或汉元素。关键不在于哪个标签更响亮，而在于顾客能否凭名称理解自己买到什么、该怎么穿。',
+            ],
+        ],
+        'garment_form_history' => [
+            'headings' => ['先看完整的服装系统', '从领型、开合与分体关系辨认', '历史资料究竟能说明什么', '比例、面料与穿着顺序', '现代复原从哪里开始', '怎样得出稳妥结论'],
+            'paragraphs' => [
+                '汉服形制不是一个熟悉轮廓，而是衣片、领型、开合、系结、腰部控制、衣长和穿着顺序共同组成的系统。只有看到完整关系，才不会把一条裙、一个配饰或一张朝代氛围照误当成整套服装。',
+                '领口与开合是最快的线索，但必须和衣身裁片、上下装关系一起看。被裁切的正面图可能恰好藏住关键结构，单一角度也无法说明系带方向、后背做法，或画面里的两层其实是一件现代连衣式服装。',
+                '博物馆实物、出土材料、绘画、机构文章与传世文本回答的是不同问题。有年代的实物可以支持自身结构和语境，图像能够帮助理解穿着外观，却不一定展示每一道缝；任何单一来源都不能代表整个朝代和所有身份。',
+                '现代制作者把不完整资料变成可穿成衣时，必然要处理袖宽、衣长、里料、面料重量和内搭等选择。好的复原会说明这些取舍，让读者区分存世信息与现代判断，而不是用一个朝代名称遮住全部细节。',
+                '拉链、松紧、化纤混纺、简化层次和调整长度可能更适合日常，它们不必被否定，但应明确称为改良。这样顾客才能在研习、礼仪、拍摄、舞台和普通出行之间选择真正合适的版本。',
+                '稳妥的结论要同时写清可见结构支持什么形制、哪条资料支持哪一项有限历史信息，以及哪些地方属于现代复原。它比对着氛围图猜朝代慢一些，却能让读者复查，也更能指导真实购买。',
+            ],
+        ],
+        'fabric_craft_sizing_care' => [
+            'headings' => ['纤维只是材料的第一层', '结构会改变面料表现', '用成衣尺寸判断合身', '按最脆弱部件安排护理', '看懂工艺声明', '为长期穿着做选择'],
+            'paragraphs' => [
+                '真丝、棉、麻、再生纤维和聚酯说的是纤维成分，不等于整件衣服的性格。纱线、织法、密度、后整理、里料、刺绣、金银线和贴饰都会改变垂坠、闷热、光泽、耐穿程度与价格。',
+                '看起来相似的布，做成大摆裙、夹里袍、窄袖或多层套装后会有完全不同的表现。接缝、受力点、下摆、系结、绣背以及粗糙装饰与细薄底布的接触位置，往往比一个笼统面料名更能解释舒适度和寿命。',
+                '尺码判断应使用成衣尺寸和一致的平铺测量方法。把胸围、腰围、衣长、袖展、裤裆或裙长与一件已经合身的衣服对照，再为计划内搭留量；身高体重表只能起步，不能覆盖个人比例与松量偏好。',
+                '护理方式要服从整件衣服里最脆弱的部件，而不是成分表里最耐洗的纤维。深色染料、粘合装饰、金属、珠饰、织锦与刺绣可能需要分别处理，收纳时也要避免重饰长期拉扯底布。',
+                '“纯手工”“非遗工艺”“织锦”或“刺绣”只有对应到可见工序和责任制作者时才有意义。机器辅助不必然降低品质，手作也不自动保证针脚和结构；有用的说明会说清哪一步如何完成、用了什么材料。',
+                '好的选购要同时考虑外观、活动、气候、护理时间、可修复性与重复穿着。除了想象到货当天拍照的效果，还要问连续穿几小时是否舒服、第一次清洁后会怎样，这才是材料知识真正转化成价值的地方。',
+            ],
+        ],
+        'occasion_styling' => [
+            'headings' => ['先从场合开始', '打好服装结构基础', '先调比例，再加装饰', '把天气、合身与动作都排练一遍', '配饰要牢固，也要克制', '完成最后一次调整'],
+            'paragraphs' => [
+                '汉服搭配成功与否，首先取决于穿着者当天要做什么。婚礼宾客、博物馆参观、户外游园、舞台表演和长途交通，对活动量、天气、正式程度与换装时间的要求都不同，即使同一套衣服在照片里都很好看。',
+                '加首饰之前，先确认内层、领襟、上下装关系、腰线、裙门方向、下摆和鞋履。如果基础层没有穿对，配饰只会让错配更忙乱，还可能遮住本该清楚呈现的形制结构。',
+                '比例来自领口、肩线、袖型、腰位、裙长与视觉重量之间的关系。整套只设一个主要焦点，其余元素负责呼应；把所有纹样同时复制到发饰、腰饰、包和鞋上，通常不会更华丽，只会削弱重点。',
+                '穿好基础层后，坐下、行走、上下台阶、抬手，并重复活动中持续最久的动作。同时考虑温度、雨风、地面、防滑、如厕便利和换装时间，镜前的静止姿势无法暴露这些真实压力。',
+                '发饰、腰带、佩饰、包和扇子都要固定可靠，不能拖歪领口、扭转裙门或勾住袖口。一件位置准确的主饰往往已经足够；历史灵感只有顺着衣服结构，才不会变成遮盖形制的堆砌。',
+                '动作测试后拍正、侧、背三面，先修正腰线、裙长、领口和平衡，再调整颜色或饰物。真正完成的造型，应在穿着一小时后依然舒适、端正、行动安全，而不只是第一张照片成立。',
+            ],
+        ],
+        'purchase_decision' => [
+            'headings' => ['先明确这件衣服必须解决什么', '看懂具体商品提供了什么', '只比较真正可比的商品', '价格之前先看合身与结构', '向卖家问可以核实的问题', '知道什么时候应该放弃'],
+            'paragraphs' => [
+                '打开平台前，先确定场合、期限、气候、活动量、预算上限、必须满足的形制，以及不能接受的纤维或护理方式。这些才是不可妥协项；若没有它们，漂亮图片和限时折扣会让几乎每件商品都显得合适。',
+                '能帮助下单的页面，应明确具体颜色尺码、套装件数、厘米成衣尺寸、纤维、里料、闭合和完整结构图。评论若来自其他套装，或切换变体后图片与规格发生变化，就只能作为线索，不能代替当前选择的信息。',
+                '比较时要统一件数、结构、材质披露、收货目的地和退货路径。少一件内搭、换了不同裙型或根本无法退货的低价套装，不是同一个报价；真实价值还包括补齐缺失信息和修正问题的成本。',
+                '把页面尺寸与已经合身的衣服并排比较，并检查计划内搭是否有余量。系带、腰部、袖窿、坐围和下摆是最容易在动作中暴露问题的位置，名义上选对尺码，并不代表坐走抬手都合适。',
+                '向卖家询问能用数字、照片、成分行或政策回答的问题，例如成衣尺寸、绣背、闭合、包含件数、实际发货日和退货地址。只说“放心”“标准尺码”的回复，不能等同于针对具体变体的明确答案。',
+                '任一不可妥协项仍然不明、期限没有试穿余量、退货路径不可执行，或卖家答复与页面冲突时，就应放弃。错过一次折扣，远比买下一件无法完成既定场合任务的衣服便宜。',
+            ],
+        ],
+        'brand_factory_claim_audit' => [
+            'headings' => ['把品牌故事与具体商品分开', '让每项声明对应具体货号', '看懂每道工序由谁完成', '材质、尺寸与质检', '工厂直达能说明什么', '用已披露事实判断价值'],
+            'paragraphs' => [
+                '创始人故事、车间照片和文化理念可以说明品牌想做什么，却不能自动代表每一个商品。顾客真正需要知道的是由哪个法律或交易主体承担订单，以及页面上的材料、工艺和服务声明是否对应当前货号。',
+                '材料、工艺、产地和质量只有连接到批次、规格、工序图、制作者或检验节点时，才具有购买意义。一段真实的通用车间视频，也可能完全没有说明眼前颜色和尺码是怎样生产的。',
+                '设计确认、打版、面辅料采购、织造、裁剪、缝制、绣花、后整理、质检、包装与发货可以发生在不同地点。透明品牌会说清这些合作关系，不把合作厂写成自有厂，也不拿一个车间覆盖全部目录。',
+                '成衣尺寸与公差、纤维比例、里料、缝份处理、检验标准和瑕疵处理，比“高端”二字更能说明稳定性。马面褶、成对纹样、系带位置和套装各件的对位尤其需要明确标准。',
+                '工厂直达可以表示销售链路较短，但不能自动证明最低价、形制准确或做工更好。应比较同规格商品、包含服务、修改支持、售后责任和最终到手成本，而不是把“直达”本身当成质量等级。',
+                '最可靠的商品，会在品牌故事、生产关系和售后责任被拆开查看后仍然清楚。若某项内容目前只是企业自述，就把它当作背景，而不是独立认证，再判断剩余不确定性是否会影响这次购买。',
+            ],
+        ],
+        'global_traditional_clothing_comparison' => [
+            'headings' => ['先使用各自传统的名称', '比较服装系统，不只比较轮廓', '双方材料都需要自己的来源', '使用场合与社会语境同样重要', '相似不等于同源', '最后回到地方术语'],
+            'paragraphs' => [
+                '传统服饰首先应放在本社区、藏品或研究所使用的名称中理解。地区、年代、穿着者、服装部件与场合都属于介绍的一部分，全球化大类和购物网站的翻译关键词太宽，无法承担准确命名。',
+                '视觉比较只有沿着同一个结构问题展开才有价值，例如围裹方向、裁片、闭合、层次、腰部控制、袖型或穿着顺序。拿一方的结构与另一方的颜色相比，只能得到外观联想，不能解释服装如何成立。',
+                '纤维、织法、染色、刺绣、表面工艺和制作者知识，需要为每一种传统分别找到有出处的资料。中国纺织来源可以解释中国服装，却不能悄悄替代另一个社区的历史或技艺说明。',
+                '谁在什么季节、为了哪种劳动或仪式、依据谁的指引穿着，与剪裁同样重要。宗教、性别、迁徙、贸易、殖民历史、复兴和当代时尚，不应被压缩成一张只有装饰元素的灵感板。',
+                '贸易和文化交流可能形成真实联系，但相似的围裹、纹样或织物本身不能证明共同起源。负责任的比较会说明相似发生在哪个有限层面、差异在哪里，以及要支持更强历史结论还缺什么。',
+                '结尾应把每件服装放回自己的地方名称与语境，不排列谁更古老、谁更正宗、谁更有价值。读懂各自服装系统如何运作，比把其中一种说成另一种的版本更尊重，也更有知识含量。',
+            ],
+        ],
+        'china_56_ethnic_dress_hub' => [
+            'headings' => ['五十六个入口，不是五十六套制服', '先看完整的穿着系统', '材料与工艺是两个问题', '服饰会随地方和场合变化', '一张照片不能告诉你的事', '继续阅读地方资料'],
+            'paragraphs' => [
+                '中国官方民族分类可以作为浏览入口，却不代表每个民族只有一套永恒不变的衣橱。县域、支系、年龄、性别、生计、信仰、季节、家庭经历和当代变化，都会影响人们穿什么以及怎样称呼一件衣服。',
+                '理解时要看上衣、下装、袍服或围裹、裤装、外层、系结、腰带、鞋履与头饰之间的完整关系。醒目的颜色和饰物可能很重要，但单靠它们既不能判断族属，也不能解释整套服装如何穿着。',
+                '纤维、织法、染色、刺绣、贴饰、珠饰、金属、毛皮和修补是不同问题。说明具体工艺很重要，因为相似表面可能来自不同方法，同一社区在不同地区和场合也可能使用多种材料。',
+                '日常劳动、赶集、婚礼、节庆、宗教参与、舞台表演与旅游展示会形成不同正式程度。现代改良和复兴服装同样属于活态故事，不能因为与旧照片不同，就被简单视为错误或不真实。',
+                '照片可以展示轮廓、颜色、可见开合和部分表面细节，却通常不能证明支系身份、礼仪等级、婚姻状态、确切纤维、纯手工制作或每个纹样的含义，这些内容需要有说明的地方、制作者、博物馆或社区来源。',
+                '总览适合帮助读者选定具体社区和地区，之后仍应继续查找带日期的地方资料。民族服饰不能因为出现在中国就改称汉服，编辑插图也不能冒充田野照片，这是浏览整个分类时最重要的边界。',
+            ],
+        ],
+    ];
+
+    return $voices[$role] ?? throw new InvalidArgumentException('Unknown core editorial role: ' . $role);
+}
+
+/** @return list<string> */
+function hanfuR4CoreReaderNotes(string $subject, string $role, string $risk, bool $en): array
+{
+    $roleLens = $en ? [
+        'platform_due_diligence' => 'The exact listing, selected variation, destination, delivery date, and usable return route all belong to the decision.',
+        'new_chinese_boundary' => 'Modern tailoring and historical reference can coexist, provided that neither is hidden behind the other.',
+        'garment_form_history' => 'Collar, opening, panels, fastening, and dressing order should agree before a period name is trusted.',
+        'fabric_craft_sizing_care' => 'Fibre, weave, finish, decoration, finished measurements, and care instructions answer different practical questions.',
+        'occasion_styling' => 'The occasion, weather, duration, movement, and dressing sequence matter before colour and jewellery are refined.',
+        'purchase_decision' => 'Fit, contents, material disclosure, timing, total cost, and after-sales terms must all suit the same planned use.',
+        'brand_factory_claim_audit' => 'Brand narrative, product specification, manufacturing responsibility, quality control, and after-sales service are separate promises.',
+        'global_traditional_clothing_comparison' => 'Each clothing tradition needs its own local name, source, construction, material history, and social context.',
+        'china_56_ethnic_dress_hub' => 'Community, locality, generation, occasion, and contemporary change matter more than a single representative image.',
+    ] : [
+        'platform_due_diligence' => '具体商品、所选变体、目的地、到货时间和真正可执行的退货路径，都属于同一次判断。',
+        'new_chinese_boundary' => '现代剪裁可以与历史借鉴并存，前提是两者都被准确说清，而不是互相遮盖。',
+        'garment_form_history' => '领型、开合、衣片、系结和穿着顺序应当彼此吻合，之后再使用年代名称。',
+        'fabric_craft_sizing_care' => '纤维、织法、后整理、装饰、成衣尺寸和护理说明，回答的是不同的实际问题。',
+        'occasion_styling' => '场合、天气、时长、动作和穿着顺序先成立，颜色与首饰才有继续调整的意义。',
+        'purchase_decision' => '合身、件数、材料披露、时效、到手成本和售后，必须共同服务同一个使用目的。',
+        'brand_factory_claim_audit' => '品牌故事、商品规格、制造责任、质检和售后是几类不同承诺，不能混成一句宣传。',
+        'global_traditional_clothing_comparison' => '每一种服饰传统都需要自己的地方名称、资料、结构、材料历史与社会语境。',
+        'china_56_ethnic_dress_hub' => '社区、地方、世代、场合与当代变化，比一张所谓代表图片更重要。',
+    ];
+    $lens = $roleLens[$role] ?? $roleLens['purchase_decision'];
+
+    if ($en) {
+        return [
+            'Before choosing ' . $subject . ', define the real occasion, the hours of wear, the expected movement, the climate, and the points that cannot be compromised. ' . $lens . ' Starting from those needs prevents an attractive photograph or a familiar label from making the decision on the reader’s behalf.',
+            'Read a page about ' . $subject . ' from the whole garment toward the details: front, side, back, opening, inner layers, fastening, measurements, and included pieces. A close-up may be excellent for embroidery yet useless for judging proportion. When views disagree, the complete structure deserves more weight than the most dramatic image.',
+            $subject . ' must also work away from the camera. Try the planned underlayers and shoes, then sit, walk, climb a step, raise both arms, and repeat the longest action required by the occasion. A small imbalance at the waist, collar, cuff, or hem often becomes obvious only after several minutes of movement.',
+            'When a key fact is absent, treat that absence as a practical risk: it may affect fit, classification, care, delivery, or return. One limitation deserves particular attention here: ' . $risk . ' Ask for a measurement, material line, construction photograph, date, or policy instead of relying on a confident adjective.',
+            'The value of ' . $subject . ' becomes clearer after imagining the second and fifth wear, not only the arrival-day photograph. Consider cleaning, storage, simple repair, compatibility with existing layers, and whether the piece can serve more than one appropriate setting. Repeated comfortable use is a stronger measure of value than decorative density alone.',
+            'A sound decision about ' . $subject . ' should remain easy to explain: what the garment or offer actually is, why it suits the intended use, which limitations still matter, and what must be checked again at purchase or before dressing. If that explanation depends on guessing a hidden structure or policy, the uncertainty is still part of the choice.',
+        ];
+    }
+
+    return [
+        '准备选择“' . $subject . '”时，先确定真实场合、连续穿着时间、主要动作、气候和不能妥协的条件。' . $lens . '从这些需求出发，能避免一张漂亮照片或一个熟悉标签替读者完成决定。',
+        '阅读“' . $subject . '”相关页面时，应从整件衣服逐步看到细节：正面、侧面、背面、开合、内层、系结、成衣尺寸和包含件数。特写可以很好地展示刺绣，却未必能说明比例；不同图片发生冲突时，完整结构比最有气氛的一张更值得相信。',
+        '“' . $subject . '”还必须离开镜头也能工作。穿上计划中的内层和鞋履，依次坐下、行走、登一级台阶、抬起双臂，并重复场合里持续最久的动作。腰部、领口、袖口或下摆的一点失衡，往往要活动几分钟以后才会显现。',
+        '如果缺少一项关键信息，就应把这种未知当成实际风险，因为它可能影响合身、名称、护理、交付或退货。这里尤其需要留意：“' . $risk . '”向卖家或资料方提出能够用尺寸、成分行、结构照片、日期或条款回答的问题，只有“高级”“放心”等形容词不能代替具体答案。',
+        '“' . $subject . '”的价值，应放到第二次、第五次穿着中判断，而不只看刚到货的照片。清洁、收纳、简单修补、与现有内搭的兼容性，以及能否服务多个合适场景，都属于成本。能够反复舒适穿着，比单纯堆高装饰密度更有意义。',
+        '对“' . $subject . '”的最后判断应当容易说明：眼前衣服或商品究竟是什么，为什么适合预定用途，仍有哪些限制，以及下单或穿着前还要重新确认什么。如果答案必须依赖猜测被遮住的结构或条款，那么这种不确定性本身仍然属于选择的一部分。',
+    ];
+}
+
+/**
+ * @param array<string,mixed> $profile
+ * @return array{lede:string,sections:list<array{heading:string,paragraphs:list<string>,table?:array{headers:list<string>,rows:list<list<string>>},bullets?:list<string>}>}
+ */
+function hanfuR4CoreArticle(array $profile, string $title, string $locale, string $baseSlug): array
+{
+    $en = str_starts_with(strtolower(trim($locale)), 'en');
+    if ($baseSlug === 'hanfu-styling-complete-guide') {
+        $articles = require __DIR__ . '/hanfu-r4-styling-guide.php';
+        return $articles[$en ? 'en_US' : 'zh_Hans_CN'];
+    }
+    $suffix = $en ? '_en' : '_zh';
+    $subject = trim((string)($profile['subject' . $suffix] ?? $title));
+    $definition = trim((string)($profile['definition' . $suffix] ?? ''));
+    $evidence = trim((string)($profile['evidence' . $suffix] ?? ''));
+    $risk = trim((string)($profile['risk' . $suffix] ?? ''));
+    $practice = trim((string)($profile['practice' . $suffix] ?? ''));
+    $role = trim((string)($profile['editorial_role'] ?? ''));
+    if (in_array('', [$subject, $definition, $evidence, $risk, $practice, $role], true)) {
+        throw new InvalidArgumentException('Incomplete reader article profile: ' . $baseSlug);
+    }
+
+    $voice = hanfuR4CoreRoleVoice($role, $en);
+    $readerNotes = hanfuR4CoreReaderNotes($subject, $role, $risk, $en);
+    $working = hanfuR3CoreRoleBody($role, $en, compact('subject', 'definition', 'evidence', 'risk', 'practice'));
+    $headers = array_map(static function (string $header) use ($en): string {
+        $replacements = $en ? [
+            'Evidence to capture' => 'What the page should show',
+            'Primary record required' => 'What can support it',
+            'Unverified status' => 'Reason for caution',
+            'Photo and editorial boundary' => 'What a photograph can show',
+        ] : [
+            '应保存的证据' => '页面应该提供什么',
+            '所需原始记录' => '可以怎样判断',
+            '未核实状态' => '需要警惕什么',
+            '照片与编辑边界' => '照片能够说明什么',
+        ];
+        return $replacements[$header] ?? $header;
+    }, $working['headers']);
+    $lede = $en
+        ? 'Many readers first meet ' . $subject . ' through a photograph, a product name, or an occasion they need to dress for. A useful guide looks past that first impression and connects visible construction, material, fit, movement, and context so the final choice still makes sense away from the campaign image.'
+        : '很多人第一次接触“' . $subject . '”，是从一张照片、一个商品名称或一次具体穿着需求开始。真正有用的文章不能停在第一印象，而要把可见结构、材料、合身、动作和使用语境连起来，让读者离开宣传图以后仍然能够判断。';
+
+    return [
+        'lede' => $lede,
+        'sections' => [
+            ['heading' => $voice['headings'][0], 'paragraphs' => [$definition . ' ' . $voice['paragraphs'][0], $readerNotes[0]]],
+            ['heading' => $voice['headings'][1], 'paragraphs' => [$evidence . ' ' . $voice['paragraphs'][1], $readerNotes[1]], 'table' => ['headers' => $headers, 'rows' => $working['rows']]],
+            ['heading' => $voice['headings'][2], 'paragraphs' => [$voice['paragraphs'][2] . ' ' . $readerNotes[2]]],
+            ['heading' => $voice['headings'][3], 'paragraphs' => [$voice['paragraphs'][3] . ' ' . $readerNotes[3]]],
+            ['heading' => $voice['headings'][4], 'paragraphs' => [$practice . ' ' . $voice['paragraphs'][4], $readerNotes[4]]],
+            ['heading' => $voice['headings'][5], 'paragraphs' => [$voice['paragraphs'][5] . ' ' . $working['evidence_boundary'], $readerNotes[5]]],
+        ],
+    ];
+}
+
+return $profiles;

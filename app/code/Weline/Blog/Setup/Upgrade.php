@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Blog\Setup;
 
 use Weline\Blog\Model\BlogCategoryAttributeEntity;
+use Weline\Blog\Model\Post\LocalDescription;
 use Weline\Blog\Service\BlogCategoryEavBootstrap;
 use Weline\Blog\Service\BlogCategoryLocaleSyncService;
 use Weline\Blog\Service\BlogNewsCategoryBootstrap;
@@ -25,8 +26,69 @@ final class Upgrade implements UpgradeInterface
         $modelSetup->putModel($entity);
         $entity->upgrade($modelSetup, $context);
 
+        /** @var LocalDescription $postLocal */
+        $postLocal = ObjectManager::getInstance(LocalDescription::class);
+        $modelSetup->putModel($postLocal);
+        $postLocal->upgrade($modelSetup, $context);
+
         ObjectManager::getInstance(BlogCategoryEavBootstrap::class)->ensureCategorySchema();
         ObjectManager::getInstance(BlogCategoryLocaleSyncService::class)->syncExistingCategories();
         ObjectManager::getInstance(BlogNewsCategoryBootstrap::class)->ensure(0);
+        $this->ensureBlogReviewsPublished();
+    }
+
+    /**
+     * blog-reviews default_injections only land in draft; publish so storefront reviews slot is not empty.
+     */
+    private function ensureBlogReviewsPublished(): void
+    {
+        if (!class_exists(\Weline\Theme\Service\WidgetDefaultInjectionService::class)
+            || !class_exists(\Weline\Theme\Service\ThemeLayoutService::class)
+            || !class_exists(\Weline\Theme\Model\WelineTheme::class)
+            || !class_exists(\Weline\Theme\Model\ThemeLayout::class)
+        ) {
+            return;
+        }
+
+        try {
+            /** @var \Weline\Theme\Model\WelineTheme $themeModel */
+            $themeModel = ObjectManager::getInstance(\Weline\Theme\Model\WelineTheme::class);
+            $theme = $themeModel->clear()->where(\Weline\Theme\Model\WelineTheme::schema_fields_IS_ACTIVE, 1)->find()->fetch();
+            $themeId = (int)($theme?->getId() ?? 0);
+            if ($themeId <= 0) {
+                $themeId = (int)($themeModel->clear()->load(1)->getId() ?? 0);
+            }
+            if ($themeId <= 0) {
+                return;
+            }
+
+            $identity = [
+                'layout_option' => 'default',
+                'scope' => 'default',
+                'locale_code' => '',
+                'target_type' => 'global',
+                'target_id' => 0,
+            ];
+
+            ObjectManager::getInstance(\Weline\Theme\Service\WidgetDefaultInjectionService::class)
+                ->applyRequiredMissingForIdentity(
+                    $themeId,
+                    \Weline\Theme\Model\ThemeLayout::PAGE_TYPE_BLOG,
+                    $identity,
+                    \Weline\Theme\Service\PreviewContextService::AREA_FRONTEND,
+                    \Weline\Theme\Model\ThemeLayout::STATUS_DRAFT,
+                );
+
+            ObjectManager::getInstance(\Weline\Theme\Service\ThemeLayoutService::class)
+                ->publishLayout(
+                    $themeId,
+                    \Weline\Theme\Model\ThemeLayout::PAGE_TYPE_BLOG,
+                    $identity,
+                    false,
+                    ['reason' => 'blog-reviews storefront publish'],
+                );
+        } catch (\Throwable) {
+            // Theme optional at install time; storefront can publish later via editor.
+        }
     }
 }
