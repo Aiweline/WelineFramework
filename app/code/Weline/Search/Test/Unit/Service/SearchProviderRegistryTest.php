@@ -46,6 +46,7 @@ final class SearchProviderRegistryTest extends TestCase
             public function code(): string { return 'product'; }
             public function label(): string { return '商品'; }
             public function sortOrder(): int { return 10; }
+            public function areas(): array { return ['frontend']; }
             public function expression(\Weline\Search\Dto\SearchRequest $request): \Weline\Search\Service\SearchExpression {
                 return \Weline\Search\Service\SearchExpression::of($request);
             }
@@ -109,12 +110,26 @@ final class SearchProviderRegistryTest extends TestCase
         self::assertSame(7, $crumbs[3]['category_id']);
     }
 
+    public function testListTypesUsesUnifiedChannelLanguageCachePolicy(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/SearchProviderRegistry.php',
+        );
+
+        self::assertStringContainsString('StorefrontScopeHotCache', $source);
+        self::assertStringContainsString('rememberPolicy', $source);
+        self::assertStringContainsString("resource: 'search.provider_types'", $source);
+        self::assertStringContainsString("scope: 'channel'", $source);
+        self::assertStringContainsString("vary: ['lang', 'area']", $source);
+    }
+
     public function testHitTemplateMapCollectsProviderTemplates(): void
     {
         $product = new class implements \Weline\Search\Api\SearchProviderInterface {
             public function code(): string { return 'product'; }
             public function label(): string { return '商品'; }
             public function sortOrder(): int { return 10; }
+            public function areas(): array { return ['frontend']; }
             public function expression(\Weline\Search\Dto\SearchRequest $request): \Weline\Search\Service\SearchExpression {
                 return \Weline\Search\Service\SearchExpression::of($request);
             }

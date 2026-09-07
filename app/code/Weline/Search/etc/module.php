@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Search',
-    'version' => '1.4.4',
+    'version' => '1.4.8',
     'requires' => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
@@ -28,5 +28,9 @@ return [
             => \Weline\Search\Service\DatabaseSearchDegradeMarkerStore::class,
         \Weline\Search\Api\SearchProviderIndexStorageInterface::class
             => \Weline\Search\Service\DatabaseSearchProviderIndexStore::class,
+        \Weline\Search\Api\SearchProjectionPendingDrainerInterface::class
+            => \Weline\Search\Service\SearchProjectionPendingDrainer::class,
+        \Weline\Search\Api\SearchProjectionQueueAdmissionInterface::class
+            => \Weline\Search\Service\SearchProjectionQueueAdmission::class,
     ],
 ];

@@ -18,6 +18,14 @@ abstract class AbstractSearchProvider implements SearchProviderInterface
         return 100;
     }
 
+    /**
+     * @return list<string>
+     */
+    public function areas(): array
+    {
+        return ['frontend'];
+    }
+
     public function hitTemplate(): string
     {
         return '';
