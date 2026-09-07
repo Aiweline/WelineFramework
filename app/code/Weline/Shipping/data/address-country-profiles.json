@@ -1,0 +1,101 @@
+{
+  "schema_version": "address-country-profiles.v1",
+  "default": {
+    "levels": ["country", "province", "city"],
+    "autocomplete": true,
+    "notes": "Shallow form by default: province + city; district only when pack has third-level data. Street/line1 always free-text address1 (no global street cascade)."
+  },
+  "countries": {
+    "CN": {
+      "levels": ["country", "province", "city", "district"],
+      "autocomplete": true
+    },
+    "HK": {
+      "levels": ["country", "province", "city", "district"],
+      "autocomplete": true
+    },
+    "MO": {
+      "levels": ["country", "province", "city", "district"],
+      "autocomplete": true
+    },
+    "TW": {
+      "levels": ["country", "province", "city", "district"],
+      "autocomplete": true
+    },
+    "FR": {
+      "levels": ["country", "province", "city", "district"],
+      "autocomplete": true,
+      "notes": "region → department → commune (CSC nested states)"
+    },
+    "GB": {
+      "levels": ["country", "province", "city", "district"],
+      "autocomplete": true,
+      "notes": "country → council/district → locality"
+    },
+    "IT": {
+      "levels": ["country", "province", "city", "district"],
+      "autocomplete": true,
+      "notes": "region → province → comune"
+    },
+    "US": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "CA": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "JP": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "KR": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "AU": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "DE": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "AR": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "BR": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "IN": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "ID": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "MX": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "RU": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "SA": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "ZA": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    },
+    "TR": {
+      "levels": ["country", "province", "city"],
+      "autocomplete": true
+    }
+  }
+}
