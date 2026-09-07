@@ -276,6 +276,7 @@ class EavAttribute extends \Weline\Framework\Database\Model
                 EavAttribute\Option::schema_fields_code => $option->getCode(),
                 EavAttribute\Option::schema_fields_value => $option->getValue(),
                 EavAttribute\Option::schema_fields_eav_entity_id => $option->getEavEntityId(),
+                EavAttribute\Option::schema_fields_scope_instance_id => $option->getScopeInstanceId(),
                 EavAttribute\Option::schema_fields_attribute_id => $option->getAttributeId(),
                 EavAttribute\Option::schema_fields_swatch_image => $option->getSwatchImage(),
                 EavAttribute\Option::schema_fields_swatch_color => $option->getSwatchColor(),
@@ -286,7 +287,12 @@ class EavAttribute extends \Weline\Framework\Database\Model
         $optionModel = ObjectManager::getInstance(EavAttribute\Option::class);
         $optionModel->beginTransaction();
         try {
-            $optionModel->reset()->insert($insert_attribute_options, ['eav_entity_id', 'attribute_id', 'code'])->fetch();
+            $optionModel->reset()->insert($insert_attribute_options, [
+                'eav_entity_id',
+                'attribute_id',
+                'code',
+                'scope_instance_id',
+            ])->fetch();
             $optionModel->commit();
         } catch (\Throwable $e) {
             $optionModel->rollBack();

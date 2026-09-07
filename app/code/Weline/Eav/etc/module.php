@@ -2,13 +2,14 @@
 
 return [
     "name" => 'Weline_Eav',
-    "version" => '1.1.10',
+    "version" => '1.1.15',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '*',
         'Weline_I18n' => '*',
     ],
     "optional" => [
+        'Weline_Queue' => '>=1.2.5',
     ],
     "provides" => [
         \Weline\Framework\Setup\Stage\EavSchemaProviderInterface::class => \Weline\Eav\Api\SchemaProvider::class,

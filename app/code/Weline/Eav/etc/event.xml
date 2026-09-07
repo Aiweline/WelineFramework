@@ -5,4 +5,21 @@
     <event name="Weline_Framework_Module::module_upgrade">
         <observer name="Weline_Eav::upgrade_default_attribute" instance="Weline\Eav\Observer\UpgradeDefaultAttribute" disabled="false" shared="true" sort="0"/>
     </event>
+
+    <!-- EAV names/option values are LocalModel fields; queue translation after writes. -->
+    <event name="Weline_Eav_Model_EavEntity_model_save_after">
+        <observer name="Weline_Eav::local_model_translation_entity_save" instance="Weline\Eav\Observer\EavLocalModelTranslationTrigger" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="Weline_Eav_Model_EavAttribute_Set_model_save_after">
+        <observer name="Weline_Eav::local_model_translation_set_save" instance="Weline\Eav\Observer\EavLocalModelTranslationTrigger" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="Weline_Eav_Model_EavAttribute_Group_model_save_after">
+        <observer name="Weline_Eav::local_model_translation_group_save" instance="Weline\Eav\Observer\EavLocalModelTranslationTrigger" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="Weline_Eav_Model_EavAttribute_model_save_after">
+        <observer name="Weline_Eav::local_model_translation_attribute_save" instance="Weline\Eav\Observer\EavLocalModelTranslationTrigger" disabled="false" shared="true" sort="100"/>
+    </event>
+    <event name="Weline_Eav_Model_EavAttribute_Option_model_save_after">
+        <observer name="Weline_Eav::local_model_translation_option_save" instance="Weline\Eav\Observer\EavLocalModelTranslationTrigger" disabled="false" shared="true" sort="100"/>
+    </event>
 </config>
