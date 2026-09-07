@@ -26,16 +26,26 @@ final class InquiryFormBootstrap
 
         if ($formId > 0 && ($existing[0][Form::schema_fields_STATUS] ?? '') === Form::STATUS_PUBLISHED) {
             $state = $service->draft($formId);
+            $hasGlobalCountry = false;
+            $hasDistrictCascade = false;
+            $companionKeys = [];
             foreach ((array)($state['schema']['fields'] ?? []) as $field) {
                 if (!is_array($field)) {
                     continue;
                 }
-                if (($field['key'] ?? '') === 'country' && ($field['type'] ?? '') === 'country') {
+                $key = (string)($field['key'] ?? '');
+                if ($key === 'country' && ($field['type'] ?? '') === 'country') {
                     $catalog = strtolower(trim((string)(($field['validation'] ?? [])['catalog'] ?? '')));
-                    if ($catalog === 'global') {
-                        return;
-                    }
+                    $levels = strtolower(trim((string)(($field['validation'] ?? [])['levels'] ?? '')));
+                    $hasGlobalCountry = ($catalog === 'global');
+                    $hasDistrictCascade = str_contains($levels, 'district');
                 }
+                if (in_array($key, ['province', 'city', 'district'], true)) {
+                    $companionKeys[$key] = true;
+                }
+            }
+            if ($hasGlobalCountry && $hasDistrictCascade && count($companionKeys) === 3) {
+                return;
             }
         }
 
@@ -50,7 +60,19 @@ final class InquiryFormBootstrap
                     ['key' => 'contact_name', 'type' => 'text', 'required' => true],
                     ['key' => 'email', 'type' => 'email', 'required' => true],
                     ['key' => 'phone', 'type' => 'text', 'required' => true],
-                    ['key' => 'country', 'type' => 'country', 'required' => true, 'validation' => ['catalog' => 'global']],
+                    [
+                        'key' => 'country',
+                        'type' => 'country',
+                        'required' => true,
+                        'validation' => [
+                            'catalog' => 'global',
+                            'levels' => 'country|province|city|district',
+                            'selection' => 'single',
+                        ],
+                    ],
+                    ['key' => 'province', 'type' => 'text', 'required' => false],
+                    ['key' => 'city', 'type' => 'text', 'required' => false],
+                    ['key' => 'district', 'type' => 'text', 'required' => false],
                     [
                         'key' => 'supply_type',
                         'type' => 'select',
@@ -77,7 +99,17 @@ final class InquiryFormBootstrap
                         'contact_name' => ['label' => '联系人'],
                         'email' => ['label' => '商务邮箱'],
                         'phone' => ['label' => '联系电话'],
-                        'country' => ['label' => '国家 / 地区'],
+                        'country' => [
+                            'label' => '国家 / 地区',
+                            'levels' => [
+                                'province' => '省份',
+                                'city' => '城市',
+                                'district' => '区县',
+                            ],
+                        ],
+                        'province' => ['label' => '省份'],
+                        'city' => ['label' => '城市'],
+                        'district' => ['label' => '区县'],
                         'supply_type' => [
                             'label' => '供应类型',
                             'options' => [
@@ -101,7 +133,17 @@ final class InquiryFormBootstrap
                         'contact_name' => ['label' => 'Contact name'],
                         'email' => ['label' => 'Business email'],
                         'phone' => ['label' => 'Phone'],
-                        'country' => ['label' => 'Country / region'],
+                        'country' => [
+                            'label' => 'Country / region',
+                            'levels' => [
+                                'province' => 'Province',
+                                'city' => 'City',
+                                'district' => 'District',
+                            ],
+                        ],
+                        'province' => ['label' => 'Province'],
+                        'city' => ['label' => 'City'],
+                        'district' => ['label' => 'District'],
                         'supply_type' => [
                             'label' => 'Supply type',
                             'options' => [

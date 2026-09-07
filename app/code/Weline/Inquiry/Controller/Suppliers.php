@@ -6,6 +6,7 @@ namespace Weline\Inquiry\Controller;
 
 use Weline\Framework\App\Controller\FrontendController;
 
+/** Frontend supplier application page (atelier split layout). */
 class Suppliers extends FrontendController
 {
     protected ?string $layoutType = 'default';
@@ -17,7 +18,7 @@ class Suppliers extends FrontendController
             'title' => __('供应商申请'),
             'showHeader' => true,
             'showFooter' => true,
-            'class' => 'w-inquiry-suppliers-page',
+            'class' => 'w-inquiry-suppliers-page w-inquiry-suppliers-page--atelier',
         ]);
 
         return $this->fetch('Weline_Inquiry::templates/frontend/suppliers.phtml');

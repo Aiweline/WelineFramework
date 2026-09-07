@@ -1,5 +1,649 @@
 <?php
 $stateJson = json_encode($state ?? [], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}';
+$fieldTypesJson = json_encode(\Weline\Inquiry\Service\FormSchemaService::FIELD_TYPES, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '[]';
+$formId = (int)($form_id ?? 0);
+$formName = (string)(($state['form']['name'] ?? '') ?: '');
+$formCode = (string)(($state['form']['code'] ?? '') ?: '');
 ?>
-<div class="w-grid" data-testid="inquiry-editor"><div style="--w-span:12;"><div class="w-backend-page__heading w-cluster" data-justify="between"><h4><?= __('可视化编辑询盘表单') ?></h4><a href="@backend-url{'inquiry/backend/inquiry/index'}"><?= __('返回列表') ?></a></div><div class="w-card"><div class="w-card__body"><div class="w-grid" style="--w-gap:var(--weline-space-4);"><div style="--w-span-md:4;"><label><?= __('内部名称') ?><input class="w-input" data-iq="name"></label></div><div style="--w-span-md:4;"><label>Code<input class="w-input" data-iq="code" pattern="[a-z][a-z0-9-]+"></label></div><div style="--w-span-md:4;"><label><?= __('默认语言') ?><input class="w-input" data-iq="default_locale" value="en_US"></label></div></div><hr><div class="w-cluster" data-justify="between" data-align="center"><h5><?= __('字段') ?></h5><button class="w-button" type="button" data-iq-add data-tone="primary" data-variant="outline"><?= __('添加字段') ?></button></div><div data-iq-fields></div><hr><h5><?= __('翻译') ?> <small class="w-text" data-tone="muted">(title / submit_label / 字段 label)</small></h5><textarea class="w-textarea" rows="10" data-iq-translations></textarea><div class="w-cluster" style="--w-mt:var(--weline-space-4);--w-gap:var(--weline-space-2);"><button class="w-button" type="button" data-iq-save data-tone="primary"><?= __('保存草稿') ?></button><button class="w-button" type="button" data-iq-publish data-tone="success"><?= __('发布') ?></button></div><p data-iq-message aria-live="polite" style="--w-mt:var(--weline-space-2);"></p></div></div></div></div>
-<script>(async function(){const state=<?= $stateJson ?>,root=document.querySelector('[data-testid="inquiry-editor"]'),fields=root.querySelector('[data-iq-fields]'),msg=root.querySelector('[data-iq-message]');let data={form_id:<?= (int)($form_id ?? 0) ?>,code:state.form?.code||'',name:state.form?.name||'',default_locale:state.form?.default_locale||'en_US',schema:state.schema||{fields:[]},settings:state.settings||{},translations:state.translations||{'en_US':{}}};for(const k of ['code','name','default_locale'])root.querySelector('[data-iq="'+k+'"]').value=data[k]||'';root.querySelector('[data-iq-translations]').value=JSON.stringify(data.translations,null,2);function draw(){fields.innerHTML='';data.schema.fields.forEach((f,i)=>{let r=document.createElement('div');r.className='border rounded p-2 mb-2';r.innerHTML='<div class="w-grid" style="--w-gap:var(--weline-space-2);"><div><input class="w-input" placeholder="key" value="'+(f.key||'')+'"></div><div><select class="w-select"><option>text</option><option>textarea</option><option>email</option><option>tel</option><option>select</option><option>radio</option><option>checkbox</option><option>file</option></select></div><div><label><input type="checkbox"> required</label></div><div><button type="button" class="w-button" data-tone="danger" data-variant="outline" data-size="sm">×</button></div></div>';let inputs=r.querySelectorAll('input'),select=r.querySelector('select');select.value=f.type||'text';inputs[0].oninput=e=>f.key=e.target.value;select.onchange=e=>f.type=e.target.value;inputs[1].checked=!!f.required;inputs[1].onchange=e=>f.required=e.target.checked;r.querySelector('button').onclick=()=>{data.schema.fields.splice(i,1);draw()};fields.appendChild(r)})}draw();root.querySelector('[data-iq-add]').onclick=()=>{data.schema.fields.push({key:'field_'+(data.schema.fields.length+1),type:'text',required:false,options:[]});draw()};async function save(publish){for(const k of ['code','name','default_locale'])data[k]=root.querySelector('[data-iq="'+k+'"]').value.trim();try{data.translations=JSON.parse(root.querySelector('[data-iq-translations]').value||'{}');let api=await Weline.load('api'),res=await api.resource('inquiry').adminSaveDraft(data);data.form_id=res.form.form_id;if(publish)res=await api.resource('inquiry').adminPublish({form_id:data.form_id});msg.textContent=publish?'<?= __('已发布') ?>':'<?= __('草稿已保存') ?>'}catch(e){msg.textContent=e.message||'<?= __('保存失败') ?>'}}root.querySelector('[data-iq-save]').onclick=()=>save(false);root.querySelector('[data-iq-publish]').onclick=()=>save(true)})();</script>
+<css>Weline_Inquiry::css/inquiry-editor.css</css>
+<link rel="stylesheet" href="/Weline/Inquiry/view/statics/css/inquiry-editor.css?v=20260907-resp2" data-inquiry-editor-css="1" data-no-extract="true">
+<style data-inquiry-editor-responsive="1">
+/* Critical responsive field rail — inline so WLS static cache cannot keep the old broken grid */
+.w-inquiry-editor__field-main{
+  display:grid;
+  grid-template-columns:2rem minmax(0,1fr) auto 2.25rem;
+  grid-template-areas:"ord key key remove" ". type required required";
+  gap:var(--weline-space-2,.5rem);
+  align-items:center;
+}
+.w-inquiry-editor__ord{grid-area:ord}
+.w-inquiry-editor__cell--key{grid-area:key;margin:0;min-width:0}
+.w-inquiry-editor__cell--type{grid-area:type;margin:0;min-width:0}
+.w-inquiry-editor__cell--required{grid-area:required;justify-self:start}
+.w-inquiry-editor__cell--remove{grid-area:remove;justify-self:end;min-width:2.25rem;padding-inline:.35rem}
+.w-inquiry-editor__cell--type .w-select,
+.w-inquiry-editor__cell--key .w-input{width:100%;min-width:0}
+@media (min-width:560px) and (max-width:899px){
+  .w-inquiry-editor__field-main{
+    grid-template-columns:2rem minmax(0,1.2fr) minmax(7.5rem,.9fr) auto 2.25rem;
+    grid-template-areas:"ord key type required remove";
+  }
+}
+@media (min-width:900px){
+  .w-inquiry-editor__field-main{
+    grid-template-columns:2.5rem minmax(0,1.4fr) minmax(7rem,.9fr) 5.5rem 2.5rem;
+    grid-template-areas:"ord key type required remove";
+  }
+}
+</style>
+
+<section class="w-inquiry-editor" data-testid="inquiry-editor" weline-code="inquiry.backend.editor">
+    <header class="w-inquiry-editor__chrome w-cluster" data-justify="between" data-align="center">
+        <div class="w-stack" data-gap="xs">
+            <div class="w-backend-page__heading w-cluster" data-align="center" data-justify="start" style="--w-mb:0;">
+                <h4 style="--w-mb:0;"><?= __('编辑询盘表单') ?></h4>
+            </div>
+            <p class="w-inquiry-editor__lede w-text" data-tone="muted" data-iq-lede>
+                <?= $formCode !== '' ? htmlspecialchars($formCode, ENT_QUOTES, 'UTF-8') : __('未命名表单') ?>
+                <?php if ($formName !== ''): ?>
+                    <span aria-hidden="true"> · </span><?= htmlspecialchars($formName, ENT_QUOTES, 'UTF-8') ?>
+                <?php endif; ?>
+            </p>
+        </div>
+        <div class="w-inquiry-editor__actions w-cluster" data-gap="sm">
+            <a class="w-button" href="@backend-url{'inquiry/backend/inquiry/index'}" data-variant="ghost" data-size="sm"><?= __('返回列表') ?></a>
+            <button class="w-button" type="button" data-iq-save data-tone="primary" data-variant="outline"><?= __('保存草稿') ?></button>
+            <button class="w-button" type="button" data-iq-publish data-tone="success"><?= __('发布') ?></button>
+        </div>
+    </header>
+
+    <div class="w-stack w-inquiry-editor__body" data-gap="md">
+        <aside class="w-inquiry-editor__guide" data-testid="inquiry-editor-guide" aria-label="<?= __('配置步骤') ?>">
+            <ol class="w-inquiry-editor__steps">
+                <li><?= __('① 基本信息：填内部名称、对外编码、默认语言（先写完默认语言文案再翻其它语言）。') ?></li>
+                <li><?= __('② 字段结构：添加字段并设置键名/类型/必填；键名决定前台提交参数，改键名后请同步改文案区标签。') ?></li>
+                <li><?= __('③ 前台文案：用语言页签填写标题、按钮与字段标签；不必手改 JSON。空语言可用「AI 填充其它语言」。') ?></li>
+                <li><?= __('④ 保存草稿预览无误后点发布。') ?></li>
+            </ol>
+        </aside>
+
+        <section class="w-card w-inquiry-editor__panel" data-iq-panel="meta" aria-labelledby="iq-meta-title">
+            <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                <h5 class="w-card__title" id="iq-meta-title" style="--w-mb:0;"><?= __('基本信息') ?></h5>
+                <span class="w-text" data-tone="muted" data-size="sm"><?= __('编码发布后尽量不要改；默认语言是 AI 翻译的源语言') ?></span>
+            </div>
+            <div class="w-card__body">
+                <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                    <label class="w-field" style="--w-span-md:4;">
+                        <span class="w-field__label"><?= __('内部名称') ?></span>
+                        <input class="w-input" data-iq="name" autocomplete="off" placeholder="<?= __('例如：供应商申请') ?>">
+                        <span class="w-field__hint"><?= __('仅后台列表显示，不影响前台标题') ?></span>
+                    </label>
+                    <label class="w-field" style="--w-span-md:4;">
+                        <span class="w-field__label"><?= __('对外编码') ?></span>
+                        <input class="w-input" data-iq="code" pattern="[a-z][a-z0-9-]+" autocomplete="off" spellcheck="false" placeholder="supplier-application">
+                        <span class="w-field__hint"><?= __('小写英文与连字符，如 supplier-application') ?></span>
+                    </label>
+                    <label class="w-field" style="--w-span-md:4;">
+                        <span class="w-field__label"><?= __('默认语言') ?></span>
+                        <input class="w-input" data-iq="default_locale" value="en_US" autocomplete="off" spellcheck="false" placeholder="zh_Hans_CN">
+                        <span class="w-field__hint"><?= __('如 zh_Hans_CN、en_US；文案区应先填齐该语言') ?></span>
+                    </label>
+                </div>
+            </div>
+        </section>
+
+        <section class="w-card w-inquiry-editor__panel" data-iq-panel="fields" aria-labelledby="iq-fields-title">
+            <div class="w-card__header w-cluster" data-justify="between" data-align="center">
+                <div class="w-cluster" data-gap="sm" data-align="center">
+                    <h5 class="w-card__title" id="iq-fields-title" style="--w-mb:0;"><?= __('字段结构') ?></h5>
+                    <span class="w-inquiry-editor__count" data-iq-field-count>0</span>
+                </div>
+                <button class="w-button" type="button" data-iq-add data-tone="primary" data-variant="outline" data-size="sm"><?= __('添加字段') ?></button>
+            </div>
+            <div class="w-card__body">
+                <div class="w-inquiry-editor__rail-head w-text" data-tone="muted" data-size="sm" aria-hidden="true">
+                    <span><?= __('顺序') ?></span>
+                    <span><?= __('字段键名') ?></span>
+                    <span><?= __('类型') ?></span>
+                    <span><?= __('必填') ?></span>
+                    <span></span>
+                </div>
+                <div class="w-stack" data-gap="sm" data-iq-fields></div>
+                <p class="w-field__hint w-text" data-tone="muted" style="--w-mt:var(--weline-space-3);">
+                    <?= __('类型选「国家/地区」时会渲染官方地址级联；建议另配 province / city / district 文本字段用于落库快照。') ?>
+                </p>
+            </div>
+        </section>
+
+        <section class="w-card w-inquiry-editor__panel" data-iq-panel="i18n" aria-labelledby="iq-i18n-title">
+            <div class="w-card__header w-cluster" data-justify="between" data-align="start">
+                <div class="w-stack" data-gap="xs">
+                    <h5 class="w-card__title" id="iq-i18n-title" style="--w-mb:0;"><?= __('前台文案') ?></h5>
+                    <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:0;"><?= __('按语言填写用户看到的标题、说明、按钮与字段标签。切换语言页签即可；高级 JSON 仅排错时展开。') ?></p>
+                </div>
+                <div class="w-cluster" data-gap="sm" data-align="center">
+                    <label class="w-inquiry-editor__required"><input type="checkbox" data-iq-ai-force> <span><?= __('强制覆盖已有译文') ?></span></label>
+                    <button class="w-button" type="button" data-iq-ai-translate data-tone="primary" data-variant="outline" data-size="sm" data-testid="inquiry-ai-translate"><?= __('AI 填充其它语言') ?></button>
+                </div>
+            </div>
+            <div class="w-card__body w-stack" data-gap="md">
+                <div class="w-inquiry-editor__locale-bar w-cluster" data-justify="between" data-align="center">
+                    <div class="w-inquiry-editor__locale-tabs" role="tablist" data-iq-locale-tabs data-testid="inquiry-locale-tabs"></div>
+                    <div class="w-cluster" data-gap="sm" data-align="center">
+                        <input class="w-input" data-iq-locale-new style="max-width:10rem;" placeholder="en_US" spellcheck="false" aria-label="<?= __('新语言代码') ?>">
+                        <button class="w-button" type="button" data-iq-locale-add data-variant="outline" data-size="sm"><?= __('添加语言') ?></button>
+                    </div>
+                </div>
+
+                <div class="w-stack" data-gap="md" data-iq-i18n-form data-testid="inquiry-i18n-form">
+                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                        <label class="w-field" style="--w-span-md:6;">
+                            <span class="w-field__label"><?= __('表单标题') ?></span>
+                            <input class="w-input" data-iq-copy="title" autocomplete="off" placeholder="<?= __('前台页面大标题') ?>">
+                        </label>
+                        <label class="w-field" style="--w-span-md:6;">
+                            <span class="w-field__label"><?= __('提交按钮') ?></span>
+                            <input class="w-input" data-iq-copy="submit_label" autocomplete="off" placeholder="<?= __('例如：提交申请') ?>">
+                        </label>
+                        <label class="w-field" style="--w-span:12;">
+                            <span class="w-field__label"><?= __('表单说明') ?></span>
+                            <textarea class="w-textarea" rows="2" data-iq-copy="description" placeholder="<?= __('标题下方的简短说明') ?>"></textarea>
+                        </label>
+                        <label class="w-field" style="--w-span:12;">
+                            <span class="w-field__label"><?= __('提交成功提示') ?></span>
+                            <textarea class="w-textarea" rows="2" data-iq-copy="success_message" placeholder="<?= __('用户提交成功后看到的提示') ?>"></textarea>
+                        </label>
+                    </div>
+
+                    <div class="w-stack" data-gap="sm">
+                        <h6 class="w-inquiry-editor__subhead" style="--w-mb:0;"><?= __('字段标签') ?></h6>
+                        <p class="w-text" data-tone="muted" data-size="sm" style="--w-mt:0;"><?= __('与上方字段结构一一对应；选项型字段可写每个选项的显示名。') ?></p>
+                        <div class="w-stack" data-gap="sm" data-iq-i18n-fields></div>
+                    </div>
+                </div>
+
+                <details class="w-inquiry-editor__advanced">
+                    <summary><?= __('高级：原始翻译 JSON（一般无需编辑）') ?></summary>
+                    <label class="w-field" style="--w-mt:var(--weline-space-3);">
+                        <span class="w-field__label visually-hidden"><?= __('翻译 JSON') ?></span>
+                        <textarea class="w-textarea w-inquiry-editor__json" rows="10" data-iq-translations spellcheck="false"></textarea>
+                    </label>
+                </details>
+            </div>
+        </section>
+
+        <p class="w-inquiry-editor__message" data-iq-message aria-live="polite"></p>
+    </div>
+</section>
+
+<script>
+(async function () {
+    const state = <?= $stateJson ?>;
+    const FIELD_TYPES = <?= $fieldTypesJson ?>;
+    const TYPE_LABELS = {
+        text: <?= json_encode(__('单行文本'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        textarea: <?= json_encode(__('多行文本'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        email: <?= json_encode(__('邮箱'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        tel: <?= json_encode(__('电话'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        number: <?= json_encode(__('数字'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        select: <?= json_encode(__('下拉选择'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        radio: <?= json_encode(__('单选'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        checkbox: <?= json_encode(__('多选'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        file: <?= json_encode(__('文件上传'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        country: <?= json_encode(__('国家/地区'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        hidden: <?= json_encode(__('隐藏字段'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+    };
+    const I18N = {
+        unnamed: <?= json_encode(__('未命名表单'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        type: <?= json_encode(__('类型'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        required: <?= json_encode(__('必填'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        removeField: <?= json_encode(__('删除字段'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        optionsHint: <?= json_encode(__('选项值（每行一个，提交用；显示名在下方文案区填写）'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        catalog: <?= json_encode(__('地址目录'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        catalogGlobal: <?= json_encode(__('全球国家'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        catalogInstalled: <?= json_encode(__('站点已安装地区'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        levels: <?= json_encode(__('级联层级'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        selection: <?= json_encode(__('选择方式'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        selectionSingle: <?= json_encode(__('单选'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        selectionMulti: <?= json_encode(__('多选'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        defaultBadge: <?= json_encode(__('默认'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        fieldLabel: <?= json_encode(__('显示标签'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        optionLabel: <?= json_encode(__('选项显示名'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        levelProvince: <?= json_encode(__('省/州标签'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        levelCity: <?= json_encode(__('城市标签'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        levelDistrict: <?= json_encode(__('区县标签'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        jsonBad: <?= json_encode(__('翻译 JSON 无法解析，请检查高级区语法'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        localeNeeded: <?= json_encode(__('请输入语言代码，如 en_US'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        aiWorking: <?= json_encode(__('正在 AI 填充…'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        aiFail: <?= json_encode(__('AI 填充失败'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        aiDone: <?= json_encode(__('AI 填充完成'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        published: <?= json_encode(__('已发布'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        drafted: <?= json_encode(__('草稿已保存'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+        saveFail: <?= json_encode(__('保存失败'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>,
+    };
+
+    const root = document.querySelector('[data-testid="inquiry-editor"]');
+    if (!root) return;
+
+    const fieldsEl = root.querySelector('[data-iq-fields]');
+    const countEl = root.querySelector('[data-iq-field-count]');
+    const msg = root.querySelector('[data-iq-message]');
+    const lede = root.querySelector('[data-iq-lede]');
+    const tabsEl = root.querySelector('[data-iq-locale-tabs]');
+    const i18nFieldsEl = root.querySelector('[data-iq-i18n-fields]');
+    const translationsTa = root.querySelector('[data-iq-translations]');
+
+    const data = {
+        form_id: <?= $formId ?>,
+        code: state.form?.code || '',
+        name: state.form?.name || '',
+        default_locale: state.form?.default_locale || 'en_US',
+        schema: state.schema || { fields: [] },
+        settings: state.settings || {},
+        translations: state.translations || {},
+    };
+    if (!Array.isArray(data.schema.fields)) data.schema.fields = [];
+    if (!data.translations || typeof data.translations !== 'object') data.translations = {};
+    if (!data.translations[data.default_locale]) data.translations[data.default_locale] = {};
+
+    let activeLocale = data.default_locale;
+    let syncingJson = false;
+
+    for (const k of ['code', 'name', 'default_locale']) {
+        const input = root.querySelector('[data-iq="' + k + '"]');
+        if (input) input.value = data[k] || '';
+    }
+
+    function esc(value) {
+        return String(value ?? '')
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function typeLabel(type) {
+        return TYPE_LABELS[type] || type;
+    }
+
+    function typeOptions(selected) {
+        const known = FIELD_TYPES.includes(selected) ? selected : (selected || 'text');
+        const types = FIELD_TYPES.includes(known) ? FIELD_TYPES : FIELD_TYPES.concat([known]);
+        return types.map((t) => '<option value="' + esc(t) + '"' + (t === known ? ' selected' : '') + '>' + esc(typeLabel(t)) + '</option>').join('');
+    }
+
+    function ensureValidation(field) {
+        if (!field.validation || typeof field.validation !== 'object') field.validation = {};
+        return field.validation;
+    }
+
+    function ensureLocaleBucket(locale) {
+        if (!data.translations[locale] || typeof data.translations[locale] !== 'object') {
+            data.translations[locale] = {};
+        }
+        if (!data.translations[locale].fields || typeof data.translations[locale].fields !== 'object') {
+            data.translations[locale].fields = {};
+        }
+        return data.translations[locale];
+    }
+
+    function fieldCopy(locale, key) {
+        const bucket = ensureLocaleBucket(locale);
+        if (!bucket.fields[key] || typeof bucket.fields[key] !== 'object') bucket.fields[key] = {};
+        return bucket.fields[key];
+    }
+
+    function localeList() {
+        const def = (root.querySelector('[data-iq="default_locale"]')?.value || data.default_locale || 'en_US').trim() || 'en_US';
+        data.default_locale = def;
+        const rest = Object.keys(data.translations || {}).filter((locale) => locale && locale !== def);
+        return [def].concat(rest);
+    }
+
+    function writeJson() {
+        syncingJson = true;
+        translationsTa.value = JSON.stringify(data.translations, null, 2);
+        syncingJson = false;
+    }
+
+    function readJson() {
+        try {
+            const parsed = JSON.parse(translationsTa.value || '{}');
+            if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('bad');
+            data.translations = parsed;
+            return true;
+        } catch (e) {
+            msg.textContent = I18N.jsonBad;
+            msg.dataset.tone = 'danger';
+            return false;
+        }
+    }
+
+    function commitCopyForm() {
+        const bucket = ensureLocaleBucket(activeLocale);
+        root.querySelectorAll('[data-iq-copy]').forEach((el) => {
+            const key = el.getAttribute('data-iq-copy');
+            bucket[key] = String(el.value || '');
+        });
+        i18nFieldsEl.querySelectorAll('[data-iq-field-key]').forEach((row) => {
+            const key = row.getAttribute('data-iq-field-key');
+            const copy = fieldCopy(activeLocale, key);
+            const label = row.querySelector('[data-iq-field-label]');
+            if (label) copy.label = String(label.value || '');
+            row.querySelectorAll('[data-iq-opt-value]').forEach((inp) => {
+                const value = inp.getAttribute('data-iq-opt-value');
+                if (!copy.options || typeof copy.options !== 'object') copy.options = {};
+                copy.options[value] = String(inp.value || '');
+            });
+            row.querySelectorAll('[data-iq-level-key]').forEach((inp) => {
+                const level = inp.getAttribute('data-iq-level-key');
+                if (!copy.levels || typeof copy.levels !== 'object') copy.levels = {};
+                copy.levels[level] = String(inp.value || '');
+            });
+        });
+        writeJson();
+    }
+
+    function fillCopyForm() {
+        const bucket = ensureLocaleBucket(activeLocale);
+        root.querySelectorAll('[data-iq-copy]').forEach((el) => {
+            const key = el.getAttribute('data-iq-copy');
+            el.value = bucket[key] != null ? String(bucket[key]) : '';
+        });
+
+        i18nFieldsEl.innerHTML = '';
+        data.schema.fields.forEach((f) => {
+            const key = String(f.key || '').trim();
+            if (!key) return;
+            const copy = fieldCopy(activeLocale, key);
+            const article = document.createElement('article');
+            article.className = 'w-inquiry-editor__i18n-field';
+            article.setAttribute('data-iq-field-key', key);
+
+            let extras = '';
+            if ((f.type === 'select' || f.type === 'radio' || f.type === 'checkbox') && Array.isArray(f.options) && f.options.length) {
+                const opts = f.options.map((o) => (o && o.value != null ? String(o.value) : '')).filter(Boolean);
+                extras += '<div class="w-inquiry-editor__i18n-options">';
+                extras += '<span class="w-field__label">' + esc(I18N.optionLabel) + '</span>';
+                opts.forEach((value) => {
+                    const label = (copy.options && copy.options[value] != null) ? String(copy.options[value]) : '';
+                    extras +=
+                        '<label class="w-field"><span class="w-field__hint">' + esc(value) + '</span>' +
+                        '<input class="w-input" data-iq-opt-value="' + esc(value) + '" value="' + esc(label) + '"></label>';
+                });
+                extras += '</div>';
+            }
+            if (f.type === 'country') {
+                const levels = [
+                    ['province', I18N.levelProvince],
+                    ['city', I18N.levelCity],
+                    ['district', I18N.levelDistrict],
+                ];
+                extras += '<div class="w-inquiry-editor__i18n-levels w-grid" style="--w-gap:var(--weline-space-3);">';
+                levels.forEach(([level, label]) => {
+                    const val = (copy.levels && copy.levels[level] != null) ? String(copy.levels[level]) : '';
+                    extras +=
+                        '<label class="w-field" style="--w-span-md:4;"><span class="w-field__label">' + esc(label) + '</span>' +
+                        '<input class="w-input" data-iq-level-key="' + esc(level) + '" value="' + esc(val) + '"></label>';
+                });
+                extras += '</div>';
+            }
+
+            article.innerHTML =
+                '<div class="w-inquiry-editor__i18n-field-head w-cluster" data-justify="between" data-align="center">' +
+                '<strong class="w-inquiry-editor__i18n-key">' + esc(key) + '</strong>' +
+                '<span class="w-text" data-tone="muted" data-size="sm">' + esc(typeLabel(f.type || 'text')) + '</span>' +
+                '</div>' +
+                '<label class="w-field"><span class="w-field__label">' + esc(I18N.fieldLabel) + '</span>' +
+                '<input class="w-input" data-iq-field-label value="' + esc(copy.label != null ? copy.label : '') + '" placeholder="' + esc(key) + '"></label>' +
+                extras;
+
+            article.querySelectorAll('input').forEach((inp) => {
+                inp.addEventListener('input', () => commitCopyForm());
+            });
+            i18nFieldsEl.appendChild(article);
+        });
+    }
+
+    function drawLocaleTabs() {
+        const locales = localeList();
+        if (!locales.includes(activeLocale)) activeLocale = data.default_locale;
+        tabsEl.innerHTML = '';
+        locales.forEach((locale) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'w-inquiry-editor__locale-tab' + (locale === activeLocale ? ' is-active' : '');
+            btn.setAttribute('role', 'tab');
+            btn.setAttribute('aria-selected', locale === activeLocale ? 'true' : 'false');
+            btn.dataset.locale = locale;
+            btn.textContent = locale + (locale === data.default_locale ? ' · ' + I18N.defaultBadge : '');
+            btn.onclick = () => {
+                if (locale === activeLocale) return;
+                commitCopyForm();
+                activeLocale = locale;
+                drawLocaleTabs();
+                fillCopyForm();
+            };
+            tabsEl.appendChild(btn);
+        });
+    }
+
+    function countryExtras(field) {
+        const v = ensureValidation(field);
+        const catalog = v.catalog || 'global';
+        const levels = v.levels || 'country|province|city|district';
+        const selection = v.selection || 'single';
+        return (
+            '<div class="w-inquiry-editor__extras" data-iq-country-extras>' +
+            '<label class="w-field"><span class="w-field__label">' + esc(I18N.catalog) + '</span>' +
+            '<select class="w-select" data-iq-country="catalog">' +
+            '<option value="global"' + (catalog === 'global' ? ' selected' : '') + '>' + esc(I18N.catalogGlobal) + '</option>' +
+            '<option value="installed"' + (catalog === 'installed' ? ' selected' : '') + '>' + esc(I18N.catalogInstalled) + '</option>' +
+            '</select></label>' +
+            '<label class="w-field"><span class="w-field__label">' + esc(I18N.levels) + '</span>' +
+            '<input class="w-input" data-iq-country="levels" value="' + esc(levels) + '" placeholder="country|province|city|district" spellcheck="false">' +
+            '<span class="w-field__hint">country|province|city|district</span></label>' +
+            '<label class="w-field"><span class="w-field__label">' + esc(I18N.selection) + '</span>' +
+            '<select class="w-select" data-iq-country="selection">' +
+            '<option value="single"' + (selection === 'single' ? ' selected' : '') + '>' + esc(I18N.selectionSingle) + '</option>' +
+            '<option value="multi"' + (selection === 'multi' ? ' selected' : '') + '>' + esc(I18N.selectionMulti) + '</option>' +
+            '</select></label>' +
+            '</div>'
+        );
+    }
+
+    function choiceExtras(field) {
+        const options = Array.isArray(field.options) ? field.options : [];
+        const raw = options.map((o) => (o && o.value != null ? String(o.value) : '')).filter(Boolean).join('\n');
+        return (
+            '<div class="w-inquiry-editor__extras" data-iq-choice-extras>' +
+            '<label class="w-field" style="--w-span:12;"><span class="w-field__label">' + esc(I18N.optionsHint) + '</span>' +
+            '<textarea class="w-textarea" rows="3" data-iq-options spellcheck="false">' + esc(raw) + '</textarea></label>' +
+            '</div>'
+        );
+    }
+
+    function syncLede() {
+        if (!lede) return;
+        const code = (root.querySelector('[data-iq="code"]')?.value || '').trim();
+        const name = (root.querySelector('[data-iq="name"]')?.value || '').trim();
+        lede.textContent = (code || I18N.unnamed) + (name ? (' · ' + name) : '');
+    }
+
+    function draw() {
+        fieldsEl.innerHTML = '';
+        if (countEl) countEl.textContent = String(data.schema.fields.length);
+        data.schema.fields.forEach((f, i) => {
+            const type = f.type || 'text';
+            const row = document.createElement('article');
+            row.className = 'w-inquiry-editor__field' + (type === 'country' ? ' is-country' : '');
+            row.dataset.iqFieldIndex = String(i);
+            row.innerHTML =
+                '<div class="w-inquiry-editor__field-main">' +
+                '<span class="w-inquiry-editor__ord" aria-hidden="true">' + String(i + 1).padStart(2, '0') + '</span>' +
+                '<label class="w-field w-inquiry-editor__cell w-inquiry-editor__cell--key"><span class="w-field__label visually-hidden">' + esc(<?= json_encode(__('字段键名'), JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>) + '</span>' +
+                '<input class="w-input" data-iq-key placeholder="company" value="' + esc(f.key || '') + '" spellcheck="false"></label>' +
+                '<label class="w-field w-inquiry-editor__cell w-inquiry-editor__cell--type"><span class="w-field__label visually-hidden">' + esc(I18N.type) + '</span>' +
+                '<select class="w-select" data-iq-type data-testid="inquiry-editor-type">' + typeOptions(type) + '</select></label>' +
+                '<label class="w-inquiry-editor__required w-inquiry-editor__cell w-inquiry-editor__cell--required"><input type="checkbox" data-iq-required' + (f.required ? ' checked' : '') + '> <span>' + esc(I18N.required) + '</span></label>' +
+                '<button type="button" class="w-button w-inquiry-editor__cell w-inquiry-editor__cell--remove" data-tone="danger" data-variant="ghost" data-size="sm" data-iq-remove aria-label="' + esc(I18N.removeField) + '">×</button>' +
+                '</div>' +
+                (type === 'country' ? countryExtras(f) : '') +
+                (type === 'select' || type === 'radio' || type === 'checkbox' ? choiceExtras(f) : '');
+
+            row.querySelector('[data-iq-key]').oninput = (e) => { f.key = e.target.value; fillCopyForm(); writeJson(); };
+            row.querySelector('[data-iq-type]').onchange = (e) => {
+                f.type = e.target.value;
+                if (f.type === 'country') ensureValidation(f);
+                if ((f.type === 'select' || f.type === 'radio' || f.type === 'checkbox') && !Array.isArray(f.options)) f.options = [];
+                draw();
+                drawLocaleTabs();
+                fillCopyForm();
+            };
+            row.querySelector('[data-iq-required]').onchange = (e) => { f.required = !!e.target.checked; };
+            row.querySelector('[data-iq-remove]').onclick = () => { data.schema.fields.splice(i, 1); draw(); drawLocaleTabs(); fillCopyForm(); };
+
+            const catalog = row.querySelector('[data-iq-country="catalog"]');
+            const levels = row.querySelector('[data-iq-country="levels"]');
+            const selection = row.querySelector('[data-iq-country="selection"]');
+            if (catalog) catalog.onchange = (e) => { ensureValidation(f).catalog = e.target.value; };
+            if (levels) levels.oninput = (e) => { ensureValidation(f).levels = e.target.value.trim(); };
+            if (selection) selection.onchange = (e) => { ensureValidation(f).selection = e.target.value; };
+
+            const optionsTa = row.querySelector('[data-iq-options]');
+            if (optionsTa) {
+                optionsTa.oninput = (e) => {
+                    f.options = String(e.target.value || '')
+                        .split(/\n+/)
+                        .map((line) => line.trim())
+                        .filter(Boolean)
+                        .map((value) => ({ value }));
+                    fillCopyForm();
+                    writeJson();
+                };
+            }
+
+            fieldsEl.appendChild(row);
+        });
+        fillCopyForm();
+        writeJson();
+    }
+
+    function refreshI18nUi() {
+        drawLocaleTabs();
+        fillCopyForm();
+        writeJson();
+    }
+
+    writeJson();
+    draw();
+    refreshI18nUi();
+    syncLede();
+
+    for (const k of ['code', 'name']) {
+        root.querySelector('[data-iq="' + k + '"]')?.addEventListener('input', syncLede);
+    }
+    root.querySelector('[data-iq="default_locale"]')?.addEventListener('change', () => {
+        data.default_locale = (root.querySelector('[data-iq="default_locale"]')?.value || '').trim() || 'en_US';
+        ensureLocaleBucket(data.default_locale);
+        if (!localeList().includes(activeLocale)) activeLocale = data.default_locale;
+        refreshI18nUi();
+    });
+
+    root.querySelectorAll('[data-iq-copy]').forEach((el) => {
+        el.addEventListener('input', () => commitCopyForm());
+    });
+
+    translationsTa.addEventListener('input', () => {
+        if (syncingJson) return;
+        if (!readJson()) return;
+        if (!data.translations[activeLocale]) {
+            const locales = localeList();
+            activeLocale = locales[0] || data.default_locale;
+        }
+        refreshI18nUi();
+    });
+
+    root.querySelector('[data-iq-locale-add]').onclick = () => {
+        const input = root.querySelector('[data-iq-locale-new]');
+        const locale = String(input?.value || '').trim();
+        if (!locale) {
+            msg.textContent = I18N.localeNeeded;
+            msg.dataset.tone = 'danger';
+            return;
+        }
+        commitCopyForm();
+        ensureLocaleBucket(locale);
+        activeLocale = locale;
+        if (input) input.value = '';
+        refreshI18nUi();
+        msg.textContent = '';
+        msg.dataset.tone = '';
+    };
+
+    root.querySelector('[data-iq-add]').onclick = () => {
+        data.schema.fields.push({ key: 'field_' + (data.schema.fields.length + 1), type: 'text', required: false, options: [] });
+        draw();
+        refreshI18nUi();
+    };
+
+    root.querySelector('[data-iq-ai-translate]').onclick = async () => {
+        for (const k of ['code', 'name', 'default_locale']) {
+            data[k] = (root.querySelector('[data-iq="' + k + '"]')?.value || '').trim();
+        }
+        commitCopyForm();
+        if (!readJson()) return;
+        const force = !!root.querySelector('[data-iq-ai-force]')?.checked;
+        const btn = root.querySelector('[data-iq-ai-translate]');
+        if (btn) btn.disabled = true;
+        msg.textContent = I18N.aiWorking;
+        msg.dataset.tone = '';
+        try {
+            const api = await Weline.load('api');
+            const res = await api.resource('inquiry').adminAiTranslate({
+                translations: data.translations,
+                default_locale: data.default_locale,
+                force: force,
+            });
+            if (!res || res.success === false) {
+                throw new Error((res && res.message) || I18N.aiFail);
+            }
+            data.translations = res.translations || data.translations;
+            refreshI18nUi();
+            msg.textContent = res.message || I18N.aiDone;
+            msg.dataset.tone = 'success';
+        } catch (e) {
+            msg.textContent = e.message || I18N.aiFail;
+            msg.dataset.tone = 'danger';
+        } finally {
+            if (btn) btn.disabled = false;
+        }
+    };
+
+    async function save(publish) {
+        for (const k of ['code', 'name', 'default_locale']) {
+            data[k] = (root.querySelector('[data-iq="' + k + '"]')?.value || '').trim();
+        }
+        commitCopyForm();
+        if (!readJson()) return;
+        try {
+            const api = await Weline.load('api');
+            let res = await api.resource('inquiry').adminSaveDraft(data);
+            data.form_id = res.form.form_id;
+            if (publish) {
+                res = await api.resource('inquiry').adminPublish({ form_id: data.form_id });
+            }
+            msg.textContent = publish ? I18N.published : I18N.drafted;
+            msg.dataset.tone = 'success';
+            syncLede();
+        } catch (e) {
+            msg.textContent = e.message || I18N.saveFail;
+            msg.dataset.tone = 'danger';
+        }
+    }
+
+    root.querySelector('[data-iq-save]').onclick = () => save(false);
+    root.querySelector('[data-iq-publish]').onclick = () => save(true);
+})();
+</script>
