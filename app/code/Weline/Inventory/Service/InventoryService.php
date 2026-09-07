@@ -347,7 +347,92 @@ final class InventoryService implements
     public function getAvailability(int $websiteId, int $storeId, int $offerId): AvailabilityResult
     {
         $this->ensureStock($websiteId, $storeId, $offerId);
-        $row = $this->stockSnapshot($websiteId, $storeId, $offerId);
+        return $this->availabilityFromStockRow(
+            $websiteId,
+            $storeId,
+            $offerId,
+            $this->stockSnapshot($websiteId, $storeId, $offerId),
+        );
+    }
+
+    /**
+     * Resolve one Website×Store stock projection for many Offers with one durable read.
+     *
+     * @param list<int> $offerIds
+     * @return array<int, AvailabilityResult> keyed by offer_id
+     */
+    public function getAvailabilities(int $websiteId, int $storeId, array $offerIds): array
+    {
+        $offerIds = array_values(array_unique(array_filter(
+            array_map('intval', $offerIds),
+            static fn(int $offerId): bool => $offerId > 0,
+        )));
+        sort($offerIds, SORT_NUMERIC);
+        if ($offerIds === []) {
+            return [];
+        }
+        foreach ($offerIds as $offerId) {
+            $this->assertScope($websiteId, $storeId, $offerId);
+        }
+
+        if ($this->memory !== null) {
+            $availability = [];
+            foreach ($offerIds as $offerId) {
+                $availability[$offerId] = $this->getAvailability($websiteId, $storeId, $offerId);
+            }
+            return $availability;
+        }
+
+        $loadRows = function () use ($websiteId, $storeId, $offerIds): array {
+            $rows = $this->newStock()
+                ->clear()
+                ->where(InventoryStock::schema_fields_WEBSITE_ID, $websiteId)
+                ->where(InventoryStock::schema_fields_STORE_ID, $storeId)
+                ->where(InventoryStock::schema_fields_OFFER_ID, $offerIds, 'IN')
+                ->select()
+                ->fetchArray();
+            $indexed = [];
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                $offerId = (int)($row[InventoryStock::schema_fields_OFFER_ID] ?? 0);
+                if ($offerId > 0) {
+                    $indexed[$offerId] = $row;
+                }
+            }
+            return $indexed;
+        };
+
+        $rowsByOfferId = $loadRows();
+        foreach ($offerIds as $offerId) {
+            if (!isset($rowsByOfferId[$offerId])) {
+                $this->ensureStock($websiteId, $storeId, $offerId);
+            }
+        }
+        if (count($rowsByOfferId) !== count($offerIds)) {
+            $rowsByOfferId = $loadRows();
+        }
+
+        $availability = [];
+        foreach ($offerIds as $offerId) {
+            if (!isset($rowsByOfferId[$offerId])) {
+                throw new \RuntimeException(__('库存行不存在'));
+            }
+            $availability[$offerId] = $this->availabilityFromStockRow(
+                $websiteId,
+                $storeId,
+                $offerId,
+                $rowsByOfferId[$offerId],
+            );
+        }
+        return $availability;
+    }
+
+    /** @param array<string,mixed> $row */
+    private function availabilityFromStockRow(
+        int $websiteId,
+        int $storeId,
+        int $offerId,
+        array $row,
+    ): AvailabilityResult {
         $available = $this->calculator->availableMinor(
             (string)$row['strategy'],
             (int)$row['on_hand_minor'],

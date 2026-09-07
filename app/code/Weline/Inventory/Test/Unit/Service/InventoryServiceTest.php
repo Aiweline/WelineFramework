@@ -74,6 +74,31 @@ final class InventoryServiceTest extends TestCase
         self::assertSame(PHP_INT_MAX, $svc->getAvailability(0, 2, 2004)->availableMinor);
     }
 
+    public function testBatchAvailabilityPreservesOfferKeysAndAvailabilitySemantics(): void
+    {
+        $svc = InventoryService::forTesting();
+        $svc->setOnHand(0, 9, 9001, 3, 'batch-1', hash('sha256', 'batch-1'));
+        $svc->setOnHand(0, 9, 9002, 0, 'batch-2', hash('sha256', 'batch-2'));
+        $svc->setOnHand(
+            0,
+            9,
+            9003,
+            0,
+            'batch-3',
+            hash('sha256', 'batch-3'),
+            'oversell',
+            2,
+        );
+
+        $availability = $svc->getAvailabilities(0, 9, [9003, 9001, 9002, 9001]);
+
+        self::assertSame([9001, 9002, 9003], array_keys($availability));
+        self::assertSame(3, $availability[9001]->availableMinor);
+        self::assertFalse($availability[9002]->sellable);
+        self::assertSame(2, $availability[9003]->availableMinor);
+        self::assertTrue($availability[9003]->sellable);
+    }
+
     public function testReserveIdempotentSameHash(): void
     {
         $svc = InventoryService::forTesting();
