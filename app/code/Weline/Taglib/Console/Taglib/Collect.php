@@ -121,7 +121,7 @@ class Collect implements CommandInterface
             $tags = glob($module['base_path'] . 'Taglib' . DS . '*.php');
             if (!empty($tags)) {
                 foreach ($tags as $tag) {
-                    $tagF = rtrim($tag, '.php');
+                    $tagF = str_ends_with($tag, '.php') ? substr($tag, 0, -4) : $tag;
                     $tagClass = str_replace(DS, '\\', str_replace($module['base_path'], $module['namespace_path'] . '\\', $tagF));
                     $modules_tags[$module['name']][] = $tagClass;
                 }
@@ -287,7 +287,7 @@ class Collect implements CommandInterface
         $tags = glob($targetModule['base_path'] . 'Taglib' . DS . '*.php');
         if (!empty($tags)) {
             foreach ($tags as $tag) {
-                $tagF = rtrim($tag, '.php');
+                $tagF = str_ends_with($tag, '.php') ? substr($tag, 0, -4) : $tag;
                 $tagClass = str_replace(DS, '\\', str_replace($targetModule['base_path'], $targetModule['namespace_path'] . '\\', $tagF));
                 $modules_tags[$moduleName][] = $tagClass;
             }
