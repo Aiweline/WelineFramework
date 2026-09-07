@@ -3,8 +3,14 @@
 ## Current Scope
 
 - Backend `promotion/backend/promotion` connects marketing rules, products, orders, checkout sessions, customer service, and promotion storefront routes into one operational desk.
-- Frontend `/promotion`, `/promotion/deals`, and `/promotion/sale` provide buyer-facing campaign shelves via `w_query('product', 'list')`, with stub products when Product is unavailable.
-- Theme header「今日特价」必须指向 `/promotion/deals` only（禁止顶级别名 `/deals`）。
+- Frontend `/promotion` and scoped `/promotion/{slug}` pages render current-scope, published and sellable Product offers through `StorefrontCatalogViewService`; when Product is unavailable they show an honest empty state and never fabricate acceptance products or prices.
+- Activity product cards deep-link with `StorefrontOfferDetailQuery` (public axis codes or `offer` uuid) so PDP selects the same offer that priced the card.
+- Active theme deals stay in force until the theme is cancelled. Storefront unit prices (cards / PDP / cart snapshot) go through Product `StorefrontOfferPriceAssembler`; Promotion registers `PromotionThemeDealPriceAdjustmentProvider` with campaign label/URL. `PromotionStorefrontActiveDealResolver` remains the theme-deal resolver used by that provider.
+- Product cards on `/promotion/{slug}` show strikethrough compare-at plus `campaign_label` next to the deal price.
+- Built-in promotion copy ships storefront dictionaries for `zh_Hans_CN`, `en_US`, and `ar_SA`（含活动首页 Hero lede / 匹配商品等可见串）；LocalModel resolution prefers the specific `lang_local`, while Theme supplies the document direction for RTL locales.
+- The default storefront visual follows the Hanfu theme's warm-paper, ink-text and cinnabar-action system and reuses a real first-party Hanfu hero asset.
+- Theme header「今日特价」必须指向路由 `promotion/deals` only（禁止顶级别名 `/deals`）；前台链接经 `Url::getFrontendUrl` / `@url{'promotion/deals'}` 生成，禁止硬编码 `/promotion…` 拼接。
+- 活动页二级 Tab / 入口卡片 / campaign / 后台 storefront 预览统一经 `PromotionActivityThemeService::storefrontUrl()` → `getFrontendUrl('promotion'[/slug])`，以保留语言/货币前缀与站点挂载。
 - `PromotionCampaignRun` persists campaign_key, status (`continue` / `pause` / `repair` / `review`), handoff_json, operator_id, updated_at.
 - `PromotionAdminQueryProvider` exposes `deskSnapshot`, `listRuns`, and `saveRun` for backend browser APIs.
 - Hook contract: `page-before` / `page-after` around the promotion product list.
