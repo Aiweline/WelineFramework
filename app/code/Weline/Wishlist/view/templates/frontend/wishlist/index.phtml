@@ -10,6 +10,7 @@
 
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Data\DataInterface;
+use Weline\Product\Service\ProductCardRenderer;
 use Weline\Wishlist\Service\WishlistPagePresenter;
 
 $view = ObjectManager::getInstance(WishlistPagePresenter::class)->resolve($this);
@@ -50,52 +51,37 @@ $wishlistAccountCss = (string)$this->fetchTagSource(
                 <?php foreach ($items as $item): ?>
                     <?php
                     $productId = (int)($item['product_id'] ?? 0);
-                    $url = (string)($item['url'] ?? '#');
-                    $name = (string)($item['name'] ?? '');
-                    $image = (string)($item['image'] ?? '');
-                    $price = (string)($item['formatted_price'] ?? '');
-                    $rating = (float)($item['rating'] ?? 0);
-                    $reviewCount = (int)($item['review_count'] ?? 0);
+                    $price = (float)($item['price'] ?? 0);
+                    $originalPrice = (float)($item['original_price'] ?? 0);
+                    $hasDeal = !empty($item['has_deal']) && $originalPrice > $price && $price > 0;
+                    $offerUuid = trim((string)($item['global_offer_uuid'] ?? ''));
+                    $product = ProductCardRenderer::normalizeProduct([
+                        'product_id' => $productId,
+                        'name' => (string)($item['name'] ?? ''),
+                        'url' => (string)($item['url'] ?? ''),
+                        'image' => (string)($item['image'] ?? ''),
+                        'price' => $price,
+                        'original_price' => $hasDeal ? $originalPrice : 0.0,
+                        'currency' => trim((string)($item['currency'] ?? 'CNY')) ?: 'CNY',
+                        'rating' => (float)($item['rating'] ?? 0),
+                        'review_count' => (int)($item['review_count'] ?? 0),
+                        'sku' => trim((string)($item['sku'] ?? '')),
+                        'sellable' => array_key_exists('sellable', $item) ? !empty($item['sellable']) : ($offerUuid !== ''),
+                        'global_offer_uuid' => $offerUuid,
+                        'is_sale' => $hasDeal,
+                        'campaign_label' => trim((string)($item['campaign_label'] ?? '')),
+                        'campaign_url' => trim((string)($item['campaign_url'] ?? '')),
+                    ]);
                     ?>
-                    <article class="product-card storefront-wishlist__card" data-product-id="<?= $productId ?>">
-                        <div class="product-image-wrapper storefront-wishlist__media">
-                            <a class="product-image-link" href="<?= $esc($url) ?>">
-                                <?php if ($image !== ''): ?>
-                                    <img src="<?= $esc($image) ?>" alt="<?= $esc($name) ?>" class="product-image storefront-wishlist__image" loading="lazy">
-                                <?php else: ?>
-                                    <span class="storefront-wishlist__image-placeholder" aria-hidden="true"></span>
-                                <?php endif; ?>
-                            </a>
-                            <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
-                                'product_id' => $productId,
-                                'show_wishlist' => true,
-                                'show_compare' => true,
-                                'show_quickview' => true,
-                                'wishlist_pixel' => true,
-                            ]) ?>
-                        </div>
-                        <div class="product-info storefront-wishlist__body">
-                            <h3 class="product-name storefront-wishlist__name">
-                                <a href="<?= $esc($url) ?>"><?= $esc($name) ?></a>
-                            </h3>
-                            <p class="storefront-wishlist__rating"><?= $esc(number_format($rating, 1)) ?> (<?= $reviewCount ?>)</p>
-                            <p class="storefront-wishlist__price"><?= $esc($price) ?></p>
-                            <div class="storefront-wishlist__actions">
-                                <button type="button"
-                                        class="storefront-wishlist__add-cart"
-                                        data-wishlist-add-cart
-                                        data-product-id="<?= $productId ?>">
-                                    <lang>加入购物车</lang>
-                                </button>
-                                <button type="button"
-                                        class="storefront-wishlist__remove"
-                                        data-wishlist-remove
-                                        data-product-id="<?= $productId ?>">
-                                    <lang>移除</lang>
-                                </button>
-                            </div>
-                        </div>
-                    </article>
+                    <div class="storefront-wishlist__slot" data-product-id="<?= $productId ?>">
+                        <w:product:card product="product" show-price="true" show-rating="true" show-add-to-cart="true" show-wishlist="true" show-compare="true" show-quickview="true" show-labels="false" density="standard" class="storefront-wishlist__card" wishlist-pixel="true" />
+                        <button type="button"
+                                class="storefront-wishlist__remove"
+                                data-wishlist-remove
+                                data-product-id="<?= $productId ?>">
+                            <lang>移除</lang>
+                        </button>
+                    </div>
                 <?php endforeach; ?>
             </div>
         <?php endif; ?>
