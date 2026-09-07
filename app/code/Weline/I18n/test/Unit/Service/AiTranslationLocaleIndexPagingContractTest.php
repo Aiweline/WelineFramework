@@ -28,6 +28,16 @@ final class AiTranslationLocaleIndexPagingContractTest extends TestCase
         );
     }
 
+    public function testAppendDictionaryWordsUsesLimitOffsetNotUiPagination(): void
+    {
+        $source = $this->read('app/code/Weline/I18n/Service/AiTranslationService.php');
+        $methodStart = strpos($source, 'private function appendDictionaryWords(array &$candidates): void');
+        self::assertNotFalse($methodStart);
+        $method = substr($source, (int)$methodStart, 900);
+        self::assertStringContainsString('->limit(self::DEFAULT_SCAN_PAGE_SIZE, $offset)', $method);
+        self::assertStringNotContainsString('->pagination($page, self::DEFAULT_SCAN_PAGE_SIZE)', $method);
+    }
+
     public function testCountUntranslatedWordsSkipsSourceLocale(): void
     {
         $service = $this->read('app/code/Weline/I18n/Service/AiTranslationService.php');

@@ -31,7 +31,8 @@ final class TranslationResolver implements TranslationResolverInterface
 
         foreach (\array_values(\array_unique($preferredModules)) as $moduleName) {
             $words = $this->moduleWords((string)$moduleName, $localeCode);
-            if (isset($words[$source]) && $words[$source] !== '' && $words[$source] !== $source) {
+            // Identity mappings (Hanfu,Hanfu) are intentional: keep source and stop.
+            if (isset($words[$source]) && $words[$source] !== '') {
                 return $words[$source];
             }
         }
@@ -41,14 +42,15 @@ final class TranslationResolver implements TranslationResolverInterface
             $entry = $dictionary->getEntry($source, $localeCode);
             if ($entry !== null) {
                 $translated = \trim((string)$entry->translation);
-                if ($translated !== '' && $translated !== $source) {
+                if ($translated !== '') {
                     return $translated;
                 }
             }
         }
 
-        $translated = (string)\__($source);
-        return $translated !== '' ? $translated : $source;
+        // Prefer explicit locale lookup over global __(), which can follow a lagging
+        // RequestContext/KeyBuilder language and reverse-translate EN display strings.
+        return $source;
     }
 
     public function reset(): void
@@ -125,7 +127,9 @@ final class TranslationResolver implements TranslationResolverInterface
                     }
                     $key = \trim((string)$data[0]);
                     $value = \trim((string)$data[1]);
-                    if ($key !== '' && $value !== '' && $value !== $key) {
+                    // The loader must retain identity entries so translate() can
+                    // distinguish an explicit same-text translation from a miss.
+                    if ($key !== '' && $value !== '') {
                         $words[$key] = $value;
                     }
                 }

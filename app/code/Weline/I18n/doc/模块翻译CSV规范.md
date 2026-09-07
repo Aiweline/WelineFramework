@@ -52,9 +52,16 @@ php bin/w i18n:collect
 
 - WLS 运行时按**模块 CSV 快照 + 词典缓存**解析翻译；`i18n:collect` 会：
   1. 静态扫描 `__()` / 模板源串并合并进 `i18n/*.csv`（保留 CSV 已有但本次未扫到的词条）
-  2. 清理 `i18n` / `phrase` 缓存并刷新 Worker 翻译缓存
+  2. 清理当前进程的 `i18n` / `phrase` 翻译状态
+  3. 通过已配置的 `RuntimeControlBroadcasterInterface` 通知当前项目的运行实例清理缓存，最多等待 12 秒；仅 `success=true` 且 `completed=true` 才报告翻译缓存清理成功。没有运行控制 provider 时，保留原本地清理行为。
 - **只编辑 CSV 文件而不跑 collect** → 文件在磁盘上已更新，但进程仍用旧词典 → 页面上仍显示未翻译 source。
 - **前台 QueryBin / `Weline.Api`**：WLS 不整包加载 `generated/language/*.php`，`__()` 按请求关联模块读取 `app/code/.../i18n/{locale}.csv`。因此改完英文 CSV 后必须 `php bin/w i18n:collect Weline_YourModule`，否则英文站接口提示仍可能是中文 source。
+
+### 收集完成与运行刷新是两项结果
+
+- CSV 收集成功后，若运行控制连接失败、Worker 拒绝清理或在等待期内仍未完成，命令沿用现有 warning 输出具体原因，并保留已经完成的翻译收集；不能仅凭退出码 0 判断运行实例已经更新。
+- 当前项目运行实例从其 `var/server/instances/` 注册信息解析，沿用正式运行控制服务；不新增重启逻辑，不操作其他项目实例。
+- 遇到重载排队等情况，缓存操作可能在命令等待结束后才完成。验收须核对该次操作 ID 的终态与 Worker 回执，并回读普通中英文页面；不要把另一轮操作或一次成功视为全部刷新问题已解决。
 
 ## CSV 格式与编码（硬规则）
 

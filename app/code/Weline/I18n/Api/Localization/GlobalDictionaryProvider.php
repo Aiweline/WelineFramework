@@ -37,9 +37,8 @@ final class GlobalDictionaryProvider implements GlobalDictionaryProviderInterfac
             $query->where(Dictionary::schema_fields_SOURCE_MODULE, $modules, 'IN');
         }
 
-        $rows = $query->select()->fetchArray();
         $words = [];
-        foreach ($rows as $row) {
+        foreach ($query->select()->fetchIterator() as $row) {
             $word = $row[Dictionary::schema_fields_WORD] ?? '';
             $translate = $row[Dictionary::schema_fields_TRANSLATE] ?? '';
             if (is_string($word) && is_string($translate) && $word !== '' && $translate !== '') {

@@ -17,7 +17,8 @@
 
 勾选全局开关，并为需要自动翻译的目标语言开启 AI 翻译。
 
-保存配置后，系统会为已开启的目标语言创建 Queue。源语言自身不会入队。
+保存配置后，系统会为已开启的目标语言创建词典 Queue。源语言自身不会入队。
+同时会创建一个统一的 LocalModel Queue，覆盖 EAV 规格项等业务多语言字段；若没有启用目标语言则跳过。
 
 ## 3. 触发翻译
 
@@ -27,6 +28,7 @@
 - 在 AI 翻译页点击目标语言的“立即翻译”。
 - 后台词典新增或采集到新词。
 - 后台词典导入 CSV 后触发入队。
+- EAV 实体、属性、属性集、属性组或选项保存后触发 LocalModel 入队。
 
 ## 4. 查看队列
 
@@ -51,14 +53,14 @@ Weline\I18n\Queue\AiTranslateQueue    I18n AI翻译队列
 - `force`
 - `requested_by`
 
-## 5. 确认不再使用 I18n Cron
+## 5. 确认 Cron 只负责幂等入队
 
 ```bash
 php bin/w cron:task:collect
 php bin/w cron:task:listing
 ```
 
-列表中不应出现 `i18n_ai_translation` 或 `Weline\I18n\Cron\AiTranslation`。
+列表中可以出现 `i18n_ai_translation`。它每小时只为词典和 LocalModel 创建幂等队列，不在 Cron 请求内直接调用 AI。
 
 ## 6. 结果检查
 

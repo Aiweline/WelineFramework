@@ -14,6 +14,7 @@ use Weline\I18n\Service\AiTranslationExportService;
 use Weline\I18n\Service\AiTranslationModuleWorkspaceService;
 use Weline\I18n\Service\AiTranslationQueueService;
 use Weline\I18n\Service\AiTranslationService;
+use Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationQueueService;
 
 class AiTranslation extends BaseController
 {
@@ -22,6 +23,7 @@ class AiTranslation extends BaseController
         I18n $i18n,
         private readonly AiTranslationConfig $config,
         private readonly AiTranslationQueueService $queueService,
+        private readonly LocalModelTranslationQueueService $localModelQueueService,
         private readonly AiTranslationService $translationService,
         private readonly AiTranslationExportService $exportService,
         private readonly AiTranslationModuleWorkspaceService $moduleWorkspace,
@@ -297,13 +299,21 @@ class AiTranslation extends BaseController
         try {
             $config = $this->config->saveFromPost((array)$this->request->getPost());
             $queueIds = [];
+            $localModelQueueId = 0;
             if (!empty($config['enabled'])) {
                 $queueIds = $this->queueService->enqueueEnabledLocales('config_save');
+                $localModelQueueId = $this->localModelQueueService->enqueue('config_save');
             }
 
-            $message = (string)__('AI翻译配置已保存，已入队 %{1} 个语言。', [(string)count($queueIds)]);
+            $message = (string)__('AI翻译配置已保存，词典已入队 %{1} 个语言，LocalModel 队列：%{2}。', [
+                (string)count($queueIds),
+                $localModelQueueId > 0 ? '#' . $localModelQueueId : (string)__('无需入队'),
+            ]);
             if ($isAsyncRequest) {
-                return $this->asyncJsonResponse(true, $message, ['queue_count' => count($queueIds)]);
+                return $this->asyncJsonResponse(true, $message, [
+                    'queue_count' => count($queueIds),
+                    'local_model_queue_id' => $localModelQueueId,
+                ]);
             }
             MessageManager::success($message);
         } catch (\Throwable $throwable) {
@@ -331,9 +341,16 @@ class AiTranslation extends BaseController
             $localeCode = trim((string)$this->request->getPost('locale_code', ''));
             if ($localeCode === '') {
                 $queueIds = $this->queueService->enqueueEnabledLocales('manual');
-                $message = (string)__('已为 %{1} 个启用语言创建 AI 翻译队列。', [(string)count($queueIds)]);
+                $localModelQueueId = $this->localModelQueueService->enqueue('manual');
+                $message = (string)__('已为 %{1} 个启用语言创建 AI 翻译队列，LocalModel 队列：%{2}。', [
+                    (string)count($queueIds),
+                    $localModelQueueId > 0 ? '#' . $localModelQueueId : (string)__('无需入队'),
+                ]);
                 if ($isAsyncRequest) {
-                    return $this->asyncJsonResponse(true, $message, ['queue_count' => count($queueIds)]);
+                    return $this->asyncJsonResponse(true, $message, [
+                        'queue_count' => count($queueIds),
+                        'local_model_queue_id' => $localModelQueueId,
+                    ]);
                 }
                 MessageManager::success($message);
             } else {

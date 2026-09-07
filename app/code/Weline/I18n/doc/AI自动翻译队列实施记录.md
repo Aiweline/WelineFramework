@@ -6,8 +6,8 @@
 - 配置统一存储到 `system_config`，模块为 `Weline_I18n`，配置键为 `ai_translation`，内容为 JSON。
 - 默认配置为：全局关闭、源语言 `zh_Hans_CN`、批量大小 `100`、翻译策略 `light`、自动发布开启。
 - 每个已安装且启用的语言可以单独开启 AI 翻译；源语言自身始终跳过。
-- 不新增 I18n Cron；AI 翻译由后台保存配置、手动立即翻译、词典收集、CSV 导入等入口触发队列入队。
-- 已移除旧 `Weline\I18n\Cron\AiTranslation`，避免绕过后台配置翻译所有 active 语言。
+- I18n Cron 只负责每小时为词典和 LocalModel 做幂等入队，不在 Cron 请求内直接调用 AI；后台保存配置、手动立即翻译、词典收集、CSV 导入和 EAV 保存也可触发入队。
+- LocalModel 队列同时覆盖 EAV 的实体、属性集、属性组、属性和选项本地描述；EAV 保存后只做去重入队，翻译在后台异步执行，前台缺失译文时回退原值。
 
 ## 关键类
 
@@ -15,7 +15,9 @@
 - `Weline\I18n\Service\I18nAiTranslationAdapter`：I18n 侧 AI 翻译适配器，只暴露批量翻译入口，并继续复用 `Weline_Ai::translate` 事件链。
 - `Weline\I18n\Service\AiTranslationService`：扫描未翻译词、批量调用 AI、校验占位符和结构 token、写入译文。
 - `Weline\I18n\Service\AiTranslationQueueService`：创建 AI 翻译队列，使用 `i18n:ai_translation:{locale}` 作为去重业务键。
+- `Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationQueueService`：创建 LocalModel 队列，按活动队列族去重并在无目标语言时跳过。
 - `Weline\I18n\Queue\AiTranslateQueue`：队列执行器，负责参数校验、调用翻译服务、在仍有剩余词时继续入队。
+- `Weline\I18n\Queue\LocalModelTranslationQueue`：分批扫描 LocalModel，调用 AI 写入各目标语言的本地描述。
 - `Weline\I18n\Service\AiTranslationPublisher`：成功写入译文后同步语言文件并清理 `i18n`、`phrase` 缓存。
 - `Weline\I18n\Controller\Backend\AiTranslation`：后台配置页、保存配置、手动入队入口。
 
@@ -33,6 +35,7 @@
 ## 自动入队入口
 
 - 后台 AI 翻译配置保存后，为已启用 AI 翻译的语言入队。
+- EAV 实体、属性集、属性组、属性和属性选项保存后，为 LocalModel 统一入队；同一请求只做一次队列去重检查。
 - 后台 AI 翻译页点击单语言“立即翻译”后，对已安装启用且非源语言的目标语言强制入队，不要求该语言已开启自动 AI 翻译。
 - `CollectTranslations` 收集到新基础词条后，为已启用 AI 翻译的语言入队。
 - 后台词典 CSV 导入后，为已启用 AI 翻译的语言入队。

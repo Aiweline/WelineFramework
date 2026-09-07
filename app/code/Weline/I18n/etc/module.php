@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_I18n',
-    "version" => '1.0.14',
+    "version" => '1.0.27',
     "requires" => [
         'Weline_Framework' => '*',
         'Weline_SystemConfig' => '*',
@@ -13,7 +13,7 @@ return [
         'Weline_Admin' => '*',
         'Weline_Backend' => '*',
         'Weline_CacheManager' => '*',
-        'Weline_Queue' => '*',
+        'Weline_Queue' => '>=1.2.5',
     ],
     "provides" => [
         \Weline\Framework\Runtime\DictionaryWarmupProviderInterface::class => \Weline\I18n\Api\Runtime\DictionaryWarmupProvider::class,

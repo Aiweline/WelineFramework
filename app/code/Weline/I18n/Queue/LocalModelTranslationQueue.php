@@ -11,7 +11,9 @@ use Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationService;
 
 final class LocalModelTranslationQueue implements TaskConsumerInterface
 {
-    private const DEFAULT_BATCH_SIZE = 20;
+    /** Keep LocalModel batches small: each item may still call AI once per enabled locale. */
+    public const DEFAULT_BATCH_SIZE = 20;
+    public const MAX_BATCH_SIZE = 50;
 
     public function __construct(
         private readonly LocalModelTranslationService $translationService,
@@ -43,17 +45,26 @@ final class LocalModelTranslationQueue implements TaskConsumerInterface
     {
         $content = $this->decodeContent($task);
         $offset = max(0, (int)($content['offset'] ?? 0));
-        $batchSize = max(1, min(100, (int)($content['batch_size'] ?? self::DEFAULT_BATCH_SIZE)));
+        $batchSize = max(1, min(self::MAX_BATCH_SIZE, (int)($content['batch_size'] ?? self::DEFAULT_BATCH_SIZE)));
 
-        $allItems = $this->translationService->collectWorkItems();
-        $batch = array_slice($allItems, $offset, $batchSize);
+        // Fetch batchSize+1 so we know whether more work remains without a full catalog scan.
+        $probe = $this->translationService->collectWorkItems($offset, $batchSize + 1);
+        $batch = array_slice($probe, 0, $batchSize);
         $result = $this->translationService->processBatch($batch);
 
-        $nextOffset = $offset + count($batch);
-        $remaining = max(0, count($allItems) - $nextOffset);
+        $abortedBusy = !empty($result['aborted_busy']);
+        $consumed = max(0, (int)($result['consumed'] ?? ($abortedBusy ? 0 : count($batch))));
+        $nextOffset = $offset + $consumed;
+        $remainingInProbe = max(0, count($probe) - $consumed);
+        $hasMore = $remainingInProbe > 0 || count($probe) > $batchSize;
         $nextQueueId = 0;
-        if ($remaining > 0) {
-            $nextQueueId = $this->enqueueContinuation($nextOffset, $batchSize, $content);
+        // Busy/error: stop this round — do not immediate-requeue; next cron continues when free.
+        if ($hasMore && !$abortedBusy) {
+            $nextQueueId = $this->queueService->enqueueContinuation(
+                $nextOffset,
+                $batchSize,
+                (string)($content['requested_by'] ?? 'queue'),
+            );
         }
 
         $message = (string)__(
@@ -61,9 +72,12 @@ final class LocalModelTranslationQueue implements TaskConsumerInterface
             [
                 'processed' => (string)($result['processed'] ?? 0),
                 'translated' => (string)($result['translated'] ?? 0),
-                'remaining' => (string)$remaining,
+                'remaining' => ($hasMore || $abortedBusy) ? '>' . (string)max(1, $remainingInProbe) : '0',
             ],
         );
+        if ($abortedBusy) {
+            $message .= PHP_EOL . (string)__('AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务。');
+        }
 
         if ($nextQueueId > 0) {
             $message .= PHP_EOL . (string)__('已创建下一批队列：#%{1}', [$nextQueueId]);
@@ -73,35 +87,6 @@ final class LocalModelTranslationQueue implements TaskConsumerInterface
         }
 
         return $message . PHP_EOL . 'QUEUE_DONE';
-    }
-
-    /**
-     * @param array<string, mixed> $content
-     */
-    private function enqueueContinuation(int $offset, int $batchSize, array $content): int
-    {
-        $result = w_query('queue', 'create', [
-            'class' => self::class,
-            'name' => (string)__('LocalModel 多语言 AI 翻译'),
-            'module' => 'Weline_I18n',
-            'content' => [
-                'offset' => $offset,
-                'batch_size' => $batchSize,
-                'requested_by' => (string)($content['requested_by'] ?? 'queue'),
-            ],
-            'status' => 'pending',
-            'auto' => true,
-            'biz_key' => $this->queueService->buildBizKey() . ':offset:' . $offset,
-        ]);
-
-        if (is_array($result)) {
-            return (int)($result['queue_id'] ?? $result['id'] ?? 0);
-        }
-        if (is_object($result) && method_exists($result, 'getData')) {
-            return (int)($result->getData('queue_id') ?? 0);
-        }
-
-        return 0;
     }
 
     /**
