@@ -356,9 +356,18 @@ class CdnQueryProvider implements QueryProviderInterface
                 [
                     'name'        => 'testConnection',
                     'description' => __('测试账户连接'),
+                    'frontend'    => true,
+                    'auth'        => 'backend',
+                    'backend'     => true,
+                    'backend_acl' => ['kind' => 'source', 'source_id' => 'Weline_Cdn::cdn_account_form'],
+                    'mode'        => 'read',
+                    'graph'       => false,
                     'params'      => [
-                        ['name' => 'account_id', 'type' => 'int', 'required' => true, 'description' => __('账户 ID')],
+                        'account_id' => ['type' => 'int', 'required' => true, 'min' => 1, 'description' => __('账户 ID')],
+                        'zone_id' => ['type' => 'string', 'required' => false, 'max_length' => 128, 'description' => __('CDN Zone ID')],
+                        'domain' => ['type' => 'string', 'required' => false, 'max_length' => 255, 'description' => __('域名')],
                     ],
+                    'returns'     => ['type' => 'array'],
                 ],
                 [
                     'name'        => 'getAdapterInfo',
@@ -569,7 +578,7 @@ class CdnQueryProvider implements QueryProviderInterface
 
         try {
             $account = clone $this->accountModel;
-            $account->clearQuery();
+            $account->reset();
 
             if ($accountId > 0) {
                 $account->load($accountId);
@@ -578,15 +587,17 @@ class CdnQueryProvider implements QueryProviderInterface
                 }
             }
 
+            $credentials = AccountManager::mergeCredentials(
+                $account->getData(Account::schema_fields_ADAPTER) === $adapter ? $account->getCredentialsArray() : [],
+                $params['credentials'] ?? null
+            );
             $account->setData(Account::schema_fields_ADAPTER, $adapter);
             $account->setData(Account::schema_fields_NAME, $name);
 
             if (isset($params['description'])) {
                 $account->setData(Account::schema_fields_DESCRIPTION, (string)$params['description']);
             }
-            if (isset($params['credentials']) && is_array($params['credentials'])) {
-                $account->setCredentialsArray($params['credentials']);
-            }
+            $account->setCredentialsArray($credentials);
             if (isset($params['status'])) {
                 $account->setData(Account::schema_fields_STATUS, (string)$params['status']);
             }
@@ -767,7 +778,10 @@ class CdnQueryProvider implements QueryProviderInterface
                 return ['success' => false, 'message' => (string)__('账户凭证为空')];
             }
 
-            return ['success' => true, 'message' => (string)__('账户配置有效')];
+            if (!method_exists($adapter, 'testConnection')) {
+                return ['success' => false, 'message' => (string)__('该适配器未提供连接验证')];
+            }
+            return $adapter->testConnection($credentials, trim((string)($params['zone_id'] ?? '')), trim((string)($params['domain'] ?? '')));
         } catch (\Throwable $e) {
             return ['success' => false, 'message' => $e->getMessage()];
         }

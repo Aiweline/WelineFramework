@@ -88,6 +88,12 @@ class CachePurger
                 }
                 $hosts = is_array($data['hosts']) ? $data['hosts'] : explode(',', $data['hosts']);
                 return $adapter->purgeHosts($zoneId, $hosts, $credentials);
+
+            case 'prefixes':
+                if (!method_exists($adapter, 'purgePrefixes')) {
+                    return ['success' => false, 'message' => __('该适配器不支持按 URL 前缀清理')];
+                }
+                return $adapter->purgePrefixes($zoneId, $data['prefixes'] ?? [], $credentials);
                 
             case 'tags':
                 if (empty($data['tags'])) {
@@ -108,6 +114,17 @@ class CachePurger
         }
     }
 
+    /** A public base URL owns its host or path prefix; it never implies the whole Zone. */
+    public function purgePublicScope($domain, string $baseUrl): array
+    {
+        $host = strtolower((string)parse_url($baseUrl, PHP_URL_HOST));
+        $path = (string)parse_url($baseUrl, PHP_URL_PATH);
+        if ($path === '' || $path === '/') {
+            return $this->purge($domain, 'hosts', ['hosts' => [$host]]);
+        }
+        return $this->purge($domain, 'prefixes', ['prefixes' => [$host . $path]]);
+    }
+
     /**
      * 获取域名模型
      * 
@@ -117,7 +134,7 @@ class CachePurger
     private function getDomain($domain): ?Domain
     {
         /** @var Domain $domainModel */
-        $domainModel = $this->objectManager->getInstance(Domain::class);
+        $domainModel = clone $this->objectManager->getInstance(Domain::class);
         
         if (is_numeric($domain)) {
             $domainModel->reset()->load((int)$domain);
@@ -143,7 +160,7 @@ class CachePurger
         }
 
         // 否则使用账户凭据
-        $accountId = $domain->getData(Domain::schema_fields_ACCOUNT_ID);
+        $accountId = $domain->isInheritDefault() ? null : $domain->getData(Domain::schema_fields_ACCOUNT_ID);
         if (!$accountId) {
             // 如果没有账户ID，尝试获取默认账户
             $defaultAccount = $this->accountManager->getDefaultAccount($domain->getData(Domain::schema_fields_ADAPTER));
@@ -155,7 +172,7 @@ class CachePurger
         }
 
         /** @var Account $account */
-        $account = $this->objectManager->getInstance(Account::class)->reset()->load($accountId);
+        $account = (clone $this->objectManager->getInstance(Account::class))->reset()->load($accountId);
         
         if (!$account->getData(Account::schema_fields_ACCOUNT_ID)) {
             throw new Core(__('账户不存在'));
@@ -164,8 +181,10 @@ class CachePurger
         if (!$account->isActive()) {
             throw new Core(__('账户未激活'));
         }
+        if ($account->getData(Account::schema_fields_ADAPTER) !== $domain->getData(Domain::schema_fields_ADAPTER)) {
+            throw new Core(__('账户适配器与域名不匹配'));
+        }
 
         return $account->getCredentialsArray();
     }
 }
-

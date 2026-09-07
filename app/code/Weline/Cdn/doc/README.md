@@ -57,6 +57,8 @@ php bin/w setup:upgrade
 
 Cloudflare API Token 权限说明见：`doc/Cloudflare-API-Token-Permissions.md`。
 
+编辑账户时，API Token 留空保留已保存的密封凭据；填写新值才替换。后台表单不回显已保存的 Token。保存后可点击“测试已保存账户连接”，可选填写目标 Zone ID：只验证 Token 状态和 Zone 可访问性，不执行清缓存，也不能据此证明 Cache Purge 权限。实际清理以服务商返回结果为准。
+
 ### 2.1 配置 Cloudflare OAuth（一键授权，推荐）
 
 平台管理员在 Cloudflare 创建一次机密 OAuth Client，回调 URL 使用：
@@ -81,6 +83,17 @@ https://{域名}/{后台key}/cdn/backend/oauth/callback
    - 关联账户（可选，默认使用适配器的默认账户）
    - 预热间隔（秒）
 4. 保存域名
+
+同一个 Cloudflare Zone 可配置在多个网站和域名记录中。例如 `www.example.com` 与 `shop.example.com` 可以使用 `example.com` 的 Zone ID；清理请求仍保留原始完整 URL。已配置独立子域 Zone 时，URL 优先匹配网站内最具体的域名。域名映射以 `website_id` 隔离，`0` 是合法默认网站。
+
+### 变更自动清理（1.0.4）
+
+- 网站资源变更按公开基址的 Host/Prefix 范围清理；商品 `product_search_projection` 的 `impact.urls / previous_urls` 通过既有 ResourceChange 消费，只清理商品 URL，缺少 URL 时不扩大清理范围。
+- 店铺/渠道的既有保存事件清理当前与保存前公开 URL 对应的范围，覆盖所有页面的 SEO Head：独立主机按 Host、带路径的店铺基址按 `host/path` Prefix；店铺 URL 为空时继承网站 URL，默认网站和店铺 ID `0` 均保留。适配器不支持 Prefix 时准确返回失败，不扩大为整 Zone 清理。
+- `Weline_Cdn::request` 的 `purge_urls` 逐 URL 匹配当前网站域名并分组；未匹配 URL 返回失败信息但不阻止其他匹配组清理；`purge_scope` 按公开基址的 host/path 清理范围；`purge_all` 与无 URL 的网站资源变更按已绑定主机清理。显式管理 API/CLI 的 `mode=everything` 仍表示整个 Zone。
+- Cloudflare 的 URL、Host、Tag、Prefix 每批最多 100 项。只有 HTTP 2xx 且 JSON `success === true` 才累计成功；任一批失败整体返回失败，并保留 `purged_count`、`requested_count`、`purge_ids`，不宣称全部完成。成功表示服务商接受清理，实际命中需从 CDN 响应观察。
+
+定向开发回归：`php app/code/Weline/Cdn/Test/Regression/CdnDeliveryRegression.script.php`。此脚本替换 HTTP/ORM 边界，不访问账户或清理外部缓存；不能替代真实后台与 CDN 验收。
 
 ## 快速开始
 
@@ -244,16 +257,22 @@ php bin/w cdn:cache:clear --domain=1 --mode=everything
 
 ### Weline_Framework::resource_changed
 
-Website 生产者在主库事务内发布 `ResourceChange v1`。CDN 观察者使用
-`delivery="async" retry="standard" coalesce="latest"`，因此 CDN 网络请求不在 Website
-主事务内执行。消费时只查询 `ResourceChange.website_id` 对应的启用域名：
+Website 生产者发布 `ResourceChange v1`。2026-09-05 已核对当前宿主：
+`Event.dispatch` 直接执行观察者，没有接入异步调度器；XML 中既有
+`delivery="async" retry="standard" coalesce="latest"` 元数据不会改变这条执行路径。
+因此 CDN 调用当前即时执行，可能处于业务调用或事务内，不具备已验证的 Outbox 持久化、
+后台投递或自动重试保证。执行时只查询 `ResourceChange.website_id` 对应的启用域名：
 
 - `website_id=0` 是合法的 `default` 站点，不得以真假值过滤。
-- 合并 `impact.urls` 和 `impact.previous_urls`，再按域名 host 精确筛选。
-- 有 URL 影响时只清相关 URL；影响集为空时才对该站点的目标域名执行
-  `everything`。
+- 合并 `impact.urls` 和 `impact.previous_urls`，再在当前网站内按最具体域名匹配。
+- 网站 URL 影响按对应 Host/Prefix 范围清理；商品、CMS 与 URL 重写仅清相关 URL。非商品影响集为空时按该站点的绑定主机清理；商品无 URL 时跳过。
 - 无对应站点域名时直接结束，不查“第一个启用域名”，不跨站 fallback。
-- 服务商清理失败会抛出，由异步投递的 retry/dead-letter 语义处理。
+- 服务商清理失败会由观察者抛出；当前路径没有已接通的异步 retry/dead-letter 处理，需检查实际调用结果。
+
+店铺/渠道保存事件及 `Weline_Cdn::request` 也即时调用清理服务。当前环境没有可用于验证的
+CDN 账户，未配置目标域名时观察者提前返回；这不表示异步队列丢失，也不能作为线上 purge
+成功证据。外部验收仍需有效 Token、目标 Zone 与可缓存 URL，执行实际变更后核对服务商
+响应、purge ID 和目标 URL 的缓存响应。仅开启异步配置标志不能替代完整投递链的运行验证。
 
 `Weline_Cdn::clear` 是手工/兼容清理入口；按域名字符串查找不带站点维度。多站点集成应传递
 已经从目标站点解析出的数字 `domain_id`，或使用带 `site_id`/`website_id` 的

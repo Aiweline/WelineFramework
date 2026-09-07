@@ -104,6 +104,7 @@ class CdnAdminQueryService
                     $domain->setData($field, $params[$key]);
                 }
             }
+            $domain->setData(DomainModel::schema_fields_DOMAIN_NAME, strtolower(rtrim(trim((string)$params['domain_name']), '.')));
             $domain->save();
             return [
                 'success' => true,

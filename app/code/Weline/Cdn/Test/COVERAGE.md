@@ -1,5 +1,7 @@
 # Weline_Cdn 模块测试覆盖率分析
 
+2026-09-05 新增 `Regression/CdnDeliveryRegression.script.php`：13 个账户凭据、Cloudflare 响应/批量、网站 0、主机映射与店铺 URL 继承回归通过。命令：`php app/code/Weline/Cdn/Test/Regression/CdnDeliveryRegression.script.php`。替换 HTTP/ORM，不连接外部服务；以下历史“覆盖率”表仅为既有资产清单，未在本次重新测量。
+
 ## 📊 覆盖率概览
 
 ### 总体覆盖率统计
