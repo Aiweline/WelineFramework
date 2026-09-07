@@ -11,9 +11,11 @@ use Weline\Framework\Database\TransactionContext;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\System\Process\Processer;
+use Weline\Queue\Api\BatchDrainingQueueConsumerInterface;
 use Weline\Queue\DeadWorkerRecoverableQueueInterface;
 use Weline\Queue\DeadWorkerRecoveryPatchQueueInterface;
 use Weline\Queue\Model\Queue;
+use Weline\Queue\Model\Queue\Type;
 
 class QueueDispatchService
 {
@@ -46,6 +48,14 @@ class QueueDispatchService
         }
 
         if ($this->countRunningAutoQueues() >= $this->resolveMaxConcurrent()) {
+            return false;
+        }
+
+        $queueClass = $this->resolveQueueClass($freshQueue);
+        if ($queueClass !== ''
+            && $this->countActiveAutoQueuesForClass($queueClass)
+                >= $this->resolveMaxConcurrentForClass($queueClass)
+        ) {
             return false;
         }
 
@@ -307,6 +317,15 @@ class QueueDispatchService
                 Queue::schema_fields_process => $this->appendProcessMessage($queue->getProcess(), $message),
             ]);
         }
+
+        // SIGKILL / historic Unicode lease misses leave dead queue-*-pid.json behind.
+        // Reconcile is the periodic owner of that sweep; keep it posix-fast.
+        $this->cleanupDeadQueuePidJsonOrphans();
+    }
+
+    protected function cleanupDeadQueuePidJsonOrphans(): int
+    {
+        return Processer::cleanupDeadPidJsonOrphansFast();
     }
 
     public function countRunningAutoQueues(): int
@@ -1629,47 +1648,63 @@ class QueueDispatchService
             return false;
         }
 
-        $queue = $this->claimQueueForDispatch($queue);
-        if (!$queue instanceof Queue) {
-            return false;
-        }
-        $dispatchToken = $queue->getDispatchToken();
+        $queueClass = $this->resolveQueueClass($queue);
+        $start = function () use ($queue, $queueClass): bool {
+            if ($queueClass !== ''
+                && $this->countActiveAutoQueuesForClass($queueClass)
+                    >= $this->resolveMaxConcurrentForClass($queueClass)
+            ) {
+                return false;
+            }
 
-        $queueName = $this->normalizeQueueTaskName($queue->getName(), (int)$queue->getId());
-        $processName = $this->buildQueueRunProcessName(
-            (int)$queue->getId(),
-            $queueName,
-            $queue,
-            $dispatchToken,
-        );
-        // WLS workers reap/interfere with shell `nohup ... &` children from
-        // Processer::create(), leaving a ghost PID and an empty worker log.
-        // Detached argv + posix_setsid returns the real PHP PID and survives the
-        // request worker lifecycle (same transport Master/shared sidecars use).
-        $spawnError = '';
-        try {
-            $pid = $this->createDetachedQueueWorker(
-                $this->buildQueueRunArgv((int)$queue->getId(), $queueName, $queue, $dispatchToken),
-                $processName,
-            );
-        } catch (\Throwable $throwable) {
-            $pid = 0;
-            // Keep the claimed Queue snapshot immutable. Compensation must
-            // compare against the values that were actually persisted.
-            $spawnError = (string)__('创建脱离式 Queue Worker 异常：%{1}', $throwable->getMessage());
-        }
-        if (!$pid) {
-            $output = $this->getQueueSpawnOutput($processName);
-            $this->compensateSpawnFailure(
+            $queue = $this->claimQueueForDispatch($queue);
+            if (!$queue instanceof Queue) {
+                return false;
+            }
+            $dispatchToken = $queue->getDispatchToken();
+
+            $queueName = $this->normalizeQueueTaskName($queue->getName(), (int)$queue->getId());
+            $processName = $this->buildQueueRunProcessName(
+                (int)$queue->getId(),
+                $queueName,
                 $queue,
                 $dispatchToken,
-                \trim($spawnError . PHP_EOL . $output . PHP_EOL
-                    . (string)__('创建 Queue Worker 失败，进程名：%{1}', [$processName])),
             );
-            return false;
+            // WLS workers reap/interfere with shell `nohup ... &` children from
+            // Processer::create(), leaving a ghost PID and an empty worker log.
+            // Detached argv + posix_setsid returns the real PHP PID and survives the
+            // request worker lifecycle (same transport Master/shared sidecars use).
+            $spawnError = '';
+            try {
+                $pid = $this->createDetachedQueueWorker(
+                    $this->buildQueueRunArgv((int)$queue->getId(), $queueName, $queue, $dispatchToken),
+                    $processName,
+                );
+            } catch (\Throwable $throwable) {
+                $pid = 0;
+                // Keep the claimed Queue snapshot immutable. Compensation must
+                // compare against the values that were actually persisted.
+                $spawnError = (string)__('创建脱离式 Queue Worker 异常：%{1}', $throwable->getMessage());
+            }
+            if (!$pid) {
+                $output = $this->getQueueSpawnOutput($processName);
+                $this->compensateSpawnFailure(
+                    $queue,
+                    $dispatchToken,
+                    \trim($spawnError . PHP_EOL . $output . PHP_EOL
+                        . (string)__('创建 Queue Worker 失败，进程名：%{1}', [$processName])),
+                );
+                return false;
+            }
+
+            return true;
+        };
+
+        if ($queueClass !== '' && $this->isBatchDrainingQueueClass($queueClass)) {
+            return $this->withQueueClassDispatchLock($queueClass, $start);
         }
 
-        return true;
+        return $start();
     }
 
     /** @param list<string> $argv */
@@ -1987,9 +2022,17 @@ class QueueDispatchService
         string $expectedProcessName,
         string $expectedLaunchId,
     ): bool {
+        $expectedProcessName = \trim($expectedProcessName);
+        $expectedLaunchId = \strtolower(\trim($expectedLaunchId));
+        // Always pass canonical --name/--launch-id so bare Unicode task names are
+        // never re-hashed through generateNameFromCommand during lease removal.
+        $identity = \str_starts_with($expectedProcessName, '--name=')
+            ? $expectedProcessName
+            : ('--name=' . $expectedProcessName . ' --launch-id=' . $expectedLaunchId);
+
         return Processer::removeManagedProcessLeaseRecord(
             $pid,
-            $expectedProcessName,
+            $identity,
             $expectedLaunchId,
         );
     }
@@ -2002,6 +2045,89 @@ class QueueDispatchService
         }
 
         return $maxConcurrent;
+    }
+
+    private function resolveMaxConcurrentForClass(string $queueClass): int
+    {
+        $queueClass = \ltrim($queueClass, '\\');
+        if ($queueClass === '') {
+            return $this->resolveMaxConcurrent();
+        }
+        $configured = Env::get('queue.cron.max_concurrent_by_class.' . $queueClass, null);
+        if ($configured !== null && $configured !== '') {
+            $max = (int)$configured;
+            return $max > 0 ? $max : 1;
+        }
+        if ($this->isBatchDrainingQueueClass($queueClass)) {
+            return 1;
+        }
+
+        return $this->resolveMaxConcurrent();
+    }
+
+    private function isBatchDrainingQueueClass(string $queueClass): bool
+    {
+        $queueClass = \ltrim($queueClass, '\\');
+        if ($queueClass === '' || !\class_exists($queueClass)) {
+            return false;
+        }
+
+        return \is_a($queueClass, BatchDrainingQueueConsumerInterface::class, true);
+    }
+
+    private function countActiveAutoQueuesForClass(string $queueClass): int
+    {
+        $queueClass = \ltrim($queueClass, '\\');
+        if ($queueClass === '') {
+            return 0;
+        }
+        $query = clone $this->queue;
+        $items = $query->reset()
+            ->joinModel(Type::class, 't', 'main_table.type_id=t.type_id', 'inner')
+            ->where(Queue::schema_fields_finished, 0)
+            ->where(Queue::schema_fields_auto, 1)
+            ->where(Queue::schema_fields_status, Queue::status_running)
+            ->where('t.' . Type::schema_fields_class, $queueClass)
+            ->select()
+            ->fetch()
+            ->getItems();
+
+        return \count($items);
+    }
+
+    /**
+     * Serialize claim+spawn for batch-drain consumer classes so concurrent
+     * createIfAbsent dispatch cannot cold-start multiple Workers for one wave.
+     *
+     * @template T
+     * @param callable():T $callback
+     * @return T
+     */
+    private function withQueueClassDispatchLock(string $queueClass, callable $callback): mixed
+    {
+        $queueClass = \ltrim($queueClass, '\\');
+        $lockDir = BP . 'var' . DIRECTORY_SEPARATOR . 'lock';
+        if (!\is_dir($lockDir) && !@\mkdir($lockDir, 0775, true) && !\is_dir($lockDir)) {
+            return $callback();
+        }
+        $lockFile = $lockDir . DIRECTORY_SEPARATOR
+            . 'queue-class-dispatch-' . \hash('sha256', $queueClass) . '.lock';
+        $handle = @\fopen($lockFile, 'c+');
+        if ($handle === false) {
+            return $callback();
+        }
+        try {
+            if (!\flock($handle, \LOCK_EX)) {
+                return $callback();
+            }
+            try {
+                return $callback();
+            } finally {
+                \flock($handle, \LOCK_UN);
+            }
+        } finally {
+            \fclose($handle);
+        }
     }
 
     private function buildQueueRunProcessName(
