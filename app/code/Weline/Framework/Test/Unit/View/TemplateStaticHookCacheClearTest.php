@@ -13,18 +13,21 @@ final class TemplateStaticHookCacheClearTest extends TestCase
 {
     private mixed $runtimeCacheBackup;
     private bool $runtimeCacheResolvedBackup;
+    private mixed $processViewFileCacheBackup;
 
     protected function setUp(): void
     {
         parent::setUp();
         $this->runtimeCacheBackup = $this->readStaticProperty('staticHookRuntimeCache');
         $this->runtimeCacheResolvedBackup = (bool)$this->readStaticProperty('staticHookRuntimeCacheResolved');
+        $this->processViewFileCacheBackup = $this->readStaticProperty('processViewFileCache');
     }
 
     protected function tearDown(): void
     {
         $this->writeStaticProperty('staticHookRuntimeCache', $this->runtimeCacheBackup);
         $this->writeStaticProperty('staticHookRuntimeCacheResolved', $this->runtimeCacheResolvedBackup);
+        $this->writeStaticProperty('processViewFileCache', $this->processViewFileCacheBackup);
         parent::tearDown();
     }
 
@@ -64,6 +67,17 @@ final class TemplateStaticHookCacheClearTest extends TestCase
         self::assertTrue($shared->disconnected);
         self::assertNull($this->readStaticProperty('staticHookRuntimeCache'));
         self::assertFalse((bool)$this->readStaticProperty('staticHookRuntimeCacheResolved'));
+    }
+
+    public function testClearStaticHookCachesAlsoClearsProcessViewFileMap(): void
+    {
+        $this->writeStaticProperty('processViewFileCache', [
+            'sample' => ['compiled' => '/tmp/compiled.phtml', 'tpl' => '/tmp/source.phtml', 'expires_at' => PHP_FLOAT_MAX],
+        ]);
+
+        Template::clearStaticHookCaches();
+
+        self::assertSame([], $this->readStaticProperty('processViewFileCache'));
     }
 
     private function readStaticProperty(string $name): mixed

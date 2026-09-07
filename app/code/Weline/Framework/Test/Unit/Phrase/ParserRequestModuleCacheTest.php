@@ -27,6 +27,7 @@ final class ParserRequestModuleCacheTest extends TestCase
         }
         Runtime::setMode(RuntimeInterface::MODE_WLS);
         RequestContext::init();
+        State::setRequestLanguageOverride('en_US');
         WelineEnv::setLang('en_US');
         WelineEnv::setCurrency('CNY');
         $_SERVER['WELINE_USER_LANG'] = 'en_US';
@@ -62,6 +63,35 @@ final class ParserRequestModuleCacheTest extends TestCase
         $updatedModules = $this->currentLayerModules();
         self::assertContains('Weline_Customer', $updatedModules);
         self::assertContains('WeShop_Affiliate', $updatedModules);
+    }
+
+    public function testPersistentLocaleLayerUsesBatchGlobalDictionaryWhenMemoryAllows(): void
+    {
+        $source = (string)file_get_contents((new \ReflectionClass(Parser::class))->getFileName());
+        $start = strpos($source, 'private static function loadLocaleWords(');
+        $end = strpos($source, 'private static function extractModuleWords(', $start === false ? 0 : $start);
+        self::assertNotFalse($start);
+        self::assertNotFalse($end);
+        $method = substr($source, (int)$start, (int)$end - (int)$start);
+
+        self::assertStringContainsString('self::loadGlobalDictionaryScopeWords($lang, $modules)', $method);
+        self::assertStringContainsString('!self::shouldSkipHeavyLocaleDictionaryLoad()', $method);
+        self::assertStringContainsString("'i18n.phrase.global_dictionary_batch'", $method);
+    }
+
+    public function testPersistentGlobalDictionaryBatchExtendsOnlyForNewModules(): void
+    {
+        $source = (string)file_get_contents((new \ReflectionClass(Parser::class))->getFileName());
+        $start = strpos($source, 'private static function loadGlobalDictionaryScopeWords(');
+        $end = strpos($source, 'private static function getSharedPhraseCachePool(', $start === false ? 0 : $start);
+        self::assertNotFalse($start);
+        self::assertNotFalse($end);
+        $method = substr($source, (int)$start, (int)$end - (int)$start);
+
+        self::assertStringContainsString('$workerGlobalDictionaryLoadedModules', $method);
+        self::assertStringContainsString('\\array_diff($modules, $loadedModules)', $method);
+        self::assertStringContainsString('loadGlobalDictionaryWordsFromDatabase($lang, $queryModules)', $method);
+        self::assertStringNotContainsString("self::\$workerGlobalDictionaryWordsCache['locale|' . \$lang]", $method);
     }
 
     /**

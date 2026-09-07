@@ -25,6 +25,9 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
      */
     private CachePoolInterface $eventCache;
     private ModuleScanService $moduleScanService;
+
+    /** @var array<string,array> Module specs, including empty results, for the current read. */
+    private array $moduleEventSpecs = [];
     
     /**
      * 静态变量：记录已经输出过的错误信息，避免重复输出
@@ -86,6 +89,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
      */
     public function read(): array
     {
+        $this->moduleEventSpecs = [];
         $event_observers_list = [];
         $fileList = $this->getFileList();
         $parser = $this->parser;
@@ -370,6 +374,10 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
      */
     private function loadModuleEventSpecs(string $moduleName): array
     {
+        if (array_key_exists($moduleName, $this->moduleEventSpecs)) {
+            return $this->moduleEventSpecs[$moduleName];
+        }
+        $this->moduleEventSpecs[$moduleName] = [];
         try {
             $env = Env::getInstance();
             $moduleInfo = $env->getModuleInfo($moduleName);
@@ -385,7 +393,7 @@ class XmlReader extends \Weline\Framework\Config\Reader\XmlReader
             }
             
             $config = include $eventFile;
-            return is_array($config) ? $config : [];
+            return $this->moduleEventSpecs[$moduleName] = is_array($config) ? $config : [];
         } catch (\Exception $e) {
             return [];
         }

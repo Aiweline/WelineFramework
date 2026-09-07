@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace Weline\Framework\Console\Console\I18n;
 
-use Weline\Framework\App\Exception;
 use Weline\Framework\Console\CommandHelper;
 use Weline\Framework\Console\CommandInterface;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Phrase\DictionaryCompiler;
+use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
 
 final class Collect implements CommandInterface
 {
@@ -17,6 +19,7 @@ final class Collect implements CommandInterface
     public function __construct(
         private readonly DictionaryCompiler $compiler,
         private readonly Printing $printing,
+        private readonly ?RuntimeControlBroadcasterInterface $broadcastService = null,
     ) {
     }
 
@@ -50,8 +53,17 @@ final class Collect implements CommandInterface
         $this->printing->note(__('正在清理翻译缓存...'));
         try {
             DictionaryCompiler::clearTranslationCaches();
+            $broadcaster = $this->broadcastService
+                ?? ObjectManager::getInstance(RuntimeProviderResolver::class)
+                    ->resolve(RuntimeControlBroadcasterInterface::class);
+            if ($broadcaster instanceof RuntimeControlBroadcasterInterface) {
+                $result = $broadcaster->cacheClearAndWait(null, 12.0);
+                if (($result['success'] ?? false) !== true || ($result['completed'] ?? false) !== true) {
+                    throw new \RuntimeException((string)($result['message'] ?? __('未知错误')));
+                }
+            }
             $this->printing->success(__('翻译缓存清理成功！'));
-        } catch (Exception $exception) {
+        } catch (\Throwable $exception) {
             $this->printing->warning(
                 __('翻译缓存清理失败：%{1}，但翻译收集已完成', [$exception->getMessage()]),
             );

@@ -125,7 +125,7 @@ final class WlsRequestForwardedOriginTest extends TestCase
     public function testDirectListenPortFillsHostWhenAuthorityOmitsNonStandardPort(): void
     {
         $request = $this->createRequest(
-            "Host: p05113ef3.weline.test\r\n",
+            "Host: p05113ef3.test.weline.com\r\n",
             [
                 'HTTPS' => 'on',
                 'REQUEST_SCHEME' => 'https',
@@ -134,10 +134,10 @@ final class WlsRequestForwardedOriginTest extends TestCase
         );
 
         self::assertTrue($request->isSecure());
-        self::assertSame('p05113ef3.weline.test:9555', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('p05113ef3.test.weline.com:9555', $_SERVER['HTTP_HOST'] ?? null);
         self::assertSame('9555', $_SERVER['SERVER_PORT'] ?? null);
         self::assertSame(
-            'https://p05113ef3.weline.test:9555/customer/account/logout',
+            'https://p05113ef3.test.weline.com:9555/customer/account/logout',
             $_SERVER['WELINE_FULL_REQUEST_URI'] ?? null,
         );
     }
@@ -177,7 +177,7 @@ final class WlsRequestForwardedOriginTest extends TestCase
     public function testTrustedLocalClientWithoutForwardedHeadersUsesListenPort(): void
     {
         $request = $this->createRequest(
-            "Host: p05113ef3.weline.test\r\n",
+            "Host: p05113ef3.test.weline.com\r\n",
             [
                 'HTTPS' => 'on',
                 'REQUEST_SCHEME' => 'https',
@@ -187,7 +187,7 @@ final class WlsRequestForwardedOriginTest extends TestCase
         );
 
         self::assertTrue($request->isSecure());
-        self::assertSame('p05113ef3.weline.test:9555', $_SERVER['HTTP_HOST'] ?? null);
+        self::assertSame('p05113ef3.test.weline.com:9555', $_SERVER['HTTP_HOST'] ?? null);
         self::assertSame('9555', $_SERVER['SERVER_PORT'] ?? null);
     }
 

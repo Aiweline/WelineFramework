@@ -8,6 +8,7 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 use ReflectionMethod;
 use Weline\Framework\Cache\Adapter\WlsMemoryAdapter;
+use Weline\Server\Service\MemoryStateFacade;
 
 class WlsMemoryAdapterTest extends TestCase
 {
@@ -87,6 +88,42 @@ class WlsMemoryAdapterTest extends TestCase
         }
     }
 
+    public function testSlowRemoteReadOpensShortGlobalCooldownForAllCachePools(): void
+    {
+        WlsMemoryAdapter::clearAllMemory();
+        $adapter = new WlsMemoryAdapter('unit_wls_memory_slow_remote', [
+            'local_cache_size' => 10,
+            'local_cache_memory_pressure_threshold' => 0.99,
+            'remote_slow_threshold_ms' => 25,
+        ]);
+        $facade = new SlowRemoteMemoryFacade();
+        $property = (new ReflectionClass($adapter))->getProperty('memoryFacade');
+        $property->setValue($adapter, $facade);
+
+        $adapter->get('first');
+        self::assertSame(1, $facade->cacheReads);
+
+        // A different key must skip the remote service while the short
+        // process-wide cooldown is active, even when another pool asks next.
+        $adapter->get('second');
+        self::assertSame(1, $facade->cacheReads);
+    }
+
+    public function testEmptyLocalCacheSkipsEpochProbeBeforeFirstRemoteRead(): void
+    {
+        WlsMemoryAdapter::clearAllMemory();
+        $adapter = new WlsMemoryAdapter('unit_wls_memory_empty_epoch_probe', [
+            'local_cache_size' => 10,
+            'local_cache_memory_pressure_threshold' => 0.99,
+        ]);
+        $facade = new CountingEpochMemoryFacade();
+        $property = (new ReflectionClass($adapter))->getProperty('memoryFacade');
+        $property->setValue($adapter, $facade);
+
+        self::assertNull($adapter->get('missing'));
+        self::assertSame(0, $facade->epochReads);
+    }
+
     /**
      * @param array<string, mixed> $values
      */
@@ -116,5 +153,51 @@ class WlsMemoryAdapterTest extends TestCase
         /** @var array<string, mixed> $localCache */
         $localCache = $property->getValue($adapter);
         return $localCache;
+    }
+}
+
+final class SlowRemoteMemoryFacade extends MemoryStateFacade
+{
+    public int $cacheReads = 0;
+
+    public function __construct()
+    {
+    }
+
+    public function get(string $namespace, string $key): mixed
+    {
+        return 0;
+    }
+
+    public function getCache(string $poolIdentity, string $key): mixed
+    {
+        ++$this->cacheReads;
+        usleep(50_000);
+
+        return null;
+    }
+
+    public function disconnect(): void
+    {
+    }
+}
+
+final class CountingEpochMemoryFacade extends MemoryStateFacade
+{
+    public int $epochReads = 0;
+
+    public function __construct()
+    {
+    }
+
+    public function get(string $namespace, string $key): mixed
+    {
+        ++$this->epochReads;
+
+        return 0;
+    }
+
+    public function disconnect(): void
+    {
     }
 }

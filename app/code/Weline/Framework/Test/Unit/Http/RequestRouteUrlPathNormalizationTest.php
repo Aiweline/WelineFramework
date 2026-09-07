@@ -36,7 +36,7 @@ final class RequestRouteUrlPathNormalizationTest extends TestCase
         self::assertSame(
             'pagebuilder/backend/ai-site-agent/workspace',
             $request->getRouteUrlPath(
-                'https://p11005ce4.weline.test/' . $backendPrefix . '/pagebuilder/backend/ai-site-agent/workspace?foo=1'
+                'https://p11005ce4.test.weline.com/' . $backendPrefix . '/pagebuilder/backend/ai-site-agent/workspace?foo=1'
             )
         );
     }

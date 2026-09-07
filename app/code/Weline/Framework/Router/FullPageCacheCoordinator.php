@@ -47,8 +47,9 @@ final class FullPageCacheCoordinator
     private const FAST_HTTP_GZIP_KEEPALIVE_SUFFIX = ':http:gzip:keepalive:v1';
     private const STALE_CACHE_SUFFIX = ':stale:v1';
     private const SCHEMA_NEUTRAL_STALE_CACHE_PREFIX =
-        'unified-fpc-schema-neutral-stale:20260818-localization-context-v5:';
+        'unified-fpc-schema-neutral-stale:20260907-category-summary-facets-v8:';
     private const DEFAULT_STALE_TTL_SECONDS = 86400;
+    private const DEFAULT_SHARED_STALE_MAX_BODY_BYTES = 1048576;
     private const DEFAULT_PRIVATE_SESSION_TTL_SECONDS = 300;
     private const PROCESS_FPC_TTL_SECONDS = 3600;
     private const PROCESS_FPC_MAX_ITEMS = 128;
@@ -62,7 +63,7 @@ final class FullPageCacheCoordinator
     private const DEFAULT_LANG = 'zh_Hans_CN';
     private const DEFAULT_CURRENCY = 'CNY';
     private const VARIANT_PAYLOAD_KEY = 'fpc_variant';
-    private const FPC_CACHE_SCHEMA_VERSION = '20260818-localization-context-v5';
+    private const FPC_CACHE_SCHEMA_VERSION = '20260907-category-summary-facets-v8';
 
     /**
      * @var array<string, bool>
@@ -283,6 +284,16 @@ final class FullPageCacheCoordinator
         if ($timeoutMs === self::LOCK_WAIT_TIMEOUT_MS && $this->internalFpcWarmupMode() === 'prime') {
             return \max(250, \min(10000, (int)Env::get('wls.worker.homepage_warmup_peer_wait_ms', 3000)));
         }
+        if ($timeoutMs === self::LOCK_WAIT_TIMEOUT_MS && $this->internalStorefrontWarmupMode()) {
+            // A storefront deferred warmup is deliberately a cache builder.
+            // Let peers wait for the shared publisher instead of falling
+            // through after the normal 250ms persistent-request budget and
+            // rendering the same multi-megabyte page a second time.
+            return \max(500, \min(15000, (int)Env::get(
+                'wls.worker.storefront_deferred_warmup_peer_wait_ms',
+                5000
+            )));
+        }
         if ($timeoutMs !== self::LOCK_WAIT_TIMEOUT_MS || !Runtime::isPersistent()) {
             return \max(0, $timeoutMs);
         }
@@ -293,6 +304,17 @@ final class FullPageCacheCoordinator
         );
 
         return \min(\max(0, $configured), 250);
+    }
+
+    private function internalStorefrontWarmupMode(): bool
+    {
+        $contextServer = Context::getCurrent()?->server();
+        $value = \is_array($contextServer) && \array_key_exists('WLS_INTERNAL_STOREFRONT_WARMUP', $contextServer)
+            ? $contextServer['WLS_INTERNAL_STOREFRONT_WARMUP']
+            : WelineEnv::server('WLS_INTERNAL_STOREFRONT_WARMUP', null);
+
+        return \is_scalar($value)
+            && \in_array(\strtolower(\trim((string)$value)), ['1', 'true', 'yes', 'on'], true);
     }
 
     /**
@@ -390,29 +412,37 @@ final class FullPageCacheCoordinator
         $payload[self::UNIFIED_CACHE_EXPIRES_AT_KEY] = \microtime(true) + $ttl;
         $unifiedCacheKey = $this->getUnifiedCacheKey($method);
         self::cooperativeBuildYield();
+        $sharedPayload = $this->externalizeSharedPayload($unifiedCacheKey, $payload);
         $sharedPublished = $this->cache()->set(
             $unifiedCacheKey,
-            $this->externalizeSharedPayload($unifiedCacheKey, $payload),
+            $sharedPayload,
             $ttl
         );
         if (!$sharedPublished && InternalHomepagePrime::isCurrentRequest()) {
             throw new \RuntimeException('Homepage warmup could not publish the compact shared FPC payload.');
         }
-        if ($this->privateSessionTokenFromVariant($variant) === '' && $this->shouldPublishSharedStalePayload($body)) {
-            self::cooperativeBuildYield();
+        if ($this->privateSessionTokenFromVariant($variant) === '') {
             $staleCacheKey = $this->buildStaleCacheKey($unifiedCacheKey);
             $staleTtl = $this->staleTtlSeconds();
-            $this->cache()->set($staleCacheKey, $this->externalizeSharedPayload($staleCacheKey, $payload), $staleTtl);
-            self::cooperativeBuildYield();
-            $schemaNeutralStaleKey = $this->buildSchemaNeutralStaleCacheKey($fullUri, $method, $variant);
-            $this->cache()->set(
-                $schemaNeutralStaleKey,
-                $this->externalizeSharedPayload($schemaNeutralStaleKey, $payload),
-                $staleTtl
-            );
+            $stalePayload = $this->externalizeSharedPayload($staleCacheKey, $payload);
+            if ($this->shouldPublishSharedStalePayload($stalePayload)) {
+                self::cooperativeBuildYield();
+                $this->cache()->set($staleCacheKey, $stalePayload, $staleTtl);
+                self::cooperativeBuildYield();
+                $schemaNeutralStaleKey = $this->buildSchemaNeutralStaleCacheKey($fullUri, $method, $variant);
+                $schemaNeutralStalePayload = $this->externalizeSharedPayload($schemaNeutralStaleKey, $payload);
+                if ($this->shouldPublishSharedStalePayload($schemaNeutralStalePayload)) {
+                    $this->cache()->set(
+                        $schemaNeutralStaleKey,
+                        $schemaNeutralStalePayload,
+                        $staleTtl
+                    );
+                }
+            }
         }
         $this->setProcessCachedPayload($unifiedCacheKey, $payload);
         $this->registerLocalizedHomepageProcessReceipt($fullUri, $variant, $unifiedCacheKey);
+        $this->registerRootHomepageProcessReceipt($fullUri, $variant, $unifiedCacheKey);
         if (InternalHomepagePrime::isCurrentRequest()) {
             RequestContext::set(
                 self::INTERNAL_HOMEPAGE_RECEIPT_CONTEXT_KEY,
@@ -979,6 +1009,37 @@ final class FullPageCacheCoordinator
         string $requestFullUri,
         string $cookieHeader = ''
     ): ?array {
+        $receipt = $this->resolveHomepageProcessReceipt($requestFullUri, $cookieHeader);
+
+        return $receipt !== null && $this->isLocalizedHomepageFullUri($requestFullUri)
+            ? $receipt
+            : null;
+    }
+
+    /**
+     * Resolve an exact anonymous root-homepage identity learned from a
+     * successful Framework FPC publish or hit in this Worker.
+     *
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
+     */
+    public function resolveRootHomepageProcessReceipt(
+        string $requestFullUri,
+        string $cookieHeader = ''
+    ): ?array {
+        $receipt = $this->resolveHomepageProcessReceipt($requestFullUri, $cookieHeader);
+
+        return $receipt !== null && $this->isRootHomepageFullUri($requestFullUri)
+            ? $receipt
+            : null;
+    }
+
+    /**
+     * @return array{version:int,full_uri:string,method:string,cookie_header:string,identity_digest:string,cache_key:string}|null
+     */
+    private function resolveHomepageProcessReceipt(
+        string $requestFullUri,
+        string $cookieHeader
+    ): ?array {
         if (\trim($cookieHeader) !== '') {
             return null;
         }
@@ -1006,6 +1067,30 @@ final class FullPageCacheCoordinator
         self::$processLocalizedHomepageReceipts[$receiptIndex] = $receipt;
 
         return $receipt;
+    }
+
+    private function isRootHomepageFullUri(string $fullUri): bool
+    {
+        $fullUri = $this->canonicalizeFullUriForCacheKey(\trim($fullUri));
+        if (!KeyBuilder::isValidFullPageCacheKey($fullUri)
+            || $this->isEditorOrPreviewRequest($fullUri)
+        ) {
+            return false;
+        }
+
+        try {
+            $parts = \parse_url($fullUri);
+        } catch (\ValueError) {
+            return false;
+        }
+        if (!\is_array($parts) || \trim((string)($parts['query'] ?? '')) !== '') {
+            return false;
+        }
+
+        $path = (string)($parts['path'] ?? '/');
+        $path = State::stripWebsitePathPrefix($path, $this->currentWebsiteUrlForPathVariant());
+
+        return \trim($path, '/') === '';
     }
 
     /**
@@ -1094,6 +1179,32 @@ final class FullPageCacheCoordinator
             return;
         }
 
+        $this->registerHomepageProcessReceipt($fullUri, $variant, $cacheKey);
+    }
+
+    /** @param array<string, mixed> $variant */
+    private function registerRootHomepageProcessReceipt(
+        string $fullUri,
+        array $variant,
+        string $cacheKey
+    ): void {
+        $fullUri = $this->canonicalizeFullUriForCacheKey($fullUri);
+        if (!$this->isRootHomepageFullUri($fullUri)
+            || $this->currentRequestCookieHeader() !== ''
+            || $this->getProcessCachedPayload($cacheKey) === null
+        ) {
+            return;
+        }
+
+        $this->registerHomepageProcessReceipt($fullUri, $variant, $cacheKey);
+    }
+
+    /** @param array<string, mixed> $variant */
+    private function registerHomepageProcessReceipt(
+        string $fullUri,
+        array $variant,
+        string $cacheKey
+    ): void {
         $receipt = $this->buildInternalHomepageWarmupReceipt($fullUri, $variant, $cacheKey);
         if ($receipt === null) {
             return;
@@ -1107,6 +1218,15 @@ final class FullPageCacheCoordinator
         ) {
             \array_shift(self::$processLocalizedHomepageReceipts);
         }
+    }
+
+    private function currentRequestCookieHeader(): string
+    {
+        return \trim((string)(
+            Context::getCurrent()?->server('HTTP_COOKIE', '')
+            ?: WelineEnv::server('HTTP_COOKIE', '')
+            ?: WelineEnv::get('server.http_cookie', '')
+        ));
     }
 
     /**
@@ -1914,6 +2034,11 @@ final class FullPageCacheCoordinator
                 $cachedVariant,
                 $cacheKey,
             );
+            $this->registerRootHomepageProcessReceipt(
+                $this->getCacheKeyFullUri(),
+                $cachedVariant,
+                $cacheKey,
+            );
         }
 
         $statusCode = (int)($cached[KeyBuilder::UNIFIED_CACHE_STATUS_KEY] ?? 200);
@@ -2572,10 +2697,32 @@ final class FullPageCacheCoordinator
         return \max(60, \min($configured, 604800));
     }
 
-    private function shouldPublishSharedStalePayload(string $body): bool
+    /** @param array<string, mixed> $payload */
+    private function shouldPublishSharedStalePayload(array $payload): bool
     {
-        $maxBytes = (int)(Env::get('wls.performance.fpc_shared_stale_max_body_bytes', 1048576) ?: 0);
-        return $maxBytes > 0 && \strlen($body) <= $maxBytes;
+        $maxBytes = (int)(Env::get(
+            'wls.performance.fpc_shared_stale_max_body_bytes',
+            self::DEFAULT_SHARED_STALE_MAX_BODY_BYTES
+        ) ?: 0);
+        if ($maxBytes <= 0) {
+            return false;
+        }
+
+        $bodyFile = $payload[self::UNIFIED_CACHE_FPC_BODY_FILE_KEY] ?? null;
+        if (\is_array($bodyFile) && \trim((string)($bodyFile['path'] ?? '')) !== '') {
+            // The body is already externalized to a bounded file pointer; the
+            // shared Memory value no longer carries the multi-megabyte HTML.
+            return true;
+        }
+
+        $body = $payload[KeyBuilder::UNIFIED_CACHE_FPC_KEY] ?? '';
+        $gzip = $payload[self::UNIFIED_CACHE_FPC_GZIP_B64_KEY] ?? '';
+        $bytes = \is_string($body) ? \strlen($body) : 0;
+        if (\is_string($gzip)) {
+            $bytes += \strlen($gzip);
+        }
+
+        return $bytes <= $maxBytes;
     }
 
     private function shouldPublishSharedFormattedResponse(string $formattedResponse): bool
