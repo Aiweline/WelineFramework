@@ -11,7 +11,7 @@ declare(strict_types=1);
  */
 
 const WLS_PANEL_DEPLOY_POLICY_EXIT_ASSERTION_FAILED = 1;
-const WLS_PANEL_DEPLOY_POLICY_LOCAL_URL = 'https://app.weline.test:9523';
+const WLS_PANEL_DEPLOY_POLICY_LOCAL_URL = 'https://app.test.weline.com:9523';
 const WLS_PANEL_DEPLOY_POLICY_PRODUCTION_URL = 'https://app.aiweline.com';
 
 /**
@@ -159,8 +159,8 @@ function wlsPanelDeployPolicyChecks(array $payload, array $resolved, string $exp
             || (string)$resolved['raw_platform_url'] === WLS_PANEL_DEPLOY_POLICY_PRODUCTION_URL,
         'production_records_production_default_source' => $environment !== 'production'
             || $platformUrlSource === 'production_default',
-        'production_not_local_appstore' => $environment !== 'production' || !str_contains($url, 'app.weline.test'),
-        'marketplace_not_www_host' => !str_contains($url, 'www.weline.test') && !str_contains($url, 'www.aiweline.com'),
+        'production_not_local_appstore' => $environment !== 'production' || !str_contains($url, 'app.test.weline.com'),
+        'marketplace_not_www_host' => !str_contains($url, 'www.test.weline.com') && !str_contains($url, 'www.aiweline.com'),
         'local_records_known_appstore_source' => $environment !== 'local'
             || in_array($platformUrlSource, [
                 'local_default',

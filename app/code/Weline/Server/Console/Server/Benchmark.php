@@ -3736,7 +3736,7 @@ class Benchmark extends CommandAbstract
                 __('分流倾斜阈值检查') => 'php bin/w server:benchmark --instance api-server --path /_wls/health --worker-balance-threshold 1.3',
                 __('指定端口') => 'php bin/w server:benchmark -p 9000',
                 __('指定 HTTPS 端口') => 'php bin/w server:benchmark -p 15443 --ssl',
-                __('跨主机 HTTP/2 压测') => 'php bin/w server:benchmark --host 10.0.0.8 --authority-host app.weline.test -p 15443 --ssl --http-version 2 --physical-connections 3',
+                __('跨主机 HTTP/2 压测') => 'php bin/w server:benchmark --host 10.0.0.8 --authority-host app.test.weline.com -p 15443 --ssl --http-version 2 --physical-connections 3',
                 __('HTTP/2 协商验证') => 'php bin/w server:benchmark -p 15443 --ssl --http-version 2',
                 __('HTTP/2 单物理连接多路复用') => 'php bin/w server:benchmark -p 15443 --ssl --http-version 2 --physical-connections 1',
                 __('HTTP/3 协商验证') => 'php bin/w server:benchmark -p 15443 --ssl --http-version 3 --accept-encoding auto',

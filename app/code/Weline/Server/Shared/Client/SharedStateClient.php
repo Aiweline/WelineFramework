@@ -52,24 +52,95 @@ class SharedStateClient
 
     public function request(string $cmd, array $params = []): ?array
     {
-        $requestStart = self::monotonicSeconds();
-        return $this->withConnection(function (PooledConnectionInterface $connection) use ($cmd, $params, $requestStart): ?array {
-            $encodeStart = self::monotonicSeconds();
-            $payload = SessionProtocol::encodeRequest($cmd, $params);
-            $this->recordClientPhase('protocol_encode', $encodeStart, 'success');
-
-            if (!$connection->send($payload)) {
-                $this->recordClientPhase('request', $requestStart, 'failure');
-                return null;
+        $requestStartNs = \hrtime(true);
+        $requestStart = $requestStartNs / 1_000_000_000;
+        $trace = \Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled() ? [
+            'rpc_start_monotonic_us' => \intdiv($requestStartNs, 1000),
+            'rpc_end_monotonic_us' => null,
+            'read_start_monotonic_us' => null,
+            'read_end_monotonic_us' => null,
+            'command' => \substr($cmd, 0, 32),
+            'namespace' => \is_string($params['ns'] ?? null) ? \substr($params['ns'], 0, 128) : '',
+            'key_hash' => \is_scalar($params['key'] ?? null) ? \hash('sha256', (string)$params['key']) : null,
+            'encoded_bytes' => null,
+            'acquire_ms' => null,
+            'encode_ms' => null,
+            'send_ms' => null,
+            'read_ms' => null,
+            'dispose_ms' => null,
+            'send_called' => false,
+            'send_succeeded' => false,
+            'read_called' => false,
+            'response_received' => false,
+        ] : null;
+        try {
+            return $this->withConnection(function (PooledConnectionInterface $connection) use ($cmd, $params, $requestStart, &$trace): ?array {
+                $encodeStart = self::monotonicSeconds();
+                try {
+                    $payload = SessionProtocol::encodeRequest($cmd, $params);
+                } finally {
+                    if ($trace !== null) {
+                        $trace['encode_ms'] = \round((self::monotonicSeconds() - $encodeStart) * 1000, 3);
+                    }
+                }
+                $this->recordClientPhase('protocol_encode', $encodeStart, 'success');
+                if ($trace !== null) {
+                    $trace['encoded_bytes'] = \strlen($payload);
+                    $trace['send_called'] = true;
+                }
+                $sendStart = $trace !== null ? self::monotonicSeconds() : null;
+                try {
+                    $sent = $connection->send($payload);
+                } finally {
+                    if ($trace !== null) {
+                        $trace['send_ms'] = \round((self::monotonicSeconds() - $sendStart) * 1000, 3);
+                    }
+                }
+                if ($trace !== null) {
+                    $trace['send_succeeded'] = $sent;
+                }
+                if (!$sent) {
+                    $this->recordClientPhase('request', $requestStart, 'failure');
+                    return null;
+                }
+                if ($trace !== null) {
+                    $trace['read_called'] = true;
+                }
+                $readStartNs = $trace !== null ? \hrtime(true) : null;
+                try {
+                    $response = $connection->read();
+                } finally {
+                    if ($trace !== null) {
+                        $readEndNs = \hrtime(true);
+                        $trace['read_ms'] = \round(($readEndNs - $readStartNs) / 1_000_000, 3);
+                        $trace['read_start_monotonic_us'] = \intdiv($readStartNs, 1000);
+                        $trace['read_end_monotonic_us'] = \intdiv($readEndNs, 1000);
+                    }
+                }
+                if ($trace !== null) {
+                    $trace['response_received'] = \is_array($response);
+                }
+                $this->recordClientPhase(
+                    'request',
+                    $requestStart,
+                    \is_array($response) ? 'success' : 'timeout'
+                );
+                return $response;
+            }, $trace);
+        } finally {
+            if ($trace !== null) {
+                $requestEndNs = \hrtime(true);
+                $trace['rpc_end_monotonic_us'] = \intdiv($requestEndNs, 1000);
+                // RPC is a child of existing cache/session spans; do not count it again in WLS totals.
+                \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan(
+                    'wls.rpc.request',
+                    ($requestEndNs - $requestStartNs) / 1_000_000,
+                    'rpc',
+                    null,
+                    $trace
+                );
             }
-            $response = $connection->read();
-            $this->recordClientPhase(
-                'request',
-                $requestStart,
-                \is_array($response) ? 'success' : 'timeout'
-            );
-            return $response;
-        });
+        }
     }
 
     public function isHealthy(): bool
@@ -105,9 +176,16 @@ class SharedStateClient
         $this->pool->shutdown();
     }
 
-    private function withConnection(callable $callback): ?array
+    private function withConnection(callable $callback, ?array &$trace = null): ?array
     {
-        $conn = $this->pool->acquire($this->acquireTimeout);
+        $acquireStart = $trace !== null ? self::monotonicSeconds() : null;
+        try {
+            $conn = $this->pool->acquire($this->acquireTimeout);
+        } finally {
+            if ($trace !== null) {
+                $trace['acquire_ms'] = \round((self::monotonicSeconds() - $acquireStart) * 1000, 3);
+            }
+        }
         if ($conn === null) {
             return null;
         }
@@ -122,6 +200,7 @@ class SharedStateClient
         } catch (\Throwable) {
             $result = null;
         } finally {
+            $disposeStart = $trace !== null ? self::monotonicSeconds() : null;
             try {
                 if ($dispose === 'release') {
                     $this->pool->release($conn);
@@ -133,6 +212,10 @@ class SharedStateClient
                     $this->pool->invalidate($conn);
                 } catch (\Throwable) {
                     // 已尽力回收；避免 finally 再抛导致掩盖业务异常
+                }
+            } finally {
+                if ($trace !== null) {
+                    $trace['dispose_ms'] = \round((self::monotonicSeconds() - $disposeStart) * 1000, 3);
                 }
             }
         }

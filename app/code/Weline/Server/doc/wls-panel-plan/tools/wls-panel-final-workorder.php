@@ -10,7 +10,7 @@ declare(strict_types=1);
  * the result into a copy-safe local/production execution sequence.
  */
 
-const WLS_PANEL_WORKORDER_LOCAL_ROOT = 'https://app.weline.test:9523';
+const WLS_PANEL_WORKORDER_LOCAL_ROOT = 'https://app.test.weline.com:9523';
 const WLS_PANEL_WORKORDER_PRODUCTION_ROOT = 'https://app.aiweline.com';
 const WLS_PANEL_WORKORDER_EXIT_FAILED = 1;
 
@@ -274,7 +274,7 @@ function wlsPanelWorkorderBuild(array $preflight): array
                 'endpoint' => $localEndpoint,
                 'checkout' => 'E:\\WelineFramework\\Framework-Official\\App\\weline',
                 'env_wls_endpoint' => (string)($summary['readiness_app_env_wls_endpoint_url'] ?? WLS_PANEL_WORKORDER_LOCAL_ROOT),
-                'source' => 'local App checkout env/config only when deploy=dev/local and root equals https://app.weline.test:9523',
+                'source' => 'local App checkout env/config only when deploy=dev/local and root equals https://app.test.weline.com:9523',
             ],
             'production_deployed' => [
                 'root' => WLS_PANEL_WORKORDER_PRODUCTION_ROOT,
@@ -283,8 +283,8 @@ function wlsPanelWorkorderBuild(array $preflight): array
             ],
             'forbidden_marketplace_roots' => [
                 'https://www.aiweline.com',
-                'http://www.weline.test:9518',
-                'https://www.weline.test:9518',
+                'http://www.test.weline.com:9518',
+                'https://www.test.weline.com:9518',
             ],
         ],
         'blocked_checks' => $blockers,
@@ -339,12 +339,12 @@ function wlsPanelWorkorderBuild(array $preflight): array
                 'command' => 'php app\\code\\Weline\\Server\\doc\\wls-panel-plan\\tools\\wls-panel-live-e2e-capture.php --environment=local --allow-live=1 --evidence-output=var\\wls-panel-plan\\local-appstore-live-e2e.json',
                 'requires' => [
                     'local App checkout identity verified as E:\\WelineFramework\\Framework-Official\\App\\weline',
-                    'local App env WLS endpoint locked to https://app.weline.test:9523',
+                    'local App env WLS endpoint locked to https://app.test.weline.com:9523',
                     'App checkout sync and setup completed through the reviewed path',
                     'drift_review_fingerprint compared between compact drift summary and authorization packet before sync',
                     'workorder authorization consistency gate passes and is embedded into capture metadata',
                     'official-apps manifest/source catalog ready with module:wls and module:wls-extra canary',
-                    'app.weline.test:9523 WLS listener ready',
+                    'app.test.weline.com:9523 WLS listener ready',
                     'WLS_MARKETPLACE_BEARER_TOKEN set outside repository files',
                 ],
             ],
@@ -365,7 +365,7 @@ function wlsPanelWorkorderBuild(array $preflight): array
                     'deployed var\\deploy\\current.json records appstore_platform_url=https://app.aiweline.com',
                     'deployed var\\deploy\\current.json records appstore_platform_url_source=production_default',
                     'captured evidence endpoint_source and capture_metadata.endpoint_source are deployed var\\deploy\\current.json',
-                    'capture_metadata.workorder_authorization_consistency records app.weline.test:9523 and app.aiweline.com',
+                    'capture_metadata.workorder_authorization_consistency records app.test.weline.com:9523 and app.aiweline.com',
                     'production token/account ready outside repository files',
                     'app.aiweline.com App Store API live',
                 ],
@@ -587,7 +587,7 @@ function wlsPanelWorkorderSelfTest(): array
                     $blockedLocalCaptureRequires,
                     'local App checkout identity verified as E:\\WelineFramework\\Framework-Official\\App\\weline'
                 )
-                && str_contains($blockedLocalCaptureRequires, 'local App env WLS endpoint locked to https://app.weline.test:9523'),
+                && str_contains($blockedLocalCaptureRequires, 'local App env WLS endpoint locked to https://app.test.weline.com:9523'),
         ],
         [
             'name' => 'ready_state_allows_only_local_live_capture_step',

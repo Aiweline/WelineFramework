@@ -64,10 +64,11 @@ class SchedulerWaitObserver implements ObserverInterface
             return;
         }
         $timeout = (float) ($params['timeout'] ?? 0.0);
+        $ioTiming = ($params['io_timing'] ?? null) instanceof \stdClass ? $params['io_timing'] : null;
         if ($writable) {
-            $scheduler->addWritableWaiter($fiber, $stream, $timeout);
+            $scheduler->addWritableWaiter($fiber, $stream, $timeout, $ioTiming);
         } else {
-            $scheduler->addReadableWaiter($fiber, $stream, $timeout);
+            $scheduler->addReadableWaiter($fiber, $stream, $timeout, $ioTiming);
         }
     }
 

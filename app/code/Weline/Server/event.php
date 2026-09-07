@@ -79,7 +79,7 @@ return [
 
     /**
      * 本地托管域名注册完成事件
-     * WLS 将 *.weline.test / *.weline.localhost 等托管本地域名写入 hosts 后触发
+     * WLS 将 *.test.weline.com / *.weline.localhost 等托管本地域名写入 hosts 后触发
      */
     'Weline_Server::domain::local_domain_registered' => [
         'name' => __('本地托管域名注册完成'),
@@ -92,7 +92,7 @@ return [
             'ip' => ['type' => 'string', 'required' => true, 'description' => 'hosts 映射 IP'],
             'status' => ['type' => 'string', 'required' => true, 'description' => 'added/repaired/already_exists/external_satisfied'],
             'is_new' => ['type' => 'boolean', 'required' => true, 'description' => '是否本次新写入（非已存在）'],
-            'is_standard_project_host' => ['type' => 'boolean', 'required' => false, 'description' => '是否为 p{hash}.weline.test 标准项目 Host'],
+            'is_standard_project_host' => ['type' => 'boolean', 'required' => false, 'description' => '是否为 p{hash}.test.weline.com 标准项目 Host'],
             'source' => ['type' => 'string', 'required' => false, 'description' => '事件来源标识'],
         ],
     ],

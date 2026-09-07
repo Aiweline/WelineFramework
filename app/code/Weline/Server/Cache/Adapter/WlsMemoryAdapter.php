@@ -22,7 +22,16 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
      * @var array<string, float>
      */
     private static array $remoteUnavailableUntil = [];
+    /**
+     * One slow shared-memory operation can stall every cache pool in this
+     * worker. Keep a short process-wide cooldown so later lookups fall back
+     * without queueing behind the same service.
+     */
+    private static float $remoteGloballyUnavailableUntil = 0.0;
+    /** Request id that already observed a slow remote operation. */
+    private static ?string $remoteSlowRequestId = null;
     private const REMOTE_FAILURE_COOLDOWN_SECONDS = 2.0;
+    private const REMOTE_SLOW_THRESHOLD_MS = 75.0;
     private const EPOCH_NAMESPACE = 'wls_adapter_local_epoch';
 
     /** 进程内缓存（减少网络请求） */
@@ -96,8 +105,9 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
         }
 
         try {
-            $value = $this->memoryFacade()->getCache($this->identity, $key);
-            $this->markRemoteAvailable();
+            $value = $this->remoteCall(
+                fn() => $this->memoryFacade()->getCache($this->identity, $key)
+            );
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
             $this->recordMiss();
@@ -125,8 +135,9 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
         }
 
         try {
-            $result = $this->memoryFacade()->setCache($this->identity, $key, $value, $ttl);
-            $this->markRemoteAvailable();
+            $result = $this->remoteCall(
+                fn() => $this->memoryFacade()->setCache($this->identity, $key, $value, $ttl)
+            );
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
             return false;
@@ -147,8 +158,9 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
         }
 
         try {
-            $result = $this->memoryFacade()->deleteCache($this->identity, $key);
-            $this->markRemoteAvailable();
+            $result = $this->remoteCall(
+                fn() => $this->memoryFacade()->deleteCache($this->identity, $key)
+            );
             return $result;
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
@@ -165,8 +177,9 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
         }
 
         try {
-            $result = $this->memoryFacade()->clearCache($this->identity);
-            $this->markRemoteAvailable();
+            $result = $this->remoteCall(
+                fn() => $this->memoryFacade()->clearCache($this->identity)
+            );
             $this->bumpRemoteEpoch();
             return $result;
         } catch (\Throwable $throwable) {
@@ -186,8 +199,9 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
         }
 
         try {
-            $result = $this->memoryFacade()->compareAndSetCache($this->identity, $key, $expected, $value, $ttl);
-            $this->markRemoteAvailable();
+            $result = $this->remoteCall(
+                fn() => $this->memoryFacade()->compareAndSetCache($this->identity, $key, $expected, $value, $ttl)
+            );
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
             return false;
@@ -255,8 +269,9 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
         }
 
         try {
-            $result = $this->memoryFacade()->hasCache($this->identity, $key);
-            $this->markRemoteAvailable();
+            $result = $this->remoteCall(
+                fn() => $this->memoryFacade()->hasCache($this->identity, $key)
+            );
             return $result;
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
@@ -420,6 +435,9 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
     public static function clearAllMemory(): void
     {
         self::$stats = [];
+        self::$remoteUnavailableUntil = [];
+        self::$remoteGloballyUnavailableUntil = 0.0;
+        self::$remoteSlowRequestId = null;
     }
 
     private array $config = [];
@@ -569,12 +587,20 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
         if ($requestId !== null && $this->epochSyncedRequestId === $requestId) {
             return;
         }
+        // An empty L1 has no stale value to invalidate. Defer the shared
+        // epoch probe until this worker has materialized a local entry; the
+        // first business read still goes through the shared cache below.
+        if ($this->localCache === []) {
+            $this->epochSyncedRequestId = $requestId;
+            return;
+        }
         if ($this->isRemoteUnavailable()) {
             return;
         }
         try {
-            $remote = (int)($this->memoryFacade()->get(self::EPOCH_NAMESPACE, $this->identity) ?? 0);
-            $this->markRemoteAvailable();
+            $remote = (int)($this->remoteCall(
+                fn() => $this->memoryFacade()->get(self::EPOCH_NAMESPACE, $this->identity)
+            ) ?? 0);
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
             return;
@@ -595,8 +621,9 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
             return;
         }
         try {
-            $next = $this->memoryFacade()->incr(self::EPOCH_NAMESPACE, $this->identity, 1);
-            $this->markRemoteAvailable();
+            $next = $this->remoteCall(
+                fn() => $this->memoryFacade()->incr(self::EPOCH_NAMESPACE, $this->identity, 1)
+            );
             $this->localEpoch = $next !== null ? \max(1, (int)$next) : ($this->localEpoch + 1);
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
@@ -625,12 +652,25 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
 
     private function isRemoteUnavailable(): bool
     {
+        $requestId = $this->currentRequestId();
+        if ($requestId !== null && self::$remoteSlowRequestId === $requestId) {
+            return true;
+        }
+
+        $now = self::monotonicSeconds();
+        if (self::$remoteGloballyUnavailableUntil > $now) {
+            return true;
+        }
+        if (self::$remoteGloballyUnavailableUntil > 0.0) {
+            self::$remoteGloballyUnavailableUntil = 0.0;
+        }
+
         $until = self::$remoteUnavailableUntil[$this->identity] ?? 0.0;
         if ($until <= 0.0) {
             return false;
         }
 
-        if ($until > self::monotonicSeconds()) {
+        if ($until > $now) {
             return true;
         }
 
@@ -641,7 +681,13 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
     private function markRemoteUnavailable(\Throwable $throwable): void
     {
         unset($throwable);
-        self::$remoteUnavailableUntil[$this->identity] = self::monotonicSeconds() + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
+        $until = self::monotonicSeconds() + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
+        self::$remoteUnavailableUntil[$this->identity] = $until;
+        self::$remoteGloballyUnavailableUntil = \max(self::$remoteGloballyUnavailableUntil, $until);
+        $requestId = $this->currentRequestId();
+        if ($requestId !== null) {
+            self::$remoteSlowRequestId = $requestId;
+        }
         if ($this->memoryFacade !== null) {
             $this->memoryFacade->disconnect();
             $this->memoryFacade = null;
@@ -651,6 +697,53 @@ class WlsMemoryAdapter implements AtomicCacheAdapterInterface, CacheAdapterHealt
     private function markRemoteAvailable(): void
     {
         unset(self::$remoteUnavailableUntil[$this->identity]);
+    }
+
+    private function markRemoteSlow(): void
+    {
+        $until = self::monotonicSeconds() + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
+        self::$remoteUnavailableUntil[$this->identity] = $until;
+        self::$remoteGloballyUnavailableUntil = \max(self::$remoteGloballyUnavailableUntil, $until);
+        $requestId = $this->currentRequestId();
+        if ($requestId !== null) {
+            self::$remoteSlowRequestId = $requestId;
+        }
+        if ($this->memoryFacade !== null) {
+            $this->memoryFacade->disconnect();
+            $this->memoryFacade = null;
+        }
+    }
+
+    /**
+     * Shared cache reads can time out by returning null rather than throwing.
+     * Measure every remote operation so a slow response opens the same short
+     * cooldown as a hard failure and prevents repeated queueing in this worker.
+     */
+    private function remoteCall(callable $operation): mixed
+    {
+        $started = \hrtime(true);
+        try {
+            $result = $operation();
+        } finally {
+            $elapsedMs = (\hrtime(true) - $started) / 1_000_000;
+            if ($elapsedMs >= $this->remoteSlowThresholdMs()) {
+                $this->markRemoteSlow();
+            } else {
+                $this->markRemoteAvailable();
+            }
+        }
+
+        return $result;
+    }
+
+    private function remoteSlowThresholdMs(): float
+    {
+        $configured = $this->config['remote_slow_threshold_ms'] ?? self::REMOTE_SLOW_THRESHOLD_MS;
+        if (!\is_numeric($configured) || (float) $configured <= 0.0) {
+            return self::REMOTE_SLOW_THRESHOLD_MS;
+        }
+
+        return (float) $configured;
     }
 
     private static function monotonicSeconds(): float

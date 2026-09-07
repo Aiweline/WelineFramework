@@ -9,7 +9,7 @@ declare(strict_types=1);
  * while blocked, endpoint-locked, and safe for operator handoff.
  */
 
-const WLS_PANEL_DEFERRED_ACTIONS_LOCAL_ROOT = 'https://app.weline.test:9523';
+const WLS_PANEL_DEFERRED_ACTIONS_LOCAL_ROOT = 'https://app.test.weline.com:9523';
 const WLS_PANEL_DEFERRED_ACTIONS_PRODUCTION_ROOT = 'https://app.aiweline.com';
 const WLS_PANEL_DEFERRED_ACTIONS_FAILED = 1;
 
@@ -214,8 +214,8 @@ function wlsPanelDeferredActionsValidate(array $payload): array
         ($localPolicy['env_wls_endpoint'] ?? '') === WLS_PANEL_DEFERRED_ACTIONS_LOCAL_ROOT;
     $checks['forbidden_www_roots_present'] = in_array('https://www.aiweline.com', $forbiddenRoots, true)
         && (
-            in_array('http://www.weline.test:9518', $forbiddenRoots, true)
-            || in_array('https://www.weline.test:9518', $forbiddenRoots, true)
+            in_array('http://www.test.weline.com:9518', $forbiddenRoots, true)
+            || in_array('https://www.test.weline.com:9518', $forbiddenRoots, true)
         );
     $checks['deferred_action_plan_present'] = $actions !== [];
     $checks['operator_sequence_present'] = $operatorSequence !== [];
@@ -298,7 +298,7 @@ function wlsPanelDeferredActionsValidate(array $payload): array
         && str_contains((string)($manifest['authorized_catalog_write_command'] ?? ''), 'WRITE_WLS_OFFICIAL_SOURCES');
     $checks['start_targets_app_weline_9523'] = ($start['safe_to_run_now'] ?? true) === false
         && str_contains((string)($start['working_directory'] ?? ''), 'Framework-Official')
-        && str_contains((string)($start['command'] ?? ''), 'app.weline.test')
+        && str_contains((string)($start['command'] ?? ''), 'app.test.weline.com')
         && str_contains((string)($start['command'] ?? ''), '9523');
     $checks['token_requires_secret_placeholder'] = ($token['requires_user_secret'] ?? false) === true
         && ($token['safe_to_run_now'] ?? true) === false
@@ -314,10 +314,10 @@ function wlsPanelDeferredActionsValidate(array $payload): array
         : '';
     $checks['local_capture_requires_reviewed_appstore_prerequisites'] = str_contains($localCaptureRequires, 'App checkout sync and setup completed through the reviewed path')
         && str_contains($localCaptureRequires, 'local App checkout identity verified as E:\\WelineFramework\\Framework-Official\\App\\weline')
-        && str_contains($localCaptureRequires, 'local App env WLS endpoint locked to https://app.weline.test:9523')
+        && str_contains($localCaptureRequires, 'local App env WLS endpoint locked to https://app.test.weline.com:9523')
         && str_contains($localCaptureRequires, 'drift_review_fingerprint compared between compact drift summary and authorization packet before sync')
         && str_contains($localCaptureRequires, 'official-apps manifest/source catalog ready with module:wls and module:wls-extra canary')
-        && str_contains($localCaptureRequires, 'app.weline.test:9523 WLS listener ready')
+        && str_contains($localCaptureRequires, 'app.test.weline.com:9523 WLS listener ready')
         && str_contains($localCaptureRequires, 'WLS_MARKETPLACE_BEARER_TOKEN set outside repository files');
     $checks['local_final_gate_operator_step_present'] = ($localFinalGate['safe_to_run_now'] ?? true) === false
         && str_contains((string)($localFinalGate['command'] ?? ''), 'wls-panel-live-evidence-final-gate.php')
@@ -437,7 +437,7 @@ function wlsPanelDeferredActionsSelfTest(): array
             'production_deployed' => ['root' => WLS_PANEL_DEFERRED_ACTIONS_PRODUCTION_ROOT],
             'forbidden_marketplace_roots' => [
                 'https://www.aiweline.com',
-                'http://www.weline.test:9518',
+                'http://www.test.weline.com:9518',
             ],
         ],
         'preflight_checks' => [
@@ -472,11 +472,11 @@ function wlsPanelDeferredActionsSelfTest(): array
                 'command' => 'php app\\code\\Weline\\Server\\doc\\wls-panel-plan\\tools\\wls-panel-live-e2e-capture.php --environment=local --allow-live=1 --evidence-output=var\\wls-panel-plan\\local-appstore-live-e2e.json',
                 'requires' => [
                     'local App checkout identity verified as E:\\WelineFramework\\Framework-Official\\App\\weline',
-                    'local App env WLS endpoint locked to https://app.weline.test:9523',
+                    'local App env WLS endpoint locked to https://app.test.weline.com:9523',
                     'App checkout sync and setup completed through the reviewed path',
                     'drift_review_fingerprint compared between compact drift summary and authorization packet before sync',
                     'official-apps manifest/source catalog ready with module:wls and module:wls-extra canary',
-                    'app.weline.test:9523 WLS listener ready',
+                    'app.test.weline.com:9523 WLS listener ready',
                     'WLS_MARKETPLACE_BEARER_TOKEN set outside repository files',
                 ],
             ],
@@ -533,7 +533,7 @@ function wlsPanelDeferredActionsSelfTest(): array
                 'id' => 'start_local_app_wls',
                 'safe_to_run_now' => false,
                 'working_directory' => 'E:\\WelineFramework\\Framework-Official\\App\\weline',
-                'command' => 'php bin/w server:start wls --host app.weline.test --port 9523 --ssl-domain app.weline.test',
+                'command' => 'php bin/w server:start wls --host app.test.weline.com --port 9523 --ssl-domain app.test.weline.com',
             ],
             [
                 'id' => 'set_local_marketplace_bearer_token',

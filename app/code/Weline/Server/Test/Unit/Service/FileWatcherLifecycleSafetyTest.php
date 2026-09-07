@@ -9,6 +9,44 @@ use Weline\Server\Service\FileWatcher;
 
 final class FileWatcherLifecycleSafetyTest extends TestCase
 {
+    public function testRuntimeCompiledViewTplDoesNotTriggerReloadWhileSourceTemplatesStillDo(): void
+    {
+        $directory = \sys_get_temp_dir() . DIRECTORY_SEPARATOR
+            . 'wls-file-watcher-compiled-template-' . \bin2hex(\random_bytes(8));
+        $sourceDirectory = $directory . DIRECTORY_SEPARATOR . 'Module' . DIRECTORY_SEPARATOR
+            . 'view' . DIRECTORY_SEPARATOR . 'templates';
+        $compiledDirectory = $directory . DIRECTORY_SEPARATOR . 'Module' . DIRECTORY_SEPARATOR
+            . 'view' . DIRECTORY_SEPARATOR . 'tpl' . DIRECTORY_SEPARATOR . 'runtime-context';
+        self::assertTrue(@\mkdir($sourceDirectory, 0700, true));
+        self::assertTrue(@\mkdir($compiledDirectory, 0700, true));
+
+        $sourceTemplate = $sourceDirectory . DIRECTORY_SEPARATOR . 'page.phtml';
+        $compiledTemplate = $compiledDirectory . DIRECTORY_SEPARATOR . 'com_page.phtml';
+        self::assertNotFalse(@\file_put_contents($sourceTemplate, 'source-v1'));
+        self::assertNotFalse(@\file_put_contents($compiledTemplate, 'compiled-v1'));
+
+        try {
+            $watcher = (new FileWatcher([$directory]))->setDebounceMs(0);
+            $watcher->init();
+
+            $changedAt = \time() + 2;
+            self::assertTrue(@\touch($sourceTemplate, $changedAt));
+            self::assertTrue(@\touch($compiledTemplate, $changedAt));
+            \clearstatcache(true, $sourceTemplate);
+            \clearstatcache(true, $compiledTemplate);
+
+            self::assertSame([
+                [
+                    'type' => 'modified',
+                    'file' => $sourceTemplate,
+                    'mtime' => $changedAt,
+                ],
+            ], $watcher->checkChanges());
+        } finally {
+            $this->removeDirectory($directory);
+        }
+    }
+
     public function testRunGuardCanStopWatcherWithoutReceivingAnOsSignal(): void
     {
         $directory = \sys_get_temp_dir() . DIRECTORY_SEPARATOR
@@ -99,5 +137,25 @@ final class FileWatcherLifecycleSafetyTest extends TestCase
         self::assertNotSame('', $source, 'Source should not be empty: ' . $relativePath);
 
         return $source;
+    }
+
+    private function removeDirectory(string $directory): void
+    {
+        if (!\is_dir($directory)) {
+            return;
+        }
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($directory, \FilesystemIterator::SKIP_DOTS),
+            \RecursiveIteratorIterator::CHILD_FIRST,
+        );
+        foreach ($iterator as $item) {
+            if ($item->isDir()) {
+                @\rmdir($item->getPathname());
+            } else {
+                @\unlink($item->getPathname());
+            }
+        }
+        @\rmdir($directory);
     }
 }

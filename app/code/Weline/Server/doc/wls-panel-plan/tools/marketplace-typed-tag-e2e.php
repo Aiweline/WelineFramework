@@ -119,7 +119,7 @@ function wlsPanelEndpointFromDeployPayload(array $payload, string $source): arra
             ];
         }
     } elseif ($environment === 'local') {
-        if ($platformUrl !== 'https://app.weline.test:9523') {
+        if ($platformUrl !== 'https://app.test.weline.com:9523') {
             return [
                 'endpoint' => '',
                 'source' => $source,
@@ -784,12 +784,12 @@ function wlsPanelSelfTest(): array
     ], 'deploy-current:self-test-production-api-path');
     $localExplicitEndpoint = wlsPanelEndpointFromDeployPayload([
         'appstore_environment' => 'local',
-        'appstore_platform_url' => 'https://app.weline.test:9523',
+        'appstore_platform_url' => 'https://app.test.weline.com:9523',
         'appstore_platform_url_source' => 'local_default',
     ], 'deploy-current:self-test-local-explicit');
     $localWrongSourceEndpoint = wlsPanelEndpointFromDeployPayload([
         'appstore_environment' => 'local',
-        'appstore_platform_url' => 'https://app.weline.test:9523',
+        'appstore_platform_url' => 'https://app.test.weline.com:9523',
         'appstore_platform_url_source' => 'production_default',
     ], 'deploy-current:self-test-local-wrong-source');
     $cases[] = [
@@ -847,9 +847,9 @@ function wlsPanelSelfTest(): array
     $cases[] = [
         'name' => 'local_deploy_current_explicit_app_weline_endpoint_and_source',
         'want_passed' => true,
-        'actual_passed' => $localExplicitEndpoint['endpoint'] === 'https://app.weline.test:9523/api/v1/platform/module/list'
+        'actual_passed' => $localExplicitEndpoint['endpoint'] === 'https://app.test.weline.com:9523/api/v1/platform/module/list'
             && $localExplicitEndpoint['environment'] === 'local',
-        'case_ok' => $localExplicitEndpoint['endpoint'] === 'https://app.weline.test:9523/api/v1/platform/module/list'
+        'case_ok' => $localExplicitEndpoint['endpoint'] === 'https://app.test.weline.com:9523/api/v1/platform/module/list'
             && $localExplicitEndpoint['environment'] === 'local',
         'required_tag' => '',
         'item_count' => 0,

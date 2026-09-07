@@ -567,4 +567,6 @@ curl -k --http3-only https://example.com/
 不得宣称 WLS 2.0 release-ready。既有纯 WLS 与 legacy Nginx 的性能/协议证据只作为
 基线，不能替代最终共享网关验收。
 
-动态路径预热默认只包含首页 `/`。业务模块需要预热商品、分类或账户页面时，应显式配置 `wls.worker.dynamic_critical_paths` / `wls.worker.dynamic_hot_paths`，或通过 `Weline_Server::dispatcher::warmup_paths` 发布真实路由；Server 不内置任何演示业务 URL。
+动态 READY 预热由模块通过 `FpcWarmupProviderInterface` 发布有限的匿名公开路径；当前 Product 默认提供各语言商品列表路径。示例配置中的 `wls.worker.dynamic_ready_gate_paths` 留空时使用模块声明，只有需要覆盖模块默认值时才显式配置路径。更大范围的运行期热点发现仍可使用 `wls.worker.dynamic_hot_paths` 或 `Weline_Server::dispatcher::warmup_paths`，不要把商品 ID 或无限制 URL 列表写入启动预热。
+
+商品关键路径的默认 READY 后预热由 `wls.worker.storefront_deferred_warmup_enabled=true` 控制，使用统一 FPC 构建与二次命中校验；`storefront_deferred_warmup_max_paths` 默认只取一个代表路径，`storefront_deferred_warmup_peer_wait_ms` 默认 5000ms 供其他 Worker 等待共享发布。动态首渲染门禁 `dynamic_ready_gate_enabled` 仍默认关闭；只有显式开启时才在 READY 前执行严格首渲染证明并承担对应启动成本。诊断链若需要只加载模板/Slot/目录进程状态，可使用内部 chain warmup 标记，不能让该一张卡响应进入公共 FPC。

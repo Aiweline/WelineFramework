@@ -76,5 +76,8 @@ return [
             // 设为 0/false 才启用严格 in-process 首页证明（可能因模板编译致命错误杀死进程）。
             'ready_gate_homepage_fail_open' => true,
         ],
+        // 电商店面连接预算（秒）：半开快探测、写停滞快断、Keep-Alive 适中复用。
+        'keep_alive_timeout' => 45,
+        'response_write_stall_timeout' => 20,
     ],
 ];

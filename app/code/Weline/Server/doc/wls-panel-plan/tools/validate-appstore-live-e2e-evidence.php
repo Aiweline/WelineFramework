@@ -10,9 +10,9 @@ declare(strict_types=1);
  */
 
 const WLS_PANEL_LIVE_EVIDENCE_EXIT_ASSERTION_FAILED = 1;
-const WLS_PANEL_LIVE_EVIDENCE_LOCAL_ROOT = 'https://app.weline.test:9523';
+const WLS_PANEL_LIVE_EVIDENCE_LOCAL_ROOT = 'https://app.test.weline.com:9523';
 const WLS_PANEL_LIVE_EVIDENCE_PRODUCTION_ROOT = 'https://app.aiweline.com';
-const WLS_PANEL_LIVE_EVIDENCE_LOCAL_ENDPOINT = 'https://app.weline.test:9523/api/v1/platform/module/list';
+const WLS_PANEL_LIVE_EVIDENCE_LOCAL_ENDPOINT = 'https://app.test.weline.com:9523/api/v1/platform/module/list';
 const WLS_PANEL_LIVE_EVIDENCE_PRODUCTION_ENDPOINT = 'https://app.aiweline.com/api/v1/platform/module/list';
 const WLS_PANEL_LIVE_EVIDENCE_LOCAL_CHECKOUT = 'E:\\WelineFramework\\Framework-Official\\App\\weline';
 const WLS_PANEL_LIVE_EVIDENCE_LOCAL_ENV_WLS_ENDPOINT = WLS_PANEL_LIVE_EVIDENCE_LOCAL_ROOT;
@@ -385,7 +385,7 @@ function wlsPanelLiveEvidenceEvaluate(array $payload, string $expect, array $pre
     $checks = [
         'evidence_present' => $evidence !== [],
         'endpoint_exact' => $endpoint === $expectedEndpoint,
-        'not_www_marketplace_host' => !str_contains($endpoint, 'www.weline.test') && !str_contains($endpoint, 'www.aiweline.com'),
+        'not_www_marketplace_host' => !str_contains($endpoint, 'www.test.weline.com') && !str_contains($endpoint, 'www.aiweline.com'),
         'payload_passed' => ($evidence['passed'] ?? false) === true,
         'payload_not_blocked' => ($evidence['blocked'] ?? false) === false,
         'token_redacted' => ($evidence['token_redacted'] ?? false) === true,

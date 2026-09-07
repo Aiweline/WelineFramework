@@ -21,7 +21,7 @@ The production marketplace is:
 https://app.aiweline.com
 ```
 
-The official website hosts `www.weline.test:9518` and `www.aiweline.com` are not
+The official website hosts `www.test.weline.com:9518` and `www.aiweline.com` are not
 WLS Panel marketplace endpoints.
 
 ## Required WLS Entries
@@ -160,7 +160,7 @@ The local App Store typed-tag API gate can move forward only when all are true:
 - The readiness probe reports `official_manifest_has_wls_positive=true`.
 - The readiness probe reports `official_manifest_has_negative_canary=true`.
 - The readiness probe reports `official_manifest_negative_canary_exact=true`.
-- App WLS is listening on `app.weline.test:9523`.
+- App WLS is listening on `app.test.weline.com:9523`.
 - The token-safe live runner passes with `--require-negative-conclusive=1`.
 
 Until then, the completion audit must keep the WLS marketplace typed-tag rows as

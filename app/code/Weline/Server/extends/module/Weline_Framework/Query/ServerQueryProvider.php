@@ -716,7 +716,7 @@ class ServerQueryProvider implements QueryProviderInterface
                 'domain' => $domain,
             ];
         }
-        // *.weline.test / *.local.test always use loopback; never read LAN/public IP.
+        // *.test.weline.com / *.local.test always use loopback; never read LAN/public IP.
         $ip = HostsFileManager::resolveIpForDomain(
             $domain,
             $requestedIp !== '' ? $requestedIp : HostsFileManager::LOOPBACK_IPV4

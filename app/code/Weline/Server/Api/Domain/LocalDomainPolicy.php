@@ -15,10 +15,12 @@ use Weline\Server\Service\LocalDomainPolicy as InternalLocalDomainPolicy;
 final class LocalDomainPolicy
 {
     public const TEST_ROOT_DOMAIN = InternalLocalDomainPolicy::TEST_ROOT_DOMAIN;
+    public const LEGACY_WELINE_TEST_ROOT_DOMAIN = InternalLocalDomainPolicy::LEGACY_WELINE_TEST_ROOT_DOMAIN;
     public const LEGACY_LOCAL_TEST_ROOT_DOMAIN = InternalLocalDomainPolicy::LEGACY_LOCAL_TEST_ROOT_DOMAIN;
     public const LOOPBACK_ROOT_DOMAIN = InternalLocalDomainPolicy::LOOPBACK_ROOT_DOMAIN;
 
     public const TEST_WILDCARD_DOMAIN = InternalLocalDomainPolicy::TEST_WILDCARD_DOMAIN;
+    public const LEGACY_WELINE_TEST_WILDCARD_DOMAIN = InternalLocalDomainPolicy::LEGACY_WELINE_TEST_WILDCARD_DOMAIN;
     public const LEGACY_LOCAL_TEST_WILDCARD_DOMAIN = InternalLocalDomainPolicy::LEGACY_LOCAL_TEST_WILDCARD_DOMAIN;
     public const LOOPBACK_WILDCARD_DOMAIN = InternalLocalDomainPolicy::LOOPBACK_WILDCARD_DOMAIN;
 

@@ -8,6 +8,67 @@ if (!\function_exists('wlsWorkerMonotonicNow')) {
     }
 }
 
+if (!\function_exists('wlsWorkerDeferredWarmupMayStart')) {
+    /**
+     * Keep deferred bootstrap work behind the first network event-loop turn.
+     *
+     * The warmup Fiber still runs synchronously until its first suspension, so
+     * starting it before the Worker has waited once can starve a just-arrived
+     * request even though the work is labelled "deferred".
+     */
+    function wlsWorkerDeferredWarmupMayStart(
+        bool $started,
+        bool $workerLoopStarted,
+        bool $shuttingDown,
+        bool $firstLoopCompleted,
+        bool $pendingRequestWork,
+        bool $pendingTransportWork,
+    ): bool {
+        return !$started
+            && $workerLoopStarted
+            && !$shuttingDown
+            && $firstLoopCompleted
+            && !$pendingRequestWork
+            && !$pendingTransportWork;
+    }
+}
+
+if (!\function_exists('wlsWorkerDeferredWarmupNotBefore')) {
+    /**
+     * Leave the first few seconds after the first event-loop turn to real
+     * storefront traffic. A deferred warmup Fiber still executes synchronously
+     * until its first suspension, so a zero-delay start can contend with the
+     * first request even when the listener was checked immediately beforehand.
+     */
+    function wlsWorkerDeferredWarmupNotBefore(float $now, int $workerId): float
+    {
+        $workerId = max(1, $workerId);
+        $staggerSeconds = (($workerId * 53) % 700) / 1000;
+
+        return $now + 3.0 + $staggerSeconds;
+    }
+}
+
+if (!\function_exists('wlsWorkerListenerHasPendingConnection')) {
+    /**
+     * Probe the listener without consuming it so deferred CPU work yields to
+     * a connection that arrived between event-loop turns.
+     */
+    function wlsWorkerListenerHasPendingConnection(mixed $socket): bool
+    {
+        if (!\is_resource($socket) || !\function_exists('stream_select')) {
+            return false;
+        }
+
+        $read = [$socket];
+        $write = [];
+        $except = [];
+        $changed = @\stream_select($read, $write, $except, 0, 0);
+
+        return $changed !== false && $changed > 0 && $read !== [];
+    }
+}
+
 /**
  * Transport-neutral helpers shared by the plain HTTP, stream TLS and
  * experimental EventBuffer TLS Workers.

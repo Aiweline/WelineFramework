@@ -879,6 +879,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                             \opcache_reset();
                         }
                         \clearstatcache(true);
+                        \Weline\Framework\App\Env::getInstance()->reloadPersistentConfigFromDisk();
                         $cachePoolResults = \Weline\Server\Service\Runtime\WorkerCachePoolResetter::clearFrameworkPools();
                         $failedCachePools = \Weline\Server\Service\Runtime\WorkerCachePoolResetter::failedPools(
                             $cachePoolResults

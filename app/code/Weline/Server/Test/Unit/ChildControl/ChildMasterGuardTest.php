@@ -61,9 +61,103 @@ final class ChildMasterGuardTest extends TestCase
         $wrongToken = $this->guard($manager, $instance, $path, \str_repeat('f', 64), false);
         self::assertTrue($wrongToken->shouldExit(true));
 
+        // Restore a fresh heartbeat so this assertion isolates the positive
+        // Master birth mismatch instead of reporting the earlier stale state.
+        $now = 2_000.0;
         $birth = 'reused-pid-birth';
         self::assertTrue($guard->shouldExit(true));
         self::assertStringContainsString('owner', \strtolower($guard->getLastExitReason()));
+    }
+
+    public function testCompatibilityGuardRegainsFullAuthorizationAfterTransientUnknownOwner(): void
+    {
+        $unknownManager = new class extends MasterLeaseManager {
+            public int $validationCalls = 0;
+
+            public function validateProtectedChildCredential(
+                string $leaseFile,
+                string $instance,
+                int $masterPid,
+                int $masterEpoch,
+                string $credential,
+                bool $requireFreshness = true,
+            ): array {
+                ++$this->validationCalls;
+                if ($this->validationCalls === 1) {
+                    return [
+                        'authorized' => false,
+                        'reason' => 'Managed-child Master lease is not authorized: '
+                            . 'Master owner evidence is not observable.',
+                        'transient_owner_unknown' => true,
+                    ];
+                }
+
+                return [
+                    'authorized' => true,
+                    'reason' => '',
+                    'transient_owner_unknown' => false,
+                ];
+            }
+        };
+        $instance = 'child-guard-transient-owner';
+        $guard = new ChildMasterGuard(
+            (int)\getmypid(),
+            MasterLeaseManager::pathForInstance($instance),
+            \str_repeat('a', 64),
+            'UT-Child',
+            $instance,
+            7,
+            0.0,
+            $unknownManager,
+            false,
+        );
+
+        self::assertFalse($guard->shouldExit(true));
+        self::assertSame(2, $unknownManager->validationCalls);
+        self::assertSame('', $guard->getLastExitReason());
+
+        $mismatchManager = new class extends MasterLeaseManager {
+            public int $validationCalls = 0;
+
+            public function validateProtectedChildCredential(
+                string $leaseFile,
+                string $instance,
+                int $masterPid,
+                int $masterEpoch,
+                string $credential,
+                bool $requireFreshness = true,
+            ): array {
+                ++$this->validationCalls;
+                if ($this->validationCalls === 1) {
+                    return [
+                        'authorized' => false,
+                        'reason' => 'Managed-child Master lease is not authorized: '
+                            . 'Master owner evidence is not observable.',
+                        'transient_owner_unknown' => false,
+                    ];
+                }
+
+                return [
+                    'authorized' => true,
+                    'reason' => '',
+                    'transient_owner_unknown' => false,
+                ];
+            }
+        };
+        $mismatchGuard = new ChildMasterGuard(
+            (int)\getmypid(),
+            MasterLeaseManager::pathForInstance('child-guard-owner-mismatch'),
+            \str_repeat('a', 64),
+            'UT-Child',
+            'child-guard-owner-mismatch',
+            7,
+            0.0,
+            $mismatchManager,
+            false,
+        );
+
+        self::assertTrue($mismatchGuard->shouldExit(true));
+        self::assertSame(1, $mismatchManager->validationCalls);
     }
 
     public function testStoppingStateAndExpectedIdentityMismatchExit(): void

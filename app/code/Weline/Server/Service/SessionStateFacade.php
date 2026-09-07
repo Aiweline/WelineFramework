@@ -167,14 +167,7 @@ class SessionStateFacade implements SessionStateFacadeInterface, SharedSessionSt
      */
     private function buildServiceOptions(array $config, array $runtime = []): array
     {
-        return [
-            'connect_timeout' => (float) ($config['connect_timeout'] ?? 0.5),
-            'timeout' => (float) ($config['timeout'] ?? 1.0),
-            'pool_size' => (int) ($config['pool_size'] ?? 8),
-            'pool_min_idle' => (int) ($config['pool_min_idle'] ?? 0),
-            'acquire_timeout' => (float) ($config['acquire_timeout'] ?? 0.1),
-            'idle_timeout' => (float) ($config['idle_timeout'] ?? 86400.0),
-            'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? false),
+        return \Weline\Server\Shared\Connection\SharedStatePoolDefaults::sessionClientOptions($config) + [
             'token_file_name' => (string) ($runtime['token_file_name'] ?? $this->resolveConfiguredRuntime($config)['token_file_name']),
             'token_authority_instance' => (string) (
                 $config['token_authority_instance']

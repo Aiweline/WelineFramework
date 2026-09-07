@@ -102,13 +102,14 @@ final class WorkerFullPageCacheFastPath
         $fullUri = $scheme . '://' . $host . $requestUri;
 
         try {
-            // READY warms the homepage under an exact locale/currency receipt.
-            // Anonymous requests intentionally carry no cookies, so reuse that
-            // exact receipt instead of the generic raw-request lookup. A
-            // receipt mismatch or exact Process L1 miss returns to Framework;
-            // it never reconstructs Store/Channel scope or probes Shared L2.
-            if ($this->runtime instanceof WlsRuntime && $requestUri === '/') {
-                $receipt = $this->runtime->resolveHomepageFastPathReceipt(
+            // Prefer READY's exact identity, then the receipt captured by a
+            // natural anonymous homepage hit when startup skipped priming.
+            // Both paths stay in Process L1; a miss returns to Framework.
+            if ($requestUri === '/') {
+                $receipt = $this->runtime?->resolveHomepageFastPathReceipt(
+                    $fullUri,
+                    (string)($headers['cookie'] ?? ''),
+                ) ?? $this->coordinator->resolveRootHomepageProcessReceipt(
                     $fullUri,
                     (string)($headers['cookie'] ?? ''),
                 );

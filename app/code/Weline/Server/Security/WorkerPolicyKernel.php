@@ -179,6 +179,7 @@ final class WorkerPolicyKernel
         try {
             $state = new MemoryStateFacade([
                 'consumer_code' => $instanceName . ':policy:' . (string)(\getmypid() ?: 0),
+                'pool_profile' => 'worker_policy',
                 'prefer_direct_connect' => true,
                 'fail_fast_on_unhealthy' => true,
                 'connect_timeout' => 0.02,
@@ -1562,6 +1563,7 @@ final class WorkerPolicyKernel
         try {
             $state = new MemoryStateFacade([
                 'consumer_code' => $this->instanceName . ':policy:' . (string)(\getmypid() ?: 0),
+                'pool_profile' => 'worker_policy',
                 'prefer_direct_connect' => true,
                 'fail_fast_on_unhealthy' => true,
                 'connect_timeout' => 0.01,

@@ -513,4 +513,77 @@ PHP,
         self::assertIsInt($end);
         return \substr($source, $start, $end - $start);
     }
+
+    public function testEmptyOutputPipesWaitOnlyWhileTheChildRemainsRunning(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The POSIX pipe boundary is required.');
+        }
+        $drain = new \ReflectionMethod(GatewayBoundedCommandRunner::class, 'drainReadyPipes');
+        $observations = [];
+        foreach (['alive', 'exited'] as $mode) {
+            $script = $mode === 'alive'
+                ? 'fclose(STDOUT); fclose(STDERR); usleep(500000); exit(17);'
+                : 'exit(17);';
+            $pipes = [];
+            $process = \proc_open(
+                [\PHP_BINARY, '-n', '-r', $script],
+                [0 => ['file', '/dev/null', 'r'], 1 => ['pipe', 'w'], 2 => ['pipe', 'w']],
+                $pipes,
+                null,
+                ['LC_ALL' => 'C', 'LANG' => 'C', 'TZ' => 'UTC'],
+                ['bypass_shell' => true],
+            );
+            self::assertIsResource($process);
+            try {
+                $stdout = (string)\stream_get_contents($pipes[1]);
+                $stderr = (string)\stream_get_contents($pipes[2]);
+                self::assertTrue(\feof($pipes[1]));
+                self::assertTrue(\feof($pipes[2]));
+                $before = \proc_get_status($process);
+                if ($mode === 'exited') {
+                    $fixtureDeadline = \hrtime(true) + 500_000_000;
+                    while ($before['running'] && \hrtime(true) < $fixtureDeadline) {
+                        \usleep(1000);
+                        $before = \proc_get_status($process);
+                    }
+                }
+                self::assertSame($mode === 'alive', $before['running']);
+                $truncated = false;
+                $exitedStatus = null;
+                // Existing five-argument calls stay valid. The caller can supply its
+                // real process and receive a status observed before an empty-pipe sleep.
+                $arguments = [$pipes, &$stdout, &$stderr, &$truncated, 100000, $process, &$exitedStatus];
+                $started = \hrtime(true);
+                $drain->invokeArgs(null, $arguments);
+                $elapsed = \hrtime(true) - $started;
+                $after = \proc_get_status($process);
+                self::assertSame('', $stdout);
+                self::assertSame('', $stderr);
+                self::assertFalse($truncated);
+                $observations[$mode] = [$elapsed, $after, $exitedStatus];
+            } finally {
+                foreach ($pipes as $pipe) {
+                    if (\is_resource($pipe)) {
+                        \fclose($pipe);
+                    }
+                }
+                // Both self-owned fixture commands exit naturally within 0.5 seconds.
+                \proc_close($process);
+            }
+        }
+        // Preserve the live-child no-busy-spin case before asserting the missing fast path.
+        self::assertTrue($observations['alive'][1]['running']);
+        self::assertNull($observations['alive'][2]);
+        self::assertGreaterThanOrEqual(80_000_000, $observations['alive'][0]);
+        self::assertFalse($observations['exited'][1]['running']);
+        self::assertLessThan(
+            50_000_000,
+            $observations['exited'][0],
+            'A proven-exited child with both pipes EOF must not pay the 100 ms wait.',
+        );
+        self::assertIsArray($observations['exited'][2]);
+        self::assertFalse($observations['exited'][2]['running']);
+        self::assertSame(17, $observations['exited'][2]['exitcode']);
+    }
 }

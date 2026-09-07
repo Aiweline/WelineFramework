@@ -13,9 +13,9 @@ The marketplace endpoint split is a hard delivery rule:
 
 - Local development uses the local App Store checkout
   `E:\WelineFramework\Framework-Official\App\weline` through
-  `https://app.weline.test:9523`.
+  `https://app.test.weline.com:9523`.
 - Deployed or production verification uses `https://app.aiweline.com`.
-- `https://www.weline.test:9518` and `https://www.aiweline.com` are official
+- `https://www.test.weline.com:9518` and `https://www.aiweline.com` are official
   website endpoints and must not be used as WLS marketplace endpoints.
 - Deploy writes the selected App Store endpoint into
   `deploy_root/var/deploy/current.json` as `appstore_environment`,
@@ -36,7 +36,7 @@ The marketplace endpoint split is a hard delivery rule:
   `local_records_exact_app_weline_platform_url` for local fixtures.
 - Non-local resolver paths ignore leftover local `WELINE_APPSTORE_PLATFORM_URL`
   and `appstore.platform_url` values so deployment checks cannot be pulled back
-  to `app.weline.test:9523` by stale local configuration.
+  to `app.test.weline.com:9523` by stale local configuration.
 - The final browser sweep must show the resolved endpoint/source in the WLS
   Panel marketplace and AppStore backend marketplace before an API call is
   attempted.
@@ -46,7 +46,7 @@ The marketplace endpoint split is a hard delivery rule:
   `app_checkout_is_framework_official_app`,
   `app_checkout_has_platform_appstore_module`, and
   `app_checkout_has_appstore_module`, sqlite guard status,
-  `app.weline.test:9523` listener status, local deploy-current metadata,
+  `app.test.weline.com:9523` listener status, local deploy-current metadata,
   `local_deploy_current_matches_probe_endpoint`,
   official `module:wls` manifest source, strict `module:wls-extra` negative
   canary source, and bearer-token environment presence without printing
@@ -58,7 +58,7 @@ The marketplace endpoint split is a hard delivery rule:
   not explicitly `deploy=dev/local`, if the App checkout is not
   `E:\WelineFramework\Framework-Official\App\weline`, if the checkout does not
   expose both `PlatformAppStore` and `AppStore`, or if deployment metadata is
-  missing, not `local`, not exactly `https://app.weline.test:9523`, uses a
+  missing, not `local`, not exactly `https://app.test.weline.com:9523`, uses a
   `www.*` host, or disagrees with the probe endpoint, it emits
   `select_local_appstore_checkout` or
   `fix_local_deploy_current_marketplace_metadata` and blocks the live call.
@@ -125,7 +125,7 @@ The marketplace endpoint split is a hard delivery rule:
   `tools/validate-appstore-endpoint-source-contract.php`. It is read-only and
   confirms `DeployOrchestratorService`, `AppStorePlatformUrlResolver`,
   `AccountBindService`, and WLS Panel still implement the same local
-  `app.weline.test:9523` versus deployed `app.aiweline.com` rule. It must also
+  `app.test.weline.com:9523` versus deployed `app.aiweline.com` rule. It must also
   keep WLS Panel's own fallback path under the same policy:
   `panel_has_locked_fallback_defaults`,
   `panel_fallback_local_mode_is_explicit_only`, and
@@ -202,7 +202,7 @@ The marketplace endpoint split is a hard delivery rule:
   `local_app_checkout_identity_consistent=true`, and
   `local_app_env_wls_endpoint_consistent=true` so local development cannot drift
   from `E:\WelineFramework\Framework-Official\App\weline` /
-  `https://app.weline.test:9523` before live evidence is accepted.
+  `https://app.test.weline.com:9523` before live evidence is accepted.
 - Final live E2E capture should go through
   `tools/wls-panel-live-e2e-capture.php`. Its `--self-test=1` mode is
   read-only and is mirrored by final preflight as
@@ -237,7 +237,7 @@ The marketplace endpoint split is a hard delivery rule:
   `capture_consistency_drift_fingerprints_match`,
   `capture_consistency_endpoint_contract_exact`, and
   `capture_consistency_drift_fingerprint_present`, requires local evidence to
-  use `app.weline.test:9523`, and requires production evidence to use
+  use `app.test.weline.com:9523`, and requires production evidence to use
   `app.aiweline.com` from deployed `var/deploy/current.json`. The same final
   gate self-test must accept valid production capture-wrapper evidence only
   when the validator reports `production_evidence_source_is_deployed_current_json`
@@ -279,7 +279,7 @@ The marketplace endpoint split is a hard delivery rule:
   `set_local_marketplace_bearer_token`, and `run_live_typed_tag_e2e`. This is
   the handoff surface for the corrected endpoint split: local development uses
   `E:\WelineFramework\Framework-Official\App\weline` plus
-  `https://app.weline.test:9523`, while production/deployed tests use
+  `https://app.test.weline.com:9523`, while production/deployed tests use
   `https://app.aiweline.com` only from deployed `var/deploy/current.json` with
   `appstore_platform_url_source=production_default`.
 - The workorder action chain is independently guarded by
@@ -312,7 +312,7 @@ The marketplace endpoint split is a hard delivery rule:
   `local_final_gate_ready`, `production_final_gate_ready`, and `inside_var=true`
   from both final evidence gates. The consistency check forces local
   development to stay on `E:\WelineFramework\Framework-Official\App\weline` and
-  `https://app.weline.test:9523`, while deployed production proof must stay on
+  `https://app.test.weline.com:9523`, while deployed production proof must stay on
   `https://app.aiweline.com` from deployment metadata. While captured local or
   production evidence is absent, or while the handoff consistency proof is
   stale, it must return `complete=false` and report
@@ -351,8 +351,8 @@ The marketplace endpoint split is a hard delivery rule:
 | WLS Panel marketplace reads only WLS-compatible plugins from AppStore through typed module tags. | `20-plugin-tag-logic.md`, `93-official-appstore-manifest-contract.md`, AppStore WMP-Meta tags, `module:wls`, `custom:*`, installed-module query contract, readiness manifest checks, official manifest validator/template/source-plan/materialize output, guarded live gate wrapper, `tools/wls-panel-live-e2e-authorization-pack.php --self-test=1`, `tools/wls-panel-live-e2e-authorization-pack.php --fail-if-unsafe=1`, `tools/validate-appstore-live-e2e-evidence.php --self-test=1`, `tools/wls-panel-live-e2e-capture.php --self-test=1`, `tools/wls-panel-live-evidence-final-gate.php --self-test=1`, `tools/marketplace-typed-tag-e2e.php --self-test=1`, `var\wls-panel-plan\local-appstore-live-e2e.json`, `var\wls-panel-plan\production-appstore-live-e2e.json`, and `78-appstore-demo-plugin-install-evidence.md`. | Proven: client parsing, local resolver, installed-module discovery, endpoint observability, offline runner parsing/exact-match behavior, captured-evidence validator self-test, capture wrapper self-test, final evidence gate self-test, capture consistency metadata/fingerprint guards, local App checkout/env endpoint evidence guards, manifest contract/template/source-plan shape, guarded materialization behavior, authorization packet self-test, no-live-call guard, CI-safe unsafe-packet failure mode, concrete `Weline_WlsDemoPlugin` AppStore catalog/install path, and canonical local plus production capture-wrapper evidence are proven. Local and production live captures both returned 5 `module:wls` plugins, exactly `Weline_WlsDemoPlugin` for `module:wls + custom:wls-panel-plugin`, exactly `Weline_WlsTagCanary` for the conclusive `module:wls-extra` negative canary, and no secret values. | Closed for the current marketplace slice. Re-run local and production capture/final-gate commands only if endpoint resolution, typed-tag filtering, official WLS catalog metadata, or demo plugin package/install behavior changes. |
 | Module tags use the existing meta system, not a separate inheritance protocol. | `20-plugin-tag-logic.md`, AppStore module meta docs, WMP-Meta v1 rows. | Proven as design and local package/client contract. | Live marketplace API must return normalized typed tags. |
 | Tags support typed `type:value` format such as `module:wls`, `custom:wls-file-manager`, `system:false`. | AppStore tag logic docs, package validation rows, and typed-tag runner self-test. | Proven locally, including string, JSON-string, structured object, locale-grouped, `system:false`, negative `module:wls-extra`, strict negative-canary conclusive cases, and runner-level deploy-current source/root guard cases. | Local/production App Store API E2E must prove the live platform route returns the same exact-match behavior with `--require-negative-conclusive=1`. |
-| WLS Panel installs plugins from online marketplace, while local development uses local App Store. | Endpoint resolver, endpoint observability, manifest/source catalog guard, source contract checker, guarded live gate wrapper, live capture wrapper, final evidence gate, deploy endpoint policy checker, final work order, authorization packet, read-only App readiness probe evidence in `77` and `90`, `var\wls-panel-plan\local-appstore-live-e2e.json`, `var\wls-panel-plan\production-appstore-live-e2e.json`, plus `78-appstore-demo-plugin-install-evidence.md`. | Proven: local development uses `https://app.weline.test:9523`, deployed production uses `https://app.aiweline.com`, forbidden `www.*` marketplace roots are rejected, the demo plugin install path is proven for both local and production, and the canonical capture-wrapper payloads have been consumed by the final evidence gate. Local and production both listed `Weline_WlsDemoPlugin`, downloaded matching packages, installed `app/code/Weline/WlsDemoPlugin/register.php`, validated exact typed tags, and stored no token values in evidence. | Closed for the current marketplace slice. Re-run only if AppStore endpoint policy, local/production environment split, package install behavior, or marketplace typed-tag semantics change. |
-| Deployed tests and production checks automatically use `app.aiweline.com`. | `DeployOrchestratorService` deployment payload fields, `AppStorePlatformUrlResolver`, `tools/validate-appstore-endpoint-source-contract.php`, tracked runner `tools/marketplace-typed-tag-e2e.php` with `--deploy-current=var/deploy/current.json` plus `--resolve-endpoint-only=1`, guarded production wrapper `tools/production-appstore-typed-tag-live-gate.php`, live evidence checker `tools/validate-appstore-live-e2e-evidence.php`, live capture wrapper `tools/wls-panel-live-e2e-capture.php`, final evidence gate `tools/wls-panel-live-evidence-final-gate.php`, manifest guard `tools/validate-local-appstore-sync-manifest.php`, deploy endpoint policy checker `tools/validate-deploy-appstore-endpoint-policy.php`, workorder/authorization consistency gate, and fixtures `tools/deploy-current-local-development.json` / `tools/deploy-current-production-default.json`. | Proven by isolated resolver probe, deployment artifact shape, static source contract check, manifest self-check, deploy endpoint policy fixture checks, deploy endpoint self-test negative cases, typed-tag runner self-test cases that reject production non-`production_default` source and API-path platform URLs, production wrapper preflight guards, workorder/authorization consistency self-test and read-only gate, live-evidence validator self-test, live capture wrapper self-test, final evidence gate self-test, and no-token/no-network runner preflights that resolve local metadata to `https://app.weline.test:9523/api/v1/platform/module/list` and production metadata that explicitly records `https://app.aiweline.com` plus `appstore_platform_url_source=production_default` to `https://app.aiweline.com/api/v1/platform/module/list`; the same evidence path now also rejects wrong local checkout identity and missing env endpoint lock through `rejects_wrapper_consistency_wrong_local_checkout`, `rejects_wrapper_consistency_missing_env_endpoint_lock`, `rejects_consistency_wrong_local_checkout`, and `rejects_consistency_missing_env_endpoint_lock`. | Production launch check after `app.aiweline.com` is live with external token/account: first run `tools/wls-panel-live-e2e-capture.php --environment=production --deploy-current=var\deploy\current.json`, then run the same wrapper with `--allow-live=1 --evidence-output=var\wls-panel-plan\production-appstore-live-e2e.json` only after the underlying production live gate reports `ready_for_live=true`; it must report `captured_valid`, include `capture_metadata.workorder_authorization_consistency` with exact local and production roots/endpoints plus the shared drift fingerprint, exact `local_development_checkout`, exact `local_development_env_wls_endpoint`, `capture_consistency_local_app_identity_locked=true`, `capture_consistency_local_app_env_endpoint_locked=true`, and `capture_consistency_local_env_wls_endpoint_exact=true`, validate with `tools/validate-appstore-live-e2e-evidence.php --evidence=... --expect=production`, and pass `tools/wls-panel-live-evidence-final-gate.php --environment=production`. |
+| WLS Panel installs plugins from online marketplace, while local development uses local App Store. | Endpoint resolver, endpoint observability, manifest/source catalog guard, source contract checker, guarded live gate wrapper, live capture wrapper, final evidence gate, deploy endpoint policy checker, final work order, authorization packet, read-only App readiness probe evidence in `77` and `90`, `var\wls-panel-plan\local-appstore-live-e2e.json`, `var\wls-panel-plan\production-appstore-live-e2e.json`, plus `78-appstore-demo-plugin-install-evidence.md`. | Proven: local development uses `https://app.test.weline.com:9523`, deployed production uses `https://app.aiweline.com`, forbidden `www.*` marketplace roots are rejected, the demo plugin install path is proven for both local and production, and the canonical capture-wrapper payloads have been consumed by the final evidence gate. Local and production both listed `Weline_WlsDemoPlugin`, downloaded matching packages, installed `app/code/Weline/WlsDemoPlugin/register.php`, validated exact typed tags, and stored no token values in evidence. | Closed for the current marketplace slice. Re-run only if AppStore endpoint policy, local/production environment split, package install behavior, or marketplace typed-tag semantics change. |
+| Deployed tests and production checks automatically use `app.aiweline.com`. | `DeployOrchestratorService` deployment payload fields, `AppStorePlatformUrlResolver`, `tools/validate-appstore-endpoint-source-contract.php`, tracked runner `tools/marketplace-typed-tag-e2e.php` with `--deploy-current=var/deploy/current.json` plus `--resolve-endpoint-only=1`, guarded production wrapper `tools/production-appstore-typed-tag-live-gate.php`, live evidence checker `tools/validate-appstore-live-e2e-evidence.php`, live capture wrapper `tools/wls-panel-live-e2e-capture.php`, final evidence gate `tools/wls-panel-live-evidence-final-gate.php`, manifest guard `tools/validate-local-appstore-sync-manifest.php`, deploy endpoint policy checker `tools/validate-deploy-appstore-endpoint-policy.php`, workorder/authorization consistency gate, and fixtures `tools/deploy-current-local-development.json` / `tools/deploy-current-production-default.json`. | Proven by isolated resolver probe, deployment artifact shape, static source contract check, manifest self-check, deploy endpoint policy fixture checks, deploy endpoint self-test negative cases, typed-tag runner self-test cases that reject production non-`production_default` source and API-path platform URLs, production wrapper preflight guards, workorder/authorization consistency self-test and read-only gate, live-evidence validator self-test, live capture wrapper self-test, final evidence gate self-test, and no-token/no-network runner preflights that resolve local metadata to `https://app.test.weline.com:9523/api/v1/platform/module/list` and production metadata that explicitly records `https://app.aiweline.com` plus `appstore_platform_url_source=production_default` to `https://app.aiweline.com/api/v1/platform/module/list`; the same evidence path now also rejects wrong local checkout identity and missing env endpoint lock through `rejects_wrapper_consistency_wrong_local_checkout`, `rejects_wrapper_consistency_missing_env_endpoint_lock`, `rejects_consistency_wrong_local_checkout`, and `rejects_consistency_missing_env_endpoint_lock`. | Production launch check after `app.aiweline.com` is live with external token/account: first run `tools/wls-panel-live-e2e-capture.php --environment=production --deploy-current=var\deploy\current.json`, then run the same wrapper with `--allow-live=1 --evidence-output=var\wls-panel-plan\production-appstore-live-e2e.json` only after the underlying production live gate reports `ready_for_live=true`; it must report `captured_valid`, include `capture_metadata.workorder_authorization_consistency` with exact local and production roots/endpoints plus the shared drift fingerprint, exact `local_development_checkout`, exact `local_development_env_wls_endpoint`, `capture_consistency_local_app_identity_locked=true`, `capture_consistency_local_app_env_endpoint_locked=true`, and `capture_consistency_local_env_wls_endpoint_exact=true`, validate with `tools/validate-appstore-live-e2e-evidence.php --evidence=... --expect=production`, and pass `tools/wls-panel-live-evidence-final-gate.php --environment=production`. |
 | Plugin install/update returns to the standalone WLS Panel and refreshes installed capabilities. | AppStore return context, plugin-refresh result strip, normalized `panel_entry_url` evidence. | Proven for current local flow shape. | Re-run browser install/update journey after local Official App package API is token/route ready. |
 | WLS Panel can load new module-contributed menus and capabilities after module updates. | `WlsPanelPluginDiscoveryService`, AppStore `installedModules` query provider, plugin shell normalization. | Proven for current plugin refresh path. | Final package journey must prove new menu/capability appears without leaving the standalone panel. |
 | Deploy is a WLS Panel capability with webhook/tag release support. | `Weline_Deploy` panel plugin, Project Profile, webhook replay, manual plan, controlled tag/branch harness, rollback evidence. | Proven for local guarded success path and rollback harness. | Production credentials and real release targets remain outside local UI completion. |
@@ -372,11 +372,11 @@ the completion tools require:
 1. Local capture:
    Run
    `tools/wls-panel-live-e2e-capture.php --environment=local --allow-live=1 --evidence-output=var\wls-panel-plan\local-appstore-live-e2e.json`
-   against `https://app.weline.test:9523/api/v1/platform/module/list`.
+   against `https://app.test.weline.com:9523/api/v1/platform/module/list`.
    The captured JSON must list `Weline_WlsDemoPlugin` with exact typed tags,
    include canonical `capture_metadata.workorder_authorization_consistency`,
    keep `local_development_checkout=E:\WelineFramework\Framework-Official\App\weline`,
-   keep `local_development_env_wls_endpoint=https://app.weline.test:9523`,
+   keep `local_development_env_wls_endpoint=https://app.test.weline.com:9523`,
    and prove the `module:wls-extra` negative canary is conclusive.
 2. Local validation: pass
    `tools/validate-appstore-live-e2e-evidence.php --evidence=var\wls-panel-plan\local-appstore-live-e2e.json --expect=local`

@@ -178,7 +178,7 @@ function wlsPanelCompletionRequiredTextChecks(array $documents): array
     $combined = implode("\n", $documents);
 
     return [
-        'local_appstore_url' => str_contains($combined, 'https://app.weline.test:9523'),
+        'local_appstore_url' => str_contains($combined, 'https://app.test.weline.com:9523'),
         'production_appstore_url' => str_contains($combined, 'https://app.aiweline.com'),
         'official_www_not_marketplace' => str_contains($combined, 'www.aiweline.com') && str_contains($combined, 'not the WLS Panel marketplace endpoint'),
         'deploy_current_metadata' => str_contains($combined, 'var/deploy/current.json')

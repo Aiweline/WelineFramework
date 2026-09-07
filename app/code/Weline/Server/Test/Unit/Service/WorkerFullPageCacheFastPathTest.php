@@ -114,6 +114,84 @@ final class WorkerFullPageCacheFastPathTest extends TestCase
         }
     }
 
+    public function testNaturalRootHomepageHitEstablishesFastPathWithoutReadyWarmup(): void
+    {
+        FullPageCacheCoordinator::clearProcessCache();
+        $pool = new WorkerFastPathCountingCachePool();
+
+        try {
+            $coordinator = new FullPageCacheCoordinator(null, $pool);
+            $cacheKey = '13579bdf2468ace0';
+            $fullUri = 'https://example.test/';
+            $body = '<html><body>' . \str_repeat('localized-process-receipt', 128) . '</body></html>';
+            $setPayload = new \ReflectionMethod($coordinator, 'setProcessCachedPayload');
+            $setPayload->invoke($coordinator, $cacheKey, [
+                KeyBuilder::UNIFIED_CACHE_STATUS_KEY => 200,
+                KeyBuilder::UNIFIED_CACHE_FPC_KEY => $body,
+                KeyBuilder::UNIFIED_CACHE_HEADERS_KEY => ['Content-Type: text/html; charset=utf-8'],
+                'fpc_variant' => ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+                'fpc_html_urls_validated' => true,
+                'fpc_expires_at' => \microtime(true) + 60.0,
+            ]);
+            $register = new \ReflectionMethod($coordinator, 'registerRootHomepageProcessReceipt');
+            $register->invoke(
+                $coordinator,
+                $fullUri,
+                ['lang' => 'zh_Hans_CN', 'currency' => 'CNY'],
+                $cacheKey,
+            );
+
+            $decision = static function (string $target, array $extraHeaders = []): WorkerPolicyDecision {
+                return WorkerPolicyDecision::allow(
+                    '127.0.0.1',
+                    'GET',
+                    'HTTP/1.1',
+                    $target,
+                    $target,
+                    $extraHeaders + [
+                        'host' => 'example.test',
+                        'accept' => 'text/html',
+                        'accept-encoding' => 'gzip',
+                        'connection' => 'keep-alive',
+                    ],
+                    '',
+                    \str_repeat('f', 64),
+                    false,
+                    WorkerPolicyDecision::CACHE_FPC_PROCESS_L1
+                        | WorkerPolicyDecision::CACHE_FPC_SHARED_L2,
+                );
+            };
+            $fastPath = new WorkerFullPageCacheFastPath($coordinator, new WlsRuntime(), true);
+
+            $hit = $fastPath->lookup($decision('/'), 'https');
+            self::assertIsArray($hit);
+            self::assertSame('process-formatted', $hit['source']);
+            self::assertStringContainsString('localized-process-receipt', \gzdecode(
+                \substr($hit['response'], (int)\strpos($hit['response'], "\r\n\r\n") + 4),
+            ));
+            self::assertStringContainsString("X-Wls-Performance-Urlparser: 0\r\n", $hit['response']);
+            self::assertSame(0, $pool->getCalls, 'An exact localized receipt must remain Process-L1-only.');
+
+            self::assertNull($fastPath->lookup($decision('/zh_Hans_CN/CNY/'), 'https'));
+            self::assertSame(
+                0,
+                $pool->getCalls,
+                'A different visitor-facing prefix order must return to Framework without Shared reconstruction.',
+            );
+            self::assertNull($fastPath->lookup($decision(
+                '/',
+                ['cookie' => 'WELINE_USER_CURRENCY=CNY'],
+            ), 'https'));
+            self::assertSame(0, $pool->getCalls, 'Cookie-bearing requests must return to Framework.');
+            self::assertNull($fastPath->lookup($decision('/?page=2'), 'https'));
+            self::assertNull($fastPath->lookup($decision('/', ['host' => 'other.test']), 'https'));
+            FullPageCacheCoordinator::clearProcessCache();
+            self::assertNull($fastPath->lookup($decision('/'), 'https'));
+        } finally {
+            FullPageCacheCoordinator::clearProcessCache();
+        }
+    }
+
     public function testAnonymousHomepageConsumesTheExactReadyReceiptWithoutEnteringRouter(): void
     {
         FullPageCacheCoordinator::clearProcessCache();

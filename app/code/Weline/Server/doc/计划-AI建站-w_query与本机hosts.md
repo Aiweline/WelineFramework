@@ -6,7 +6,7 @@
 ## 本次固化后的规则
 
 - 仅“本地域名”走这套特殊逻辑，真实业务域名逻辑保持不变。
-- 开发 / 本地 / 测试环境使用 `*.weline.test`
+- 开发 / 本地 / 测试环境使用 `*.test.weline.com`
 - 本地回环式生产入口使用 `*.weline.localhost`
 - 旧的历史本地域名后缀已删除，不再生成、不再文档化、不再作为兼容入口
 
@@ -15,13 +15,13 @@
 ### 1. 主机名生成
 
 - 标准项目主机名格式：
-  - 开发态：`p{hash}.weline.test`
+  - 开发态：`p{hash}.test.weline.com`
   - 生产式本地态：`p{hash}.weline.localhost`
 - 真实域名、自定义域名仍按原有配置流程处理，不受本策略影响
 
 ### 2. hosts 写入
 
-- `*.weline.test` / `*.local.test`
+- `*.test.weline.com` / `*.local.test`
   - 需要显式写入本机 hosts
   - **固定映射到 `127.0.0.1`（本地回环）**，不读取、不写入局域网 IP 或公网 IP
   - `server:start`、`server:hosts:add`、`w_query('server','hostsAdd')` 共用 `HostsFileManager`
@@ -35,7 +35,7 @@
 
 - 本地托管域名允许复用共享本地通配证书
 - 共享通配证书仅针对：
-  - `*.weline.test`
+  - `*.test.weline.com`
   - `*.weline.localhost`
 - 证书复用、SNI 回退、worker 磁盘证书扫描，都只认这两类本地后缀
 - 真实域名证书申请 / 续期 / 供应商逻辑保持原样
@@ -43,7 +43,7 @@
 ### 4. worker / 路由校验
 
 - WLS worker 允许的标准本地域名仅为：
-  - `p[hash].weline.test`
+  - `p[hash].test.weline.com`
   - `p[hash].weline.localhost`
 - 旧格式 `weline-p[hash].local` 继续直接拒绝
 
@@ -51,7 +51,7 @@
 
 | 场景 | 入口 | 行为 |
 | --- | --- | --- |
-| 自动补 hosts | `server:start` | 仅对 `*.weline.test` / `*.local.test` 写 `127.0.0.1`；错误 IP 自动纠正 |
+| 自动补 hosts | `server:start` | 仅对 `*.test.weline.com` / `*.local.test` 写 `127.0.0.1`；错误 IP 自动纠正 |
 | 手动补 hosts | `php bin/w server:hosts:add <domain>` | 仅接受单标签托管本地域；固定 `127.0.0.1` |
 | 查询接口 | `w_query('server', 'hostsAdd', ...)` | 忽略传入非回环 IP；`.weline.localhost` 返回跳过 |
 | 本地通配证书 | `ensureLocalWelineWildcardCertificate` | 仅允许托管本地通配域名 |
@@ -62,8 +62,8 @@
 
 ```bash
 php bin/w server:start
-php bin/w server:hosts:add p11005ce4.weline.test
-curl -k https://p11005ce4.weline.test:8443/ -I
+php bin/w server:hosts:add p11005ce4.test.weline.com
+curl -k https://p11005ce4.test.weline.com:8443/ -I
 ```
 
 ### 本地回环式生产入口

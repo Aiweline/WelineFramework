@@ -250,6 +250,11 @@ class FileWatcher
      */
     private function shouldWatch(string $filepath): bool
     {
+        $normalizedPath = \str_replace('\\', '/', $filepath);
+        if (\str_contains($normalizedPath, '/view/tpl/')) {
+            return false;
+        }
+
         $extension = \pathinfo($filepath, PATHINFO_EXTENSION);
         return \in_array(\strtolower($extension), $this->watchExtensions, true);
     }

@@ -73,8 +73,8 @@ class SslCertificateServiceTest extends TestCase
         $m = new ReflectionMethod($service, 'collectSanEntries');
         $m->setAccessible(true);
 
-        $san = $m->invoke($service, 'p11005ce4.weline.test');
-        $this->assertContains('p11005ce4.weline.test', $san['dns']);
+        $san = $m->invoke($service, 'p11005ce4.test.weline.com');
+        $this->assertContains('p11005ce4.test.weline.com', $san['dns']);
         $this->assertContains('127.0.0.1', $san['ip']);
         $this->assertContains('::1', $san['ip']);
     }
@@ -82,7 +82,7 @@ class SslCertificateServiceTest extends TestCase
     public function testResolvesToLoopbackIsTrueForLocalTldWithoutDns(): void
     {
         $service = new SslCertificateService();
-        $this->assertTrue($service->resolvesToLoopback('p11005ce4.weline.test'));
+        $this->assertTrue($service->resolvesToLoopback('p11005ce4.test.weline.com'));
     }
 
     public function testIsWelineLocalWildcardCandidateDomain(): void
@@ -91,13 +91,13 @@ class SslCertificateServiceTest extends TestCase
         $m = new ReflectionMethod($service, 'isWelineLocalWildcardCandidateDomain');
         $m->setAccessible(true);
 
-        $this->assertTrue($m->invoke($service, '*.weline.test'));
-        $this->assertTrue($m->invoke($service, 'p11005ce4.weline.test'));
-        $this->assertTrue($m->invoke($service, 'shop-1.weline.test'));
+        $this->assertTrue($m->invoke($service, '*.test.weline.com'));
+        $this->assertTrue($m->invoke($service, 'p11005ce4.test.weline.com'));
+        $this->assertTrue($m->invoke($service, 'shop-1.test.weline.com'));
         $this->assertTrue($m->invoke($service, '*.weline.localhost'));
         $this->assertTrue($m->invoke($service, 'p11005ce4.weline.localhost'));
 
-        $this->assertFalse($m->invoke($service, 'weline.test'));
+        $this->assertFalse($m->invoke($service, 'test.weline.com'));
         $this->assertFalse($m->invoke($service, 'weline.localhost'));
         $this->assertFalse($m->invoke($service, 'example.com'));
         $this->assertFalse($m->invoke($service, ''));
@@ -106,8 +106,8 @@ class SslCertificateServiceTest extends TestCase
     public function testCertificateStorageSegmentForFilesystemPlainDomain(): void
     {
         $this->assertSame(
-            'p11005ce4.weline.test',
-            SslCertificateService::certificateStorageSegmentForFilesystem('p11005ce4.weline.test')
+            'p11005ce4.test.weline.com',
+            SslCertificateService::certificateStorageSegmentForFilesystem('p11005ce4.test.weline.com')
         );
     }
 
@@ -115,25 +115,25 @@ class SslCertificateServiceTest extends TestCase
     {
         if (\PHP_OS_FAMILY === 'Windows') {
             $this->assertSame(
-                '_wildcard_.weline.test',
-                SslCertificateService::certificateStorageSegmentForFilesystem('*.weline.test')
+                '_wildcard_.test.weline.com',
+                SslCertificateService::certificateStorageSegmentForFilesystem('*.test.weline.com')
             );
         } else {
             $this->assertSame(
-                '*.weline.test',
-                SslCertificateService::certificateStorageSegmentForFilesystem('*.weline.test')
+                '*.test.weline.com',
+                SslCertificateService::certificateStorageSegmentForFilesystem('*.test.weline.com')
             );
         }
     }
 
     public function testCertificateStorageSegmentCandidatesForProbeWildcard(): void
     {
-        $c = SslCertificateService::certificateStorageSegmentCandidatesForProbe('*.weline.test');
+        $c = SslCertificateService::certificateStorageSegmentCandidatesForProbe('*.test.weline.com');
         if (\PHP_OS_FAMILY === 'Windows') {
-            $this->assertContains('_wildcard_.weline.test', $c);
-            $this->assertContains('*.weline.test', $c);
+            $this->assertContains('_wildcard_.test.weline.com', $c);
+            $this->assertContains('*.test.weline.com', $c);
         } else {
-            $this->assertSame(['*.weline.test'], $c);
+            $this->assertSame(['*.test.weline.com'], $c);
         }
     }
 
@@ -231,12 +231,12 @@ class SslCertificateServiceTest extends TestCase
     public function testLogicalDomainFromStorageSegment(): void
     {
         $this->assertSame(
-            '*.weline.test',
-            SslCertificateService::logicalDomainFromStorageSegment('_wildcard_.weline.test')
+            '*.test.weline.com',
+            SslCertificateService::logicalDomainFromStorageSegment('_wildcard_.test.weline.com')
         );
         $this->assertSame(
-            'p1.weline.test',
-            SslCertificateService::logicalDomainFromStorageSegment('p1.weline.test')
+            'p1.test.weline.com',
+            SslCertificateService::logicalDomainFromStorageSegment('p1.test.weline.com')
         );
     }
 
@@ -270,12 +270,12 @@ class SslCertificateServiceTest extends TestCase
 
         $result = $extract->invoke(
             $service,
-            'DNS:example.test, DNS:*.weline.test, IP Address:127.0.0.1, IP:::1'
+            'DNS:example.test, DNS:*.test.weline.com, IP Address:127.0.0.1, IP:::1'
         );
 
         $this->assertSame(
             [
-                'dns' => ['example.test', '*.weline.test'],
+                'dns' => ['example.test', '*.test.weline.com'],
                 'ip' => ['127.0.0.1', '::1'],
             ],
             $result
@@ -284,7 +284,7 @@ class SslCertificateServiceTest extends TestCase
 
     public function testSniCertificateMapRejectsReversedOverbroadAndMismatchedPairs(): void
     {
-        $wildcard = $this->createSniCertificatePair('*.weline.test', ['*.weline.test', 'localhost'], 'wildcard');
+        $wildcard = $this->createSniCertificatePair('*.test.weline.com', ['*.test.weline.com', 'localhost'], 'wildcard');
         $localhost = $this->createSniCertificatePair('localhost', ['localhost'], 'localhost');
         $exact = $this->createSniCertificatePair('shop.example.test', ['shop.example.test'], 'exact');
         $wrongKey = $this->createSniCertificatePair(
@@ -294,10 +294,10 @@ class SslCertificateServiceTest extends TestCase
         );
 
         $sanitized = SslCertificateService::sanitizeSniCertificateMap([
-            'p2583f416.weline.test' => $localhost,
-            '*.weline.test' => $wildcard,
+            'p2583f416.test.weline.com' => $localhost,
+            '*.test.weline.com' => $wildcard,
             'localhost' => $localhost,
-            'deep.p2583f416.weline.test' => $wildcard,
+            'deep.p2583f416.test.weline.com' => $wildcard,
             'shop.example.test' => $exact,
             'wrong-key.example.test' => [
                 'local_cert' => $wrongKey['local_cert'],
@@ -305,14 +305,14 @@ class SslCertificateServiceTest extends TestCase
             ],
         ]);
 
-        $this->assertArrayNotHasKey('p2583f416.weline.test', $sanitized);
-        $this->assertArrayHasKey('*.weline.test', $sanitized);
+        $this->assertArrayNotHasKey('p2583f416.test.weline.com', $sanitized);
+        $this->assertArrayHasKey('*.test.weline.com', $sanitized);
         $this->assertArrayHasKey('localhost', $sanitized);
-        $this->assertArrayNotHasKey('deep.p2583f416.weline.test', $sanitized);
+        $this->assertArrayNotHasKey('deep.p2583f416.test.weline.com', $sanitized);
         $this->assertArrayNotHasKey('wrong-key.example.test', $sanitized);
 
         $projectPair = SslCertificateService::selectSniCertificatePair(
-            'p2583f416.weline.test',
+            'p2583f416.test.weline.com',
             $sanitized,
             $localhost['local_cert'],
             $localhost['local_pk'],
@@ -327,7 +327,7 @@ class SslCertificateServiceTest extends TestCase
         );
         $this->assertSame($exact['local_cert'], $exactPair['local_cert']);
 
-        foreach (['deep.p2583f416.weline.test', 'unrelated.example.test'] as $fallbackHost) {
+        foreach (['deep.p2583f416.test.weline.com', 'unrelated.example.test'] as $fallbackHost) {
             $fallbackPair = SslCertificateService::selectSniCertificatePair(
                 $fallbackHost,
                 $sanitized,
@@ -341,12 +341,12 @@ class SslCertificateServiceTest extends TestCase
     public function testSniHostnameWildcardMatchesExactlyOneLabel(): void
     {
         $this->assertTrue(SslCertificateService::sniHostnameMatchesPattern(
-            'p2583f416.weline.test',
-            '*.weline.test',
+            'p2583f416.test.weline.com',
+            '*.test.weline.com',
         ));
         $this->assertFalse(SslCertificateService::sniHostnameMatchesPattern(
-            'deep.p2583f416.weline.test',
-            '*.weline.test',
+            'deep.p2583f416.test.weline.com',
+            '*.test.weline.com',
         ));
         $this->assertTrue(SslCertificateService::sniHostnameMatchesPattern(
             'shop.example.test',
@@ -435,8 +435,8 @@ class SslCertificateServiceTest extends TestCase
 
     public function testLocalCaCertificateReuseRequiresLoopbackIpSanForLocalDomain(): void
     {
-        $fixture = $this->createLocalCaFixture('p11005ce4.weline.test');
-        $tempDir = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'p11005ce4.weline.test';
+        $fixture = $this->createLocalCaFixture('p11005ce4.test.weline.com');
+        $tempDir = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'p11005ce4.test.weline.com';
         \mkdir($tempDir, 0700, true);
         $certPath = $tempDir . DIRECTORY_SEPARATOR . 'fullchain.pem';
         \file_put_contents($certPath, $fixture['fullchain']);
@@ -446,13 +446,13 @@ class SslCertificateServiceTest extends TestCase
         $covers = new ReflectionMethod($service, 'localCaCertificateCoversRequiredSan');
         $covers->setAccessible(true);
 
-        $this->assertFalse($covers->invoke($service, 'p11005ce4.weline.test', $certPath));
+        $this->assertFalse($covers->invoke($service, 'p11005ce4.test.weline.com', $certPath));
     }
 
     public function testLocalCaCertificateReuseAcceptsLoopbackIpSanForLocalDomain(): void
     {
-        $fixture = $this->createLocalCaFixture('p11005ce4.weline.test', ['127.0.0.1', '::1']);
-        $tempDir = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'p11005ce4.weline.test';
+        $fixture = $this->createLocalCaFixture('p11005ce4.test.weline.com', ['127.0.0.1', '::1']);
+        $tempDir = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'p11005ce4.test.weline.com';
         \mkdir($tempDir, 0700, true);
         $certPath = $tempDir . DIRECTORY_SEPARATOR . 'fullchain.pem';
         \file_put_contents($certPath, $fixture['fullchain']);
@@ -462,7 +462,7 @@ class SslCertificateServiceTest extends TestCase
         $covers = new ReflectionMethod($service, 'localCaCertificateCoversRequiredSan');
         $covers->setAccessible(true);
 
-        $this->assertTrue($covers->invoke($service, 'p11005ce4.weline.test', $certPath));
+        $this->assertTrue($covers->invoke($service, 'p11005ce4.test.weline.com', $certPath));
     }
 
     public function testHostMatchesCertificateNameSupportsManagedWildcardDomains(): void
@@ -471,10 +471,10 @@ class SslCertificateServiceTest extends TestCase
         $match = new ReflectionMethod($service, 'hostMatchesCertificateName');
         $match->setAccessible(true);
 
-        $this->assertTrue($match->invoke($service, 'p11005ce4.weline.test', '*.weline.test'));
+        $this->assertTrue($match->invoke($service, 'p11005ce4.test.weline.com', '*.test.weline.com'));
         $this->assertTrue($match->invoke($service, 'demo.weline.localhost', '*.weline.localhost'));
-        $this->assertFalse($match->invoke($service, 'foo.bar.weline.test', '*.weline.test'));
-        $this->assertFalse($match->invoke($service, 'weline.test', '*.weline.test'));
+        $this->assertFalse($match->invoke($service, 'foo.bar.test.weline.com', '*.test.weline.com'));
+        $this->assertFalse($match->invoke($service, 'test.weline.com', '*.test.weline.com'));
     }
 
     public function testWildcardCertificateMapDoesNotClaimUncoveredRootDomain(): void
@@ -676,7 +676,7 @@ class SslCertificateServiceTest extends TestCase
 
     public function testExtractLocalCaPemFromCertificateBundleReturnsEmbeddedRootCertificate(): void
     {
-        $fixture = $this->createLocalCaFixture('*.weline.test');
+        $fixture = $this->createLocalCaFixture('*.test.weline.com');
         $service = $this->createRecoveringService($this->makeTempDir());
 
         $this->assertSame(
@@ -687,7 +687,7 @@ class SslCertificateServiceTest extends TestCase
 
     public function testRecoverAndTrustLocalCaFromCertificateBundlePersistsRecoveredRootCertificate(): void
     {
-        $fixture = $this->createLocalCaFixture('*.weline.test');
+        $fixture = $this->createLocalCaFixture('*.test.weline.com');
         $tempDir = $this->makeTempDir();
         $service = $this->createRecoveringService($tempDir);
 
@@ -1118,7 +1118,7 @@ class SslCertificateServiceTest extends TestCase
 
     public function testIsCertificateSelfSignedDistinguishesLocalCaRootAndLeaf(): void
     {
-        $fixture = $this->createLocalCaSignedCertificateFixture('*.weline.test');
+        $fixture = $this->createLocalCaSignedCertificateFixture('*.test.weline.com');
         $tempDir = $this->makeTempDir();
         $caPath = $tempDir . DIRECTORY_SEPARATOR . 'ca.pem';
         $leafPath = $tempDir . DIRECTORY_SEPARATOR . 'leaf.pem';
@@ -1136,7 +1136,7 @@ class SslCertificateServiceTest extends TestCase
 
     public function testIsCertificateAuthorityDistinguishesLocalCaRootAndLeaf(): void
     {
-        $fixture = $this->createLocalCaSignedCertificateFixture('*.weline.test');
+        $fixture = $this->createLocalCaSignedCertificateFixture('*.test.weline.com');
         $tempDir = $this->makeTempDir();
         $caPath = $tempDir . DIRECTORY_SEPARATOR . 'ca.pem';
         $leafPath = $tempDir . DIRECTORY_SEPARATOR . 'leaf.pem';
@@ -1158,14 +1158,14 @@ class SslCertificateServiceTest extends TestCase
         $method = new ReflectionMethod($service, 'buildSanOpenSslConfig');
         $method->setAccessible(true);
 
-        $config = $method->invoke($service, 'p11005ce4.weline.test', [
-            'dns' => ['p11005ce4.weline.test'],
+        $config = $method->invoke($service, 'p11005ce4.test.weline.com', [
+            'dns' => ['p11005ce4.test.weline.com'],
             'ip' => ['127.0.0.1'],
         ]);
 
         $this->assertStringContainsString('basicConstraints = critical, CA:false', $config);
         $this->assertStringContainsString('extendedKeyUsage = serverAuth', $config);
-        $this->assertStringContainsString('DNS.1 = p11005ce4.weline.test', $config);
+        $this->assertStringContainsString('DNS.1 = p11005ce4.test.weline.com', $config);
         $this->assertStringContainsString('IP.1 = 127.0.0.1', $config);
     }
 
@@ -1174,7 +1174,7 @@ class SslCertificateServiceTest extends TestCase
         $service = new SslCertificateService();
         // 一个绝对不存在的私有开发域名：目录通常不会被预先创建，应直接返回 false。
         $this->assertFalse($service->hasValidLocalCertificate(
-            'this-host-must-not-exist-' . \bin2hex(\random_bytes(3)) . '.weline.test'
+            'this-host-must-not-exist-' . \bin2hex(\random_bytes(3)) . '.test.weline.com'
         ));
     }
 

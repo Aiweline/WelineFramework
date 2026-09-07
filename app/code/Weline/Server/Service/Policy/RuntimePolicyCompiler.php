@@ -155,7 +155,12 @@ final class RuntimePolicyCompiler
                     'allowed_hosts' => $allowedHosts,
                     'strict' => $hostPolicyStrict,
                     'allow_loopback' => true,
-                    'managed_local_roots' => ['weline.test', 'local.test', 'weline.localhost'],
+                    'managed_local_roots' => [
+                        'test.weline.com',
+                        'weline.test',
+                        'local.test',
+                        'weline.localhost',
+                    ],
                 ],
                 action: ['type' => 'reject', 'status' => 400],
                 critical: true,
