@@ -12,6 +12,11 @@
             globalVar: "WelineI18n",
             description: "国际化（i18n）语言切换器模块"
         },
+        siteBlocks: {
+            origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/site-blocks.js"],
+            paths: ["/Weline/Theme/view/statics/js/widgets/site-blocks.js"],
+            globalVar: "WelineSiteBlocks"
+        },
         miniCartExtras: {
             origin_paths: ["app/code/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js"],
             paths: ["/Weline/Theme/view/statics/js/widgets/mini-cart-extras-tabs.js"],
@@ -103,8 +108,8 @@
             description: "Location定位模块（浏览器定位和IP定位）"
         },
         customerAccount: {
-            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js"],
-            paths: ["/Weline/Customer/view/statics/js/account-index.js"],
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-index.js?v=20260906-profile-header-sync-1"],
+            paths: ["/Weline/Customer/view/statics/js/account-index.js?v=20260906-profile-header-sync-1"],
             globalVar: "WelineCustomerAccount",
             description: "前台用户中心账户页交互"
         },
@@ -113,6 +118,12 @@
             paths: ["/Weline/Customer/view/statics/js/account-logout.js"],
             globalVar: "WelineCustomerLogout",
             description: "前台账户退出确认"
+        },
+        customerSocialQuick: {
+            origin_paths: ["app/code/Weline/Customer/view/statics/js/account-social-quick.js?v=20260907-chooser-ui-1"],
+            paths: ["/Weline/Customer/view/statics/js/account-social-quick.js?v=20260907-chooser-ui-1"],
+            globalVar: "WelineSocialQuick",
+            description: "未登录右下角社媒快捷登录条（由 account JS 动态拉起）"
         },
         accountTwoFactor: {
             origin_paths: ["app/code/Weline/TwoFactorAuth/view/statics/frontend/js/account-two-factor-inline-v2.js"],
@@ -133,9 +144,9 @@
             description: "前台客服聊天部件"
         },
         shippingCheckoutAddress: {
-            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js"],
-            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.js"],
-            globalVar: null,
+            origin_paths: ["app/code/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.v20260917.js"],
+            paths: ["/Weline/Shipping/view/statics/js/widgets/checkout-shipping-address.v20260917.js"],
+            globalVar: "WelineShippingCheckoutAddress",
             description: "结账收货地址部件"
         },
         shippingAccountAddress: {
@@ -145,14 +156,14 @@
             description: "账户中心发货/收货地址维护"
         },
         captchaLazy: {
-            origin_paths: ["app/code/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260831-layout-fix1"],
-            paths: ["/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260831-layout-fix1"],
+            origin_paths: ["app/code/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260907-pending1"],
+            paths: ["/Weline/Captcha/view/statics/js/captcha-lazy.js?v=20260907-pending1"],
             globalVar: null,
             description: "FPC-safe lazy captcha client runtime (Weline.Captcha)"
         },
         checkoutCoupon: {
-            origin_paths: ["app/code/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js"],
-            paths: ["/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js"],
+            origin_paths: ["app/code/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260905-coupon-i18n1"],
+            paths: ["/Weline/Marketing/view/statics/js/widgets/checkout-coupon.js?v=20260905-coupon-i18n1"],
             globalVar: null,
             description: "结账/迷你购物车优惠券部件"
         },
@@ -180,9 +191,21 @@
             globalVar: null,
             description: "经常一起购买（FBT）"
         },
+        b2bSellingMode: {
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/selling-mode.js"],
+            paths: ["/Weline/B2B/view/statics/js/selling-mode.js"],
+            globalVar: "WelineB2BSellingMode",
+            description: "B2B ToC/ToB selling mode switcher"
+        },
+        b2bCheckoutTob: {
+            origin_paths: ["app/code/Weline/B2B/view/statics/js/checkout-tob.js"],
+            paths: ["/Weline/B2B/view/statics/js/checkout-tob.js"],
+            globalVar: "WelineB2BCheckoutTob",
+            description: "B2B checkout deposit note and coupon hide for tob carts"
+        },
         productReviews: {
-            origin_paths: ["app/code/Weline/Review/view/statics/js/widgets/product-reviews.js"],
-            paths: ["/Weline/Review/view/statics/js/widgets/product-reviews.js"],
+            origin_paths: ["app/code/Weline/Review/view/statics/js/widgets/product-reviews.v20260904-pager2.js"],
+            paths: ["/Weline/Review/view/statics/js/widgets/product-reviews.v20260904-pager2.js"],
             globalVar: "WelineReviewProductWidget",
             description: "万能评论部件（商品/博客共用）"
         },

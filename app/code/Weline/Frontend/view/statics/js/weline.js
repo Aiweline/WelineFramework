@@ -301,15 +301,43 @@
                     } catch (_error) {
                     }
 
-                    script.onload = () => {
-                        if (validateGlobal && globalVarName && !this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
-                            reject(new Error('[Weline] ' + __('模块 %{1} 加载失败：未找到 %{2}', { 1: moduleName, 2: globalVarName })));
+                    const loadTimeoutMs = 10000;
+                    let settled = false;
+                    const settle = (fn) => {
+                        if (settled) {
                             return;
                         }
-                        resolve();
+                        settled = true;
+                        window.clearTimeout(timeoutId);
+                        fn();
+                    };
+                    const timeoutId = window.setTimeout(() => {
+                        try {
+                            script.onload = null;
+                            script.onerror = null;
+                            if (script.parentNode) {
+                                script.parentNode.removeChild(script);
+                            }
+                        } catch (_cleanupError) {
+                        }
+                        settle(() => reject(new Error(
+                            '[Weline] ' + __('模块 %{1} 加载超时：%{2}', { 1: moduleName, 2: scriptPath })
+                        )));
+                    }, loadTimeoutMs);
+
+                    script.onload = () => {
+                        settle(() => {
+                            if (validateGlobal && globalVarName && !this.isGlobalModuleReady(globalVarName, requiresFullGlobal)) {
+                                reject(new Error('[Weline] ' + __('模块 %{1} 加载失败：未找到 %{2}', { 1: moduleName, 2: globalVarName })));
+                                return;
+                            }
+                            resolve();
+                        });
                     };
                     script.onerror = () => {
-                        reject(new Error('[Weline] ' + __('模块 %{1} 加载失败：无法加载 %{2}', { 1: moduleName, 2: scriptPath })));
+                        settle(() => reject(new Error(
+                            '[Weline] ' + __('模块 %{1} 加载失败：无法加载 %{2}', { 1: moduleName, 2: scriptPath })
+                        )));
                     };
                     document.head.appendChild(script);
                 });

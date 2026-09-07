@@ -407,6 +407,56 @@
         return cachedDevWorkerUrls[cacheKey];
     };
 
+    /**
+     * Storefront pages can leave `new Worker(http(s) URL)` Network-pending forever
+     * (Chrome Dedicated Worker destination) while fetch() of the same URL succeeds.
+     * Bootstrap the classic Worker from a same-origin Blob URL instead.
+     */
+    const createDedicatedWorkerFromScriptUrl = (workerUrl) => {
+        if (!window.Worker) {
+            return Promise.reject(new Error(
+                '[Weline.Api] Worker is unavailable; direct frontend API fallback is disabled.'
+            ));
+        }
+        const scriptUrl = String(workerUrl || '');
+        if (!scriptUrl) {
+            return Promise.reject(new Error('[Weline.Api] workerUrl is not configured.'));
+        }
+        return fetch(scriptUrl, {
+            credentials: 'same-origin',
+            cache: isDevMode() ? 'no-store' : 'force-cache',
+        }).then((response) => {
+            if (!response.ok) {
+                throw new Error('[Weline.Api] worker script HTTP ' + response.status);
+            }
+            return response.text();
+        }).then((code) => {
+            if (!code || !String(code).trim()) {
+                throw new Error('[Weline.Api] worker script body is empty.');
+            }
+            const blob = new Blob([code], { type: 'text/javascript' });
+            const blobUrl = URL.createObjectURL(blob);
+            try {
+                const worker = new Worker(blobUrl);
+                window.setTimeout(() => {
+                    try {
+                        URL.revokeObjectURL(blobUrl);
+                    } catch (_error) {
+                        /* ignore */
+                    }
+                }, 0);
+                return worker;
+            } catch (error) {
+                try {
+                    URL.revokeObjectURL(blobUrl);
+                } catch (_error) {
+                    /* ignore */
+                }
+                throw error;
+            }
+        });
+    };
+
     const getDefaultWorkerUrl = () => {
         const isDev = isDevMode();
         if (isDev) {
@@ -1193,6 +1243,7 @@
         constructor(clientConfig) {
             this.config = clientConfig;
             this.worker = null;
+            this.workerStartPromise = null;
             this.requestId = 0;
             this.pending = new Map();
             this.devTraces = new Map();
@@ -1392,12 +1443,12 @@
                 }
             }
             this.worker = null;
+            this.workerStartPromise = null;
         }
 
         sendToWorker(payload) {
-            this.ensureWorker();
             const messageId = this.buildMessageId();
-            return new Promise((resolve, reject) => {
+            return this.ensureWorker().then(() => new Promise((resolve, reject) => {
                 const optionTimeout = payload && payload.options
                     ? (payload.options.requestTimeoutMs || payload.options.timeoutMs || payload.options.timeout)
                     : null;
@@ -1441,24 +1492,29 @@
                         scopeBootstrapId: this.config.scopeBootstrapId,
                     },
                 }));
-            });
+            }));
         }
 
         ensureWorker() {
             if (this.worker) {
-                return;
+                return Promise.resolve(this.worker);
             }
-            if (!window.Worker) {
-                throw new Error('[Weline.Api] Worker is unavailable; direct frontend API fallback is disabled.');
+            if (this.workerStartPromise) {
+                return this.workerStartPromise;
             }
-            if (!this.config.workerUrl) {
-                throw new Error('[Weline.Api] workerUrl is not configured.');
-            }
-
-            this.worker = new Worker(this.config.workerUrl);
-            this.worker.addEventListener('message', this.handleWorkerMessage);
-            this.worker.addEventListener('error', this.handleWorkerError);
-            this.worker.addEventListener('messageerror', this.handleWorkerError);
+            this.workerStartPromise = createDedicatedWorkerFromScriptUrl(this.config.workerUrl)
+                .then((worker) => {
+                    this.worker = worker;
+                    this.worker.addEventListener('message', this.handleWorkerMessage);
+                    this.worker.addEventListener('error', this.handleWorkerError);
+                    this.worker.addEventListener('messageerror', this.handleWorkerError);
+                    return worker;
+                })
+                .catch((error) => {
+                    this.workerStartPromise = null;
+                    throw error;
+                });
+            return this.workerStartPromise;
         }
 
         buildMessageId() {
