@@ -1,0 +1,371 @@
+region_code	region_name
+11	Beijing
+1101	Municipal Districts
+12	Tianjin
+1201	Municipal Districts
+13	Hebei
+1301	Shijiazhuang
+1302	Tangshan
+1303	Qinhuangdao
+1304	Handan
+1305	Xingtai County
+1306	Baoding
+1307	Zhangjiakou
+1308	Chengde Prefecture
+1309	Cangzhou
+1310	Langfang
+1311	Hengshui
+14	Shanxi
+1401	Taiyuan
+1402	Datong
+1403	Yangquan
+1404	Changzhi
+1405	Jincheng
+1406	Shuozhou
+1407	Jinzhong
+1408	Yuncheng
+1409	Xinzhou
+1410	Linfen
+1411	Lüliang
+15	Inner Mongolia
+1501	Hohhot
+1502	Baotou
+1503	Wuhai
+1504	Chifeng
+1505	Tongliao
+1506	Ordos
+1507	Hulunbuir Region
+1508	Bayannur
+1509	Wulanchabu
+1522	Hinggan
+1525	Xilin Gol
+1529	Alxa
+21	Liaoning
+2101	Shenyang
+2102	Dalian
+2103	Anshan
+2104	Fushun
+2105	Benxi
+2106	Dandong
+2107	Jinzhou
+2108	Yingkou
+2109	Fuxin
+2110	Liaoyang
+2111	Panjin
+2112	Tieling
+2113	Chaoyang
+2114	Huludao
+22	Jilin
+2201	Changchun
+2202	Jilin
+2203	Siping
+2204	Liaoyuan
+2205	Tonghua
+2206	Baishan
+2207	Songyuan
+2208	Baicheng
+2224	Yanbian Chaoxianzu
+23	Heilongjiang
+2301	Harbin
+2302	Qiqihar
+2304	Hegang
+2305	Shuangyashan
+2306	Daqing
+2307	Yichun
+2308	Jiamusi
+2309	Qitaihe
+2310	Mudanjiang
+2311	Heihe
+2312	Suihua
+2327	Daxing’anling Diqu
+31	Shanghai
+3101	Municipal Districts
+32	Jiangsu
+3201	Nanjing
+3202	Wuxi
+3203	Xuzhou
+3204	Changzhou
+3205	Suzhou
+3206	Nantong
+3207	Lianyungang
+3208	Huai’an
+3209	Yancheng
+3210	Yangzhou
+3211	Zhenjiang
+3212	Taizhou
+3213	Suqian
+33	Zhejiang
+3301	Hangzhou
+3302	Ningbo
+3303	Wenzhou
+3304	Jiaxing
+3305	Huzhou
+3306	Shaoxing
+3307	Jinhua
+3308	Quzhou
+3309	Zhoushan
+3310	Taizhou
+3311	Lishui
+34	Anhui
+3401	Hefei
+3402	Wuhu
+3403	Bengbu
+3404	Huainan
+3405	Ma’anshan
+3406	Huaibei
+3407	Tongling
+3408	Anqing
+3410	Huangshan
+3411	Chuzhou
+3412	Fuyang
+3413	Suzhou
+3415	Lu’an
+3416	Bozhou
+3417	Chizhou
+3418	Xuancheng
+35	Fujian
+3501	Fuzhou
+3502	Xiamen
+3503	Putian
+3504	Sanming
+3505	Quanzhou
+3506	Zhangzhou
+3507	Nanping
+3508	Longyan
+3509	Ningde
+36	Jiangxi
+3601	Nanchang
+3602	Jingdezhen
+3603	Pingxiang
+3604	Jiujiang
+3605	Xinyu
+3606	Yingtan
+3607	Ganzhou
+3608	Ji’an
+3609	Yichun
+3610	Fuzhou
+3611	Shangrao
+37	Shandong
+3701	Jinan
+3702	Qingdao
+3703	Zibo
+3704	Zaozhuang
+3705	Dongying
+3706	Yantai
+3707	Weifang
+3708	Jining
+3709	Tai’an
+3710	Weihai
+3711	Rizhao
+3713	Linyi
+3714	Dezhou
+3715	Liaocheng
+3716	Binzhou
+3717	Heze
+41	Henan
+4101	Zhengzhou
+4102	Kaifeng
+4103	Luoyang
+4104	Pingdingshan
+4105	Anyang
+4106	Hebi
+4107	Xinxiang
+4108	Jiaozuo
+4109	Puyang
+4110	Xuchang
+4111	Luohe
+4112	Sanmenxia
+4113	Nanyang
+4114	Shangqiu
+4115	Xinyang
+4116	Zhoukou
+4117	Zhumadian
+4190	Province-administered
+42	Hubei
+4201	Wuhan
+4202	Huangshi
+4203	Shiyan
+4205	Yichangshi
+4206	Xiangyang
+4207	Ezhou
+4208	Jingmen
+4209	Xiaogan
+4210	Jingzhou
+4211	Huanggang
+4212	Xianning Prefecture
+4213	Suizhou
+4228	Enshi Tujiazu Miaozu
+4290	Province-administered
+43	Hunan
+4301	Changsha
+4302	Zhuzhou
+4303	Xiangtan
+4304	Hengyang
+4305	Shaoyang County
+4306	Yueyang
+4307	Changde
+4308	Zhangjiajie
+4309	Yiyang
+4310	Prefecture of Chenzhou
+4311	Yongzhou
+4312	Huaihua Prefecture
+4313	Loudi
+4331	Xiangxi Tujiazu Miaozu
+44	Guangdong
+4401	Guangzhou
+4402	Shaoguan
+4403	Shenzhen
+4404	Zhuhai
+4405	Shantou
+4406	Foshan
+4407	Jiangmen
+4408	Zhanjiang
+4409	Maoming
+4412	Zhaoqing
+4413	Huizhou
+4414	Meizhou
+4415	Shanwei
+4416	Heyuan
+4417	Yangjiang
+4418	Qingyuan
+4419	Dongguan
+4420	Zhongshan Prefecture
+4451	Chaozhou
+4452	Jieyang
+4453	Yunfu
+45	Guangxi
+4501	Nanning
+4502	Liuzhou
+4503	Guilin
+4504	Wuzhou
+4505	Beihai
+4506	Fangchenggang
+4507	Qinzhou
+4508	Guigang
+4509	Yulin
+4510	Baise
+4511	Hezhou
+4512	Hechi
+4513	Laibin
+4514	Chongzuo
+46	Hainan
+4601	Haikou
+4602	Sanya
+4603	Sansha
+4604	Danzhou
+4690	Province-administered
+50	Chongqing
+5001	Municipal Districts
+5002	Counties
+51	Sichuan
+5101	Chengdu
+5103	Zigong
+5104	Panzhihua
+5105	Luzhou
+5106	Deyang
+5107	Mianyang
+5108	Guangyuan
+5109	Suining
+5110	Neijiang
+5111	Leshan
+5113	Nanchong
+5114	Meishan
+5115	Yibin
+5116	Guang’an
+5117	Dazhou
+5118	Ya’an
+5119	Bazhong
+5120	Ziyang
+5132	Aba Zangzu Qiangzu
+5133	Garzê
+5134	Liangshan Yizu
+52	Guizhou
+5201	Guiyang
+5202	Lupanshui
+5203	Zunyi
+5204	Anshun
+5205	Bijie Diqu
+5206	Tongren Diqu
+5223	Qianxinan Buyei and Miao Autonomous Prefecture
+5226	Qiandongnan Miao and Dong Autonomous Prefecture
+5227	Qiannan Bouyeizu Miaozu
+53	Yunnan
+5301	Kunming
+5303	Qujing
+5304	Yuxi
+5305	Baoshan
+5306	Zhaotong
+5307	Lijiang
+5308	Pu'er City
+5309	Lincang
+5323	Chuxiong Yizu
+5325	Honghe Hanizu Yizu
+5326	Wenshan Zhuangzu Miaozu
+5329	Dali Baizu
+5331	Dehong Daizu Jingpozu
+5333	Nujiang Lisuzu
+5334	Diqing
+54	Tibet
+5401	Lhasa
+5402	Rikaze Diqu
+5403	Qamdo
+5404	Nyingchi Prefecture
+5405	Shannan Diqu
+5406	Nagqu
+5425	Ngari Diqu
+61	Shaanxi
+6101	Xi’an
+6102	Tongchuan
+6103	Baoji
+6104	Xianyang
+6105	Weinan
+6106	Yan’an
+6107	Hanzhong
+6108	Yulin
+6109	Ankang
+6110	Shangluo
+62	Gansu
+6201	Lanzhou
+6202	Jiayuguan
+6203	Jinchang
+6204	Baiyin Prefecture
+6205	Tianshui
+6206	Wuwei
+6207	Zhangye
+6208	Pingliang
+6209	Jiuquan
+6210	Qingyang
+6211	Dingxi
+6212	Longnan
+6229	Linxia Huizu
+6230	Gannan Zangzu
+63	Qinghai
+6301	Xining
+6302	Haidong Diqu
+6322	Haibei
+6323	Huangnan Zangzu
+6325	Hainan Zangzu
+6326	Golog Tibetan Autonomous Prefecture
+6327	Yushu Zangzu
+6328	Haixi
+64	Ningxia
+6401	Yinchuan
+6402	Shizuishan
+6403	Wuzhong
+6404	Guyuan
+6405	Zhongwei
+65	Xinjiang
+6501	Urumqi
+6502	Karamay
+6505	Kumul Diqu
+6523	Changji Huizu
+6527	Bortala Mongol
+6528	Bayingolin Mongol
+6529	Aksu Diqu
+6530	Kezilesu
+6531	Kaxgar Diqu
+6532	Hetian
+6540	Ili Kazak
+6542	Tacheng Diqu
+6543	Altay Diqu
+6590	Region-administered
