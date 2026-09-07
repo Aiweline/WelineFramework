@@ -53,7 +53,7 @@ That script probes local STDIO health, probes host attachment, and returns `host
 
 For IDE Agent chats, use the operator's chosen Cursor **Run Mode** (for example **Run Everything** or **Auto-review**). One-time MCP enable is handled via `cursor-agent mcp enable weline_project_intelligence`, not by editing `permissions.json`.
 
-This server is **local STDIO with no OAuth**. Agents must **never** call Cursor `mcp_auth` for `weline_project_intelligence` — that only opens the host authorization toast and is not required for tools to work. `ensure-project-guidance.php` now asserts STDIO `tools/list` includes the required plan/edit pair (`submit_task_plan`, `get_task_plan`, …). When the Cursor Helper `mcp-process` is older than MCP source or required tools are missing, ensure bounces that process and returns `host_repair_needed` so the next Agent turn re-attaches a fresh catalog. If `mcp_stdio` lists the tools but the current chat’s `GetDynamicTools` does not, treat it as `HOST_MCP_SESSION_CATALOG_STALE`: start a new Agent turn (do not call `mcp_auth`). Keep the registered PHP `command` on a stable path (for example `/opt/homebrew/bin/php`) so `mcp-approvals` fingerprints do not churn and re-prompt workspace approval.
+This server is **local STDIO with no OAuth**. Agents must **never** call Cursor `mcp_auth` for `weline_project_intelligence` — that only opens the host authorization toast and is not required for tools to work. `ensure-project-guidance.php` now asserts STDIO `tools/list` includes the required plan/edit pair (`submit_task_plan`, `get_task_plan`, …). On Cursor Agent hosts (`CURSOR_AGENT` / `CURSOR_EXTENSION_HOST_ROLE`), ensure probes the Helper `mcp-process`. When that helper is older than MCP source **or** still running with no `learning-mcp` child (`orphan_no_learning_mcp_child` — IDE keeps a stale catalog while `CallDynamicTool` times out with Transport closed), ensure bounces the helper, touches user `mcp.json`, and returns `host_repair_needed` so the next Agent turn (or Developer: Reload Window) re-attaches a fresh catalog. If `mcp_stdio` lists the tools but the current chat’s `GetDynamicTools` does not, treat it as `HOST_MCP_SESSION_CATALOG_STALE`: start a new Agent turn (do not call `mcp_auth`). Keep the registered PHP `command` on a stable path (for example `/opt/homebrew/bin/php`) so `mcp-approvals` fingerprints do not churn and re-prompt workspace approval.
 
 ## Verification
 
@@ -63,14 +63,31 @@ php tests/project-readiness.php
 php tests/git-worktree-safety.php
 php tests/module-version-bump-gate.php
 find src bin scripts tests -type f -name '*.php' -print0 | xargs -0 -n1 php -l
-node --check bin/learning-mcp.js
+node --check bin/weline-mcp.js
 ```
 
 Use `php scripts/install.php --dry-run` to inspect installer output without changing host registration. STDIO smoke tests must keep stdout valid JSON-RPC; diagnostics go to stderr.
 
 ## Index maintenance
 
-The next guarded request automatically observes external source or document changes. Manual full rebuild is normally unnecessary. Project indexes are caches and may be deleted only after stopping MCP processes; the next `prepare_project` recreates them. Back up the global learning DB and edit journals only when their audit history is required.
+Project indexes are caches and may be deleted only after stopping MCP processes; the next `prepare_project` recreates them. Back up the global learning DB and edit journals only when their audit history is required.
+
+Interactive requests use three cost tiers:
+
+1. A recent persisted index with `phase=idle`, `freshness=current`, and a `last_completed_at` inside `index.refresh_interval` is reused. A new MCP process no longer repeats a full discovery just because its in-memory cache is empty.
+2. A request with explicit `path`/`paths` performs a bounded content-hash refresh for those targets. Use this mode for an edit or a focused investigation; it preserves same-size/same-mtime edit detection.
+3. Revision zero, an expired/partial index, or an explicit forced refresh performs incremental discovery. This is the cold/maintenance path and can be expensive on a large project; it must not be confused with an STDIO connection failure.
+
+This is a freshness window, not a claim of real-time filesystem watching. The sidecar is an optional post-tool accelerator. Check `health.project_intelligence.index_sidecar.socket_present` before treating it as active; when it is absent, use explicit target paths for interactive work and allow the periodic refresh to repair the cache. Do not disable relation or sparse-vector data merely to hide a slow cold refresh: both are used for symbol impact and semantic ranking. First measure `project_index_status.state.last_index.duration_ms`, changed-file count, and database size.
+
+When a scan reports a problem, classify it before changing code:
+
+- `Transport closed`/missing tools: run `ensure-project-guidance.php`; distinguish a missing host attachment from a stale chat tool catalog. Never use `mcp_auth` for this local STDIO server.
+- Long `prepare_project`: inspect the persisted index state and last index counters. A long write with changed files is an index-storage performance issue, not a protocol issue.
+- Unresolved relations or low-ranked candidates: treat them as retrieval evidence, not defects. Validate the concrete source/sink and expected behavior with `get_edit_bundle` and exact guards before opening a code fix.
+- Large SQLite files: retain them while the index is useful; offline rebuild/VACUUM is a maintenance operation requiring stopped MCP processes and a backup, not an interactive workaround.
+
+The normal remediation loop is: reproduce with a bounded path, add a failing regression case, implement the smallest fix, reindex that path, compare counts/query results, then run a real MCP probe. A scan finding without a reproducible defect, owner, and acceptance criterion remains a documented observation rather than an automatic edit.
 
 ## Upgrade and retirement
 

@@ -383,11 +383,14 @@ final class McpServer
     {
         $receiptId = Ids::make('weline-mcp');
         $result = $this->decorateClosedLoopResult($tool, $result, $isError);
-        $mirrorFullResultInContent = in_array(
-            $tool,
-            ['get_edit_bundle', 'apply_compact_edit', 'validate_change', 'get_edit_status', 'get_run_status', 'get_run_trace'],
-            true,
-        ) || $isError;
+        // Structured content is the normal full carrier. Only explicitly configured
+        // legacy hosts receive a second copy for wrappers that discard that field.
+        $mirrorFullResultInContent = getenv('WELINE_MCP_RESPONSE_FORMAT') === 'legacy_mirror';
+        if (!$mirrorFullResultInContent && $tool === 'get_edit_bundle'
+            && isset($result['exact_regions'], $result['regions'])
+            && $result['exact_regions'] === $result['regions']) {
+            unset($result['regions']);
+        }
 
         static $workflowAuditByProject = [];
         $projectId = trim((string) ($result['project_id'] ?? ''));
@@ -516,24 +519,26 @@ final class McpServer
             'response_prefix' => self::RESPONSE_PREFIX,
             'report_contract' => 'Begin every subsequent user-visible progress update and the final report in this turn with the exact response_prefix. content[0].text repeats usage_line as runtime proof.',
         ];
-        $contentPayload = $mirrorFullResultInContent
-            ? $result
-            : $this->legacyToolSummary($tool, $result, $isError, $receiptId);
-
-        return [
-            'content' => [
-                [
-                    'type' => 'text',
-                    'text' => $usageLine,
+        $envelope = function (array $body) use ($mirrorFullResultInContent, $tool, $isError, $receiptId, $usageLine): array {
+            $contentPayload = $mirrorFullResultInContent
+                ? $body
+                : $this->legacyToolSummary($tool, $body, $isError, $receiptId);
+            return [
+                'content' => [
+                    ['type' => 'text', 'text' => $usageLine],
+                    ['type' => 'text', 'text' => Json::encode($contentPayload)],
                 ],
-                [
-                    'type' => 'text',
-                    'text' => Json::encode($contentPayload),
-                ],
-            ],
-            'structuredContent' => $result,
-            'isError' => $isError,
-        ];
+                'structuredContent' => $body,
+                'isError' => $isError,
+            ];
+        };
+        if (($result['schema_version'] ?? '') === 'guidance-bundle.v1') {
+            $result = ContextResponseBudget::fit($result, (int) $result['token_usage']['budget'], $envelope);
+            $digestBody = $result;
+            unset($digestBody['_weline_mcp']);
+            $result['_weline_mcp']['result_digest'] = Ids::hash(Json::canonical($digestBody));
+        }
+        return $envelope($result);
     }
 
     /** @param array<string, mixed> $result */

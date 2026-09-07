@@ -79,6 +79,28 @@ try {
     readinessCheck(isset($prepared['repair']['created_paths']), 'auto repair records created paths');
     readinessCheck(count($prepared['repair']['created_paths'] ?? []) === 3, 'auto repair creates three missing documents');
 
+    $currentState = $index->state();
+    $currentCompletedAt = (string) ($currentState['last_completed_at'] ?? '');
+    $secondPrepared = $service->prepare($index, ['client_session_id' => 'session-a']);
+    $secondState = $index->state();
+    readinessCheck(
+        ($secondPrepared['status'] ?? '') === 'ready'
+            && (string) ($secondState['last_completed_at'] ?? '') === $currentCompletedAt,
+        'prepare reuses a recent current persisted index without rescanning',
+    );
+
+    $index->setState([
+        'phase' => 'idle',
+        'freshness' => 'current',
+        'last_completed_at' => '2000-01-01T00:00:00.000Z',
+    ]);
+    $stalePrepared = $service->prepare($index, ['client_session_id' => 'session-a']);
+    readinessCheck(
+        ($stalePrepared['status'] ?? '') === 'ready'
+            && (string) ($index->state()['last_completed_at'] ?? '') !== '2000-01-01T00:00:00.000Z',
+        'prepare refreshes an expired persisted index',
+    );
+
     $ready = $prepared;
     readinessCheck(is_string($ready['readiness_id'] ?? null) && $ready['readiness_id'] !== '', 'ready response binds a readiness id');
 

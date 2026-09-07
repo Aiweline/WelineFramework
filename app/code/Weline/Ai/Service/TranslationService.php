@@ -57,23 +57,39 @@ class TranslationService
     private DefaultModelManager $defaultModelManager;
 
     /**
+     * @var TranslationConcurrencyGate
+     */
+    private TranslationConcurrencyGate $concurrencyGate;
+
+    /**
+     * Per-request timeout for translation model calls (seconds).
+     * Avoids infinite curl waits when the local runner is saturated.
+     * Keep below TranslationConcurrencyGate::STALE_HOLD_SECONDS so a hung
+     * holder is disconnected before the next cron idle-spins on a dead lock.
+     */
+    private const REQUEST_TIMEOUT_SECONDS = 180;
+
+    /**
      * 构造函数
      * 
      * @param AiService $aiService
      * @param CacheManager $cacheManager
      * @param I18nIntegration $i18nIntegration
      * @param DefaultModelManager $defaultModelManager
+     * @param TranslationConcurrencyGate $concurrencyGate
      */
     public function __construct(
         AiService $aiService,
         CacheManager $cacheManager,
         I18nIntegration $i18nIntegration,
-        DefaultModelManager $defaultModelManager
+        DefaultModelManager $defaultModelManager,
+        TranslationConcurrencyGate $concurrencyGate
     ) {
         $this->aiService = $aiService;
         $this->cache = $cacheManager->pool('ai_translation');
         $this->i18nIntegration = $i18nIntegration;
         $this->defaultModelManager = $defaultModelManager;
+        $this->concurrencyGate = $concurrencyGate;
     }
 
     /**
@@ -171,18 +187,26 @@ class TranslationService
         $batchPrompt = $this->buildBatchTranslationPrompt($textsWithKeys, $targetLanguage, $sourceLanguage, $adapterStrategy);
         
         try {
-            // 一次性调用AI服务进行批量翻译
-            $response = $this->aiService->generate(
-                $batchPrompt,
-                $modelCode,
-                null,
-                null,
-                [
-                    'target_language' => $targetLanguage,
-                    'source_language' => $sourceLanguage,
-                    'strategy' => $adapterStrategy
-                ]
-            );
+            // Single-flight: only one process hits the model at a time; others
+            // sleep(1) briefly then fail busy instead of stacking curl waits.
+            $this->concurrencyGate->acquire();
+            try {
+                // 一次性调用AI服务进行批量翻译
+                $response = $this->aiService->generate(
+                    $batchPrompt,
+                    $modelCode,
+                    null,
+                    null,
+                    [
+                        'target_language' => $targetLanguage,
+                        'source_language' => $sourceLanguage,
+                        'strategy' => $adapterStrategy,
+                        'timeout_seconds' => self::REQUEST_TIMEOUT_SECONDS,
+                    ]
+                );
+            } finally {
+                $this->concurrencyGate->release();
+            }
             
             // 解析批量翻译结果
             $translations = $this->parseBatchTranslationResponse($response, count($textsWithKeys));
@@ -203,6 +227,9 @@ class TranslationService
                         $translation = $this->translate($text, $originalTargetLocale, $sourceLocale, $strategy);
                         $result[$key] = $translation;
                     } catch (\Exception $e) {
+                        if ($this->concurrencyGate->isBusyMarker($e->getMessage())) {
+                            throw $e;
+                        }
                         // 翻译失败时返回原文
                         $result[$key] = $text;
                     }
@@ -211,6 +238,10 @@ class TranslationService
             
             return $result;
         } catch (\Exception $e) {
+            // Busy / lock failures must not fall back into N more model calls.
+            if ($this->concurrencyGate->isBusyMarker($e->getMessage())) {
+                throw $e;
+            }
             // 批量翻译失败，回退到循环翻译
             $result = [];
             foreach ($texts as $key => $text) {
@@ -218,6 +249,9 @@ class TranslationService
                     $translation = $this->translate($text, $originalTargetLocale, $sourceLocale, $strategy);
                     $result[$key] = $translation;
                 } catch (\Exception $ex) {
+                    if ($this->concurrencyGate->isBusyMarker($ex->getMessage())) {
+                        throw $ex;
+                    }
                     // 翻译失败时返回原文
                     $result[$key] = $text;
                 }
@@ -349,17 +383,23 @@ class TranslationService
         
         // 调用AI服务，传递适配器所需的参数
         // TranslationAdapter 会自动处理提示词构建和响应处理
-        $response = $this->aiService->generate(
-            $text,  // 原始文本，让适配器处理
-            $modelCode, 
-            'translation',  // 场景代码
-            null,  // locale
-            [
-                'target_language' => $targetLanguage,
-                'source_language' => $sourceLanguage,
-                'strategy' => $adapterStrategy
-            ]
-        );
+        $this->concurrencyGate->acquire();
+        try {
+            $response = $this->aiService->generate(
+                $text,  // 原始文本，让适配器处理
+                $modelCode, 
+                'translation',  // 场景代码
+                null,  // locale
+                [
+                    'target_language' => $targetLanguage,
+                    'source_language' => $sourceLanguage,
+                    'strategy' => $adapterStrategy,
+                    'timeout_seconds' => self::REQUEST_TIMEOUT_SECONDS,
+                ]
+            );
+        } finally {
+            $this->concurrencyGate->release();
+        }
         
         // 响应已经被 TranslationAdapter 处理过了，直接返回
         return trim($response);

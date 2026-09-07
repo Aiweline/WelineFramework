@@ -12,7 +12,13 @@ require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-mcp-install.php';
 
 $quiet = in_array('--quiet', $argv, true);
 $mcpRoot = dirname(__DIR__);
-$guidance = welineMcpInstallResolveGuidance($mcpRoot);
+$hostKind = null;
+foreach ($argv as $argument) {
+    if (str_starts_with($argument, '--host-runtime=')) {
+        $hostKind = substr($argument, strlen('--host-runtime='));
+    }
+}
+$guidance = welineMcpInstallResolveGuidance($mcpRoot, $hostKind);
 $cursor = is_array($guidance['hosts']['cursor'] ?? null) ? $guidance['hosts']['cursor'] : [];
 $cursorHost = is_array($cursor['host'] ?? null) ? $cursor['host'] : [];
 
@@ -23,8 +29,8 @@ $result = [
     'changed' => false,
     'repository' => $guidance['repository'] ?? null,
     'server' => $guidance['server'] ?? WELINE_PROJECT_INTELLIGENCE_MCP_SERVER,
-    'primary_host' => $guidance['primary_host'] ?? 'cursor',
-    'primary_ready' => (bool) ($guidance['primary_ready'] ?? false),
+    'primary_host' => $guidance['primary_host'] ?? 'unknown',
+    'primary_ready' => $guidance['primary_ready'] ?? null,
     'hosts' => $guidance['hosts'] ?? [],
     'registration' => $guidance['registration'] ?? null,
     'cursor' => [

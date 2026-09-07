@@ -106,6 +106,18 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'weline_ui_theme_first'),
         false,
     ),
+    'hard_constraints include theme_address_for_region_pickers' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'theme_address_for_region_pickers'
+            && str_contains((string) ($rule['summary'] ?? ''), '<w:theme:address>')),
+        false,
+    ),
+    'hard_constraints include weline_ui_floating_primitives' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'weline_ui_floating_primitives'),
+        false,
+    ),
     'hard_constraints include frontend_unified_content_container' => array_reduce(
         is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
@@ -123,16 +135,41 @@ $checks = [
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'at_lang_no_unquoted_comma'),
         false,
     ),
+    'hard_constraints include no_php_tags_in_comments' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'no_php_tags_in_comments'
+            && str_contains((string) ($rule['summary'] ?? ''), 'inside comments')
+            && str_contains((string) ($rule['summary'] ?? ''), 'not ordinary commented-out')),
+        false,
+    ),
     'hard_constraints include browser_operator_self_test' => array_reduce(
         is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule) && ($rule['id'] ?? '') === 'browser_operator_self_test'),
+        false,
+    ),
+    'hard_constraints include browser_cache_disabled_on_open' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'browser_cache_disabled_on_open'
+            && str_contains((string) ($rule['summary'] ?? ''), 'setCacheDisabled')
+            && str_contains((string) ($rule['summary'] ?? ''), 'ignoreCache')),
+        false,
+    ),
+    'hard_constraints include browser_release_after_delivery' => array_reduce(
+        is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
+            && ($rule['id'] ?? '') === 'browser_release_after_delivery'
+            && str_contains((string) ($rule['summary'] ?? ''), 'close')
+            && str_contains((string) ($rule['summary'] ?? ''), '交付地址')),
         false,
     ),
     'hard_constraints feature_delivery_urls requires section' => array_reduce(
         is_array($contract['hard_constraints']['rules'] ?? null) ? $contract['hard_constraints']['rules'] : [],
         static fn (bool $ok, mixed $rule): bool => $ok || (is_array($rule)
             && ($rule['id'] ?? '') === 'feature_delivery_urls'
-            && str_contains((string) ($rule['summary'] ?? ''), '交付地址')),
+            && str_contains((string) ($rule['summary'] ?? ''), '交付地址')
+            && str_contains((string) ($rule['summary'] ?? ''), 'browser_release_after_delivery')),
         false,
     ),
     'hard_constraints include task_plan_before_edit' => array_reduce(
@@ -179,9 +216,34 @@ $checks = [
         is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
         true,
     ),
+    'mandatory_before_closeout includes browser release after delivery' => in_array(
+        'webui_browser_released_after_delivery_or_na',
+        is_array($contract['mandatory_before_closeout'] ?? null) ? $contract['mandatory_before_closeout'] : [],
+        true,
+    ),
     'closeout reminder requires browser self-test for web' => ($closeoutReminder['browser_self_test_required_for_web'] ?? false) === true
         && (($closeoutReminder['browser_tooling'] ?? '') === 'host_available_real_browser')
         && str_contains((string) ($closeoutReminder['summary_zh'] ?? ''), '真实 Browser'),
+    'closeout reminder requires browser release after delivery' => ($closeoutReminder['browser_release_after_delivery_required'] ?? false) === true
+        && is_array($closeoutReminder['browser_release_order'] ?? null)
+        && in_array('write_delivery_urls_section', $closeoutReminder['browser_release_order'], true)
+        && in_array('close_acceptance_browser_tabs', $closeoutReminder['browser_release_order'], true)
+        && str_contains((string) ($closeoutReminder['summary_zh'] ?? ''), '关闭'),
+    'closeout reminder requires browser cache disabled on open' => ($closeoutReminder['browser_cache_disabled_on_open_required'] ?? false) === true
+        && is_array($closeoutReminder['browser_open_order'] ?? null)
+        && in_array('disable_http_cache_for_session', $closeoutReminder['browser_open_order'], true)
+        && in_array('navigate_or_reload_ignore_cache', $closeoutReminder['browser_open_order'], true)
+        && str_contains((string) ($closeoutReminder['summary_zh'] ?? ''), '缓存'),
+    'webui surface requires browser_cache_disabled_on_open norm' => array_reduce(
+        is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'browser_cache_disabled_on_open'),
+        false,
+    ),
+    'webui surface requires browser_release_after_delivery norm' => array_reduce(
+        is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'browser_release_after_delivery'),
+        false,
+    ),
     'hard_rules require browser operator self-test' => array_reduce(
         $hardRules,
         static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'host') && str_contains($rule, 'Browser')),
@@ -196,6 +258,16 @@ $checks = [
     'frontend norms include weline_ui_theme_first' => array_reduce(
         $norms,
         static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'weline_ui_theme_first'),
+        false,
+    ),
+    'frontend norms include theme_address_for_region_pickers' => array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'theme_address_for_region_pickers'),
+        false,
+    ),
+    'frontend norms include weline_ui_floating_primitives' => array_reduce(
+        $norms,
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm) && ($norm['id'] ?? '') === 'weline_ui_floating_primitives'),
         false,
     ),
     'hard_rules require Weline UI theme' => array_reduce(
@@ -232,6 +304,30 @@ $checks = [
             static fn (bool $ok, mixed $item): bool => $ok || (is_string($item) && str_contains($item, '打开')),
             false,
         ),
+    'feature_delivery_urls defaults to project_hash.test.weline.com' => array_reduce(
+        is_array($featureDeliveryUrls['link_format']['url_rules'] ?? null) ? $featureDeliveryUrls['link_format']['url_rules'] : [],
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule)
+            && str_contains($rule, '{project_hash}.test.weline.com')
+            && str_contains($rule, '*.weline.test')),
+        false,
+    ),
+    'feature_delivery_urls forbids primary weline.test host' => array_reduce(
+        $featureDeliveryUrls['forbidden_delivery_patterns'] ?? [],
+        static fn (bool $ok, mixed $item): bool => $ok || (is_string($item) && str_contains($item, '*.weline.test')),
+        false,
+    ),
+    'feature_delivery_urls exposes default_local_host field' => ($featureDeliveryUrls['default_local_host'] ?? '') === '{project_hash}.test.weline.com'
+        && is_array($featureDeliveryUrls['forbidden_primary_hosts'] ?? null)
+        && in_array('*.weline.test', $featureDeliveryUrls['forbidden_primary_hosts'], true),
+    'closeout_delivery_reminder mentions default host' => is_string($closeoutReminder['summary_zh'] ?? null)
+        && str_contains((string)$closeoutReminder['summary_zh'], '{project_hash}.test.weline.com')
+        && str_contains((string)$closeoutReminder['summary_zh'], '*.weline.test'),
+    'webui surface requires default host norm' => array_reduce(
+        is_array($webuiBrowserCloseoutSurface['norms'] ?? null) ? $webuiBrowserCloseoutSurface['norms'] : [],
+        static fn (bool $ok, mixed $norm): bool => $ok || (is_array($norm)
+            && ($norm['id'] ?? '') === 'delivery_default_host_test_weline_com'),
+        false,
+    ),
     'closeout_delivery_reminder present' => ($closeoutReminder['schema'] ?? '') === 'closeout-delivery-reminder.v1'
         && ($closeoutReminder['required_in_every_feature_report'] ?? false) === true
         && is_string($closeoutReminder['summary_zh'] ?? null)
@@ -362,6 +458,18 @@ $checks = [
         $hardRules,
         static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'hook.php')),
         false,
+    ),
+    'hard_rules require hook type partials or layouts' => array_reduce(
+        $hardRules,
+        static fn (bool $ok, mixed $rule): bool => $ok || (is_string($rule) && str_contains($rule, 'partials') && str_contains($rule, 'layouts')),
+        false,
+    ),
+    'hook surface forbids invented type segment' => in_array(
+        'Inventing type segment (theme-editor, checkout, product, account, …) — type is ONLY partials or layouts',
+        is_array($hookSurface['template_surface_rules']['forbidden'] ?? null)
+            ? $hookSurface['template_surface_rules']['forbidden']
+            : [],
+        true,
     ),
     'hard_rules forbid phtml __()' => array_reduce(
         $hardRules,

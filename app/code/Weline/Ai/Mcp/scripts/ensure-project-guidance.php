@@ -46,7 +46,14 @@ $sourceState = welineGuidanceSourceState($mcpRoot);
 $hostRuntime = welineGuidanceHostRuntimeState((int) $sourceState['latest_mtime']);
 
 $ensureScript = $mcpRoot . DIRECTORY_SEPARATOR . 'scripts' . DIRECTORY_SEPARATOR . 'ensure-host-mcp-registrations.php';
-$ensure = welineGuidanceRunPhp($ensureScript, $repoRoot);
+$hostRuntimeKind = (string) ($hostRuntime['kind'] ?? 'other');
+$hostArguments = match ($hostRuntimeKind) {
+    'codex_app_server' => ['--host-runtime=codex_app_server'],
+    'cursor' => ['--host-runtime=cursor'],
+    'claude' => ['--host-runtime=claude'],
+    default => [],
+};
+$ensure = welineGuidanceRunPhp($ensureScript, $repoRoot, $hostArguments);
 if (($ensure['exit_code'] ?? 1) !== 0) {
     welineGuidanceEmit([
         'schema_version' => 'project-guidance-bootstrap.v1',
@@ -66,13 +73,14 @@ if (($ensure['exit_code'] ?? 1) !== 0) {
 }
 
 $ensurePayload = is_array($ensure['json'] ?? null) ? $ensure['json'] : [];
-$cursorPayload = is_array($ensurePayload['cursor'] ?? null) ? $ensurePayload['cursor'] : [];
-$hostReady = (bool) (($ensurePayload['primary_ready'] ?? false) || ($cursorPayload['host']['ready'] ?? false));
+$primaryHost = (string) ($ensurePayload['primary_host'] ?? 'unknown');
+$activeHost = $ensurePayload['hosts'][$primaryHost]['host'] ?? null;
+$hostReady = $ensurePayload['primary_ready'] ?? null;
 $hostMcpInstall = [
     'schema_version' => $ensurePayload['schema_version'] ?? 'host-mcp-install-guidance.v1',
     'writes_host_config' => false,
     'primary_host' => $ensurePayload['primary_host'] ?? null,
-    'primary_ready' => $ensurePayload['primary_ready'] ?? false,
+    'primary_ready' => $hostReady,
     'hosts' => $ensurePayload['hosts'] ?? null,
     'registration' => $ensurePayload['registration'] ?? null,
     'agent_next_action' => $ensurePayload['agent_next_action'] ?? null,
@@ -109,7 +117,9 @@ $stdioOk = (bool) ($stdio['ready'] ?? false);
 $missingRequiredTools = is_array($stdio['missing_required_tools'] ?? null)
     ? $stdio['missing_required_tools']
     : [];
-$cursorMcpProcess = welineGuidanceCursorMcpProcessState((int) $sourceState['latest_mtime']);
+$cursorMcpProcess = $primaryHost === 'cursor'
+    ? welineGuidanceCursorMcpProcessState((int) $sourceState['latest_mtime'])
+    : ['kind' => 'cursor_mcp_process', 'pid' => 0, 'current' => true, 'reason' => 'inactive_host_not_probed'];
 $reloadDecision = welineGuidanceReloadDecision(
     $hostRuntime,
     $mcpConfigChanged,
@@ -117,17 +127,14 @@ $reloadDecision = welineGuidanceReloadDecision(
     $cursorMcpProcess,
     $missingRequiredTools,
 );
-$hostReloadRequired = $reloadDecision['reload_required'];
 $cursorBounceRequired = (bool) ($reloadDecision['cursor_mcp_bounce_required'] ?? false);
 $restart = ['scheduled' => false, 'reason' => $reloadDecision['reason']];
 $cursorBounce = ['attempted' => false, 'bounced' => false, 'reason' => $reloadDecision['reason']];
-if ($branchOk && $stdioOk && $hostReady && $hostReloadRequired) {
-    $restart = welineGuidanceScheduleCodexHostRestart($hostRuntime);
-    if (($restart['scheduled'] ?? false) === true) {
-        $repairs[] = 'scheduled_single_shot_codex_app_server_restart';
-    }
-}
-if ($branchOk && $stdioOk && $hostReady && $cursorBounceRequired) {
+// Host processes are shared by other tasks. A source generation change must not
+// restart the app-server; use host-supported MCP/catalog refresh when available.
+// hostReady=null means install state was not probed; still bounce a stale/orphan
+// Cursor mcp-process so Transport-closed sessions can reattach.
+if ($branchOk && $stdioOk && $hostReady !== false && $cursorBounceRequired) {
     $cursorBounce = welineGuidanceBounceCursorMcpProcess($cursorMcpProcess, $userMcp);
     if (($cursorBounce['bounced'] ?? false) === true) {
         $repairs[] = 'bounced_cursor_mcp_process_for_tool_catalog';
@@ -136,9 +143,9 @@ if ($branchOk && $stdioOk && $hostReady && $cursorBounceRequired) {
 
 $status = 'ready';
 $blocker = null;
-$nextAction = 'Call prepare_project with repository and a stable client_session_id, then resolve_task_context. Before sealed edits verify host tools include submit_task_plan/get_task_plan; if missing in this chat despite mcp_stdio.ready, start a new Agent turn (HOST_MCP_SESSION_CATALOG_STALE).';
+$nextAction = 'Local STDIO is ready. Verify the current session exposes all mcp_required_tools, then call prepare_project with repository and a stable client_session_id. If tools remain missing after a new Agent turn, refresh only this MCP connection/catalog through the host when supported; preserve runnable STDIO and use the documented bounded fallback. Do not restart the shared app-server.';
 if ($reloadDecision['plugin_refresh_deferred']) {
-    $nextAction = 'The Hook-only Codex plugin registration was refreshed non-blockingly; the current healthy STDIO MCP remains ready. Continue with prepare_project.';
+    $nextAction = 'Codex plugin files were refreshed non-blockingly; local STDIO remains ready. Verify all mcp_required_tools in the current session and refresh only its MCP connection/catalog when supported. No app-server restart is required.';
 }
 
 if (!$branchOk) {
@@ -173,18 +180,13 @@ if (!$branchOk) {
         ],
     ];
     $nextAction = 'Stop with MCP_REQUIRED_TOOLS_MISSING; do not call prepare_project through an incomplete tool catalog.';
-} elseif (!$hostReady) {
+} elseif ($hostReady === false) {
     $status = 'host_install_needed';
     $nextAction = (string) ($hostMcpInstall['agent_next_action'] ?? 'Execute host_mcp_install steps in this session, rerun ensure-project-guidance, then prepare_project.');
-} elseif ($hostReloadRequired) {
-    $status = 'host_repair_needed';
-    $nextAction = (($restart['scheduled'] ?? false) === true)
-        ? 'A single-shot Codex app-server restart is scheduled. After reconnection rerun ensure-project-guidance; continue only when the new PID and source generation are current.'
-        : 'Restart the Codex app-server once, rerun ensure-project-guidance, and continue only when host_runtime.current is true.';
 } elseif ($cursorBounceRequired) {
     $status = 'host_repair_needed';
     $nextAction = (($cursorBounce['bounced'] ?? false) === true)
-        ? 'Cursor Helper mcp-process was bounced so tools/list can refresh. Start a new Agent turn in this workspace, rerun ensure-project-guidance, verify submit_task_plan is visible, then prepare_project.'
+        ? 'Cursor Helper mcp-process was bounced so tools/list can refresh. Start a new Agent turn in this workspace (or Developer: Reload Window if CallDynamicTool still times out), rerun ensure-project-guidance, verify submit_task_plan is visible, then prepare_project.'
         : 'Cursor MCP tool catalog is stale or incomplete. Start a new Agent turn after ensure-project-guidance; never continue sealed edits without submit_task_plan.';
 }
 
@@ -198,20 +200,21 @@ welineGuidanceEmit([
     'mcp_init_check' => [
         'schema_version' => 'mcp-init-check.v1',
         'server' => 'weline_project_intelligence',
-        'correct' => $status === 'ready',
+        'correct' => $status === 'ready' ? null : false,
         'verdict' => $status,
         'may_call_prepare_project' => $status === 'ready',
         'checks' => [
             'git_branch_dev' => $branchOk,
             'stdio_probe' => $stdioOk,
             'stdio_required_tools' => $missingRequiredTools === [],
-            'host_attached' => $hostReady,
-            'host_runtime_current' => !$hostReloadRequired,
-            'session_tool_catalog' => 'verify_in_chat',
+            'host_registration_ready' => $hostReady,
+            'host_attached' => null,
+            'host_runtime_current' => null,
+            'session_tool_catalog' => 'unknown_verify_in_chat',
         ],
         'missing_required_tools' => $missingRequiredTools,
         'primary_host' => $hostMcpInstall['primary_host'] ?? null,
-        'note' => 'session_tool_catalog is not probed by ensure; if prepare_project is missing in this chat despite correct=true, start a new Agent turn (HOST_MCP_SESSION_CATALOG_STALE).',
+        'note' => 'ready and may_call_prepare_project describe local bootstrap readiness. correct, host_attached and session_tool_catalog cannot be established outside the active conversation; verify every mcp_required_tool there. Installed editor binaries and app-server uptime do not prove MCP attachment.',
     ],
     'mcp_stdio' => $stdio,
     'mcp_required_tools' => welineGuidanceRequiredMcpTools(),
@@ -222,11 +225,11 @@ welineGuidanceEmit([
     'host_reload_policy' => $reloadDecision,
     'host_restart' => $restart,
     'cursor_mcp_bounce' => $cursorBounce,
-    'mcp_host' => $cursorPayload['host'] ?? null,
+    'mcp_host' => $activeHost,
     'host_mcp_install' => $hostMcpInstall,
     'ensure_mcp' => [
         'writes_host_config' => false,
-        'primary_ready' => $ensurePayload['primary_ready'] ?? false,
+        'primary_ready' => $hostReady,
         'primary_host' => $ensurePayload['primary_host'] ?? null,
     ],
     'repairs' => array_values(array_unique($repairs)),
@@ -426,9 +429,11 @@ function welineGuidanceCursorMcpProcessState(int $latestSourceMtime): array
     if (($listed['exit_code'] ?? 1) !== 0) {
         return ['kind' => 'unavailable', 'current' => true, 'reason' => 'ps_failed'];
     }
+    $lines = preg_split('/\R/', (string) ($listed['stdout'] ?? '')) ?: [];
     $needle = 'learning-mcp';
     $candidates = [];
-    foreach (preg_split('/\R/', (string) ($listed['stdout'] ?? '')) ?: [] as $line) {
+    $learningParents = [];
+    foreach ($lines as $line) {
         $line = trim($line);
         if ($line === '' || !str_contains($line, $needle)) {
             continue;
@@ -440,6 +445,7 @@ function welineGuidanceCursorMcpProcessState(int $latestSourceMtime): array
         $ppid = (int) $matches[2];
         $elapsed = (string) $matches[3];
         $command = (string) $matches[4];
+        $learningParents[$ppid] = true;
         $parent = welineGuidanceProcessInfo($ppid);
         $parentCommand = (string) ($parent['command'] ?? '');
         if (!str_contains($parentCommand, 'mcp-process')) {
@@ -458,12 +464,53 @@ function welineGuidanceCursorMcpProcessState(int $latestSourceMtime): array
             'current' => $startedEpoch > 0 && $startedEpoch >= $latestSourceMtime,
         ];
     }
-    if ($candidates === []) {
-        return ['kind' => 'cursor_mcp_process', 'pid' => 0, 'current' => true, 'reason' => 'not_running'];
-    }
-    usort($candidates, static fn (array $a, array $b): int => ((int) $b['started_epoch']) <=> ((int) $a['started_epoch']));
+    if ($candidates !== []) {
+        usort($candidates, static fn (array $a, array $b): int => ((int) $b['started_epoch']) <=> ((int) $a['started_epoch']));
 
-    return $candidates[0];
+        return $candidates[0];
+    }
+
+    // Cursor Helper mcp-process can stay alive after its STDIO child dies. The
+    // IDE then keeps a stale tool catalog while CallDynamicTool times out —
+    // bounce the orphan helper so the host respawns learning-mcp.
+    foreach ($lines as $line) {
+        $line = trim($line);
+        if ($line === '') {
+            continue;
+        }
+        if (!preg_match('/^(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/', $line, $matches)) {
+            continue;
+        }
+        $pid = (int) $matches[1];
+        $ppid = (int) $matches[2];
+        $elapsed = (string) $matches[3];
+        $command = trim((string) $matches[4]);
+        // Exact Cursor Helper title only — shell wrappers that embed the needle
+        // in argv must not be treated as the mcp-process.
+        if ($command !== 'Cursor Helper: mcp-process'
+            && !str_ends_with($command, 'Cursor Helper: mcp-process')) {
+            continue;
+        }
+        if (isset($learningParents[$pid])) {
+            continue;
+        }
+        $startedEpoch = welineGuidanceStartedEpochFromElapsed($elapsed, time());
+
+        return [
+            'kind' => 'cursor_mcp_process',
+            'pid' => $pid,
+            'parent_pid' => $ppid,
+            'parent_command' => $command,
+            'command' => $command,
+            'elapsed' => $elapsed,
+            'started_epoch' => $startedEpoch,
+            'source_latest_mtime' => $latestSourceMtime,
+            'current' => false,
+            'reason' => 'orphan_no_learning_mcp_child',
+        ];
+    }
+
+    return ['kind' => 'cursor_mcp_process', 'pid' => 0, 'current' => true, 'reason' => 'not_running'];
 }
 
 /**
@@ -637,6 +684,23 @@ function welineGuidanceHostRuntimeState(int $latestSourceMtime): array
         $cursor = $process['parent_pid'];
     }
 
+    if (getenv('CURSOR_AGENT') || getenv('CURSOR_EXTENSION_HOST_ROLE')) {
+        return [
+            'kind' => 'cursor',
+            'source_latest_mtime' => $latestSourceMtime,
+            'current' => true,
+            'reason' => 'cursor_agent_env',
+        ];
+    }
+    if (getenv('CLAUDECODE')) {
+        return [
+            'kind' => 'claude',
+            'source_latest_mtime' => $latestSourceMtime,
+            'current' => true,
+            'reason' => 'claude_env',
+        ];
+    }
+
     return [
         'kind' => 'other',
         'source_latest_mtime' => $latestSourceMtime,
@@ -702,10 +766,9 @@ function welineGuidanceEnsureCodexPlugin(
         : '';
     $manifestMtime = is_file($manifest) ? (int) (@filemtime($manifest) ?: 0) : 0;
     $declaresDuplicateServer = is_array($payload) && array_key_exists('mcpServers', $payload);
-    $needsRefresh = !is_array($payload)
-        || $declaresDuplicateServer
-        || !hash_equals((string) ($sourceState['generation'] ?? ''), $artifactGeneration)
-        || $manifestMtime < (int) ($sourceState['latest_mtime'] ?? 0);
+    // Hook and MCP commands point at the source tree. Editing a PHP file does
+    // not require reinstalling the plugin or removing its live registration.
+    $needsRefresh = !is_array($payload) || $declaresDuplicateServer;
     if (!$needsRefresh) {
         return [
             'ready' => true,
@@ -715,6 +778,7 @@ function welineGuidanceEnsureCodexPlugin(
             'manifest_mtime' => $manifestMtime,
             'declares_mcp_server' => false,
             'artifact_generation' => $artifactGeneration,
+            'source_generation_current' => hash_equals((string) ($sourceState['generation'] ?? ''), $artifactGeneration),
         ];
     }
 

@@ -61,8 +61,8 @@ final class GuidanceWorkflowCatalog
         return [
             '【引导·只指路】框架硬约束不在本列表展开。请立即阅读 prepare_project.agent_guidance.hard_constraints（hard-constraints.v1）；权威正文 app/code/Weline/Ai/doc/AI硬规则索引.md；任务细则由 resolve_task_context → workflow_contract.v1 surfaces 下发。',
             '[Bootstrap · pointers only] Framework hard rules are not expanded here. Read agent_guidance.hard_constraints (hard-constraints.v1); authority app/code/Weline/Ai/doc/AI硬规则索引.md; task detail via resolve_task_context → workflow_contract.v1 surfaces.',
-            '交付地址机器契约见 agent_guidance.feature_delivery_urls 与 closeout_delivery_reminder；Browser 自测与交付地址硬规则见 hard_constraints（browser_operator_self_test / feature_delivery_urls）与 WebUI浏览器验收与交付地址门禁.md。',
-            'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; Browser self-test + delivery URL bodies live in hard_constraints (browser_operator_self_test / feature_delivery_urls) and WebUI browser closeout gate doc.',
+            '交付地址机器契约见 agent_guidance.feature_delivery_urls 与 closeout_delivery_reminder；本机默认 Host 为 `{project_hash}.test.weline.com`，禁止主验收使用 `*.weline.test`。Browser 自测、每次打开禁用缓存、交付地址、汇报后关闭标签见 hard_constraints（browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery）与 WebUI浏览器验收与交付地址门禁.md。',
+            'Delivery URL machine contract: agent_guidance.feature_delivery_urls and closeout_delivery_reminder; default local Host is {project_hash}.test.weline.com (never primary *.weline.test). Browser self-test, cache-disabled-on-open, delivery URLs, and close-after-report live in hard_constraints (browser_operator_self_test / browser_cache_disabled_on_open / feature_delivery_urls / browser_release_after_delivery) and WebUI browser closeout gate doc.',
             '【宿主工具目录】密封编辑前确认本会话可见 submit_task_plan / get_task_plan。ensure 的 mcp_stdio 已含而本会话 GetDynamicTools 缺失时，记 HOST_MCP_SESSION_CATALOG_STALE 并新开 Agent 回合；禁止调用 mcp_auth。',
             '[Host tool catalog] Before sealed edits, confirm this chat exposes submit_task_plan / get_task_plan. If ensure mcp_stdio lists them but GetDynamicTools does not, record HOST_MCP_SESSION_CATALOG_STALE and start a new Agent turn; never call mcp_auth.',
             '【调用范围】非编码（闲聊/概念问答）禁止 MCP；仅编码/工程走 ensure → prepare_project。细则见 hard_constraints.mcp_operational.mcp_call_scope。',
@@ -89,15 +89,33 @@ final class GuidanceWorkflowCatalog
                 'Host-private pseudo-protocol (e.g. command:simpleBrowser.api.open) as the primary acceptance link',
                 'Styled plain 打开 text without Markdown [label](url) syntax',
                 'Invented or probe-failed URLs presented as acceptance links',
+                'Primary acceptance Host *.weline.test when *.test.weline.com is available',
+                'Forcing 127.0.0.1 when *.test.weline.com Host exists',
+                'Leaving acceptance Browser tabs/webviews open after the Delivery URLs section (idle Glass/Simple Browser/ide-browser)',
             ],
-            'summary_zh' => '每次向用户汇报功能完成或阶段性交付时：① Web/UI 须已用当前宿主可用的真实 Browser 按用例自测（未测或宿主无 Browser 只能报验收未完成）；② 回复末尾必须包含「交付地址」小节，列出探活过的前台/后台/API 可点击 http(s) Markdown 链接；纯逻辑无 UI 写 N/A。禁止省略该小节。',
-            'summary_en' => 'On every feature completion or stage handoff: (1) for Web/UI, AI must have run a host-available real Browser on agreed use cases—otherwise only report WebUI incomplete; (2) end with a Delivery URLs section of probe-verified clickable http(s) Markdown links, or N/A when no UI. Never omit this section. Do not require a Cursor-only browser.',
+            'summary_zh' => '每次向用户汇报功能完成或阶段性交付时：① Web/UI 须已用当前宿主可用的真实 Browser 按用例自测，且每次打开/导航前禁用 HTTP 缓存（未测或宿主无 Browser 只能报验收未完成）；② 回复末尾必须包含「交付地址」小节，列出探活过的前台/后台/API 可点击 http(s) Markdown 链接；本机默认 Host 为 `{project_hash}.test.weline.com`（例 http://p05113ef3.test.weline.com:9555/...），禁止把 `*.weline.test` 当主验收 Host；纯逻辑无 UI 写 N/A。禁止省略该小节。③ 写完「交付地址」后立即关闭本回合打开的验收 Browser 标签/webview（Cursor：unlock 后 browser_tabs close；用户明确要求保留除外）。',
+            'summary_en' => 'On every feature completion or stage handoff: (1) for Web/UI, AI must have run a host-available real Browser on agreed use cases with HTTP cache disabled on every open/navigate—otherwise only report WebUI incomplete; (2) end with a Delivery URLs section of probe-verified clickable http(s) Markdown links using default local Host {project_hash}.test.weline.com (never primary *.weline.test), or N/A when no UI. Never omit this section. (3) Immediately after that section, close every acceptance Browser tab/webview opened this turn (Cursor: unlock then browser_tabs close), unless the user explicitly asks to keep them. Do not require a Cursor-only browser.',
             'browser_self_test_required_for_web' => true,
             'browser_tooling' => 'host_available_real_browser',
+            'browser_cache_disabled_on_open_required' => true,
+            'browser_open_order' => [
+                'disable_http_cache_for_session',
+                'navigate_or_reload_ignore_cache',
+                'run_wb_op_and_optional_wb_vis',
+            ],
+            'browser_release_after_delivery_required' => true,
+            'browser_release_order' => [
+                'complete_wb_op_and_optional_wb_vis',
+                'write_delivery_urls_section',
+                'unlock_if_locked',
+                'close_acceptance_browser_tabs',
+            ],
             'forbidden_completion_claims_without_browser' => [
                 'Claiming Web/UI feature done after unit tests or curl only',
                 'Asking the user to open pages instead of AI Browser self-test when a host Browser is available',
                 'Hard-coding Cursor-only Browser as the sole allowed tool',
+                'Leaving idle acceptance Browser tabs after delivery',
+                'Verifying this turn UI/static assets against default browser disk cache without disable/ignoreCache',
             ],
         ];
     }
@@ -123,15 +141,17 @@ final class GuidanceWorkflowCatalog
                 'optional_host_opener' => 'Only as a secondary line on hosts that support it (e.g. Cursor Simple Browser); never replace the primary Markdown http(s) link.',
                 'copy_fallback' => 'Optional second line: bare `{url}` in backticks for copy/paste; must match the clickable link target exactly.',
                 'url_rules' => [
-                    'Use a probe-verified literal http(s) URL as the Markdown link target (include ?query=&key=value as literal characters). WLS local Host is often http://*.weline.test—do not force https when the instance serves http.',
+                    'Use a probe-verified literal http(s) URL as the Markdown link target (include ?query=&key=value as literal characters). WLS local default Host is http://{project_hash}.test.weline.com:{port}—do not force https when the instance serves http.',
                     'Do not encodeURIComponent the whole URL; do not double-encode ? / = &.',
-                    'Prefer instance Host (*.weline.test) when WLS serves it; use 127.0.0.1 only when no Host exists.',
+                    'Default delivery Host MUST be {project_hash}.test.weline.com (e.g. p05113ef3.test.weline.com). Do not use *.weline.test (e.g. p05113ef3.weline.test) as the primary acceptance Host—even if /etc/hosts also lists it.',
+                    'Prefer instance Host (*.test.weline.com) when WLS serves it; use 127.0.0.1 only when no *.test.weline.com Host exists.',
                     'Primary delivery link must be standard Markdown [label](http(s)://…); host-private schemes like command:simpleBrowser.api.open are optional secondary openers only (Cursor), never the sole/primary acceptance link.',
                 ],
             ],
             'examples' => [
-                'correct' => '[愿望清单](https://p05113ef3.weline.test:9555/wishlist)',
-                'correct_http' => '[后台配置](http://p05113ef3.weline.test:9555/admin/system/config)',
+                'correct' => '[愿望清单](https://p05113ef3.test.weline.com:9555/wishlist)',
+                'correct_http' => '[后台配置](http://p05113ef3.test.weline.com:9555/admin/system/config)',
+                'forbidden_host' => 'http://p05113ef3.weline.test:9555/...（禁止作主验收 Host）',
                 'forbidden' => '**打开**（仅变色文字、无 Markdown 链接语法）',
             ],
             'forbidden_delivery_patterns' => [
@@ -141,19 +161,26 @@ final class GuidanceWorkflowCatalog
                 'command:simpleBrowser.api.open with encodeURIComponent on the entire URL',
                 'Probe-failed or invented URLs presented as acceptance links',
                 'Using open_resource or Simple Browser for non-http paths (source files, doc paths, commands)',
-                'Forcing 127.0.0.1 when a working *.weline.test Host exists',
+                'Forcing 127.0.0.1 when a working *.test.weline.com Host exists',
+                'Using *.weline.test (e.g. p05113ef3.weline.test) as the primary acceptance Host when *.test.weline.com is available',
             ],
             'rules' => [
                 'List every user-facing page and admin page created or modified by the feature.',
                 'Include API/Query routes when the feature exposes programmatic entry points.',
                 'Probe URLs before delivery; do not invent routes or hosts.',
+                'Default local WLS Host for primary acceptance is {project_hash}.test.weline.com (e.g. http://p05113ef3.test.weline.com:9555/path). Never use *.weline.test as the primary Host when *.test.weline.com exists—even if /etc/hosts lists both.',
                 'Every primary acceptance URL must be a real Markdown link `[label](http(s)://…)` with a direct http(s) target per link_format.primary_acceptance.',
                 'Link label should name the page (e.g. 愿望清单, 后台分类管理); avoid orphan “打开” text outside link syntax.',
                 'When a surface does not apply, state N/A for that surface instead of omitting the section.',
                 'Record the same URLs in module doc/开发日志.md under the feature entry (plain http(s) URLs OK in docs).',
+                'After the Delivery URLs section is written for the user, immediately close every acceptance Browser tab/webview opened this turn (hard rule browser_release_after_delivery).',
             ],
+            'default_local_host' => '{project_hash}.test.weline.com',
+            'forbidden_primary_hosts' => ['*.weline.test'],
+            'fallback_hosts' => ['127.0.0.1', 'localhost'],
             'authoritative_skill' => 'local-browser-urls',
             'authoritative_doc' => 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',
+            'authoritative_index' => 'app/code/Weline/Ai/doc/AI硬规则索引.md',
         ];
     }
 
@@ -230,6 +257,7 @@ final class GuidanceWorkflowCatalog
                 'responsive_breakpoints_considered_for_web_ui',
                 'webui_browser_operator_self_test_pass_or_na',
                 'feature_delivery_urls_provided',
+                'webui_browser_released_after_delivery_or_na',
                 'module_i18n_csv_collected_when_strings_changed',
             ],
             'hard_constraints' => HardConstraintsCatalog::package(),
@@ -264,6 +292,7 @@ final class GuidanceWorkflowCatalog
                     'Reconcile module docs with shipped behavior before claiming done.',
                     'Plan honesty (plan_todo_evidence_closeout): never mark a multi-todo plan complete without per-todo evidence; partial work must report an unfinished checklist and write it into doc/开发日志.md.',
                     'End every user-facing feature report with 「交付地址」: frontend pages, backend admin pages, API/Query routes (probe-verified); each primary URL as direct http(s) Markdown link `[label](url)` per feature_delivery_urls.link_format.',
+                    'After the Delivery URLs section: immediately release acceptance Browsers (browser_release_after_delivery)—unlock then close tabs; do not leave idle Glass/Simple Browser/ide-browser webviews.',
                 ]],
             ],
             'extension_point_matrix' => [
@@ -293,6 +322,33 @@ final class GuidanceWorkflowCatalog
         ];
     }
 
+    /** Task response: full bootstrap constraints remain in prepare_project, once per session. */
+    public static function forTask(string $task): array
+    {
+        $surfaces = [];
+        foreach (self::resolveActiveSurfaces($task) as $surface) {
+            $surfaces[(string) $surface['id']] = [
+                'label' => $surface['label'],
+                'authoritative_doc' => $surface['authoritative_doc'],
+                'norms' => $surface['norms'] ?? [],
+            ];
+        }
+        return [
+            'schema_version' => self::SCHEMA,
+            'authoritative_hard_rules_index' => HardConstraintsCatalog::AUTHORITATIVE_DOC,
+            'authoritative_workflow_doc' => HardConstraintsCatalog::AUTHORITATIVE_WORKFLOW_DOC,
+            'hard_constraints' => [
+                'schema' => HardConstraintsCatalog::SCHEMA,
+                'must_obey' => true,
+                'source' => 'prepare_project.agent_guidance.hard_constraints',
+            ],
+            'mandatory_before_code' => ['prepare_project_ready', 'extension_point_selected', 'submit_task_plan_accepted'],
+            'mandatory_before_closeout' => ['module_docs_reconciled_with_behavior', 'real_runtime_acceptance_evidence', 'review_task_plan'],
+            'active_surface_ids' => array_keys($surfaces),
+            'surfaces' => $surfaces,
+        ];
+    }
+
     /** @return array<string, mixed> */
     public static function frontendDevelopmentSurface(): array
     {
@@ -319,6 +375,16 @@ final class GuidanceWorkflowCatalog
                     'detail_doc' => 'app/code/Weline/Theme/doc/theme-css-variables-only.md',
                 ],
                 [
+                    'id' => 'theme_address_for_region_pickers',
+                    'summary' => '【高压线】前台/后台国家·省·市·区·地区选择（表单、列表筛选、多选 chips）必须用 <w:theme:address>（single/multi）；禁止手写国家/地区 <select>、自造筛选芯片行或绕开 Theme Address 的级联 input；chips/菜单由标签与浮层内核提供',
+                    'detail_doc' => 'app/code/Weline/Taglib/doc/场景映射表.md',
+                ],
+                [
+                    'id' => 'weline_ui_floating_primitives',
+                    'summary' => '【高压线】菜单/Popover/Tooltip/Combobox/地址多选下拉等浮层必须用 Weline.UI（menu/popover/tooltip/combobox/anchored-float 或 UI.floating.attach）；禁止手写 left/top、自研 flip/边界检测或私有 portal',
+                    'detail_doc' => 'app/code/Weline/Theme/doc/widgets/anchored-float.md',
+                ],
+                [
                     'id' => 'layer_choice',
                     'summary' => '先判定改动层：layout / partial / component / widget，再落文件',
                 ],
@@ -329,6 +395,11 @@ final class GuidanceWorkflowCatalog
                 [
                     'id' => 'taglib_attr_no_php',
                     'summary' => 'w:* / Taglib 标签属性禁止 <?= / <?php',
+                ],
+                [
+                    'id' => 'no_php_tags_in_comments',
+                    'summary' => '注释（// # /* */ /** */ <!-- -->）禁止出现 <?= / <?php 开标签；非禁止普通注释掉语句；文件头勿留生成器短回显',
+                    'detail_doc' => 'app/code/Weline/Ai/doc/AI硬规则索引.md',
                 ],
                 [
                     'id' => 'widget_external_js',
@@ -390,6 +461,7 @@ final class GuidanceWorkflowCatalog
                 'label' => '前端开发规范',
                 'forbidden' => [
                     'PHP tags inside HTML attribute values (e.g. attr="<?= ... ?>") on w:* / Taglib tags',
+                    'PHP open tags (<?= / <?php) inside comments (// # /* */ <!-- -->); not ordinary commented-out statements',
                     'Inline <script> containing <?= in Theme widgets/partials that render through slot injection',
                     'Business UI or demo copy inside layout slot fallbacks (use widgets + default_injections)',
                     'Non-Weline_Theme <w:widget> or fetch(.../widgets/...) inside Theme layouts/partials (use default_injections)',
@@ -403,12 +475,15 @@ final class GuidanceWorkflowCatalog
                     'var(--weline-layout-content-max-width, 1440px) or any pixel fallback on layout content tokens',
                     'Third-party UI kits (Bootstrap/Element/Ant/…) or ad-hoc visual CSS literals instead of Weline UI 2.0 + theme CSS variable tokens',
                     'Naked country/province/city/district inputs when <w:theme:address> or official Theme/Taglib address controls exist',
+                    'Hand-rolled country/region <select>, custom filter chip rows, or cascade inputs that replace <w:theme:address> in admin/storefront filters and forms',
+                    'Hand-computed left/top, custom flip/boundary scripts, or private portal stacks for menus/popovers/tooltips/combobox/address multi dropdowns — use Weline.UI floating primitives instead',
                 ],
                 'required' => [
                     'Use first-party Weline Theme / Weline UI 2.0 component classes and theme CSS variable tokens for all visual UI',
-                    'Address and region cascade via <w:theme:address>; never hand-roll region inputs',
+                    'Address and region cascade/filters via <w:theme:address> (single or multi, including official chips); never hand-roll region inputs or chip rows',
+                    'Floating surfaces (menu/popover/tooltip/combobox/address multi) via menu/popover/tooltip/combobox/anchored-float or UI.floating.attach',
                     'Choose layout / partial / component / widget layer before editing',
-                    'Widget JS scoped by data-js-ns + data-uid; load via @static(...js) with defer and data-no-extract when kept inline-adjacent',
+                    'Widget JS scoped by data-js-ns + data-uid; register in weline.modules.js and load via Weline.declare / data-weline-load / data-weline-declare',
                     'Dynamic values in attributes: set on HTML elements in body, not on Taglib tag attributes',
                     'Widget root uses WidgetUiScope and a stable type-level section identity attribute',
                     'Layout/partial literal <section> and w:slot wrapper="section" carry stable semantic section identity; verify with php bin/w frontend:check-section-code before setup:upgrade',
@@ -516,6 +591,11 @@ final class GuidanceWorkflowCatalog
                 ['id' => 'no_hand_rolled_select', 'summary' => '禁止手写 language/website/currency/ACL 等 domain select'],
                 ['id' => 'taglib_attr_no_php', 'summary' => 'w:* 属性禁止 <?= / <?php'],
                 [
+                    'id' => 'no_php_tags_in_comments',
+                    'summary' => '注释内禁止 <?= / <?php 开标签（非禁止普通注释掉语句）',
+                    'detail_doc' => 'app/code/Weline/Ai/doc/AI硬规则索引.md',
+                ],
+                [
                     'id' => 'taglib_callback_static_url',
                     'summary' => 'Taglib callback 返回 HTML 禁止裸 @static(...)；须 fetchTagSource 解析静态 URL',
                     'detail_doc' => 'app/code/Weline/Taglib/doc/如何自定义Tag.md',
@@ -525,6 +605,7 @@ final class GuidanceWorkflowCatalog
                 'forbidden' => [
                     'Hand-rolled <select>/<input> for language, website, currency, ACL, file, DataTable domains',
                     'PHP tags inside w:* / Taglib tag attribute values',
+                    'PHP open tags (<?= / <?php) inside comments (// # /* */ <!-- -->); not ordinary commented-out statements',
                     'Using raw HTML when an official Taglib or Hook exists in scenario mapping',
                     'Literal @static(...) inside Taglib callback()/runtime_callback() HTML return strings',
                 ],
@@ -555,6 +636,7 @@ final class GuidanceWorkflowCatalog
             ],
             'norms' => [
                 ['id' => 'hook_triple', 'summary' => 'Owner hook.php + doc/hook/*.md + impl view/hooks/*.phtml'],
+                ['id' => 'hook_name_five_segment', 'summary' => '{Module}::{frontend|backend}::{partials|layouts}::{component}::{position} — type MUST be partials or layouts only; put page/feature in component or position'],
             ],
             'verification_commands' => [
                 'php bin/w setup:upgrade --route',
@@ -563,10 +645,13 @@ final class GuidanceWorkflowCatalog
                 'forbidden' => [
                     'view/hooks/*.phtml without owner hook.php entry and doc/hook/*.md',
                     'doc path mismatch with hook.php doc field',
+                    'Inventing type segment (theme-editor, checkout, product, account, …) — type is ONLY partials or layouts',
+                    'Hook names like ::backend::theme-editor:: or ::frontend::checkout:: in the type slot',
                 ],
                 'required' => [
                     'Declare hook in owner module hook.php before implementation',
                     'Add doc/hook/*.md spec before setup:upgrade',
+                    'Use partials or layouts as the third segment; page/feature names belong in component or position',
                 ],
             ],
         ];
@@ -739,20 +824,25 @@ final class GuidanceWorkflowCatalog
         return [
             'id' => self::SURFACE_WEBUI_BROWSER_CLOSEOUT,
             'label' => 'WebUI 浏览器验收与交付地址',
-            'description' => '页面/UI 任务收口前必须用当前宿主可用的真实 Browser 按用例自测；交付汇报末尾必须列「交付地址」。',
+            'description' => '页面/UI 任务收口前必须用当前宿主可用的真实 Browser 按用例自测；每次打开/导航前禁用 HTTP 缓存；交付汇报末尾必须列「交付地址」；写完交付地址后立即关闭本回合验收 Browser；本机默认 Host 为 {project_hash}.test.weline.com，禁止主链 *.weline.test。',
             'triggers' => [
                 'phtml', '页面', '后台', '前台', '验收', '交付', '完成', 'browser', 'webui',
-                '交付地址', '自测', '用例', '截图', 'wls', 'ui',
+                '交付地址', '自测', '用例', '截图', 'wls', 'ui', 'test.weline.com', 'weline.test',
+                '关闭浏览器', 'close browser', 'webview', '缓存', 'cache', 'ignoreCache',
             ],
             'authoritative_doc' => 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',
             'authoritative_docs' => [
                 'app/code/Weline/Framework/doc/3-开发/WebUI浏览器验收与交付地址门禁.md',
                 'app/code/Weline/Ai/doc/AI工程交付流程.md',
+                'app/code/Weline/Ai/doc/AI硬规则索引.md',
             ],
             'norms' => [
                 ['id' => 'wb_op_browser_self_test', 'summary' => 'AI 必须用当前宿主可用的真实 Browser 跑完约定用例；单测/curl 不能替代；不绑定 Cursor'],
+                ['id' => 'browser_cache_disabled_on_open', 'summary' => '每次打开/导航验收 Browser 前禁用 HTTP 缓存（Cursor：Network.setCacheDisabled；失败则 Page.reload ignoreCache）；禁止用默认磁盘缓存验本回合静态资源'],
                 ['id' => 'wb_vis_screenshots', 'summary' => '有视觉面且宿主可截图时：多断点截图存 doc/evidence/；有原型文档则对照'],
                 ['id' => 'delivery_urls_section', 'summary' => '每次功能完成汇报末尾必须有「交付地址」小节（主链 http(s) Markdown）'],
+                ['id' => 'delivery_default_host_test_weline_com', 'summary' => '本机主验收 Host 默认 {project_hash}.test.weline.com；禁止主链 *.weline.test；仅无前者时才用 127.0.0.1'],
+                ['id' => 'browser_release_after_delivery', 'summary' => '写完「交付地址」后立即关闭本回合打开的验收 Browser（unlock + close tabs）；禁止留下空转 webview；用户明确要求保留除外'],
             ],
             'verification_commands' => [
                 'curl -I <probe_verified_acceptance_url>',
@@ -765,11 +855,17 @@ final class GuidanceWorkflowCatalog
                     'Hard-coding Cursor-only Browser as the sole allowed acceptance tool',
                     'Using command:simpleBrowser (or other host-private schemes) as the sole/primary acceptance link',
                     'Asking the user to open pages instead of AI Browser self-test when a host Browser is available',
+                    'Using *.weline.test as primary acceptance Host when *.test.weline.com is available',
+                    'Forcing 127.0.0.1 when *.test.weline.com Host exists',
+                    'Leaving acceptance Browser tabs/webviews open after Delivery URLs are reported',
+                    'Opening acceptance Browser with default HTTP cache enabled when verifying this turn UI/static changes',
                 ],
                 'required' => [
                     'Define operator use cases (URL, steps, expected) before claiming Web done',
+                    'On every acceptance Browser open/navigate: disable HTTP cache (or ignoreCache reload fallback) before trusting the page',
                     'Run host-available real Browser on those use cases (WB-OP); collect WB-VIS when visual and screenshot-capable',
-                    'End every feature/stage report with probe-verified http(s) Markdown Delivery URLs',
+                    'End every feature/stage report with probe-verified http(s) Markdown Delivery URLs on {project_hash}.test.weline.com by default',
+                    'Immediately after the Delivery URLs section, close every acceptance Browser tab opened this turn (Cursor: unlock then browser_tabs close)',
                     'If Browser not run or host has no Browser: report only “代码已改，WebUI 验收未完成”',
                 ],
             ],
@@ -787,10 +883,14 @@ final class GuidanceWorkflowCatalog
         }
 
         $perPath = max(128, (int) floor($tokenBudget / count($paths)));
+        $remaining = $tokenBudget;
         $fragments = [];
         $seenPaths = [];
 
         foreach ($paths as $path) {
+            if ($remaining < 128) {
+                break;
+            }
             if (isset($seenPaths[$path])) {
                 continue;
             }
@@ -799,7 +899,7 @@ final class GuidanceWorkflowCatalog
                 $result = $retriever->getDocument([
                     'path' => $path,
                     'limit' => 2,
-                    'token_budget' => min($perPath, 900),
+                    'token_budget' => min($perPath, 900, $remaining),
                 ]);
             } catch (\Throwable) {
                 continue;
@@ -822,6 +922,7 @@ final class GuidanceWorkflowCatalog
                     'content_hash' => (string) ($item['content_hash'] ?? ''),
                     'token_estimate' => (int) ($item['token_estimate'] ?? 0),
                 ];
+                $remaining -= (int) ($item['token_estimate'] ?? 0);
             }
         }
 
@@ -835,10 +936,6 @@ final class GuidanceWorkflowCatalog
      */
     public static function mergeFragments(array $fragments, array $pinned): array
     {
-        if ($pinned === []) {
-            return $fragments;
-        }
-
         $merged = [];
         $seen = [];
         foreach (array_merge($pinned, $fragments) as $fragment) {
@@ -851,11 +948,28 @@ final class GuidanceWorkflowCatalog
             if ($key === '::' || isset($seen[$key])) {
                 continue;
             }
+            $content = (string) ($fragment['content'] ?? '');
+            foreach ($merged as $position => $existing) {
+                if (($existing['path'] ?? '') !== $path || $content === '') {
+                    continue;
+                }
+                $existingContent = (string) ($existing['content'] ?? '');
+                if ((int) ($existing['start_line'] ?? 0) <= $start
+                    && (int) ($existing['end_line'] ?? 0) >= (int) ($fragment['end_line'] ?? 0)
+                    && str_contains($existingContent, $content)) {
+                    continue 2;
+                }
+                if ($start <= (int) ($existing['start_line'] ?? 0)
+                    && (int) ($fragment['end_line'] ?? 0) >= (int) ($existing['end_line'] ?? 0)
+                    && $existingContent !== '' && str_contains($content, $existingContent)) {
+                    unset($merged[$position]);
+                }
+            }
             $seen[$key] = true;
             $merged[] = $fragment;
         }
 
-        return $merged;
+        return array_values($merged);
     }
 
     private static function surfaceIdForPinnedPath(string $path): string
