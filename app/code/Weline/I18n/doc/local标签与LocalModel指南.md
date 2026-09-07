@@ -316,7 +316,22 @@ if ((int)$local->getId() <= 0) {
 - 每个模型上的可翻译字段列表
 - 与主表的 ID 映射（`LocalDescription` / `*Local` 命名自动推断）
 
+**取源约定（重要）：**
+
+1. 主表若有与 Local **同名字段**且非空 → **直接用主表值作源文**（Local 可完全为空）。
+2. 否则再读源语言 Local 行。
+3. 目标语言写入 Local；**不要求**先灌源语言 Local。
+
+示例：主表 `region_name=成都市`，Local 无行 → AI 以「成都市」翻译写入 `en_US` 等 Local。
+
 示例：`PromotionActivityThemeLocal` 上的 `nav_label`、`page_title` 等字段会被自动纳入扫描，无需手工配置字段清单。
+
+### EAV 规格项的自动翻译
+
+EAV 的实体、属性集、属性组、属性和属性选项本地描述同样继承公开的 `LocalModel`，所以规格名称和选项值（例如尺寸、颜色）会被同一套目录扫描。EAV 模型保存后由 `Weline\Eav\Observer\EavLocalModelTranslationTrigger` 幂等入队；AI 配置保存或后台“立即翻译”批量入口也会启动该队列。队列只处理 AI 配置中启用的目标语言，并在没有目标语言时跳过。
+
+翻译在后台异步执行，商品详情请求不会等待模型调用。当前语言没有译文时，前台继续显示 EAV 原始值；队列完成后下一次读取即可得到对应语言的 LocalDescription。
+LocalDescription 的身份是“业务记录 ID + local_code”，所以译文属于该记录的全局语言数据；网站、店铺、渠道的差异仍由 EAV 主记录和选项作用域决定，不把翻译缓存复制成三套。
 
 ---
 

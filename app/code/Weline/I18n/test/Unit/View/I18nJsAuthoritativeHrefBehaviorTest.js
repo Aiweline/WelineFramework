@@ -42,11 +42,11 @@ function bootI18n({pathname, search = '', hash = '', cookie = '', documentLang =
         },
     };
     const location = {
-        origin: 'https://p05113ef3.weline.test:9976',
+        origin: 'https://p05113ef3.test.weline.com:9976',
         pathname,
         search,
         hash,
-        href: `https://p05113ef3.weline.test:9976${pathname}${search}${hash}`,
+        href: `https://p05113ef3.test.weline.com:9976${pathname}${search}${hash}`,
         reload() {
             reloadCount += 1;
         },
@@ -167,7 +167,7 @@ test('switchLang navigates the server-rendered authoritative href without rebuil
 
     assert.equal(
         runtime.location.href,
-        `https://p05113ef3.weline.test:9976${authoritativeHref}`
+        `https://p05113ef3.test.weline.com:9976${authoritativeHref}`
     );
     // Path-only language: preference storage is cleared, not rewritten.
     assert.equal(runtime.storage.get('weline_user_lang'), undefined);

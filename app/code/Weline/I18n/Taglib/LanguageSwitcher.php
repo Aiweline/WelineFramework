@@ -10,6 +10,7 @@ use Weline\Framework\Http\Request;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\I18n\Api\Seo\LocalizedUrlBuilderInterface;
+use Weline\I18n\Helper\CountryFlagMarkup;
 use Weline\I18n\Helper\InlineSvgIdUniquifier;
 use Weline\I18n\Helper\SwitcherInstanceId;
 use Weline\I18n\Model\I18n;
@@ -23,6 +24,8 @@ class LanguageSwitcher implements TaglibInterface
 {
     private const SWITCHER_HTML_CACHE_TTL = 60.0;
     private const SWITCHER_LANGUAGE_CACHE_TTL = 300.0;
+    /** Bumped when storefront switcher DOM contract changes (chrome partial cache key). */
+    public const SWITCHER_MARKUP_VERSION = 'component-25-supported-locales';
     public const TAG_NAME = 'i18n:switcher';
 
     /**
@@ -119,6 +122,7 @@ class LanguageSwitcher implements TaglibInterface
      */
     public static function render(array $attributes = []): string
     {
+        return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('i18n.language_switcher.render', static function () use ($attributes): string {
             $websiteId = 0;
             $request = null;
             try {
@@ -184,7 +188,10 @@ class LanguageSwitcher implements TaglibInterface
             $labelError = self::translateChrome('加载失败，请稍后重试', $displayLocale);
             $labelClose = self::translateChrome('关闭', $displayLocale);
             $labelUngrouped = self::translateChrome('未分组国家', $displayLocale);
-            $welineLanguages = self::buildLanguagesFromScope($scope, $displayLocale);
+            $welineLanguages = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                'i18n.language_switcher.catalog',
+                static fn() => self::buildLanguagesFromScope($scope, $displayLocale),
+            );
             $languageGroups = self::groupLanguagesByCountry($welineLanguages, $displayLocale, $currentCode);
 
             $firstCode = (string)(array_key_first($welineLanguages) ?? $scope->defaultCode);
@@ -212,7 +219,8 @@ class LanguageSwitcher implements TaglibInterface
                 ? (string)($welineCurrentLanguage['display_name'] ?? ($welineCurrentLanguage['name'] ?? ''))
                 : (string)($welineCurrentLanguage['tag_label'] ?? ($welineCurrentLanguage['name'] ?? ''));
             $currentName = htmlspecialchars($currentLabelRaw, ENT_QUOTES, 'UTF-8');
-            $currentFlag = self::sanitizeInlineFlagMarkup((string)($welineCurrentLanguage['flag'] ?? ''));
+            $currentCountryCode = self::resolveLanguageCountryCode($welineCurrentLanguage);
+            $currentFlag = CountryFlagMarkup::placeholderHtml($currentCountryCode);
             $renderFor = strtolower(trim((string)($attributes['for'] ?? '')));
             $switcherId = SwitcherInstanceId::create('weline-i18n-switcher');
             $parts = explode('_', $currentCode);
@@ -286,7 +294,7 @@ class LanguageSwitcher implements TaglibInterface
                 . '|navigation=' . $navigation
                 . '|show_search=' . ($showSearch ? '1' : '0')
                 . '|label_mode=' . $labelMode
-                . '|markup=weline-ui-2-language-switcher-component-22'
+                . '|markup=weline-ui-2-language-switcher-' . self::SWITCHER_MARKUP_VERSION
                 . '|mount=' . $websiteMount
                 . '|inst=' . $switcherId;
             $now = \microtime(true);
@@ -300,12 +308,17 @@ class LanguageSwitcher implements TaglibInterface
             $safePanelId = htmlspecialchars($panelId, ENT_QUOTES, 'UTF-8');
             $safeNavigation = htmlspecialchars($navigation, ENT_QUOTES, 'UTF-8');
             $safeWebsiteMount = htmlspecialchars($websiteMount, ENT_QUOTES, 'UTF-8');
+            $supportedScope = self::buildSupportedScopeAttributes($welineLanguages);
+            $safeSupportedLocales = htmlspecialchars($supportedScope['locales'], ENT_QUOTES, 'UTF-8');
+            $safeSupportedCountries = htmlspecialchars($supportedScope['countries'], ENT_QUOTES, 'UTF-8');
             $currentLabel = $renderFor === 'js' ? $currentDisplay : $currentName;
             $html = [];
             $html[] = '<div class="w-language-switcher w-menu-root"'
                 . ' data-w-component="menu language-switcher" data-w-placement="bottom-end" data-w-anchor-mode="element"'
                 . ' data-i18n-switcher data-i18n-switcher-id="' . $safeSwitcherId . '"'
                 . ' data-i18n-navigation="' . $safeNavigation . '"'
+                . ' data-i18n-supported-locales="' . $safeSupportedLocales . '"'
+                . ' data-i18n-supported-countries="' . $safeSupportedCountries . '"'
                 . ' data-website-id="' . (int)$websiteId . '"'
                 . ($showLanguageRequest ? ' data-language-request="1"' : '')
                 . ' data-website-mount="' . $safeWebsiteMount . '">';
@@ -314,7 +327,7 @@ class LanguageSwitcher implements TaglibInterface
                 . ' data-w-menu-trigger aria-expanded="false" aria-haspopup="menu"'
                 . ' aria-controls="' . $safePanelId . '"'
                 . ' aria-label="' . htmlspecialchars($labelSwitchLanguage, ENT_QUOTES, 'UTF-8') . '">';
-            $html[] = '        <span class="w-language-switcher__flag">' . $currentFlag . '</span>'
+            $html[] = '        ' . $currentFlag
                 . '<span class="w-language-switcher__current current-language">' . $currentLabel . '</span>'
                 . '<w-icon name="chevron-down" size="xs"></w-icon>';
             $html[] = '    </button>';
@@ -382,9 +395,8 @@ class LanguageSwitcher implements TaglibInterface
                         . ' data-w-search="' . htmlspecialchars(\mb_strtolower($searchBlob), ENT_QUOTES, 'UTF-8') . '"'
                         . ' data-lang="' . htmlspecialchars($code, ENT_QUOTES, 'UTF-8') . '"'
                         . ' href="' . htmlspecialchars($href, ENT_QUOTES, 'UTF-8') . '">'
-                        . '<span class="w-language-switcher__flag">'
-                        . self::sanitizeInlineFlagMarkup((string)($language['flag'] ?? ''))
-                        . '</span><span class="w-language-switcher__copy"><strong>'
+                        . CountryFlagMarkup::placeholderHtml(self::resolveLanguageCountryCode($language, $countryCodeRaw))
+                        . '<span class="w-language-switcher__copy"><strong>'
                         . htmlspecialchars($nameRaw, ENT_QUOTES, 'UTF-8') . '</strong><small>'
                         . htmlspecialchars(\implode(' | ', $metaParts), ENT_QUOTES, 'UTF-8')
                         . '</small></span></a>';
@@ -447,6 +459,7 @@ class LanguageSwitcher implements TaglibInterface
             ];
 
             return $output;
+        });
     }
 
     /**
@@ -1015,15 +1028,80 @@ class LanguageSwitcher implements TaglibInterface
         return self::$chromeDictionaryCache[$locale] = $words;
     }
 
-    private static function sanitizeInlineFlagMarkup(string $markup): string
+    /**
+     * @param array<string, array<string, mixed>> $languages
+     * @return array{locales: string, countries: string}
+     */
+    private static function buildSupportedScopeAttributes(array $languages): array
     {
-        if ($markup === '') {
-            return '';
+        $locales = [];
+        $countries = [];
+        foreach ($languages as $code => $language) {
+            $locale = \trim(\str_replace('-', '_', (string)$code));
+            if ($locale !== '') {
+                $locales[$locale] = true;
+            }
+            if (!\is_array($language)) {
+                $language = [];
+            }
+            $country = self::resolveLanguageCountryCode($language, (string)($language['country_code'] ?? ''));
+            if ($country !== '') {
+                $countries[$country] = true;
+            }
+        }
+        $localeList = \array_keys($locales);
+        \sort($localeList, \SORT_STRING);
+        $countryList = \array_keys($countries);
+        \sort($countryList, \SORT_STRING);
+
+        return [
+            'locales' => \implode(',', $localeList),
+            'countries' => \implode(',', $countryList),
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $language
+     */
+    private static function resolveLanguageCountryCode(array $language, string $fallback = ''): string
+    {
+        $candidates = [
+            (string)($language['country_code'] ?? ''),
+            $fallback,
+        ];
+        $locale = (string)($language['code'] ?? '');
+        if ($locale !== '') {
+            $parts = \explode('_', \str_replace('-', '_', $locale));
+            $last = (string)\end($parts);
+            if (\preg_match('/^[A-Za-z]{2}$/', $last) === 1) {
+                $candidates[] = $last;
+            }
+        }
+        foreach ($candidates as $candidate) {
+            $normalized = CountryFlagMarkup::normalizeCountryCode($candidate);
+            if ($normalized !== '') {
+                return $normalized;
+            }
         }
 
-        $markup = (string)preg_replace('/<\\?xml[^?]*\\?>/i', '', $markup);
+        return '';
+    }
 
-        return InlineSvgIdUniquifier::uniquify($markup);
+    /**
+     * @deprecated Storefront chrome uses CountryFlagMarkup::placeholderHtml + binquery.
+     */
+    private static function sanitizeInlineFlagMarkup(string $markup): string
+    {
+        return \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('i18n.language_switcher.flag', static function () use ($markup): string {
+            if ($markup === '') {
+                return '';
+            }
+
+            $markup = (string)preg_replace('/<\\?xml[^?]*\\?>/i', '', $markup);
+            $code = CountryFlagMarkup::detectCountryCodeFromMarkup($markup);
+
+            return CountryFlagMarkup::placeholderHtml($code ?? '');
+        });
     }
 
     private static function resolveCurrentSearch(Request $request): string
