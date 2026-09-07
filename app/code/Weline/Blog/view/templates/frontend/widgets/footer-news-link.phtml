@@ -41,4 +41,4 @@ $categoryPath = BlogNamespace::categoryPublicPath($slug);
    data-js-ns="<?= $esc($scope->jsNs) ?>"
    data-testid="footer-news-link"
    data-category-slug="<?= $esc($slug) ?>"
-   href="<?= $esc($categoryPath) ?>"><?= $esc($label) ?></a>
+   href="@url{$categoryPath}"><?= $esc($label) ?></a>

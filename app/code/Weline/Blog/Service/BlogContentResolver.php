@@ -8,6 +8,7 @@ use Weline\Blog\Api\Data\BlogArticle;
 use Weline\Blog\Api\Uri\BlogNamespace;
 use Weline\Blog\Model\Category;
 use Weline\Blog\Model\Post;
+use Weline\Blog\Model\Post\LocalDescription;
 
 final class BlogContentResolver
 {
@@ -17,6 +18,8 @@ final class BlogContentResolver
         private readonly CmsBlogPageAdapter $cmsAdapter,
         private readonly BlogCategoryAttributeService $categoryAttributes,
         private readonly BlogCategoryAdminService $categoryAdmin,
+        private readonly BlogKeywordLocalizer $keywordLocalizer,
+        private readonly LocalDescription $postLocalDescription,
     ) {
     }
 
@@ -319,8 +322,42 @@ final class BlogContentResolver
                 'category_slug' => (string)($categoryMeta['slug'] ?? ''),
                 'category_url' => (string)($categoryMeta['url'] ?? ''),
             ],
-            keywords: (string)($row[Post::schema_fields_KEYWORDS] ?? '') ?: null,
+            keywords: $this->resolveKeywords(
+                (int)($row[Post::schema_fields_ID] ?? 0),
+                $locale,
+                (string)($row[Post::schema_fields_KEYWORDS] ?? ''),
+            ),
         );
+    }
+
+    private function resolveKeywords(int $postId, string $locale, string $fallback): ?string
+    {
+        $localKeywords = null;
+        if ($postId > 0 && $locale !== '') {
+            $localKeywords = $this->loadLocalKeywords($postId, $locale);
+        }
+
+        return $this->keywordLocalizer->localizeKeywordsString($fallback, $locale, $localKeywords);
+    }
+
+    private function loadLocalKeywords(int $postId, string $locale): ?string
+    {
+        try {
+            $local = clone $this->postLocalDescription;
+            $row = $local->clearData()->reset()
+                ->where(LocalDescription::schema_fields_ID, $postId)
+                ->where(LocalDescription::schema_fields_local_code, $locale)
+                ->find()
+                ->fetchArray();
+            if (!is_array($row) || $row === []) {
+                return null;
+            }
+            $value = trim((string)($row[LocalDescription::schema_fields_KEYWORDS] ?? ''));
+
+            return $value !== '' ? $value : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     /**

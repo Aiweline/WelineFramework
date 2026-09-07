@@ -8,6 +8,18 @@
 $categories = is_array($blog_categories ?? null) ? $blog_categories : [];
 $activeId = (int)($blog_active_category_id ?? 0);
 $escape = static fn(mixed $v): string => htmlspecialchars((string)$v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$template = $this;
+$buildUrl = static function (string $path) use ($template): string {
+    $path = trim($path);
+    if ($path === '') {
+        return '';
+    }
+    if (preg_match('#^(?:https?:)?//#i', $path) === 1) {
+        return $path;
+    }
+
+    return (string)$template->getUrl(ltrim($path, '/'));
+};
 
 $containsId = static function (array $nodes, int $id) use (&$containsId): bool {
     foreach ($nodes as $node) {
@@ -34,6 +46,7 @@ $renderNodes = static function (
     int $depth,
     callable $escape,
     callable $containsId,
+    callable $buildUrl,
 ) use (&$renderNodes): void {
     foreach ($nodes as $category) {
         if (!is_array($category)) {
@@ -41,7 +54,7 @@ $renderNodes = static function (
         }
         $id = (int)($category['category_id'] ?? 0);
         $label = trim((string)($category['name'] ?? ''));
-        $url = trim((string)($category['url'] ?? ''));
+        $url = $buildUrl(trim((string)($category['url'] ?? '')));
         if ($id <= 0 || $label === '' || $url === '') {
             continue;
         }
@@ -82,7 +95,7 @@ $renderNodes = static function (
                      data-blog-filter-children
                      <?= $isOpen ? '' : 'hidden' ?>>
                     <ul class="amazon-blog-filter__list amazon-blog-filter__list--nested" role="list">
-                        <?php $renderNodes($children, $activeId, $depth + 1, $escape, $containsId); ?>
+                        <?php $renderNodes($children, $activeId, $depth + 1, $escape, $containsId, $buildUrl); ?>
                     </ul>
                 </div>
             <?php endif; ?>
@@ -103,7 +116,7 @@ $renderNodes = static function (
                 <lang>全部文章</lang>
             </a>
         </li>
-        <?php $renderNodes($categories, $activeId, 1, $escape, $containsId); ?>
+        <?php $renderNodes($categories, $activeId, 1, $escape, $containsId, $buildUrl); ?>
     </ul>
 </div>
 <script>
