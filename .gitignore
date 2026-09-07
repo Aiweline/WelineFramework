@@ -5,8 +5,11 @@
 
 # Local tooling / session state (do not commit)
 .omx/
+.dev
 /tmp/
 /data/pagebuilder/
+/app/var/
+/artifacts/
 
 # Uploaded / generated storefront media — only keep the placeholder
 /pub/media/**
