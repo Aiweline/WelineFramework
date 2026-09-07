@@ -12,6 +12,12 @@ use Weline\Payment\Service\PaymentTransactionPayableStateInvariant;
 
 final class PaymentTransactionPayableStateInvariantTest extends TestCase
 {
+    public function testPaymentTransactionExtendsFrameworkModelForReconciliationNewModel(): void
+    {
+        self::assertTrue(is_subclass_of(PaymentTransaction::class, \Weline\Framework\Database\Model::class));
+        self::assertFalse(PaymentTransaction::class === \Weline\Framework\Database\AbstractModel::class);
+    }
+
     public function testSuccessfulTransactionReportsOpenPayableAndIgnoresPaidPayable(): void
     {
         self::assertTrue(

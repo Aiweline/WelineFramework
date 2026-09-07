@@ -27,7 +27,7 @@ Provider 无关的开发环境 Webhook 转发：任意本框架线上站（开�
 1. 任意本机页输入 `weline` → 最右侧 Tab **高级维护** → 二级 Tab **DevRelay 中继**
 2. 面板顶部 **Provider Webhook** 区块：复制线上官方回调 URL，粘贴到 PayPal（或其它 Provider）Developer Webhooks  
    - 形态：`https://www.aiweline.com/payment/frontend/callback/notify?endpoint_code={method}.sandbox.default`  
-   - **勿**填本机 `*.weline.test`，**勿**填 `/payment/dev-relay/*`  
+   - **勿**填本机 `*.test.weline.com`，**勿**填 `/payment/dev-relay/*`  
    - 面板提供**搜索 + 下拉选择**（覆盖已注册支付方式的 sandbox/live 默认端点及库中 active 端点）；选中后复制完整 URL；选择会记在本机 localStorage
 3. 点 **发送探测**（无需填 Token、无需打开线上 demo）
 4. 面板自动：补全已存凭证 → 保活中继 → 发线上探针 → 展示本机 SSE 重放结果
@@ -74,7 +74,7 @@ php bin/w payment:devrelay:stop
 
 ## 约束
 
-- 线上 **不会** 直接 POST 到 `*.weline.test`；由本机 worker 拉 SSE 后重放
+- 线上 **不会** 直接 POST 到 `*.test.weline.com`；由本机 worker 拉 SSE 后重放
 - PayPal 2xx 不等待本机；本机离线时线上 inbox 仍写入
 - 出站 API 默认本机直连 Provider；`online_proxy` 时经线上代发
 

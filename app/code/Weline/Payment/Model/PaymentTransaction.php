@@ -7,7 +7,7 @@ declare(strict_types=1);
  * 论坛：https://bbs.aiweline.com
  */
 namespace Weline\Payment\Model;
-use Weline\Framework\Database\AbstractModel;
+use Weline\Framework\Database\Model;
 use Weline\Framework\Database\Schema\Attribute\Col;
 use Weline\Framework\Database\Schema\Attribute\Index;
 use Weline\Framework\Database\Schema\Attribute\Table;
@@ -17,7 +17,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_method_code', columns: ['method_code'])]
 #[Index(name: 'idx_status', columns: ['status'])]
 #[Index(name: 'idx_transaction_scope', columns: ['scope'])]
-class PaymentTransaction extends AbstractModel
+class PaymentTransaction extends Model
 {
     public const schema_table = 'weline_payment_transaction';
     public const schema_primary_key = 'transaction_id';

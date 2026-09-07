@@ -14,6 +14,7 @@ final class PaymentGuideTranslationQueueServiceTest extends TestCase
         $service = new PaymentGuideTranslationQueueService(
             $this->createMock(\Weline\Payment\Service\PaymentGuideI18nCatalog::class),
             $this->createMock(\Weline\I18n\Service\AiTranslationConfig::class),
+            $this->createMock(\Weline\Queue\Service\IdempotentQueueAdmission::class),
         );
 
         self::assertSame(
