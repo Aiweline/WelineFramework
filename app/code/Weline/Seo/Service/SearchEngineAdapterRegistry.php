@@ -35,15 +35,16 @@ class SearchEngineAdapterRegistry
         $this->objectManager = $objectManager;
 
         // 内置适配器注册
-        $this->adapters['google'] = \Weline\Seo\Service\Adapter\GoogleIndexingApiAdapter::class;
-        $this->adapters['google_indexing_api'] = \Weline\Seo\Service\Adapter\GoogleIndexingApiAdapter::class;
+        $this->adapters['google'] = \Weline\Seo\Service\Adapter\GoogleSearchConsoleAdapter::class;
+        $this->adapters['google_indexing_api'] = \Weline\Seo\Service\Adapter\GoogleSearchConsoleAdapter::class;
         $this->adapters['google_search_console'] = \Weline\Seo\Service\Adapter\GoogleSearchConsoleAdapter::class;
         $this->adapters['bing'] = \Weline\Seo\Service\Adapter\BingSearchEngineAdapter::class;
         $this->adapters['bing_webmaster'] = \Weline\Seo\Service\Adapter\BingSearchEngineAdapter::class;
-        $this->adapters['bing_indexnow'] = \Weline\Seo\Service\Adapter\BingSearchEngineAdapter::class;
+        $this->adapters['bing_indexnow'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
         $this->adapters['baidu'] = \Weline\Seo\Service\Adapter\BaiduSearchEngineAdapter::class;
         $this->adapters['baidu_push_api'] = \Weline\Seo\Service\Adapter\BaiduSearchEngineAdapter::class;
         $this->adapters['baidu_zhanzhang'] = \Weline\Seo\Service\Adapter\BaiduSearchEngineAdapter::class;
+        $this->adapters['indexnow'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
         $this->adapters['yandex'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
         $this->adapters['yandex_indexnow'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
         $this->adapters['naver'] = \Weline\Seo\Service\Adapter\IndexNowSearchEngineAdapter::class;
@@ -65,7 +66,7 @@ class SearchEngineAdapterRegistry
      */
     public function getAdapter(string $provider): ?SearchEngineAdapterInterface
     {
-        $provider = trim($provider);
+        $provider = strtolower(trim($provider));
         $this->loadExtendedAdapters();
         if ($provider === '' || !isset($this->adapters[$provider])) {
             return null;
@@ -82,7 +83,7 @@ class SearchEngineAdapterRegistry
      */
     public function register(string $provider, string $adapterClass): void
     {
-        $provider = trim($provider);
+        $provider = strtolower(trim($provider));
         if ($provider === '') {
             return;
         }
@@ -91,7 +92,7 @@ class SearchEngineAdapterRegistry
 
     public function hasProvider(string $provider): bool
     {
-        $provider = trim($provider);
+        $provider = strtolower(trim($provider));
         if ($provider === '') {
             return false;
         }

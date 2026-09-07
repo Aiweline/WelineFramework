@@ -59,7 +59,7 @@ class BaiduSitemapAdapter extends AbstractSitemapPlatformAdapter
 
     public function supportsAutoSubmit(): bool
     {
-        return true;
+        return false;
     }
 
     /**
@@ -70,100 +70,7 @@ class BaiduSitemapAdapter extends AbstractSitemapPlatformAdapter
      */
     public function submitSitemap(string $sitemapUrl, array $accountConfig): array
     {
-        // 兼容嵌套和平铺两种 config 格式
-        $config = $accountConfig['config'] ?? $accountConfig;
-        if (is_string($config)) {
-            $decoded = json_decode($config, true);
-            $config = is_array($decoded) ? $decoded : $accountConfig;
-        }
-        
-        $token = $config['token'] ?? $config['api_key'] ?? '';
-        $site = $config['site'] ?? $config['site_url'] ?? '';
-        
-        if (empty($token)) {
-            return [
-                'success' => false,
-                'message' => __('缺少百度站长平台 Token'),
-                'response' => null,
-            ];
-        }
-        
-        if (empty($site)) {
-            // 从 sitemap URL 提取站点
-            $parsed = parse_url($sitemapUrl);
-            $site = ($parsed['scheme'] ?? 'https') . '://' . ($parsed['host'] ?? '');
-        }
-        
-        // 使用快速收录还是普通收录
-        $useFastPush = !empty($config['use_fast_push']);
-        
-        return $this->submitViaPushApi($sitemapUrl, $site, $token, $useFastPush);
-    }
-
-    /**
-     * 通过百度链接提交 API 提交
-     */
-    protected function submitViaPushApi(
-        string $sitemapUrl,
-        string $site,
-        string $token,
-        bool $useFastPush = false
-    ): array {
-        $apiUrl = self::PUSH_API_URL . '?site=' . urlencode($site) . '&token=' . urlencode($token);
-        if ($useFastPush) {
-            $apiUrl .= '&type=daily';
-        }
-        
-        // 百度 API 接受每行一个 URL
-        $postData = $sitemapUrl;
-        
-        $ch = curl_init();
-        curl_setopt_array($ch, [
-            CURLOPT_URL => $apiUrl,
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $postData,
-            CURLOPT_RETURNTRANSFER => true,
-            CURLOPT_TIMEOUT => 30,
-            CURLOPT_HTTPHEADER => [
-                'Content-Type: text/plain',
-            ],
-            CURLOPT_USERAGENT => 'Weline SEO Sitemap Submitter/1.0',
-        ]);
-        
-        $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-        $error = curl_error($ch);
-        curl_close($ch);
-        
-        if ($error) {
-            return [
-                'success' => false,
-                'message' => __('百度 API 请求失败：%{1}', $error),
-                'response' => null,
-            ];
-        }
-        
-        // 解析百度返回
-        $result = json_decode($response, true);
-        
-        if (isset($result['error'])) {
-            return [
-                'success' => false,
-                'message' => __('百度返回错误：%{1} - %{2}', [$result['error'], $result['message'] ?? '']),
-                'response' => $result,
-            ];
-        }
-        
-        $success = isset($result['success']) && $result['success'] > 0;
-        $type = $useFastPush ? __('快速收录') : __('普通收录');
-        
-        return [
-            'success' => $success,
-            'message' => $success 
-                ? __('已成功通过%{1} API提交到百度，成功 %{2} 条', [$type, $result['success'] ?? 1])
-                : __('百度 API 返回异常'),
-            'response' => $result,
-        ];
+        return (new \Weline\Seo\Service\Adapter\BaiduSearchEngineAdapter())->submitSitemap($sitemapUrl, $accountConfig);
     }
 
     /**
@@ -177,56 +84,6 @@ class BaiduSitemapAdapter extends AbstractSitemapPlatformAdapter
      */
     public function submitUrls(array $urls, string $site, string $token, bool $useFastPush = false): array
     {
-        $apiUrl = self::PUSH_API_URL . '?site=' . urlencode($site) . '&token=' . urlencode($token);
-        if ($useFastPush) {
-            $apiUrl .= '&type=daily';
-        }
-        
-        // 百度每次最多提交 2000 条
-        $chunks = array_chunk($urls, 2000);
-        $totalSuccess = 0;
-        $totalRemain = 0;
-        $errors = [];
-        
-        foreach ($chunks as $chunk) {
-            $postData = implode("\n", $chunk);
-            
-            $ch = curl_init();
-            curl_setopt_array($ch, [
-                CURLOPT_URL => $apiUrl,
-                CURLOPT_POST => true,
-                CURLOPT_POSTFIELDS => $postData,
-                CURLOPT_RETURNTRANSFER => true,
-                CURLOPT_TIMEOUT => 30,
-                CURLOPT_HTTPHEADER => [
-                    'Content-Type: text/plain',
-                ],
-            ]);
-            
-            $response = curl_exec($ch);
-            curl_close($ch);
-            
-            $result = json_decode($response, true);
-            
-            if (isset($result['success'])) {
-                $totalSuccess += $result['success'];
-            }
-            if (isset($result['remain'])) {
-                $totalRemain = $result['remain'];
-            }
-            if (isset($result['error'])) {
-                $errors[] = $result['message'] ?? $result['error'];
-            }
-        }
-        
-        return [
-            'success' => $totalSuccess > 0,
-            'message' => __('百度提交完成：成功 %{1} 条，剩余配额 %{2}', [$totalSuccess, $totalRemain]),
-            'response' => [
-                'total_success' => $totalSuccess,
-                'remain' => $totalRemain,
-                'errors' => $errors,
-            ],
-        ];
+        return (new \Weline\Seo\Service\Adapter\BaiduSearchEngineAdapter())->pushUrls($urls, ['config' => ['site' => $site, 'token' => $token, 'use_fast_push' => $useFastPush]]);
     }
 }

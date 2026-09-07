@@ -80,7 +80,7 @@ class Sitemap extends BackendController
             // 获取 POST 数据，支持多种格式
             $postData = $this->getPostData();
             
-            $websiteId = (int)($postData['website_id'] ?? 0);
+            $websiteId = isset($postData['website_id']) && $postData['website_id'] !== '' ? (int)$postData['website_id'] : -1;
             $generateAll = $this->toBool($postData['generate_all'] ?? false);
             $useProviders = $this->toBool($postData['use_providers'] ?? false);
             $providerModule = (string)($postData['provider_module'] ?? '');
@@ -89,10 +89,10 @@ class Sitemap extends BackendController
             if ($useProviders) {
                 $result = $this->generateByProviders($providerModule);
                 $message = $this->buildDetailedSummary($result);
-                return $this->jsonResponse(true, $message, $result);
+                return $this->jsonResponse(empty($result['sync_stats']['errors']) && $this->generationSucceeded($result['sitemap_results']), $message, $result);
             }
             
-            if ($generateAll || $websiteId <= 0) {
+            if ($generateAll || $websiteId < 0) {
                 // 全站生成（包括未选择具体站点的情况）
                 $result = $this->generateAllSitemaps();
                 $message = $this->buildAllSitesSummary($result);
@@ -102,7 +102,7 @@ class Sitemap extends BackendController
                 $message = $this->buildSingleSiteSummary($result);
             }
             
-            return $this->jsonResponse(true, $message, $result);
+            return $this->jsonResponse($this->generationSucceeded(($generateAll || $websiteId < 0) ? $result : [$result]), $message, $result);
             
         } catch (\Exception $e) {
             return $this->jsonResponse(false, __('生成Sitemap失败：%{1}', $e->getMessage()));
@@ -124,6 +124,7 @@ class Sitemap extends BackendController
         /** @var SitemapUrlSyncService $syncService */
         $syncService = ObjectManager::getInstance(SitemapUrlSyncService::class);
         $syncStats = $syncService->syncAll(true, $filterModule);
+        $failedWebsiteIds = \Weline\Seo\Service\SitemapRefreshService::failedWebsiteIds($syncStats);
         
         // 第二步：为所有站点生成实际的 sitemap XML 文件
         $websites = $this->getAllWebsites();
@@ -132,12 +133,17 @@ class Sitemap extends BackendController
         
         foreach ($websites as $website) {
             $websiteId = (int)($website['website_id'] ?? $website['id'] ?? 0);
-            if ($websiteId <= 0) {
+            if ($websiteId < 0) {
+                continue;
+            }
+            if (in_array($websiteId, $failedWebsiteIds, true)) {
+                $sitemapResults[] = ['website_id' => $websiteId, 'error' => true,
+                    'message' => __('部分 Provider 同步失败，请查看明细')];
                 continue;
             }
             
             try {
-                $result = $this->generateSitemapForWebsite($websiteId);
+                $result = $this->generateSitemapForWebsite($websiteId, false);
                 $sitemapResults[] = $result;
                 $totalFiles += $result['total_files'] ?? 0;
             } catch (\Throwable $e) {
@@ -480,7 +486,7 @@ class Sitemap extends BackendController
         
         foreach ($websites as $website) {
             $websiteId = $website['website_id'] ?? $website['id'] ?? 0;
-            if ($websiteId > 0) {
+            if ($websiteId >= 0) {
                 $results[] = $this->generateSitemapForWebsite($websiteId);
             }
         }
@@ -496,24 +502,26 @@ class Sitemap extends BackendController
      * @param int $websiteId
      * @return array
      */
-    private function generateSitemapForWebsite(int $websiteId): array
+    private function generateSitemapForWebsite(int $websiteId, bool $syncProviders = true): array
     {
         try {
             /** @var \Weline\Seo\Service\WebSitemapData $webSitemapData */
             $webSitemapData = ObjectManager::getInstance(\Weline\Seo\Service\WebSitemapData::class);
             
             // 使用适配器架构生成 sitemap 文件
-            $result = $webSitemapData->generateSitemapFiles($websiteId);
+            $result = $syncProviders
+                ? ObjectManager::getInstance(\Weline\Seo\Service\SitemapRefreshService::class)->refresh($websiteId)
+                : $webSitemapData->generateSitemapFiles($websiteId);
             
             // 检查是否有错误
-            if (isset($result['error'])) {
+            if (empty($result['success']) || isset($result['error'])) {
                 return [
                     'website_id' => $websiteId,
                     'files' => [],
                     'platforms' => [],
                     'total_urls' => $result['total_urls'] ?? 0,
-                    'error' => $result['error'],
-                    'message' => $result['message'],
+                    'error' => $result['error'] ?? true,
+                    'message' => $result['message'] ?? __('生成Sitemap失败'),
                 ];
             }
             
@@ -538,6 +546,19 @@ class Sitemap extends BackendController
                 'error' => true,
             ];
         }
+    }
+
+    private function generationSucceeded(array $results): bool
+    {
+        if ($results === []) {
+            return false;
+        }
+        foreach ($results as $result) {
+            if (!empty($result['error'])) {
+                return false;
+            }
+        }
+        return true;
     }
     
     /**

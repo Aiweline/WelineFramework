@@ -61,30 +61,13 @@ class RobotsTxtRenderer
     }
 
     /**
-     * Declare one Sitemap line per public origin (Website.url + WebsiteDomain).
+     * Declare the generated canonical sitemap, preserving its port and base path.
      *
      * @param array<string, mixed> $website
      * @return list<string>
      */
     private function sitemapDeclarationUrls(array $website): array
     {
-        $urls = [];
-        $seen = [];
-        foreach ($this->websiteResolver->listPublicOrigins($website) as $origin) {
-            if (!is_array($origin)) {
-                continue;
-            }
-            $sitemapUrl = trim((string)($origin['sitemap_url'] ?? ''));
-            if ($sitemapUrl === '' || isset($seen[$sitemapUrl])) {
-                continue;
-            }
-            $seen[$sitemapUrl] = true;
-            $urls[] = $sitemapUrl;
-        }
-        if ($urls !== []) {
-            return $urls;
-        }
-
         $baseUrl = rtrim((string)($website['url'] ?? $this->websiteResolver->currentBaseUrl()), '/');
         return $baseUrl !== '' ? [$baseUrl . '/sitemap.xml'] : [];
     }

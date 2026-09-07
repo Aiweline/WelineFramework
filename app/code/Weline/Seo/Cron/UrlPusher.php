@@ -41,7 +41,10 @@ class UrlPusher implements CronTaskInterface
             /** @var SeoTask $taskModel */
             $taskModel = $this->objectManager->getInstance(SeoTask::class);
 
-            $tasks = $taskModel->getPendingTasks(SeoTask::TASK_TYPE_PUSH_URLS, 50);
+            $tasks = array_merge(
+                $taskModel->getPendingTasks(SeoTask::TASK_TYPE_SITEMAP_REFRESH, 10),
+                $taskModel->getPendingTasks(SeoTask::TASK_TYPE_PUSH_URLS, 50)
+            );
             if (empty($tasks)) {
                 return 'No pending SEO URL push tasks.';
             }
