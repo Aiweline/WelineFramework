@@ -5,14 +5,24 @@ require dirname(__DIR__, 7) . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR 
 
 use Weline\Dashboard\Model\DashboardView;
 use Weline\Dashboard\Service\DashboardViewService;
+use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Theme\Api\Scoped\ThemeEditorContext;
+use Weline\Theme\Api\Scoped\ThemeScopedResourceAdapterInterface;
 use Weline\Theme\Model\ThemeLayout;
 use Weline\Theme\Model\ThemeLayoutVersion;
 use Weline\Theme\Model\ThemeScopePatch;
 use Weline\Theme\Model\ThemeScopeRelease;
+use Weline\Theme\Model\ThemeScopeReleaseBatch;
 use Weline\Theme\Model\ThemeScopeRevision;
 use Weline\Theme\Model\ThemeScopeWorkspace;
+use Weline\Theme\Service\LayoutContentValidationRegistry;
+use Weline\Theme\Service\Scoped\ThemeLayoutPayloadDiffer;
+use Weline\Theme\Service\Scoped\ThemeLayoutSnapshotNormalizer;
+use Weline\Theme\Service\Scoped\ThemePatchEngine;
+use Weline\Theme\Service\Scoped\ThemeScopedReleaseBatch;
+use Weline\Theme\Service\Scoped\ThemeScopedWorkspace;
 use Weline\Theme\Service\WidgetDefaultInjectionService;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
 use Weline\Websites\Model\SalesChannel;
@@ -94,6 +104,17 @@ function theme_layout_table_exists(ThemeLayout $layout): bool
 {
     try {
         return (bool)$layout->getConnection()->getConnector()->tableExist(ThemeLayout::schema_table);
+    } catch (Throwable) {
+        return false;
+    }
+}
+
+function theme_scope_release_batch_table_exists(ThemeScopeReleaseBatch $batch): bool
+{
+    try {
+        return (bool)$batch->getConnection()->getConnector()->tableExist(
+            ThemeScopeReleaseBatch::schema_table,
+        );
     } catch (Throwable) {
         return false;
     }
@@ -587,13 +608,33 @@ function delete_theme_scope_rows(string $modelClass, string $field, int $workspa
     return $count;
 }
 
-/** @param list<string> $scopes */
+/**
+ * @param list<string> $scopes
+ * @return array{batches:int,patches:int,revisions:int,releases:int,workspaces:int}
+ */
 function cleanup_theme_scope_workspaces(array $scopes): array
 {
-    $deleted = ['patches' => 0, 'revisions' => 0, 'releases' => 0, 'workspaces' => 0];
+    $deleted = ['batches' => 0, 'patches' => 0, 'revisions' => 0, 'releases' => 0, 'workspaces' => 0];
     foreach (array_values(array_unique($scopes)) as $scope) {
         if (!str_starts_with($scope, 'e2e-theme-scope-')) {
             throw new RuntimeException('Refusing Theme Scope cleanup outside its owned namespace.');
+        }
+        /** @var ThemeScopeReleaseBatch $batchModel */
+        $batchModel = clone ObjectManager::getInstance(ThemeScopeReleaseBatch::class);
+        if (theme_scope_release_batch_table_exists($batchModel)) {
+            $batchRows = $batchModel->clearData()->clearQuery()
+                ->where(ThemeScopeReleaseBatch::schema_fields_SCOPE, $scope)
+                ->select()
+                ->fetchArray();
+            $batchCount = is_array($batchRows) ? count($batchRows) : 0;
+            if ($batchCount > 0) {
+                $batchModel->getConnection()->getQuery()
+                    ->table($batchModel->getTable())
+                    ->where(ThemeScopeReleaseBatch::schema_fields_SCOPE, $scope)
+                    ->delete()
+                    ->fetch();
+                $deleted['batches'] += $batchCount;
+            }
         }
         /** @var ThemeScopeWorkspace $workspaceModel */
         $workspaceModel = clone ObjectManager::getInstance(ThemeScopeWorkspace::class);
@@ -793,6 +834,499 @@ function prepare_theme_scope_hierarchy(int $themeId, string $pageType, string $t
     ];
 }
 
+function require_theme_scope_batch(bool $condition, string $message): void
+{
+    if (!$condition) {
+        throw new RuntimeException($message);
+    }
+}
+
+/**
+ * Build the production scoped-workspace service with an isolated projection boundary.
+ *
+ * Base loading and compilation remain real. Published projections are deliberately
+ * no-op for this synthetic Website so the fixture can inject a failure after any
+ * resource without writing compatibility tables, disk assets, or active bindings.
+ */
+function theme_scope_batch_workspace(int $failProjectionAt = 0): ThemeScopedWorkspace
+{
+    /** @var ThemeScopedResourceAdapterInterface $delegate */
+    $delegate = ObjectManager::getInstance(ThemeScopedResourceAdapterInterface::class);
+    $adapter = new class($delegate, $failProjectionAt) implements ThemeScopedResourceAdapterInterface {
+        private int $publishedCalls = 0;
+
+        public function __construct(
+            private readonly ThemeScopedResourceAdapterInterface $delegate,
+            private readonly int $failProjectionAt,
+        ) {
+        }
+
+        public function loadBase(ThemeEditorContext $context): array
+        {
+            return $this->delegate->loadBase($context);
+        }
+
+        public function loadLegacyPublished(ThemeEditorContext $context): array
+        {
+            return $this->delegate->loadLegacyPublished($context);
+        }
+
+        public function compile(ThemeEditorContext $context, array $effectivePayload): array
+        {
+            return $this->delegate->compile($context, $effectivePayload);
+        }
+
+        public function projectPublished(
+            ThemeEditorContext $context,
+            array $effectivePayload,
+            int $releaseId,
+        ): void {
+            unset($context, $effectivePayload, $releaseId);
+            $this->publishedCalls++;
+            if ($this->failProjectionAt > 0 && $this->publishedCalls === $this->failProjectionAt) {
+                throw new RuntimeException(
+                    'e2e_injected_batch_projection_failure:' . $this->failProjectionAt,
+                );
+            }
+        }
+
+        public function projectDraft(ThemeEditorContext $context, array $effectivePayload): void
+        {
+            unset($context, $effectivePayload);
+        }
+    };
+
+    return new ThemeScopedWorkspace(
+        workspaces: clone ObjectManager::getInstance(ThemeScopeWorkspace::class),
+        revisions: clone ObjectManager::getInstance(ThemeScopeRevision::class),
+        patches: clone ObjectManager::getInstance(ThemeScopePatch::class),
+        releases: clone ObjectManager::getInstance(ThemeScopeRelease::class),
+        scopes: ObjectManager::getInstance(ScopeHierarchyInterface::class),
+        adapter: $adapter,
+        patchEngine: ObjectManager::getInstance(ThemePatchEngine::class),
+        layoutDiffer: ObjectManager::getInstance(ThemeLayoutPayloadDiffer::class),
+        transactions: ObjectManager::getInstance(WriteIntentTransactionCoordinatorInterface::class),
+        contentValidators: ObjectManager::getInstance(LayoutContentValidationRegistry::class),
+        layoutSnapshots: ObjectManager::getInstance(ThemeLayoutSnapshotNormalizer::class),
+        releaseBatches: clone ObjectManager::getInstance(ThemeScopeReleaseBatch::class),
+    );
+}
+
+/** @return array<string,list<array<string,mixed>>> */
+function theme_scope_batch_changes(int $themeId, string $marker): array
+{
+    return [
+        ThemeEditorContext::RESOURCE_THEME_BINDING => [[
+            'op' => 'set',
+            'path' => '/theme_id',
+            'value' => $themeId,
+        ]],
+        ThemeEditorContext::RESOURCE_LAYOUT => [[
+            'op' => 'set',
+            'path' => '/selection/e2e_batch_marker',
+            'value' => $marker,
+        ]],
+        ThemeEditorContext::RESOURCE_META => [[
+            'op' => 'set',
+            'path' => '/values/e2e_batch_marker',
+            'value' => $marker,
+        ]],
+        ThemeEditorContext::RESOURCE_APPEARANCE => [[
+            'op' => 'set',
+            'path' => '/tokens/e2e_batch_marker',
+            'value' => $marker,
+        ]],
+        ThemeEditorContext::RESOURCE_I18N => [[
+            'op' => 'set',
+            'path' => '/translations/e2e_batch_marker',
+            'value' => $marker,
+        ]],
+    ];
+}
+
+/**
+ * Create one new immutable draft revision for every release resource.
+ *
+ * @return array<string,array{expected_revision:int,expected_parent_release_id:?int}>
+ */
+function apply_theme_scope_batch_drafts(
+    ThemeScopedWorkspace $workspace,
+    ThemeEditorContext $baseContext,
+    int $themeId,
+    string $marker,
+): array {
+    $changes = theme_scope_batch_changes($themeId, $marker);
+    $expectations = [];
+    foreach (ThemeEditorContext::RESOURCES as $resourceType) {
+        $context = $baseContext->withResource($resourceType);
+        $before = $workspace->load($context, true);
+        $workspace->applyChanges(
+            context: $context,
+            expectedRevision: (int)($before['revision'] ?? 0),
+            expectedParentReleaseId: isset($before['expected_parent_release_id'])
+                ? (int)$before['expected_parent_release_id']
+                : null,
+            changes: $changes[$resourceType],
+            actorId: 'e2e-theme-batch',
+            actorName: 'Theme batch runtime fixture',
+            summary: 'E2E five-resource draft ' . $marker,
+        );
+        $after = $workspace->load($context, true);
+        $expectations[$resourceType] = [
+            'expected_revision' => (int)($after['revision'] ?? 0),
+            'expected_parent_release_id' => isset($after['expected_parent_release_id'])
+                ? (int)$after['expected_parent_release_id']
+                : null,
+        ];
+    }
+
+    return $expectations;
+}
+
+/** @return array<string,mixed> */
+function snapshot_theme_scope_batch_database(string $scope): array
+{
+    if (!str_starts_with($scope, 'e2e-theme-scope-')) {
+        throw new RuntimeException('Refusing Theme Scope snapshot outside its owned namespace.');
+    }
+
+    /** @var ThemeScopeWorkspace $workspaceModel */
+    $workspaceModel = clone ObjectManager::getInstance(ThemeScopeWorkspace::class);
+    $workspaceRows = $workspaceModel->clearData()->clearQuery()
+        ->where(ThemeScopeWorkspace::schema_fields_SCOPE, $scope)
+        ->order(ThemeScopeWorkspace::schema_fields_ID, 'ASC')
+        ->select()
+        ->fetchArray();
+    $workspaces = [];
+    $revisions = [];
+    $releases = [];
+    foreach (is_array($workspaceRows) ? $workspaceRows : [] as $row) {
+        $workspaceId = (int)($row[ThemeScopeWorkspace::schema_fields_ID] ?? 0);
+        if ($workspaceId <= 0) {
+            continue;
+        }
+        $resourceType = (string)($row[ThemeScopeWorkspace::schema_fields_RESOURCE_TYPE] ?? '');
+        $workspaces[$resourceType] = [
+            'workspace_id' => $workspaceId,
+            'resource_type' => $resourceType,
+            'identity_hash' => (string)($row[ThemeScopeWorkspace::schema_fields_IDENTITY_HASH] ?? ''),
+            'revision' => (int)($row[ThemeScopeWorkspace::schema_fields_REVISION] ?? 0),
+            'draft_revision_id' => isset($row[ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID])
+                ? (int)$row[ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID]
+                : null,
+            'published_release_id' => isset($row[ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID])
+                ? (int)$row[ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID]
+                : null,
+            'last_good_release_id' => isset($row[ThemeScopeWorkspace::schema_fields_LAST_GOOD_RELEASE_ID])
+                ? (int)$row[ThemeScopeWorkspace::schema_fields_LAST_GOOD_RELEASE_ID]
+                : null,
+            'parent_release_id' => isset($row[ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID])
+                ? (int)$row[ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID]
+                : null,
+            'status' => (string)($row[ThemeScopeWorkspace::schema_fields_STATUS] ?? ''),
+        ];
+
+        /** @var ThemeScopeRevision $revisionModel */
+        $revisionModel = clone ObjectManager::getInstance(ThemeScopeRevision::class);
+        $revisionRows = $revisionModel->clearData()->clearQuery()
+            ->where(ThemeScopeRevision::schema_fields_WORKSPACE_ID, $workspaceId)
+            ->order(ThemeScopeRevision::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
+        foreach (is_array($revisionRows) ? $revisionRows : [] as $revisionRow) {
+            $revisions[] = [
+                'revision_id' => (int)($revisionRow[ThemeScopeRevision::schema_fields_ID] ?? 0),
+                'workspace_id' => $workspaceId,
+                'revision_no' => (int)($revisionRow[ThemeScopeRevision::schema_fields_REVISION_NO] ?? 0),
+                'parent_release_id' => isset($revisionRow[ThemeScopeRevision::schema_fields_PARENT_RELEASE_ID])
+                    ? (int)$revisionRow[ThemeScopeRevision::schema_fields_PARENT_RELEASE_ID]
+                    : null,
+                'status' => (string)($revisionRow[ThemeScopeRevision::schema_fields_STATUS] ?? ''),
+            ];
+        }
+
+        /** @var ThemeScopeRelease $releaseModel */
+        $releaseModel = clone ObjectManager::getInstance(ThemeScopeRelease::class);
+        $releaseRows = $releaseModel->clearData()->clearQuery()
+            ->where(ThemeScopeRelease::schema_fields_WORKSPACE_ID, $workspaceId)
+            ->order(ThemeScopeRelease::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
+        foreach (is_array($releaseRows) ? $releaseRows : [] as $releaseRow) {
+            $releases[] = [
+                'release_id' => (int)($releaseRow[ThemeScopeRelease::schema_fields_ID] ?? 0),
+                'workspace_id' => $workspaceId,
+                'resource_type' => (string)($releaseRow[ThemeScopeRelease::schema_fields_RESOURCE_TYPE] ?? ''),
+                'revision_id' => isset($releaseRow[ThemeScopeRelease::schema_fields_REVISION_ID])
+                    ? (int)$releaseRow[ThemeScopeRelease::schema_fields_REVISION_ID]
+                    : null,
+                'parent_release_id' => isset($releaseRow[ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID])
+                    ? (int)$releaseRow[ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID]
+                    : null,
+                'fingerprint' => (string)($releaseRow[ThemeScopeRelease::schema_fields_FINGERPRINT] ?? ''),
+                'status' => (string)($releaseRow[ThemeScopeRelease::schema_fields_STATUS] ?? ''),
+            ];
+        }
+    }
+    ksort($workspaces);
+    usort($revisions, static fn(array $left, array $right): int => $left['revision_id'] <=> $right['revision_id']);
+    usort($releases, static fn(array $left, array $right): int => $left['release_id'] <=> $right['release_id']);
+
+    /** @var ThemeScopeReleaseBatch $batchModel */
+    $batchModel = clone ObjectManager::getInstance(ThemeScopeReleaseBatch::class);
+    $batchRows = $batchModel->clearData()->clearQuery()
+        ->where(ThemeScopeReleaseBatch::schema_fields_SCOPE, $scope)
+        ->order(ThemeScopeReleaseBatch::schema_fields_ID, 'ASC')
+        ->select()
+        ->fetchArray();
+    $batches = [];
+    foreach (is_array($batchRows) ? $batchRows : [] as $row) {
+        $batches[] = [
+            'batch_id' => (int)($row[ThemeScopeReleaseBatch::schema_fields_ID] ?? 0),
+            'batch_digest' => (string)($row[ThemeScopeReleaseBatch::schema_fields_BATCH_DIGEST] ?? ''),
+            'state' => (string)($row[ThemeScopeReleaseBatch::schema_fields_STATE] ?? ''),
+            'source_batch_id' => isset($row[ThemeScopeReleaseBatch::schema_fields_SOURCE_BATCH_ID])
+                ? (int)$row[ThemeScopeReleaseBatch::schema_fields_SOURCE_BATCH_ID]
+                : null,
+        ];
+    }
+
+    return [
+        'workspaces' => $workspaces,
+        'revisions' => $revisions,
+        'releases' => $releases,
+        'batches' => $batches,
+    ];
+}
+
+/** @return array<string,int> */
+function theme_scope_batch_release_map(array $receipt): array
+{
+    $map = [];
+    foreach ((array)($receipt['resources'] ?? []) as $resource) {
+        if (!is_array($resource)) {
+            continue;
+        }
+        $resourceType = (string)($resource['resource_type'] ?? '');
+        $releaseId = (int)($resource['release_id'] ?? 0);
+        if (in_array($resourceType, ThemeEditorContext::RESOURCES, true) && $releaseId > 0) {
+            $map[$resourceType] = $releaseId;
+        }
+    }
+    require_theme_scope_batch(
+        array_keys($map) === ThemeEditorContext::RESOURCES,
+        'theme_scope_batch_fixture_receipt_incomplete',
+    );
+
+    return $map;
+}
+
+/** @return array<string,?int> */
+function theme_scope_batch_published_map(array $snapshot): array
+{
+    $map = [];
+    foreach (ThemeEditorContext::RESOURCES as $resourceType) {
+        $workspace = $snapshot['workspaces'][$resourceType] ?? null;
+        $map[$resourceType] = is_array($workspace)
+            ? ($workspace['published_release_id'] ?? null)
+            : null;
+    }
+
+    return $map;
+}
+
+/** @return array<string,mixed> */
+function verify_theme_scope_release_batch_atomicity(int $themeId, string $pageType, string $token): array
+{
+    $result = [];
+    $failure = null;
+    $cleanup = [];
+    try {
+        $hierarchy = prepare_theme_scope_hierarchy($themeId, $pageType, $token);
+        $fixture = theme_scope_fixture_identity($token);
+        /** @var ScopeHierarchyInterface $scopes */
+        $scopes = ObjectManager::getInstance(ScopeHierarchyInterface::class);
+        $scope = $scopes->contextFromIdentity(ScopeIdentity::website(
+            (int)$hierarchy['website_id'],
+            $fixture['website_code'],
+        ));
+        require_theme_scope_batch(
+            str_starts_with($scope->storageScope, 'e2e-theme-scope-'),
+            'theme_scope_batch_fixture_scope_invalid',
+        );
+        $baseContext = new ThemeEditorContext(
+            scope: $scope,
+            area: 'frontend',
+            resourceType: ThemeEditorContext::RESOURCE_LAYOUT,
+            themeId: $themeId,
+            layoutType: $pageType,
+            layoutOption: 'default',
+            locale: 'default',
+            targetType: 'global',
+            targetId: 0,
+        );
+
+        $workspace = theme_scope_batch_workspace();
+        $expectationsOne = apply_theme_scope_batch_drafts(
+            $workspace,
+            $baseContext,
+            $themeId,
+            'batch-one-' . $token,
+        );
+        $baseline = snapshot_theme_scope_batch_database($scope->storageScope);
+        require_theme_scope_batch(
+            count($baseline['workspaces']) === count(ThemeEditorContext::RESOURCES),
+            'theme_scope_batch_fixture_workspace_count_invalid',
+        );
+
+        $failureEvidence = [];
+        foreach (range(1, count(ThemeEditorContext::RESOURCES)) as $failAt) {
+            $error = null;
+            try {
+                theme_scope_batch_workspace($failAt)->publishBatch(
+                    ThemeScopedReleaseBatch::fromExpectations($baseContext, $expectationsOne),
+                    'e2e-theme-batch',
+                    'Theme batch runtime fixture',
+                    'Injected atomicity failure at resource ' . $failAt,
+                );
+            } catch (Throwable $throwable) {
+                $error = $throwable->getMessage();
+            }
+            require_theme_scope_batch(
+                $error === 'e2e_injected_batch_projection_failure:' . $failAt,
+                'theme_scope_batch_fixture_injected_failure_missing:' . $failAt . ':' . (string)$error,
+            );
+            require_theme_scope_batch(
+                snapshot_theme_scope_batch_database($scope->storageScope) === $baseline,
+                'theme_scope_batch_fixture_partial_commit:' . $failAt,
+            );
+            $failureEvidence[] = ['projection_position' => $failAt, 'error' => $error, 'rolled_back' => true];
+        }
+
+        $receiptOne = $workspace->publishBatch(
+            ThemeScopedReleaseBatch::fromExpectations($baseContext, $expectationsOne),
+            'e2e-theme-batch',
+            'Theme batch runtime fixture',
+            'First five-resource E2E publish',
+        );
+        $releaseMapOne = theme_scope_batch_release_map($receiptOne);
+        $batchOneId = (int)($receiptOne['batch_id'] ?? 0);
+        $readbackOne = $workspace->getReleaseBatch($batchOneId);
+        require_theme_scope_batch(
+            (int)($readbackOne['batch_id'] ?? 0) === $batchOneId
+                && ($readbackOne['state'] ?? '') === ThemeScopeReleaseBatch::STATE_PUBLISHED,
+            'theme_scope_batch_fixture_readback_invalid',
+        );
+        $afterOne = snapshot_theme_scope_batch_database($scope->storageScope);
+        require_theme_scope_batch(
+            count($afterOne['batches']) === count($baseline['batches']) + 1
+                && count($afterOne['releases']) === count($baseline['releases']) + 5
+                && theme_scope_batch_published_map($afterOne) === $releaseMapOne,
+            'theme_scope_batch_fixture_first_publish_invalid',
+        );
+
+        $expectationsTwo = apply_theme_scope_batch_drafts(
+            $workspace,
+            $baseContext,
+            $themeId,
+            'batch-two-' . $token,
+        );
+        $receiptTwo = $workspace->publishBatch(
+            ThemeScopedReleaseBatch::fromExpectations($baseContext, $expectationsTwo),
+            'e2e-theme-batch',
+            'Theme batch runtime fixture',
+            'Second five-resource E2E publish',
+        );
+        $releaseMapTwo = theme_scope_batch_release_map($receiptTwo);
+        foreach (ThemeEditorContext::RESOURCES as $resourceType) {
+            require_theme_scope_batch(
+                $releaseMapTwo[$resourceType] !== $releaseMapOne[$resourceType],
+                'theme_scope_batch_fixture_second_release_not_immutable:' . $resourceType,
+            );
+        }
+        $afterTwo = snapshot_theme_scope_batch_database($scope->storageScope);
+        require_theme_scope_batch(
+            count($afterTwo['batches']) === count($baseline['batches']) + 2
+                && count($afterTwo['releases']) === count($baseline['releases']) + 10
+                && theme_scope_batch_published_map($afterTwo) === $releaseMapTwo,
+            'theme_scope_batch_fixture_second_publish_invalid',
+        );
+
+        $rollback = $workspace->rollbackReleaseBatch(
+            $batchOneId,
+            $baseContext,
+            'e2e-theme-batch',
+            'Theme batch runtime fixture',
+            'Restore first five-resource E2E release',
+        );
+        $rollbackMap = theme_scope_batch_release_map($rollback);
+        $rollbackBatchId = (int)($rollback['batch_id'] ?? 0);
+        $rollbackReadback = $workspace->getReleaseBatch($rollbackBatchId);
+        $afterRollback = snapshot_theme_scope_batch_database($scope->storageScope);
+        require_theme_scope_batch(
+            (int)($rollback['source_batch_id'] ?? 0) === $batchOneId
+                && (int)($rollbackReadback['source_batch_id'] ?? 0) === $batchOneId
+                && $rollbackMap === $releaseMapOne
+                && theme_scope_batch_published_map($afterRollback) === $releaseMapOne,
+            'theme_scope_batch_fixture_rollback_pointer_invalid',
+        );
+        require_theme_scope_batch(
+            count($afterRollback['batches']) === count($baseline['batches']) + 3
+                && $afterRollback['releases'] === $afterTwo['releases'],
+            'theme_scope_batch_fixture_rollback_history_mutated',
+        );
+
+        $result = [
+            'success' => true,
+            'scope' => $scope->storageScope,
+            'failure_matrix' => $failureEvidence,
+            'first_batch' => [
+                'batch_id' => $batchOneId,
+                'release_ids' => $releaseMapOne,
+                'readback_state' => $readbackOne['state'] ?? null,
+            ],
+            'second_batch' => [
+                'batch_id' => (int)($receiptTwo['batch_id'] ?? 0),
+                'release_ids' => $releaseMapTwo,
+            ],
+            'rollback_batch' => [
+                'batch_id' => $rollbackBatchId,
+                'source_batch_id' => (int)($rollback['source_batch_id'] ?? 0),
+                'published_release_ids' => theme_scope_batch_published_map($afterRollback),
+            ],
+            'database_evidence' => [
+                'workspace_count' => count($afterRollback['workspaces']),
+                'revision_count' => count($afterRollback['revisions']),
+                'release_count' => count($afterRollback['releases']),
+                'batch_count' => count($afterRollback['batches']),
+                'historical_releases_preserved' => true,
+            ],
+        ];
+    } catch (Throwable $throwable) {
+        $failure = $throwable;
+    } finally {
+        try {
+            $cleanup = cleanup_theme_scope_hierarchy($themeId, $pageType, $token);
+        } catch (Throwable $cleanupFailure) {
+            $cleanup = ['success' => false, 'error' => $cleanupFailure->getMessage()];
+            if (!$failure instanceof Throwable) {
+                $failure = $cleanupFailure;
+            }
+        }
+    }
+
+    if ($failure instanceof Throwable) {
+        throw new RuntimeException(
+            $failure->getMessage() . ' | cleanup=' . json_encode($cleanup, JSON_UNESCAPED_SLASHES),
+            0,
+            $failure,
+        );
+    }
+    $result['cleanup'] = $cleanup;
+
+    return $result;
+}
+
 /**
  * Seed a scoped draft (+ optional publish) for Theme editor E2E without theme_layout.
  *
@@ -876,6 +1410,11 @@ try {
 
     if ($action === 'cleanup_scope_hierarchy') {
         output_json(cleanup_theme_scope_hierarchy($themeId, $pageType, $token));
+        exit(0);
+    }
+
+    if ($action === 'verify_scoped_release_batch_atomicity') {
+        output_json(verify_theme_scope_release_batch_atomicity($themeId, $pageType, $token));
         exit(0);
     }
 

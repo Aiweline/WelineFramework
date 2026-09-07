@@ -7,8 +7,12 @@ namespace Weline\Theme\Service\Scoped;
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
 use Weline\Theme\Api\Scoped\ThemePatchCommand;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
+use Weline\Theme\Model\ThemeLayout;
+use Weline\Theme\Model\ThemeScopeReleaseBatch;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\SharedChromeService;
 use Weline\Theme\Service\ThemeContextService;
+use Weline\Theme\Service\ThemeLayoutVersionService;
 use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 
 /** Validates HTTP-shaped commands before invoking the scoped workspace API. */
@@ -25,6 +29,8 @@ final class ThemeScopedWorkspaceRequestService
         private readonly WelineTheme $themes,
         private readonly ThemeContextService $themeContext,
         private readonly ThemeRuntimeCacheCleaner $cacheCleaner,
+        private readonly ThemeLayoutVersionService $layoutVersions,
+        private readonly SharedChromeService $sharedChrome,
     ) {
     }
 
@@ -93,6 +99,7 @@ final class ThemeScopedWorkspaceRequestService
     }
 
     /** @param array<string,mixed> $input */
+    /** @param array<string,mixed> $input */
     public function publish(array $input, string $actorId, string $actorName = ''): array
     {
         $context = $this->contexts->fromInput($input);
@@ -109,9 +116,23 @@ final class ThemeScopedWorkspaceRequestService
         if (!empty($result['blocked'])) {
             return $result;
         }
+
+        $carrier = $this->publishSharedChromeCarrierIfPending(
+            $context,
+            $actorId,
+            $actorName,
+            $this->note($input['reason'] ?? '', 'reason'),
+        );
+        if ($carrier !== null) {
+            $result['shared_chrome_carrier'] = $carrier;
+        }
+
         $publishedThemeId = $context->themeId > 0
             ? $context->themeId
             : (int)($result['payload']['theme_id'] ?? 0);
+        $result['static_version'] = $this->layoutVersions->bumpStaticVersion(
+            $publishedThemeId > 0 ? $publishedThemeId : 0,
+        );
         $result['cache_invalidation'] = $this->cacheCleaner->clearScopedCaches(
             $context->scope,
             $publishedThemeId > 0 ? $publishedThemeId : null,
@@ -119,6 +140,217 @@ final class ThemeScopedWorkspaceRequestService
         );
 
         return $result;
+    }
+
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    public function publishBatch(array $input, string $actorId, string $actorName = ''): array
+    {
+        $context = $this->contexts->fromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
+        $claims = $input['resources'] ?? null;
+        if (\is_string($claims)) {
+            $claims = \json_decode($claims, true, flags: JSON_THROW_ON_ERROR);
+        }
+        if (!\is_array($claims) || \array_is_list($claims)) {
+            throw new \InvalidArgumentException('theme_scope_release_batch_resources_required');
+        }
+        $expectations = [];
+        foreach (ThemeEditorContext::RESOURCES as $resourceType) {
+            $claim = $claims[$resourceType] ?? null;
+            if (!\is_array($claim)) {
+                throw new \InvalidArgumentException('theme_scope_release_batch_resource_set_incomplete');
+            }
+            $expectations[$resourceType] = [
+                'expected_revision' => $this->requiredRevision($claim),
+                'expected_parent_release_id' => $this->nullableId(
+                    $claim['expected_parent_release_id'] ?? null,
+                ),
+            ];
+        }
+        $batch = ThemeScopedReleaseBatch::fromExpectations($context, $expectations);
+        $result = $this->workspace->publishBatch(
+            batch: $batch,
+            actorId: $actorId,
+            actorName: $actorName,
+            reason: $this->note($input['reason'] ?? '', 'reason'),
+        );
+
+        $carrier = $this->publishSharedChromeCarrierIfPending(
+            $context,
+            $actorId,
+            $actorName,
+            $this->note($input['reason'] ?? '', 'reason'),
+        );
+        if ($carrier !== null) {
+            $result['shared_chrome_carrier'] = $carrier;
+        }
+
+        return $this->finalizeBatchCacheState(
+            $result,
+            $context,
+            'theme_scoped_release_batch_publish',
+        );
+    }
+
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    public function readBatch(array $input): array
+    {
+        $context = $this->contexts->fromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
+        $result = $this->workspace->getReleaseBatch($this->requiredBatchId($input));
+        $this->assertBatchMatchesContext($result, $context);
+
+        return $result;
+    }
+
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    public function retryBatchCache(array $input): array
+    {
+        $context = $this->contexts->fromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
+        $result = $this->workspace->getReleaseBatch($this->requiredBatchId($input));
+        $this->assertBatchMatchesContext($result, $context);
+
+        return $this->finalizeBatchCacheState(
+            $result,
+            $context,
+            'theme_scoped_release_batch_cache_retry',
+        );
+    }
+
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    public function rollbackBatch(array $input, string $actorId, string $actorName = ''): array
+    {
+        $context = $this->contexts->fromInput($input, ThemeEditorContext::RESOURCE_LAYOUT);
+        $sourceBatchId = $this->requiredBatchId($input);
+        $source = $this->workspace->getReleaseBatch($sourceBatchId);
+        $this->assertBatchMatchesContext($source, $context);
+        $result = $this->workspace->rollbackReleaseBatch(
+            sourceBatchId: $sourceBatchId,
+            context: $context,
+            actorId: $actorId,
+            actorName: $actorName,
+            reason: $this->note($input['reason'] ?? 'theme_editor_batch_rollback', 'reason'),
+        );
+
+        return $this->finalizeBatchCacheState(
+            $result,
+            $context,
+            'theme_scoped_release_batch_rollback',
+        );
+    }
+
+    /**
+     * Inherit-mode chrome writes land on the homepage carrier workspace.
+     * Publishing any other layout must also flush that carrier so storefront
+     * mergeSharedChromeSlotWidgets sees the updated global header/footer.
+     *
+     * @return array<string,mixed>|null
+     */
+    private function publishSharedChromeCarrierIfPending(
+        ThemeEditorContext $context,
+        string $actorId,
+        string $actorName,
+        string $reason,
+    ): ?array {
+        if ($this->sharedChrome->isChromeCarrierPageType($context->layoutType)) {
+            return null;
+        }
+
+        $carrier = $context
+            ->withLayoutType(ThemeLayout::PAGE_TYPE_HOME)
+            ->withResource(ThemeEditorContext::RESOURCE_LAYOUT);
+        $state = $this->workspace->load($carrier, true);
+        $draftRevisionId = (int)($state['draft_revision_id'] ?? 0);
+        $publishedRevisionId = (int)($state['published_revision_id'] ?? 0);
+        if ($draftRevisionId <= 0 || $draftRevisionId === $publishedRevisionId) {
+            return null;
+        }
+
+        $carrierReason = \trim($reason) !== ''
+            ? ($reason . '_shared_chrome_carrier')
+            : 'shared_chrome_carrier_publish';
+
+        return $this->workspace->publish(
+            context: $carrier,
+            expectedRevision: (int)($state['revision'] ?? 0),
+            expectedParentReleaseId: $this->nullableId($state['expected_parent_release_id'] ?? null),
+            actorId: $actorId,
+            actorName: $actorName,
+            reason: $carrierReason,
+        );
+    }
+
+    /** @param array<string,mixed> $result @return array<string,mixed> */
+    private function finalizeBatchCacheState(
+        array $result,
+        ThemeEditorContext $context,
+        string $reason,
+    ): array {
+        // Database publication is already committed. Cache faults are recorded as
+        // a retryable degraded state and must never be surfaced as commit failure.
+        $cacheState = ThemeScopeReleaseBatch::STATE_PUBLISHED;
+        $cacheError = null;
+        $cacheInvalidation = [];
+        try {
+            $result['static_version'] = $this->layoutVersions->bumpStaticVersion(
+                $context->themeId > 0 ? $context->themeId : 0,
+            );
+            $cacheInvalidation = $this->cacheCleaner->clearScopedCaches(
+                $context->scope,
+                $context->themeId > 0 ? $context->themeId : null,
+                $reason,
+            );
+            $failures = \is_array($cacheInvalidation['failures'] ?? null)
+                ? $cacheInvalidation['failures']
+                : [];
+            if ($failures !== []) {
+                $cacheState = ThemeScopeReleaseBatch::STATE_PUBLISHED_CACHE_DEGRADED;
+                $cacheError = [
+                    'code' => 'theme_scope_release_batch_cache_degraded',
+                    'failures' => $failures,
+                ];
+            }
+        } catch (\Throwable $e) {
+            $cacheState = ThemeScopeReleaseBatch::STATE_PUBLISHED_CACHE_DEGRADED;
+            $cacheError = [
+                'code' => 'theme_scope_release_batch_cache_degraded',
+                'message' => $e->getMessage(),
+            ];
+        }
+
+        $batchId = (int)($result['batch_id'] ?? 0);
+        try {
+            $result = $this->workspace->updateReleaseBatchCacheState(
+                $batchId,
+                $cacheState,
+                $cacheError,
+            );
+        } catch (\Throwable $e) {
+            $result['state'] = $cacheState;
+            $result['cache_error'] = $cacheError;
+            $result['cache_state_update_error'] = $e->getMessage();
+        }
+        $result['cache_invalidation'] = $cacheInvalidation;
+        $result['cache_retryable'] = $cacheState
+            === ThemeScopeReleaseBatch::STATE_PUBLISHED_CACHE_DEGRADED;
+
+        return $result;
+    }
+
+    /** @param array<string,mixed> $batch */
+    private function assertBatchMatchesContext(array $batch, ThemeEditorContext $context): void
+    {
+        $matches = (string)($batch['scope'] ?? '') === $context->scope->storageScope
+            && (string)($batch['store_mode'] ?? '') === $context->scope->storeMode
+            && (string)($batch['area'] ?? '') === $context->area
+            && (int)($batch['theme_id'] ?? 0) === $context->themeId
+            && (string)($batch['layout_type'] ?? '') === $context->layoutType
+            && (string)($batch['layout_option'] ?? '') === $context->layoutOption
+            && (string)($batch['locale'] ?? '') === $context->locale
+            && (string)($batch['target_type'] ?? '') === $context->targetType
+            && (int)($batch['target_id'] ?? 0) === $context->targetId;
+        if (!$matches) {
+            throw new \RuntimeException('theme_scope_release_batch_context_mismatch');
+        }
     }
 
     private function assertThemeBindingValue(ThemeEditorContext $context, ThemePatchCommand $command): void
@@ -159,6 +391,20 @@ final class ThemeScopedWorkspaceRequestService
         }
 
         return $revision;
+    }
+
+    /** @param array<string,mixed> $input */
+    private function requiredBatchId(array $input): int
+    {
+        $batchId = $input['batch_id'] ?? $input['source_batch_id'] ?? null;
+        if (\is_string($batchId) && \preg_match('/^[1-9][0-9]*$/D', $batchId) === 1) {
+            $batchId = (int)$batchId;
+        }
+        if (!\is_int($batchId) || $batchId <= 0) {
+            throw new \InvalidArgumentException('theme_scope_release_batch_id_invalid');
+        }
+
+        return $batchId;
     }
 
     private function nullableId(mixed $value): ?int

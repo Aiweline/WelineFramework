@@ -2,8 +2,22 @@
     'use strict';
 
     var moduleName = 'themeAddress';
-    var modulePath = 'Weline_Theme::js/address.js?v=20260831-address-catalog-2';
-    var fallbackUrl = '/Weline/Theme/view/statics/js/address.js?v=20260831-address-catalog-2';
+    var modulePath = 'Weline_Theme::js/address.js';
+    // Keep an explicit bust token so country-only/global fixes are not stuck behind a sticky inherited query.
+    var fallbackUrl = '/Weline/Theme/view/statics/js/address.js?v=20260907-postal-lookup1';
+
+    (function inheritLoaderVersion() {
+        var cur = document.currentScript && document.currentScript.src;
+        if (!cur) return;
+        var qPos = cur.indexOf('?');
+        if (qPos === -1) return;
+        var q = cur.slice(qPos);
+        // Prefer the newer explicit bust above; only inherit when fallback has no query yet.
+        if (fallbackUrl.indexOf('?') === -1) {
+            fallbackUrl += q;
+        }
+    })();
+
 
     function bootLoadedModule() {
         if (window.WelineThemeAddress && typeof window.WelineThemeAddress.boot === 'function') {
@@ -12,6 +26,10 @@
     }
 
     function directLoad() {
+        if (window.WelineThemeAddress) {
+            bootLoadedModule();
+            return;
+        }
         if (window.WelineThemeAddressLoading) {
             return;
         }
@@ -20,6 +38,9 @@
         script.src = fallbackUrl;
         script.async = true;
         script.onload = bootLoadedModule;
+        script.onerror = function () {
+            window.WelineThemeAddressLoading = false;
+        };
         document.head.appendChild(script);
     }
 
@@ -37,6 +58,12 @@
     }
 
     if (window.WelineThemeAddressDeclared) {
+        // Previous loader may have declared but failed to materialize the module (common on backend).
+        setTimeout(function () {
+            if (!window.WelineThemeAddress) {
+                directLoad();
+            }
+        }, 300);
         return;
     }
     window.WelineThemeAddressDeclared = true;
@@ -44,6 +71,12 @@
     var attempts = 0;
     (function waitForThemeLoader() {
         if (declareModule()) {
+            // Weline.declare can acknowledge without ever loading the file on some backends.
+            setTimeout(function () {
+                if (!window.WelineThemeAddress) {
+                    directLoad();
+                }
+            }, 1200);
             return;
         }
         attempts += 1;

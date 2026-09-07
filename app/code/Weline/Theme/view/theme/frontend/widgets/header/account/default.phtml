@@ -69,12 +69,16 @@ if (empty($dropdownItems)) {
     <div class="account-logged-in" data-account-shell="signed-in" hidden>
         <a href="@url{'customer/account/index'}" class="account-link" data-account-home-link>
             <?php if ($showAvatar): ?>
-                <span class="account-avatar">
-                    <?php if ($userAvatar !== ''): ?>
-                        <img src="<?= $esc($userAvatar) ?>" alt="<?= $esc($userName) ?>" data-account-avatar>
-                    <?php else: ?>
+                <span class="account-avatar" data-account-avatar-wrap>
+                    <?php /* Always emit img so account.current can paint a real avatar after guest SSR. */ ?>
+                    <img<?= $userAvatar !== '' ? ' src="' . $esc($userAvatar) . '"' : '' ?>
+                         alt="<?= $esc($userName) ?>"
+                         data-account-avatar
+                         class="account-avatar__img"
+                         <?= $userAvatar === '' ? 'hidden' : '' ?>>
+                    <span class="account-avatar__fallback" data-account-avatar-fallback<?= $userAvatar !== '' ? ' hidden' : '' ?> aria-hidden="true">
                         <w:icon name="user" size="sm"></w:icon>
-                    <?php endif; ?>
+                    </span>
                 </span>
             <?php endif; ?>
             <?php if ($showName): ?>
@@ -82,7 +86,10 @@ if (empty($dropdownItems)) {
             <?php endif; ?>
             <span class="account-text">
                 <span class="login-text" data-account-line1><?= $esc($label('您好')) ?></span>
-                <span class="register-text" data-account-line2><?= $esc($label('我的账户')) ?></span>
+                <span class="register-text" data-account-line2>
+                    <?= $esc($label('我的账户')) ?>
+                    <span class="account-menu-signal-badge" data-account-menu-signal-total hidden aria-hidden="true"></span>
+                </span>
             </span>
             <w:icon name="arrow-down" size="sm"></w:icon>
         </a>
@@ -93,7 +100,7 @@ if (empty($dropdownItems)) {
             </div>
             <ul class="dropdown-menu account-dropdown-menu" role="menu" data-account-menu>
                 <?php if ($dropdownItems === null): ?>
-                    <?php /* 个人中心入口由各模块 header-account-links 贡献（Customer/Shipping/Wishlist 等） */ ?>
+                    <?php /* 导航入口由各模块 header-account-links 贡献；退出登录由宿主固定在底部 */ ?>
                     <w:hook>header-account-links<else/>
                         <li role="none">
                             <a href="@url{'customer/account/index'}" role="menuitem">
@@ -108,12 +115,6 @@ if (empty($dropdownItems)) {
                         <li role="none">
                             <a href="@url{'customer/account/index'}#addresses" role="menuitem">
                                 <?= $esc($label('地址管理')) ?>
-                            </a>
-                        </li>
-                        <li class="divider" role="separator"></li>
-                        <li role="none">
-                            <a class="logout-link" href="@url{'customer/account/logout'}" role="menuitem">
-                                <?= $esc($label('退出登录')) ?>
                             </a>
                         </li>
                     </w:hook>
@@ -133,6 +134,12 @@ if (empty($dropdownItems)) {
                     <?php endif; ?>
                 <?php endforeach; ?>
                 <?php endif; ?>
+                <li class="divider" role="separator" data-account-menu-auth="signed-in" hidden></li>
+                <li role="none" data-account-menu-auth="signed-in" hidden>
+                    <a class="logout-link" href="@url{'customer/account/logout'}" role="menuitem" data-account-logout-confirm>
+                        <?= $esc($label('退出登录')) ?>
+                    </a>
+                </li>
             </ul>
         </div>
     </div>
@@ -183,10 +190,25 @@ if (empty($dropdownItems)) {
     overflow: hidden;
 }
 
-.<?= $wc ?> .account-avatar img {
+.<?= $wc ?> .account-avatar img,
+.<?= $wc ?> .account-avatar__img {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    display: block;
+}
+
+.<?= $wc ?> .account-avatar__img[hidden],
+.<?= $wc ?> .account-avatar__fallback[hidden] {
+    display: none !important;
+}
+
+.<?= $wc ?> .account-avatar__fallback {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
 }
 
 .<?= $wc ?> .account-name {
@@ -202,6 +224,29 @@ if (empty($dropdownItems)) {
     flex-direction: column;
     font-size: var(--weline-font-size-sm);
     line-height: 1.3;
+}
+
+.<?= $wc ?> .account-menu-signal-badge,
+.account-menu-signal-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.1rem;
+    height: 1.1rem;
+    margin-left: 0.35rem;
+    padding: 0 0.3rem;
+    border-radius: 999px;
+    background: #b12704;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 700;
+    line-height: 1;
+    vertical-align: middle;
+}
+
+.<?= $wc ?> .account-menu-signal-badge[hidden],
+.account-menu-signal-badge[hidden] {
+    display: none !important;
 }
 
 .<?= $wc ?> .login-text {

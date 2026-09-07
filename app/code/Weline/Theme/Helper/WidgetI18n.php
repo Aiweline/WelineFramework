@@ -14,6 +14,10 @@ use Weline\I18n\Api\Translation\TranslationResolverInterface;
  */
 final class WidgetI18n
 {
+    private const REQUEST_MEMO_KEY = 'theme.widget_i18n.memo';
+
+    private const REQUEST_MEMO_LIMIT = 512;
+
     /**
      * Resolve configured/default storefront copy and expand framework-style positional placeholders.
      *
@@ -27,6 +31,11 @@ final class WidgetI18n
         }
 
         $lang = self::resolveStorefrontLocale();
+        $memoKey = self::requestMemoKey($key, $lang, $args);
+        if (self::hasRequestMemo($memoKey)) {
+            return self::getRequestMemo($memoKey);
+        }
+
         /** @var TranslationResolverInterface $resolver */
         $resolver = ObjectManager::getInstance(TranslationResolverInterface::class);
         $preferredModules = [
@@ -36,6 +45,7 @@ final class WidgetI18n
             'Weline_Review',
             'Weline_Product',
             'Weline_Checkout',
+            'Weline_RecentlyViewed',
             'WeShop_Product',
             'WeShop_Catalog',
         ];
@@ -56,11 +66,63 @@ final class WidgetI18n
             $translated = str_replace('%{' . ($index + 1) . '}', (string)$value, $translated);
         }
 
+        self::setRequestMemo($memoKey, $translated);
+
         return $translated;
+    }
+
+    private static function requestMemoKey(string $source, string $locale, array $args): string
+    {
+        $encodedArgs = $args === []
+            ? ''
+            : (json_encode(array_values($args), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: serialize(array_values($args)));
+
+        return $locale . "\0" . $source . "\0" . $encodedArgs;
+    }
+
+    private static function hasRequestMemo(string $key): bool
+    {
+        if (!RequestContext::isInitialized()) {
+            return false;
+        }
+
+        $memo = RequestContext::get(self::REQUEST_MEMO_KEY, null);
+
+        return is_array($memo) && array_key_exists($key, $memo);
+    }
+
+    private static function getRequestMemo(string $key): string
+    {
+        $memo = RequestContext::get(self::REQUEST_MEMO_KEY, []);
+
+        return (string)($memo[$key] ?? '');
+    }
+
+    private static function setRequestMemo(string $key, string $value): void
+    {
+        if (!RequestContext::isInitialized()) {
+            return;
+        }
+
+        $memo = RequestContext::get(self::REQUEST_MEMO_KEY, []);
+        if (!is_array($memo)) {
+            $memo = [];
+        }
+        if (!array_key_exists($key, $memo) && count($memo) >= self::REQUEST_MEMO_LIMIT) {
+            array_shift($memo);
+        }
+        $memo[$key] = $value;
+        RequestContext::set(self::REQUEST_MEMO_KEY, $memo);
     }
 
     private static function resolveStorefrontLocale(): string
     {
+        // Path locale wins over RequestContext/KeyBuilder, which can lag on /{locale}/ pages.
+        $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+        if ($requestUri !== '' && preg_match('#/(ar_SA|en_US|zh_Hans_CN|zh_CN)(?:/|$)#', $requestUri, $matches)) {
+            return (string) $matches[1];
+        }
+
         try {
             $requestLocale = trim((string)(RequestContext::locale() ?? ''));
             if ($requestLocale !== ''
@@ -73,10 +135,6 @@ final class WidgetI18n
         }
 
         $lang = trim(State::getLangLocal());
-        $requestUri = (string) (\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
-        if ($requestUri !== '' && preg_match('#/(ar_SA|en_US|zh_Hans_CN|zh_CN)(?:/|$)#', $requestUri, $matches)) {
-            return (string) $matches[1];
-        }
 
         return $lang !== '' ? $lang : 'zh_Hans_CN';
     }

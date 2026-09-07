@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use ReflectionObject;
+use Weline\Framework\App\State;
 use Weline\Framework\Http\Request;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Theme\Model\ThemeLayout;
 
@@ -21,28 +23,34 @@ final class ThemePageTypeResolver
         ThemeLayout::PAGE_TYPE_CART => ThemeLayout::PAGE_TYPE_CART,
         ThemeLayout::PAGE_TYPE_CHECKOUT => ThemeLayout::PAGE_TYPE_CHECKOUT,
         ThemeLayout::PAGE_TYPE_ACCOUNT => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        ThemeLayout::PAGE_TYPE_DASHBOARD => ThemeLayout::PAGE_TYPE_DASHBOARD,
         'account_auth' => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        'account.auth' => ThemeLayout::PAGE_TYPE_ACCOUNT,
+        'account.challenge' => ThemeLayout::PAGE_TYPE_ACCOUNT,
         'account_profile' => ThemeLayout::PAGE_TYPE_ACCOUNT,
         'account_orders' => ThemeLayout::PAGE_TYPE_ACCOUNT,
         'account_logout' => ThemeLayout::PAGE_TYPE_ACCOUNT,
         ThemeLayout::PAGE_TYPE_SEARCH => ThemeLayout::PAGE_TYPE_SEARCH,
         ThemeLayout::PAGE_TYPE_BLOG => ThemeLayout::PAGE_TYPE_BLOG,
         ThemeLayout::PAGE_TYPE_BLOG_CATEGORY => ThemeLayout::PAGE_TYPE_BLOG_CATEGORY,
+        ThemeLayout::PAGE_TYPE_PROMOTION => ThemeLayout::PAGE_TYPE_PROMOTION,
+        ThemeLayout::PAGE_TYPE_ACTIVITY => ThemeLayout::PAGE_TYPE_ACTIVITY,
+        ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS => ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS,
+        ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
+        'checkout_failer' => ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE,
+        ThemeLayout::PAGE_TYPE_HELP => ThemeLayout::PAGE_TYPE_HELP,
+        ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE => ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE,
+        ThemeLayout::PAGE_TYPE_GUIDE => ThemeLayout::PAGE_TYPE_GUIDE,
+        ThemeLayout::PAGE_TYPE_ABOUT => ThemeLayout::PAGE_TYPE_ABOUT,
+        ThemeLayout::PAGE_TYPE_CONTACT => ThemeLayout::PAGE_TYPE_CONTACT,
+        'customer_service' => ThemeLayout::PAGE_TYPE_CONTACT,
+        ThemeLayout::PAGE_TYPE_REVIEW => ThemeLayout::PAGE_TYPE_REVIEW,
+        ThemeLayout::PAGE_TYPE_QA => ThemeLayout::PAGE_TYPE_QA,
+        ThemeLayout::PAGE_TYPE_RMA => ThemeLayout::PAGE_TYPE_RMA,
+        ThemeLayout::PAGE_TYPE_POLICY => ThemeLayout::PAGE_TYPE_POLICY,
+        ThemeLayout::PAGE_TYPE_TERMS => ThemeLayout::PAGE_TYPE_TERMS,
+        ThemeLayout::PAGE_TYPE_NOT_FOUND => ThemeLayout::PAGE_TYPE_NOT_FOUND,
         ThemeLayout::PAGE_TYPE_DEFAULT => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'checkout_success' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'checkout_failer' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'not_found' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'customer_service' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'help' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'payment_guide' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'contact' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'about' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'promotion' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'review' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'qa' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'rma' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'activity' => ThemeLayout::PAGE_TYPE_DEFAULT,
-        'policy' => ThemeLayout::PAGE_TYPE_DEFAULT,
     ];
 
     private const PREVIEW_ROUTE_BY_PAGE_TYPE = [
@@ -57,6 +65,21 @@ final class ThemePageTypeResolver
         ThemeLayout::PAGE_TYPE_SEARCH => 'search',
         ThemeLayout::PAGE_TYPE_BLOG => 'blog',
         ThemeLayout::PAGE_TYPE_BLOG_CATEGORY => 'blog',
+        ThemeLayout::PAGE_TYPE_PROMOTION => 'promotion',
+        ThemeLayout::PAGE_TYPE_ACTIVITY => 'activity',
+        ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS => 'checkout/success',
+        ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE => 'theme/frontend/theme-preview/content',
+        ThemeLayout::PAGE_TYPE_HELP => 'help',
+        ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE => 'guide/payment',
+        ThemeLayout::PAGE_TYPE_GUIDE => 'guide/shipping',
+        ThemeLayout::PAGE_TYPE_ABOUT => 'about',
+        ThemeLayout::PAGE_TYPE_CONTACT => 'contact',
+        ThemeLayout::PAGE_TYPE_REVIEW => 'review',
+        ThemeLayout::PAGE_TYPE_QA => 'qa',
+        ThemeLayout::PAGE_TYPE_RMA => 'rma',
+        ThemeLayout::PAGE_TYPE_POLICY => 'policy',
+        ThemeLayout::PAGE_TYPE_TERMS => 'terms',
+        ThemeLayout::PAGE_TYPE_NOT_FOUND => 'theme/frontend/theme-preview/content',
         ThemeLayout::PAGE_TYPE_DEFAULT => 'index/index',
     ];
 
@@ -222,7 +245,10 @@ final class ThemePageTypeResolver
             return ThemeLayout::PAGE_TYPE_PRODUCT;
         }
         if ($contains('checkout') && $contains('success')) {
-            return 'checkout_success';
+            return ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS;
+        }
+        if ($contains('checkout') && ($contains('failure') || $contains('failer'))) {
+            return ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE;
         }
         if ($contains('checkout')) {
             return ThemeLayout::PAGE_TYPE_CHECKOUT;
@@ -239,20 +265,50 @@ final class ThemePageTypeResolver
         if ($contains('account')) {
             return ThemeLayout::PAGE_TYPE_ACCOUNT;
         }
+        if ($contains('dashboard')) {
+            return ThemeLayout::PAGE_TYPE_DASHBOARD;
+        }
         if ($contains('customerservice')) {
             return 'customer_service';
         }
+        if ($contains('payment') && $contains('guide')) {
+            return ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE;
+        }
+        if ($contains('guide')) {
+            return ThemeLayout::PAGE_TYPE_GUIDE;
+        }
+        if ($contains('help') || $contains('faq')) {
+            return ThemeLayout::PAGE_TYPE_HELP;
+        }
+        if ($contains('contact')) {
+            return ThemeLayout::PAGE_TYPE_CONTACT;
+        }
+        if ($contains('about')) {
+            return ThemeLayout::PAGE_TYPE_ABOUT;
+        }
         if ($contains('promotion')) {
-            return 'promotion';
+            return ThemeLayout::PAGE_TYPE_PROMOTION;
+        }
+        if ($contains('activity')) {
+            return ThemeLayout::PAGE_TYPE_ACTIVITY;
         }
         if ($contains('review')) {
-            return 'review';
+            return ThemeLayout::PAGE_TYPE_REVIEW;
         }
         if ($contains('qa')) {
-            return 'qa';
+            return ThemeLayout::PAGE_TYPE_QA;
         }
         if ($contains('rma')) {
-            return 'rma';
+            return ThemeLayout::PAGE_TYPE_RMA;
+        }
+        if ($contains('terms') || $contains('termcondition')) {
+            return ThemeLayout::PAGE_TYPE_TERMS;
+        }
+        if ($contains('policy') || $contains('privacy')) {
+            return ThemeLayout::PAGE_TYPE_POLICY;
+        }
+        if ($contains('notfound') || $contains('not_found')) {
+            return ThemeLayout::PAGE_TYPE_NOT_FOUND;
         }
         if ($contains('cms') || $contains('page_view')) {
             return 'cms';
@@ -266,8 +322,7 @@ final class ThemePageTypeResolver
 
     private function detectLayoutTypeFromUri(string $requestUri): string
     {
-        $path = strtolower((string)parse_url($requestUri, PHP_URL_PATH));
-        $path = trim($path, '/');
+        $path = $this->normalizeStorefrontPath($requestUri);
 
         if ($path === '' || str_ends_with($path, 'index/index') || $path === 'index') {
             return ThemeLayout::PAGE_TYPE_HOME;
@@ -295,7 +350,13 @@ final class ThemePageTypeResolver
             return 'cms';
         }
         if ($this->pathMatchesRoute($path, 'checkout/success')) {
-            return 'checkout_success';
+            return ThemeLayout::PAGE_TYPE_CHECKOUT_SUCCESS;
+        }
+        if ($this->pathMatchesRoute($path, 'checkout/failure')) {
+            return ThemeLayout::PAGE_TYPE_CHECKOUT_FAILURE;
+        }
+        if ($this->pathMatchesRoute($path, 'checkout/failer')) {
+            return 'checkout_failer';
         }
         if ($this->pathMatchesRoute($path, 'checkout')) {
             return ThemeLayout::PAGE_TYPE_CHECKOUT;
@@ -322,6 +383,9 @@ final class ThemePageTypeResolver
         if ($this->pathMatchesRoute($path, 'account') || $this->pathMatchesRoute($path, 'customer/account')) {
             return ThemeLayout::PAGE_TYPE_ACCOUNT;
         }
+        if ($this->pathMatchesRoute($path, 'dashboard')) {
+            return ThemeLayout::PAGE_TYPE_DASHBOARD;
+        }
         if ($this->pathMatchesRoute($path, 'orders/track')
             || $this->pathMatchesRoute($path, 'order/track')
             || $this->pathMatchesRoute($path, 'order/tracking')
@@ -330,31 +394,93 @@ final class ThemePageTypeResolver
             return 'account_orders';
         }
         if ($this->pathMatchesRoute($path, 'help') || $this->pathMatchesRoute($path, 'faq')) {
-            return 'help';
+            return ThemeLayout::PAGE_TYPE_HELP;
         }
         if ($this->pathMatchesRoute($path, 'customer/service') || $this->pathMatchesRoute($path, 'customer-service')) {
             return 'customer_service';
         }
         if ($this->pathMatchesRoute($path, 'contact') || $path === 'support' || str_ends_with($path, '/support')) {
-            return 'contact';
+            return ThemeLayout::PAGE_TYPE_CONTACT;
         }
         if ($this->pathMatchesRoute($path, 'about')) {
-            return 'about';
+            return ThemeLayout::PAGE_TYPE_ABOUT;
         }
         if ($this->pathMatchesRoute($path, 'promotion')) {
-            return 'promotion';
+            return ThemeLayout::PAGE_TYPE_PROMOTION;
+        }
+        if ($this->pathMatchesRoute($path, 'activity')) {
+            return ThemeLayout::PAGE_TYPE_ACTIVITY;
         }
         if ($this->pathMatchesRoute($path, 'review')) {
-            return 'review';
+            return ThemeLayout::PAGE_TYPE_REVIEW;
         }
         if ($this->pathMatchesRoute($path, 'qa')) {
-            return 'qa';
+            return ThemeLayout::PAGE_TYPE_QA;
         }
         if ($this->pathMatchesRoute($path, 'rma')) {
-            return 'rma';
+            return ThemeLayout::PAGE_TYPE_RMA;
+        }
+        if ($this->pathMatchesRoute($path, 'guide/payment') || $this->pathMatchesRoute($path, 'payment-guide')) {
+            return ThemeLayout::PAGE_TYPE_PAYMENT_GUIDE;
+        }
+        if ($this->pathMatchesRoute($path, 'guide')) {
+            return ThemeLayout::PAGE_TYPE_GUIDE;
+        }
+        if ($this->pathMatchesRoute($path, 'terms')
+            || $this->pathMatchesRoute($path, 'term-condition')
+            || $this->pathMatchesRoute($path, 'terms-and-conditions')
+            || $this->pathMatchesRoute($path, 'policy/terms')
+            || $this->pathMatchesRoute($path, 'policy/term-condition')
+        ) {
+            return ThemeLayout::PAGE_TYPE_TERMS;
+        }
+        if ($this->pathMatchesRoute($path, 'policy')
+            || $this->pathMatchesRoute($path, 'privacy')
+            || $this->pathMatchesRoute($path, 'cookie')
+            || $this->pathMatchesRoute($path, 'cookies')
+            || $this->pathMatchesRoute($path, 'cookie-policy')
+            || $this->pathMatchesRoute($path, 'refund')
+            || $this->pathMatchesRoute($path, 'returns')
+            || $this->pathMatchesRoute($path, 'disclaimer')
+        ) {
+            return ThemeLayout::PAGE_TYPE_POLICY;
+        }
+        if ($this->pathMatchesRoute($path, 'not-found')
+            || $this->pathMatchesRoute($path, 'not_found')
+            || $this->pathMatchesRoute($path, '404')
+        ) {
+            return ThemeLayout::PAGE_TYPE_NOT_FOUND;
         }
 
         return '';
+    }
+
+    private function normalizeStorefrontPath(string $requestUri): string
+    {
+        $path = (string)\parse_url($requestUri, \PHP_URL_PATH);
+        $path = '/' . \trim(\str_replace('\\', '/', $path), '/');
+
+        try {
+            $path = Url::peelWebsiteMountPathFromRelativePath($path);
+        } catch (\Throwable) {
+            // A standalone resolver call may not have an initialized Website context.
+        }
+
+        $segments = \array_values(\array_filter(
+            \explode('/', \trim($path, '/')),
+            static fn(string $segment): bool => $segment !== ''
+        ));
+
+        try {
+            $localized = State::resolveLocalizationFromPathSegments($segments);
+            if (isset($localized['remaining']) && \is_array($localized['remaining'])) {
+                $segments = \array_values(\array_map('strval', $localized['remaining']));
+            }
+        } catch (\Throwable) {
+            // Keep the unmodified path when localization metadata is unavailable.
+        }
+
+        return \strtolower(\implode('/', $segments));
     }
 
     /**

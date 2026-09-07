@@ -27,14 +27,14 @@
 .amazon-payment-guide-layout__main {
     background: #fff;
     border: 1px solid #d5d9d9;
-    border-radius: 8px;
+    border-radius: var(--weline-theme-radius-lg);
     padding: 0.875rem 1rem 1rem;
     box-sizing: border-box;
 }
 
 .amazon-payment-guide-layout__sidebar-title {
     margin: 0 0 0.75rem;
-    font-size: 14px;
+    font-size: var(--weline-font-size-sm);
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.02em;
@@ -52,16 +52,16 @@
 .amazon-payment-guide-layout__nav-link {
     display: block;
     padding: 0.45rem 0.6rem;
-    border-radius: 4px;
+    border-radius: var(--weline-theme-radius-md);
     color: #0f1111;
     text-decoration: none;
-    font-size: 13px;
+    font-size: var(--weline-font-size-sm);
     line-height: 1.45;
 }
 
 .amazon-payment-guide-layout__nav-link:hover {
     background: #f7fafa;
-    color: #c45500;
+    color: var(--color-link-hover);
 }
 
 .amazon-payment-guide-layout__nav-link.is-active {
@@ -79,7 +79,7 @@
 .amazon-payment-guide-layout__nav-group-label {
     display: block;
     padding: 0.45rem 0.6rem;
-    font-size: 13px;
+    font-size: var(--weline-font-size-sm);
     font-weight: 700;
     line-height: 1.45;
     color: #0f1111;
@@ -97,16 +97,16 @@
 .amazon-payment-guide-layout__nav-article {
     display: block;
     padding: 0.35rem 0.55rem;
-    border-radius: 4px;
-    color: #007185;
+    border-radius: var(--weline-theme-radius-md);
+    color: var(--color-link);
     text-decoration: none;
-    font-size: 12px;
+    font-size: var(--weline-font-size-xs);
     line-height: 1.45;
     font-weight: 600;
 }
 
 .amazon-payment-guide-layout__nav-article:hover {
-    color: #c45500;
+    color: var(--color-link-hover);
     background: #f7fafa;
     text-decoration: underline;
 }
@@ -129,14 +129,14 @@
 }
 
 .amazon-payment-guide-layout__nav-sub a {
-    color: #007185;
-    font-size: 12px;
+    color: var(--color-link);
+    font-size: var(--weline-font-size-xs);
     text-decoration: none;
     font-weight: 600;
 }
 
 .amazon-payment-guide-layout__nav-sub a:hover {
-    color: #c45500;
+    color: var(--color-link-hover);
     text-decoration: underline;
 }
 
@@ -156,7 +156,7 @@
 .amazon-payment-guide-listing__meta {
     margin: 0;
     color: #565959;
-    font-size: 13px;
+    font-size: var(--weline-font-size-sm);
     line-height: 1.5;
 }
 
@@ -167,16 +167,16 @@
 .amazon-payment-guide-listing__grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px;
+    gap: var(--weline-space-3);
 }
 
 .amazon-payment-guide-card {
     display: grid;
-    gap: 0.5rem;
+    gap: var(--weline-space-2);
     min-height: 100%;
     padding: 0.875rem;
     border: 1px solid #d5d9d9;
-    border-radius: 8px;
+    border-radius: var(--weline-theme-radius-lg);
     background: #fff;
     box-sizing: border-box;
     transition: box-shadow 0.15s ease, border-color 0.15s ease;
@@ -184,14 +184,14 @@
 
 .amazon-payment-guide-card:hover {
     border-color: #a2a6a6;
-    box-shadow: 0 2px 5px rgba(15, 17, 17, 0.12);
+    box-shadow: var(--weline-shadow-sm);
 }
 
 .amazon-payment-guide-card__badge {
     display: inline-block;
     width: fit-content;
     padding: 0.15rem 0.45rem;
-    border-radius: 3px;
+    border-radius: var(--weline-theme-radius-sm);
     background: #f0f2f2;
     color: #565959;
     font-size: 11px;
@@ -211,7 +211,7 @@
 .amazon-payment-guide-card__summary {
     margin: 0;
     color: #565959;
-    font-size: 13px;
+    font-size: var(--weline-font-size-sm);
     line-height: 1.5;
     flex: 1;
 }
@@ -224,14 +224,14 @@
 }
 
 .amazon-payment-guide-card__link {
-    color: #007185;
-    font-size: 13px;
+    color: var(--color-link);
+    font-size: var(--weline-font-size-sm);
     font-weight: 600;
     text-decoration: none;
 }
 
 .amazon-payment-guide-card__link:hover {
-    color: #c45500;
+    color: var(--color-link-hover);
     text-decoration: underline;
 }
 
@@ -246,16 +246,16 @@
     gap: 0.35rem;
     margin: 0 0 0.75rem;
     color: #565959;
-    font-size: 12px;
+    font-size: var(--weline-font-size-xs);
 }
 
 .amazon-payment-guide-article__breadcrumb a {
-    color: #007185;
+    color: var(--color-link);
     text-decoration: none;
 }
 
 .amazon-payment-guide-article__breadcrumb a:hover {
-    color: #c45500;
+    color: var(--color-link-hover);
     text-decoration: underline;
 }
 
@@ -269,9 +269,9 @@
     display: inline-block;
     margin: 0 0 0.35rem;
     padding: 0.15rem 0.45rem;
-    border-radius: 3px;
+    border-radius: var(--weline-theme-radius-sm);
     background: #fff4e5;
-    color: #c45500;
+    color: var(--color-link-hover);
     font-size: 11px;
     font-weight: 700;
     text-transform: uppercase;
@@ -288,7 +288,7 @@
 .amazon-payment-guide-article__lead {
     margin: 0;
     color: #565959;
-    font-size: 14px;
+    font-size: var(--weline-font-size-sm);
     line-height: 1.6;
 }
 
@@ -316,7 +316,7 @@
     margin: 0;
     padding-left: 1.1rem;
     color: #0f1111;
-    font-size: 14px;
+    font-size: var(--weline-font-size-sm);
     line-height: 1.6;
     display: grid;
     gap: 0.35rem;
@@ -333,21 +333,21 @@
 .amazon-payment-guide-article__faq li {
     padding: 0.65rem 0.75rem;
     border: 1px solid #e3e6e6;
-    border-radius: 6px;
+    border-radius: var(--weline-theme-radius-md);
     background: #f7fafa;
 }
 
 .amazon-payment-guide-article__faq strong {
     display: block;
     margin-bottom: 0.25rem;
-    font-size: 14px;
+    font-size: var(--weline-font-size-sm);
     color: #0f1111;
 }
 
 .amazon-payment-guide-article__faq p {
     margin: 0;
     color: #565959;
-    font-size: 13px;
+    font-size: var(--weline-font-size-sm);
     line-height: 1.55;
 }
 
@@ -358,14 +358,14 @@
 }
 
 .amazon-payment-guide-article__footer a {
-    color: #007185;
-    font-size: 13px;
+    color: var(--color-link);
+    font-size: var(--weline-font-size-sm);
     font-weight: 600;
     text-decoration: none;
 }
 
 .amazon-payment-guide-article__footer a:hover {
-    color: #c45500;
+    color: var(--color-link-hover);
     text-decoration: underline;
 }
 
@@ -373,7 +373,7 @@
     padding: 2rem 1rem;
     text-align: center;
     color: #565959;
-    font-size: 14px;
+    font-size: var(--weline-font-size-sm);
 }
 
 @media (max-width: 1024px) {

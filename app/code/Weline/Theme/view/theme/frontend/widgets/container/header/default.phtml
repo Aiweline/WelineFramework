@@ -18,7 +18,7 @@
  * @widget.slots {"logo":{"name":"Logo 插槽","position":"left","accept":["logo"],"max":1},"search":{"name":"搜索框插槽","position":"center","accept":["header-search"],"max":1},"navigation":{"name":"导航菜单插槽","position":"center-bottom","accept":["main-nav","category-menu"],"max":1},"user-area":{"name":"用户区域插槽","position":"right","accept":["account","mini-cart-icon","wishlist-icon","language-switcher","currency-switcher"],"max":5}}
  *
  * @param sticky {default=true,type="bool",label="吸顶效果"}
- * @param bg_color {default="var(--weline-theme-header-bg,#131921)",type="color",label="背景颜色"}
+ * @param bg_color {default="var(--weline-theme-header-bg, var(--color-bg-dark-secondary))",type="color",label="背景颜色"}
  * @param shadow {default=true,type="bool",label="显示阴影"}
  */
 
@@ -35,7 +35,7 @@ $isPreviewMode = (bool)($config['preview_mode'] ?? false);
 $sticky = (bool)($config['sticky'] ?? true);
 $bgColor = ThemeUiColor::sanitize(
     $config['bg_color'] ?? '',
-    'var(--weline-theme-header-bg,#131921)'
+    'var(--weline-theme-header-bg, var(--color-bg-dark-secondary))'
 );
 $shadow = (bool)($config['shadow'] ?? true);
 
@@ -52,9 +52,9 @@ if ($shadow) {
         style="<?= $esc($rootStyle) ?>">
 
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)?v=20260826-mini-cart-align1">
+      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)">
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)?v=20260824-hotword-contrast1">
+      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)">
 
     <div class="header-main">
         <div class="header-inner header-inner--primary">

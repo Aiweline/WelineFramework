@@ -6,6 +6,7 @@ namespace Weline\Theme\Test\Unit\Service\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Service\WidgetRegistryComponentSource;
+use Weline\Widget\Service\ParamSchemaRegistry;
 use Weline\Widget\Service\WidgetRegistry;
 
 final class WidgetRegistryComponentSourceTest extends TestCase
@@ -34,7 +35,10 @@ final class WidgetRegistryComponentSourceTest extends TestCase
             ],
         ]);
 
-        $source = new WidgetRegistryComponentSource($registry);
+        $source = new WidgetRegistryComponentSource(
+            $registry,
+            $this->createMock(ParamSchemaRegistry::class),
+        );
         $definitions = $source->collect('frontend');
 
         self::assertCount(2, $definitions);

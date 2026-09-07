@@ -17,7 +17,8 @@ final class StorefrontShopperToastContractTest extends TestCase
         self::assertStringContainsString('.w-amz-shopper-toast', $themeCss);
         self::assertStringContainsString('.w-amz-cart-added', $themeCss);
         self::assertStringContainsString('.w-amz-cart-added__btn--checkout', $themeCss);
-        self::assertStringContainsString('#067d62', $themeCss);
+        self::assertStringContainsString('var(--color-success)', $themeCss);
+        self::assertStringContainsString('var(--color-primary)', $themeCss);
     }
 
     public function testFrontendHeadLoadsThemeCss(): void

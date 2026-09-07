@@ -13,6 +13,18 @@ namespace Weline\Theme\Service;
  */
 final class WidgetHtmlHealthInspector
 {
+    /**
+     * Purchase CTAs may intentionally render nothing (quote_only / unsellable).
+     * Empty HTML is not a health fault for these widget codes.
+     *
+     * @var array<string, true>
+     */
+    private const OPTIONAL_EMPTY_WIDGET_CODES = [
+        'product-add-to-cart' => true,
+        'product-buy-now' => true,
+        'product-card-buy-now' => true,
+    ];
+
     /** @var list<array{pattern:string,severity:string,code:string}> */
     private const PHP_ERROR_MATCHERS = [
         [
@@ -76,6 +88,10 @@ final class WidgetHtmlHealthInspector
     public function inspect(string $html, array $meta = []): array
     {
         if (trim($html) === '') {
+            if ($this->allowsEmptyHtml($meta)) {
+                return [];
+            }
+
             return [[
                 'severity' => 'warning',
                 'code' => 'empty_html',
@@ -119,6 +135,16 @@ final class WidgetHtmlHealthInspector
         }
 
         return $worst;
+    }
+
+    /**
+     * @param array{module?:string,code?:string,type?:string,slot_id?:string,layout_id?:string} $meta
+     */
+    private function allowsEmptyHtml(array $meta): bool
+    {
+        $code = strtolower(trim((string)($meta['code'] ?? '')));
+
+        return $code !== '' && isset(self::OPTIONAL_EMPTY_WIDGET_CODES[$code]);
     }
 
     /**

@@ -44,10 +44,18 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('loadDrawer', $source);
         self::assertStringContainsString('syncCartState', $source);
         self::assertStringContainsString('scheduleCartSync', $source);
+        self::assertStringContainsString('applyCachedSummary', $source);
+        self::assertStringContainsString('readSummaryCache', $source);
+        self::assertStringContainsString('rememberSummaryCache', $source);
+        self::assertStringContainsString('forceNetwork', $source);
+        self::assertStringContainsString('weline.cart.summary_cache', $source);
         self::assertStringContainsString('waitForCartApi', $source);
         self::assertStringContainsString('getCart', $source);
         self::assertStringContainsString('isDemoChromeOnly', $source);
         self::assertStringContainsString('withTimeout', $source);
+        self::assertStringContainsString('weline:cart-updated', $source);
+        self::assertStringContainsString('isCheckoutPath', $source);
+        self::assertStringContainsString("setDrawerOpen(root, false)", $source);
         self::assertStringContainsString('miniItems', $source);
         self::assertStringContainsString('update', $source);
         self::assertStringContainsString('remove', $source);
@@ -68,7 +76,25 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('observeMiniCartRoots', $source);
         self::assertStringContainsString('__booted', $source);
         self::assertStringContainsString('isDisplayableImageUrl', $source);
+        self::assertStringContainsString('appendMiniCartOptions', $source);
+        self::assertStringContainsString('mini-cart-drawer__line-options', $source);
+        self::assertStringContainsString('option.swatch_image', $source);
         self::assertMatchesRegularExpression('#asset:\\\\?/\\\\?/#', $source);
+    }
+
+    public function testMiniCartIconTemplateRendersOptionSwatches(): void
+    {
+        $path = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/header/mini-cart-icon/default.phtml';
+        $css = dirname(__DIR__, 2) . '/view/statics/css/widgets/mini-cart-drawer.css';
+        self::assertFileExists($path);
+        self::assertFileExists($css);
+        $source = (string)file_get_contents($path);
+        $styles = (string)file_get_contents($css);
+
+        self::assertStringContainsString('mini-cart-drawer__line-options', $source);
+        self::assertStringContainsString('mini-cart-drawer__line-option-swatch', $source);
+        self::assertStringContainsString("swatch_image", $source);
+        self::assertStringContainsString('mini-cart-drawer__line-option-swatch', $styles);
     }
 
     public function testMiniCartExtrasTabsScriptBuildsHorizontalSwitcher(): void
@@ -79,6 +105,7 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
 
         self::assertStringContainsString('mini-cart-drawer__extras-tablist', $source);
         self::assertStringContainsString('data-mini-cart-tab-label', $source);
+        self::assertStringContainsString('shellUid', $source);
         self::assertStringContainsString('bindSwipe', $source);
         self::assertStringContainsString('weshop:mini-cart:open', $source);
         self::assertStringContainsString('weshop:mini-cart:extras-ready', $source);
@@ -131,7 +158,11 @@ final class MiniCartShopifyDrawerContractTest extends TestCase
         self::assertStringContainsString('mini-cart-drawer.css', $source);
         self::assertStringContainsString('data-weline-mini-cart-drawer="1"', $source);
         self::assertStringContainsString('data-weline-load="miniCartIcon,miniCartExtras"', $source);
-        self::assertStringContainsString('20260831-component-scope1', $source);
+        self::assertStringContainsString('@static(Weline_Theme::css/widgets/mini-cart-drawer.css)', $source);
+        self::assertDoesNotMatchRegularExpression(
+            '/@static\(Weline_Theme::css\/widgets\/mini-cart-drawer\.css\)(?:\?|&amp;)v=/',
+            $source,
+        );
     }
 
     public function testBodyEndHookDoesNotLoadMiniCartAssetsGlobally(): void

@@ -16,6 +16,7 @@
    - 装饰性缩略图可用 `alt=""`，链接用 `aria-label`
 4. 运行时：`Weline_Theme::js/storefront-image-fallback.js`；破图或误留的 `data:image` 一律改成静态 `src`。可注入 `Weline.Theme.storefrontPlaceholderSrc`。
 5. JS：`Weline.Theme.storefrontImagePlaceholder()` 返回同一静态 URL。
+6. 加载策略（同脚本）：未声明 `loading` 的店面 `img` 自动补 `lazy` + `decoding=async`；`IntersectionObserver` 近视口预测预载（默认 `rootMargin: 600px 0px`）。例外见 `REQ-THEME-0025`。开关：`Weline.Theme.storefrontAutoLazy` / `storefrontPredictPrefetch` / `storefrontPredictRootMargin`。
 
 ## 禁止
 

@@ -14,9 +14,9 @@
  * @widget.supports {["layout-homepage-promo","layout-homepage-hero","layout-cms-hero","layout-default-content"]}
  *
  * @param background_image {default="",type="media_image",label="背景图片",description="从媒体库选择背景图"}
- * @param background_color {default="var(--weline-theme-danger-surface)",type="color",label="背景颜色"}
- * @param text {default="限时特惠！全场满300减50",type="string",label="促销文字"}
- * @param text_color {default="var(--weline-theme-danger)",type="color",label="文字颜色"}
+ * @param background_color {default="var(--weline-theme-primary-subtle)",type="color",label="背景颜色"}
+ * @param text {default="云裳汉服 · 满 ¥299 包邮 · 形制精选上新",type="string",label="促销文字"}
+ * @param text_color {default="var(--weline-theme-primary-text-emphasis)",type="color",label="文字颜色"}
  * @param link {default="",type="string",label="链接地址"}
  * @param closeable {default=true,type="bool",label="允许关闭"}
  * @param countdown_end {default="",type="string",label="倒计时结束时间",description="格式：2026-12-31 23:59:59"}
@@ -38,15 +38,15 @@ $backgroundImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize(
 $backgroundImageFileHtml = (string)($this->getData('background_image_file_html') ?? '');
 $backgroundColor = ThemeUiColor::sanitize(
     $this->getData('background_color') ?? '',
-    'var(--weline-theme-danger-surface)'
+    'var(--weline-theme-primary-subtle)'
 );
-$text = WidgetI18n::label(trim((string)($this->getData('text') ?? '')), '限时特惠！全场满300减50');
+$text = WidgetI18n::label(trim((string)($this->getData('text') ?? '')), '云裳汉服 · 满 ¥299 包邮 · 形制精选上新');
 $textColor = ThemeUiColor::sanitize(
     $this->getData('text_color') ?? '',
-    'var(--weline-theme-danger)'
+    'var(--weline-theme-primary-text-emphasis)'
 );
 $link = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('link') ?? '');
-$closeable = (bool)($this->getData('closeable') ?? true);
+$closeable = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('closeable'), true);
 $countdownEnd = trim((string)($this->getData('countdown_end') ?? ''));
 $hasCountdown = $countdownEnd !== '';
 
@@ -60,6 +60,7 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
+         data-weline-load="siteBlocks" data-site-block="promo"
          style="<?= $esc($rootStyle) ?>">
     <?php if ($backgroundImageFileHtml !== ''): ?>
         <div class="promo-background"><?= $backgroundImageFileHtml ?></div>
@@ -103,7 +104,9 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: var(--weline-space-3) var(--weline-space-12);
+    width: 100%;
+    max-width: none;
+    padding: var(--spacing-sm) 0;
     background-color: var(--wc-promo-bg);
     background-size: cover;
     background-position: center;
@@ -113,6 +116,8 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
 
 .<?= $wc ?> .promo-content {
     position: relative;
+    min-width: 0;
+    padding-inline: var(--spacing-lg) var(--spacing-3xl);
     z-index: 2;
     display: flex;
     align-items: center;
@@ -139,6 +144,7 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     display: flex;
     align-items: center;
     gap: var(--weline-space-4);
+    flex-wrap: wrap;
     color: inherit;
     text-decoration: none;
     transition: opacity var(--weline-theme-transition-base);
@@ -214,25 +220,15 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     opacity: 1;
 }
 
+.<?= $wc ?> [hidden],
+.<?= $wc ?>[hidden],
 .<?= $wc ?>.is-hidden {
     display: none;
 }
 
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    min-height: var(--size-control-xl);
-    padding: var(--weline-space-2) var(--weline-space-9) var(--weline-space-2) var(--weline-space-3);
-}
-
-.widget-preview-canvas .<?= $wc ?> .promo-text,
-.<?= $wc ?>.is-preview .promo-text {
-    font-size: var(--weline-font-size-xs);
-    line-height: 1.3;
-}
-
 @media (max-width: 768px) {
     .<?= $wc ?> {
-        padding: var(--weline-space-2) var(--weline-space-10) var(--weline-space-2) var(--weline-space-4);
+        padding-block: var(--spacing-sm);
     }
 
     .<?= $wc ?> .promo-text {
@@ -240,59 +236,3 @@ if ($backgroundImageFileHtml === '' && $backgroundImage !== '') {
     }
 }
 </style>
-
-<script>
-(function () {
-    var root = document.querySelector('[data-uid="<?= $esc($scope->uid) ?>"]');
-    if (!root) return;
-
-    var storageKey = '<?= $esc($scope->jsNs) ?>-closed-' + root.getAttribute('data-uid');
-
-    var closeBtn = root.querySelector('.promo-close');
-    if (closeBtn) {
-        closeBtn.addEventListener('click', function () {
-            root.classList.add('is-hidden');
-            try { localStorage.setItem(storageKey, String(Date.now())); } catch (e) {}
-        });
-
-        try {
-            var closedTime = localStorage.getItem(storageKey);
-            if (closedTime) {
-                var hoursSinceClosed = (Date.now() - parseInt(closedTime, 10)) / (1000 * 60 * 60);
-                // Avoid raw "<" in inline JS: Theme preview may re-parse HTML with DOMDocument.
-                if (!(hoursSinceClosed >= 24)) {
-                    root.classList.add('is-hidden');
-                }
-            }
-        } catch (e) {}
-    }
-
-    var countdown = root.querySelector('.promo-countdown');
-    if (!countdown) return;
-
-    var endDate = new Date(countdown.dataset.end).getTime();
-    if (!Number.isFinite(endDate)) return;
-
-    function updateCountdown() {
-        var diff = endDate - Date.now();
-        if (diff <= 0) {
-            root.classList.add('is-hidden');
-            return;
-        }
-
-        var days = Math.floor(diff / 86400000);
-        var hours = Math.floor((diff % 86400000) / 3600000);
-        var minutes = Math.floor((diff % 3600000) / 60000);
-        var seconds = Math.floor((diff % 60000) / 1000);
-
-        var map = { days: days, hours: hours, minutes: minutes, seconds: seconds };
-        Object.keys(map).forEach(function (unit) {
-            var el = countdown.querySelector('[data-unit="' + unit + '"] .time-value');
-            if (el) el.textContent = String(map[unit]).padStart(2, '0');
-        });
-    }
-
-    updateCountdown();
-    setInterval(updateCountdown, 1000);
-})();
-</script>

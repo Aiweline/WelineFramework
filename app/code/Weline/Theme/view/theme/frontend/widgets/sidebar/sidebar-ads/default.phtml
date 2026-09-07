@@ -30,8 +30,8 @@ $placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/t
 
 if (empty($ads)) {
     $ads = [
-        ['image' => $placeholder, 'link' => '/promotions/summer', 'alt' => __('夏季促销'), 'open_new_tab' => false],
-        ['image' => $placeholder, 'link' => '/promotions/new-arrivals', 'alt' => __('新品上市'), 'open_new_tab' => false],
+        ['image' => $placeholder, 'link' => $this->getFrontendUrl('promotion/deals'), 'alt' => __('限时优惠'), 'open_new_tab' => false],
+        ['image' => $placeholder, 'link' => $this->getFrontendUrl('promotion/sale'), 'alt' => __('新品上市'), 'open_new_tab' => false],
     ];
 }
 ?>

@@ -13,6 +13,7 @@
     // 编辑器配置 - 从 DOM 获取后台 URL
     const config = {
         apiBase: '',
+        apiResolveNavigation: '',
         apiSaveWidget: '',
         apiUpdateConfig: '',
         apiDeleteWidget: '',
@@ -65,6 +66,10 @@
         apiForceTakeover: '',
         apiScopedWorkspace: '',
         apiPublishScopedWorkspace: '',
+        apiPublishScopedReleaseBatch: '',
+        apiScopedReleaseBatch: '',
+        apiRetryScopedReleaseBatchCache: '',
+        apiRollbackScopedReleaseBatch: '',
     };
 
     // 状态管理
@@ -137,6 +142,7 @@
         scopeIdentity: null,
         legacyScopeReadonly: false,
         scopedWorkspaces: {},
+        lastScopedReleaseBatch: null,
         pendingScopedMutation: Promise.resolve(),
     };
     const scheduledEditorAutoSaves = new Map();
@@ -2111,7 +2117,10 @@
             params.body = body;
         }
         const resource = await resolveThemeEditorResource();
-        return resource.editorRequest(params);
+        // Lock callers handle ordinary business rejection (expired lock / other owner) themselves.
+        return options.keepBusinessResult === true
+            ? resource.editorRequest(params, { keepBusinessResult: true })
+            : resource.editorRequest(params);
     }
 
     async function unwrapApiPayload(response) {
@@ -2385,6 +2394,8 @@
             };
             return attempt(true);
         };
+        // Internal ownership writes already belong to the enclosing widget-save task.
+        if (options.withinMutation === true) return run();
         const queued = Promise.resolve(state.pendingScopedMutation).catch(() => {}).then(run);
         state.pendingScopedMutation = queued.catch(() => undefined);
         return queued;
@@ -2423,70 +2434,142 @@
         return result.data || null;
     }
 
+    function renderScopedReleaseBatchStatus(receipt = state.lastScopedReleaseBatch) {
+        const badge = document.getElementById('themeReleaseBatchStatus');
+        if (!(badge instanceof HTMLElement) || !receipt?.batch_id) return;
+        const resources = Array.isArray(receipt.resources) ? receipt.resources : [];
+        const summary = resources.map((item) =>
+            `${item?.resource_type || 'unknown'}: ${item?.status || 'unknown'} (release ${item?.release_id ?? 'inherit'})`
+        );
+        const degraded = receipt.cache_retryable === true
+            || receipt.state === 'published_cache_degraded';
+        const label = badge.querySelector('[data-release-batch-label]');
+        if (label) {
+            label.textContent = `#${receipt.batch_id} · ${resources.length}/5 · ${degraded ? 'cache degraded' : 'published'}`;
+        }
+        badge.dataset.batchId = String(receipt.batch_id);
+        badge.dataset.cacheState = String(receipt.state || 'published');
+        badge.dataset.tone = degraded ? 'warning' : 'success';
+        badge.title = summary.join('\n');
+        badge.hidden = false;
+        const retryButton = badge.querySelector('[data-release-batch-cache-retry]');
+        if (retryButton instanceof HTMLButtonElement) {
+            retryButton.hidden = !degraded;
+            if (retryButton.dataset.bound !== '1') {
+                retryButton.dataset.bound = '1';
+                retryButton.addEventListener('click', () => {
+                    retryScopedReleaseBatchCache().catch((error) => {
+                        showToast(error?.message || translateUiText('缓存重试失败'), 'error');
+                    });
+                });
+            }
+        }
+    }
+
+    async function retryScopedReleaseBatchCache(batchId = state.lastScopedReleaseBatch?.batch_id) {
+        const normalizedBatchId = Number.parseInt(batchId || 0, 10);
+        if (!(normalizedBatchId > 0)) throw new Error('theme_scope_release_batch_id_invalid');
+        const result = await apiJson(config.apiRetryScopedReleaseBatchCache, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                editor_context: buildTypedEditorContext('layout'),
+                batch_id: normalizedBatchId,
+            }),
+        });
+        if (!result?.success) throw new Error(result?.message || 'Retry batch cache failed');
+        state.lastScopedReleaseBatch = result.data || null;
+        renderScopedReleaseBatchStatus();
+        showToast(
+            result?.data?.cache_retryable
+                ? translateUiText('缓存仍处于降级状态，可再次重试')
+                : translateUiText('批次缓存刷新完成'),
+            result?.data?.cache_retryable ? 'warning' : 'success',
+        );
+        return result.data || null;
+    }
+
+    async function rollbackScopedReleaseBatch(sourceBatchId, reason = 'theme_editor_batch_rollback') {
+        const normalizedBatchId = Number.parseInt(sourceBatchId || 0, 10);
+        if (!(normalizedBatchId > 0)) throw new Error('theme_scope_release_batch_id_invalid');
+        await flushPendingEditorMutations();
+        const result = await apiJson(config.apiRollbackScopedReleaseBatch, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                editor_context: buildTypedEditorContext('layout'),
+                source_batch_id: normalizedBatchId,
+                reason,
+            }),
+        });
+        if (!result?.success) throw new Error(result?.message || 'Rollback scoped release batch failed');
+        state.lastScopedReleaseBatch = result.data || null;
+        await Promise.all(['theme_binding', 'layout', 'meta', 'appearance', 'i18n']
+            .map((resourceType) => loadScopedWorkspace(resourceType)));
+        renderScopedReleaseBatchStatus();
+        return result.data || null;
+    }
+
     async function publishLoadedScopedWorkspaces(reason = 'theme_editor_publish') {
         await flushPendingEditorMutations();
-        const currentResources = ['theme_binding'];
-        if (state.themeId) {
-            currentResources.push('layout', 'meta', 'appearance');
-            if (String(getActiveConfigLocale() || '').trim()) currentResources.push('i18n');
-        }
+        const currentResources = ['theme_binding', 'layout', 'meta', 'appearance', 'i18n'];
         for (const resourceType of currentResources) {
             if (!getScopedWorkspaceState(resourceType)) {
                 await loadScopedWorkspace(resourceType);
             }
         }
-        const currentKeys = currentScopedWorkspaceKeys();
-        const entries = Object.entries(state.scopedWorkspaces)
-            .filter(([key]) => currentKeys.has(key))
-            .filter(([, workspace]) => workspace && Number(workspace.revision || 0) > 0)
-            .filter(([, workspace]) => Number(workspace.draft_revision_id || 0) !== Number(workspace.published_revision_id || 0))
-            .sort(([, left], [, right]) => {
-                const priority = { theme_binding: 0, layout: 1, meta: 2, appearance: 3, i18n: 4 };
-                return (priority[left?.context?.resource_type] ?? 9) - (priority[right?.context?.resource_type] ?? 9);
-            });
-
-        for (const [key, workspace] of entries) {
-            const editorContext = workspace.context;
-            if (!editorContext || !editorContext.scope) continue;
-            const result = await apiJson(config.apiPublishScopedWorkspace, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    editor_context: editorContext,
-                    expected_revision: Number(workspace.revision || 0),
-                    expected_parent_release_id: workspace.expected_parent_release_id ?? null,
-                    reason,
-                }),
-            });
-            if (!result?.success) {
-                if (result?.message === 'theme_scope_structural_conflict') {
-                    await loadScopedWorkspace(
-                        workspace.context?.resource_type || 'layout',
-                        scopedOptionsFromContext(workspace.context || {}),
-                    );
-                }
-                throw new Error(result?.message || 'Publish scoped workspace failed');
+        const resources = {};
+        let hasPendingChanges = false;
+        for (const resourceType of currentResources) {
+            const workspace = getScopedWorkspaceState(resourceType);
+            if (!workspace?.context?.scope) {
+                throw new Error(`Scoped workspace is unavailable: ${resourceType}`);
             }
-            if (result?.data?.blocked) {
-                state.scopedWorkspaces[key] = {
-                    ...workspace,
-                    status: 'conflict',
-                    conflicts: Array.isArray(result.data.conflicts) ? result.data.conflicts : [],
-                };
-                throw new Error('theme_scope_structural_conflict');
-            }
-            state.scopedWorkspaces[key] = {
-                ...workspace,
-                published_release_id: result.data?.release_id ?? workspace.published_release_id ?? null,
-                published_revision_id: workspace.draft_revision_id ?? workspace.published_revision_id ?? null,
-                expected_parent_release_id: result.data?.parent_release_id ?? workspace.expected_parent_release_id ?? null,
-                status: 'active',
-                conflicts: [],
+            resources[resourceType] = {
+                expected_revision: Number(workspace.revision || 0),
+                expected_parent_release_id: workspace.expected_parent_release_id ?? null,
             };
+            if (Number(workspace.revision || 0) > 0
+                && Number(workspace.draft_revision_id || 0) > 0
+                && Number(workspace.draft_revision_id || 0) !== Number(workspace.published_revision_id || 0)
+            ) {
+                hasPendingChanges = true;
+            }
         }
+        if (!hasPendingChanges) {
+            state.hasChanges = false;
+            return null;
+        }
+
+        const layoutWorkspace = getScopedWorkspaceState('layout');
+        const result = await apiJson(config.apiPublishScopedReleaseBatch, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                editor_context: layoutWorkspace.context,
+                resources: resources,
+                reason,
+            }),
+        });
+        if (!result?.success) {
+            await Promise.all(currentResources.map((resourceType) =>
+                loadScopedWorkspace(resourceType).catch(() => null)
+            ));
+            throw new Error(result?.message || 'Publish scoped release batch failed');
+        }
+        state.lastScopedReleaseBatch = result.data || null;
+        renderScopedReleaseBatchStatus();
+        await Promise.all(currentResources.map((resourceType) => loadScopedWorkspace(resourceType)));
         state.hasChanges = false;
         renderThemeBindingOwnership();
         renderScopedConflictPanel();
+        if (result?.data?.cache_retryable) {
+            showToast(
+                `${translateUiText('发布已提交，缓存刷新降级，可安全重试')} #${result.data.batch_id || ''}`.trim(),
+                'warning',
+            );
+        }
+        return result.data || null;
     }
 
     function renderThemeBindingOwnership() {
@@ -2798,6 +2881,10 @@
                                     setConfigControlValue(control, inherited.value);
                                 }
                             });
+                        }
+                        const form = field.closest('.layout-config-form');
+                        if (form) {
+                            rememberLayoutConfigValues(form, { [key]: collectWidgetConfigData(form)[key] });
                         }
                         renderLayoutConfigOwnership(container, next, normalizedLocale);
                         showToast(translateUiText('已恢复继承（发布后生效）'), 'success');
@@ -3185,7 +3272,7 @@
         return queueScopedChanges('layout', changes, { summary });
     }
 
-    async function queueWidgetConfigOwnership(nodeUid, configValues, locale = '') {
+    async function queueWidgetConfigOwnership(nodeUid, configValues, locale = '', withinMutation = false) {
         nodeUid = validNodeUid(nodeUid);
         if (!nodeUid) throw new Error(translateUiText('布局节点缺少稳定 UID，未写入配置 Scope 草稿'));
         const normalizedLocale = String(locale || '').trim();
@@ -3193,7 +3280,7 @@
         const prefix = normalizedLocale
             ? `/translations/${nodeUid}`
             : `/nodes/${nodeUid}/config`;
-        await state.pendingScopedMutation;
+        if (!withinMutation) await state.pendingScopedMutation;
         const options = { locale: normalizedLocale || 'default' };
         const current = getScopedWorkspaceState(resourceType, options)
             || await loadScopedWorkspace(resourceType, { ...options, skipReconcile: true });
@@ -3201,6 +3288,7 @@
         if (changes.length === 0) return current;
         return queueScopedChanges(resourceType, changes, {
             ...options,
+            withinMutation,
             summary: normalizedLocale ? 'widget_i18n_changed' : 'widget_config_changed',
         }).then((workspace) => {
             document.querySelectorAll(`[data-scope-node-uid="${nodeUid}"]`).forEach((container) => {
@@ -3218,7 +3306,7 @@
         nodeUid = validNodeUid(nodeUid);
         const normalizedLocale = String(locale || '').trim();
         if (normalizedLocale) {
-            return queueWidgetConfigOwnership(nodeUid, configValues, normalizedLocale);
+            return queueWidgetConfigOwnership(nodeUid, configValues, normalizedLocale, true);
         }
         const workspace = await syncLayoutWorkspaceAfterServerMutation(saveResult);
         if (nodeUid && workspace) {
@@ -3451,12 +3539,82 @@
         }
     }
 
-    function navigateEditorShell(overrides = {}) {
-        const targetUrl = buildEditorUrl(overrides);
+    function navigateSameOriginEditorUrl(targetUrl) {
+        const resolvedUrl = resolveSameOriginEditorUrl(targetUrl);
+        if (!resolvedUrl) {
+            throw new Error(translateUiText('编辑器导航目标无效'));
+        }
         if (state.lockHeld) {
             releaseCurrentEditorLock({keepalive: true});
         }
-        window.location.href = targetUrl;
+        window.location.href = resolvedUrl;
+    }
+
+    function navigateEditorShell(overrides = {}) {
+        navigateSameOriginEditorUrl(buildEditorUrl(overrides));
+    }
+
+    function buildEditorNavigationContext() {
+        const currentUrl = getCurrentWindowUrl();
+        const editorArea = getEffectiveEditorArea();
+        const layoutType = getEffectiveLayoutType();
+        const locale = getScopedEditorLocale();
+        const frontendThemeId = parseInt(
+            currentUrl.searchParams.get('frontend_theme_id')
+                || (editorArea === 'frontend' ? String(state.themeId || 0) : '0'),
+            10
+        ) || 0;
+        const backendThemeId = parseInt(
+            currentUrl.searchParams.get('backend_theme_id')
+                || (editorArea === 'backend' ? String(state.themeId || 0) : '0'),
+            10
+        ) || 0;
+
+        return {
+            frontend_theme_id: frontendThemeId,
+            backend_theme_id: backendThemeId,
+            editor_area: editorArea,
+            shell: 'theme-editor',
+            preview_mode: currentUrl.searchParams.get('preview_mode') || 'live',
+            status: state.previewStatus || 'draft',
+            version_id: parseInt(currentUrl.searchParams.get('version_id') || '0', 10) || null,
+            scope: String(
+                state.layoutIdentity?.scope
+                    || currentUrl.searchParams.get('scope')
+                    || storageScopeForIdentity(state.scopeIdentity)
+                    || 'default'
+            ),
+            store_mode: payloadStoreModeFromScopeIdentity({}),
+            target_type: 'layout',
+            target_value: layoutType,
+            layout_option: getEffectiveLayoutOption(),
+            locale: locale === 'default' ? '' : locale,
+        };
+    }
+
+    async function resolveEditorNavigationTarget(targetUrl) {
+        const result = await apiJson(config.apiResolveNavigation, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                href: targetUrl.toString(),
+                context: buildEditorNavigationContext(),
+            }),
+        });
+        if (!result?.success || !result?.data || typeof result.data !== 'object') {
+            throw new Error(result?.message || translateUiText('无法解析预览链接'));
+        }
+        return result.data;
+    }
+
+    function navigateResolvedEditorShell(navigation) {
+        const targetUrl = resolveSameOriginEditorUrl(navigation.target_url);
+        if (!targetUrl) {
+            throw new Error(translateUiText('服务端返回了无效的编辑器地址'));
+        }
+        navigateSameOriginEditorUrl(targetUrl);
     }
 
     // 注意：pageType 和 layoutType 现在是同一个概念
@@ -3475,6 +3633,7 @@
 
         // 从 DOM data 属性获取后台 API URL
         config.apiBase = container.dataset.apiBase || '/backend/theme-editor';
+        config.apiResolveNavigation = container.dataset.apiResolveNavigation || `${config.apiBase}/resolve-navigation`;
         config.apiSaveWidget = container.dataset.apiSaveWidget || `${config.apiBase}/save-widget`;
         config.apiUpdateConfig = container.dataset.apiUpdateConfig || `${config.apiBase}/update-config`;
         config.apiDeleteWidget = container.dataset.apiDeleteWidget || `${config.apiBase}/delete-widget`;
@@ -3535,6 +3694,14 @@
         config.apiForceTakeover = container.dataset.apiForceTakeover || `${config.apiBase}/force-takeover`;
         config.apiScopedWorkspace = container.dataset.apiScopedWorkspace || `${config.apiBase}/scoped-workspace`;
         config.apiPublishScopedWorkspace = container.dataset.apiPublishScopedWorkspace || `${config.apiBase}/publish-scoped-workspace`;
+        config.apiPublishScopedReleaseBatch = container.dataset.apiPublishScopedReleaseBatch
+            || `${config.apiBase}/publish-scoped-release-batch`;
+        config.apiScopedReleaseBatch = container.dataset.apiScopedReleaseBatch
+            || `${config.apiBase}/scoped-release-batch`;
+        config.apiRetryScopedReleaseBatchCache = container.dataset.apiRetryScopedReleaseBatchCache
+            || `${config.apiBase}/retry-scoped-release-batch-cache`;
+        config.apiRollbackScopedReleaseBatch = container.dataset.apiRollbackScopedReleaseBatch
+            || `${config.apiBase}/rollback-scoped-release-batch`;
         config.fileManagerConnectorBase = container.dataset.fileManagerConnectorBase
             || container.getAttribute('data-file-manager-connector-base')
             || '';
@@ -5900,11 +6067,33 @@
         }
     }
 
+    function rememberLayoutConfigValues(form, values) {
+        form.welineLayoutConfigBaseline = {
+            ...(form.welineLayoutConfigBaseline || {}),
+            ...values,
+        };
+    }
+
+    function collectLayoutConfigChanges(form) {
+        const values = collectWidgetConfigData(form);
+        const baseline = form.welineLayoutConfigBaseline || {};
+        const changes = {};
+        form.querySelectorAll('.w-param-field[data-field-key]').forEach((field) => {
+            const key = String(field.dataset.fieldKey || '');
+            if (key && Object.prototype.hasOwnProperty.call(values, key)
+                && !scopedValuesEqual(values[key], baseline[key])) {
+                changes[key] = values[key];
+            }
+        });
+        return changes;
+    }
+
     function bindLayoutConfigEvents(container) {
         const form = container.querySelector('.layout-config-form');
         if (!form) {
             return;
         }
+        rememberLayoutConfigValues(form, collectWidgetConfigData(form));
         form.addEventListener('submit', async function(e) {
             e.preventDefault();
             cancelEditorAutoSave('layout-config');
@@ -5962,7 +6151,11 @@
 
     async function saveLayoutConfig(form, locale, options = {}) {
         const silent = options.silent === true;
-        const configData = collectWidgetConfigData(form);
+        const configData = collectLayoutConfigChanges(form);
+        if (Object.keys(configData).length === 0) {
+            if (!silent) showToast('布局配置已保存', 'success');
+            return;
+        }
         const editorArea = getEffectiveEditorArea();
         const effectiveLocale = locale === undefined ? getActiveConfigLocale() : (locale || '');
         const payload = {
@@ -5985,6 +6178,7 @@
             throw new Error(result.message || 'Save layout config failed');
         }
         await queueLayoutConfigOwnership(configData, effectiveLocale);
+        rememberLayoutConfigValues(form, configData);
         if (!silent) {
             showToast(result.message || '布局配置已保存', 'success');
         }
@@ -14911,7 +15105,7 @@
         const icon = widgetTypeIconName(widget.widget_type);
         const widgetName = widget.meta?.name || widget.widget_code;
         const widgetDesc = widget.meta?.description || '';
-        const layoutId = widget.layout_id || '';
+        const layoutId = validNodeUid(widget.node_uid) || widget.layout_id || '';
         const formHtml = await generateWidgetConfigForm(layoutId, params, widget.config || {});
         const searchPlaceholder = (typeof __ !== 'undefined' ? __('Search config') : 'Search config');
 
@@ -17681,8 +17875,6 @@
 
             // 获取当前站点的基础 URL
             const currentOrigin = window.location.origin;
-            const baseUrl = config.apiBase?.replace(/\/theme\/backend\/theme-editor.*$/, '') || '';
-
             // iframe 内区域点击事件处理，用于过滤部件面板
             iframeDoc.addEventListener('click', function(e) {
                 // Shopper runtime controls keep native behavior inside the editor iframe.
@@ -17709,7 +17901,7 @@
             });
 
             // 拦截所有链接点击
-            iframeDoc.addEventListener('click', function(e) {
+            iframeDoc.addEventListener('click', async function(e) {
                 // Shopper runtime controls keep native behavior inside the editor iframe.
                 if (isShopperRuntimeEventTarget(e.target)) return;
 
@@ -17753,100 +17945,26 @@
                     return;
                 }
 
-                // 内部链接 - 转换为预览模式 URL
-                // 根据目标路径判断页面类型（pageType = layoutType = 布局目录名）
-                const pathname = targetUrl.pathname;
-                let pageType = 'homepage';
-                let layoutType = 'homepage';
-                let themePublicRoute = '';
-
-                const pathSegments = pathname.split('/').filter(Boolean);
-                const productIdx = pathSegments.findIndex((seg) => seg.toLowerCase() === 'product');
-                const categoryIdx = pathSegments.findIndex((seg) => seg.toLowerCase() === 'category');
-
-                // 路径到页面类型的映射（使用布局目录名）
-                if (pathname === '/' || pathname === '' || pathname.endsWith('/index')) {
-                    pageType = 'homepage';
-                    layoutType = 'homepage';
-                } else if (pathname.includes('/category/') || pathname.includes('/catalog/')) {
-                    pageType = 'category';
-                    layoutType = 'category';
-                    if (categoryIdx >= 0 && pathSegments[categoryIdx + 1]) {
-                        themePublicRoute = 'category/' + pathSegments.slice(categoryIdx + 1).join('/').toLowerCase();
+                try {
+                    await flushPendingEditorMutations();
+                    const navigation = await resolveEditorNavigationTarget(targetUrl);
+                    if (navigation.kind === 'external') {
+                        window.open(navigation.target_url || targetUrl.toString(), '_blank');
+                        showToast(translateUiText('外部链接已在新标签页打开'), 'info');
+                        return;
                     }
-                } else if (pathname.includes('/product/')) {
-                    pageType = 'product';
-                    layoutType = 'product';
-                    if (productIdx >= 0 && pathSegments[productIdx + 1]) {
-                        themePublicRoute = 'product/' + String(pathSegments[productIdx + 1]).toLowerCase();
+                    if (navigation.kind !== 'internal-editor') {
+                        throw new Error(translateUiText('服务端未返回编辑器导航目标'));
                     }
-                } else if (pathname.includes('/cart')) {
-                    pageType = 'cart';
-                    layoutType = 'cart';
-                } else if (pathname.includes('/checkout')) {
-                    pageType = 'checkout';
-                    layoutType = 'checkout';
-                } else if (pathname.includes('/account') || pathname.includes('/customer')) {
-                    pageType = 'account';
-                    layoutType = 'account';
-                } else if (pathname.includes('/search')) {
-                    pageType = 'search';
-                    layoutType = 'search';
-                } else {
-                    // CMS 或其他页面
-                    pageType = 'cms_page';
-                    layoutType = 'cms_page';
+                    const pageType = String(navigation.page_type || navigation.target_value || 'cms_page');
+                    showToast(`${translateUiText('已切换到')} ${pageType} ${translateUiText('布局')}`, 'info');
+                    console.log('[ThemeEditor] Server navigation:', href, '->', pageType);
+                    navigateResolvedEditorShell(navigation);
+                } catch (error) {
+                    console.error('[ThemeEditor] Navigation resolve error:', error);
+                    showToast(error?.message || translateUiText('预览链接切换失败'), 'error');
                 }
-
-                // 构建预览 URL：选中布局，并携带具体产品/分类 public route
-                showToast(`已切换到 ${pageType} 布局`, 'info');
-                console.log('[ThemeEditor] Link intercepted:', href, '-> Editor page type:', pageType, themePublicRoute || '');
-                const shellOverrides = {
-                    page_type: pageType,
-                    layout_option: resolveLayoutOptionForType(pageType, ''),
-                };
-                if (themePublicRoute) {
-                    shellOverrides.theme_public_route = themePublicRoute;
-                } else {
-                    shellOverrides.theme_public_route = null;
-                }
-                navigateEditorShell(shellOverrides);
                 return;
-
-                const previewUrl = new URL(config.apiLayoutPreview, currentOrigin);
-                previewUrl.searchParams.set('theme_id', state.themeId);
-                previewUrl.searchParams.set('layout_type', layoutType);
-                previewUrl.searchParams.set('layout_option', 'default');
-                previewUrl.searchParams.set('editor_mode', '1');
-                previewUrl.searchParams.set('interaction_mode', normalizeInteractionMode(state.interactionMode || 'edit'));
-                const selectionTarget = normalizeSelectionTarget(state.selectionTarget || 'default');
-                if (selectionTarget === 'default') {
-                    previewUrl.searchParams.delete('selection_target');
-                } else {
-                    previewUrl.searchParams.set('selection_target', selectionTarget);
-                }
-                if (state.linkBlockEnabled === true) {
-                    previewUrl.searchParams.set('link_block', '1');
-                } else {
-                    previewUrl.searchParams.delete('link_block');
-                }
-                previewUrl.searchParams.set('status', state.previewStatus || 'draft');
-                previewUrl.searchParams.set('_t', Date.now());
-
-                // 更新状态
-                state.pageType = pageType;
-                state.layoutType = layoutType;
-
-                // 更新 iframe
-                iframe.src = previewUrl.toString();
-
-                // 更新页面类型选择器（如果有）
-                if (elements.pageTypeSelect) {
-                    elements.pageTypeSelect.value = pageType;
-                }
-
-                showToast(`已切换到 ${pageType} 布局预览`, 'info');
-                console.log('[ThemeEditor] Link intercepted:', href, '-> Preview:', previewUrl.toString());
             }, true); // 使用捕获阶段
 
             // 同步交互模式（预览态不强制 editor-mode）
@@ -19076,7 +19194,7 @@
         bindLockLifecycle();
     }
 
-    function renderEditorLockOverlay(lockInfo, mode = 'conflict') {
+    function renderEditorLockOverlay(lockInfo, mode = 'conflict', failureMessage = '') {
         if (!elements.container) {
             return;
         }
@@ -19103,6 +19221,7 @@
 
         const unavailable = mode === 'unavailable';
         const pending = mode === 'pending';
+        const failureReason = unavailable ? String(failureMessage || '').trim() : '';
         const userName = lockInfo && lockInfo.user_name ? lockInfo.user_name : '其他用户';
         const title = pending
             ? translateUiText('正在确认编辑权限')
@@ -19117,6 +19236,7 @@
                 <div class="w-card__body w-stack">
                 <h3 class="w-card__title">${escapeHtml(title)}</h3>
                 <p class="w-text">${mode === 'conflict' ? message : escapeHtml(message)}</p>
+                ${failureReason ? `<p class="w-text" data-theme-editor-lock-reason>${escapeHtml(failureReason)}</p>` : ''}
                 <p class="w-text" data-tone="muted">
                     ${escapeHtml(pending
                         ? translateUiText('锁定成功后将自动进入编辑。')
@@ -19153,6 +19273,7 @@
         try {
             const result = await apiJson(config.apiUpdateActivity, {
                 method: 'POST',
+                keepBusinessResult: true,
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -19176,14 +19297,14 @@
                     ? reacquire.data.lock_info
                     : (result?.data?.lock_info || null))
                 : null;
-            renderEditorLockOverlay(state.lockConflictInfo, blockedByOther ? 'conflict' : 'unavailable');
+            renderEditorLockOverlay(state.lockConflictInfo, blockedByOther ? 'conflict' : 'unavailable', reacquire?.message || result?.message);
             return false;
         } catch (error) {
             console.warn('[ThemeEditor] Lock heartbeat failed:', error);
             state.lockHeld = false;
             state.lockConflictInfo = null;
             stopLockHeartbeat();
-            renderEditorLockOverlay(null, 'unavailable');
+            renderEditorLockOverlay(null, 'unavailable', error?.message);
             return false;
         }
     }
@@ -19265,6 +19386,7 @@
         try {
             return await apiJson(config.apiCheckLock, {
                 method: 'POST',
+                keepBusinessResult: true,
                 headers: {
                     'Content-Type': 'application/json',
                 },
@@ -19306,7 +19428,7 @@
         stopLockHeartbeat();
         const blockedByOther = isEditorLockBlockedByOther(result);
         state.lockConflictInfo = blockedByOther && result?.data?.lock_info ? result.data.lock_info : null;
-        renderEditorLockOverlay(state.lockConflictInfo, result?.unavailable ? 'unavailable' : (blockedByOther ? 'conflict' : 'unavailable'));
+        renderEditorLockOverlay(state.lockConflictInfo, result?.unavailable ? 'unavailable' : (blockedByOther ? 'conflict' : 'unavailable'), result?.message);
         if (blockedByOther) {
             showToast(result?.message || '当前页面正被其他用户编辑', 'warning');
         } else if (result?.message) {
@@ -19349,6 +19471,8 @@
         deleteVersion,
         toggleVersionPanel,
         loadVersions,
+        retryScopedReleaseBatchCache,
+        rollbackScopedReleaseBatch,
     });
 
     // 初始化

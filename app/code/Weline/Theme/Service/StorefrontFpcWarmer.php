@@ -55,6 +55,7 @@ final class StorefrontFpcWarmer implements CacheWarmerInterface
         $skipped = 0;
         $notes = [];
         $requestHost = $this->pickRequestHost($hosts, $connectHost);
+        $requestHost = $this->requestHostWithPort($requestHost, $port);
 
         foreach ($paths as $path) {
             // Prefer public hostname URL so TLS SNI/Host match the storefront face.
@@ -84,7 +85,18 @@ final class StorefrontFpcWarmer implements CacheWarmerInterface
      */
     private function priorityPaths(array $paths): array
     {
-        $forced = ['/', '/en_US/', '/zh_Hans_CN/'];
+        // The public catalog entry is the most common anonymous first request
+        // after a deploy. Prime it alongside locale roots so the first shopper
+        // does not pay the full SSR/layout cost while the FPC is still empty.
+        $forced = [
+            '/',
+            '/en_US/',
+            '/zh_Hans_CN/',
+            '/ar_SA/',
+            '/en_US/products',
+            '/zh_Hans_CN/products',
+            '/ar_SA/products',
+        ];
         $merged = [];
         foreach ([...$forced, ...$paths] as $path) {
             $path = \str_replace(["\r", "\n", "\t"], '', \trim((string)$path));
@@ -169,6 +181,28 @@ final class StorefrontFpcWarmer implements CacheWarmerInterface
         }
 
         return $connectHost;
+    }
+
+    private function requestHostWithPort(string $host, int $port): string
+    {
+        $host = trim($host);
+        if ($host === '' || $port <= 0 || $port === 80 || $port === 443) {
+            return $host;
+        }
+        if (str_starts_with($host, '[')) {
+            if (preg_match('/\]:\d+$/', $host) === 1) {
+                return $host;
+            }
+            return rtrim($host, ']') . ']:' . $port;
+        }
+        if (substr_count($host, ':') > 1) {
+            return '[' . $host . ']:' . $port;
+        }
+        if (preg_match('/:\d+$/', $host) === 1) {
+            return $host;
+        }
+
+        return $host . ':' . $port;
     }
 
     /**

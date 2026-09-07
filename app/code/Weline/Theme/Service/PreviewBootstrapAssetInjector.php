@@ -31,8 +31,7 @@ final class PreviewBootstrapAssetInjector
             'UTF-8',
         );
         $scriptUrl = \htmlspecialchars(
-            $this->template->fetchTagSource('statics', 'Weline_Theme::ui/pages/weline-preview-bootstrap.js')
-                . '?v=20260827-live-preview-token-v1',
+            (string)$this->template->fetchTagSource('statics', 'Weline_Theme::ui/pages/weline-preview-bootstrap.js'),
             ENT_QUOTES,
             'UTF-8',
         );

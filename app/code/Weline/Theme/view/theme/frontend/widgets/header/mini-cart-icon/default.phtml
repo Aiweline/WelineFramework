@@ -48,24 +48,61 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
     $price = (float)($item['price'] ?? 0);
     $rowTotal = (float)($item['row_total'] ?? ($price * $qty));
     $priceText = HeaderCommerceData::formatMoney($rowTotal, (string)$cart['currency']);
+    $compareAtMinor = max(0, (int)($item['compare_at_minor'] ?? 0));
+    $unitMinor = max(0, (int)($item['unit_price_minor'] ?? (int)round($price * 100)));
+    $originalPrice = (float)($item['original_price'] ?? ($compareAtMinor > 0 ? $compareAtMinor / 100 : 0));
+    $hasDeal = !empty($item['has_deal'])
+        || ($compareAtMinor > $unitMinor && $unitMinor > 0)
+        || ($originalPrice > $price && $price > 0);
+    $campaignLabel = trim((string)($item['campaign_label'] ?? ''));
+    $campaignUrl = trim((string)($item['campaign_url'] ?? ''));
+    $originalText = $hasDeal && $originalPrice > 0
+        ? HeaderCommerceData::formatMoney($originalPrice * max(1, $qty), (string)$cart['currency'])
+        : '';
     $itemId = (string)($item['item_id'] ?? '');
     $url = (string)($item['url'] ?? '/cart');
-    $variant = trim((string)($item['variant_label'] ?? $item['sku'] ?? ''));
-    if ($variant === '' && !empty($item['selected_options']) && is_array($item['selected_options'])) {
-        $parts = [];
-        foreach ($item['selected_options'] as $optionKey => $optionValue) {
-            if (is_scalar($optionValue) && (string)$optionValue !== '') {
-                $parts[] = (string)$optionValue;
-            } elseif (is_array($optionValue)) {
-                $label = trim((string)($optionValue['label'] ?? $optionValue['value'] ?? ''));
-                if ($label !== '') {
-                    $parts[] = $label;
-                }
-            } elseif (is_string($optionKey) && $optionKey !== '' && is_scalar($optionValue)) {
-                $parts[] = $optionKey . ': ' . (string)$optionValue;
-            }
+    $options = is_array($item['options'] ?? null) ? $item['options'] : [];
+    $optionRows = [];
+    foreach ($options as $option) {
+        if (!is_array($option)) {
+            continue;
         }
-        $variant = implode(' / ', $parts);
+        $label = trim((string)($option['label'] ?? $option['code'] ?? ''));
+        $value = trim((string)($option['value_label'] ?? $option['value'] ?? ''));
+        if ($label === '' || $value === '') {
+            continue;
+        }
+        $swatchImage = LegacyMediaUrl::sanitize((string)($option['swatch_image'] ?? ''));
+        $swatchColor = trim((string)($option['swatch_color'] ?? ''));
+        if ($swatchColor !== '' && preg_match('/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/', $swatchColor) !== 1) {
+            $swatchColor = '';
+        }
+        $optionRows[] = [
+            'label' => $label,
+            'value' => $value,
+            'swatch_image' => $swatchImage,
+            'swatch_color' => $swatchColor,
+        ];
+    }
+    $variant = '';
+    if ($optionRows === []) {
+        $variant = trim((string)($item['variant_label'] ?? $item['sku'] ?? ''));
+        if ($variant === '' && !empty($item['selected_options']) && is_array($item['selected_options'])) {
+            $parts = [];
+            foreach ($item['selected_options'] as $optionKey => $optionValue) {
+                if (is_scalar($optionValue) && (string)$optionValue !== '') {
+                    $parts[] = (string)$optionValue;
+                } elseif (is_array($optionValue)) {
+                    $label = trim((string)($optionValue['label'] ?? $optionValue['value'] ?? ''));
+                    if ($label !== '') {
+                        $parts[] = $label;
+                    }
+                } elseif (is_string($optionKey) && $optionKey !== '' && is_scalar($optionValue)) {
+                    $parts[] = $optionKey . ': ' . (string)$optionValue;
+                }
+            }
+            $variant = implode(' / ', $parts);
+        }
     }
 
     ob_start();
@@ -80,7 +117,26 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
         </a>
         <div class="mini-cart-drawer__line-details">
             <a href="<?= $esc($url) ?>" class="mini-cart-drawer__line-title"><?= $esc($name) ?></a>
-            <?php if ($variant !== ''): ?>
+            <?php if ($optionRows !== []): ?>
+                <ul class="mini-cart-drawer__line-options">
+                    <?php foreach ($optionRows as $optionRow): ?>
+                        <li class="mini-cart-drawer__line-option">
+                            <?php if ($optionRow['swatch_image'] !== ''): ?>
+                                <img class="mini-cart-drawer__line-option-swatch"
+                                     src="<?= $esc($optionRow['swatch_image']) ?>"
+                                     alt="">
+                            <?php elseif ($optionRow['swatch_color'] !== ''): ?>
+                                <span class="mini-cart-drawer__line-option-swatch mini-cart-drawer__line-option-swatch--color"
+                                      style="background-color: <?= $esc($optionRow['swatch_color']) ?>"
+                                      aria-hidden="true"></span>
+                            <?php endif; ?>
+                            <span class="mini-cart-drawer__line-option-text">
+                                <?= $esc($optionRow['label'] . ': ' . $optionRow['value']) ?>
+                            </span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            <?php elseif ($variant !== ''): ?>
                 <p class="mini-cart-drawer__line-variant"><?= $esc($variant) ?></p>
             <?php endif; ?>
             <div class="mini-cart-drawer__line-meta">
@@ -100,14 +156,31 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                 </button>
             </div>
         </div>
-        <div class="mini-cart-drawer__line-price" data-line-total><?= $esc($priceText) ?></div>
+        <div class="mini-cart-drawer__line-price" data-line-total>
+            <span class="mini-cart-drawer__line-price-row" data-line-price-row>
+                <span class="mini-cart-drawer__line-price-now" data-line-price-now><?= $esc($priceText) ?></span>
+                <?php if ($hasDeal && $originalText !== ''): ?>
+                    <span class="mini-cart-drawer__line-price-was" data-line-price-was><?= $esc($originalText) ?></span>
+                <?php endif; ?>
+            </span>
+            <?php if ($hasDeal && $originalText !== '' && $campaignLabel !== ''): ?>
+                <?php if ($campaignUrl !== ''): ?>
+                    <a class="mini-cart-drawer__line-price-campaign"
+                       data-line-price-campaign
+                       href="<?= $esc($campaignUrl) ?>"><?= $esc($campaignLabel) ?></a>
+                <?php else: ?>
+                    <span class="mini-cart-drawer__line-price-campaign"
+                          data-line-price-campaign><?= $esc($campaignLabel) ?></span>
+                <?php endif; ?>
+            <?php endif; ?>
+        </div>
     </article>
     <?php
     return (string)ob_get_clean();
 };
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)&amp;v=20260831-component-scope1"
+      href="@static(Weline_Theme::css/widgets/mini-cart-drawer.css)&v=20260907-price-header-layout"
       data-no-extract="true"
       data-weline-mini-cart-drawer="1">
 <section class="header-cart header-action-item <?= $esc($wc) ?><?= $isEmpty ? ' is-empty' : '' ?>"
@@ -138,6 +211,8 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
          data-i18n-discount-coupon="<?= $esc(__('优惠券')) ?>"
          data-i18n-discount-stack="<?= $esc(__('叠加优惠')) ?>"
          data-i18n-discount-automatic="<?= $esc(__('自动优惠')) ?>"
+         data-i18n-cart-type-toc="<?= $esc(__('零售')) ?>"
+         data-i18n-cart-type-tob="<?= $esc(__('批发')) ?>"
          data-placeholder-image="<?= $esc($placeholder) ?>">
     <a href="@url{'cart'}"
        class="cart-link"
@@ -158,6 +233,10 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
                     <?= $cartQuantity > 99 ? '99+' : $cartQuantity ?>
                 </span>
             <?php endif; ?>
+            <span class="w-badge header-cart__cart-type"
+                  data-cart-type-badge
+                  data-tone="secondary"
+                  data-testid="mini-cart-type-badge"><lang>零售</lang></span>
         </span>
         <?php if ($showSubtotal): ?>
             <span class="cart-info">
@@ -183,6 +262,9 @@ $renderLine = static function (array $item) use ($esc, $placeholder, $cart): str
             <h2 class="mini-cart-drawer__title">
                 <?= __('购物车') ?>
                 (<span class="item-count" data-cart-item-count><?= $cartQuantity ?></span>)
+                <span class="w-badge mini-cart-drawer__cart-type"
+                      data-cart-type-badge
+                      data-tone="secondary"><lang>零售</lang></span>
             </h2>
             <button type="button"
                     class="mini-cart-drawer__close"

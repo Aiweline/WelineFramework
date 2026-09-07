@@ -76,10 +76,10 @@ $this->assign('meta', $meta);
             font-size: 12px;
         }
         .amazon-blog-article__breadcrumb a {
-            color: #007185;
+            color: var(--color-link);
             text-decoration: none;
         }
-        .amazon-blog-article__breadcrumb a:hover { text-decoration: underline; color: #c45500; }
+        .amazon-blog-article__breadcrumb a:hover { text-decoration: underline; color: var(--color-link-hover); }
         .amazon-blog-article__title {
             margin: 0 0 0.5rem;
             font-size: clamp(1.5rem, 2.2vw, 1.875rem);
@@ -159,13 +159,13 @@ $this->assign('meta', $meta);
             border-radius: 999px;
             border: 1px solid #d5d9d9;
             background: #fff;
-            color: #007185;
+            color: var(--color-link);
             font-size: 12px;
             text-decoration: none;
         }
         .amazon-blog-article__keyword:hover {
-            border-color: #c45500;
-            color: #c45500;
+            border-color: var(--color-link-hover);
+            color: var(--color-link-hover);
         }
         .blog-layout__reviews {
             margin-top: 1rem;
@@ -177,11 +177,11 @@ $this->assign('meta', $meta);
             padding: 1rem 1.25rem 1.5rem;
         }
         .amazon-blog-article__category {
-            color: #007185;
+            color: var(--color-link);
             text-decoration: none;
             font-weight: 600;
         }
-        .amazon-blog-article__category:hover { color: #c45500; text-decoration: underline; }
+        .amazon-blog-article__category:hover { color: var(--color-link-hover); text-decoration: underline; }
         .amazon-blog-article__excerpt {
             margin: 0 0 1rem;
             color: #0f1111;
@@ -208,6 +208,47 @@ $this->assign('meta', $meta);
         }
         .amazon-blog-article__content p { margin: 0 0 1rem; }
         .amazon-blog-article__content img { max-width: 100%; height: auto; border-radius: 4px; }
+        .amazon-blog-article__content .hanfu-article-figure {
+            max-width: 100%;
+            margin: 1.5rem 0;
+            overflow: hidden;
+            box-sizing: border-box;
+            border: 1px solid #d5d9d9;
+            border-radius: 8px;
+            background: #f7fafa;
+        }
+        .amazon-blog-article__content .hanfu-article-figure img {
+            display: block;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 3 / 2;
+            object-fit: cover;
+            border-radius: 0;
+        }
+        .amazon-blog-article__content .hanfu-article-figure figcaption {
+            padding: 0.75rem 1rem;
+            color: #565959;
+            font-size: clamp(0.8125rem, 1.8vw, 0.875rem);
+            line-height: 1.5;
+            overflow-wrap: anywhere;
+        }
+        .amazon-blog-article__content .hanfu-article-figure__provenance {
+            color: #565959;
+            font-size: 0.875em;
+            overflow-wrap: anywhere;
+        }
+        .amazon-blog-article__content .hanfu-article-figure a {
+            color: var(--color-link);
+            text-decoration: underline;
+            text-underline-offset: 0.15em;
+        }
+        .amazon-blog-article__content .hanfu-article-figure a:hover {
+            color: var(--color-link-hover);
+        }
+        .amazon-blog-article__content .hanfu-article-figure a:focus-visible {
+            outline: 2px solid var(--color-link);
+            outline-offset: 2px;
+        }
         .amazon-blog-article__content h2,
         .amazon-blog-article__content h3 {
             margin: 1.5rem 0 0.75rem;
@@ -288,6 +329,13 @@ $this->assign('meta', $meta);
         }
         @media (max-width: 520px) {
             .amazon-blog-listing__grid--related { grid-template-columns: 1fr; }
+            .amazon-blog-article__content .hanfu-article-figure {
+                margin: 1.25rem 0;
+                border-radius: 6px;
+            }
+            .amazon-blog-article__content .hanfu-article-figure figcaption {
+                padding: 0.625rem 0.75rem;
+            }
         }
     </style>
 </head>

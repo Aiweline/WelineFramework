@@ -5,12 +5,13 @@ declare(strict_types=1);
 namespace Weline\Theme\Service;
 
 use Weline\Theme\Api\Scoped\ThemeEditorContext;
-use Weline\Theme\Model\ThemeScopePatch;
+use Weline\Theme\Api\Scoped\ThemePatchCommand;
+use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\ThemeScopeWorkspace;
 
 /**
  * Clears only the current editing draft materialization for selected resources.
- * Does not delete ThemeScopeRevision / ThemeScopeRelease / ThemeLayoutVersion rows,
+ * Preserves historical patches and ThemeScopeRevision / ThemeScopeRelease / ThemeLayoutVersion rows,
  * and never creates restore/backup versions.
  */
 final class ThemeEditorDraftResetService
@@ -20,7 +21,7 @@ final class ThemeEditorDraftResetService
 
     public function __construct(
         private readonly ThemeScopeWorkspace $workspaces,
-        private readonly ThemeScopePatch $patches,
+        private readonly ThemeScopedWorkspaceInterface $scopedWorkspace,
         private readonly ThemeLayoutService $layoutService,
         private readonly ThemeRuntimeCacheCleaner $cacheCleaner,
         private readonly ThemeLayoutScopeNormalizer $layoutScopeNormalizer,
@@ -82,13 +83,16 @@ final class ThemeEditorDraftResetService
         ) {
             foreach ($this->findLayoutWorkspaces($context) as $workspace) {
                 $workspaceCount++;
-                $patchCount += $this->clearDraftPatchesForWorkspace($workspace);
+                $patchCount += $this->clearDraftPatchesForWorkspace(
+                    $workspace,
+                    $context->withLayoutType((string)$workspace->getData(ThemeScopeWorkspace::schema_fields_LAYOUT_TYPE)),
+                );
             }
         } else {
             $workspace = $this->findWorkspace($context);
             if ($workspace instanceof ThemeScopeWorkspace) {
                 $workspaceCount = 1;
-                $patchCount = $this->clearDraftPatchesForWorkspace($workspace);
+                $patchCount = $this->clearDraftPatchesForWorkspace($workspace, $context);
             }
         }
 
@@ -182,44 +186,41 @@ final class ThemeEditorDraftResetService
         return $workspace->getId() > 0 ? $workspace : null;
     }
 
-    private function clearDraftPatchesForWorkspace(ThemeScopeWorkspace $workspace): int
-    {
-        $draftRevisionId = (int)$workspace->getData(ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID);
-        if ($draftRevisionId <= 0) {
+    private function clearDraftPatchesForWorkspace(
+        ThemeScopeWorkspace $workspace,
+        ThemeEditorContext $context,
+    ): int {
+        if ((int)$workspace->getData(ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID) <= 0) {
             return 0;
         }
 
-        return $this->deletePatchesForRevision($draftRevisionId);
-    }
-
-    private function deletePatchesForRevision(int $revisionId): int
-    {
-        if ($revisionId <= 0) {
+        $state = $this->scopedWorkspace->load($context, true);
+        $changes = [];
+        foreach ($state['owned_paths'] ?? [] as $path) {
+            $changes[] = ThemePatchCommand::fromArray([
+                'op' => ThemePatchCommand::OP_INHERIT,
+                'path' => $path,
+            ]);
+        }
+        if ($changes === []) {
             return 0;
         }
 
-        $rows = (clone $this->patches)->clearData()->clearQuery()
-            ->where(ThemeScopePatch::schema_fields_REVISION_ID, $revisionId)
-            ->select()
-            ->fetchArray();
-        $count = 0;
-        foreach (\is_array($rows) ? $rows : [] as $row) {
-            if (!\is_array($row)) {
-                continue;
-            }
-            $patchId = (int)($row[ThemeScopePatch::schema_fields_ID] ?? 0);
-            if ($patchId <= 0) {
-                continue;
-            }
-            $patch = clone $this->patches;
-            $patch->clearData()->clearQuery()->load($patchId);
-            if ($patch->getId() > 0) {
-                $patch->delete()->fetch();
-                $count++;
-            }
-        }
+        // A draft pointer may reference a published revision. Restore ownership
+        // through the canonical writer so all old patches remain immutable and
+        // the reset receives a fresh optimistic revision before publication.
+        $this->scopedWorkspace->applyChanges(
+            context: $context,
+            expectedRevision: (int)$state['revision'],
+            expectedParentReleaseId: isset($state['expected_parent_release_id'])
+                ? (int)$state['expected_parent_release_id']
+                : null,
+            changes: $changes,
+            actorId: 'system:theme-editor-draft-reset',
+            summary: 'theme_editor_draft_reset',
+        );
 
-        return $count;
+        return \count($changes);
     }
 
     /**

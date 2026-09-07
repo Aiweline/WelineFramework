@@ -338,6 +338,275 @@ function bindLanguageRequestForm(UI, form, requestDialog) {
     });
 }
 
+const FLAG_CACHE_PREFIX = 'weline.i18n.flag.v1.';
+const FLAG_SCOPE_PREFIX = 'weline.i18n.supported-locales.v1.';
+const FLAG_GROUP_SIZE = 6;
+const FLAG_ASSET_VERSION = 'flag-icons-4x3-v1';
+/** Skip localStorage for lipis detail flags (e.g. ES ~81KB) to avoid main-thread stalls. */
+const FLAG_LOCAL_STORAGE_MAX_BYTES = 12 * 1024;
+
+/** @type {Map<string, {version: string, svg: string, sha256: string}>} */
+const flagMemoryCache = new Map();
+/** @type {Map<string, Promise<Record<string, any>>>} */
+const flagGroupInflight = new Map();
+let flagHydrateChain = Promise.resolve();
+
+function normalizeCountryFlagCode(code) {
+    const value = String(code || '').trim().toLowerCase();
+    return /^[a-z]{2}$/.test(value) ? value : '';
+}
+
+function splitCsvTokens(raw) {
+    return String(raw || '')
+        .split(',')
+        .map((part) => String(part || '').trim())
+        .filter(Boolean);
+}
+
+function readSupportedScopeCache(websiteId = '') {
+    try {
+        const key = FLAG_SCOPE_PREFIX + (String(websiteId || '').trim() || 'global');
+        const raw = window.localStorage?.getItem?.(key);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed.locales !== 'string') return null;
+        return {
+            locales: String(parsed.locales || ''),
+            countries: String(parsed.countries || ''),
+        };
+    } catch (_error) {
+        return null;
+    }
+}
+
+function writeSupportedScopeCache(websiteId, localesCsv, countriesCsv) {
+    try {
+        const key = FLAG_SCOPE_PREFIX + (String(websiteId || '').trim() || 'global');
+        window.localStorage?.setItem?.(key, JSON.stringify({
+            locales: String(localesCsv || ''),
+            countries: String(countriesCsv || ''),
+            version: FLAG_ASSET_VERSION,
+            updated_at: Date.now(),
+        }));
+    } catch (_error) {
+    }
+}
+
+/**
+ * Compare SSR supported-locale tag with browser cache; return newly added country codes.
+ * Does not by itself schedule network — callers decide trigger vs panel mode.
+ */
+function resolveForcedFlagCountries(root) {
+    if (!(root instanceof HTMLElement)) {
+        return { forced: new Set(), localesCsv: '', countriesCsv: '', changed: false };
+    }
+    const localesCsv = String(root.getAttribute('data-i18n-supported-locales') || '').trim();
+    const countriesCsv = String(root.getAttribute('data-i18n-supported-countries') || '').trim();
+    const websiteId = String(root.dataset.websiteId || root.getAttribute('data-website-id') || '');
+    const prev = readSupportedScopeCache(websiteId);
+    const changed = !prev || prev.locales !== localesCsv;
+    const currentCountries = new Set(
+        splitCsvTokens(countriesCsv).map(normalizeCountryFlagCode).filter(Boolean),
+    );
+    const prevCountries = new Set(
+        splitCsvTokens(prev?.countries || '').map(normalizeCountryFlagCode).filter(Boolean),
+    );
+    const forced = new Set();
+    if (changed) {
+        currentCountries.forEach((code) => {
+            if (!prevCountries.has(code)) forced.add(code);
+        });
+        writeSupportedScopeCache(websiteId, localesCsv, countriesCsv);
+    }
+    return { forced, localesCsv, countriesCsv, changed };
+}
+
+function readFlagCache(code) {
+    const mem = flagMemoryCache.get(code);
+    if (mem?.svg) return mem;
+    try {
+        const raw = window.localStorage?.getItem?.(FLAG_CACHE_PREFIX + code);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw);
+        if (!parsed || typeof parsed.svg !== 'string' || !parsed.svg) return null;
+        if (parsed.version && parsed.version !== FLAG_ASSET_VERSION) return null;
+        flagMemoryCache.set(code, parsed);
+        return parsed;
+    } catch (_error) {
+        return null;
+    }
+}
+
+function writeFlagCache(code, payload) {
+    const entry = {
+        version: String(payload?.version || FLAG_ASSET_VERSION),
+        svg: String(payload?.svg || ''),
+        sha256: String(payload?.sha256 || ''),
+    };
+    if (!entry.svg) return;
+    flagMemoryCache.set(code, entry);
+    if (entry.svg.length > FLAG_LOCAL_STORAGE_MAX_BYTES) {
+        return;
+    }
+    try {
+        window.localStorage?.setItem?.(FLAG_CACHE_PREFIX + code, JSON.stringify(entry));
+    } catch (_error) {
+        // Quota / private mode — memory cache still serves this tab.
+    }
+}
+
+function svgToDataUri(svg) {
+    return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(String(svg || ''))}`;
+}
+
+function paintCountryFlagSlot(slot, svg) {
+    if (!(slot instanceof HTMLElement) || !svg) return;
+    if (slot.querySelector('img.w-flag-icon')) return;
+    const img = document.createElement('img');
+    img.className = 'w-flag-icon';
+    img.alt = '';
+    img.decoding = 'async';
+    img.loading = 'lazy';
+    img.width = 24;
+    img.height = 18;
+    img.src = svgToDataUri(svg);
+    slot.replaceChildren(img);
+}
+
+function collectFlagSlots(scopes, mode = 'trigger') {
+    /** @type {Map<string, HTMLElement[]>} */
+    const slotsByCode = new Map();
+    const ordered = [];
+    let rootForScope = null;
+
+    const acceptSlot = (slot) => {
+        if (!(slot instanceof HTMLElement)) return;
+        if (mode === 'trigger') {
+            // Visible chrome only — never walk the closed menu panel on first paint.
+            if (!slot.closest('[data-w-menu-trigger]')) return;
+        } else if (mode === 'panel') {
+            if (slot.closest('[data-w-menu-trigger]')) return;
+        }
+        const code = normalizeCountryFlagCode(slot.getAttribute('data-country-flag'));
+        if (!code) return;
+        if (!slotsByCode.has(code)) {
+            slotsByCode.set(code, []);
+            ordered.push(code);
+        }
+        slotsByCode.get(code).push(slot);
+    };
+
+    scopes.forEach((scope) => {
+        if (!(scope instanceof HTMLElement)) return;
+        if (!rootForScope && scope.matches?.('[data-i18n-switcher], [data-w-component~="language-switcher"]')) {
+            rootForScope = scope;
+        }
+        if (mode === 'trigger') {
+            scope.querySelectorAll('[data-w-menu-trigger] [data-country-flag]').forEach(acceptSlot);
+            return;
+        }
+        const panel = scope.matches?.('[data-w-menu-panel]')
+            ? scope
+            : scope.querySelector?.('[data-w-menu-panel]');
+        if (panel instanceof HTMLElement) {
+            panel.querySelectorAll('[data-country-flag]').forEach(acceptSlot);
+        }
+        // Root may still hold a nested panel when not portaled.
+        if (scope !== panel) {
+            scope.querySelectorAll('[data-w-menu-panel] [data-country-flag]').forEach(acceptSlot);
+        }
+    });
+
+    if (!rootForScope) {
+        rootForScope = scopes.find((scope) => (
+            scope instanceof HTMLElement
+            && scope.matches?.('[data-i18n-switcher], [data-w-component~="language-switcher"]')
+        )) || scopes.find((scope) => scope instanceof HTMLElement) || null;
+    }
+
+    return { slotsByCode, ordered, rootForScope };
+}
+
+async function fetchCountryFlagGroup(codes) {
+    const key = codes.slice().sort().join(',');
+    const existing = flagGroupInflight.get(key);
+    if (existing) return existing;
+
+    const task = (async () => {
+        if (typeof window.Weline?.load === 'function') {
+            await window.Weline.load('api');
+        }
+        const resource = await Promise.resolve(window.Weline?.Api?.resource?.('i18n'));
+        if (!resource?.getCountryFlags) {
+            throw new Error('i18n.getCountryFlags unavailable');
+        }
+        return resource.getCountryFlags({
+            country_codes: codes,
+            ratio: '4x3',
+        });
+    })().finally(() => {
+        flagGroupInflight.delete(key);
+    });
+
+    flagGroupInflight.set(key, task);
+    return task;
+}
+
+async function hydrateCountryFlags(scopes = [], options = {}) {
+    const mode = String(options.mode || 'trigger');
+    const { slotsByCode, ordered, rootForScope } = collectFlagSlots(scopes, mode);
+    // Keep scope fingerprint fresh, but do not prefetch every country on first paint.
+    const scopeDiff = resolveForcedFlagCountries(rootForScope);
+    if (ordered.length === 0) return;
+
+    const missing = [];
+    ordered.forEach((code) => {
+        const force = mode === 'panel' && scopeDiff.forced.has(code);
+        const cached = force ? null : readFlagCache(code);
+        if (cached?.svg) {
+            (slotsByCode.get(code) || []).forEach((slot) => paintCountryFlagSlot(slot, cached.svg));
+            return;
+        }
+        missing.push(code);
+    });
+    if (missing.length === 0) return;
+
+    for (let offset = 0; offset < missing.length; offset += FLAG_GROUP_SIZE) {
+        const group = missing.slice(offset, offset + FLAG_GROUP_SIZE);
+        try {
+            const payload = await fetchCountryFlagGroup(group);
+            const flags = payload && typeof payload === 'object' ? (payload.flags || {}) : {};
+            const version = String(payload?.version || FLAG_ASSET_VERSION);
+            group.forEach((code) => {
+                const entry = flags[code];
+                if (!entry || typeof entry.svg !== 'string' || !entry.svg) return;
+                writeFlagCache(code, { ...entry, version });
+                (slotsByCode.get(code) || []).forEach((slot) => paintCountryFlagSlot(slot, entry.svg));
+            });
+        } catch (_error) {
+            // Soft-fail: keep empty placeholders when API/CDN is unavailable.
+        }
+    }
+}
+
+function enqueueFlagHydration(scopes = [], options = {}) {
+    flagHydrateChain = flagHydrateChain
+        .then(() => hydrateCountryFlags(scopes, options))
+        .catch(() => {});
+    return flagHydrateChain;
+}
+
+function scheduleCountryFlagHydration(scopes = [], options = {}) {
+    const run = () => {
+        void enqueueFlagHydration(scopes, options);
+    };
+    if (typeof window.requestIdleCallback === 'function') {
+        window.requestIdleCallback(run, { timeout: 1800 });
+        return;
+    }
+    window.setTimeout(run, 50);
+}
+
 export function register(UI) {
     UI.define('language-switcher', ({ element: root, listen, emit }) => {
         const resolvePanel = () => {
@@ -370,6 +639,7 @@ export function register(UI) {
         let searchBound = false;
         let panelClickBound = false;
         let requestBound = false;
+        let flagsHydrated = false;
 
         const applySearchFilter = (rawTerm = '') => {
             panel = resolvePanel() || panel;
@@ -620,6 +890,8 @@ export function register(UI) {
         bindPanelClick();
         bindSearch();
         bindRequest();
+        // First paint: only the visible trigger flag (avoid 4× full-catalog SVG fetch).
+        scheduleCountryFlagHydration([root], { mode: 'trigger' });
 
         listen(root, 'weline:ui:menu:open', () => {
             bindPanelClick();
@@ -630,6 +902,12 @@ export function register(UI) {
             search = panel?.querySelector?.('[data-w-language-search]') || search;
             applySearchFilter(search instanceof HTMLInputElement ? search.value : '');
             focusSearch();
+            if (!flagsHydrated) {
+                flagsHydrated = true;
+                void enqueueFlagHydration([root, panel].filter(Boolean), { mode: 'panel' });
+            } else {
+                scheduleCountryFlagHydration([root, panel].filter(Boolean), { mode: 'panel' });
+            }
         });
         listen(root, 'weline:ui:menu:close', () => {
             panel = resolvePanel() || panel;

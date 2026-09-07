@@ -1,0 +1,78 @@
+<?php
+/**
+ * 认证页转化顶栏：Logo + 语言 + 次要登录/注册入口（无搜索/类目/购物车）。
+ *
+ * @meta.name {default="账号认证顶栏",name="账号认证顶栏",description="登录/注册转化页精简顶栏"}
+ * @meta.cache.mode {default="off",name="缓存模式",description="含登录/注册互跳 CTA，禁止跨路由复用 chrome 缓存"}
+ * @meta.cache.auth {default="guest",name="鉴权维度"}
+ * @param.logo {default="",name="Logo",description="覆盖站点 Logo URL"}
+ * @param.logoText {default="",name="Logo 文案",description="无图时的文字标"}
+ */
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Theme\Helper\SiteBrand;
+
+$meta = is_array($this->getData('meta')) ? $this->getData('meta') : [];
+$layoutMeta = is_array($this->getData('layout')) ? $this->getData('layout') : [];
+$logo = trim((string)($meta['logo'] ?? ''))
+    ?: ObjectManager::getInstance(SiteBrand::class)->resolveFrontendLogoUrl($this);
+$logoText = trim((string)($meta['logoText'] ?? ''));
+if ($logoText === '') {
+    $logoText = (string)__('首页');
+}
+$secondaryHref = trim((string)(
+    $this->getData('auth_secondary_url')
+    ?? $meta['auth_secondary_url']
+    ?? $layoutMeta['auth_secondary_url']
+    ?? ''
+));
+$secondaryLabel = trim((string)(
+    $this->getData('auth_secondary_label')
+    ?? $meta['auth_secondary_label']
+    ?? $layoutMeta['auth_secondary_label']
+    ?? ''
+));
+$esc = static fn(string $value): string => htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+?>
+<header class="w-auth-chrome" data-w-component="auth-chrome" weline-code="theme.partial.header.auth">
+    <div class="w-auth-chrome__inner">
+        <a class="w-auth-chrome__brand" href="@url{'/'}" aria-label="<?= $esc($logoText) ?>">
+            <?php if ($logo !== ''): ?>
+                <img class="w-auth-chrome__logo" src="<?= $esc($logo) ?>" alt="<?= $esc($logoText) ?>">
+            <?php else: ?>
+                <span class="w-auth-chrome__wordmark"><?= $esc($logoText) ?></span>
+            <?php endif; ?>
+        </a>
+        <div class="w-auth-chrome__actions">
+            <w:i18n:switcher for="js" />
+            <?php if ($secondaryHref !== '' && $secondaryLabel !== ''): ?>
+                <a class="w-button w-auth-chrome__secondary" href="<?= $esc($secondaryHref) ?>" data-tone="neutral" data-size="sm" data-variant="outline">
+                    <?= $esc($secondaryLabel) ?>
+                </a>
+            <?php endif; ?>
+        </div>
+    </div>
+</header>
+<style>
+.w-auth-chrome{
+    flex:0 0 auto;
+    background:rgba(15,17,17,.72);
+    color:#fff;
+    border-bottom:1px solid rgba(255,255,255,.08);
+    backdrop-filter:saturate(1.2) blur(8px);
+}
+.w-auth-chrome__inner{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:1rem;
+    width:min(100%,72rem);
+    margin-inline:auto;
+    padding:.75rem clamp(1rem,3vw,1.75rem);
+    box-sizing:border-box;
+}
+.w-auth-chrome__brand{display:inline-flex;align-items:center;min-width:0;color:inherit;text-decoration:none}
+.w-auth-chrome__logo{display:block;height:2rem;width:auto;max-width:10rem;object-fit:contain}
+.w-auth-chrome__wordmark{font-weight:700;letter-spacing:.02em}
+.w-auth-chrome__actions{display:inline-flex;align-items:center;gap:.65rem;margin-inline-start:auto}
+.w-auth-chrome__secondary{white-space:nowrap}
+</style>

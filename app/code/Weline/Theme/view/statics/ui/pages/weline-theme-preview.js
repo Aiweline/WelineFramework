@@ -2032,10 +2032,6 @@ function notify(type, detail = {}) {
 }
 
 function selectSlot(slot) {
-    // 部件模式只触发部件，不激活插槽。
-    if (root.dataset.wEditorSelectionTarget === 'widget') {
-        return;
-    }
     document.querySelectorAll('[data-wslot][data-state="selected"]').forEach((candidate) => {
         if (candidate !== slot) candidate.removeAttribute('data-state');
     });

@@ -28,7 +28,16 @@ final class BackendNavFilterCurrentScrollContractTest extends TestCase
             self::assertStringContainsString('scrollCurrentIntoView', $source);
             self::assertStringContainsString('clearCurrentRoute', $source);
             self::assertStringContainsString('matchesSubtree', $source);
+            self::assertStringContainsString('entryMatchesOwnLabel', $source);
+            self::assertStringContainsString('hasMatchingAncestor', $source);
+            self::assertStringContainsString('expandDescendants', $source);
+            self::assertStringContainsString('setEntryExpandedForFilter(entry, selfMatch)', $source);
             self::assertStringContainsString('data-w-nav-filtering', $source);
+            self::assertStringContainsString('data-w-nav-filter-source', $source);
+            self::assertStringContainsString('data-search-text', $source);
+            self::assertStringContainsString('isFilterSourceEntry', $source);
+            self::assertStringContainsString('isFilterSourceGroup', $source);
+            self::assertStringContainsString("!item.closest('[data-w-nav-filter-source]')", $source);
             self::assertStringContainsString('syncCurrentRouteAndScrollUnlessFiltering', $source);
             self::assertStringContainsString('.w-backend-nav__item[aria-current="page"]', $source);
             self::assertStringContainsString("element.querySelector(':scope > nav')", $source);

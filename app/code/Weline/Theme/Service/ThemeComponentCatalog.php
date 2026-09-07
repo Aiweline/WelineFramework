@@ -11,6 +11,8 @@ use Weline\Theme\Model\WelineTheme;
 class ThemeComponentCatalog
 {
     private array $cache = [];
+    /** @var array<string, array<string, ThemeComponentDefinition>> */
+    private array $identityIndex = [];
 
     public function __construct(
         private readonly WelineTheme $welineTheme,
@@ -29,6 +31,14 @@ class ThemeComponentCatalog
     {
         $area = strtolower($area) === 'backend' ? 'backend' : 'frontend';
         $resolvedTheme = $this->resolveTheme($area, $theme);
+        return $this->getDefinitionsForResolvedTheme($area, $resolvedTheme, $forceReload);
+    }
+
+    /**
+     * @return ThemeComponentDefinition[]
+     */
+    private function getDefinitionsForResolvedTheme(string $area, ?WelineTheme $resolvedTheme, bool $forceReload = false): array
+    {
         $themeId = $resolvedTheme?->getId() ?: 0;
         $cacheKey = "{$themeId}:{$area}";
         if (!$forceReload && isset($this->cache[$cacheKey])) {
@@ -59,19 +69,24 @@ class ThemeComponentCatalog
         }
 
         $this->cache[$cacheKey] = array_values($definitions);
+        $this->identityIndex[$cacheKey] = [];
+        foreach ($this->cache[$cacheKey] as $definition) {
+            $this->identityIndex[$cacheKey][$definition->getIdentity()] = $definition;
+        }
+
         return $this->cache[$cacheKey];
     }
 
     public function find(string $module, string $type, string $code, string $area = 'frontend', ?WelineTheme $theme = null): ?ThemeComponentDefinition
     {
         $identity = $this->buildIdentity($module, $type, $code);
-        foreach ($this->getDefinitions($area, $theme) as $definition) {
-            if ($definition->getIdentity() === $identity) {
-                return $definition;
-            }
-        }
+        $area = strtolower($area) === 'backend' ? 'backend' : 'frontend';
+        $resolvedTheme = $this->resolveTheme($area, $theme);
+        $themeId = $resolvedTheme?->getId() ?: 0;
+        $cacheKey = "{$themeId}:{$area}";
+        $this->getDefinitionsForResolvedTheme($area, $resolvedTheme);
 
-        return null;
+        return $this->identityIndex[$cacheKey][$identity] ?? null;
     }
 
     /**
@@ -138,6 +153,7 @@ class ThemeComponentCatalog
     public function clearCache(): void
     {
         $this->cache = [];
+        $this->identityIndex = [];
     }
 
     private function appendDefinition(array &$definitions, array &$seen, array &$nativeThemeComponentCodes, ThemeComponentDefinition $definition): void

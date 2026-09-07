@@ -93,25 +93,53 @@ class ThemePreviewContentRendererRestoreTest extends TestCore
         $method->setAccessible(true);
         $html = (string)$method->invoke(
             $renderer,
-            ThemeLayout::PAGE_TYPE_CMS,
-            ['content', 'delivery', 'search', 'category-menu', 'navigation', 'logo'],
+            ThemeLayout::PAGE_TYPE_HOME,
+            [
+                'content',
+                'homepage-hero',
+                'delivery',
+                'search',
+                'category-menu',
+                'navigation',
+                'logo',
+                'header-nav-extensions',
+                'top-bar-rights',
+                'footer-about-links',
+                'footer-partner-links',
+                'footer-payment-account-links',
+                'footer-help-links',
+            ],
             [
                 'content' => '<div class="widget-wrapper" data-widget-code="ad-banner">banner</div>',
+                'homepage-hero' => '<div class="widget-wrapper" data-widget-code="hero-slider">hero</div>',
                 'delivery' => '<div class="widget-wrapper" data-widget-code="checkout-delivery-context">delivery</div>',
                 'search' => '<div class="widget-wrapper" data-widget-code="header-search">search</div>',
                 'category-menu' => '<div class="widget-wrapper" data-widget-code="category-menu">cats</div>',
                 'navigation' => '<div class="widget-wrapper" data-widget-code="main-nav">nav</div>',
                 'logo' => '<div class="widget-wrapper" data-widget-code="logo">logo</div>',
+                'header-nav-extensions' => '<div class="widget-wrapper" data-widget-code="header-blog-link">blog</div>',
+                'top-bar-rights' => '<div class="widget-wrapper" data-widget-code="help-center-link">help</div>',
+                'footer-about-links' => '<div class="widget-wrapper" data-widget-code="footer-blog-link">footer-blog</div>',
+                'footer-partner-links' => '<div class="widget-wrapper" data-widget-code="footer-promote-link">promote</div>',
+                'footer-payment-account-links' => '<div class="widget-wrapper" data-widget-code="footer-payment-methods-link">pay</div>',
+                'footer-help-links' => '<div class="widget-wrapper" data-widget-code="footer-my-account-link">account</div>',
             ],
             [],
         );
 
         $this->assertStringContainsString('ad-banner', $html);
+        $this->assertStringContainsString('hero-slider', $html);
         $this->assertStringNotContainsString('checkout-delivery-context', $html);
         $this->assertStringNotContainsString('header-search', $html);
         $this->assertStringNotContainsString('category-menu', $html);
         $this->assertStringNotContainsString('main-nav', $html);
         $this->assertStringNotContainsString('data-widget-code="logo"', $html);
+        $this->assertStringNotContainsString('header-blog-link', $html);
+        $this->assertStringNotContainsString('help-center-link', $html);
+        $this->assertStringNotContainsString('footer-blog-link', $html);
+        $this->assertStringNotContainsString('footer-promote-link', $html);
+        $this->assertStringNotContainsString('footer-payment-methods-link', $html);
+        $this->assertStringNotContainsString('footer-my-account-link', $html);
     }
 
     public function testExtractSlotHtmlPreservesFeaturedAmazonMarkupWhenPriorSlotHasScriptLt(): void

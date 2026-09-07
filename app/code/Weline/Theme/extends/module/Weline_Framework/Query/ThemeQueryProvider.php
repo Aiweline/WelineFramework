@@ -18,10 +18,15 @@ use Weline\Framework\Service\Query\Value\FrontendWorkerExecutionContext;
 use Weline\Theme\Api\Layout\LayoutIdentity;
 use Weline\Theme\Api\Layout\LayoutWorkspaceInterface;
 use Weline\Theme\Model\WelineTheme;
+use Weline\Theme\Service\ProductLayoutCacheBustService;
+use Weline\Theme\Service\ProductLayoutOptionService;
+use Weline\Theme\Service\ProductLayoutResolveService;
+use Weline\Theme\Service\ProductLayoutScheduleService;
 use Weline\Theme\Service\PreviewContextService;
 use Weline\Theme\Service\PreviewTokenService;
 use Weline\Theme\Service\ThemeContextService;
 use Weline\Theme\Service\ThemeResourceCatalog;
+use Weline\Theme\Service\ThemeRuntimeCacheCleaner;
 use Weline\Theme\Service\ThemeTargetIdentityResolver;
 use Weline\Theme\Service\ThemeVirtualLayoutService;
 use Weline\Widget\Api\Param\ParamFormRendererInterface;
@@ -74,6 +79,13 @@ class ThemeQueryProvider implements QueryProviderInterface
             'listLayoutSelectionVersions' => $this->listLayoutSelectionVersions($params),
             'precheckLayoutSelectionRollback' => $this->precheckLayoutSelectionRollback($params),
             'rollbackLayoutSelectionVersion' => $this->rollbackLayoutSelectionVersion($params),
+            'listProductLayoutOptions' => $this->listProductLayoutOptions($params),
+            'createProductLayoutOption' => $this->createProductLayoutOption($params),
+            'resolveProductLayout' => $this->resolveProductLayout($params),
+            'listProductLayoutSchedules' => $this->listProductLayoutSchedules($params),
+            'saveProductLayoutSchedule' => $this->saveProductLayoutSchedule($params),
+            'deleteProductLayoutSchedule' => $this->deleteProductLayoutSchedule($params),
+            'processProductLayoutScheduleBoundaries' => $this->processProductLayoutScheduleBoundaries($params),
             'generatePreviewToken' => $this->generatePreviewToken($params),
             'validatePreviewToken' => $this->validatePreviewToken($params),
             'editorRequest' => $this->editorRequest($params),
@@ -621,6 +633,110 @@ class ThemeQueryProvider implements QueryProviderInterface
         );
     }
 
+    private function listProductLayoutOptions(array $params): array
+    {
+        /** @var ProductLayoutOptionService $service */
+        $service = ObjectManager::getInstance(ProductLayoutOptionService::class);
+
+        return [
+            'success' => true,
+            'options' => $service->listProductOptions(
+                (string)($params['area'] ?? 'frontend'),
+                isset($params['theme_id']) ? (int)$params['theme_id'] : null,
+            ),
+        ];
+    }
+
+    private function createProductLayoutOption(array $params): array
+    {
+        /** @var ProductLayoutOptionService $service */
+        $service = ObjectManager::getInstance(ProductLayoutOptionService::class);
+
+        return $service->createOption(
+            (string)($params['layout_option'] ?? $params['code'] ?? ''),
+            (string)($params['name'] ?? $params['display_name'] ?? ''),
+            (string)($params['clone_from'] ?? 'default'),
+            (string)($params['area'] ?? 'frontend'),
+        );
+    }
+
+    private function resolveProductLayout(array $params): array
+    {
+        /** @var ProductLayoutResolveService $service */
+        $service = ObjectManager::getInstance(ProductLayoutResolveService::class);
+        $categoryIds = [];
+        if (is_array($params['category_ids'] ?? null)) {
+            foreach ($params['category_ids'] as $id) {
+                $categoryIds[] = (int)$id;
+            }
+        } elseif (isset($params['category_id'])) {
+            $categoryIds[] = (int)$params['category_id'];
+        }
+        $resolved = $service->resolveForProduct(
+            (int)($params['product_id'] ?? $params['target_id'] ?? 0),
+            $categoryIds,
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null,
+            null,
+            (int)($params['website_id'] ?? 0),
+        );
+        /** @var ProductLayoutCacheBustService $bust */
+        $bust = ObjectManager::getInstance(ProductLayoutCacheBustService::class);
+        $bustResult = $bust->bustIfScheduleMembershipChanged(
+            (int)($params['product_id'] ?? $params['target_id'] ?? 0),
+            (int)$resolved['schedule_id'],
+        );
+
+        return [
+            'success' => true,
+            'resolved' => $resolved,
+            'cache_bust' => $bustResult,
+        ];
+    }
+
+    private function listProductLayoutSchedules(array $params): array
+    {
+        /** @var ProductLayoutScheduleService $service */
+        $service = ObjectManager::getInstance(ProductLayoutScheduleService::class);
+
+        return [
+            'success' => true,
+            'schedules' => $service->listForTarget(
+                (string)($params['target_type'] ?? ''),
+                (int)($params['target_id'] ?? 0),
+                (string)($params['layout_type'] ?? ProductLayoutOptionService::LAYOUT_TYPE),
+            ),
+        ];
+    }
+
+    private function saveProductLayoutSchedule(array $params): array
+    {
+        /** @var ProductLayoutScheduleService $service */
+        $service = ObjectManager::getInstance(ProductLayoutScheduleService::class);
+
+        return $service->save(is_array($params) ? $params : []);
+    }
+
+    private function deleteProductLayoutSchedule(array $params): array
+    {
+        /** @var ProductLayoutScheduleService $service */
+        $service = ObjectManager::getInstance(ProductLayoutScheduleService::class);
+
+        return $service->delete((int)($params['schedule_id'] ?? $params['id'] ?? 0));
+    }
+
+    private function processProductLayoutScheduleBoundaries(array $params): array
+    {
+        /** @var ProductLayoutScheduleService $service */
+        $service = ObjectManager::getInstance(ProductLayoutScheduleService::class);
+        $events = $service->processBoundariesNear(
+            new \DateTimeImmutable('now'),
+            max(1, (int)($params['lookback_seconds'] ?? 120)),
+        );
+
+        return ['success' => true, 'events' => $events, 'count' => count($events)];
+    }
+
     private function resolveLayoutSelection(array $params): ?array
     {
         return $this->virtualLayoutService()->resolveLayoutSelection(
@@ -767,6 +883,10 @@ class ThemeQueryProvider implements QueryProviderInterface
                     ? ($themeEditor ??= $this->createDirectThemeEditor())->postScopedWorkspace()
                     : ($themeEditor ??= $this->createDirectThemeEditor())->getScopedWorkspace(),
                 '/theme/backend/theme-editor/publish-scoped-workspace' => ($themeEditor ??= $this->createDirectThemeEditor())->postPublishScopedWorkspace(),
+                '/theme/backend/theme-editor/publish-scoped-release-batch' => ($themeEditor ??= $this->createDirectThemeEditor())->postPublishScopedReleaseBatch(),
+                '/theme/backend/theme-editor/scoped-release-batch' => ($themeEditor ??= $this->createDirectThemeEditor())->getScopedReleaseBatch(),
+                '/theme/backend/theme-editor/retry-scoped-release-batch-cache' => ($themeEditor ??= $this->createDirectThemeEditor())->postRetryScopedReleaseBatchCache(),
+                '/theme/backend/theme-editor/rollback-scoped-release-batch' => ($themeEditor ??= $this->createDirectThemeEditor())->postRollbackScopedReleaseBatch(),
                 '/theme/backend/theme-editor/brand-basics-identity' => $method === 'POST'
                     ? ($themeEditor ??= $this->createDirectThemeEditor())->postBrandBasicsIdentity()
                     : ($themeEditor ??= $this->createDirectThemeEditor())->getBrandBasicsIdentity(),
@@ -972,15 +1092,28 @@ class ThemeQueryProvider implements QueryProviderInterface
 
     private function scopedEditorRequestAclSourceId(string $path, string $method): ?string
     {
-        if ($path === '/theme/backend/theme-editor/publish-scoped-workspace' && $method !== 'POST') {
+        if (in_array($path, [
+            '/theme/backend/theme-editor/publish-scoped-workspace',
+            '/theme/backend/theme-editor/publish-scoped-release-batch',
+            '/theme/backend/theme-editor/retry-scoped-release-batch-cache',
+            '/theme/backend/theme-editor/rollback-scoped-release-batch',
+        ], true) && $method !== 'POST') {
             throw new \InvalidArgumentException('theme_scope_publish_method_invalid');
+        }
+        if ($path === '/theme/backend/theme-editor/scoped-release-batch' && $method !== 'GET') {
+            throw new \InvalidArgumentException('theme_scope_batch_read_method_invalid');
         }
 
         return match ($path) {
             '/theme/backend/theme-editor/scoped-workspace' => $method === 'GET'
                 ? 'Weline_Theme::theme_visual_editor_scope_read'
                 : 'Weline_Theme::theme_visual_editor_scope_edit',
-            '/theme/backend/theme-editor/publish-scoped-workspace'
+            '/theme/backend/theme-editor/scoped-release-batch'
+                => 'Weline_Theme::theme_visual_editor_scope_read',
+            '/theme/backend/theme-editor/publish-scoped-workspace',
+            '/theme/backend/theme-editor/publish-scoped-release-batch',
+            '/theme/backend/theme-editor/retry-scoped-release-batch-cache',
+            '/theme/backend/theme-editor/rollback-scoped-release-batch'
                 => 'Weline_Theme::theme_visual_editor_scope_publish',
             default => null,
         };
@@ -1460,6 +1593,71 @@ class ThemeQueryProvider implements QueryProviderInterface
                         ['name' => 'scope', 'type' => 'string', 'required' => false],
                         ['name' => 'locale', 'type' => 'string', 'required' => false],
                         ['name' => 'reason', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'listProductLayoutOptions',
+                    'description' => __('列出产品布局 layout_option（文件壳）'),
+                    'mode' => 'read',
+                    'params' => [
+                        ['name' => 'area', 'type' => 'string', 'required' => false],
+                        ['name' => 'theme_id', 'type' => 'int', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'createProductLayoutOption',
+                    'description' => __('新建产品布局 layout_option（克隆文件壳）'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'layout_option', 'type' => 'string', 'required' => true],
+                        ['name' => 'name', 'type' => 'string', 'required' => false],
+                        ['name' => 'clone_from', 'type' => 'string', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'resolveProductLayout',
+                    'description' => __('解析产品详情有效 layout_option（含定时）'),
+                    'mode' => 'read',
+                    'params' => [
+                        ['name' => 'product_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'category_ids', 'type' => 'array', 'required' => false],
+                    ],
+                ],
+                [
+                    'name' => 'listProductLayoutSchedules',
+                    'description' => __('列出产品/分类默认产品布局定时计划'),
+                    'mode' => 'read',
+                    'params' => [
+                        ['name' => 'target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'saveProductLayoutSchedule',
+                    'description' => __('保存产品布局定时计划'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'target_type', 'type' => 'string', 'required' => true],
+                        ['name' => 'target_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'layout_option', 'type' => 'string', 'required' => true],
+                        ['name' => 'starts_at', 'type' => 'string', 'required' => true],
+                        ['name' => 'ends_at', 'type' => 'string', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'deleteProductLayoutSchedule',
+                    'description' => __('删除产品布局定时计划'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'schedule_id', 'type' => 'int', 'required' => true],
+                    ],
+                ],
+                [
+                    'name' => 'processProductLayoutScheduleBoundaries',
+                    'description' => __('扫描并处理临近边界的产品布局定时计划缓存清理'),
+                    'mode' => 'write',
+                    'params' => [
+                        ['name' => 'lookback_seconds', 'type' => 'int', 'required' => false],
                     ],
                 ],
                 [

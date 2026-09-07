@@ -144,7 +144,7 @@
     padding: 1.5rem 1.75rem;
     overflow-y: auto;
     background: var(--weline-theme-surface, #ffffff);
-    color: var(--weline-theme-body-text, #0f1111);
+    color: var(--weline-theme-body-text, var(--color-text-primary));
 }
 
 .w-mega-menu__panel,

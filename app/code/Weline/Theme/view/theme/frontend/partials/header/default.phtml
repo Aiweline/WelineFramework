@@ -154,7 +154,9 @@ $headerLabel = static function ($value) use ($headerCategoryService, $headerCapi
         return '';
     }
     $widgetLabel = \Weline\Theme\Helper\WidgetI18n::label($key);
-    if ($widgetLabel !== '' && $widgetLabel !== $key) {
+    if ($widgetLabel !== ''
+        && ($widgetLabel !== $key || preg_match('/\p{sc=Han}/u', $key) !== 1)
+    ) {
         return $headerCapitalize($widgetLabel);
     }
     if ($headerCategoryService instanceof \WeShop\Catalog\Service\CategoryService) {
@@ -174,7 +176,9 @@ $headerDesc = static function ($value) use ($headerCategoryService): string {
     }
     try {
         $widgetLabel = \Weline\Theme\Helper\WidgetI18n::label($key);
-        if ($widgetLabel !== '' && $widgetLabel !== $key) {
+        if ($widgetLabel !== ''
+            && ($widgetLabel !== $key || preg_match('/\p{sc=Han}/u', $key) !== 1)
+        ) {
             return $widgetLabel;
         }
     } catch (\Throwable) {
@@ -344,9 +348,9 @@ $defaultNavItemsFactory = static function (): array {
 </script>
 <!-- theme-partial:header option=default -->
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)?v=20260901-logo-height-chrome1">
+      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)">
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)?v=20260826-search-submenu-hover1">
+      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)">
 <!-- Skip to content link for accessibility -->
 <a href="#main-content" class="skip-to-content" aria-label="<lang>跳转到主要内容</lang>"><lang>跳转到主要内容</lang></a>
 <div hidden data-weline-load="headerSearch" data-w-header-search-loader="true" aria-hidden="true"></div>
@@ -499,8 +503,8 @@ $defaultNavItemsFactory = static function (): array {
                                     <li role="none"><a href="@url{'customer/account/index'}" role="menuitem"><i class="fas fa-tachometer-alt" aria-hidden="true"></i> <lang>账户</lang></a></li>
                                     <li role="none"><a href="@url{'customer/account/index'}#orders" role="menuitem"><i class="fas fa-box" aria-hidden="true"></i> <lang>我的订单</lang></a></li>
                                     <li role="none"><a href="@url{'customer/account/index'}#settings" role="menuitem"><i class="fas fa-cog" aria-hidden="true"></i> <lang>账户设置</lang></a></li>
-                                    <li role="none"><a href="@url{'customer/account/logout'}" role="menuitem"><i class="fas fa-sign-out-alt" aria-hidden="true"></i> <lang>退出登录</lang></a></li>
                                 </w:hook>
+                                <li role="none" data-account-menu-auth="signed-in" hidden><a class="logout-link" href="@url{'customer/account/logout'}" role="menuitem" data-account-logout-confirm><i class="fas fa-sign-out-alt" aria-hidden="true"></i> <lang>退出登录</lang></a></li>
                             <?php else: ?>
                                 <li role="none"><a href="@url{'customer/account/index'}#orders" role="menuitem"><i class="fas fa-box" aria-hidden="true"></i> <lang>我的订单</lang></a></li>
                             <?php endif; ?>
@@ -521,10 +525,8 @@ $defaultNavItemsFactory = static function (): array {
                                     </span>
                                     <i class="fas fa-chevron-right my-menu-submenu-arrow" aria-hidden="true"></i>
                                 </span>
-                                <div class="my-menu-submenu-content">
-                                    <a href="#" class="my-menu-submenu-item active" data-lang="zh_Hans_CN" role="menuitem"><lang>简体中文</lang></a>
-                                    <a href="#" class="my-menu-submenu-item" data-lang="en_US" role="menuitem">English</a>
-                                    <a href="#" class="my-menu-submenu-item" data-lang="zh_Hant_TW" role="menuitem"><lang>繁體中文</lang></a>
+                                <div class="my-menu-submenu-content my-menu-submenu-content--language">
+                                    <w:i18n:switcher navigation="path" />
                                 </div>
                             </li>
                             <li role="none" class="my-menu-submenu">
@@ -544,10 +546,7 @@ $defaultNavItemsFactory = static function (): array {
                                     <i class="fas fa-chevron-right my-menu-submenu-arrow" aria-hidden="true"></i>
                                 </span>
                                 <div class="my-menu-submenu-content">
-                                    <a href="#" class="my-menu-submenu-item active" data-currency="CNY" role="menuitem">CNY (¥)</a>
-                                    <a href="#" class="my-menu-submenu-item" data-currency="USD" role="menuitem">USD ($)</a>
-                                    <a href="#" class="my-menu-submenu-item" data-currency="EUR" role="menuitem">EUR (€)</a>
-                                    <a href="#" class="my-menu-submenu-item" data-currency="GBP" role="menuitem">GBP (£)</a>
+                                    <w:hook>header-currency-switcher</w:hook>
                                 </div>
                             </li>
                         </ul>
@@ -561,33 +560,7 @@ $defaultNavItemsFactory = static function (): array {
                         position="header"
                         class="header-action-item header-language-switcher">
                     <w:hook>header-language-switcher<else/>
-                        <div class="language-switcher" role="button" tabindex="0" aria-label="<lang>切换语言</lang>">
-                            <span class="action-line-1"><lang>语言</lang></span>
-                            <span class="action-line-2">
-                                <span class="language-switcher-icon" aria-hidden="true">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">
-                                        <circle cx="12" cy="12" r="10" />
-                                        <path d="M2 12h20M12 2a15 15 0 0 1 0 20M12 2a15 15 0 0 0 0 20" fill="none" stroke="currentColor" stroke-width="1" />
-                                    </svg>
-                                </span>
-                                <span class="current-language"><lang>ZH</lang></span>
-                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                            </span>
-                            <div class="language-options" role="menu" aria-label="<lang>语言选项</lang>">
-                                <a href="#" class="language-option active" data-lang="zh_Hans_CN" role="menuitem">
-                                    <span><lang>简体中文</lang></span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
-                                </a>
-                                <a href="#" class="language-option" data-lang="en_US" role="menuitem">
-                                    <span><lang>English</lang></span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
-                                </a>
-                                <a href="#" class="language-option" data-lang="zh_Hant_TW" role="menuitem">
-                                    <span><lang>繁體中文</lang></span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
-                                </a>
-                            </div>
-                        </div>
+                        <w:i18n:switcher navigation="path" />
                     </w:hook>
                 </w:slot>
 
@@ -597,39 +570,7 @@ $defaultNavItemsFactory = static function (): array {
                         exclusive="true"
                         position="header"
                         class="header-action-item header-currency-switcher">
-                    <w:hook>header-currency-switcher<else/>
-                        <div class="currency-switcher" role="button" tabindex="0" aria-label="<lang>切换货币</lang>">
-                            <span class="action-line-1"><lang>货币</lang></span>
-                            <span class="action-line-2">
-                                <span class="currency-switcher-icon" aria-hidden="true">
-                                    <svg width="16" height="16" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" focusable="false" aria-hidden="true">
-                                        <circle cx="12" cy="12" r="8" fill="none" stroke="currentColor" stroke-width="1.4" />
-                                        <path d="M12 7v10M9 10h6M9 14h6" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
-                                    </svg>
-                                </span>
-                                <span class="current-currency"><lang>CNY</lang></span>
-                                <i class="fas fa-chevron-down" aria-hidden="true"></i>
-                            </span>
-                            <div class="currency-options" role="menu" aria-label="<lang>货币选项</lang>">
-                                <a href="#" class="currency-option active" data-currency="CNY" role="menuitem">
-                                    <span>CNY (¥)</span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
-                                </a>
-                                <a href="#" class="currency-option" data-currency="USD" role="menuitem">
-                                    <span>USD ($)</span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
-                                </a>
-                                <a href="#" class="currency-option" data-currency="EUR" role="menuitem">
-                                    <span>EUR (€)</span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
-                                </a>
-                                <a href="#" class="currency-option" data-currency="GBP" role="menuitem">
-                                    <span>GBP (£)</span>
-                                    <i class="fas fa-check" aria-hidden="true"></i>
-                                </a>
-                            </div>
-                        </div>
-                    </w:hook>
+                    <w:hook>header-currency-switcher</w:hook>
                 </w:slot>
 
                 <w:slot id="user-area"
@@ -699,19 +640,18 @@ $defaultNavItemsFactory = static function (): array {
                     <w:widget type="navigation" name="all-menu" />
                 </w:hook>
             </w:slot>
-            <a href="#"
-               class="hamburger-menu-btn hamburger-menu-btn--fallback js-header-drawer-trigger"
-               id="hamburger-menu-fallback"
-               role="button"
-               aria-label="<?= $headerEsc('打开所有类别菜单') ?>"
-               aria-expanded="false"
-               aria-controls="categories-sidebar"
-               hidden>
+            <button type="button"
+                    class="hamburger-menu-btn hamburger-menu-btn--fallback js-header-drawer-trigger"
+                    id="hamburger-menu-fallback"
+                    aria-label="<?= $headerEsc('打开所有类别菜单') ?>"
+                    aria-expanded="false"
+                    aria-controls="categories-sidebar"
+                    hidden>
                 <svg class="hamburger-menu-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
                     <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"></path>
                 </svg>
                 <span class="hamburger-label"><?= $headerEsc('全部') ?></span>
-            </a>
+            </button>
             </div>
 
             <!-- 左侧分类菜单 slot：分类模块部件默认注入；Theme 仅保留同部件兜底，禁止内嵌分类列表 -->
@@ -1051,7 +991,7 @@ textarea::-webkit-scrollbar-thumb:hover,
 /* Header主容器 */
 .weline-header {
     width: 100%;
-    background-color: var(--weline-chrome-bg-dark, var(--color-bg-amazon, #131921));
+    background-color: var(--weline-chrome-bg-dark, var(--color-bg-amazon, var(--color-bg-dark-secondary)));
     position: sticky;
     top: 0;
     z-index: var(--weline-z-sticky-header, 100);
@@ -1085,7 +1025,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     overflow: visible;
     position: relative;
     box-sizing: border-box;
-    background-color: var(--weline-chrome-bg-dark, var(--color-bg-amazon, #131921));
+    background-color: var(--weline-chrome-bg-dark, var(--color-bg-amazon, var(--color-bg-dark-secondary)));
     color: var(--weline-theme-text-on-dark);
 }
 
@@ -1215,7 +1155,7 @@ textarea::-webkit-scrollbar-thumb:hover,
     flex-direction: column; /* 移动端改为纵向布局 */
     position: relative;
     z-index: 1;
-    background-color: <?= htmlspecialchars(($colors['bgDark'] ?? '') ?: 'var(--weline-chrome-bg-dark, var(--color-bg-amazon, #131921))') ?>;
+    background-color: <?= htmlspecialchars(($colors['bgDark'] ?? '') ?: 'var(--weline-chrome-bg-dark, var(--color-bg-amazon, var(--color-bg-dark-secondary)))') ?>;
     color: var(--weline-theme-text-on-dark);
     padding: var(--spacing-sm) var(--spacing-md);
     min-height: var(--spacing-15);
@@ -2751,7 +2691,7 @@ html.is-rtl .header-categories::after {
 
 .header-category-panel.is-flyout,
 .header-category-panel.w-surface-body:not(.is-megamenu) {
-    color: var(--weline-theme-body-text, #0f1111);
+    color: var(--weline-theme-body-text, var(--color-text-primary));
 }
 
 .header-category-panel.is-megamenu[data-state="open"] {
@@ -3160,7 +3100,7 @@ html.is-rtl .header-categories::after {
 .header-category-panel.w-surface-body .category-link-wrapper .category-link {
     display: flex;
     width: 100%;
-    color: var(--weline-theme-body-text, #0f1111);
+    color: var(--weline-theme-body-text, var(--color-text-primary));
     background: transparent;
 }
 
@@ -3174,7 +3114,7 @@ html.is-rtl .header-categories::after {
     text-transform: uppercase;
     letter-spacing: 0.5px;
     border-radius: 0;
-    color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, #0f1111));
+    color: var(--weline-theme-body-text-heading, var(--weline-theme-body-text, var(--color-text-primary)));
 }
 
 .header-category-panel.is-megamenu .header-category-panel__list > .category-item > .category-link:hover,
@@ -3223,7 +3163,7 @@ html.is-rtl .header-categories::after {
     padding: 0.55rem 0.75rem;
     margin: 0;
     border-radius: var(--weline-radius-sm, 6px);
-    color: var(--weline-theme-body-text, #0f1111);
+    color: var(--weline-theme-body-text, var(--color-text-primary));
     background: transparent;
     text-decoration: none !important;
     font-size: var(--font-size-sm, 0.875rem);
@@ -3249,7 +3189,7 @@ html.is-rtl .header-categories::after {
 .categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item[data-state="open"] > .category-link-wrapper,
 .categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item[data-state="open"] > .category-link-wrapper > .category-link {
     background: var(--weline-theme-surface-hover, rgba(0, 0, 0, 0.06)) !important;
-    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover, #ff9900)) !important;
+    color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover, var(--color-primary))) !important;
     text-decoration: none !important;
 }
 
@@ -3262,7 +3202,7 @@ html.is-rtl .header-categories::after {
 .categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item:hover .category-arrow,
 .categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item[data-state="open"] .category-arrow,
 .categories-overflow-panel.w-surface-body .categories-overflow-list > .category-item > .category-link-wrapper:hover .category-arrow {
-    border-top-color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover, #ff9900));
+    border-top-color: var(--weline-theme-body-link-hover, var(--weline-theme-menu-panel-text-hover, var(--color-primary)));
     transform: rotate(-90deg);
 }
 
@@ -3278,7 +3218,7 @@ html.is-rtl .header-categories::after {
 }
 
 .sidebar-category-panel.w-surface-body .sidebar-category-link {
-    color: var(--weline-theme-body-text, #0f1111);
+    color: var(--weline-theme-body-text, var(--color-text-primary));
 }
 
 /* 汉堡侧栏：一级图文；子级向右侧飞出（复用 mega-menu-panel） */
@@ -3492,7 +3432,7 @@ body > .header-category-panel.is-drawer-flyout .mega-menu-layout {
 }
 
 .categories-overflow-list .category-link {
-    color: var(--weline-theme-body-text, #0f1111);
+    color: var(--weline-theme-body-text, var(--color-text-primary));
     text-decoration: none !important;
 }
 
@@ -3545,7 +3485,7 @@ body > .header-category-panel.is-drawer-flyout .mega-menu-layout {
 }
 
 .nav-more-menu.w-menu {
-    --w-surface-fg: var(--weline-theme-body-text, #0f1111);
+    --w-surface-fg: var(--weline-theme-body-text, var(--color-text-primary));
     --w-surface-fg-muted: var(--weline-theme-body-text-muted, #666666);
     --w-floating-max-inline-size: min(28rem, calc(100vw - 2rem));
     min-inline-size: min(16rem, calc(100vw - 2rem));
@@ -3560,7 +3500,7 @@ body > .header-category-panel.is-drawer-flyout .mega-menu-layout {
         0 20px 40px rgba(15, 23, 42, 0.16),
         0 6px 12px rgba(15, 23, 42, 0.08);
     border-radius: var(--weline-radius-lg, 12px);
-    color: var(--weline-theme-body-text, #0f1111);
+    color: var(--weline-theme-body-text, var(--color-text-primary));
 }
 
 /* More 收纳：Mega 分栏宽度与一级分类悬浮一致，不再套用 28rem 小列表 */
@@ -3568,7 +3508,7 @@ body > .header-category-panel.is-drawer-flyout .mega-menu-layout {
 .categories-overflow-panel.w-popover.is-mega-panel-split,
 body > .categories-overflow-panel.w-popover.is-megamenu,
 body > .categories-overflow-panel.w-popover.is-mega-panel-split {
-    --w-surface-fg: var(--weline-theme-body-text, #0f1111);
+    --w-surface-fg: var(--weline-theme-body-text, var(--color-text-primary));
     --w-surface-fg-muted: var(--weline-theme-body-text-muted, #666666);
     /* L1 More 侧栏 + 内嵌完整 Mega（L2+L3），需比单层 Mega 更宽 */
     --w-floating-inline-size: min(1120px, calc(100vw - 2rem));
@@ -3624,7 +3564,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
 .nav-more-menu .w-menu__item {
     display: block;
     padding: var(--weline-space-3) var(--spacing-md);
-    color: var(--weline-theme-body-text, #0f1111);
+    color: var(--weline-theme-body-text, var(--color-text-primary));
     text-decoration: none;
     font-size: var(--font-size-sm);
     transition: background-color 0.2s ease, color 0.2s ease;
@@ -3683,6 +3623,13 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     transform: translateX(-100%);
     transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
     color: <?= htmlspecialchars($colors['textPrimary'] ?? 'var(--color-text-primary)') ?>;
+}
+
+/* The drawer is rendered for keyboard/mobile users but remains closed on the
+ * initial paint. Skip its off-canvas subtree until it is opened so a large
+ * category tree does not participate in first-paint style/layout work. */
+.categories-sidebar[aria-hidden="true"] {
+    content-visibility: hidden;
 }
 
 .categories-sidebar[aria-hidden="false"] {
@@ -5034,6 +4981,91 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
         }
     }
 
+    function normalizeHeaderNavHref(value) {
+        value = String(value || '').trim();
+        if (!value) {
+            return '';
+        }
+        try {
+            var resolved = new URL(value, window.location.href);
+            return (resolved.pathname || '/') + (resolved.search || '');
+        } catch (_error) {
+            return value.replace(/\/+$/, '') || '/';
+        }
+    }
+
+    function hydrateSidebarMegaPanels(root) {
+        var scope = root || document;
+        if (!scope || typeof scope.querySelectorAll !== 'function') {
+            return;
+        }
+
+        var sourceByHref = Object.create(null);
+        document.querySelectorAll('[data-mega-menu][data-mega-source-url]').forEach(function(panel) {
+            if (panel.closest('#categories-sidebar')) {
+                return;
+            }
+            var href = normalizeHeaderNavHref(panel.getAttribute('data-mega-source-url'));
+            if (href && !sourceByHref[href]) {
+                sourceByHref[href] = panel;
+            }
+        });
+
+        scope.querySelectorAll('[data-sidebar-mega-deferred="1"]').forEach(function(item, index) {
+            var existingPanel = Array.from(item.children || []).find(function(child) {
+                return child instanceof HTMLElement && child.hasAttribute('data-w-popover-panel');
+            });
+            if (existingPanel) {
+                item.setAttribute('data-sidebar-mega-deferred', '0');
+                return;
+            }
+
+            var sourceHref = normalizeHeaderNavHref(item.getAttribute('data-sidebar-mega-source'));
+            var sourcePanel = sourceByHref[sourceHref];
+            if (!sourcePanel) {
+                return;
+            }
+
+            var clone = sourcePanel.cloneNode(true);
+            clone.classList.add('is-drawer-flyout');
+            clone.setAttribute('data-drawer-flyout', '1');
+            clone.setAttribute('data-state', 'closed');
+            clone.setAttribute('aria-hidden', 'true');
+            clone.hidden = true;
+
+            var idPrefix = 'drawer-mega-' + index + '-';
+            var idMap = Object.create(null);
+            clone.querySelectorAll('[id]').forEach(function(element) {
+                var oldId = element.getAttribute('id');
+                if (!oldId) {
+                    return;
+                }
+                var newId = idPrefix + oldId;
+                idMap[oldId] = newId;
+                element.setAttribute('id', newId);
+            });
+            var remapId = function(value) {
+                value = String(value || '');
+                return value ? (idMap[value] || idPrefix + value) : value;
+            };
+            clone.querySelectorAll('[data-mega-tab]').forEach(function(element) {
+                element.setAttribute('data-mega-tab', remapId(element.getAttribute('data-mega-tab')));
+                if (element.hasAttribute('aria-controls')) {
+                    element.setAttribute('aria-controls', remapId(element.getAttribute('aria-controls')));
+                }
+            });
+            clone.querySelectorAll('[data-mega-panel]').forEach(function(element) {
+                element.setAttribute('data-mega-panel', remapId(element.getAttribute('data-mega-panel')));
+                if (element.hasAttribute('aria-labelledby')) {
+                    element.setAttribute('aria-labelledby', remapId(element.getAttribute('aria-labelledby')));
+                }
+            });
+
+            item.appendChild(clone);
+            item.setAttribute('data-sidebar-mega-deferred', '0');
+        });
+    }
+
     function bindDrawerFlyoutAlign(root) {
         var scope = root || document;
         scope.querySelectorAll('.sidebar-category-item--mega[data-w-component="popover"]').forEach(function(item) {
@@ -5164,6 +5196,7 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
             categoriesSidebarOverlay.setAttribute('aria-hidden', 'false');
             document.body.style.overflow = 'hidden';
             // 抽屉打开后再绑定内部 mega（右侧飞出）
+            hydrateSidebarMegaPanels(categoriesSidebar);
             bindHeaderMegaMenu(categoriesSidebar);
             bindDrawerFlyoutAlign(categoriesSidebar);
             bindSidebarAccordions(categoriesSidebar);
@@ -5338,4 +5371,3 @@ body > .categories-overflow-panel.w-popover.is-mega-panel-split {
     scheduleHeaderInteractions();
 })();
 </script>
-

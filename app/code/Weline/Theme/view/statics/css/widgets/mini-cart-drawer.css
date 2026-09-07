@@ -7,14 +7,14 @@
     --amz-drawer-text: #0f1111;
     --amz-drawer-muted: #565959;
     --amz-drawer-link: #2162a1;
-    --amz-drawer-price: #b12704;
-    --amz-drawer-border: #d5d9d9;
-    --amz-drawer-surface: #ffffff;
-    --amz-drawer-surface-muted: #f7fafa;
-    --amz-drawer-cta-bg: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
-    --amz-drawer-cta-bg-hover: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
-    --amz-drawer-cta-border: #fcd200;
-    --amz-drawer-cta-text: #0f1111;
+    --amz-drawer-price: var(--color-primary, #b84a3c);
+    --amz-drawer-border: var(--color-border-default, #d4cfc5);
+    --amz-drawer-surface: var(--color-bg-primary, #fffefa);
+    --amz-drawer-surface-muted: var(--color-bg-secondary, #ede9e1);
+    --amz-drawer-cta-bg: var(--color-primary, #b84a3c);
+    --amz-drawer-cta-bg-hover: var(--color-primary-hover, #963b30);
+    --amz-drawer-cta-border: var(--color-primary-dark, #963b30);
+    --amz-drawer-cta-text: var(--color-on-primary, #f7f4ef);
     --amz-drawer-secondary-bg: linear-gradient(180deg, #f7f8f8 0%, #e3e6e6 100%);
     --amz-drawer-secondary-border: #adb1b8;
     --amz-drawer-secondary-text: #0f1111;
@@ -48,7 +48,7 @@
     flex-direction: column;
     background: var(--amz-drawer-surface, var(--weline-theme-surface-raised, #ffffff));
     color: var(--amz-drawer-text, var(--weline-theme-text, #111111));
-    box-shadow: -0.25rem 0 1.5rem rgba(15, 23, 42, 0.16);
+    box-shadow: var(--weline-shadow-lg);
     z-index: calc(var(--weline-z-overlay, 1200) + 2);
     transform: translateX(100%);
     visibility: hidden;
@@ -134,7 +134,7 @@
     height: var(--size-control-md, 2.5rem);
     padding: 0;
     border: none;
-    border-radius: var(--weline-radius-round, 999px);
+    border-radius: var(--weline-theme-radius-full);
     background: transparent;
     color: inherit;
     cursor: pointer;
@@ -208,7 +208,7 @@
     display: block;
     width: 4.5rem;
     height: 4.5rem;
-    border-radius: var(--weline-radius-md, 0.375rem);
+    border-radius: var(--weline-theme-radius-md);
     overflow: hidden;
     border: var(--border-width-thin, 1px) solid var(--weline-theme-border, #e5e7eb);
     background: var(--weline-theme-surface-muted, #f9fafb);
@@ -246,6 +246,42 @@
     color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #6b7280));
 }
 
+.header-cart .mini-cart-drawer__line-options {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    margin: 0 0 var(--weline-space-2, 0.5rem);
+    padding: 0;
+    list-style: none;
+}
+
+.header-cart .mini-cart-drawer__line-option {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: var(--weline-font-size-xs, 0.75rem);
+    color: var(--amz-drawer-muted, var(--weline-theme-text-muted, #6b7280));
+}
+
+.header-cart .mini-cart-drawer__line-option-swatch {
+    flex: 0 0 auto;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--weline-theme-border, #d1d5db);
+    border-radius: var(--weline-theme-radius-sm);
+    object-fit: cover;
+    background: #fff;
+}
+
+.header-cart .mini-cart-drawer__line-option-swatch--color {
+    display: inline-block;
+}
+
+.header-cart .mini-cart-drawer__line-option-text {
+    min-width: 0;
+}
+
 .header-cart .mini-cart-drawer__line-meta {
     display: flex;
     flex-wrap: wrap;
@@ -257,7 +293,7 @@
     display: inline-flex;
     align-items: center;
     border: var(--border-width-thin, 1px) solid var(--weline-theme-border, #d1d5db);
-    border-radius: var(--weline-radius-md, 0.375rem);
+    border-radius: var(--weline-theme-radius-md);
     overflow: hidden;
     background: var(--weline-theme-surface-raised, #ffffff);
 }
@@ -308,14 +344,59 @@
 }
 
 .header-cart .mini-cart-drawer__remove:hover {
-    color: #c45500;
+    color: var(--color-link-hover);
 }
 
 .header-cart .mini-cart-drawer__line-price {
+    align-self: start;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    align-content: flex-start;
+    gap: 2px;
+    max-width: 11rem;
     font-size: var(--weline-font-size-sm, 0.875rem);
     font-weight: 700;
     color: var(--amz-drawer-price, #b12704);
+    text-align: right;
+    white-space: normal;
+    line-height: 1.25;
+}
+
+.header-cart .mini-cart-drawer__line-price-row {
+    display: inline-flex;
+    flex-wrap: nowrap;
+    justify-content: flex-end;
+    align-items: baseline;
+    gap: 0.35rem;
+}
+
+.header-cart .mini-cart-drawer__line-price-now {
+    color: var(--amz-drawer-price, #b12704);
+    font-weight: 700;
     white-space: nowrap;
+}
+
+.header-cart .mini-cart-drawer__line-price-was {
+    color: var(--weline-theme-text-muted, #565959);
+    font-size: var(--weline-font-size-xs, 0.75rem);
+    font-weight: 400;
+    text-decoration: line-through;
+    white-space: nowrap;
+}
+
+.header-cart .mini-cart-drawer__line-price-campaign {
+    display: block;
+    color: var(--amz-drawer-price, #b12704);
+    font-size: var(--weline-font-size-xs, 0.75rem);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+a.header-cart .mini-cart-drawer__line-price-campaign:hover,
+.header-cart a.mini-cart-drawer__line-price-campaign:hover {
+    text-decoration: underline;
 }
 
 .header-cart .mini-cart-drawer__footer {
@@ -530,7 +611,7 @@
     justify-content: center;
     min-height: var(--size-control-lg, 2.75rem);
     padding: var(--weline-space-3, 0.75rem) var(--weline-space-4, 1rem);
-    border-radius: var(--weline-radius-md, 0.375rem);
+    border-radius: var(--weline-theme-radius-md);
     font-size: var(--weline-font-size-sm, 0.875rem);
     font-weight: 600;
     text-align: center;
@@ -540,9 +621,9 @@
 
 .header-cart .mini-cart-drawer__btn--primary {
     border: 1px solid var(--amz-drawer-cta-border, #fcd200);
-    background: var(--amz-drawer-cta-bg, linear-gradient(180deg, #ffe08a 0%, #ffd814 100%));
+    background: var(--amz-drawer-cta-bg, var(--color-primary));
     color: var(--amz-drawer-cta-text, #0f1111);
-    box-shadow: 0 2px 5px rgba(213, 217, 217, 0.5);
+    box-shadow: var(--weline-shadow-sm);
 }
 
 .header-cart .mini-cart-drawer__btn--primary:hover {
@@ -573,7 +654,7 @@
     border: 1px solid var(--amz-drawer-secondary-border, #adb1b8);
     background: var(--amz-drawer-secondary-bg, linear-gradient(180deg, #f7f8f8 0%, #e3e6e6 100%));
     color: var(--amz-drawer-secondary-text, #0f1111);
-    box-shadow: 0 2px 5px rgba(213, 217, 217, 0.5);
+    box-shadow: var(--weline-shadow-sm);
 }
 
 .header-cart .mini-cart-drawer__btn--secondary:hover {

@@ -28,15 +28,20 @@
  * @param label_sale_text {default="",type="color",label="促销标签文字",description="留空使用主题全局色盘"}
  */
 
-use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
 use Weline\Theme\Helper\ProductLabelStyle;
 use Weline\Theme\Helper\ThemeDemoCatalog;
-use Weline\Theme\Helper\ThemeUiColor;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('product-carousel');
 $shopperActions = ProductCardShopperActionParams::fromTemplate($this);
+$cardShowWishlist = !empty($shopperActions['show_wishlist']);
+$cardShowCompare = !empty($shopperActions['show_compare']);
+$cardShowQuickview = !empty($shopperActions['show_quickview']);
+$showPrice = true;
+$showRating = true;
+$showAddToCart = true;
+
 $wc = $scope->cssClass;
 $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 
@@ -80,55 +85,14 @@ $scopeLabelStyle = ProductLabelStyle::scopeStyleAttribute($labelOverrides);
         <div class="carousel-viewport">
             <div class="carousel-track">
                 <?php foreach ($products as $index => $product): ?>
-                    <?php
-                    $actionProductId = (int)($product['id'] ?? $product['product_id'] ?? 0);
-                    $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
-                    ?>
                     <div class="carousel-slide">
-                        <div class="product-card" data-product-id="<?= $actionProductId ?>">
-                            <div class="product-image-wrapper">
-                                <a href="<?= $esc((string)($product['url'] ?? '')) ?>" class="product-image-link">
-                                    <img src="<?= $esc((string)($product['image'] ?? '')) ?>"
-                                         alt="<?= $esc((string)($product['name'] ?? '')) ?>"
-                                         class="product-image"
-                                         loading="lazy">
-                                </a>
-
-                                <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/labels.phtml', [
-                                    'is_demo' => $labelFlags['is_demo'],
-                                    'is_new' => $labelFlags['is_new'],
-                                    'is_sale' => $labelFlags['is_sale'],
-                                ]) ?>
-
-                                <div class="product-action-bar product-action-bar--carousel">
-                                    <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
-                                        'product_id' => $actionProductId,
-                                        'show_wishlist' => $shopperActions['show_wishlist'],
-                                        'show_compare' => $shopperActions['show_compare'],
-                                        'show_quickview' => $shopperActions['show_quickview'],
-                                    ]) ?>
-                                    <?= $this->fetch(
-                                        'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
-                                        ProductCardAddToCartParams::fetchDictionary($product, ['variant' => 'icon'])
-                                    ) ?>
-                                </div>
-                            </div>
-
-                            <div class="product-info">
-                                <h3 class="product-name">
-                                    <a href="<?= $esc((string)($product['url'] ?? '')) ?>">
-                                        <?= $esc((string)($product['name'] ?? '')) ?>
-                                    </a>
-                                </h3>
-
-                                <div class="product-price">
-                                    <?php if ($product['original_price'] > $product['price']): ?>
-                                        <span class="price-original">¥<?= number_format($product['original_price'], 2) ?></span>
-                                    <?php endif; ?>
-                                    <span class="price-current">¥<?= number_format($product['price'], 2) ?></span>
-                                </div>
-                            </div>
-                        </div>
+                        <?php
+                        $labelFlags = ProductLabelStyle::resolveFlags($product, $index);
+                        $product['is_demo'] = !empty($labelFlags['is_demo']);
+                        $product['is_new'] = !empty($labelFlags['is_new']);
+                        $product['is_sale'] = !empty($labelFlags['is_sale']);
+                        ?>
+                        <w:product:card product="product" show-price="showPrice" show-rating="showRating" show-add-to-cart="showAddToCart" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" density="standard" wishlist-pixel="true" />
                     </div>
                 <?php endforeach; ?>
             </div>

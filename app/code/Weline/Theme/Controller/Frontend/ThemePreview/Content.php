@@ -140,7 +140,7 @@ class Content extends FrontendController
         /** @var ThemePreviewRenderCache $previewRenderCache */
         $previewRenderCache = ObjectManager::getInstance(ThemePreviewRenderCache::class);
 
-        return $previewRenderCache->remember(
+        $html = $previewRenderCache->remember(
             $themeId,
             $layoutType,
             $layoutOption,
@@ -162,6 +162,32 @@ class Content extends FrontendController
                 $scope,
                 $context,
             ): string {
+                $hideProductChrome = $this->shouldHideProductLayoutChrome($layoutType);
+
+                // Product layout editor: skip full product/default layout SSR (head/chrome
+                // Partials + empty slot skeleton) and render a chrome-filtered slot canvas.
+                if ($hideProductChrome) {
+                    $canvas = $previewContentRenderer->buildProductEditorCanvasHtml(
+                        $themeId,
+                        $layoutType,
+                        $status,
+                        $versionId,
+                        $typedEditorContext,
+                    );
+                    $html = (string)($canvas['html'] ?? '');
+                    if ($typedEditorContext instanceof ThemeEditorContext) {
+                        $html = $this->injectScopedAppearance($html, $typedEditorContext, $status);
+                    }
+                    $editorMode = (string)$this->request->getParam('editor_mode', '');
+                    if ($html !== '' && ($editorMode === '1' || $editorMode === 'true')) {
+                        /** @var EditorModeAssetInjector $injector */
+                        $injector = ObjectManager::getInstance(EditorModeAssetInjector::class);
+                        $html = $injector->inject($html);
+                    }
+
+                    return $html;
+                }
+
                 $previewPayload = $previewContentRenderer->build(
                     $themeId,
                     $layoutType,
@@ -192,7 +218,7 @@ class Content extends FrontendController
                 $targetPreviewMeta = $this->buildTargetPreviewMeta($targetPreviewPayload);
                 $this->assign('content', $previewPayload['content']);
                 $this->assign('target_preview_payload', $targetPreviewPayload ?: []);
-                $this->assign('meta', \array_merge([
+                $mergedMeta = \array_merge([
                     'showHeader' => true,
                     'showFooter' => true,
                     'showStatistics' => true,
@@ -201,7 +227,8 @@ class Content extends FrontendController
                     'showTestimonials' => true,
                     'showNews' => true,
                     'showPartners' => true,
-                ], $previewPayload['meta'], $layoutMeta, $targetPreviewMeta));
+                ], $previewPayload['meta'], $layoutMeta, $targetPreviewMeta);
+                $this->assign('meta', $mergedMeta);
 
                 $html = (string)$this->fetch('Weline_Theme::templates/frontend/theme-preview/content.phtml');
                 if ($typedEditorContext instanceof ThemeEditorContext) {
@@ -217,6 +244,45 @@ class Content extends FrontendController
                 return $html;
             },
         );
+        return $html;
+    }
+
+    /**
+     * Product-layout Theme Editor mode hides site chrome and must not pay for a
+     * discarded ThemePreviewContentRenderer.build() pass: product/default.phtml
+     * never echoes assigned content and LayoutSlotRenderer fills slots once.
+     */
+    private function shouldHideProductLayoutChrome(string $layoutType = ''): bool
+    {
+        $editorModeFlag = \trim((string)$this->request->getParam('editor_mode', ''));
+        $isEditorMode = ($editorModeFlag === '1' || \strtolower($editorModeFlag) === 'true');
+        if (!$isEditorMode) {
+            return false;
+        }
+
+        foreach (['product_layout_mode', 'hide_chrome_editing'] as $flag) {
+            $raw = \strtolower(\trim((string)$this->request->getParam($flag, '')));
+            if ($raw === '1' || $raw === 'true' || $raw === 'yes' || $raw === 'on') {
+                return true;
+            }
+        }
+
+        $lockSource = \strtolower(\trim((string)$this->request->getParam('lock_source', '')));
+        if ($lockSource === 'product') {
+            return true;
+        }
+
+        $resolvedLayout = \strtolower(\trim($layoutType));
+        if ($resolvedLayout === '') {
+            $resolvedLayout = \strtolower(\trim((string)$this->request->getParam('layout_type', '')));
+        }
+        $pageType = \strtolower(\trim((string)$this->request->getParam('page_type', '')));
+        $base = $resolvedLayout !== '' ? $resolvedLayout : $pageType;
+        if ($base === '') {
+            return false;
+        }
+
+        return $base === 'product' || \str_starts_with($base, 'product.');
     }
 
     private function injectScopedAppearance(

@@ -135,7 +135,7 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
             border: none;
             background: transparent;
             padding: 0;
-            color: var(--color-link, #007185);
+            color: var(--color-link);
             font: inherit;
             font-size: 0.95rem;
             cursor: pointer;
@@ -143,7 +143,7 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
         }
 
         .amazon-not-found__back-link:hover {
-            color: var(--color-link-hover, #c45500);
+            color: var(--color-link-hover);
             text-decoration: underline;
         }
 

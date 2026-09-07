@@ -106,17 +106,20 @@ final class ThemeHanfuHomepageDefaultsContractTest extends TestCase
         self::assertStringNotContainsString('发现最新产品和优惠', $seeder);
     }
 
-    public function testEmptyBrandListUsesProductTextileHeritageCatalog(): void
+    public function testEmptyBrandListUsesThemeTextileHeritageCatalog(): void
     {
         $widget = $this->readProjectFile('view/theme/frontend/widgets/content/brand-logos/default.phtml');
         $homepage = $this->readProjectFile('view/theme/frontend/layouts/homepage/default.phtml');
 
+        self::assertStringNotContainsString('\\Weline\\Product\\Service\\TextileHeritageCatalog', $widget);
         self::assertStringContainsString('TextileHeritageCatalog::items()', $widget);
         self::assertStringContainsString('$usesCraftDirectory = $brands === [];', $widget);
         self::assertStringContainsString("'image' => \$item['image']", $widget);
         self::assertStringContainsString("'link' => \$item['link']", $widget);
         self::assertStringContainsString('<w:widget type="content" name="textile-heritage"', $homepage);
         self::assertStringContainsString('textile-heritage', $homepage);
+        self::assertStringContainsString('default_injections', $homepage);
+        self::assertStringNotContainsString('<w:widget type="content" name="brand-logos"', $homepage);
         self::assertStringContainsString('Weline_Theme::frontend::layouts::homepage::brands', $homepage);
     }
 

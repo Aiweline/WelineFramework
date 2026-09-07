@@ -349,7 +349,7 @@
 @layer base {
     body {
         background: var(--weline-theme-body-bg, var(--weline-theme-canvas));
-        color: var(--weline-theme-body-text, #0f1111);
+        color: var(--weline-theme-body-text, var(--color-text-primary));
         font-family: var(--weline-font-sans);
         font-size: var(--weline-font-size-md);
         line-height: var(--weline-line-height);
@@ -1243,7 +1243,8 @@
     .w-currency-select__popover[data-w-floating-positioned],
     .w-tooltip[data-w-floating-positioned],
     [data-w-component~="anchored-float"][data-w-floating-positioned],
-    [data-w-floating-portal][data-w-floating-positioned] {
+    [data-w-floating-portal][data-w-floating-positioned],
+    .w-address__menu[data-w-floating-positioned] {
         position: fixed;
         inset: auto;
         top: max(var(--w-floating-top, 0px), var(--w-floating-viewport-top, .5rem));
@@ -1297,7 +1298,7 @@
     }
     .search-type-submenu .w-menu__item.is-active .search-type-option-check,
     .search-type-submenu .w-menu__item[aria-selected="true"] .search-type-option-check {
-        color: var(--weline-chrome-primary, var(--weline-theme-primary, #ff9900));
+        color: var(--weline-chrome-primary, var(--weline-theme-primary, var(--color-primary)));
     }
     .w-menu__item[data-tone="primary"] { color: var(--weline-theme-primary); font-weight: 700; }
     .w-menu__item[data-tone="danger"] { color: var(--weline-theme-danger); }
@@ -1353,7 +1354,8 @@
     .w-language-switcher__group-label small { font-size: inherit; font-weight: 500; }
     .w-language-switcher__option { align-items: flex-start; }
     .w-language-switcher__flag { display: inline-flex; inline-size: 1.5rem; min-height: 1rem; flex: 0 0 auto; align-items: center; justify-content: center; overflow: hidden; }
-    .w-language-switcher__flag svg { display: block; inline-size: 1.5rem; block-size: auto; max-block-size: 1.1rem; stroke: none; }
+    .w-language-switcher__flag svg,
+    .w-language-switcher__flag img.w-flag-icon { display: block; inline-size: 1.5rem; block-size: auto; max-block-size: 1.1rem; stroke: none; }
     .w-language-switcher__copy { display: grid; min-width: 0; gap: var(--weline-space-1); }
     .w-language-switcher__copy small { color: var(--weline-theme-text-muted); white-space: normal; }
     .w-disclosure {

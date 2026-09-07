@@ -56,6 +56,19 @@ final class PartialsChromeCachePolicyTest extends TestCase
         self::assertSame('user', (string)($cache['auth']['default'] ?? ''));
     }
 
+    public function testFrontendHeadUsesGuestChromeCaching(): void
+    {
+        $file = BP . 'app/code/Weline/Theme/view/theme/frontend/partials/head/default.phtml';
+        self::assertFileExists($file);
+
+        $parsed = ComponentMetaParser::parse($file);
+        $cache = $parsed['meta']['cache'] ?? [];
+
+        self::assertIsArray($cache);
+        self::assertSame('chrome', (string)($cache['mode']['default'] ?? ''));
+        self::assertSame('guest', (string)($cache['auth']['default'] ?? ''));
+    }
+
     public function testTopbarChromeAuthDefaultsToUser(): void
     {
         $file = BP . 'app/code/Weline/Theme/view/theme/backend/partials/topbar/default.phtml';
@@ -125,15 +138,47 @@ final class PartialsChromeCachePolicyTest extends TestCase
         self::assertFalse($class->hasMethod('acquirePartialRefreshLock'));
     }
 
+    public function testStorefrontChromeUsesTheDeclarativeThemePolicy(): void
+    {
+        $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
+
+        self::assertStringContainsString('StorefrontThemeCacheCoordinator::storefrontChromePolicy', $source);
+        self::assertStringContainsString('$hotCache->rememberPolicy(', $source);
+        self::assertStringNotContainsString("['website' => true, 'lang' => true]", $source);
+    }
+
+    public function testFrontendHeadUsesTheSharedStorefrontChromeCache(): void
+    {
+        $partials = (new ReflectionClass(Partials::class))->newInstanceWithoutConstructor();
+        $method = new ReflectionMethod(Partials::class, 'shouldUseSharedStorefrontChromeCache');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke($partials, 'frontend', 'head'));
+        self::assertTrue($method->invoke($partials, 'frontend', 'header'));
+        self::assertTrue($method->invoke($partials, 'frontend', 'footer'));
+        self::assertFalse($method->invoke($partials, 'backend', 'head'));
+    }
+
     public function testChromePartialCacheSchemaPinsStateLangOverStorefrontCookie(): void
     {
         $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
-        self::assertStringContainsString("'schema' => 'chrome-partial-v4'", $source);
+        self::assertStringContainsString("'schema' => 'chrome-partial-v9'", $source);
+        self::assertStringContainsString("'i18n_switcher_markup'", $source);
+        self::assertStringContainsString('SWITCHER_MARKUP_VERSION', $source);
         self::assertStringContainsString("'lang' => (string)State::getLang()", $source);
         self::assertStringContainsString(
             'Theme-preview request language override must win over storefront',
             $source,
         );
+    }
+
+    public function testFrontendHeaderFingerprintIncludesNestedNavigationTemplates(): void
+    {
+        $source = (string)\file_get_contents(BP . 'app/code/Weline/Theme/Block/Partials.php');
+
+        self::assertStringContainsString('categories-horizontal-nav.phtml', $source);
+        self::assertStringContainsString('categories-sidebar-nav.phtml', $source);
+        self::assertStringContainsString('mega-menu-panel.phtml', $source);
     }
 
     public function testRememberPartialOutputEvictsOldestWhenFull(): void

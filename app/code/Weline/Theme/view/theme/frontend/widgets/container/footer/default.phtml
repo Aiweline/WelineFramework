@@ -17,7 +17,7 @@
  * @widget.exclusive {true}
  * @widget.is_container {true}
  * @widget.supports {["layout-global-footer","footer-container"]}
- * @widget.slots {"footer-about-links":{"name":"了解我们扩展","accept":["footer-blog-link","footer-news-link","layout-footer-about-links"],"multiple":true},"footer-partner-links":{"name":"合作信息扩展","accept":["footer-publish-link","footer-promote-link","layout-footer-partner-links"],"multiple":true},"footer-payment-account-links":{"name":"支付与账户扩展","accept":["footer-payment-methods-link","footer-currency-rates-link","footer-campaign-link","layout-footer-payment-account-links"],"multiple":true},"footer-help-links":{"name":"帮助中心扩展","accept":["footer-my-account-link","footer-my-orders-link","footer-shipping-info-link","footer-returns-policy-link","footer-help-center-link","footer-contact-service-link","layout-footer-help-links"],"multiple":true},"footer-language":{"name":"语言","accept":["language-switcher","language"],"max":1},"footer-currency":{"name":"货币","accept":["currency-switcher","currency"],"max":1},"footer-social":{"name":"社交媒体","accept":["footer-social","social"],"max":1},"footer-copyright":{"name":"版权信息","accept":["footer-copyright","copyright"],"max":1}}
+ * @widget.slots {"footer-about-links":{"name":"了解我们扩展","accept":["footer-blog-link","footer-news-link","layout-footer-about-links"],"multiple":true},"footer-partner-links":{"name":"合作信息扩展","accept":["footer-publish-link","footer-promote-link","layout-footer-partner-links"],"multiple":true},"footer-payment-account-links":{"name":"支付与账户扩展","accept":["footer-payment-methods-link","footer-social-login-link","footer-currency-rates-link","footer-campaign-link","layout-footer-payment-account-links"],"multiple":true},"footer-help-links":{"name":"帮助中心扩展","accept":["footer-my-account-link","footer-my-orders-link","footer-shipping-info-link","footer-returns-policy-link","footer-help-center-link","footer-contact-service-link","layout-footer-help-links"],"multiple":true},"footer-language":{"name":"语言","accept":["language-switcher","language"],"max":1},"footer-currency":{"name":"货币","accept":["currency-switcher","currency"],"max":1},"footer-social":{"name":"社交媒体","accept":["footer-social","social"],"max":1},"footer-copyright":{"name":"版权信息","accept":["footer-copyright","copyright"],"max":1}}
  * @widget.default_injections {[{ "layout_type":"homepage", "slot":"footer", "area":"footer", "sort_order":0, "required":true, "exclusive":true, "reason":"整页脚主部件默认安装到全局 chrome 载体（homepage），非首页继承合并" }]}
  *
  * @param link_groups {default=[],type="footer_link_groups",label="链接分组",description="默认四组；enabled=false 时不渲染该列及扩展槽；自定义分组不带新槽"}
@@ -96,7 +96,7 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
 ?>
 
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/footer-chrome-amazon.css)?v=20260902-hanfu-ink-v1">
+      href="@static(Weline_Theme::css/widgets/footer-chrome-amazon.css)">
 
 <footer id="footer"
         class="weline-footer <?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
@@ -114,6 +114,32 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
             <i class="fas fa-arrow-up footer-back-to-top__icon" aria-hidden="true"></i>
             <span class="footer-back-to-top__text"><lang>回到顶部</lang></span>
         </button>
+        <script>
+        (function () {
+            var btn = document.getElementById('navBackToTop');
+            if (!btn || btn.getAttribute('data-weline-back-to-top-bound') === '1') {
+                return;
+            }
+            btn.setAttribute('data-weline-back-to-top-bound', '1');
+            btn.addEventListener('click', function () {
+                var reduce = false;
+                try {
+                    reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+                } catch (e) {}
+                try {
+                    window.scrollTo({ top: 0, left: 0, behavior: reduce ? 'auto' : 'smooth' });
+                } catch (e2) {
+                    window.scrollTo(0, 0);
+                }
+                if (document.documentElement) {
+                    document.documentElement.scrollTop = 0;
+                }
+                if (document.body) {
+                    document.body.scrollTop = 0;
+                }
+            });
+        })();
+        </script>
     <?php endif; ?>
 
     <div class="footer-nav">
@@ -138,14 +164,14 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
                             <div class="footer-section__links">
                                 <?php foreach ($items as $item):
                                     $itemLabel = $label($item['label'] ?? '');
-                                    $itemUrl = $esc((string)($item['url'] ?? '#'));
+                                    $itemUrl = FooterDefaultLinksHelper::splitUrlForTaglib((string)($item['url'] ?? '#'));
                                     $openNew = !empty($item['open_in_new']);
                                     if ($itemLabel === '') {
                                         continue;
                                     }
                                     ?>
                                     <a class="footer-section__link"
-                                       href="<?= $itemUrl ?>"<?= $openNew ? ' target="_blank" rel="noopener noreferrer"' : '' ?>>
+                                       href="<?php if ($itemUrl['url'] !== ''): ?><?= $esc($itemUrl['url']) ?><?php else: ?>@url{$itemUrl['url_path']}<?php endif; ?>"<?= $openNew ? ' target="_blank" rel="noopener noreferrer"' : '' ?>>
                                         <?= $itemLabel ?>
                                     </a>
                                 <?php endforeach; ?>
@@ -169,7 +195,7 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
                                 <?php elseif ($groupKey === 'payment'): ?>
                                     <w:slot id="footer-payment-account-links"
                                             name="支付与账户扩展"
-                                            accept="footer-payment-methods-link,footer-currency-rates-link,footer-campaign-link,layout-footer-payment-account-links"
+                                            accept="footer-payment-methods-link,footer-social-login-link,footer-currency-rates-link,footer-campaign-link,layout-footer-payment-account-links"
                                             multiple="true"
                                             position="footer"
                                             class="footer-section__extras"></w:slot>
@@ -230,7 +256,7 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
 
     <div class="footer-bottom-band">
         <w:hook>Weline_Theme::frontend::partials::footer::social-media-before<else/></w:hook>
-        <?php if ($showSocial): ?>
+        <?php if ($showSocial && $socialItems !== []): ?>
             <w:slot id="footer-social"
                     name="社交媒体"
                     accept="layout-footer-social,layout-global-footer-social,footer-social,social"
@@ -265,8 +291,9 @@ $gridClass = 'footer-content footer-content--cols-' . $columns;
                     <nav class="footer-legal__links" aria-label="<?= $esc((string)__('法律与政策')) ?>">
                         <?php foreach ($legalLinks as $legal):
                             $openNew = !empty($legal['open_in_new']);
+                            $legalUrl = FooterDefaultLinksHelper::splitUrlForTaglib((string)($legal['url'] ?? '#'));
                             ?>
-                            <a href="<?= $esc((string)($legal['url'] ?? '#')) ?>"<?= $openNew ? ' target="_blank" rel="noopener noreferrer"' : '' ?>>
+                            <a href="<?php if ($legalUrl['url'] !== ''): ?><?= $esc($legalUrl['url']) ?><?php else: ?>@url{$legalUrl['url_path']}<?php endif; ?>"<?= $openNew ? ' target="_blank" rel="noopener noreferrer"' : '' ?>>
                                 <?= $label($legal['text'] ?? '') ?>
                             </a>
                         <?php endforeach; ?>

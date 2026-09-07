@@ -14,7 +14,7 @@
  * @widget.page_layouts {["*"]}
  * @widget.exclusive {true}
  *
- * @param logo_text {default="WELINE",type="string",label="Logo文字"}
+ * @param logo_text {default="Weline Store",type="string",label="Logo文字"}
  * @param logo_image {default="",type="image",label="Logo图片",description="Logo图片URL，留空显示文字"}
  * @param sticky {default=true,type="bool",label="吸顶效果"}
  * @param bg_color {default="var(--weline-theme-surface)",type="color",label="背景颜色"}
@@ -39,7 +39,7 @@ $esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES,
 
 $config = $config ?? [];
 $isPreviewMode = (bool)($config['preview_mode'] ?? false);
-$logoText = $config['logo_text'] ?? 'WELINE';
+$logoText = $config['logo_text'] ?? 'Weline Store';
 $logoImage = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($config['logo_image'] ?? '');
 $logoImageFileHtml = (string)($config['logo_image_file_html'] ?? '');
 $sticky = (bool)($config['sticky'] ?? true);
@@ -72,7 +72,7 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
     <div class="header-topbar">
         <div class="w-container">
             <div class="topbar-left">
-                <span class="topbar-text"><?= __('欢迎光临！免费配送满') ?> ¥299</span>
+                <span class="topbar-text"><?= __('东方衣冠，全球配送') ?></span>
             </div>
             <div class="topbar-right">
                 <a href="@url{'help'}" class="topbar-link"><?= __('帮助中心') ?></a>
@@ -132,7 +132,7 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                 <?php endif; ?>
                 <?php if ($showCart): ?>
                 <div class="tool-item tool-cart">
-                    <a href="@url{'checkout/cart'}" class="tool-link">
+                    <a href="@url{'cart'}" class="tool-link">
                         <w:icon name="pin" size="sm"></w:icon>
                         <span class="tool-label"><?= __('购物车') ?></span>
                         <span class="tool-badge cart-count" data-count="0">0</span>
@@ -153,35 +153,35 @@ $rootStyle = '--wc-header-bg:' . $bgColor . ';'
                     </a>
                 </li>
                 <li class="nav-item has-dropdown">
-                    <a href="@url{'catalog/category'}" class="nav-link">
+                    <a href="@url{'categories'}" class="nav-link">
                         <w:icon name="grid" size="sm"></w:icon><span><?= __('商品分类') ?></span>
                         <w:icon name="arrow-down" size="sm"></w:icon>
                     </a>
                     <div class="nav-dropdown">
                         <div class="dropdown-inner">
                             <div class="dropdown-column">
-                                <h4 class="dropdown-title"><?= __('热门分类') ?></h4>
+                                <h4 class="dropdown-title"><?= __('热门形制') ?></h4>
                                 <ul class="dropdown-list">
-                                    <li><a href="#"><?= __('电子产品') ?></a></li>
-                                    <li><a href="#"><?= __('服装鞋帽') ?></a></li>
-                                    <li><a href="#"><?= __('家居生活') ?></a></li>
-                                    <li><a href="#"><?= __('美妆护肤') ?></a></li>
+                                    <li><a href="@url{'search'|['q' => '明制汉服']}"><?= __('明制汉服') ?></a></li>
+                                    <li><a href="@url{'search'|['q' => '宋制汉服']}"><?= __('宋制汉服') ?></a></li>
+                                    <li><a href="@url{'search'|['q' => '唐制汉服']}"><?= __('唐制汉服') ?></a></li>
+                                    <li><a href="@url{'search'|['q' => '汉服配饰']}"><?= __('汉服配饰') ?></a></li>
                                 </ul>
                             </div>
                             <div class="dropdown-column">
                                 <h4 class="dropdown-title"><?= __('特色推荐') ?></h4>
                                 <ul class="dropdown-list">
-                                    <li><a href="#"><?= __('新品上市') ?></a></li>
-                                    <li><a href="#"><?= __('限时特惠') ?></a></li>
-                                    <li><a href="#"><?= __('品牌精选') ?></a></li>
+                                    <li><a href="@url{'products'|['filter' => 'new']}"><?= __('新品上市') ?></a></li>
+                                    <li><a href="@url{'promotion/deals'}"><?= __('限时特惠') ?></a></li>
+                                    <li><a href="@url{'blog'}"><?= __('汉服文化') ?></a></li>
                                 </ul>
                             </div>
                         </div>
                     </div>
                 </li>
-                <li class="nav-item"><a href="@url{'catalog/products'|['filter' => 'hot']}" class="nav-link"><w:icon name="fire" size="sm"></w:icon><span><?= __('热卖') ?></span></a></li>
-                <li class="nav-item"><a href="@url{'catalog/products'|['filter' => 'new']}" class="nav-link"><w:icon name="bolt" size="sm"></w:icon><span><?= __('新品') ?></span></a></li>
-                <li class="nav-item"><a href="@url{'promotions'}" class="nav-link highlight"><w:icon name="circle" size="sm"></w:icon><span><?= __('促销活动') ?></span></a></li>
+                <li class="nav-item"><a href="@url{'products'|['filter' => 'hot']}" class="nav-link"><w:icon name="fire" size="sm"></w:icon><span><?= __('热卖') ?></span></a></li>
+                <li class="nav-item"><a href="@url{'products'|['filter' => 'new']}" class="nav-link"><w:icon name="bolt" size="sm"></w:icon><span><?= __('新品') ?></span></a></li>
+                <li class="nav-item"><a href="@url{'promotion'}" class="nav-link highlight"><w:icon name="circle" size="sm"></w:icon><span><?= __('促销活动') ?></span></a></li>
                 <li class="nav-item"><a href="@url{'about'}" class="nav-link"><w:icon name="info" size="sm"></w:icon><span><?= __('关于我们') ?></span></a></li>
             </ul>
         </div>
