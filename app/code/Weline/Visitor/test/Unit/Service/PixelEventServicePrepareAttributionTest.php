@@ -107,7 +107,7 @@ class PixelEventServicePrepareAttributionTest extends TestCore
         $prepared = $this->prepare([
             'eventName' => 'hero_cta_click',
             'websiteId' => 0,
-            'url' => 'https://default.weline.test/chess-club',
+            'url' => 'https://default.test.weline.com/chess-club',
             'additionalInfo' => [
                 'environment' => [
                     'website_id' => '0',
@@ -151,7 +151,7 @@ class PixelEventServicePrepareAttributionTest extends TestCore
             $prepared = $this->prepare([
                 'eventName' => 'hero_cta_click',
                 'websiteId' => 0,
-                'url' => 'https://default.weline.test/chess-club',
+                'url' => 'https://default.test.weline.com/chess-club',
                 'additionalInfo' => [
                     'environment' => ['website_id' => '0'],
                     'pagebuilder_attribution' => array_replace([

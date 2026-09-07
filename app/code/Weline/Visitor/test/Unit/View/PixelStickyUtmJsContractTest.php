@@ -122,11 +122,14 @@ class PixelStickyUtmJsContractTest extends TestCore
             BP . '/app/code/Weline/Visitor/view/hooks/Weline_Theme/frontend/layouts/base/body-end.phtml'
         );
 
-        self::assertStringContainsString(
+        // @static inside a PHP-quoted assignment compiles to nested PHP and ParseErrors the homepage.
+        self::assertStringNotContainsString(
             "\$__pixel_script_url = '@static(Weline_Visitor::js/pixel.js)';",
             $hook
         );
         self::assertStringNotContainsString('@static(Weline_Visitor::js/pixel.js)?v=', $hook);
+        self::assertStringContainsString("fetchTagSource('statics', 'Weline_Visitor::js/pixel.js')", $hook);
+        self::assertStringContainsString('script.src = \'<?= $__pixel_script_url ?>\'', $hook);
     }
 
     public function testLocalDevelopmentDefersThePixelBundleUntilIdle(): void

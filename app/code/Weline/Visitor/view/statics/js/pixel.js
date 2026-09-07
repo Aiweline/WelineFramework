@@ -3233,7 +3233,7 @@
                     || window.__WELINE_DEBUG__
                     || host === 'localhost'
                     || host === '127.0.0.1'
-                    || /\.weline\.test$/i.test(host));
+                    || /\.(?:test\.weline\.com|weline\.test)$/i.test(host));
                 if (isDev && typeof console !== 'undefined' && typeof console.log === 'function') {
                     console.log('[WelinePixel] track', {
                         event: normalizedEventName,

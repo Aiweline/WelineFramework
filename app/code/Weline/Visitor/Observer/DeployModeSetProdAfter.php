@@ -76,6 +76,7 @@ class DeployModeSetProdAfter implements ObserverInterface
             $token = $encryptionService->generateTokenForVersion($fullVersion);
             
             // 保存版本号到配置中，用于静态文件版本号
+            Env::getInstance()->setConfig('theme_static_version', $fullVersion);
             Env::getInstance()->setConfig('theme.static_version', $fullVersion);
             
             $printer = $data->getData('printer');
