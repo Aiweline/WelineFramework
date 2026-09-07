@@ -45,12 +45,16 @@ final class AddressCatalogImporter
         $layers = $onlyLayer !== null ? [$onlyLayer] : ['countries', 'provinces', 'cities', 'districts', 'postal', 'streets'];
         $countryFilter = $onlyCountry !== null ? strtoupper(trim($onlyCountry)) : null;
 
-        if (in_array('countries', $layers, true) && $countryFilter === null) {
+        if (in_array('countries', $layers, true) && ($countryFilter === null || $countryFilter === '')) {
             $imported['countries'] = $this->importCountries();
         }
 
         $countries = $this->discoverCountryCodes($countryFilter);
         foreach ($countries as $cc) {
+            // Province/city parents need the country node even when --layer skips countries.
+            if ($this->ensureCountryNode($cc)) {
+                $imported['countries']++;
+            }
             if (in_array('provinces', $layers, true)) {
                 $imported['provinces'] += $this->importRegionLayer($cc, 'provinces', Region::TYPE_PROVINCE);
             }
@@ -147,16 +151,101 @@ final class AddressCatalogImporter
         return $count;
     }
 
+    /**
+     * Ensure TYPE_COUNTRY row exists for $countryCode (from countries.tsv.gz or code fallback).
+     * @return bool true when a new country row was inserted
+     */
+    private function ensureCountryNode(string $countryCode): bool
+    {
+        $countryCode = strtoupper(trim($countryCode));
+        if (!preg_match('/^[A-Z]{2}$/', $countryCode)) {
+            return false;
+        }
+        /** @var Region $model */
+        $model = $this->objectManager->getInstance(Region::class);
+        if ($this->findRegionId($model, $countryCode, $countryCode) !== null) {
+            return false;
+        }
+
+        $name = $countryCode;
+        $sort = 0;
+        $pattern = null;
+        $path = AddressCatalogPaths::countriesPath();
+        if (is_file($path)) {
+            foreach (TsvGzReader::rows($path) as $row) {
+                $code = strtoupper(trim((string)($row['country_code'] ?? $row['region_code'] ?? '')));
+                if ($code !== $countryCode) {
+                    continue;
+                }
+                $label = trim((string)($row['region_name'] ?? $row['name'] ?? ''));
+                if ($label !== '') {
+                    $name = $label;
+                }
+                $sort = (int)($row['sort_order'] ?? 0);
+                $pattern = trim((string)($row['postal_code_pattern'] ?? '')) ?: null;
+                break;
+            }
+        }
+
+        $this->upsertRegion($model, [
+            Region::schema_fields_COUNTRY_CODE => $countryCode,
+            Region::schema_fields_PARENT_REGION_ID => null,
+            Region::schema_fields_REGION_CODE => $countryCode,
+            Region::schema_fields_REGION_NAME => $name,
+            Region::schema_fields_REGION_TYPE => Region::TYPE_COUNTRY,
+            Region::schema_fields_IS_ACTIVE => 1,
+            Region::schema_fields_SORT_ORDER => $sort,
+            Region::schema_fields_POSTAL_CODE_PATTERN => $pattern,
+        ]);
+
+        return true;
+    }
+
     private function importRegionLayer(string $countryCode, string $layer, string $type): int
     {
         $path = AddressCatalogPaths::layerFile($countryCode, $layer);
         if (!is_file($path)) {
             return 0;
         }
-        $count = 0;
+
         /** @var Region $model */
         $model = $this->objectManager->getInstance(Region::class);
-        $parentCache = [];
+        $table = Region::schema_table;
+        $codeMap = $this->loadRegionCodeMap($countryCode);
+        if (!isset($codeMap[$countryCode])) {
+            $countryId = $this->findRegionId($model, $countryCode, $countryCode);
+            if ($countryId !== null) {
+                $codeMap[$countryCode] = $countryId;
+            }
+        }
+
+        $link = $model->getConnection()->getConnector()->getLink();
+        $count = 0;
+        $batch = [];
+        $flush = function () use (&$batch, &$count, &$codeMap, $link, $table): void {
+            if ($batch === []) {
+                return;
+            }
+            $sql = 'INSERT INTO ' . $table . ' ('
+                . implode(',', [
+                    Region::schema_fields_COUNTRY_CODE,
+                    Region::schema_fields_PARENT_REGION_ID,
+                    Region::schema_fields_REGION_CODE,
+                    Region::schema_fields_REGION_NAME,
+                    Region::schema_fields_REGION_TYPE,
+                    Region::schema_fields_IS_ACTIVE,
+                    Region::schema_fields_SORT_ORDER,
+                    Region::schema_fields_POSTAL_CODE,
+                ])
+                . ') VALUES ' . implode(',', $batch);
+            $affected = $link->exec($sql);
+            if ($affected === false) {
+                throw new \RuntimeException('region batch insert failed: ' . $table);
+            }
+            $count += count($batch);
+            $batch = [];
+        };
+
         foreach (TsvGzReader::rows($path) as $row) {
             $code = trim((string)($row['region_code'] ?? ''));
             $name = trim((string)($row['region_name'] ?? ''));
@@ -164,31 +253,43 @@ final class AddressCatalogImporter
             if ($code === '' || $name === '') {
                 continue;
             }
-            $parentId = null;
-            if ($parentCode !== '') {
-                $cacheKey = $countryCode . '|' . $parentCode;
-                if (!array_key_exists($cacheKey, $parentCache)) {
-                    $parentCache[$cacheKey] = $this->findRegionId($model, $countryCode, $parentCode);
-                }
-                $parentId = $parentCache[$cacheKey];
-                if ($parentId === null) {
-                    continue;
-                }
-            } else {
-                $parentId = $this->findRegionId($model, $countryCode, $countryCode);
+            if (isset($codeMap[$code])) {
+                // Already present: keep existing row (fill-missing path). Name/parent drift is rare.
+                continue;
             }
-            $this->upsertRegion($model, [
-                Region::schema_fields_COUNTRY_CODE => $countryCode,
-                Region::schema_fields_PARENT_REGION_ID => $parentId,
-                Region::schema_fields_REGION_CODE => $code,
-                Region::schema_fields_REGION_NAME => $name,
-                Region::schema_fields_REGION_TYPE => $type,
-                Region::schema_fields_IS_ACTIVE => 1,
-                Region::schema_fields_SORT_ORDER => (int)($row['sort_order'] ?? 0),
-                Region::schema_fields_POSTAL_CODE => trim((string)($row['postal_code'] ?? '')) ?: null,
-            ]);
-            $count++;
+
+            if ($parentCode === '') {
+                $parentCode = $countryCode;
+            }
+            $parentId = $codeMap[$parentCode] ?? null;
+            if ($parentId === null) {
+                continue;
+            }
+
+            $sort = (int)($row['sort_order'] ?? 0);
+            $postal = trim((string)($row['postal_code'] ?? ''));
+            $postalSql = $postal === '' ? 'NULL' : $this->quote($postal);
+            $batch[] = '('
+                . $this->quote($countryCode) . ','
+                . (int)$parentId . ','
+                . $this->quote($code) . ','
+                . $this->quote($name) . ','
+                . $this->quote($type) . ','
+                . '1,'
+                . $sort . ','
+                . $postalSql
+                . ')';
+
+            // Reserve slot so same-layer duplicates / later parents in file resolve.
+            $codeMap[$code] = -1;
+
+            if (count($batch) >= 200) {
+                $flush();
+                // Refresh ids for rows just inserted (needed if later rows parent to same-layer codes).
+                $codeMap = $this->loadRegionCodeMap($countryCode) + $codeMap;
+            }
         }
+        $flush();
 
         return $count;
     }
