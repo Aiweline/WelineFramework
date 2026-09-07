@@ -19,6 +19,13 @@ return [
     'type' => 'module',
     'documentation' => 'doc/extends.md',
     'extends' => [
+        'CommerceOrderType' => [
+            'path' => 'extends/module/Weline_Order/CommerceOrderType',
+            'interface' => 'Weline\\Order\\Api\\CommerceOrderTypeInterface',
+            'description' => '订单售卖类型 SPI（toc 内置；tob 等由业务模块扩展）。',
+            'required' => false,
+            'multiple' => true,
+        ],
         'TrackingProvider' => [
             'path' => 'extends/module/Weline_Order/TrackingProvider',
             'interface' => 'Weline\Order\Interface\TrackingProviderInterface',

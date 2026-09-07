@@ -210,8 +210,6 @@ switch,转变
 部分发货,部分发货
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot 必填字段为空：%{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot 数值/hash 非法"
-订单留言,订单留言
-如有特殊要求请留言,如有特殊要求请留言
 我的订单,我的订单
 查看订单进度与支付状态,查看订单进度与支付状态
 已关闭,已关闭
@@ -239,15 +237,19 @@ SKU,存货单位
 查询失败,查询失败
 物流单号,物流单号
 当前,当前
+订单留言,订单留言
+如有特殊要求请留言,如有特殊要求请留言
 订单列表,订单列表
 新建订单,新建订单
 搜索订单号、客户姓名、邮箱,搜索订单号、客户姓名、邮箱
 全部状态,全部状态
 全部支付状态,全部支付状态
 全部发货状态,全部发货状态
+全部类型,全部类型
 搜索,搜索
 重置,重置
 订单号,订单号
+类型,类型
 客户,客户
 订单状态,订单状态
 支付状态,支付状态
@@ -492,6 +494,11 @@ Outbox,发件箱
 "rollback 不得直接设为 on","rollback 不得直接设为 on"
 "已有新 Order 时拒绝会混淆事实源的 unsafe rollback；可切 shadow，且绝不恢复旧 writer","已有新 Order 时拒绝会混淆事实源的 unsafe rollback；可切 shadow，且绝不恢复旧 writer"
 "禁止回滚恢复旧 Checkout writer","禁止回滚恢复旧 Checkout writer"
+"Order 售卖类型 code 不能为空","Order 售卖类型 code 不能为空"
+"重复的 Order 售卖类型 code：%{1}","重复的 Order 售卖类型 code：%{1}"
+未注册的订单售卖类型：%{1},未注册的订单售卖类型：%{1}
+零售,零售
+历史批发,历史批发
 订单当前状态不允许退款,订单当前状态不允许退款
 退款金额不能为空,退款金额不能为空
 退款金额不能超过订单总额,退款金额不能超过订单总额
@@ -573,3 +580,4 @@ Outbox,发件箱
 "OrderFacade get 当前仅 memory/harness","OrderFacade 获取当前内存/线束"
 "OrderFacade getGroup 当前仅 memory/harness","OrderFacade getGroup 当前仅限内存/线束"
 "DisplayNumberAllocator 当前仅 memory/harness；请挂 Registry writer",DisplayNumberAllocator当前仅限内存/线束；请挂注册表编写器
+批发,批发

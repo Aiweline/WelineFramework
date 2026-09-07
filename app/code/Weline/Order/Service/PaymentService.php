@@ -100,12 +100,15 @@ class PaymentService
                 // 如果状态转换失败，不影响支付记录
             }
             
-            // 触发订单支付事件
-            $this->eventsManager->dispatch('Weline_Order::order_paid', [
-                'order' => $order,
-                'order_id' => $orderId,
-                'payment' => $payment,
-            ]);
+            // 触发订单支付事件（非破坏追加 order_type + type_payload）
+            $this->eventsManager->dispatch(
+                'Weline_Order::order_paid',
+                OrderTypeEventEnvelope::append([
+                    'order' => $order,
+                    'order_id' => $orderId,
+                    'payment' => $payment,
+                ]),
+            );
         } elseif ($paidAmount > 0) {
             $order->setData(Order::schema_fields_PAYMENT_STATUS, Order::PAYMENT_STATUS_PARTIAL);
             $order->save();

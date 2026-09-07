@@ -197,6 +197,7 @@ class OrderStateMachine
                 );
             }
             $eventData['order'] = $order;
+            $eventData = OrderTypeEventEnvelope::append($eventData);
             $this->dispatch('Weline_Order::order_status_changed', $eventData);
             if ($ownsTransaction) {
                 $transaction->commit();

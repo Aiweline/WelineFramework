@@ -1,0 +1,388 @@
+/**
+ * Account-center orders panel (CheckoutGroup summary / detail).
+ * Emitted as <css> → <link> from account.sidebar.content;
+ * account-index loadTrustedSidebarStyles hoists it into <head> on AJAX inject.
+ * Scoped by [data-account-orders] to avoid Theme account_orders layout shell.
+ */
+[data-account-orders="true"].account-orders {
+    --ao-radius: var(--border-radius-xl, 1rem);
+    --ao-gutter: var(--spacing-lg, 1.5rem);
+    --ao-border: var(--color-border-light, #e5e7eb);
+    --ao-surface: var(--color-bg-primary, #fff);
+    --ao-muted: var(--color-text-secondary, #647084);
+    --ao-text: var(--color-text-primary, #172033);
+    box-sizing: border-box;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    border: 1px solid var(--ao-border);
+    border-radius: var(--ao-radius);
+    background: var(--ao-surface);
+    box-shadow: var(--shadow-sm, 0 1px 2px rgba(15, 23, 42, 0.06));
+    color: var(--ao-text);
+}
+
+[data-account-orders="true"].account-orders *,
+[data-account-orders="true"].account-orders *::before,
+[data-account-orders="true"].account-orders *::after {
+    box-sizing: border-box;
+}
+
+[data-account-orders="true"] .account-orders__header {
+    display: grid;
+    gap: 0.35rem;
+    padding: 1.25rem var(--ao-gutter);
+    background: var(--color-bg-secondary, #f8fafc);
+    border-bottom: 1px solid var(--ao-border);
+}
+
+[data-account-orders="true"] .account-orders__header h2 {
+    margin: 0;
+    font-size: 1.125rem;
+    font-weight: 700;
+    color: var(--ao-text);
+    line-height: 1.3;
+}
+
+[data-account-orders="true"] .account-orders__hint {
+    margin: 0;
+    color: var(--ao-muted);
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+[data-account-orders="true"] .account-orders__empty {
+    margin: 0;
+    padding: 2.25rem 1.25rem;
+    color: var(--ao-muted);
+    text-align: center;
+    border: 1px dashed rgba(148, 163, 184, 0.45);
+    border-radius: var(--border-radius-lg, 0.75rem);
+    background: rgba(248, 250, 252, 0.72);
+}
+
+[data-account-orders="true"] .account-orders__groups,
+[data-account-orders="true"] .account-orders__partial {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+[data-account-orders="true"] .account-orders__groups {
+    display: grid;
+    gap: 0.85rem;
+    padding: var(--ao-gutter);
+}
+
+[data-account-orders="true"] .account-orders__group {
+    border: 1px solid var(--ao-border);
+    border-radius: var(--border-radius-lg, 0.75rem);
+    background: linear-gradient(180deg, #fff 0%, #fbfdff 100%);
+    overflow: hidden;
+}
+
+[data-account-orders="true"] .account-orders__summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.55rem 0.75rem;
+    padding: 1rem 1.1rem;
+}
+
+[data-account-orders="true"] .account-orders__summary > strong {
+    font-size: 1rem;
+    font-weight: 800;
+    color: var(--ao-text);
+    overflow-wrap: anywhere;
+}
+
+[data-account-orders="true"] .account-orders__summary > span:not(.account-orders__badge):not(.account-orders__total) {
+    color: var(--ao-muted);
+    font-size: 0.875rem;
+}
+
+[data-account-orders="true"] .account-orders__badge {
+    display: inline-flex;
+    align-items: center;
+    min-height: 1.75rem;
+    padding: 0.2rem 0.65rem;
+    border: 1px solid rgba(148, 163, 184, 0.35);
+    border-radius: 999px;
+    background: rgba(15, 23, 42, 0.04);
+    color: var(--ao-text);
+    font-size: 0.75rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+[data-account-orders="true"] .account-orders__badge[data-status="paid"],
+[data-account-orders="true"] .account-orders__badge[data-status="completed"] {
+    background: rgba(16, 185, 129, 0.12);
+    border-color: rgba(16, 185, 129, 0.35);
+    color: #065f46;
+}
+
+[data-account-orders="true"] .account-orders__badge[data-status="pending_payment"],
+[data-account-orders="true"] .account-orders__badge[data-status="pending"] {
+    background: rgba(245, 158, 11, 0.14);
+    border-color: rgba(245, 158, 11, 0.4);
+    color: #92400e;
+}
+
+[data-account-orders="true"] .account-orders__badge[data-status="cancelled"],
+[data-account-orders="true"] .account-orders__badge[data-status="closed"] {
+    background: rgba(148, 163, 184, 0.16);
+    border-color: rgba(148, 163, 184, 0.4);
+    color: #475569;
+}
+
+[data-account-orders="true"] .account-orders__total {
+    margin-inline-start: auto;
+    font-size: 0.95rem;
+    font-weight: 800;
+    color: var(--ao-text);
+    white-space: nowrap;
+}
+
+[data-account-orders="true"] .account-orders__detail-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 2.15rem;
+    padding: 0.35rem 0.85rem;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    background: rgba(240, 193, 75, 0.16);
+    color: var(--color-primary-dark, #9a6b00);
+    text-decoration: none;
+    font-size: 0.8125rem;
+    font-weight: 800;
+}
+
+[data-account-orders="true"] .account-orders__detail-link:hover {
+    background: var(--color-primary, #f0c14b);
+    color: var(--color-text-dark, #111);
+}
+
+[data-account-orders="true"] .account-orders__partial {
+    display: grid;
+    gap: 0.55rem;
+    padding: 0 1.1rem 1rem;
+    border-top: 1px dashed rgba(148, 163, 184, 0.35);
+}
+
+[data-account-orders="true"] .account-orders__partial > li {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.45rem 0.75rem;
+    padding: 0.65rem 0.75rem;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    background: rgba(248, 250, 252, 0.9);
+    font-size: 0.875rem;
+}
+
+/* —— Order detail (same panel) —— */
+[data-account-orders="true"] .account-order-detail {
+    display: grid;
+    gap: 1.1rem;
+    margin: var(--ao-gutter);
+    padding: 1.1rem;
+    border: 1px solid var(--ao-border);
+    border-radius: var(--border-radius-lg, 0.75rem);
+    background: linear-gradient(180deg, #fffdf8 0%, #f8fafc 100%);
+}
+
+[data-account-orders="true"] .account-order-detail__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+}
+
+[data-account-orders="true"] .account-order-detail__eyebrow {
+    margin: 0;
+    color: var(--ao-muted);
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+[data-account-orders="true"] .account-order-detail__header h3 {
+    margin: 0.2rem 0 0;
+    font-size: 1.15rem;
+    font-weight: 800;
+    overflow-wrap: anywhere;
+}
+
+[data-account-orders="true"] .account-order-detail__uuid {
+    margin: 0.25rem 0 0;
+    color: var(--ao-muted);
+    font-size: 0.8125rem;
+    overflow-wrap: anywhere;
+}
+
+[data-account-orders="true"] .account-order-detail__table-wrap {
+    overflow-x: auto;
+}
+
+[data-account-orders="true"] .account-order-detail__table {
+    display: grid;
+    gap: 0;
+    min-width: 36rem;
+    border: 1px solid var(--ao-border);
+    border-radius: var(--border-radius-lg, 0.75rem);
+    overflow: hidden;
+    background: #fff;
+}
+
+[data-account-orders="true"] .account-order-detail__row {
+    display: grid;
+    grid-template-columns: minmax(0, 2fr) minmax(0, 1.2fr) 4.5rem minmax(5.5rem, 1fr) minmax(5.5rem, 1fr);
+    gap: 0.75rem;
+    align-items: center;
+    padding: 0.75rem 0.9rem;
+    border-top: 1px solid var(--ao-border);
+}
+
+[data-account-orders="true"] .account-order-detail__row--head {
+    border-top: 0;
+    background: var(--color-bg-secondary, #f8fafc);
+    color: var(--ao-muted);
+    font-size: 0.75rem;
+    font-weight: 800;
+}
+
+[data-account-orders="true"] .account-order-detail__cell {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    font-size: 0.875rem;
+}
+
+[data-account-orders="true"] .account-order-detail__shipping,
+[data-account-orders="true"] .account-order-detail__tracking {
+    display: grid;
+    gap: 0.45rem;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--ao-border);
+    border-radius: var(--border-radius-lg, 0.75rem);
+    background: #fff;
+    min-width: 0;
+    overflow: hidden;
+}
+
+[data-account-orders="true"] .account-order-detail__shipping-header,
+[data-account-orders="true"] .account-order-detail__totals {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem 1rem;
+}
+
+[data-account-orders="true"] .account-order-detail__shipping-header h4,
+[data-account-orders="true"] .account-order-detail__tracking h4 {
+    margin: 0;
+    font-size: 0.95rem;
+    font-weight: 800;
+}
+
+[data-account-orders="true"] .account-order-detail__shipping-recipient,
+[data-account-orders="true"] .account-order-detail__shipping-address {
+    margin: 0;
+    color: var(--ao-text);
+    font-size: 0.875rem;
+    line-height: 1.55;
+}
+
+[data-account-orders="true"] .account-order-detail__shipping-recipient {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem 0.85rem;
+}
+
+[data-account-orders="true"] .account-order-detail__totals {
+    display: grid;
+    gap: 0.55rem;
+    margin: 0;
+    padding: 0.9rem 1rem;
+    border: 1px solid var(--ao-border);
+    border-radius: var(--border-radius-lg, 0.75rem);
+    background: #fff;
+}
+
+[data-account-orders="true"] .account-order-detail__totals > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 1rem;
+    color: var(--ao-muted);
+    font-size: 0.875rem;
+}
+
+[data-account-orders="true"] .account-order-detail__totals strong {
+    color: var(--ao-text);
+    font-weight: 800;
+}
+
+[data-account-orders="true"] .account-order-detail__grand-total {
+    padding-top: 0.55rem;
+    border-top: 1px solid var(--ao-border);
+    color: var(--ao-text) !important;
+    font-size: 0.95rem !important;
+}
+
+[data-account-orders="true"] .account-order-detail__back {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: fit-content;
+    min-height: 2.5rem;
+    padding: 0.5rem 1rem;
+    border-radius: var(--border-radius-lg, 0.75rem);
+    background: rgba(148, 163, 184, 0.14);
+    color: var(--ao-text);
+    text-decoration: none;
+    font-weight: 800;
+}
+
+[data-account-orders="true"] .account-order-detail__back:hover {
+    background: rgba(240, 193, 75, 0.22);
+    color: var(--color-primary-dark, #9a6b00);
+}
+
+@media (max-width: 720px) {
+    [data-account-orders="true"] .account-orders__summary {
+        align-items: stretch;
+    }
+
+    [data-account-orders="true"] .account-orders__total,
+    [data-account-orders="true"] .account-orders__detail-link {
+        margin-inline-start: 0;
+        width: 100%;
+    }
+
+    [data-account-orders="true"] .account-order-detail__table {
+        min-width: 0;
+    }
+
+    [data-account-orders="true"] .account-order-detail__row {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
+    }
+
+    [data-account-orders="true"] .account-order-detail__row--head {
+        display: none;
+    }
+
+    [data-account-orders="true"] .account-order-detail__cell::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 0.15rem;
+        color: var(--ao-muted);
+        font-size: 0.75rem;
+        font-weight: 800;
+    }
+}

@@ -271,6 +271,8 @@ final class OrderFacade implements OrderFacadeInterface
                     'website_id' => $command->websiteId,
                     'store_id' => $command->storeId,
                     'customer_id' => $command->customerId,
+                    'order_type' => $this->orderTypeFromCommand($command),
+                    'type_payload' => $this->typePayloadFromCommand($command),
                     'items' => $planned['items'],
                     'money' => $money->toArray(),
                     'scope' => $scope->toArray(),
@@ -450,6 +452,8 @@ final class OrderFacade implements OrderFacadeInterface
                     'website_id' => $command->websiteId,
                     'store_id' => $command->storeId,
                     'customer_id' => $command->customerId,
+                    'order_type' => $this->orderTypeFromCommand($command),
+                    'type_payload' => $this->typePayloadFromCommand($command),
                     'items' => $planned['items'],
                     'money' => $money->toArray(),
                     'scope' => $scope->toArray(),
@@ -692,6 +696,8 @@ final class OrderFacade implements OrderFacadeInterface
             displayNumber: $row['display_number'] ?? null,
             customerId: isset($row['customer_id']) ? (int)$row['customer_id'] : null,
             customerEmail: ($email = trim((string)($row['customer_email'] ?? ''))) !== '' ? $email : null,
+            orderType: strtolower(trim((string)($row['order_type'] ?? 'toc'))) ?: 'toc',
+            typePayload: is_array($row['type_payload'] ?? null) ? $row['type_payload'] : [],
         );
     }
 
@@ -1191,6 +1197,8 @@ final class OrderFacade implements OrderFacadeInterface
                     'money' => $o['money'],
                     'is_shipping_charge_owner' => $o['is_shipping_charge_owner'],
                     'status' => $o['status'],
+                    'order_type' => $o['order_type'] ?? 'toc',
+                    'type_payload' => is_array($o['type_payload'] ?? null) ? $o['type_payload'] : [],
                     'number_kind' => $o['number_kind'] ?? DisplayNumberRegistry::KIND_ORDER,
                     'display_number' => $o['display_number'] ?? null,
                 ];
@@ -1198,6 +1206,39 @@ final class OrderFacade implements OrderFacadeInterface
             replayed: $replayed,
             shippingChargeOwnerOrderUuid: $group['shipping_charge_owner_order_uuid'] ?? null,
         );
+    }
+
+    private function orderTypeFromCommand(CreateCheckoutGroupCommand $command): string
+    {
+        $code = strtolower(trim((string)(
+            $command->options['order_type']
+            ?? $command->options['cart_type']
+            ?? 'toc'
+        )));
+
+        return $code !== '' ? $code : 'toc';
+    }
+
+    /** @return array<string,mixed> */
+    private function typePayloadFromCommand(CreateCheckoutGroupCommand $command): array
+    {
+        $payload = is_array($command->options['type_payload'] ?? null)
+            ? $command->options['type_payload']
+            : [];
+        $orderType = $this->orderTypeFromCommand($command);
+        if ($orderType === 'tob') {
+            $deposit = is_array($command->options['deposit'] ?? null) ? $command->options['deposit'] : [];
+            $payload = array_merge([
+                'discounts_applied' => false,
+                'deposit_ratio_bps' => (int)($deposit['deposit_ratio_bps'] ?? 3000),
+                'deposit_amount_minor' => (int)($deposit['deposit_amount_minor'] ?? 0),
+                'balance_amount_minor' => (int)($deposit['balance_amount_minor'] ?? 0),
+                'goods_subtotal_taxed_minor' => (int)($deposit['goods_subtotal_taxed_minor'] ?? 0),
+                'hang_status' => (string)($deposit['hang_status'] ?? 'awaiting_deposit'),
+            ], $payload);
+        }
+
+        return $payload;
     }
 
     /**
