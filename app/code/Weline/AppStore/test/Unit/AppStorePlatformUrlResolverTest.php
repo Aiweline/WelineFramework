@@ -38,12 +38,12 @@ class AppStorePlatformUrlResolverTest extends TestCase
     public function testLocalDeployModeUsesLocalAppStoreEnvironmentOverride(): void
     {
         $envFile = $this->writeTempFile('env.php', "<?php\nreturn ['system' => ['deploy' => 'dev']];\n");
-        putenv('WELINE_APPSTORE_PLATFORM_URL=https://app.weline.test:9523/');
+        putenv('WELINE_APPSTORE_PLATFORM_URL=https://app.test.weline.com:9523/');
 
         $result = (new AppStorePlatformUrlResolver($envFile))->resolve();
 
         $this->assertSame('local', $result['environment']);
-        $this->assertSame('https://app.weline.test:9523', $result['platform_url']);
+        $this->assertSame('https://app.test.weline.com:9523', $result['platform_url']);
         $this->assertSame('env:WELINE_APPSTORE_PLATFORM_URL', $result['source']);
     }
 
@@ -51,7 +51,7 @@ class AppStorePlatformUrlResolverTest extends TestCase
     {
         $envFile = $this->writeTempFile('env.php', "<?php\nreturn ['system' => ['deploy' => 'prod']];\n");
         $missingDeployCurrent = $this->makeTempDir() . DIRECTORY_SEPARATOR . 'missing-current.json';
-        putenv('WELINE_APPSTORE_PLATFORM_URL=https://app.weline.test:9523');
+        putenv('WELINE_APPSTORE_PLATFORM_URL=https://app.test.weline.com:9523');
 
         $result = (new AppStorePlatformUrlResolver($envFile, $missingDeployCurrent))->resolve();
 
@@ -68,7 +68,7 @@ class AppStorePlatformUrlResolverTest extends TestCase
             'appstore_platform_url' => 'https://app.aiweline.com/',
             'appstore_platform_url_source' => 'production_default',
         ], JSON_THROW_ON_ERROR));
-        putenv('WELINE_APPSTORE_PLATFORM_URL=https://app.weline.test:9523');
+        putenv('WELINE_APPSTORE_PLATFORM_URL=https://app.test.weline.com:9523');
 
         $result = (new AppStorePlatformUrlResolver($envFile, $deployCurrent))->resolve();
 
@@ -82,7 +82,7 @@ class AppStorePlatformUrlResolverTest extends TestCase
         $envFile = $this->writeTempFile('env.php', "<?php\nreturn ['system' => ['deploy' => 'prod']];\n");
         $deployCurrent = $this->writeTempFile('current.json', json_encode([
             'appstore_environment' => 'production',
-            'appstore_platform_url' => 'https://app.weline.test:9523',
+            'appstore_platform_url' => 'https://app.test.weline.com:9523',
             'appstore_platform_url_source' => 'production_default',
         ], JSON_THROW_ON_ERROR));
 
@@ -96,12 +96,12 @@ class AppStorePlatformUrlResolverTest extends TestCase
     public function testLocalDeployModeRejectsOfficialWebsiteHostAndFallsBackToLocalAppStore(): void
     {
         $envFile = $this->writeTempFile('env.php', "<?php\nreturn ['system' => ['deploy' => 'local']];\n");
-        putenv('WELINE_APPSTORE_PLATFORM_URL=https://www.weline.test:9518');
+        putenv('WELINE_APPSTORE_PLATFORM_URL=https://www.test.weline.com:9518');
 
         $result = (new AppStorePlatformUrlResolver($envFile))->resolve();
 
         $this->assertSame('local', $result['environment']);
-        $this->assertSame('https://app.weline.test:9523', $result['platform_url']);
+        $this->assertSame('https://app.test.weline.com:9523', $result['platform_url']);
         $this->assertContains($result['source'], ['config:appstore.platform_url', 'local_default']);
     }
 
@@ -113,7 +113,7 @@ class AppStorePlatformUrlResolverTest extends TestCase
         $result = (new AppStorePlatformUrlResolver($envFile))->resolve();
 
         $this->assertSame('local', $result['environment']);
-        $this->assertSame('https://app.weline.test:9523', $result['platform_url']);
+        $this->assertSame('https://app.test.weline.com:9523', $result['platform_url']);
         $this->assertContains($result['source'], ['config:appstore.platform_url', 'local_default']);
     }
 

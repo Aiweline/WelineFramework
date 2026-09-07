@@ -246,7 +246,7 @@ Surface,表面
 本地商城,本地商城
 已配置,已配置
 应用商城端点,应用商城端点
-"本地开发应使用 https://app.weline.test:9523，部署后测试应自动使用 https://app.aiweline.com。","本地开发应使用 https://app.weline.test:9523，部署后测试应自动使用 https://app.aiweline.com。"
+"本地开发应使用 https://app.test.weline.com:9523，部署后测试应自动使用 https://app.aiweline.com。","本地开发应使用 https://app.test.weline.com:9523，部署后测试应自动使用 https://app.aiweline.com。"
 来源：,来源：
 文件：,文件：
 目录：,目录：
