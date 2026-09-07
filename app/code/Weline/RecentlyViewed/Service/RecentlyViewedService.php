@@ -24,7 +24,7 @@ final class RecentlyViewedService
     /**
      * @return list<int>
      */
-    public function listIds(int $limit = 6, int $excludeProductId = 0): array
+    public function listIds(int $limit = 24, int $excludeProductId = 0): array
     {
         $limit = max(1, min(24, $limit));
         $excludeProductId = max(0, $excludeProductId);
@@ -47,7 +47,7 @@ final class RecentlyViewedService
      *
      * @return list<array<string, mixed>>
      */
-    public function cards(int $limit = 6, int $excludeProductId = 0): array
+    public function cards(int $limit = 24, int $excludeProductId = 0): array
     {
         $ids = $this->listIds($limit, $excludeProductId);
         if ($ids === []) {
@@ -61,12 +61,16 @@ final class RecentlyViewedService
             }
             /** @var \Weline\Product\Service\StorefrontCatalogViewService $catalog */
             $catalog = ObjectManager::getInstance(\Weline\Product\Service\StorefrontCatalogViewService::class);
-            foreach ($catalog->publishedOffersForProductIds($ids, max(count($ids) * 2, 24)) as $offer) {
-                $productId = max(0, (int)($offer['product_id'] ?? 0));
-                if ($productId <= 0 || isset($offersByProductId[$productId])) {
-                    continue;
+            // Prefer per-id live projection: publishedOffersForProductIds() always
+            // cold-builds the full catalog via rememberPublishedOffers().
+            foreach ($ids as $lookupId) {
+                foreach ($catalog->livePublishedOffersForProduct($lookupId) as $offer) {
+                    $productId = max(0, (int)($offer['product_id'] ?? 0));
+                    if ($productId <= 0 || isset($offersByProductId[$productId])) {
+                        continue;
+                    }
+                    $offersByProductId[$productId] = $offer;
                 }
-                $offersByProductId[$productId] = $offer;
             }
         } catch (\Throwable) {
             return [];
