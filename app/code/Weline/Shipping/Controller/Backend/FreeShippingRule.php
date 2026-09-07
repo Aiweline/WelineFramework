@@ -20,6 +20,8 @@ use Weline\Shipping\Service\ShippingConfigurationAdminService;
 #[Acl('Weline_Shipping::free_shipping_rule', '免邮规则管理', 'circle', '免邮规则管理', 'Weline_Backend::shipping_group')]
 class FreeShippingRule extends BackendController
 {
+    use ShippingBackendEmbedTrait;
+
     private FreeShippingRuleModel $rule;
     private ShippingConfigurationAdminService $adminService;
 
@@ -42,7 +44,7 @@ class FreeShippingRule extends BackendController
             ->getItems();
 
         $this->assign('rules', $rules);
-        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
+        $this->assignShippingEmbedLayout();
 
         return $this->fetch();
     }

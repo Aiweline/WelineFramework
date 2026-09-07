@@ -15,6 +15,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Index(name: 'idx_country_code', columns: ['country_code'])]
 #[Index(name: 'idx_parent_region_id', columns: ['parent_region_id'])]
 #[Index(name: 'idx_region_code', columns: ['region_code'])]
+#[Index(name: 'uk_country_region_code', columns: ['country_code', 'region_code'], type: 'UNIQUE')]
 #[Index(name: 'idx_region_type', columns: ['region_type'])]
 class Region extends AbstractModel
 {
@@ -27,7 +28,7 @@ class Region extends AbstractModel
     public const schema_fields_COUNTRY_CODE = 'country_code';
     #[Col('int', null, comment: '父级地区ID')]
     public const schema_fields_PARENT_REGION_ID = 'parent_region_id';
-    #[Col('varchar', 50, nullable: false, comment: '地区代码')]
+    #[Col('varchar', 96, nullable: false, comment: '地区代码')]
     public const schema_fields_REGION_CODE = 'region_code';
     #[Col('varchar', 255, nullable: false, comment: '地区名称')]
     public const schema_fields_REGION_NAME = 'region_name';

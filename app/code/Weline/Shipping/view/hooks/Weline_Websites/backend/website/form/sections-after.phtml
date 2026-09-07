@@ -1,0 +1,23 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 40
+ */
+
+$website = (array)($this->getData('website') ?? []);
+$hasWebsiteIdentity = array_key_exists('website_id', $website) || array_key_exists('id', $website);
+$websiteId = $hasWebsiteIdentity ? (int)($website['website_id'] ?? $website['id']) : -1;
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'website'));
+if (!is_string($hookId) || $hookId === '' || preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'website_' . (is_string($hookId) ? $hookId : '');
+}
+$scopeType = 'website';
+$scopeId = $websiteId;
+$hasIdentity = $hasWebsiteIdentity;
+$sectionId = $hookId . '_shipping_embargo';
+$pendingHint = (string)__('请先保存网站，再配置禁运区域。');
+include BP . 'app/code/Weline/Shipping/view/templates/backend/partials/embargo-form-section.phtml';
+
+$sectionId = $hookId . '_shipping_destination';
+$pendingHint = (string)__('请先保存网站，再配置可售目的地。');
+include BP . 'app/code/Weline/Shipping/view/templates/backend/partials/destination-form-section.phtml';

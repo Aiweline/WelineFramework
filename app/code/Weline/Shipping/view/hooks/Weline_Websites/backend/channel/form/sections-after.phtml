@@ -1,0 +1,24 @@
+<?php
+/**
+ * @hook-priority 100
+ * @hook-sort-order 40
+ */
+
+$channel = (array)($this->getData('channel') ?? []);
+$channelId = array_key_exists('channel_id', $channel) || $this->getData('channel_id') !== null
+    ? (int)($this->getData('channel_id') ?? $channel['channel_id'] ?? -1)
+    : -1;
+$hookId = preg_replace('/[^\w\-]+/', '_', (string)($this->getData('id') ?? 'channel'));
+if (!is_string($hookId) || $hookId === '' || preg_match('/^[A-Za-z_]/D', $hookId) !== 1) {
+    $hookId = 'channel_' . (is_string($hookId) ? $hookId : '');
+}
+$scopeType = 'channel';
+$scopeId = $channelId;
+$hasIdentity = $channelId >= 0;
+$sectionId = $hookId . '_shipping_embargo';
+$pendingHint = (string)__('请先保存渠道，再配置禁运区域。');
+include BP . 'app/code/Weline/Shipping/view/templates/backend/partials/embargo-form-section.phtml';
+
+$sectionId = $hookId . '_shipping_destination';
+$pendingHint = (string)__('请先保存渠道，再配置可售目的地。');
+include BP . 'app/code/Weline/Shipping/view/templates/backend/partials/destination-form-section.phtml';

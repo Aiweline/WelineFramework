@@ -10,7 +10,6 @@ use Weline\Shipping\Model\FreeShippingRule;
 use Weline\Shipping\Model\RateTemplate;
 use Weline\Shipping\Model\Region;
 use Weline\Shipping\Model\ShippingService;
-use Weline\Shipping\Model\Zone;
 
 /**
  * Validation and persistence boundary for the compact Shipping admin forms.
@@ -24,6 +23,21 @@ final class ShippingConfigurationAdminService
     /** @param array<string,mixed> $data */
     public function createRegion(array $data): Region
     {
+        $mode = strtolower(trim((string)($data['create_mode'] ?? '')));
+        if ($mode === 'manual_path'
+            || isset($data['add_province_name'])
+            || isset($data['add_district_name'])
+            || isset($data['province_name'])
+            || isset($data['district_name'])) {
+            $result = $this->createManualProvinceDistrict($data);
+            $primary = $result['regions'][0] ?? null;
+            if (!$primary instanceof Region) {
+                throw new \InvalidArgumentException((string)__('请填写要新增的省份或区县。'));
+            }
+
+            return $primary;
+        }
+
         $country = strtoupper(trim((string)($data['country_code'] ?? '')));
         $code = strtoupper(trim((string)($data['region_code'] ?? '')));
         $name = trim((string)($data['region_name'] ?? ''));
@@ -34,11 +48,16 @@ final class ShippingConfigurationAdminService
         if (!in_array($type, [Region::TYPE_COUNTRY, Region::TYPE_PROVINCE, Region::TYPE_CITY, Region::TYPE_DISTRICT], true)) throw new \InvalidArgumentException((string)__('地区类型无效。'));
         $this->assertUnique(Region::class, Region::schema_fields_REGION_CODE, $code, [Region::schema_fields_COUNTRY_CODE => $country]);
 
+        $parentId = null;
+        if ($type !== Region::TYPE_COUNTRY) {
+            $parentId = $this->findRegionIdByCode($country, $country);
+        }
+
         /** @var Region $model */
         $model = $this->fresh(Region::class);
         $model->setData([
             Region::schema_fields_COUNTRY_CODE => $country,
-            Region::schema_fields_PARENT_REGION_ID => null,
+            Region::schema_fields_PARENT_REGION_ID => $parentId,
             Region::schema_fields_REGION_CODE => $code,
             Region::schema_fields_REGION_NAME => $name,
             Region::schema_fields_REGION_TYPE => $type,
@@ -49,23 +68,333 @@ final class ShippingConfigurationAdminService
         return $model;
     }
 
-    /** @param array<string,mixed> $data */
-    public function createZone(array $data): Zone
+    /**
+     * 弹窗新增：国家已选，省/区手填；已存在代码一律拒绝（不更新）。
+     *
+     * @param array<string,mixed> $data
+     * @return array{created:int,regions:list<Region>,primary_country:string}
+     */
+    public function createManualProvinceDistrict(array $data): array
     {
-        $name = trim((string)($data['zone_name'] ?? ''));
-        $code = strtoupper(trim((string)($data['zone_code'] ?? '')));
-        $this->assertNameAndCode($name, $code, '配送区域');
-        $this->assertUnique(Zone::class, Zone::schema_fields_ZONE_CODE, $code);
-        /** @var Zone $model */
-        $model = $this->fresh(Zone::class);
-        $model->setData([
-            Zone::schema_fields_ZONE_NAME => $name,
-            Zone::schema_fields_ZONE_CODE => $code,
-            Zone::schema_fields_DESCRIPTION => trim((string)($data['description'] ?? '')) ?: null,
-            Zone::schema_fields_IS_ACTIVE => !empty($data['is_active']) ? 1 : 0,
-            Zone::schema_fields_SORT_ORDER => max(0, (int)($data['sort_order'] ?? 0)),
+        $country = strtoupper(trim((string)($data['country_code'] ?? '')));
+        if (preg_match('/^[A-Z]{2}$/D', $country) !== 1) {
+            throw new \InvalidArgumentException((string)__('请先选择国家。'));
+        }
+
+        $provinceName = trim((string)($data['add_province_name'] ?? $data['province_name'] ?? ''));
+        $provinceCode = strtoupper(trim((string)($data['add_province_code'] ?? $data['province_code'] ?? '')));
+        $districtName = trim((string)($data['add_district_name'] ?? $data['district_name'] ?? ''));
+        $districtCode = strtoupper(trim((string)($data['add_district_code'] ?? $data['district_code'] ?? '')));
+        $isActive = !array_key_exists('is_active', $data) || !empty($data['is_active']) ? 1 : 0;
+        $sortOrder = max(0, (int)($data['sort_order'] ?? 0));
+
+        if ($provinceName === '') {
+            throw new \InvalidArgumentException((string)__('请填写要新增的省份名称。'));
+        }
+        if ($provinceCode === '') {
+            throw new \InvalidArgumentException((string)__('请填写要新增的省份代码。'));
+        }
+        if ($districtName !== '' && $districtCode === '') {
+            throw new \InvalidArgumentException((string)__('请填写要新增的区县代码。'));
+        }
+        if ($districtCode !== '' && $districtName === '') {
+            throw new \InvalidArgumentException((string)__('请填写要新增的区县名称。'));
+        }
+
+        $countryId = $this->ensureCountryRow($country, trim((string)($data['country_name'] ?? '')));
+        $regions = [];
+        $created = 0;
+
+        // 已存在代码一律不更新；省已存在时仅允许继续新增「尚不存在」的区县。
+        $existingProvinceId = $this->findRegionIdByCode($country, $provinceCode);
+        if ($existingProvinceId !== null) {
+            if ($districtName === '') {
+                throw new \RuntimeException((string)__('该地区代码已存在，不能重复添加。'));
+            }
+            $provinceId = $existingProvinceId;
+            /** @var Region $existingProvince */
+            $existingProvince = $this->fresh(Region::class)->load($provinceId);
+            if ((int)$existingProvince->getId() > 0) {
+                $regions[] = $existingProvince;
+            }
+        } else {
+            $this->assertRegionCodeAvailable($country, $provinceCode);
+            /** @var Region $province */
+            $province = $this->fresh(Region::class);
+            $province->setData([
+                Region::schema_fields_COUNTRY_CODE => $country,
+                Region::schema_fields_PARENT_REGION_ID => $countryId,
+                Region::schema_fields_REGION_CODE => $provinceCode,
+                Region::schema_fields_REGION_NAME => $provinceName,
+                Region::schema_fields_REGION_TYPE => Region::TYPE_PROVINCE,
+                Region::schema_fields_IS_ACTIVE => $isActive,
+                Region::schema_fields_SORT_ORDER => $sortOrder,
+            ])->save();
+            $provinceId = (int)$province->getId();
+            $regions[] = $province;
+            $created++;
+        }
+
+        if ($districtName !== '') {
+            $this->assertRegionCodeAvailable($country, $districtCode);
+            /** @var Region $district */
+            $district = $this->fresh(Region::class);
+            $district->setData([
+                Region::schema_fields_COUNTRY_CODE => $country,
+                Region::schema_fields_PARENT_REGION_ID => $provinceId,
+                Region::schema_fields_REGION_CODE => $districtCode,
+                Region::schema_fields_REGION_NAME => $districtName,
+                Region::schema_fields_REGION_TYPE => Region::TYPE_DISTRICT,
+                Region::schema_fields_IS_ACTIVE => $isActive,
+                Region::schema_fields_SORT_ORDER => $sortOrder,
+            ])->save();
+            $regions[] = $district;
+            $created++;
+        }
+
+        if ($created < 1) {
+            throw new \RuntimeException((string)__('该地区代码已存在，不能重复添加。'));
+        }
+
+        return [
+            'created' => $created,
+            'regions' => $regions,
+            'primary_country' => $country,
+        ];
+    }
+
+    private function assertRegionCodeAvailable(string $countryCode, string $regionCode): void
+    {
+        if ($regionCode === '' || strlen($regionCode) > 50 || preg_match('/^[A-Z0-9_-]+$/D', $regionCode) !== 1) {
+            throw new \InvalidArgumentException((string)__('地区代码格式无效。'));
+        }
+        if ($this->findRegionIdByCode($countryCode, $regionCode) !== null) {
+            throw new \RuntimeException((string)__('该地区代码已存在，不能重复添加。'));
+        }
+    }
+
+    private function ensureCountryRow(string $countryCode, string $countryName = ''): int
+    {
+        $existingId = $this->findRegionIdByCode($countryCode, $countryCode);
+        if ($existingId !== null) {
+            return $existingId;
+        }
+        $name = $countryName !== '' ? $countryName : $countryCode;
+        /** @var Region $country */
+        $country = $this->fresh(Region::class);
+        $country->setData([
+            Region::schema_fields_COUNTRY_CODE => $countryCode,
+            Region::schema_fields_PARENT_REGION_ID => null,
+            Region::schema_fields_REGION_CODE => $countryCode,
+            Region::schema_fields_REGION_NAME => $name,
+            Region::schema_fields_REGION_TYPE => Region::TYPE_COUNTRY,
+            Region::schema_fields_IS_ACTIVE => 1,
+            Region::schema_fields_SORT_ORDER => 0,
         ])->save();
-        return $model;
+
+        return (int)$country->getId();
+    }
+
+    /**
+     * 从 theme:address multi selection 自动识别并幂等写入国家/省/市/区。
+     *
+     * @param list<array<string,mixed>> $selection
+     * @param array<string,mixed> $options
+     * @return array{created:int,updated:int,regions:list<Region>,primary_country:string}
+     */
+    public function createRegionsFromAddressSelection(array $selection, array $options = []): array
+    {
+        $rows = self::normalizeAddressSelection($selection);
+        if ($rows === []) {
+            throw new \InvalidArgumentException((string)__('请先在地址选择标签中选择国家/省份/区县。'));
+        }
+
+        $isActive = !array_key_exists('is_active', $options) || !empty($options['is_active']) ? 1 : 0;
+        $sortOrder = max(0, (int)($options['sort_order'] ?? 0));
+        $created = 0;
+        $updated = 0;
+        $regions = [];
+        /** @var array<string,int> $idByKey country|type|code => id */
+        $idByKey = [];
+        /** @var array<string,int> $latestByCountryType country|type => id */
+        $latestByCountryType = [];
+
+        foreach ($rows as $row) {
+            $country = $row['country_code'];
+            $code = $row['region_code'];
+            $type = $row['region_type'];
+            $name = $row['region_name'];
+            $parentId = $this->resolveSelectionParentId($row, $idByKey, $latestByCountryType);
+
+            /** @var Region $finder */
+            $finder = $this->fresh(Region::class);
+            $existing = $finder->reset()
+                ->where(Region::schema_fields_COUNTRY_CODE, $country)
+                ->where(Region::schema_fields_REGION_CODE, $code)
+                ->find()
+                ->fetch();
+
+            $payload = [
+                Region::schema_fields_COUNTRY_CODE => $country,
+                Region::schema_fields_PARENT_REGION_ID => $parentId,
+                Region::schema_fields_REGION_CODE => $code,
+                Region::schema_fields_REGION_NAME => $name,
+                Region::schema_fields_REGION_TYPE => $type,
+                Region::schema_fields_IS_ACTIVE => $isActive,
+                Region::schema_fields_SORT_ORDER => $sortOrder,
+            ];
+
+            if ($existing->getId()) {
+                $existing->setData($payload)->save();
+                $model = $existing;
+                $updated++;
+            } else {
+                /** @var Region $model */
+                $model = $this->fresh(Region::class);
+                $model->setData($payload)->save();
+                $created++;
+            }
+
+            $id = (int)$model->getId();
+            if ($id > 0) {
+                $idByKey[$country . '|' . $type . '|' . $code] = $id;
+                $latestByCountryType[$country . '|' . $type] = $id;
+            }
+            $regions[] = $model;
+        }
+
+        return [
+            'created' => $created,
+            'updated' => $updated,
+            'regions' => $regions,
+            'primary_country' => (string)($rows[0]['country_code'] ?? ''),
+        ];
+    }
+
+    /**
+     * @param list<array<string,mixed>> $selection
+     * @return list<array{country_code:string,region_code:string,region_name:string,region_type:string,parent_region_id:int}>
+     */
+    public static function normalizeAddressSelection(array $selection): array
+    {
+        $order = [
+            Region::TYPE_COUNTRY => 0,
+            Region::TYPE_PROVINCE => 1,
+            Region::TYPE_CITY => 2,
+            Region::TYPE_DISTRICT => 3,
+        ];
+        $normalized = [];
+        $seen = [];
+
+        foreach ($selection as $item) {
+            if (!is_array($item)) {
+                continue;
+            }
+            $type = strtolower(trim((string)($item['region_type'] ?? '')));
+            if ($type === 'city') {
+                // city 按市级写入；部分目录把区挂在省下并用 district
+            }
+            if (!isset($order[$type])) {
+                continue;
+            }
+            $country = strtoupper(trim((string)($item['country_code'] ?? '')));
+            if (preg_match('/^[A-Z]{2}$/D', $country) !== 1) {
+                continue;
+            }
+            $code = strtoupper(trim((string)($item['region_code'] ?? '')));
+            if ($type === Region::TYPE_COUNTRY && $code === '') {
+                $code = $country;
+            }
+            if ($code === '' || strlen($code) > 50 || preg_match('/^[A-Z0-9_-]+$/D', $code) !== 1) {
+                continue;
+            }
+            $name = trim((string)($item['region_name'] ?? $item['label'] ?? ''));
+            if ($name === '') {
+                $name = $code;
+            }
+            if (mb_strlen($name) > 255) {
+                $name = mb_substr($name, 0, 255);
+            }
+            $key = $country . '|' . $type . '|' . $code;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $normalized[] = [
+                'country_code' => $country,
+                'region_code' => $code,
+                'region_name' => $name,
+                'region_type' => $type,
+                'parent_region_id' => max(0, (int)($item['parent_region_id'] ?? 0)),
+            ];
+        }
+
+        usort($normalized, static function (array $a, array $b) use ($order): int {
+            $typeCmp = ($order[$a['region_type']] ?? 9) <=> ($order[$b['region_type']] ?? 9);
+            if ($typeCmp !== 0) {
+                return $typeCmp;
+            }
+            $countryCmp = strcmp($a['country_code'], $b['country_code']);
+            if ($countryCmp !== 0) {
+                return $countryCmp;
+            }
+
+            return strcmp($a['region_code'], $b['region_code']);
+        });
+
+        return $normalized;
+    }
+
+    /**
+     * @param array{country_code:string,region_code:string,region_name:string,region_type:string,parent_region_id:int} $row
+     * @param array<string,int> $idByKey
+     * @param array<string,int> $latestByCountryType
+     */
+    private function resolveSelectionParentId(array $row, array $idByKey, array $latestByCountryType): ?int
+    {
+        $type = $row['region_type'];
+        $country = $row['country_code'];
+        if ($type === Region::TYPE_COUNTRY) {
+            return null;
+        }
+
+        $hint = max(0, (int)($row['parent_region_id'] ?? 0));
+        if ($hint > 0) {
+            /** @var Region $probe */
+            $probe = $this->fresh(Region::class);
+            if ((int)$probe->load($hint)->getId() === $hint) {
+                return $hint;
+            }
+        }
+
+        if ($type === Region::TYPE_PROVINCE) {
+            return $latestByCountryType[$country . '|' . Region::TYPE_COUNTRY]
+                ?? $idByKey[$country . '|' . Region::TYPE_COUNTRY . '|' . $country]
+                ?? $this->findRegionIdByCode($country, $country);
+        }
+
+        if ($type === Region::TYPE_CITY) {
+            return $latestByCountryType[$country . '|' . Region::TYPE_PROVINCE] ?? null;
+        }
+
+        // district：优先市，其次省
+        return $latestByCountryType[$country . '|' . Region::TYPE_CITY]
+            ?? $latestByCountryType[$country . '|' . Region::TYPE_PROVINCE]
+            ?? null;
+    }
+
+    private function findRegionIdByCode(string $countryCode, string $regionCode): ?int
+    {
+        /** @var Region $finder */
+        $finder = $this->fresh(Region::class);
+        $row = $finder->reset()
+            ->where(Region::schema_fields_COUNTRY_CODE, $countryCode)
+            ->where(Region::schema_fields_REGION_CODE, $regionCode)
+            ->find()
+            ->fetch();
+        $id = (int)$row->getId();
+
+        return $id > 0 ? $id : null;
     }
 
     /** @param array<string,mixed> $data */
@@ -118,10 +447,8 @@ final class ShippingConfigurationAdminService
         $name = trim((string)($data['service_name'] ?? ''));
         $code = strtoupper(trim((string)($data['service_code'] ?? '')));
         $carrierId = (int)($data['carrier_id'] ?? 0);
-        $zoneId = (int)($data['zone_id'] ?? 0);
         $this->assertNameAndCode($name, $code, '配送服务');
         $this->assertReference(Carrier::class, $carrierId, '快递公司');
-        $this->assertReference(Zone::class, $zoneId, '配送区域');
         $this->assertUnique(ShippingService::class, ShippingService::schema_fields_SERVICE_CODE, $code);
         $minDays = max(0, (int)($data['estimated_days_min'] ?? 0));
         $maxDays = max($minDays, (int)($data['estimated_days_max'] ?? $minDays));
@@ -131,7 +458,6 @@ final class ShippingConfigurationAdminService
             ShippingService::schema_fields_SERVICE_NAME => $name,
             ShippingService::schema_fields_SERVICE_CODE => $code,
             ShippingService::schema_fields_CARRIER_ID => $carrierId,
-            ShippingService::schema_fields_ZONE_ID => $zoneId,
             ShippingService::schema_fields_RATE_TEMPLATE_ID => null,
             ShippingService::schema_fields_FREE_SHIPPING_RULE_ID => null,
             ShippingService::schema_fields_ESTIMATED_DAYS_MIN => $minDays,

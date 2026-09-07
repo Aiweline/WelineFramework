@@ -24,12 +24,14 @@ class DeliveryAddressService
     private ObjectManager $objectManager;
     private AddressFormatter $addressFormatter;
     private AddressValidationService $addressValidationService;
+    private EmbargoService $embargoService;
 
     public function __construct(ObjectManager $objectManager)
     {
         $this->objectManager = $objectManager;
         $this->addressFormatter = $objectManager->getInstance(AddressFormatter::class);
         $this->addressValidationService = $objectManager->getInstance(AddressValidationService::class);
+        $this->embargoService = $objectManager->getInstance(EmbargoService::class);
     }
 
     /**
@@ -454,39 +456,24 @@ class DeliveryAddressService
         }
 
         $this->addressValidationService->validate($data);
-        return;
-
-        $required = [
-            DeliveryAddress::schema_fields_NAME => __('地址名称'),
-            DeliveryAddress::schema_fields_CONTACT_NAME => __('收货人姓名'),
-            DeliveryAddress::schema_fields_CONTACT_PHONE => __('联系电话'),
-            DeliveryAddress::schema_fields_PROVINCE => __('省份'),
-            DeliveryAddress::schema_fields_CITY => __('城市'),
-            DeliveryAddress::schema_fields_STREET => __('街道地址'),
-        ];
-        
-        foreach ($required as $field => $label) {
-            if (empty($data[$field])) {
-                throw new \Exception(__('%{1}不能为空', [$label]));
-            }
-        }
-        
-        // 验证电话号码格式
-        if (!empty($data[DeliveryAddress::schema_fields_CONTACT_PHONE])) {
-            $phone = $data[DeliveryAddress::schema_fields_CONTACT_PHONE];
-            $digits = preg_replace('/\D+/', '', (string) $phone);
-            if ($digits === null || strlen($digits) < 6 || strlen($digits) > 20 || !preg_match('/^[0-9+\-\s()]+$/', (string) $phone)) {
-                throw new \Exception(__('电话号码格式不正确'));
-            }
-        }
-        
-        // 验证邮政编码格式（如果提供）
-        if (!empty($data[DeliveryAddress::schema_fields_POSTAL_CODE])) {
-            $postalCode = $data[DeliveryAddress::schema_fields_POSTAL_CODE];
-            if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9\-\s]{1,11}$/', (string) $postalCode)) {
-                throw new \Exception(__('邮政编码格式不正确，应为6位数字'));
-            }
-        }
+        $this->embargoService->assertAllowed([
+            'country_code' => (string)($data[DeliveryAddress::schema_fields_COUNTRY_CODE]
+                ?? $data[DeliveryAddress::schema_fields_COUNTRY]
+                ?? ''),
+            'province_code' => (string)($data[DeliveryAddress::schema_fields_PROVINCE_CODE]
+                ?? $data[DeliveryAddress::schema_fields_PROVINCE]
+                ?? ''),
+            'province_region_id' => (int)($data[DeliveryAddress::schema_fields_PROVINCE_REGION_ID] ?? 0),
+            'city_code' => (string)($data[DeliveryAddress::schema_fields_CITY_CODE]
+                ?? $data[DeliveryAddress::schema_fields_CITY]
+                ?? ''),
+            'city_region_id' => (int)($data[DeliveryAddress::schema_fields_CITY_REGION_ID] ?? 0),
+            'district_code' => (string)($data[DeliveryAddress::schema_fields_DISTRICT_CODE]
+                ?? $data[DeliveryAddress::schema_fields_DISTRICT]
+                ?? ''),
+            'district_region_id' => (int)($data[DeliveryAddress::schema_fields_DISTRICT_REGION_ID] ?? 0),
+            'street' => (string)($data[DeliveryAddress::schema_fields_STREET] ?? ''),
+        ]);
     }
 }
 

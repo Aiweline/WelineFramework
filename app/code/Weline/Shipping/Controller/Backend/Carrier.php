@@ -13,12 +13,15 @@ namespace Weline\Shipping\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Http\ResponseTerminateException;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\Carrier as CarrierModel;
 
 #[Acl('Weline_Shipping::carrier', '快递公司管理', 'truck', '快递公司管理', 'Weline_Backend::shipping_group')]
 class Carrier extends BackendController
 {
+    use ShippingBackendEmbedTrait;
+
     private CarrierModel $carrier;
 
     public function __construct(ObjectManager $objectManager)
@@ -71,7 +74,7 @@ class Carrier extends BackendController
         $this->assign('total_pages', $totalPages);
         $this->assign('keyword', $keyword);
         $this->assign('is_active', $isActive);
-        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
+        $this->assignShippingEmbedLayout();
 
         return $this->fetch();
     }
@@ -93,7 +96,25 @@ class Carrier extends BackendController
             }
         }
 
+        $coverageRows = [];
+        $coverageDefaults = [];
+        if ($carrier && $carrier->getId()) {
+            /** @var \Weline\Shipping\Service\CarrierCoverageAdminService $coverageAdmin */
+            $coverageAdmin = ObjectManager::getInstance(\Weline\Shipping\Service\CarrierCoverageAdminService::class);
+            $coverageRows = $coverageAdmin->listForCarrier((int)$carrier->getId());
+        }
+        /** @var \Weline\Shipping\Service\CarrierCoverageAdminService $coverageAdminForLabels */
+        $coverageAdminForLabels = ObjectManager::getInstance(\Weline\Shipping\Service\CarrierCoverageAdminService::class);
+        $coverageDefaults = ObjectManager::getInstance(\Weline\Shipping\Service\CarrierCoverageProviderRegistry::class)
+            ->mergedDefaultCoverage();
         $this->assign('carrier', $carrier);
+        $this->assign('coverage_rows', $coverageRows);
+        $this->assign(
+            'coverage_defaults_json',
+            json_encode($coverageDefaults, JSON_UNESCAPED_UNICODE) ?: '[]'
+        );
+        $this->assign('coverage_defaults_labels', $coverageAdminForLabels->formatRowLabels($coverageDefaults));
+        $this->assign('coverage_labels', $coverageAdminForLabels->formatRowLabels($coverageRows));
         return $this->fetch();
     }
 
@@ -165,11 +186,27 @@ class Carrier extends BackendController
                 }
             }
 
+            $coverageRaw = $this->request->getParam('coverage_json', null);
+            // 默认勾选：当前选择覆盖 Provider 默认；取消勾选才应用 Provider 默认
+            $keepCurrent = (int)$this->request->getParam('coverage_keep_current', 1) === 1;
+            /** @var \Weline\Shipping\Service\CarrierCoverageAdminService $coverageAdmin */
+            $coverageAdmin = ObjectManager::getInstance(\Weline\Shipping\Service\CarrierCoverageAdminService::class);
+
             $carrier->save();
+            $carrierId = (int)$carrier->getId();
+
+            if (!$keepCurrent) {
+                $coverageAdmin->applyProviderDefaults($carrierId);
+            } elseif ($coverageRaw !== null) {
+                $coverageAdmin->replaceForCarrier($carrierId, $coverageAdmin->rowsFromPayload($coverageRaw));
+            }
+            $coverageAdmin->assertActiveRequiresCoverage($carrierId, $isActive === 1);
 
             $this->getMessageManager()->addSuccess($id ? __('更新成功') : __('创建成功'));
             return $this->redirect('shipping/backend/carrier');
 
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError($e->getMessage());
             return $this->redirect('shipping/backend/carrier/edit' . ($id ? '?id=' . $id : ''));
@@ -196,6 +233,8 @@ class Carrier extends BackendController
             $carrier->delete();
             $this->getMessageManager()->addSuccess(__('删除成功'));
 
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError($e->getMessage());
         }
@@ -227,6 +266,8 @@ class Carrier extends BackendController
 
             $this->getMessageManager()->addSuccess($newStatus ? __('启用成功') : __('禁用成功'));
 
+        } catch (ResponseTerminateException $terminate) {
+            throw $terminate;
         } catch (\Throwable $e) {
             $this->getMessageManager()->addError($e->getMessage());
         }

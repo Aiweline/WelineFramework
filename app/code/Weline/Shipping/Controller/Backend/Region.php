@@ -13,54 +13,59 @@ namespace Weline\Shipping\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
-use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\Message;
-use Weline\Framework\Runtime\RuntimeProviderResolver;
-use Weline\I18n\Api\Localization\CountryRepositoryInterface;
-use Weline\Shipping\Service\RegionService;
 use Weline\Shipping\Service\ShippingConfigurationAdminService;
 
 #[Acl('Weline_Shipping::region', '地区管理', 'pin', '地区管理', 'Weline_Backend::shipping_group')]
 class Region extends BackendController
 {
+    use ShippingBackendEmbedTrait;
+
     public function __construct(
-        private readonly RegionService $regionService,
-        private readonly RuntimeProviderResolver $runtimeProviders,
         private readonly ShippingConfigurationAdminService $adminService,
     ) {
     }
 
-    /**
-     * 地区列表（树形结构）
-     */
     #[Acl('Weline_Shipping::region_index', '查看地区', 'list', '查看地区列表')]
     public function index()
     {
-        // 获取所有已安装国家列表
-        $countries = $this->countryRows();
-
-        $countryCode = (string)$this->request->getParam('country_code', '');
-
-        if (!$countryCode && !empty($countries)) {
-            $countryCode = (string)($countries[0]['code'] ?? '');
-        }
-
-        $regionTree = [];
-        if ($countryCode) {
-            $regionTree = $this->regionService->getTreeByCountryCode($countryCode);
-        }
-
-        $this->assign('countries', $countries);
-        $this->assign('current_country_code', $countryCode);
-        $this->assign('region_tree', $regionTree);
-        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
-
+        // 地址目录与地区表一律不 SSR：仅透传 URL 选中国家码，列表由 JS 调 region/list 异步填充。
+        $selectedCountryCodes = $this->resolveSelectedCountryCodesFromRequest();
+        $this->assign('current_country_code', $selectedCountryCodes[0] ?? '');
+        $this->assign('current_country_codes', $selectedCountryCodes);
+        $this->assignShippingEmbedLayout();
         return $this->fetch();
     }
 
     /**
-     * 地区编辑页（暂时简单保留占位，后续按需扩展）
+     * @return list<string>
      */
+    private function resolveSelectedCountryCodesFromRequest(): array
+    {
+        $rawCodes = trim((string)$this->request->getParam('country_codes', ''));
+        $codes = [];
+        if ($rawCodes !== '') {
+            foreach (preg_split('/[,\s]+/', $rawCodes) ?: [] as $part) {
+                $code = strtoupper(trim((string)$part));
+                if (preg_match('/^[A-Z]{2}$/D', $code) === 1) {
+                    $codes[$code] = $code;
+                }
+            }
+        }
+        if ($codes === []) {
+            $single = strtoupper(trim((string)$this->request->getParam('country_code', '')));
+            if (preg_match('/^[A-Z]{2}$/D', $single) === 1) {
+                $codes[$single] = $single;
+            }
+        }
+        // 无 URL 参数时默认中国，避免 global 目录字母序落到 AR（阿根廷）等
+        if ($codes === []) {
+            $codes['CN'] = 'CN';
+        }
+
+        return array_values($codes);
+    }
+
     #[Acl('Weline_Shipping::region_edit', '编辑地区', 'edit', '编辑地区')]
     public function edit()
     {
@@ -71,59 +76,40 @@ class Region extends BackendController
     #[Acl('Weline_Shipping::region_save', '保存地区', 'save', '创建地区')]
     public function save()
     {
+        $redirectCountry = strtoupper(trim((string)$this->request->getPost('country_code', '')));
+        $embed = $this->request->getPost('embed') === '1' || $this->request->getPost('embed') === 1;
         try {
-            if (!$this->request->isPost()) throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
-            $this->adminService->createRegion((array)$this->request->getPost());
-            $this->getMessageManager()->addSuccess(__('地区创建成功。'));
+            if (!$this->request->isPost()) {
+                throw new \InvalidArgumentException((string)__('仅允许 POST 请求。'));
+            }
+            $post = (array)$this->request->getPost();
+            $mode = strtolower(trim((string)($post['create_mode'] ?? '')));
+            if ($mode === 'manual_path'
+                || isset($post['add_province_name'])
+                || isset($post['add_district_name'])
+                || isset($post['province_name'])
+                || isset($post['district_name'])) {
+                $result = $this->adminService->createManualProvinceDistrict($post);
+                $redirectCountry = (string)($result['primary_country'] ?: $redirectCountry);
+                $created = (int)$result['created'];
+                $this->getMessageManager()->addSuccess(__('已新增 %{1} 个地区。', [$created]));
+            } else {
+                $region = $this->adminService->createRegion($post);
+                $redirectCountry = strtoupper(trim((string)$region->getData(\Weline\Shipping\Model\Region::schema_fields_COUNTRY_CODE)));
+                $this->getMessageManager()->addSuccess(__('地区创建成功。'));
+            }
         } catch (\Throwable $throwable) {
             $this->getMessageManager()->addError($throwable->getMessage());
         }
-        return $this->redirect('shipping/backend/region/index');
-    }
 
-    /**
-     * 从 i18n 同步国家数据
-     */
-    #[Acl('Weline_Shipping::region_sync', '同步国家数据', 'globe', '从i18n同步国家数据')]
-    public function syncFromI18n()
-    {
-        try {
-            // 获取所有已安装国家
-            $countries = [];
-            foreach ($this->countryRows() as $country) {
-                $countries[] = [
-                    'code' => $country['code'],
-                    'name' => $country['code'],
-                ];
-            }
-
-            $count = $this->regionService->syncFromI18n($countries);
-            Message::success(__('同步完成，新增国家数量：%{1}', [$count]));
-        } catch (\Throwable $e) {
-            Message::error(__('同步失败：%{1}', [$e->getMessage()]));
+        $params = [];
+        if (preg_match('/^[A-Z]{2}$/', $redirectCountry) === 1) {
+            $params['country_code'] = $redirectCountry;
+        }
+        if ($embed) {
+            $params['embed'] = 1;
         }
 
-        $this->redirect('*/index');
-    }
-
-    /** @return list<array{code:string,name:string,flag:string,is_active:int}> */
-    private function countryRows(): array
-    {
-        $repository = $this->runtimeProviders->resolve(CountryRepositoryInterface::class);
-        if (!$repository instanceof CountryRepositoryInterface) {
-            throw new \RuntimeException('Weline_I18n country repository provider is unavailable.');
-        }
-
-        $rows = [];
-        foreach ($repository->installed(Cookie::getLangLocal()) as $country) {
-            $rows[] = [
-                'code' => $country->code,
-                'name' => $country->displayName,
-                'flag' => $country->flag,
-                'is_active' => $country->active ? 1 : 0,
-            ];
-        }
-
-        return $rows;
+        return $this->redirect('shipping/backend/region/index', $params);
     }
 }

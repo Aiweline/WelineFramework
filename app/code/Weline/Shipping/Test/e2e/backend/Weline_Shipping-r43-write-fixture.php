@@ -14,7 +14,6 @@ use Weline\Shipping\Model\RateTemplate;
 use Weline\Shipping\Model\Region;
 use Weline\Shipping\Model\ShippingAddress;
 use Weline\Shipping\Model\ShippingService;
-use Weline\Shipping\Model\Zone;
 
 require dirname(__DIR__, 7) . '/app/bootstrap.php';
 
@@ -98,14 +97,12 @@ function r43_shipping_cleanup(string $case, string $token, array $input): void
             if ($user->getId() && (int)$user->getId() > 1) ObjectManager::getInstance(FrontendUserAdministrationInterface::class)->delete((int)$user->getId());
         })(),
         'region' => r43_shipping_delete(Region::class, Region::schema_fields_REGION_CODE, $code),
-        'zone' => r43_shipping_delete(Zone::class, Zone::schema_fields_ZONE_CODE, $code),
         'carrier' => r43_shipping_delete(Carrier::class, Carrier::schema_fields_CARRIER_CODE, $code),
         'rate' => r43_shipping_delete(RateTemplate::class, RateTemplate::schema_fields_TEMPLATE_CODE, $code),
         'free' => r43_shipping_delete(FreeShippingRule::class, FreeShippingRule::schema_fields_RULE_CODE, $code),
         'service' => (function () use ($code): void {
             r43_shipping_delete(ShippingService::class, ShippingService::schema_fields_SERVICE_CODE, $code);
             r43_shipping_delete(Carrier::class, Carrier::schema_fields_CARRIER_CODE, $code . '_C');
-            r43_shipping_delete(Zone::class, Zone::schema_fields_ZONE_CODE, $code . '_Z');
         })(),
         default => throw new InvalidArgumentException('unknown_shipping_case:' . $case),
     };
@@ -137,11 +134,7 @@ try {
                 Carrier::schema_fields_TRACKING_API_METHOD => 'GET', Carrier::schema_fields_TRACKING_SUPPORT_STATUS => Carrier::TRACKING_SUPPORTED,
                 Carrier::schema_fields_IS_ACTIVE => 1, Carrier::schema_fields_SORT_ORDER => 0,
             ])->save();
-            /** @var Zone $zone */
-            $zone = r43_shipping_model(Zone::class);
-            $zone->setData([Zone::schema_fields_ZONE_NAME => 'R43 Service Zone ' . $token, Zone::schema_fields_ZONE_CODE => $result['code'] . '_Z', Zone::schema_fields_IS_ACTIVE => 1, Zone::schema_fields_SORT_ORDER => 0])->save();
             $result['carrier_id'] = (int)$carrier->getId();
-            $result['zone_id'] = (int)$zone->getId();
         }
         r43_shipping_output($result);
     }
@@ -151,7 +144,6 @@ try {
             'address' => r43_shipping_find(ShippingAddress::class, ShippingAddress::schema_fields_NAME, 'R43 Shipping ' . $token),
             'delivery' => r43_shipping_find(DeliveryAddress::class, DeliveryAddress::schema_fields_NAME, 'R43 Delivery ' . $token),
             'region' => r43_shipping_find(Region::class, Region::schema_fields_REGION_CODE, $code),
-            'zone' => r43_shipping_find(Zone::class, Zone::schema_fields_ZONE_CODE, $code),
             'carrier' => r43_shipping_find(Carrier::class, Carrier::schema_fields_CARRIER_CODE, $code),
             'rate' => r43_shipping_find(RateTemplate::class, RateTemplate::schema_fields_TEMPLATE_CODE, $code),
             'free' => r43_shipping_find(FreeShippingRule::class, FreeShippingRule::schema_fields_RULE_CODE, $code),

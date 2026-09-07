@@ -16,12 +16,13 @@ use Weline\Framework\App\Controller\BackendController;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\ShippingService as ShippingServiceModel;
 use Weline\Shipping\Model\Carrier;
-use Weline\Shipping\Model\Zone;
 use Weline\Shipping\Service\ShippingConfigurationAdminService;
 
 #[Acl('Weline_Shipping::shipping_service', '配送服务管理', 'truck', '配送服务管理', 'Weline_Backend::shipping_group')]
 class ShippingService extends BackendController
 {
+    use ShippingBackendEmbedTrait;
+
     private ShippingServiceModel $service;
     private ShippingConfigurationAdminService $adminService;
     private ObjectManager $objectManager;
@@ -47,8 +48,7 @@ class ShippingService extends BackendController
 
         $this->assign('services', $services);
         $this->assign('carriers', $this->objectManager->getInstance(Carrier::class, [], false)->reset()->order(Carrier::schema_fields_CARRIER_NAME, 'ASC')->select()->fetch()->getItems());
-        $this->assign('zones', $this->objectManager->getInstance(Zone::class, [], false)->reset()->order(Zone::schema_fields_ZONE_NAME, 'ASC')->select()->fetch()->getItems());
-        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
+        $this->assignShippingEmbedLayout();
 
         return $this->fetch();
     }
