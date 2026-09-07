@@ -89,6 +89,11 @@
 加载中,Loading
 "分销 API 不支持分享链接操作","Affiliate API does not support share link operations"
 暂不可用,Unavailable
+当前访问范围,"Current scope"
+账户范围,"Account scope"
+分销数据暂时无法加载，请稍后重试。,"Affiliate data is temporarily unavailable. Please try again later."
+Affiliate,Affiliate
+分销中心,"Affiliate Center"
 已申请,Requested
 处理中,Processing
 已驳回,Rejected
@@ -124,10 +129,6 @@
 上一页,Previous
 下一页,Next
 没有匹配记录,"No matching records."
-Affiliate,Affiliate
-分销中心,"Affiliate Center"
-"Current scope","Current scope"
-"Account scope","Account scope"
 累计佣金,"Total commission"
 分销转化漏斗,"Affiliate conversion funnel"
 平台流量与成交,"Platform traffic and conversions"
@@ -302,7 +303,6 @@ Next,Next
 "Website scope is required before creating an affiliate account.","Website scope is required before creating an affiliate account."
 "Customer ID or affiliate ID is required.","Customer ID or affiliate ID is required."
 "Store is required when a channel is selected.","Store is required when a channel is selected."
-"Website is required when a store is selected.","Website is required when a store is selected."
 商品不存在或已下架，无法生成分销分享链接。,"The product does not exist or is unavailable, so an affiliate share link cannot be generated."
 缺少分享码。,"Share code is required."
 商城首页,"Store homepage"
@@ -314,6 +314,7 @@ Next,Next
 微信,WeChat
 微博,Weibo
 "Global scope","Global scope"
+"Website is required when a store is selected.","Website is required when a store is selected."
 """删除分销记录必须使用 POST 请求。""","删除分销记录必须使用 POST 请求。"
 "Leave empty for global scope. Select website, then store, then channel.","Leave empty for global scope. Select website, then store, then channel."
 我要推广,"Advertise with us"

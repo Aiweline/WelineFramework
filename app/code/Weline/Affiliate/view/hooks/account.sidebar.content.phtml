@@ -22,6 +22,6 @@ if (RequestContext::get($renderKey, false)) {
 
 RequestContext::set($renderKey, true);
 ?>
-<section class="account-hook-section account-index__section d-none motor-account-section" id="affiliate-section" data-account-section="affiliate" hidden weline-code="affiliate.account.sidebar">
+<section class="account-hook-section account-index__section motor-account-section" id="affiliate-section" data-account-section="affiliate" hidden weline-code="affiliate.account.sidebar">
     <?= $this->getHook('Weline_Affiliate::frontend::account::index::affiliate') ?>
 </section>
