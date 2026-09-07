@@ -369,6 +369,7 @@ AI运行时提供器不可用。,AI运行时提供器不可用。
 "📡 开始导入API文档...","📡 开始导入API文档..."
 "API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}","API文档导入完成: 扫描 %{scanned}, 新增 %{new}, 更新 %{updated}"
 "API文档导入失败: %{error}","API文档导入失败: %{error}"
+"Document AI translation skipped: %{1}","Document AI translation skipped: %{1}"
 """API 文档收集后""","""API 文档收集后"""
 沙盒环境配置,沙盒环境配置
 开发文档分类管理,开发文档分类管理
