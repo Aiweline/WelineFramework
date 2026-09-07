@@ -18,7 +18,9 @@ $filterVal = static fn (string $key, mixed $default = '') => $filter[$key] ?? $d
 $selectedProducts = is_array($this->getData('selected_products')) ? $this->getData('selected_products') : [];
 $selectedProductsJson = (string)($this->getData('selectedProductsJson') ?? '[]');
 $pageSlugPreview = (string)$val('page_slug', 'deals');
-$storefrontPreviewUrl = $pageSlugPreview !== '' ? '/promotion/' . rawurlencode($pageSlugPreview) : '/promotion';
+$storefrontPreviewUrl = $pageSlugPreview !== ''
+    ? $this->getFrontendUrl('promotion/' . rawurlencode($pageSlugPreview))
+    : $this->getFrontendUrl('promotion');
 $pickModeLabels = [
     'manual' => (string)__('手动多选'),
     'single' => (string)__('单商品活动'),

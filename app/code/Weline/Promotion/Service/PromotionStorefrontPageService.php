@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 namespace Weline\Promotion\Service;
 
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Api\Data\StorefrontPriceContext;
+use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
+use Weline\Product\Helper\StorefrontOfferDetailQuery;
+use Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler;
 use Weline\Product\Service\StorefrontCatalogViewService;
 
 final class PromotionStorefrontPageService
 {
-    private const DEFAULT_IMAGE = '';
-
     public function __construct(
         private readonly PromotionActivityThemeService $themeService,
         private readonly PromotionScopeResolver $scopeResolver,
         private readonly PromotionThemeDealDiscountSyncService $dealDiscountSync,
+        private readonly ?StorefrontOfferPriceAssemblerInterface $priceAssembler = null,
     ) {
     }
 
@@ -36,16 +40,21 @@ final class PromotionStorefrontPageService
         $themePage = $pageType === 'index' ? [] : $this->themeService->buildStorefrontPage($pageType);
 
         $priceBand = (string)($themePage['price_band'] ?? '');
+        $pickMode = (string)($themePage['product_pick_mode'] ?? PromotionThemeProductService::PICK_MODE_MANUAL);
         $productIds = array_values(array_filter(array_map(
             'intval',
             is_array($themePage['product_ids'] ?? null) ? $themePage['product_ids'] : [],
         )));
-        $items = $this->loadProducts($priceBand, $productIds, $requestScope);
+        $items = $this->loadProducts($priceBand, $productIds, $pickMode);
         $deal = [
             'deal_discount_type' => (string)($themePage['deal_discount_type'] ?? PromotionThemeDealDiscountSyncService::DISCOUNT_NONE),
             'deal_discount_value' => (float)($themePage['deal_discount_value'] ?? 0),
         ];
-        $items = $this->applyDealPricing($items, $deal);
+        $campaignFallback = [
+            'label' => (string)($themePage['page_title'] ?? $themePage['title'] ?? $this->resolveTitle($pageType)),
+            'url' => $pageType !== 'index' ? $this->storefrontUrl($pageType) : '',
+        ];
+        $items = $this->applyStorefrontPricing($items, $deal, $campaignFallback);
 
         $slugUrls = $this->slugUrlsFromNavTabs($navTabs);
 
@@ -60,7 +69,7 @@ final class PromotionStorefrontPageService
             'marketing_rule_id' => (int)($themePage['marketing_rule_id'] ?? 0),
             'promotions' => $this->themeService->listEntryCards($pageType),
             'nav_tabs' => $navTabs,
-            'list_url' => '/promotion',
+            'list_url' => $this->storefrontUrl(),
             'deals_url' => (string)($slugUrls['deals'] ?? ''),
             'sale_url' => (string)($slugUrls['sale'] ?? ''),
             'scope' => [
@@ -70,6 +79,11 @@ final class PromotionStorefrontPageService
             ],
             'theme_scope' => is_array($themePage['scope'] ?? null) ? $themePage['scope'] : null,
         ];
+    }
+
+    private function storefrontUrl(string $pageSlug = ''): string
+    {
+        return $this->themeService->storefrontUrl($pageSlug);
     }
 
     /**
@@ -93,24 +107,84 @@ final class PromotionStorefrontPageService
 
     /**
      * @param array<int, array<string, mixed>> $items
-     * @param array{deal_discount_type:string,deal_discount_value:float} $deal
+     * @param array{deal_discount_type:string,deal_discount_value:float} $pageDeal
+     * @param array{label?:string,url?:string} $campaignFallback
      * @return array<int, array<string, mixed>>
      */
-    private function applyDealPricing(array $items, array $deal): array
+    private function applyStorefrontPricing(array $items, array $pageDeal, array $campaignFallback = []): array
     {
+        $assembler = $this->priceAssembler();
         $priced = [];
         foreach ($items as $item) {
             if (!is_array($item)) {
                 continue;
             }
-            $applied = $this->dealDiscountSync->applyDealToPrice((float)($item['price'] ?? 0), $deal);
+            $productId = max(0, (int)($item['product_id'] ?? 0));
+            $currency = trim((string)($item['currency'] ?? 'CNY')) ?: 'CNY';
+            $catalogPrice = max(0, (float)($item['price'] ?? 0));
+            $catalogMinor = (int) round($catalogPrice * 100);
+            $applied = null;
+            if ($assembler instanceof StorefrontOfferPriceAssemblerInterface && $productId > 0 && $catalogMinor > 0) {
+                $view = $assembler->assemble(StorefrontPriceContext::fromCatalogMinor(
+                    $productId,
+                    $catalogMinor,
+                    $currency,
+                ));
+                if ($view->hasDeal) {
+                    $applied = $view->toArray();
+                } else {
+                    // Assembler is authoritative with PDP/cart — do not re-apply pageDeal.
+                    $applied = [
+                        'price' => $catalogPrice,
+                        'original_price' => $catalogPrice,
+                        'has_deal' => false,
+                        'campaign_label' => '',
+                        'campaign_url' => '',
+                    ];
+                }
+            }
+            // Legacy only when Assembler is unavailable (provides not compiled yet).
+            if ($applied === null) {
+                $applied = $this->dealDiscountSync->applyDealToPrice($catalogPrice, $pageDeal);
+                $applied['campaign_label'] = (string)($campaignFallback['label'] ?? '');
+                $applied['campaign_url'] = (string)($campaignFallback['url'] ?? '');
+            }
             $item['original_price'] = $applied['original_price'];
             $item['price'] = $applied['price'];
-            $item['has_deal'] = $applied['has_deal'];
+            $item['has_deal'] = !empty($applied['has_deal']);
+            $item['campaign_label'] = (string)($applied['campaign_label'] ?? $campaignFallback['label'] ?? '');
+            $item['campaign_url'] = (string)($applied['campaign_url'] ?? $campaignFallback['url'] ?? '');
+            if ($item['has_deal'] && $item['campaign_label'] === '') {
+                $item['campaign_label'] = (string)($campaignFallback['label'] ?? '');
+            }
+            if ($item['has_deal'] && $item['campaign_url'] === '') {
+                $item['campaign_url'] = (string)($campaignFallback['url'] ?? '');
+            }
             $priced[] = $item;
         }
 
         return $priced;
+    }
+
+    private function priceAssembler(): ?StorefrontOfferPriceAssemblerInterface
+    {
+        if ($this->priceAssembler instanceof StorefrontOfferPriceAssemblerInterface) {
+            return $this->priceAssembler;
+        }
+        try {
+            $resolved = ObjectManager::getInstance(StorefrontOfferPriceAssemblerInterface::class);
+            if ($resolved instanceof StorefrontOfferPriceAssemblerInterface) {
+                return $resolved;
+            }
+        } catch (\Throwable) {
+            // Fall through to concrete class when provides registry lags setup:upgrade.
+        }
+        try {
+            $concrete = ObjectManager::getInstance(StorefrontOfferPriceAssembler::class);
+            return $concrete instanceof StorefrontOfferPriceAssemblerInterface ? $concrete : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 
     private function normalizePageType(string $pageType): string
@@ -145,53 +219,50 @@ final class PromotionStorefrontPageService
     }
 
     /** @return array<int, array<string, mixed>> */
-    /** @param list<int> $productIds @param array{website_id:int,store_code:string,channel_code:string} $scope */
-    private function loadProducts(string $priceBand, array $productIds = [], array $scope = []): array
+    /** @param list<int> $productIds */
+    private function loadProducts(
+        string $priceBand,
+        array $productIds = [],
+        string $pickMode = PromotionThemeProductService::PICK_MODE_MANUAL,
+    ): array
     {
         if ($productIds !== []) {
             // Explicit theme selection must not fall back to a generic catalog page.
             return $this->loadProductsByIds($productIds);
         }
 
-        if (!function_exists('w_query')) {
-            return $this->stubProducts($priceBand);
+        // Filter themes with zero matches must not shelf generic catalog rows under a page deal.
+        if ($pickMode === PromotionThemeProductService::PICK_MODE_FILTER) {
+            return [];
         }
 
-        $params = [
-            'limit' => 12,
-            'availability' => 'in_stock',
-        ];
-        if ((int)($scope['website_id'] ?? 0) > 0) {
-            $params['website_id'] = (int)$scope['website_id'];
+        $catalog = $this->resolveCatalog();
+        if ($catalog === null) {
+            return [];
         }
-        if (trim((string)($scope['store_code'] ?? '')) !== '') {
-            $params['store_code'] = trim((string)$scope['store_code']);
+        try {
+            // Promotion cards only need the summary projection. Loading full
+            // localized specifications for the whole catalog makes this page
+            // pay the EAV projection cost before it slices to twelve cards.
+            $normalized = $this->normalizeItems($catalog->publishedOfferSummaries(48));
+        } catch (\Throwable) {
+            return [];
         }
-        if (trim((string)($scope['channel_code'] ?? '')) !== '') {
-            $params['channel_code'] = trim((string)$scope['channel_code']);
-        }
-        if ($priceBand !== '') {
-            $params['price'] = $priceBand;
-        }
-
-        $items = $this->queryProductItems($params);
-        if ($items === [] && $priceBand !== '') {
-            unset($params['price']);
-            $items = $this->queryProductItems($params);
+        if ($normalized === []) {
+            return [];
         }
 
-        $normalized = $this->normalizeItems($items);
+        $matching = array_values(array_filter(
+            $normalized,
+            fn (array $item): bool => $this->matchesPriceBand((float)($item['price'] ?? 0), $priceBand),
+        ));
 
-        return $normalized !== [] ? $normalized : $this->stubProducts($priceBand);
+        return array_slice($matching !== [] ? $matching : $normalized, 0, 12);
     }
 
     /** @param list<int> $productIds @return array<int, array<string, mixed>> */
     private function loadProductsByIds(array $productIds): array
     {
-        if (!class_exists(StorefrontCatalogViewService::class)) {
-            return [];
-        }
-
         $orderedIds = [];
         $seen = [];
         foreach ($productIds as $rawId) {
@@ -206,10 +277,17 @@ final class PromotionStorefrontPageService
             return [];
         }
 
+        $catalog = $this->resolveCatalog();
+        if ($catalog === null) {
+            return [];
+        }
         try {
-            $catalog = \Weline\Framework\Manager\ObjectManager::getInstance(StorefrontCatalogViewService::class);
             // Catalog may emit duplicate offer rows per product; pull enough rows then keep one card per id.
-            $offers = $catalog->publishedOffersForProductIds($orderedIds, max(count($orderedIds) * 8, count($orderedIds)));
+            $offers = $catalog->publishedOffersForProductIds(
+                $orderedIds,
+                max(count($orderedIds) * 8, count($orderedIds)),
+                false,
+            );
         } catch (\Throwable) {
             return [];
         }
@@ -220,22 +298,7 @@ final class PromotionStorefrontPageService
             if ($productId <= 0 || isset($byProductId[$productId])) {
                 continue;
             }
-            $handle = trim((string)($offer['handle'] ?? ''));
-            $image = trim((string)($offer['image_url'] ?? $offer['image'] ?? ''));
-            $url = $handle !== ''
-                ? '/product/' . rawurlencode($handle)
-                : '/product?id=' . $productId;
-            $priceMinor = (int)($offer['unit_price_minor'] ?? 0);
-            $price = $priceMinor > 0 ? round($priceMinor / 100, 2) : round(max(0, (float)($offer['price'] ?? 0)), 2);
-
-            $byProductId[$productId] = [
-                'product_id' => $productId,
-                'url' => $url,
-                'image' => $image !== '' ? $image : self::DEFAULT_IMAGE,
-                'name' => (string)($offer['name'] ?? __('活动商品')),
-                'short_description' => (string)($offer['short_description'] ?? ($offer['sku'] ?? '')),
-                'price' => $price,
-            ];
+            $byProductId[$productId] = $offer;
         }
 
         $items = [];
@@ -249,26 +312,6 @@ final class PromotionStorefrontPageService
     }
 
     /**
-     * @param array<string, mixed> $params
-     * @return array<int, array<string, mixed>>
-     */
-    private function queryProductItems(array $params): array
-    {
-        try {
-            $payload = \w_query('product', 'list', $params, 'frontend');
-        } catch (\Throwable) {
-            return [];
-        }
-
-        $items = is_array($payload) ? ($payload['items'] ?? []) : [];
-        if (!is_array($items)) {
-            return [];
-        }
-
-        return array_values(array_filter($items, 'is_array'));
-    }
-
-    /**
      * @param array<int, array<string, mixed>> $items
      * @return array<int, array<string, mixed>>
      */
@@ -277,51 +320,63 @@ final class PromotionStorefrontPageService
         $normalized = [];
         foreach ($items as $item) {
             $productId = (int)($item['product_id'] ?? $item['id'] ?? $item['entity_id'] ?? 0);
-            $handle = trim((string)($item['handle'] ?? ''));
+            if ($productId <= 0 || (array_key_exists('sellable', $item) && !$item['sellable'])) {
+                continue;
+            }
+            $handle = trim((string)($item['handle'] ?? $item['slug'] ?? ''));
             $image = trim((string)($item['image_url'] ?? $item['image'] ?? ''));
             $url = $handle !== ''
                 ? '/product/' . rawurlencode($handle)
-                : ($productId > 0 ? '/product?id=' . $productId : '/products');
+                : '/product?id=' . $productId;
+            // Card price must open the same offer on PDP (axis codes or offer uuid).
+            if (class_exists(StorefrontOfferDetailQuery::class)) {
+                $detailQuery = StorefrontOfferDetailQuery::params($item);
+                if ($detailQuery !== []) {
+                    $url .= (str_contains($url, '?') ? '&' : '?') . http_build_query($detailQuery);
+                }
+            }
+            $priceMinor = (int)($item['catalog_price_minor'] ?? $item['unit_price_minor'] ?? 0);
+            $price = $priceMinor > 0
+                ? round($priceMinor / 100, 2)
+                : round(max(0, (float)($item['price'] ?? $item['final_price'] ?? 0)), 2);
+            $sku = trim((string)($item['sku'] ?? ''));
 
             $normalized[] = [
                 'product_id' => $productId,
                 'url' => $url,
-                'image' => $image !== '' ? $image : self::DEFAULT_IMAGE,
+                'image' => $image,
                 'name' => (string)($item['name'] ?? __('活动商品')),
-                'short_description' => (string)($item['short_description'] ?? __('已接入 Weline 商品、购物车和结账链路。')),
-                'price' => round(max(0, (float)($item['price'] ?? $item['final_price'] ?? 0)), 2),
+                'short_description' => (string)($item['short_description'] ?? ($sku !== '' ? 'SKU: ' . $sku : '')),
+                'price' => $price,
+                'currency' => trim((string)($item['currency'] ?? 'CNY')) ?: 'CNY',
+                'sku' => $sku,
+                'sellable' => true,
+                'global_offer_uuid' => trim((string)($item['global_offer_uuid'] ?? '')),
             ];
         }
 
         return $normalized;
     }
 
-    /** @return array<int, array<string, mixed>> */
-    private function stubProducts(string $priceBand): array
+    private function resolveCatalog(): ?StorefrontCatalogViewService
     {
-        $prefix = match ($priceBand) {
-            'under_200' => (string)__('精选'),
-            '300_plus' => (string)__('主题'),
-            default => (string)__('活动'),
-        };
+        if (!class_exists(StorefrontCatalogViewService::class)) {
+            return null;
+        }
 
-        return [
-            [
-                'product_id' => 0,
-                'url' => '/products',
-                'image' => self::DEFAULT_IMAGE,
-                'name' => $prefix . ' ' . (string)__('示例商品 A'),
-                'short_description' => (string)__('Product 模块未就绪时展示占位商品，便于验收活动页布局。'),
-                'price' => 199.0,
-            ],
-            [
-                'product_id' => 0,
-                'url' => '/products',
-                'image' => self::DEFAULT_IMAGE,
-                'name' => $prefix . ' ' . (string)__('示例商品 B'),
-                'short_description' => (string)__('接入 w_query(product, list) 后会自动替换为真实可售商品。'),
-                'price' => 299.0,
-            ],
-        ];
+        try {
+            return ObjectManager::getInstance(StorefrontCatalogViewService::class);
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    private function matchesPriceBand(float $price, string $priceBand): bool
+    {
+        return match ($priceBand) {
+            'under_200' => $price > 0 && $price < 200,
+            '300_plus' => $price >= 300,
+            default => true,
+        };
     }
 }
