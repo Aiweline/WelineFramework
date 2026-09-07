@@ -11,6 +11,7 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '企业邮箱测试邮件表')]
 #[Index(name: 'idx_weline_mail_message_account_folder', columns: ['account_id', 'folder'])]
 #[Index(name: 'idx_weline_mail_message_created', columns: ['created_at'])]
+#[Index(name: 'idx_weline_mail_message_source', columns: ['source', 'source_id'])]
 class MailMessage extends Model
 {
     public const schema_table = 'weline_mail_message';
@@ -42,6 +43,12 @@ class MailMessage extends Model
 
     #[Col('varchar', 32, default: 'delivered', comment: '投递状态')]
     public const schema_fields_DELIVERY_STATUS = 'delivery_status';
+
+    #[Col('varchar', 64, nullable: true, comment: '业务来源')]
+    public const schema_fields_SOURCE = 'source';
+
+    #[Col('int', nullable: true, comment: '业务来源ID')]
+    public const schema_fields_SOURCE_ID = 'source_id';
 
     #[Col('datetime', default: 'CURRENT_TIMESTAMP', comment: '创建时间')]
     public const schema_fields_CREATED_AT = 'created_at';
