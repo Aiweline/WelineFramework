@@ -16,6 +16,7 @@ interface B2BPriceCandidateInterface
      *   website_id:int,
      *   channel_id?:string|null,
      *   sku:string,
+     *   qty?:int,
      *   retail_amount_minor:int,
      *   claimed_price_list_id?:string|null,
      *   claimed_version?:int|null

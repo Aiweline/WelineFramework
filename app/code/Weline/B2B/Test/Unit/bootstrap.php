@@ -68,6 +68,7 @@ $codeRoot = \dirname(__DIR__, 3);
 spl_autoload_register(static function (string $class) use ($codeRoot): void {
     $map = [
         'Weline\\B2B\\' => $codeRoot . '/B2B/',
+        'Weline\\Cart\\' => $codeRoot . '/Cart/',
         'Weline\\Framework\\' => $codeRoot . '/Framework/',
         'Weline\\SystemConfig\\' => $codeRoot . '/SystemConfig/',
     ];

@@ -1,0 +1,105 @@
+/* B2B storefront ToC/ToB — Theme tokens only; price stays hero */
+.b2b-selling-mode {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--weline-space-2, 0.5rem);
+    margin: var(--weline-space-2, 0.5rem) 0 var(--weline-space-3, 0.75rem);
+    max-width: 100%;
+}
+
+.b2b-selling-mode__row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-2, 0.5rem) var(--weline-space-3, 0.75rem);
+}
+
+.b2b-selling-mode__label {
+    font-size: var(--weline-font-size-sm, 0.875rem);
+    line-height: 1.3;
+    color: var(--weline-theme-text-muted, var(--color-text-secondary));
+    font-weight: 500;
+}
+
+/* Compact segment: never full-bleed dual primary slabs under price */
+.b2b-selling-mode__segment.w-button-group {
+    display: inline-flex;
+    width: auto;
+    max-width: 100%;
+    vertical-align: middle;
+}
+
+.b2b-selling-mode__segment > .w-button {
+    flex: 0 1 auto;
+    min-inline-size: 4.25rem;
+    justify-content: center;
+}
+
+.b2b-selling-mode__segment > .w-button[data-state="inactive"],
+.b2b-selling-mode__segment > .w-button[aria-pressed="false"] {
+    /* soft inactive stays quiet next to price hero */
+    font-weight: 500;
+}
+
+.b2b-selling-mode__hint {
+    margin: 0;
+    font-size: var(--weline-font-size-xs, 0.75rem);
+    line-height: 1.4;
+    color: var(--weline-theme-text-muted, var(--color-text-secondary));
+}
+
+.b2b-selling-mode__hint[hidden],
+.b2b-selling-mode__cta[hidden] {
+    display: none !important;
+}
+
+.b2b-selling-mode__cta {
+    align-self: flex-start;
+}
+
+.b2b-checkout-deposit-note {
+    margin: 0 0 var(--weline-space-3, 0.75rem);
+    padding: var(--weline-space-3, 0.75rem);
+    border: var(--weline-theme-border-width, 1px) solid var(--weline-theme-border-color, var(--color-border-default));
+    border-radius: var(--weline-radius-md, 0.5rem);
+    background: var(--weline-theme-surface-muted, var(--color-bg-secondary));
+    color: var(--weline-theme-text, var(--color-text-primary));
+    font-size: var(--weline-font-size-sm, 0.875rem);
+}
+
+.b2b-checkout-deposit-note[hidden],
+.b2b-account-hang[hidden] {
+    display: none !important;
+}
+
+.b2b-account-hang {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--weline-space-2, 0.5rem);
+    margin-top: var(--weline-space-2, 0.5rem);
+}
+
+.b2b-account-hang__progress {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-1, 0.25rem);
+}
+
+.b2b-account-hang__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--weline-space-2, 0.5rem);
+}
+
+.mini-cart-drawer__cart-type,
+.header-cart__cart-type {
+    margin-inline-start: var(--weline-space-2, 0.5rem);
+    vertical-align: middle;
+}
+
+.weline-checkout[data-cart-type="tob"] .weline-checkout__coupon-slot,
+.weline-checkout[data-cart-type="tob"] [data-checkout-discount-row] {
+    display: none !important;
+}
