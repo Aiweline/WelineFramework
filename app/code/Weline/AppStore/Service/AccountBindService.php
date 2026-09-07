@@ -769,7 +769,7 @@ class AccountBindService
         }
 
         $host = strtolower((string)parse_url($this->platformUrl, PHP_URL_HOST));
-        return in_array($host, ['app.weline.test', '127.0.0.1', 'localhost'], true);
+        return in_array($host, ['app.test.weline.com', '127.0.0.1', 'localhost'], true);
     }
 
     private function normalizeCaBundlePath(string $path): string

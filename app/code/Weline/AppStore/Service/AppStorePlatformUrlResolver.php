@@ -9,7 +9,7 @@ use Weline\Framework\App\Env;
 class AppStorePlatformUrlResolver implements AppStorePlatformUrlResolverInterface
 {
     public const DEFAULT_PLATFORM_URL = 'https://app.aiweline.com';
-    public const LOCAL_PLATFORM_URL = 'https://app.weline.test:9523';
+    public const LOCAL_PLATFORM_URL = 'https://app.test.weline.com:9523';
 
     public function __construct(
         private readonly ?string $envFile = null,
@@ -141,7 +141,9 @@ class AppStorePlatformUrlResolver implements AppStorePlatformUrlResolverInterfac
         }
 
         return str_starts_with($host, 'www.')
-            && (str_ends_with($host, 'weline.test') || str_ends_with($host, 'aiweline.com'));
+            && (str_ends_with($host, 'test.weline.com')
+                || str_ends_with($host, 'weline.test')
+                || str_ends_with($host, 'aiweline.com'));
     }
 
     private function hasExplicitLocalDeployMode(): bool
