@@ -20,6 +20,8 @@ final class MaintenanceRecoveryAutoRefreshContractTest extends TestCase
         self::assertStringContainsString('hardReloadDelay = 30000', $template);
         self::assertStringContainsString("if (/^\\/pub\\/errors\\/maintenance\\//.test(url.pathname))", $template);
         self::assertStringContainsString("url.pathname = '/'", $template);
+        self::assertStringContainsString('social-login', $template);
+        self::assertStringContainsString('searchParams.delete', $template);
         self::assertStringNotContainsString('response.status === 200', $template);
         self::assertStringNotContainsString("redirect: 'follow'", $template);
     }
@@ -34,6 +36,10 @@ final class MaintenanceRecoveryAutoRefreshContractTest extends TestCase
         self::assertStringContainsString("redirect: 'manual'", $js);
         self::assertStringContainsString('scheduleHardReload()', $js);
         self::assertStringContainsString("if (/^\\/pub\\/errors\\/maintenance\\//.test(url.pathname))", $js);
+        self::assertStringContainsString('social-login', $js);
+        self::assertStringContainsString("searchParams.delete(key)", $js);
+        self::assertStringContainsString("'code'", $js);
+        self::assertStringContainsString("'state'", $js);
         self::assertStringNotContainsString('response.status === 200', $js);
     }
 
