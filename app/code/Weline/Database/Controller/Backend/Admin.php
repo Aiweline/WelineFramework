@@ -43,6 +43,7 @@ class Admin extends BackendPageController
     public function index(): string
     {
         $defaultDatabase = (string) $this->request->getParam('database', '');
+        $selectedModule = (string) $this->request->getParam('module', '');
         $databases = [];
         $tables = [];
         try {
@@ -51,7 +52,7 @@ class Admin extends BackendPageController
                 $defaultDatabase = (string) $databases[0];
             }
             if ($defaultDatabase !== '') {
-                $tables = $this->databaseAdminService->listTables($defaultDatabase);
+                $tables = $this->databaseAdminService->listTables($defaultDatabase, $selectedModule);
             }
         } catch (\Throwable) {
             $databases = [];
@@ -61,6 +62,7 @@ class Admin extends BackendPageController
         $this->assign([
             'title' => (string) __('数据库管理'),
             'default_database' => $defaultDatabase,
+            'selected_module' => $selectedModule,
             'databases' => $databases,
             'tables' => $tables,
             'active_tab' => (string) $this->request->getParam('tab', 'browse'),
@@ -92,7 +94,8 @@ class Admin extends BackendPageController
     public function tables(): string
     {
         $database = (string) $this->request->getParam('database', '');
-        return $this->json(['success' => true, 'data' => $this->databaseAdminService->listTables($database)]);
+        $module = (string) $this->request->getParam('module', '');
+        return $this->json(['success' => true, 'data' => $this->databaseAdminService->listTables($database, $module)]);
     }
 
     #[Acl(
