@@ -2,18 +2,57 @@
 /**
  * Shared account-center affiliate summary card.
  *
- * This template is rendered only from customer account hooks. The standalone
- * /affiliate route redirects back to the account center for theme consistency.
+ * Render via Template::fetch (not raw include) so Taglib/css compile.
+ * CSS also emitted as an explicit link for AJAX sidebar stylesheet hoisting.
+ * The standalone /affiliate route redirects back to the account center.
+ *
+ * @var \Weline\Framework\View\Template $this
  */
-/** @var \Weline\Framework\View\Template $this */
+use Weline\Framework\View\Data\DataInterface;
+
+$affiliateLoadError = '';
 $affiliateResponse = [];
 try {
     $affiliateResponse = w_query('affiliate', 'getMySummary', [], 'frontend');
-} catch (\Throwable) {
-    return;
+} catch (\Throwable $e) {
+    $message = trim((string) $e->getMessage());
+    $affiliateLoadError = $message !== ''
+        ? $message
+        : (string) __('分销数据暂时无法加载，请稍后重试。');
 }
 
+$affiliateAccountCss = (string) $this->fetchTagSource(
+    DataInterface::dir_type_STATICS,
+    'Weline_Affiliate::css/affiliate-account.css'
+);
+$escAttr = static fn (mixed $v): string => htmlspecialchars((string) $v, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+
 if (!is_array($affiliateResponse) || empty($affiliateResponse['success'])) {
+    $message = $affiliateLoadError;
+    if ($message === '' && is_array($affiliateResponse)) {
+        $message = trim((string) ($affiliateResponse['message'] ?? ''));
+    }
+    if ($message === '') {
+        $message = (string) __('分销数据暂时无法加载，请稍后重试。');
+    }
+    ?>
+<link rel="stylesheet" type="text/css" href="<?= $escAttr($affiliateAccountCss) ?>">
+<article id="affiliate"
+         class="weline-affiliate-account-card"
+         data-affiliate-account-panel="true"
+         data-account-section-anchor="affiliate"
+         data-testid="affiliate-account-unavailable">
+    <div class="weline-affiliate-account-card__header">
+        <div>
+            <p class="weline-affiliate-account-card__eyebrow"><?= __('Affiliate') ?></p>
+            <h2 class="weline-affiliate-account-card__title"><?= __('分销中心') ?></h2>
+        </div>
+    </div>
+    <div class="weline-affiliate-account-card__body">
+        <p class="weline-affiliate-account-card__notice" data-tone="danger" role="alert"><?= $escAttr($message) ?></p>
+    </div>
+</article>
+    <?php
     return;
 }
 
@@ -117,13 +156,13 @@ if (!is_string($affiliateAccountI18nJson)) {
     $affiliateAccountI18nJson = '{}';
 }
 ?>
+<link rel="stylesheet" type="text/css" href="<?= $escAttr($affiliateAccountCss) ?>">
 <article id="affiliate"
          class="weline-affiliate-account-card"
          data-affiliate-account-panel="true"
          data-account-section-anchor="affiliate"
          data-weline-load="affiliateAccount"
          data-affiliate-i18n="<?= htmlspecialchars($affiliateAccountI18nJson, ENT_QUOTES) ?>">
-<css>Weline_Affiliate::css/affiliate-account.css</css>
 <div class="weline-affiliate-account-card__header">
         <div>
             <p class="weline-affiliate-account-card__eyebrow"><?= __('Affiliate') ?></p>
@@ -133,10 +172,10 @@ if (!is_string($affiliateAccountI18nJson)) {
     </div>
 
     <?php if ($currentScopeLabel !== ''): ?>
-        <p class="weline-affiliate-account-card__section-note" style="margin:0 0 12px;">
-            <?= __('Current scope') ?>: <strong><?= htmlspecialchars($currentScopeLabel, ENT_QUOTES) ?></strong>
+        <p class="weline-affiliate-account-card__scope" data-testid="affiliate-current-scope">
+            <lang>当前访问范围</lang>: <strong><?= htmlspecialchars($currentScopeLabel, ENT_QUOTES) ?></strong>
             <?php if ($scopeLabel !== '' && $scopeLabel !== $currentScopeLabel): ?>
-                · <?= __('Account scope') ?>: <?= htmlspecialchars($scopeLabel, ENT_QUOTES) ?>
+                · <lang>账户范围</lang>: <?= htmlspecialchars($scopeLabel, ENT_QUOTES) ?>
             <?php endif; ?>
         </p>
     <?php endif; ?>

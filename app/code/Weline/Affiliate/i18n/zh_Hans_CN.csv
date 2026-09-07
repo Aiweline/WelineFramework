@@ -89,6 +89,11 @@
 加载中,加载中
 "分销 API 不支持分享链接操作","分销 API 不支持分享链接操作"
 暂不可用,暂不可用
+当前访问范围,当前访问范围
+账户范围,账户范围
+分销数据暂时无法加载，请稍后重试。,分销数据暂时无法加载，请稍后重试。
+Affiliate,Affiliate
+分销中心,分销中心
 已申请,已申请
 处理中,处理中
 已驳回,已驳回
@@ -124,10 +129,6 @@
 上一页,上一页
 下一页,下一页
 没有匹配记录,没有匹配记录
-Affiliate,Affiliate
-分销中心,分销中心
-"Current scope",当前访问范围
-"Account scope",账户范围
 累计佣金,累计佣金
 分销转化漏斗,分销转化漏斗
 平台流量与成交,平台流量与成交
@@ -302,7 +303,6 @@ Next,下一页
 "Website scope is required before creating an affiliate account.","创建分销账户前必须先选择 Website 范围。"
 "Customer ID or affiliate ID is required.","必须提供客户 ID 或推荐 ID。"
 "Store is required when a channel is selected.",选择渠道前必须先选择店铺。
-"Website is required when a store is selected.",选择店铺前必须先选择网站。
 商品不存在或已下架，无法生成分销分享链接。,商品不存在或已下架，无法生成分销分享链接。
 缺少分享码。,缺少分享码。
 商城首页,商城首页
@@ -314,6 +314,7 @@ Next,下一页
 微信,微信
 微博,微博
 "Global scope",全局范围
+"Website is required when a store is selected.",选择店铺前必须先选择网站。
 """删除分销记录必须使用 POST 请求。""","删除分销记录必须使用 POST 请求。"
 "Leave empty for global scope. Select website, then store, then channel.",留空表示全局范围；请依次选择网站、店铺、渠道。
 我要推广,我要推广

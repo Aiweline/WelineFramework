@@ -1072,6 +1072,7 @@ class AffiliateService
      */
     public function normalizeScope(array $data): array
     {
+        // website_id=0 is the framework default website (valid), not "missing".
         $websiteId = max(0, (int) ($data['website_id'] ?? 0));
         $storeCode = trim((string) ($data['store_code'] ?? ''));
         $channelCode = trim((string) ($data['channel_code'] ?? ''));
@@ -1080,14 +1081,8 @@ class AffiliateService
             throw new \InvalidArgumentException((string) \__('Store is required when a channel is selected.'));
         }
 
-        if ($storeCode !== '' && $websiteId <= 0) {
-            throw new \InvalidArgumentException((string) \__('Website is required when a store is selected.'));
-        }
-
-        if ($websiteId <= 0) {
-            $storeCode = '';
-            $channelCode = '';
-        } elseif ($storeCode === '') {
+        // Keep store/channel when website_id is 0 (default site). Only clear channel if store is empty.
+        if ($storeCode === '') {
             $channelCode = '';
         }
 
