@@ -1,0 +1,140 @@
+<?php
+/**
+ * Shared embargo admin widget.
+ *
+ * Expected locals:
+ * - string $scopeType website|store|channel
+ * - int $scopeId
+ * - bool $hasIdentity
+ * - string $sectionId
+ * - string $pendingHint
+ */
+
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Shipping\Service\EmbargoAdminService;
+
+$rows = [];
+try {
+    if (!empty($hasIdentity) && (int)$scopeId >= 0) {
+        /** @var EmbargoAdminService $admin */
+        $admin = ObjectManager::getInstance(EmbargoAdminService::class);
+        $rows = $admin->listForScope((string)$scopeType, (int)$scopeId);
+    }
+} catch (\Throwable) {
+    $rows = [];
+}
+$json = htmlspecialchars(json_encode($rows, JSON_UNESCAPED_UNICODE) ?: '[]', ENT_QUOTES, 'UTF-8');
+$sectionId = (string)($sectionId ?? 'shipping_embargo');
+$pendingHint = (string)($pendingHint ?? __('请先保存主体，再配置禁运区域。'));
+$testId = 'shipping-embargo-' . preg_replace('/[^\w\-]+/', '-', (string)$scopeType);
+$pickerCode = $sectionId . '-picker';
+?>
+<div class="w-disclosure" data-w-component="disclosure" data-testid="<?= htmlspecialchars($testId, ENT_QUOTES, 'UTF-8') ?>">
+    <div id="<?= htmlspecialchars($sectionId . '_heading', ENT_QUOTES, 'UTF-8') ?>">
+        <button class="w-disclosure__trigger" type="button" aria-expanded="false" aria-controls="<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>" data-w-target="#<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>" data-w-action="disclosure.toggle" data-w-disclosure-trigger>
+            <w:icon name="map-pin-off" size="sm"></w:icon>
+            <span><lang>运输禁运区域</lang></span>
+            <w:icon name="chevron-down" size="sm"></w:icon>
+        </button>
+    </div>
+    <div id="<?= htmlspecialchars($sectionId . '_body', ENT_QUOTES, 'UTF-8') ?>" class="w-disclosure__panel" aria-labelledby="<?= htmlspecialchars($sectionId . '_heading', ENT_QUOTES, 'UTF-8') ?>" data-w-disclosure-panel hidden>
+        <div class="w-disclosure__body">
+            <?php if (empty($hasIdentity) || (int)$scopeId < 0): ?>
+                <div class="w-text" data-tone="muted"><?= htmlspecialchars($pendingHint, ENT_QUOTES, 'UTF-8') ?></div>
+            <?php else: ?>
+                <div class="w-text" data-tone="muted" style="--w-mb:var(--weline-space-3);">
+                    <lang>配置本作用域不支持配送的国家/州省/区县（黑名单）。命中规则为 website ∪ store ∪ channel 并集。请搜索后多选添加。</lang>
+                </div>
+                <input type="hidden" name="extensions[shipping][embargo][json]" id="<?= htmlspecialchars($sectionId . '_json', ENT_QUOTES, 'UTF-8') ?>" value="<?= $json ?>">
+                <?php
+                // Included from hook via PHP include — Taglib tags are NOT compiled here.
+                $addressConfig = [
+                    'for' => 'country|province|district',
+                    'code' => $pickerCode,
+                    'names' => [
+                        'country' => 'country',
+                        'province' => 'province',
+                        'city' => 'city',
+                        'district' => 'district',
+                        'street' => 'street',
+                    ],
+                    'labels' => [
+                        'country' => (string)__('国家/地区'),
+                        'province' => (string)__('省份'),
+                        'city' => (string)__('城市'),
+                        'district' => (string)__('区县'),
+                        'street' => (string)__('街道'),
+                        'empty' => (string)__('暂无可选地区'),
+                        'selectCountryFirst' => (string)__('请先选择国家/地区'),
+                        'selectProvinceFirst' => (string)__('请先选择省份'),
+                        'loading' => (string)__('加载中…'),
+                        'multiHint' => (string)__('尚未选择禁运区域，请搜索后添加'),
+                        'searchCountry' => (string)__('搜索并添加国家/地区'),
+                        'searchProvince' => (string)__('搜索并添加省份'),
+                        'searchCity' => (string)__('搜索并添加城市'),
+                        'searchDistrict' => (string)__('搜索并添加区县'),
+                        'searchStreet' => (string)__('搜索并添加街道'),
+                        'typeToFilter' => (string)__('输入关键字筛选更多'),
+                        'poolCountHint' => (string)__('共 {n} 项可选，输入关键字筛选'),
+                        'selectDistrictFirst' => (string)__('请先选择区县'),
+                    ],
+                    'filters' => [
+                        'country' => '',
+                        'province' => '',
+                        'city' => '',
+                        'district' => '',
+                        'street' => '',
+                    ],
+                    'sourceUrl' => w_url('/shipping/frontend/region/list', [], 'frontend'),
+                    'searchable' => true,
+                    'cascade' => true,
+                    'catalog' => 'global',
+                    'selection' => 'multi',
+                    'multiLevels' => ['country', 'province', 'district'],
+                ];
+                $addressConfigJson = htmlspecialchars(
+                    json_encode($addressConfig, JSON_UNESCAPED_UNICODE) ?: '{}',
+                    ENT_QUOTES,
+                    'UTF-8'
+                );
+                ?>
+                <div class="w-address" data-w-address data-address-config="<?= $addressConfigJson ?>"></div>
+                <script src="/Weline/Theme/view/statics/js/address.js?v=20260906-catalog-empty1" data-shipping-address-direct data-no-extract="true" onload="window.__welineShippingEmbargoReady&&window.__welineShippingEmbargoReady()"></script>
+                <script>
+                (function () {
+                    var jsonInput = document.getElementById(<?= json_encode($sectionId . '_json', JSON_UNESCAPED_UNICODE) ?>);
+                    if (!jsonInput) return;
+                    var root = jsonInput.parentElement
+                        ? jsonInput.parentElement.querySelector('[data-w-address]')
+                        : null;
+                    if (!root) {
+                        root = document.querySelector('[data-address-code=<?= json_encode($pickerCode, JSON_UNESCAPED_UNICODE) ?>]');
+                    }
+                    if (!root) return;
+                    try { root.setAttribute('data-multi-seed', jsonInput.value || '[]'); } catch (e) {}
+                    root.addEventListener('weline:address:multi-change', function () {
+                        var raw = root.getAttribute('data-multi-selection') || '[]';
+                        try { JSON.parse(raw); jsonInput.value = raw; } catch (e) {}
+                    });
+                    function boot() {
+                        if (!window.WelineThemeAddress || typeof window.WelineThemeAddress.boot !== 'function') {
+                            return false;
+                        }
+                        root.dataset.wAddressReady = '';
+                        window.WelineThemeAddress.boot();
+                        return true;
+                    }
+                    window.__welineShippingEmbargoReady = function () {
+                        if (!boot()) {
+                            setTimeout(boot, 50);
+                        }
+                    };
+                    if (window.WelineThemeAddress) {
+                        window.__welineShippingEmbargoReady();
+                    }
+                })();
+                </script>
+            <?php endif; ?>
+        </div>
+    </div>
+</div>

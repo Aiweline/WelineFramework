@@ -9,8 +9,8 @@ use Weline\Framework\Acl\Acl;
 /**
  * 配送系统管理聚合页
  *
- * 地区管理 | 配送区域 | 快递公司 | 费用模板 | 免邮规则 | 配送服务 | 物流跟踪
- * Tab 聚合，URL 持久化 ?tab=region|zone|carrier|...
+ * 地区管理 | 快递公司 | 费用模板 | 免邮规则 | 配送服务 | 物流跟踪
+ * Tab 聚合，URL 持久化 ?tab=region|carrier|...
  *
  * @package Weline_Shipping
  */
@@ -18,7 +18,7 @@ use Weline\Framework\Acl\Acl;
 class Manager extends BackendController
 {
     /**
-     * 聚合页：7 个 Tab
+     * 聚合页：6 个 Tab（已移除遗留配送区域 Zone）
      */
     #[Acl('Weline_Shipping::shipping_system_index', '查看配送系统', 'grid', '查看配送系统聚合页')]
     public function index(): string
@@ -26,14 +26,13 @@ class Manager extends BackendController
         $tab = (string) $this->request->getGet('tab', 'region');
         $allowedTabs = [
             'region',
-            'zone',
             'carrier',
             'ratetemplate',
             'freeshippingrule',
             'shippingservice',
             'tracking',
         ];
-        if (!in_array($tab, $allowedTabs)) {
+        if (!in_array($tab, $allowedTabs, true)) {
             $tab = 'region';
         }
         $this->assign('activeTab', $tab);

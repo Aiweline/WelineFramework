@@ -15,7 +15,6 @@ use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Model\FreeShippingRule;
 use Weline\Shipping\Model\RateTemplate;
 use Weline\Shipping\Model\ShippingService;
-use Weline\Shipping\Model\Zone;
 
 /**
  * 配送服务管理服务
@@ -25,20 +24,21 @@ use Weline\Shipping\Model\Zone;
 class ShippingServiceManager
 {
     private ObjectManager $objectManager;
-    private ZoneService $zoneService;
     private RateCalculationService $rateCalculationService;
     private FreeShippingService $freeShippingService;
 
+    private ?CarrierCoverageMatchService $coverageMatch = null;
+
     public function __construct(
         ObjectManager $objectManager,
-        ZoneService $zoneService,
         RateCalculationService $rateCalculationService,
-        FreeShippingService $freeShippingService
+        FreeShippingService $freeShippingService,
+        ?CarrierCoverageMatchService $coverageMatch = null,
     ) {
         $this->objectManager = $objectManager;
-        $this->zoneService = $zoneService;
         $this->rateCalculationService = $rateCalculationService;
         $this->freeShippingService = $freeShippingService;
+        $this->coverageMatch = $coverageMatch;
     }
 
     /**
@@ -66,35 +66,27 @@ class ShippingServiceManager
         ?string $city = null,
         ?string $district = null
     ): array {
-        // 匹配配送区域
-        $zone = $this->zoneService->matchZoneByAddress($countryCode, $province, $city, $district);
-        
-        if (!$zone) {
+        // 唯一路径：承运商覆盖 ∩ 可售白名单（可空）∩ 非禁运，按承运商 sort_order。
+        // Zone 遗留匹配已删除，异常时返回空列表，避免静默走错语义。
+        try {
+            return $this->coverageMatch()->getAvailableServices(
+                $countryCode,
+                $province,
+                $city,
+                $district,
+            );
+        } catch (\Throwable) {
             return [];
         }
-        
-        // 获取该区域的所有配送服务
-        $services = $this->getModel()->reset()
-            ->where(ShippingService::schema_fields_ZONE_ID, $zone->getId())
-            ->where(ShippingService::schema_fields_IS_ACTIVE, 1)
-            ->order(ShippingService::schema_fields_SORT_ORDER, 'ASC')
-            ->select()
-            ->fetch();
-        
-        $result = [];
-        foreach ($services->getItems() as $service) {
-            $result[] = [
-                'service_id' => $service->getId(),
-                'service_name' => $service->getData(ShippingService::schema_fields_SERVICE_NAME),
-                'service_code' => $service->getData(ShippingService::schema_fields_SERVICE_CODE),
-                'carrier_id' => $service->getData(ShippingService::schema_fields_CARRIER_ID),
-                'estimated_days_min' => $service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MIN),
-                'estimated_days_max' => $service->getData(ShippingService::schema_fields_ESTIMATED_DAYS_MAX),
-                'is_free_shipping' => $service->getData(ShippingService::schema_fields_IS_FREE_SHIPPING),
-            ];
+    }
+
+    private function coverageMatch(): CarrierCoverageMatchService
+    {
+        if ($this->coverageMatch instanceof CarrierCoverageMatchService) {
+            return $this->coverageMatch;
         }
-        
-        return $result;
+
+        return $this->coverageMatch = $this->objectManager->getInstance(CarrierCoverageMatchService::class);
     }
 
     /**

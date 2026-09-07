@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace Weline\Shipping\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
-use Weline\Framework\Manager\ObjectManager;
 use Weline\Shipping\Service\RegionCascadeEnsureService;
 
 final class RegionCascadeEnsureServiceTest extends TestCase
@@ -15,27 +14,26 @@ final class RegionCascadeEnsureServiceTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        $this->service = new RegionCascadeEnsureService(ObjectManager::getInstance());
+        $this->service = new RegionCascadeEnsureService();
     }
 
-    public function testHasPackForSeededCountries(): void
+    public function testCatalogCoverageForSeededCountries(): void
     {
-        foreach (['CN', 'HK', 'MO', 'TW'] as $code) {
-            self::assertTrue($this->service->hasPack($code), $code . ' pack should exist');
-            $pack = $this->service->loadPack($code);
-            self::assertIsArray($pack);
-            self::assertNotEmpty($pack['regions'] ?? []);
-            self::assertSame($code, strtoupper((string)($pack['country_code'] ?? $code)));
+        foreach (['CN', 'HK', 'MO', 'TW', 'AU'] as $code) {
+            self::assertTrue($this->service->hasCatalogCoverage($code), $code . ' catalog should exist');
+            self::assertTrue($this->service->hasPack($code), $code . ' hasPack aliases catalog');
         }
     }
 
-    public function testMissingPackReturnsNull(): void
+    public function testMissingCatalogAndJsonPackGone(): void
     {
         self::assertFalse($this->service->hasPack('ZZ'));
-        self::assertNull($this->service->loadPack('ZZ'));
+        self::assertTrue($this->service->hasCatalogCoverage('PY'));
+        self::assertTrue($this->service->hasCatalogCoverage('EG'));
+        self::assertNull($this->service->loadPack('CN'));
         $result = $this->service->ensureCountry('ZZ');
         self::assertTrue($result['skipped']);
-        self::assertSame('no_pack', $result['reason']);
+        self::assertContains($result['reason'], ['catalog_mode', 'catalog_not_covered', 'use_addresscatalog_import']);
         self::assertSame(0, $result['imported']);
     }
 
@@ -44,14 +42,5 @@ final class RegionCascadeEnsureServiceTest extends TestCase
         $result = $this->service->ensureCountry('macau');
         self::assertTrue($result['skipped']);
         self::assertSame('invalid_country', $result['reason']);
-    }
-
-    public function testMacauPackHasProvinceNodes(): void
-    {
-        $pack = $this->service->loadPack('MO');
-        self::assertNotNull($pack);
-        $types = array_map(static fn(array $n): string => (string)($n['type'] ?? ''), $pack['regions']);
-        self::assertContains('province', $types);
-        self::assertGreaterThanOrEqual(3, count($pack['regions']));
     }
 }

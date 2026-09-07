@@ -64,6 +64,7 @@ $seed = [
 ];
 
 $hasSaved = $addresses !== [];
+$addressCount = count($addresses);
 $selectedId = (string)($seed['address_id'] ?? '');
 if ($selectedId === '' && $hasSaved) {
     foreach ($addresses as $address) {
@@ -76,7 +77,23 @@ if ($selectedId === '' && $hasSaved) {
         $selectedId = (string)($addresses[0]['id'] ?? '');
     }
 }
+$displayAddresses = [];
+if ($hasSaved) {
+    foreach ($addresses as $address) {
+        $id = (string)($address['id'] ?? '');
+        if ($id !== '' && $id === $selectedId) {
+            $displayAddresses[] = $address;
+            break;
+        }
+    }
+    if ($displayAddresses === [] && $addresses !== []) {
+        $displayAddresses[] = $addresses[0];
+        $selectedId = (string)($addresses[0]['id'] ?? $selectedId);
+    }
+}
+$listLoaded = $addressCount <= 1;
 $initialMode = $hasSaved ? 'collapsed' : 'new';
+$isLoggedIn = !empty($context['is_logged_in']);
 $ui = [
     'edit' => (string)__('编辑'),
     'add_new' => (string)__('使用新地址'),
@@ -86,6 +103,12 @@ $ui = [
     'billing_title' => (string)__('账单地址'),
     'shipping_title' => (string)__('收货地址'),
     'saved_heading' => (string)__('选择收货地址'),
+    'change_address' => (string)__('更换地址'),
+    'done_change' => (string)__('收起地址列表'),
+    'load_addresses_failed' => (string)__('地址列表加载失败，请稍后重试。'),
+    'err_name' => (string)__('请填写收货人。'),
+    'err_phone' => (string)__('请填写电话。'),
+    'err_address1' => (string)__('请填写详细地址。'),
 ];
 ?>
 <section class="<?= $esc($scope->cssClass) ?> w-shipping-checkout-address"
@@ -97,6 +120,9 @@ $ui = [
          data-weline-load="shippingCheckoutAddress"
          data-mode="<?= $esc($initialMode) ?>"
          data-has-saved="<?= $hasSaved ? '1' : '0' ?>"
+         data-address-count="<?= (int)$addressCount ?>"
+         data-list-loaded="<?= $listLoaded ? '1' : '0' ?>"
+         data-is-logged-in="<?= $isLoggedIn ? '1' : '0' ?>"
          data-selected-id="<?= $esc($selectedId) ?>"
          data-initial-address="<?= $esc(json_encode($seed, $jsonFlags) ?: '{}') ?>"
          data-i18n="<?= $esc(json_encode($ui, $jsonFlags) ?: '{}') ?>">
@@ -104,11 +130,22 @@ $ui = [
     <div class="w-shipping-checkout-address__section" data-shipping-section>
         <h3 class="w-shipping-checkout-address__heading"><?= $esc($ui['shipping_title']) ?></h3>
 
-        <?php if ($hasSaved): ?>
-        <div class="w-shipping-checkout-address__saved" data-saved-addresses>
-            <p class="w-shipping-checkout-address__saved-label"><?= $esc($ui['saved_heading']) ?></p>
+        <?php /* 始终输出 saved shell：访客首存后可无刷新渲染地址卡，避免 collapsed 后空白 */ ?>
+        <div class="w-shipping-checkout-address__saved"
+             data-saved-addresses
+             <?= $hasSaved ? '' : 'hidden' ?>>
+            <div class="w-shipping-checkout-address__saved-toolbar">
+                <p class="w-shipping-checkout-address__saved-label"><?= $esc($ui['saved_heading']) ?></p>
+                <button type="button"
+                        class="w-shipping-checkout-address__link-btn"
+                        data-change-address
+                        aria-expanded="false"
+                        <?= $addressCount > 1 ? '' : 'hidden' ?>>
+                    <?= $esc($ui['change_address']) ?>
+                </button>
+            </div>
             <div class="w-shipping-checkout-address__cards" role="radiogroup" aria-label="<?= $esc($ui['saved_heading']) ?>">
-                <?php foreach ($addresses as $address): ?>
+                <?php foreach ($displayAddresses as $address): ?>
                     <?php
                     $id = (string)($address['id'] ?? '');
                     $name = (string)($address['contact_name'] ?? $address['name'] ?? '');
@@ -168,7 +205,6 @@ $ui = [
                 <?= $esc($ui['add_new']) ?>
             </button>
         </div>
-        <?php endif; ?>
 
         <div class="w-shipping-checkout-address__editor"
              data-address-editor
@@ -178,14 +214,22 @@ $ui = [
                 <label class="w-shipping-checkout-address__field">
                     <span class="w-form-label"><?= __('收货人') ?></span>
                     <input class="w-form-control w-input" name="name" type="text" <?= $hasSaved ? '' : 'required' ?> autocomplete="shipping name" value="<?= $esc($seed['name']) ?>" data-shipping-field>
+                    <span class="w-shipping-checkout-address__field-error" data-field-error-for="name" role="alert" hidden></span>
                 </label>
                 <label class="w-shipping-checkout-address__field">
                     <span class="w-form-label"><?= __('电话') ?></span>
                     <input class="w-form-control w-input" name="phone" type="tel" <?= $hasSaved ? '' : 'required' ?> autocomplete="shipping tel" value="<?= $esc($seed['phone']) ?>" data-shipping-field>
+                    <span class="w-shipping-checkout-address__field-error" data-field-error-for="phone" role="alert" hidden></span>
                 </label>
                 <label class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
                     <span class="w-form-label"><?= __('邮箱') ?></span>
                     <input class="w-form-control w-input" name="email" type="email" <?= $hasSaved ? '' : 'required' ?> autocomplete="email" value="<?= $esc($seed['email']) ?>" data-shipping-field>
+                    <span class="w-shipping-checkout-address__field-error" data-field-error-for="email" role="alert" hidden></span>
+                </label>
+                <label class="w-shipping-checkout-address__field">
+                    <span class="w-form-label"><lang>邮编</lang></span>
+                    <input class="w-form-control w-input" name="postal_code" type="text" autocomplete="shipping postal-code" value="<?= $esc($seed['postal_code']) ?>" data-shipping-field data-postal-first>
+                    <span class="w-shipping-checkout-address__field-error" data-field-error-for="postal_code" role="alert" hidden></span>
                 </label>
                 <div class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide" data-shipping-address-cascade>
                     <w:theme:address
@@ -193,25 +237,36 @@ $ui = [
                         code="checkout-shipping-address"
                         searchable="true"
                         cascade="true"
-                        district="true" />
+                        district="true"
+                        postal-lookup="true" />
                 </div>
                 <label class="w-shipping-checkout-address__field w-shipping-checkout-address__field--wide">
-                    <span class="w-form-label"><?= __('详细地址') ?></span>
-                    <input class="w-form-control w-input" name="address1" type="text" <?= $hasSaved ? '' : 'required' ?> autocomplete="shipping street-address" value="<?= $esc($seed['address1']) ?>" data-shipping-field>
-                </label>
-                <label class="w-shipping-checkout-address__field">
-                    <span class="w-form-label"><?= __('邮编') ?></span>
-                    <input class="w-form-control w-input" name="postal_code" type="text" autocomplete="shipping postal-code" value="<?= $esc($seed['postal_code']) ?>" data-shipping-field>
+                    <span class="w-form-label"><lang>详细地址</lang></span>
+                    <input class="w-form-control w-input" name="address1" type="text" <?= $hasSaved ? '' : 'required' ?> autocomplete="shipping street-address" value="<?= $esc($seed['address1']) ?>" data-shipping-field placeholder="<?= $esc(__('门牌号 / 楼栋单元等')) ?>">
+                    <span class="w-shipping-checkout-address__field-error" data-field-error-for="address1" role="alert" hidden></span>
                 </label>
             </div>
-            <?php if ($hasSaved): ?>
+            <?php if ($hasSaved || !$isLoggedIn): ?>
             <div class="w-shipping-checkout-address__editor-actions">
+                <?php if (!$isLoggedIn): ?>
+                <div class="w-shipping-checkout-address__captcha"
+                     data-weline-captcha-lazy
+                     data-form-id="checkout-shipping-address-editor"
+                     data-intent="checkout.save_delivery_address"></div>
+                <?php endif; ?>
+                <div class="w-shipping-checkout-address__editor-action-row">
+                    <p class="w-shipping-checkout-address__message" data-shipping-message aria-live="polite" hidden></p>
+                    <div class="w-shipping-checkout-address__editor-action-buttons">
+                <?php if ($hasSaved): ?>
                 <button type="button" class="w-shipping-checkout-address__secondary-btn" data-cancel-edit>
                     <?= $esc($ui['cancel']) ?>
                 </button>
+                <?php endif; ?>
                 <button type="button" class="w-shipping-checkout-address__primary-btn" data-use-edited-address>
                     <?= $esc($ui['save_use']) ?>
                 </button>
+                    </div>
+                </div>
             </div>
             <?php endif; ?>
         </div>
@@ -266,5 +321,5 @@ $ui = [
         </div>
     </div>
 </section>
-<link rel="stylesheet" href="@static(Weline_Shipping::css/widgets/checkout-shipping-address.css)?v=20260903-csa3">
+<link rel="stylesheet" href="@static(Weline_Shipping::css/widgets/checkout-shipping-address.css)?v=20260905-csa11">
 <?php // shippingCheckoutAddress：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

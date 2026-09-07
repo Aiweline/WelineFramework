@@ -24,12 +24,14 @@ class ShippingAddressService
     private ObjectManager $objectManager;
     private AddressFormatter $addressFormatter;
     private AddressValidationService $addressValidationService;
+    private EmbargoService $embargoService;
 
     public function __construct(ObjectManager $objectManager)
     {
         $this->objectManager = $objectManager;
         $this->addressFormatter = $objectManager->getInstance(AddressFormatter::class);
         $this->addressValidationService = $objectManager->getInstance(AddressValidationService::class);
+        $this->embargoService = $objectManager->getInstance(EmbargoService::class);
     }
 
     /**
@@ -371,38 +373,24 @@ class ShippingAddressService
         }
 
         $this->addressValidationService->validate($data);
-        return;
-
-        $required = [
-            ShippingAddress::schema_fields_NAME => __('地址名称'),
-            ShippingAddress::schema_fields_CONTACT_NAME => __('联系人姓名'),
-            ShippingAddress::schema_fields_CONTACT_PHONE => __('联系电话'),
-            ShippingAddress::schema_fields_PROVINCE => __('省份'),
-            ShippingAddress::schema_fields_CITY => __('城市'),
-            ShippingAddress::schema_fields_STREET => __('街道地址'),
-        ];
-        
-        foreach ($required as $field => $label) {
-            if (empty($data[$field])) {
-                throw new \Exception(__('%{1}不能为空', [$label]));
-            }
-        }
-        
-        // 验证电话号码格式
-        if (!empty($data[ShippingAddress::schema_fields_CONTACT_PHONE])) {
-            $phone = $data[ShippingAddress::schema_fields_CONTACT_PHONE];
-            if (!preg_match('/^1[3-9]\d{9}$|^0\d{2,3}-?\d{7,8}$/', $phone)) {
-                throw new \Exception(__('电话号码格式不正确'));
-            }
-        }
-        
-        // 验证邮政编码格式（如果提供）
-        if (!empty($data[ShippingAddress::schema_fields_POSTAL_CODE])) {
-            $postalCode = $data[ShippingAddress::schema_fields_POSTAL_CODE];
-            if (!preg_match('/^\d{6}$/', $postalCode)) {
-                throw new \Exception(__('邮政编码格式不正确，应为6位数字'));
-            }
-        }
+        $this->embargoService->assertAllowed([
+            'country_code' => (string)($data[ShippingAddress::schema_fields_COUNTRY_CODE]
+                ?? $data[ShippingAddress::schema_fields_COUNTRY]
+                ?? ''),
+            'province_code' => (string)($data[ShippingAddress::schema_fields_PROVINCE_CODE]
+                ?? $data[ShippingAddress::schema_fields_PROVINCE]
+                ?? ''),
+            'province_region_id' => (int)($data[ShippingAddress::schema_fields_PROVINCE_REGION_ID] ?? 0),
+            'city_code' => (string)($data[ShippingAddress::schema_fields_CITY_CODE]
+                ?? $data[ShippingAddress::schema_fields_CITY]
+                ?? ''),
+            'city_region_id' => (int)($data[ShippingAddress::schema_fields_CITY_REGION_ID] ?? 0),
+            'district_code' => (string)($data[ShippingAddress::schema_fields_DISTRICT_CODE]
+                ?? $data[ShippingAddress::schema_fields_DISTRICT]
+                ?? ''),
+            'district_region_id' => (int)($data[ShippingAddress::schema_fields_DISTRICT_REGION_ID] ?? 0),
+            'street' => (string)($data[ShippingAddress::schema_fields_STREET] ?? ''),
+        ]);
     }
 }
 

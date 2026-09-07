@@ -8,9 +8,9 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     shippingCheckoutAddress: {
         paths: [
-            "Weline_Shipping::js/widgets/checkout-shipping-address.js"
+            "Weline_Shipping::js/widgets/checkout-shipping-address.v20260917.js"
         ],
-        globalVar: null,
+        globalVar: "WelineShippingCheckoutAddress",
         description: "结账收货地址部件"
     },
     shippingAccountAddress: {
