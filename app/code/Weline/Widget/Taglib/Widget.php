@@ -276,7 +276,10 @@ class Widget implements TaglibInterface
     {
         return !str_contains($html, 'name="form_key"')
             && !str_contains($html, 'name="challenge_token"')
-            && !str_contains($html, 'data-w-challenge-token');
+            && !str_contains($html, 'data-w-challenge-token')
+            && !str_contains($html, 'name="redirect_url"')
+            && !str_contains($html, 'data-social-quick')
+            && !str_contains($html, 'data-w-auth-return');
     }
 
     /**
