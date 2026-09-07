@@ -25482,6 +25482,17 @@ class ServiceOrchestrator
 
         $this->desiredState[ControlMessage::ROLE_WORKER] = $target;
         $this->persistServicesInfo($this->context);
+        try {
+            (new ServerInstanceManager())->updateDesiredWorkerCount(
+                (string)$this->context->instanceName,
+                $target,
+            );
+        } catch (\Throwable $persistError) {
+            WlsLogger::warning_(
+                '[Orchestrator] Failed to persist scaled worker count=' . $target
+                . ': ' . $persistError->getMessage()
+            );
+        }
         $currentAfter = \count($this->registry->getInstancesByRole(ControlMessage::ROLE_WORKER));
         $data = [
             'target_workers' => $target,
@@ -26925,6 +26936,12 @@ class ServiceOrchestrator
      */
     private function setDispatcherMaintenanceRouting(bool $enabled): array
     {
+        if ($this->context?->isDirect()) {
+            // Direct has no Dispatcher pool. Flipping Master flags without Worker
+            // IPC leaves WorkerPolicyKernel sticky on maintenance 503.
+            return $this->setDirectMaintenanceMode($enabled, $enabled);
+        }
+
         $ports = $enabled
             ? $this->collectReadyMaintenancePortsSorted()
             : $this->collectReadyWorkerPortsSorted();
@@ -27092,12 +27109,41 @@ class ServiceOrchestrator
             $this->maintenanceSticky = false;
             $this->desiredState[ControlMessage::ROLE_MAINTENANCE] = 0;
             $this->deactivateMaintenanceCapacity();
+            // Heal sticky Worker gates after a prior Master-only desync.
+            $transition = $this->broadcastDirectMaintenanceMode(false);
             $this->persistServicesInfo($this->context);
+            $acked = (int)($transition['acked'] ?? 0);
+            if (!($transition['success'] ?? false)) {
+                $this->logMaintenanceOperation(
+                    'Direct maintenance re-broadcast disable incomplete while Master already disabled: '
+                    . (string)($transition['message'] ?? 'ACK incomplete'),
+                    'WARN',
+                    'direct_maintenance:rebroadcast_disable_incomplete',
+                    0.0
+                );
+
+                return [
+                    'success' => false,
+                    'message' => (string)($transition['message'] ?? 'Direct maintenance Worker ACK incomplete'),
+                    'maintenance_workers' => 0,
+                    'worker_ipc_acked' => $acked,
+                ];
+            }
+
+            $this->logMaintenanceOperation(
+                'Direct maintenance already disabled; re-broadcasted Worker gate clear'
+                . ", worker_ipc_acked={$acked}, "
+                . $this->formatMaintenanceOperationContext(),
+                'INFO',
+                'direct_maintenance:rebroadcast_disable:' . $acked,
+                0.0
+            );
+
             return [
                 'success' => true,
                 'message' => 'Direct maintenance mode already disabled',
                 'maintenance_workers' => 0,
-                'worker_ipc_acked' => 0,
+                'worker_ipc_acked' => $acked,
             ];
         }
 
@@ -31507,9 +31553,7 @@ class ServiceOrchestrator
      */
     private function resolveServiceEndpoint(string $role, int $defaultPort): array
     {
-        // 所有服务统一从 Registry 获取端点
         $host = '127.0.0.1';
-        $port = $defaultPort;
         $instances = $this->registry->getInstancesByRole($role);
 
         foreach ($instances as $instance) {
@@ -31520,12 +31564,25 @@ class ServiceOrchestrator
 
         foreach ($instances as $instance) {
             if ($instance->port !== null && $instance->port > 0) {
-                $port = (int)$instance->port;
-                break;
+                return ['host' => $host, 'port' => (int)$instance->port];
             }
         }
 
-        return ['host' => $host, 'port' => $port];
+        if ($role === ControlMessage::ROLE_SESSION_SERVER || $role === ControlMessage::ROLE_MEMORY_SERVER) {
+            // Shared sidecars are absent from the local registry. Resolve the
+            // same launch endpoint used by WorkerRuntimeArgumentBuilder.
+            $runtime = SharedStateRuntimeOptions::fromCliArgs(
+                [],
+                $this->context?->instanceName ?? '',
+                $this->context?->envConfig ?? [],
+            );
+            $endpoint = $role === ControlMessage::ROLE_SESSION_SERVER
+                ? $runtime->getSession()
+                : $runtime->getMemory();
+            return ['host' => $endpoint['host'], 'port' => $endpoint['port']];
+        }
+
+        return ['host' => $host, 'port' => $defaultPort];
     }
 
     // ========== 批量协调消息处理（SOLID: 单一职责）============

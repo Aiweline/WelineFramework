@@ -210,7 +210,7 @@ final class StopCommandWindowsTaskkillTest extends TestCase
             name: $name,
             masterPid: 333,
             controlPort: 35965,
-            host: 'p11005ce4.weline.test',
+            host: 'p11005ce4.test.weline.com',
             port: 9512,
             sslEnabled: false,
             runtimeSelection: \Weline\Server\Console\Server\stopTestRuntimeSelection(false),

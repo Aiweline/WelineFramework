@@ -39,10 +39,15 @@ final class LocalDomainRegisteredEventDispatcher
             ];
             $eventsManager->dispatch(self::EVENT_NAME, $payload);
         } catch (\Throwable $e) {
-            w_log_error(
-                '[LocalDomainRegisteredEventDispatcher] '
-                . (string)__('WLS 本地域名注册事件调度失败：%{1}', [$e->getMessage()])
-            );
+            // Privileged hosts editor boots with vendor autoload only; framework
+            // helpers such as w_log_error()/__() may be unavailable. Never let
+            // event side-effects turn a successful hosts write into failure.
+            if (\function_exists('w_log_error')) {
+                $detail = \function_exists('__')
+                    ? (string)__('WLS 本地域名注册事件调度失败：%{1}', [$e->getMessage()])
+                    : ('WLS local domain registered event dispatch failed: ' . $e->getMessage());
+                w_log_error('[LocalDomainRegisteredEventDispatcher] ' . $detail);
+            }
         }
     }
 }

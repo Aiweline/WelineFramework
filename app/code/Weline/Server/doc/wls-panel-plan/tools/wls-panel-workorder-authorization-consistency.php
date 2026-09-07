@@ -10,9 +10,9 @@ declare(strict_types=1);
  * operator-facing reports describe the same App checkout drift review.
  */
 
-const WLS_PANEL_AUTH_CONSISTENCY_LOCAL_ROOT = 'https://app.weline.test:9523';
+const WLS_PANEL_AUTH_CONSISTENCY_LOCAL_ROOT = 'https://app.test.weline.com:9523';
 const WLS_PANEL_AUTH_CONSISTENCY_PRODUCTION_ROOT = 'https://app.aiweline.com';
-const WLS_PANEL_AUTH_CONSISTENCY_LOCAL_ENDPOINT = 'https://app.weline.test:9523/api/v1/platform/module/list';
+const WLS_PANEL_AUTH_CONSISTENCY_LOCAL_ENDPOINT = 'https://app.test.weline.com:9523/api/v1/platform/module/list';
 const WLS_PANEL_AUTH_CONSISTENCY_PRODUCTION_ENDPOINT = 'https://app.aiweline.com/api/v1/platform/module/list';
 const WLS_PANEL_AUTH_CONSISTENCY_LOCAL_CHECKOUT = 'E:\\WelineFramework\\Framework-Official\\App\\weline';
 const WLS_PANEL_AUTH_CONSISTENCY_EXIT_FAILED = 1;

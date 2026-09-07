@@ -21,7 +21,7 @@ if ($argc !== 2 || !\str_starts_with((string)$argv[1], '--domain=')) {
 $domain = \strtolower(\trim(\substr((string)$argv[1], \strlen('--domain='))));
 if ($domain === ''
     || \str_contains($domain, "\0")
-    || !\preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $domain)
+    || !\preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:test\.weline\.com|weline\.test|local\.test)$/D', $domain)
 ) {
     \fwrite(STDERR, "The requested WLS hosts domain is outside the managed local policy.\n");
     exit(64);

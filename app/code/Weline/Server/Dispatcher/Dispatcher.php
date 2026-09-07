@@ -45,12 +45,6 @@ require_once \dirname(__DIR__) . '/bin/worker_http_message.php';
 
 class Dispatcher
 {
-    /**
-     * Worker 切换窗口内，主动开启 TCP keep-alive，减少中间设备对空闲连接的误回收。
-     */
-    private const CLIENT_TCP_KEEPALIVE_IDLE_SEC = 20;
-    private const CLIENT_TCP_KEEPALIVE_INTERVAL_SEC = 8;
-    private const CLIENT_TCP_KEEPALIVE_PROBES = 3;
     private const MASTER_PID_CHECK_INTERVAL_SEC = 5;
     private const MASTER_PID_DEAD_THRESHOLD = 1;
     /**
@@ -2867,23 +2861,7 @@ class Dispatcher
      */
     private function applyClientSocketKeepAlive($clientSocket): void
     {
-        try {
-            @\socket_set_option($clientSocket, \SOL_SOCKET, \SO_KEEPALIVE, 1);
-            if (\defined('TCP_NODELAY')) {
-                @\socket_set_option($clientSocket, \SOL_TCP, (int)\TCP_NODELAY, 1);
-            }
-            if (\defined('TCP_KEEPIDLE')) {
-                @\socket_set_option($clientSocket, \SOL_TCP, (int)\TCP_KEEPIDLE, self::CLIENT_TCP_KEEPALIVE_IDLE_SEC);
-            }
-            if (\defined('TCP_KEEPINTVL')) {
-                @\socket_set_option($clientSocket, \SOL_TCP, (int)\TCP_KEEPINTVL, self::CLIENT_TCP_KEEPALIVE_INTERVAL_SEC);
-            }
-            if (\defined('TCP_KEEPCNT')) {
-                @\socket_set_option($clientSocket, \SOL_TCP, (int)\TCP_KEEPCNT, self::CLIENT_TCP_KEEPALIVE_PROBES);
-            }
-        } catch (\Throwable) {
-            // keep-alive 仅为增强项；平台不支持时保持原有转发路径。
-        }
+        \Weline\Server\Service\ClientTcpKeepAliveTuner::applyToSocket($clientSocket);
     }
 
     private function tryRouteToMaintenanceWorker($clientSocket, string $clientIp, int $connId): bool

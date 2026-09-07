@@ -14,8 +14,8 @@ class StartWindowsProxyBypassDetectionTest extends TestCase
         $start->__init();
 
         self::assertTrue($this->invokeMethod($start, 'hostMatchesWindowsProxyOverride', [
-            'p11005ce4.weline.test',
-            'localhost;127.*;*.weline.test;weline.test',
+            'p11005ce4.test.weline.com',
+            'localhost;127.*;*.test.weline.com;test.weline.com',
         ]));
     }
 
@@ -25,7 +25,7 @@ class StartWindowsProxyBypassDetectionTest extends TestCase
         $start->__init();
 
         self::assertTrue($this->invokeMethod($start, 'isWindowsProxyLikelyToInterceptHost', [
-            'p11005ce4.weline.test',
+            'p11005ce4.test.weline.com',
             [
                 'proxy_enabled' => true,
                 'proxy_server' => '127.0.0.1:7897',
@@ -39,8 +39,8 @@ class StartWindowsProxyBypassDetectionTest extends TestCase
         $start = new Start();
         $start->__init();
 
-        self::assertSame('*.weline.test;weline.test', $this->invokeMethod($start, 'buildSuggestedWindowsProxyBypassRule', [
-            'p11005ce4.weline.test',
+        self::assertSame('*.test.weline.com;test.weline.com', $this->invokeMethod($start, 'buildSuggestedWindowsProxyBypassRule', [
+            'p11005ce4.test.weline.com',
         ]));
     }
 

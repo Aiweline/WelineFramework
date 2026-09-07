@@ -1682,14 +1682,12 @@ class SslCertificateService
     }
     
     /**
-     * 检查域名是否为本地开发域名（需要自签证书）
-     * 
+     * 检查域名是否为本地开发域名（需要自签/本地 CA 证书）
+     *
      * 本地域名包括：
-     * - localhost
-     * - *.local
-     * - *.test
-     * - 127.0.0.1 / ::1
-     * - RFC1918、IPv6 ULA 与链路本地地址（公网 IP 不属于本地域名）
+     * - localhost / 回环 IP
+     * - RFC 保留开发后缀：*.local / *.test / *.localhost / *.example
+     * - WLS 托管本机根：*.test.weline.com、遗留 *.weline.test、*.weline.localhost 等
      */
     public function isLocalDomain(string $domain): bool
     {
@@ -1706,6 +1704,12 @@ class SslCertificateService
             || (\filter_var($domain, FILTER_VALIDATE_IP) !== false
                 && $this->isLoopbackIp($domain))
         ) {
+            return $this->localDomainCache[$domain] = true;
+        }
+
+        // Framework-managed local roots (may use a public TLD such as .com for
+        // OAuth consoles) still authorize the project-local CA path.
+        if (LocalDomainPolicy::isManagedLocalDomain($domain)) {
             return $this->localDomainCache[$domain] = true;
         }
         
@@ -4373,7 +4377,7 @@ CNF;
         
         // 3. 本地开发用后缀（*.test / *.local 等）：不调用阻塞式 DNS。
         // gethostbynamel/gethostbyname 在 Windows 上可能因 .test 等后缀长时间挂起，
-        // 用户看到「正在为 *.weline.test 准备 SSL 证书...」后无进展。
+        // 用户看到「正在为 *.test.weline.com 准备 SSL 证书...」后无进展。
         // 开发域默认按本机 HTTPS 使用，SAN 补全回环地址即可（与 hosts 指向 127.0.0.1 的常见约定一致）。
         if ($this->isLocalDomain($domain)) {
             if (!\in_array('localhost', $dns, true)) {
@@ -4473,7 +4477,7 @@ CNF;
     }
     
     /**
-     * 是否为框架托管的本地通配相关域名（*.weline.test / *.weline.localhost 及其单标签子域）
+     * 是否为框架托管的本地通配相关域名（*.test.weline.com / *.weline.localhost 及其单标签子域）
      */
     protected function isWelineLocalWildcardCandidateDomain(string $domain): bool
     {

@@ -144,7 +144,15 @@ final class SharedRuntimeConnectionWarmup
             64
         );
         $poolSize = \max($poolSize, $minIdle, 1);
-        $defaults = \Weline\Server\Shared\Connection\SharedStatePoolDefaults::memoryPrewarmOptions($policyOptions);
+        $isSession = $serviceRole === ControlMessage::ROLE_SESSION_SERVER;
+        if ($isSession) {
+            $sessionConfig = self::wlsConfig()['session'] ?? [];
+            $defaults = \Weline\Server\Shared\Connection\SharedStatePoolDefaults::sessionClientOptions(
+                \is_array($sessionConfig) ? $sessionConfig : [],
+            );
+        } else {
+            $defaults = \Weline\Server\Shared\Connection\SharedStatePoolDefaults::memoryPrewarmOptions($policyOptions);
+        }
 
         $options = [
             'token_file_name' => $endpoint['token_file_name'],
@@ -155,19 +163,19 @@ final class SharedRuntimeConnectionWarmup
             'pool_min_idle' => $minIdle,
             'max_size' => $poolSize,
             'pool_size' => $poolSize,
-            'connect_timeout' => self::floatConfig(
+            'connect_timeout' => $isSession ? (float) $defaults['connect_timeout'] : self::floatConfig(
                 'wls.shared_state.prewarm_connect_timeout',
                 (float) $defaults['connect_timeout'],
                 0.001,
                 2.0
             ),
-            'timeout' => self::floatConfig(
+            'timeout' => $isSession ? (float) $defaults['timeout'] : self::floatConfig(
                 'wls.shared_state.prewarm_timeout',
                 (float) $defaults['timeout'],
                 0.001,
                 2.0
             ),
-            'acquire_timeout' => self::floatConfig(
+            'acquire_timeout' => $isSession ? (float) $defaults['acquire_timeout'] : self::floatConfig(
                 'wls.shared_state.prewarm_acquire_timeout',
                 (float) $defaults['acquire_timeout'],
                 0.001,

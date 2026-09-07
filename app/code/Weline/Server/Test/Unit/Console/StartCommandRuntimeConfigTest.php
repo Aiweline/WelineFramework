@@ -61,9 +61,9 @@ class StartCommandRuntimeConfigTest extends TestCase
             protected function loadSavedInstanceConfig(string $instanceName): ?array
             {
                 return [
-                    'host' => 'old-reused.weline.test',
-                    'public_host' => 'old-reused.weline.test',
-                    'public_origin' => 'https://old-reused.weline.test',
+                    'host' => 'old-reused.test.weline.com',
+                    'public_host' => 'old-reused.test.weline.com',
+                    'public_origin' => 'https://old-reused.test.weline.com',
                     'https' => true,
                 ];
             }
@@ -81,12 +81,12 @@ class StartCommandRuntimeConfigTest extends TestCase
         $start->__init();
 
         $config = $start->configFor('unit-reused-host', [
-            'host' => 'new-reused.weline.test',
+            'host' => 'new-reused.test.weline.com',
         ]);
 
-        self::assertSame('new-reused.weline.test', $config['host'] ?? null);
-        self::assertSame('new-reused.weline.test', $config['public_host'] ?? null);
-        self::assertSame('https://new-reused.weline.test', $config['public_origin'] ?? null);
+        self::assertSame('new-reused.test.weline.com', $config['host'] ?? null);
+        self::assertSame('new-reused.test.weline.com', $config['public_host'] ?? null);
+        self::assertSame('https://new-reused.test.weline.com', $config['public_origin'] ?? null);
     }
 
     public function testHostsPermissionUsesOneAdministratorBoundaryWithoutManualFallback(): void
@@ -126,7 +126,7 @@ class StartCommandRuntimeConfigTest extends TestCase
 
         \ob_start();
         try {
-            $start->ensureHost('shop-a.weline.test');
+            $start->ensureHost('shop-a.test.weline.com');
             $output = (string)\ob_get_contents();
         } finally {
             \ob_end_clean();

@@ -12,9 +12,9 @@ declare(strict_types=1);
 
 const WLS_PANEL_LIVE_FINAL_GATE_EXIT_NOT_READY = 1;
 const WLS_PANEL_LIVE_FINAL_GATE_EXIT_ASSERTION_FAILED = 2;
-const WLS_PANEL_LIVE_FINAL_GATE_LOCAL_ROOT = 'https://app.weline.test:9523';
+const WLS_PANEL_LIVE_FINAL_GATE_LOCAL_ROOT = 'https://app.test.weline.com:9523';
 const WLS_PANEL_LIVE_FINAL_GATE_PRODUCTION_ROOT = 'https://app.aiweline.com';
-const WLS_PANEL_LIVE_FINAL_GATE_LOCAL_ENDPOINT = 'https://app.weline.test:9523/api/v1/platform/module/list';
+const WLS_PANEL_LIVE_FINAL_GATE_LOCAL_ENDPOINT = 'https://app.test.weline.com:9523/api/v1/platform/module/list';
 const WLS_PANEL_LIVE_FINAL_GATE_PRODUCTION_ENDPOINT = 'https://app.aiweline.com/api/v1/platform/module/list';
 const WLS_PANEL_LIVE_FINAL_GATE_LOCAL_CHECKOUT = 'E:\\WelineFramework\\Framework-Official\\App\\weline';
 const WLS_PANEL_LIVE_FINAL_GATE_LOCAL_ENV_WLS_ENDPOINT = WLS_PANEL_LIVE_FINAL_GATE_LOCAL_ROOT;

@@ -1486,8 +1486,8 @@ those capabilities.
 | All managed projects are ready for panel operations.       8 / 8 operations    |
 +--------------------------------------------------------------------------------+
 | Current Project                    Local project                                |
-| p11005ce4.weline.test:9828                                                    |
-| Safe Context: domain=p11005ce4.weline.test / type=current                      |
+| p11005ce4.test.weline.com:9828                                                    |
+| Safe Context: domain=p11005ce4.test.weline.com / type=current                      |
 |                                                                                |
 | [Ready]                                             8 / 8 checks ready          |
 | Core links and WLS operation plugins are ready.                                 |

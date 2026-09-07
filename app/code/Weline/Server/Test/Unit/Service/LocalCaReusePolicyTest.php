@@ -54,8 +54,8 @@ class LocalCaReusePolicyTest extends TestCase
         };
 
         $config = $service->exposeBuildServerLeafOpenSslConfig(
-            '*.weline.test',
-            ['dns' => ['*.weline.test'], 'ip' => []],
+            '*.test.weline.com',
+            ['dns' => ['*.test.weline.com'], 'ip' => []],
             'file:///E:/tmp/rootCA.pem',
             'file:///E:/tmp/rootCA.crl'
         );

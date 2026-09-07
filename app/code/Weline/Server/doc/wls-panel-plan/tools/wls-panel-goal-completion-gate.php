@@ -15,7 +15,7 @@ declare(strict_types=1);
  */
 
 const WLS_PANEL_GOAL_GATE_FAILED = 1;
-const WLS_PANEL_GOAL_GATE_LOCAL_APPSTORE_ROOT = 'https://app.weline.test:9523';
+const WLS_PANEL_GOAL_GATE_LOCAL_APPSTORE_ROOT = 'https://app.test.weline.com:9523';
 const WLS_PANEL_GOAL_GATE_PRODUCTION_APPSTORE_ROOT = 'https://app.aiweline.com';
 const WLS_PANEL_GOAL_GATE_LOCAL_APP_CHECKOUT = 'E:\\WelineFramework\\Framework-Official\\App\\weline';
 

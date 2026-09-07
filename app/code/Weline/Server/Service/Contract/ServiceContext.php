@@ -36,7 +36,7 @@ class ServiceContext
         public readonly int|string|null $workerCount = null,
         public readonly ?int $workerBasePort = null,
         public readonly ?int $workerPort = null,
-        /** 浏览器/对外展示的访问主机名（可与实际 bind 的 host 不同，例如 bind 127.0.0.1 而展示 *.weline.test） */
+        /** 浏览器/对外展示的访问主机名（可与实际 bind 的 host 不同，例如 bind 127.0.0.1 而展示 *.test.weline.com） */
         public readonly ?string $publicHost = null,
         public readonly string $controlToken = '',
         public readonly string $masterLeaseFile = '',

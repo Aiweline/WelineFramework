@@ -41,6 +41,20 @@ final class SharedStatePoolDefaults
         ];
     }
 
+    /** @param array<string, mixed> $config @return array<string, mixed> */
+    public static function sessionClientOptions(array $config = []): array
+    {
+        return [
+            'connect_timeout' => (float) ($config['connect_timeout'] ?? 0.5),
+            'timeout' => (float) ($config['timeout'] ?? 1.0),
+            'pool_size' => (int) ($config['pool_size'] ?? 8),
+            'pool_min_idle' => (int) ($config['pool_min_idle'] ?? 0),
+            'acquire_timeout' => (float) ($config['acquire_timeout'] ?? 0.1),
+            'idle_timeout' => (float) ($config['idle_timeout'] ?? 86400.0),
+            'pool_health_ping_idle' => (bool) ($config['pool_health_ping_idle'] ?? false),
+        ];
+    }
+
     /**
      * Prewarm uses the same connect/read budgets as the business Memory facade.
      *

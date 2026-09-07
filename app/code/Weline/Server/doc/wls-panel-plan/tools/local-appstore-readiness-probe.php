@@ -122,7 +122,7 @@ function wlsPanelReadinessEnvLooksLocal(string $envContent): bool
     $hasLocalDeploy = preg_match('/[\'"]deploy[\'"]\s*=>\s*[\'"](dev|local)[\'"]/i', $envContent) === 1
         || str_contains($envContent, 'appstore_environment')
         || str_contains($envContent, 'appstore.platform_url');
-    $hasLocalEndpoint = str_contains($envContent, 'app.weline.test')
+    $hasLocalEndpoint = str_contains($envContent, 'app.test.weline.com')
         || str_contains($envContent, 'appstore_platform_url')
         || str_contains($envContent, 'appstore.platform_url');
 
@@ -480,9 +480,9 @@ function wlsPanelReadinessLocalDeployCurrent(string $deployCurrentPath): array
         'checks' => [
             'local_deploy_current_readable' => $payload !== [],
             'local_deploy_current_environment_local' => $environment === 'local',
-            'local_deploy_current_exact_appstore_root' => $rawPlatformUrl === 'https://app.weline.test:9523',
+            'local_deploy_current_exact_appstore_root' => $rawPlatformUrl === 'https://app.test.weline.com:9523',
             'local_deploy_current_resolves_expected_endpoint' =>
-                $endpoint === 'https://app.weline.test:9523/api/v1/platform/module/list',
+                $endpoint === 'https://app.test.weline.com:9523/api/v1/platform/module/list',
             'local_deploy_current_not_www_host' => $host !== '' && !str_starts_with($host, 'www.'),
         ],
         'summary' => [
@@ -559,7 +559,7 @@ $deployCurrentPath = trim((string)($args['deploy-current'] ?? wlsPanelReadinessP
 $localDeployCurrent = wlsPanelReadinessLocalDeployCurrent($deployCurrentPath);
 $localDeploySummary = $localDeployCurrent['summary'];
 $hasEndpointOverride = array_key_exists('host', $args) || array_key_exists('port', $args);
-$host = trim((string)($args['host'] ?? ($localDeploySummary['host'] ?: 'app.weline.test')));
+$host = trim((string)($args['host'] ?? ($localDeploySummary['host'] ?: 'app.test.weline.com')));
 $port = (int)($args['port'] ?? ($localDeploySummary['port'] ?: 9523));
 $probeRoot = 'https://' . $host . ':' . (string)$port;
 $endpointSource = $hasEndpointOverride ? 'deploy-current-checked-with-override' : 'deploy-current';
@@ -592,7 +592,7 @@ $checks = [
     'app_env_readable' => $envContent !== '',
     'app_env_deploy_mode_local' => in_array($envDeployMode, ['dev', 'local'], true),
     'app_env_mentions_local_appstore' => wlsPanelReadinessEnvLooksLocal($envContent),
-    'app_env_wls_host_matches_local_appstore' => ($envWlsEndpoint['host'] ?? '') === 'app.weline.test',
+    'app_env_wls_host_matches_local_appstore' => ($envWlsEndpoint['host'] ?? '') === 'app.test.weline.com',
     'app_env_wls_port_matches_local_appstore' => ($envWlsEndpoint['port'] ?? 0) === 9523,
     'app_env_wls_https_enabled' => ($envWlsEndpoint['https'] ?? null) === true,
     'app_env_wls_endpoint_matches_deploy_current' => ($envWlsEndpoint['url'] ?? '') === ($localDeploySummary['raw_platform_url'] ?? ''),
@@ -733,7 +733,7 @@ if (
         'deploy_current' => $deployCurrentPath,
         'policy_gate_command' => $deployCurrentPolicyCommand,
         'required_deploy_mode' => 'dev or local',
-        'required_platform_url' => 'https://app.weline.test:9523',
+        'required_platform_url' => 'https://app.test.weline.com:9523',
         'side_effects' => 'configuration gate: local live E2E must not run until env.php and deploy-current both identify the local AppStore target',
     ];
 }

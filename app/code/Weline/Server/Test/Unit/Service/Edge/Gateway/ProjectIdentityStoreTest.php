@@ -599,6 +599,59 @@ final class ProjectIdentityStoreTest extends TestCase
         );
     }
 
+    public function testUrlLikeHomeIsRejectedWhenDerivingDefaultHostState(): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('Unix HOME pollution guard only.');
+        }
+
+        $sandbox = $this->makeSandbox();
+        $project = $this->makeProject($sandbox . DIRECTORY_SEPARATOR . 'url-home-project');
+        $legacy = $sandbox . DIRECTORY_SEPARATOR . 'missing-legacy.json';
+        $previous = [
+            'HOME' => \getenv('HOME'),
+            'XDG_STATE_HOME' => \getenv('XDG_STATE_HOME'),
+            'WLS_EDGE_STATE_HOME' => \getenv('WLS_EDGE_STATE_HOME'),
+        ];
+
+        try {
+            self::assertTrue(\putenv('WLS_EDGE_STATE_HOME'));
+            self::assertTrue(\putenv('XDG_STATE_HOME'));
+            self::assertTrue(\putenv('HOME=https://p05113ef3.test.weline.com:9555'));
+
+            try {
+                new ProjectIdentityStore($project, null, $legacy);
+                self::fail('URL-like HOME must not derive a host state root.');
+            } catch (\RuntimeException $exception) {
+                self::assertTrue(
+                    \str_contains($exception->getMessage(), 'filesystem path')
+                    || \str_contains($exception->getMessage(), 'must be absolute'),
+                    $exception->getMessage()
+                );
+            }
+
+            self::assertTrue(\putenv('HOME=200'));
+            try {
+                new ProjectIdentityStore($project, null, $legacy);
+                self::fail('HTTP-status HOME must not derive a host state root.');
+            } catch (\RuntimeException $exception) {
+                self::assertTrue(
+                    \str_contains($exception->getMessage(), 'HTTP status')
+                    || \str_contains($exception->getMessage(), 'must be absolute'),
+                    $exception->getMessage()
+                );
+            }
+        } finally {
+            foreach ($previous as $name => $value) {
+                if ($value === false) {
+                    \putenv($name);
+                } else {
+                    \putenv($name . '=' . $value);
+                }
+            }
+        }
+    }
+
     /** @return array{0:resource,1:array<int,resource>} */
     private function startExclusiveLockHolder(string $lockPath, int $microseconds): array
     {

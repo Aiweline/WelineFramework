@@ -21,7 +21,7 @@ use Weline\Server\Service\WlsPanelSecurityDataService;
 class WlsPanel extends BackendController
 {
     private const APPSTORE_PRODUCTION_PLATFORM_URL = 'https://app.aiweline.com';
-    private const APPSTORE_LOCAL_PLATFORM_URL = 'https://app.weline.test:9523';
+    private const APPSTORE_LOCAL_PLATFORM_URL = 'https://app.test.weline.com:9523';
 
     #[Acl('Weline_Server::wls_panel_dashboard', '查看 WLS 面板仪表盘', 'grid', '查看 WLS 面板仪表盘', 'Weline_Server::wls_panel', accessMode: Acl::ACCESS_MODE_READ)]
     public function getIndex(): string
@@ -618,7 +618,9 @@ class WlsPanel extends BackendController
         }
 
         return \str_starts_with($host, 'www.')
-            && (\str_ends_with($host, 'weline.test') || \str_ends_with($host, 'aiweline.com'));
+            && (\str_ends_with($host, 'test.weline.com')
+                || \str_ends_with($host, 'weline.test')
+                || \str_ends_with($host, 'aiweline.com'));
     }
 
     private function hasExplicitLocalDeployMode(): bool

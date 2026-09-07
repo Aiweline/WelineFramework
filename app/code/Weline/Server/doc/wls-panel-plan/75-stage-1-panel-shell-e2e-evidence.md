@@ -30,12 +30,12 @@ php bin\w server:start ai-test-wls-panel-shell-9624 -p 9624 --no-ssl -r
 php bin\w server:status ai-test-wls-panel-shell-9624
 ```
 
-The instance ran on `http://p11005ce4.weline.test:9624` with dispatcher port `9624`.
+The instance ran on `http://p11005ce4.test.weline.com:9624` with dispatcher port `9624`.
 
 Validation command:
 
 ```powershell
-$env:PLAYWRIGHT_TARGET_ORIGIN="http://p11005ce4.weline.test:9624"
+$env:PLAYWRIGHT_TARGET_ORIGIN="http://p11005ce4.test.weline.com:9624"
 $env:PLAYWRIGHT_DISABLE_PROXY="1"
 $env:PLAYWRIGHT_INSTANCE_NAME="ai-test-wls-panel-shell-9624"
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w e2e:run specs/backend/Weline_Server-panel-shell.spec.js --headless --project=chromium
@@ -212,12 +212,12 @@ Runtime:
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w server:start ai-test-wls-panel-ui-9636 -p 9636 --no-ssl -r
 ```
 
-The instance ran on `http://p11005ce4.weline.test:9636` with dispatcher port `9636`.
+The instance ran on `http://p11005ce4.test.weline.com:9636` with dispatcher port `9636`.
 
 Validation command:
 
 ```powershell
-$env:PLAYWRIGHT_TARGET_ORIGIN="http://p11005ce4.weline.test:9636"
+$env:PLAYWRIGHT_TARGET_ORIGIN="http://p11005ce4.test.weline.com:9636"
 $env:PLAYWRIGHT_DISABLE_PROXY="1"
 $env:PLAYWRIGHT_INSTANCE_NAME="ai-test-wls-panel-ui-9636"
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w e2e:run specs/backend/Weline_Server-panel-shell.spec.js --headless --project=chromium
@@ -274,12 +274,12 @@ Runtime:
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w server:start ai-test-wls-panel-marketplace-9648 -p 9648 --no-ssl -c 2
 ```
 
-The instance ran on `http://p11005ce4.weline.test:9648` with dispatcher port `9648`.
+The instance ran on `http://p11005ce4.test.weline.com:9648` with dispatcher port `9648`.
 
 Validation command:
 
 ```powershell
-$env:PLAYWRIGHT_TARGET_ORIGIN="http://p11005ce4.weline.test:9648"
+$env:PLAYWRIGHT_TARGET_ORIGIN="http://p11005ce4.test.weline.com:9648"
 $env:PLAYWRIGHT_DISABLE_PROXY="1"
 $env:PLAYWRIGHT_INSTANCE_NAME="ai-test-wls-panel-marketplace-9648"
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w e2e:run specs/backend/Weline_Server-panel-shell.spec.js --headless --project=chromium
@@ -296,9 +296,9 @@ DOM link assertion:
 {
   "source": "appstore",
   "tag": "module:wls",
-  "onlineHref": "http://p11005ce4.weline.test:9648/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/appstore/backend?tag=module%3Awls&surface=backend",
-  "installedHref": "http://p11005ce4.weline.test:9648/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/appstore/backend/installed?tag=module%3Awls&surface=backend",
-  "installHref": "http://p11005ce4.weline.test:9648/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/appstore/backend?tag=module%3Awls&surface=backend&q=WLS+File+Manager"
+  "onlineHref": "http://p11005ce4.test.weline.com:9648/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/appstore/backend?tag=module%3Awls&surface=backend",
+  "installedHref": "http://p11005ce4.test.weline.com:9648/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/appstore/backend/installed?tag=module%3Awls&surface=backend",
+  "installHref": "http://p11005ce4.test.weline.com:9648/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/appstore/backend?tag=module%3Awls&surface=backend&q=WLS+File+Manager"
 }
 ```
 
@@ -447,12 +447,12 @@ Runtime:
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w server:start ai-test-wls-panel-dashboard-9656 -p 9656 --no-ssl -c 2
 ```
 
-The instance ran on `http://p11005ce4.weline.test:9656` with dispatcher port `9656`.
+The instance ran on `http://p11005ce4.test.weline.com:9656` with dispatcher port `9656`.
 
 Validation command:
 
 ```powershell
-$env:PLAYWRIGHT_TARGET_ORIGIN="http://p11005ce4.weline.test:9656"
+$env:PLAYWRIGHT_TARGET_ORIGIN="http://p11005ce4.test.weline.com:9656"
 $env:PLAYWRIGHT_DISABLE_PROXY="1"
 $env:PLAYWRIGHT_INSTANCE_NAME="ai-test-wls-panel-dashboard-9656"
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w e2e:run specs/backend/Weline_Server-panel-shell.spec.js --headless --project=chromium
@@ -471,13 +471,13 @@ DOM assertion:
   "projectCards": [
     {
       "title": "当前项目",
-      "domain": "p11005ce4.weline.test:9656",
+      "domain": "p11005ce4.test.weline.com:9656",
       "status": "本地",
       "pathLabel": "路径",
-      "dbHref": "http://p11005ce4.weline.test:9656/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/appstore/backend?tag=module%3Awls&surface=backend&q=WLS+Database+Manager"
+      "dbHref": "http://p11005ce4.test.weline.com:9656/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/appstore/backend?tag=module%3Awls&surface=backend&q=WLS+Database+Manager"
     }
   ],
-  "gatewayHref": "http://p11005ce4.weline.test:9656/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/reverse-proxy-manager",
+  "gatewayHref": "http://p11005ce4.test.weline.com:9656/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/reverse-proxy-manager",
   "hasFakeChild": false,
   "hasFatal": false,
   "scroll": {"html":0,"body":0}
@@ -590,7 +590,7 @@ E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w server:start ai
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe tests\e2e\framework\backend-session-bootstrap.php --mode=wls --username=admin --password=admin
 ```
 
-The instance ran on `http://p11005ce4.weline.test:9806` with dispatcher port `9806`.
+The instance ran on `http://p11005ce4.test.weline.com:9806` with dispatcher port `9806`.
 
 Validation command:
 
@@ -698,12 +698,12 @@ Runtime:
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w server:start ai-test-wls-panel-discovery-9652 -p 9652 --no-ssl -c 2
 ```
 
-The instance ran on `http://p11005ce4.weline.test:9652` with dispatcher port `9652`.
+The instance ran on `http://p11005ce4.test.weline.com:9652` with dispatcher port `9652`.
 
 Validation command:
 
 ```powershell
-$env:PLAYWRIGHT_TARGET_ORIGIN="http://p11005ce4.weline.test:9652"
+$env:PLAYWRIGHT_TARGET_ORIGIN="http://p11005ce4.test.weline.com:9652"
 $env:PLAYWRIGHT_DISABLE_PROXY="1"
 $env:PLAYWRIGHT_INSTANCE_NAME="ai-test-wls-panel-discovery-9652"
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w e2e:run specs/backend/Weline_Server-panel-shell.spec.js --headless --project=chromium
@@ -803,7 +803,7 @@ Direct service lifecycle assertion:
 ```json
 {
   "ok": true,
-  "domain": "ai-panel-smoke-20260617144757.weline.test",
+  "domain": "ai-panel-smoke-20260617144757.test.weline.com",
   "save": {
     "success": true,
     "message": "Managed project saved.",
@@ -897,7 +897,7 @@ Direct project registry apply assertion:
 
 ```json
 {
-    "domain": "ai-panel-proxy-apply-20260617151402.weline.test",
+    "domain": "ai-panel-proxy-apply-20260617151402.test.weline.com",
     "save_success": true,
     "project_id": 3,
     "gateway_synced": true,
@@ -1050,20 +1050,20 @@ Panel project registry apply assertion:
   "gateway_message": "Gateway rule saved.",
   "gateway_applied": true,
   "gateway_apply_message": "代理配置已应用到 1 个 Gateway 进程。",
-  "domain": "ai-panel-service-e2e-20260618005340.weline.test"
+  "domain": "ai-panel-service-e2e-20260618005340.test.weline.com"
 }
 ```
 
 Panel-service SNI assertion:
 
 ```powershell
-curl.exe --noproxy "*" -k -I --resolve ai-panel-service-e2e-20260618005340.weline.test:9672:127.0.0.1 https://ai-panel-service-e2e-20260618005340.weline.test:9672/
+curl.exe --noproxy "*" -k -I --resolve ai-panel-service-e2e-20260618005340.test.weline.com:9672:127.0.0.1 https://ai-panel-service-e2e-20260618005340.test.weline.com:9672/
 ```
 
 Result:
 
 - `HTTP/1.1 200 OK`
-- Response included `X-Weline-Route-Hint: port=26125,sni=ai-panel-service-e2e-20260618005340.weline.test,ttl=3600`.
+- Response included `X-Weline-Route-Hint: port=26125,sni=ai-panel-service-e2e-20260618005340.test.weline.com,ttl=3600`.
 
 Panel project delete assertion:
 
@@ -1138,13 +1138,13 @@ extend\server\php\php.exe bin\w server:start ai-test-wls-panel-gateway-9684 -p 9
 
 The instance ran on:
 
-- `http://p11005ce4.weline.test:9684`
+- `http://p11005ce4.test.weline.com:9684`
 - Backend prefix: `U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8`
 
 Primary browser smoke:
 
 ```powershell
-$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.weline.test:9684'
+$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.test.weline.com:9684'
 $env:PLAYWRIGHT_DISABLE_PROXY='1'
 $env:PLAYWRIGHT_INSTANCE_NAME='ai-test-wls-panel-gateway-9684'
 cmd.exe /d /c 'set "PATH=C:\Windows\System32;C:\Windows;E:\WelineFramework\DEV-workspace\extend\server\node;E:\WelineFramework\DEV-workspace\extend\server\php;E:\WelineFramework\DEV-workspace\extend\server;%PATH%" && extend\server\php\php.exe bin\w e2e:run specs/backend/Weline_Server-panel-shell.spec.js --headless --project=chromium'
@@ -1186,7 +1186,7 @@ Manual apply POST smoke:
 
 ```json
 {
-  "url": "http://p11005ce4.weline.test:9684/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel?gateway_instance=ai-test-wls-panel-gateway-9684&panel_error=...#gateway-settings&",
+  "url": "http://p11005ce4.test.weline.com:9684/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel?gateway_instance=ai-test-wls-panel-gateway-9684&panel_error=...#gateway-settings&",
   "hasFatal": false,
   "hasGatewaySection": true,
   "resultText": "没有已连接的 Gateway 进程可应用代理配置。"
@@ -2452,7 +2452,7 @@ Runtime validation:
 
 ```powershell
 extend\server\php\php.exe bin\w server:start ai-test-wls-file-manager-9806 -p 9806 --no-ssl -c 2
-$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.weline.test:9806'
+$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.test.weline.com:9806'
 $env:PLAYWRIGHT_INSTANCE_NAME='ai-test-wls-file-manager-9806'
 $env:PLAYWRIGHT_DISABLE_PROXY='1'
 node .\node_modules\playwright\cli.js test specs/backend/Weline_Server-panel-shell.spec.js --config=playwright.config.js --project=chromium --timeout=300000
@@ -2512,7 +2512,7 @@ Runtime validation:
 
 ```powershell
 extend\server\php\php.exe bin\w server:start ai-test-wls-deploy-meta-9812 -p 9812 --no-ssl -c 2
-$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.weline.test:9812'
+$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.test.weline.com:9812'
 $env:PLAYWRIGHT_INSTANCE_NAME='ai-test-wls-deploy-meta-9812'
 $env:PLAYWRIGHT_DISABLE_PROXY='1'
 node .\node_modules\playwright\cli.js test specs/backend/Weline_Server-panel-shell.spec.js --config=playwright.config.js --project=chromium --timeout=300000
@@ -2620,8 +2620,8 @@ Route and runtime validation:
 extend\server\php\php.exe bin\w reflection:compile
 extend\server\php\php.exe bin\w setup:upgrade --stage=route_update -m Weline_Deploy --sync --skip-env-check
 extend\server\php\php.exe bin\w server:start ai-test-wls-deploy-webhook-9814 -p 9814 --no-ssl -c 2
-curl.exe -s -i http://p11005ce4.weline.test:9814/deploy/webhook/deploy?health=1
-curl.exe -s -i -X POST http://p11005ce4.weline.test:9814/deploy/webhook/deploy -H "Content-Type: application/json" -H "Authorization: Bearer test" --data "{\"ref\":\"refs/heads/main\"}"
+curl.exe -s -i http://p11005ce4.test.weline.com:9814/deploy/webhook/deploy?health=1
+curl.exe -s -i -X POST http://p11005ce4.test.weline.com:9814/deploy/webhook/deploy -H "Content-Type: application/json" -H "Authorization: Bearer test" --data "{\"ref\":\"refs/heads/main\"}"
 extend\server\php\php.exe bin\w server:stop ai-test-wls-deploy-webhook-9814
 extend\server\php\php.exe bin\w server:status ai-test-wls-deploy-webhook-9814
 ```
@@ -2682,7 +2682,7 @@ Runtime and UI validation:
 
 ```powershell
 extend\server\php\php.exe bin\w server:start ai-test-wls-panel-ui-theme-9816 -p 9816 --no-ssl -c 2
-$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.weline.test:9816'
+$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.test.weline.com:9816'
 $env:PLAYWRIGHT_INSTANCE_NAME='ai-test-wls-panel-ui-theme-9816'
 $env:PLAYWRIGHT_DISABLE_PROXY='1'
 $env:PLAYWRIGHT_HEADLESS='1'
@@ -2692,7 +2692,7 @@ extend\server\php\php.exe bin\w e2e:run specs/backend/Weline_Server-panel-shell.
 Result:
 
 - WLS instance `ai-test-wls-panel-ui-theme-9816` started on
-  `http://p11005ce4.weline.test:9816` with two workers in Windows Dispatcher
+  `http://p11005ce4.test.weline.com:9816` with two workers in Windows Dispatcher
   mode.
 - `Weline_Server-panel-shell.spec.js` passed: `1 passed`.
 - The run covered the desktop dashboard, theme toggle to dark, File Manager
@@ -2780,7 +2780,7 @@ Focused browser validation:
 
 ```powershell
 extend\server\php\php.exe bin\w server:start ai-test-wls-deploy-panel-9818 -p 9818 --no-ssl -c 2
-$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.weline.test:9818'
+$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.test.weline.com:9818'
 $env:PLAYWRIGHT_INSTANCE_NAME='ai-test-wls-deploy-panel-9818'
 $env:PLAYWRIGHT_DISABLE_PROXY='1'
 $env:PLAYWRIGHT_HEADLESS='1'
@@ -2834,7 +2834,7 @@ Full-panel E2E rerun with panel test memory profile:
 ```powershell
 extend\server\php\php.exe bin\w server:stop ai-test-wls-deploy-panel-9818
 extend\server\php\php.exe bin\w server:start ai-test-wls-panel-full-9819 -p 9819 --no-ssl -c 2 --worker-memory-limit=512M
-$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.weline.test:9819'
+$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.test.weline.com:9819'
 $env:PLAYWRIGHT_INSTANCE_NAME='ai-test-wls-panel-full-9819'
 $env:PLAYWRIGHT_DISABLE_PROXY='1'
 $env:PLAYWRIGHT_HEADLESS='1'
@@ -2845,7 +2845,7 @@ Result:
 
 - `ai-test-wls-deploy-panel-9818` stopped cleanly before the rerun.
 - `ai-test-wls-panel-full-9819` started on
-  `http://p11005ce4.weline.test:9819` with two workers and
+  `http://p11005ce4.test.weline.com:9819` with two workers and
   `--worker-memory-limit=512M`.
 - `Weline_Server-panel-shell.spec.js` passed:
   `1 passed (18.3s)` / `E2E 测试执行成功。`
@@ -3061,7 +3061,7 @@ Browser validation:
 
 ```powershell
 php bin\w server:start ai-test-wls-panel-full-9819 -p 9819 -c 2 --no-ssl --worker-memory-limit=512M
-$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.weline.test:9819'
+$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.test.weline.com:9819'
 $env:PLAYWRIGHT_INSTANCE_NAME='ai-test-wls-panel-full-9819'
 $env:PLAYWRIGHT_DISABLE_PROXY='1'
 $env:PLAYWRIGHT_HEADLESS='1'
@@ -3188,7 +3188,7 @@ Browser validation:
 
 ```powershell
 php bin\w server:start ai-test-wls-panel-full-9819 -p 9819 -c 2 --no-ssl --worker-memory-limit=512M
-$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.weline.test:9819'
+$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.test.weline.com:9819'
 $env:PLAYWRIGHT_INSTANCE_NAME='ai-test-wls-panel-full-9819'
 $env:PLAYWRIGHT_DISABLE_PROXY='1'
 $env:PLAYWRIGHT_HEADLESS='1'
@@ -3321,7 +3321,7 @@ Browser validation:
 
 ```powershell
 php bin\w server:start ai-test-wls-panel-full-9819 -p 9819 -c 2 --no-ssl --worker-memory-limit=512M
-$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.weline.test:9819'
+$env:PLAYWRIGHT_TARGET_ORIGIN='http://p11005ce4.test.weline.com:9819'
 $env:PLAYWRIGHT_INSTANCE_NAME='ai-test-wls-panel-full-9819'
 $env:PLAYWRIGHT_DISABLE_PROXY='1'
 $env:PLAYWRIGHT_HEADLESS='1'
@@ -4160,7 +4160,7 @@ Runtime and browser validation:
 
 ```powershell
 php bin\w server:start ai-test-wls-deploy-webhook-replay-9836 -p 9836 --no-ssl --worker-memory-limit=512M
-Invoke-WebRequest -Uri http://p11005ce4.weline.test:9836/ -UseBasicParsing -TimeoutSec 20
+Invoke-WebRequest -Uri http://p11005ce4.test.weline.com:9836/ -UseBasicParsing -TimeoutSec 20
 $env:PLAYWRIGHT_INSTANCE_NAME='ai-test-wls-deploy-webhook-replay-9836'
 $env:PLAYWRIGHT_TARGET_ORIGIN='http://127.0.0.1:9836'
 php bin\w e2e:run specs/backend/Weline_Deploy-wls-deploy-profile.spec.js --project=chromium --headless
@@ -5688,7 +5688,7 @@ Runtime:
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w server:start ai-test-wls-file-ops-9897 -p 9897 --no-ssl -c 2 --worker-memory-limit=512M
 ```
 
-The instance ran on `http://p11005ce4.weline.test:9897` with dispatcher port
+The instance ran on `http://p11005ce4.test.weline.com:9897` with dispatcher port
 `9897` and two workers.
 
 Validation command:
@@ -5771,7 +5771,7 @@ Runtime:
 E:\WelineFramework\DEV-workspace\extend\server\php\php.exe bin\w server:start ai-test-wls-panel-domain-policy-9794 -p 9794 -c 2 --no-ssl
 ```
 
-The instance ran on `http://p11005ce4.weline.test:9794` with dispatcher port
+The instance ran on `http://p11005ce4.test.weline.com:9794` with dispatcher port
 `9794` and two workers.
 
 Focused browser smoke:
@@ -6059,7 +6059,7 @@ extend\server\php\php.exe bin\w server:reload dev-docs-api-9524
 Headless browser opened:
 
 ```text
-https://p11005ce4.weline.test:9524/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/marketplace
+https://p11005ce4.test.weline.com:9524/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/marketplace
 ```
 
 Result:
@@ -6103,7 +6103,7 @@ Result:
 Headless browser opened:
 
 ```text
-https://p11005ce4.weline.test:9524/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/marketplace?panel_notice=plugins_refreshed&panel_auto_refresh=plugins#installed-plugins
+https://p11005ce4.test.weline.com:9524/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/marketplace?panel_notice=plugins_refreshed&panel_auto_refresh=plugins#installed-plugins
 ```
 
 Browser result:
@@ -6113,13 +6113,13 @@ Browser result:
   "refreshRequests": [
     {
       "method": "POST",
-      "url": "https://p11005ce4.weline.test:9524/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/plugin-refresh"
+      "url": "https://p11005ce4.test.weline.com:9524/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/plugin-refresh"
     }
   ],
   "refreshResponses": [
     {
       "status": 302,
-      "location": "https://p11005ce4.weline.test:9524/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/marketplace?panel_notice=plugins_refreshed#installed-plugins"
+      "location": "https://p11005ce4.test.weline.com:9524/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/marketplace?panel_notice=plugins_refreshed#installed-plugins"
     }
   ],
   "result": {
@@ -6205,7 +6205,7 @@ Desktop `1366x768`:
   "hasInput": true,
   "hasConfirm": true,
   "hasRun": true,
-  "formAction": "http://p11005ce4.weline.test:9906/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/deploy/backend/wls-deploy/manual-plan-run",
+  "formAction": "http://p11005ce4.test.weline.com:9906/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/deploy/backend/wls-deploy/manual-plan-run",
   "runName": "manual_action",
   "runValue": "run_release",
   "blocked": "1",
@@ -8097,8 +8097,8 @@ Browser validation:
 ```json
 {
   "initialStatus": 200,
-  "initialUrl": "http://p11005ce4.weline.test:9987/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/marketplace",
-  "refreshUrl": "http://p11005ce4.weline.test:9987/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/marketplace?panel_plugin_refresh=1&panel_plugin_refresh_registry_mode=incremental&panel_plugin_refresh_registry_count=4&panel_plugin_refresh_routes=1&panel_plugin_refresh_route_count=4&panel_plugin_refresh_plugin_count=4&panel_plugin_refresh_contribution_count=4&panel_notice=plugins_refreshed#installed-plugins",
+  "initialUrl": "http://p11005ce4.test.weline.com:9987/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/marketplace",
+  "refreshUrl": "http://p11005ce4.test.weline.com:9987/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel/marketplace?panel_plugin_refresh=1&panel_plugin_refresh_registry_mode=incremental&panel_plugin_refresh_registry_count=4&panel_plugin_refresh_routes=1&panel_plugin_refresh_route_count=4&panel_plugin_refresh_plugin_count=4&panel_plugin_refresh_contribution_count=4&panel_notice=plugins_refreshed#installed-plugins",
   "summaryText": "能力重载 面板插件刷新结果 路由已刷新 注册表模式 增量 注册表模块 4 路由模块 4 WLS 插件 4 面板菜单入口 4",
   "routeFlag": "1",
   "theme": {
@@ -8516,7 +8516,7 @@ Runtime:
 php bin/w server:start ai-test-wls-panel-plugin-heavy-9990 -p 9990 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
 
 Backend entry:
-http://p11005ce4.weline.test:9990/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin
+http://p11005ce4.test.weline.com:9990/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin
 
 server:status before cleanup:
 Master PID 4556 running
@@ -8840,14 +8840,14 @@ Browser proof:
 
 ```text
 Browser URL:
-http://pf9938bb3.weline.test:9991/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel#gateway-settings
+http://pf9938bb3.test.weline.com:9991/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel#gateway-settings
 
 The in-app browser performed a real backend login using the local development
 admin account documented in 迁移前 AI 资料（已清理） then opened the
 standalone WLS Panel.
 
 The native `.wls-gateway-apply-form` was present:
-action=http://pf9938bb3.weline.test:9991/.../server/backend/wls-panel/gateway-apply
+action=http://pf9938bb3.test.weline.com:9991/.../server/backend/wls-panel/gateway-apply
 method=post
 select[name="gateway_instance"] required=true
 button=立即应用路由
@@ -9327,9 +9327,9 @@ Runtime smoke:
 
 ```text
 php bin/w server:start ai-test-wls-panel-theme-9997 -p 9997 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
-Started successfully on http://p11005ce4.weline.test:9997 with 2 workers.
+Started successfully on http://p11005ce4.test.weline.com:9997 with 2 workers.
 
-curl -I http://p11005ce4.weline.test:9997/
+curl -I http://p11005ce4.test.weline.com:9997/
 HTTP/1.1 200 OK
 X-Wls-Instance: ai-test-wls-panel-theme-9997
 
@@ -9402,7 +9402,7 @@ node --check 迁移前历史任务记录（已清理）
 Passed.
 
 php bin/w server:start ai-test-wls-panel-visual-9996 -p 9996 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
-Started successfully on http://p11005ce4.weline.test:9996.
+Started successfully on http://p11005ce4.test.weline.com:9996.
 
 node 迁移前历史任务记录（已清理）
 Exit code 0.
@@ -9537,14 +9537,14 @@ Runtime:
 php bin/w server:start ai-test-wls-panel-pages-9995 --host=127.0.0.1 --port=9995 --workers=2 --no-ssl
 ```
 
-The WLS instance ran on `http://p11005ce4.weline.test:9995`. The local env
+The WLS instance ran on `http://p11005ce4.test.weline.com:9995`. The local env
 resolved the worker count to `8`, and all workers warmed successfully.
 
 HTTP route smoke:
 
 ```text
-curl.exe --max-time 10 -I http://p11005ce4.weline.test:9995/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin
-curl.exe --max-time 10 -I http://p11005ce4.weline.test:9995/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel
+curl.exe --max-time 10 -I http://p11005ce4.test.weline.com:9995/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/admin
+curl.exe --max-time 10 -I http://p11005ce4.test.weline.com:9995/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/server/backend/wls-panel
 ```
 
 Both requests returned backend login redirects instead of 404, proving the WLS
@@ -9654,7 +9654,7 @@ php bin/w server:start ai-test-wls-panel-regression-9994 -p 9994 -c 2 --no-ssl -
 Result:
 
 ```text
-Server started on http://p11005ce4.weline.test:9994
+Server started on http://p11005ce4.test.weline.com:9994
 Master PID: 17556
 Workers: 2
 Topology: dispatcher
@@ -9665,7 +9665,7 @@ Browser URL note:
 
 ```text
 Edge/CDP returned HTTP 502 for the test domain path:
-http://p11005ce4.weline.test:9994/...
+http://p11005ce4.test.weline.com:9994/...
 
 curl.exe -I to the same domain returned a valid 302 backend login redirect.
 curl.exe -I to http://127.0.0.1:9994/... also returned a valid 302 backend
@@ -10078,7 +10078,7 @@ Artifacts:
 
 Notes:
 
-- The first CDP attempt against `p11005ce4.weline.test:9992` failed in Edge at
+- The first CDP attempt against `p11005ce4.test.weline.com:9992` failed in Edge at
   `chrome-error://chromewebdata/` while `curl.exe -I` returned 200. The accepted
   browser proof used `http://127.0.0.1:9992`, which WLS status also advertises
   as the local test URL.
@@ -10171,7 +10171,7 @@ Runtime:
 
 ```text
 php bin/w server:start ai-test-wls-panel-current-9996 -p 9996 -c 2 --no-ssl --worker-memory-limit=512M --supervisor false
-curl.exe -I http://p11005ce4.weline.test:9996/
+curl.exe -I http://p11005ce4.test.weline.com:9996/
 php bin/w server:status ai-test-wls-panel-current-9996
 ```
 
@@ -10185,7 +10185,7 @@ Master, two HTTP workers, and Dispatcher were running on the dedicated instance.
 Multi-page visual smoke:
 
 ```text
-node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/迁移前历史任务记录（已清理） process.env.WLS_BASE_URL='http://p11005ce4.weline.test:9996'; process.env.CDP_PORT='9338'; await import('./迁移前历史任务记录（已清理）);"
+node --input-type=module -e "process.env.OUT_DIR='E:/WelineFramework/DEV-workspace/迁移前历史任务记录（已清理） process.env.WLS_BASE_URL='http://p11005ce4.test.weline.com:9996'; process.env.CDP_PORT='9338'; await import('./迁移前历史任务记录（已清理）);"
 ```
 
 Result:
@@ -10361,7 +10361,7 @@ php bin/w server:start ai-test-wls-file-source-tree-9988 -p 9988 --no-ssl --supe
 Result:
 
 ```text
-baseUrl=http://p11005ce4.weline.test:9988
+baseUrl=http://p11005ce4.test.weline.com:9988
 HTTP smoke used http://127.0.0.1:9988
 ```
 
@@ -10932,7 +10932,7 @@ Result:
 
 ```text
 passed=true
-baseUrl=http://p11005ce4.weline.test:9996
+baseUrl=http://p11005ce4.test.weline.com:9996
 domain=codex-source-rename-9996.local
 before=迁移前历史任务记录（已清理）
 after=迁移前历史任务记录（已清理）
@@ -11080,7 +11080,7 @@ Result:
 
 ```text
 passed=true
-baseUrl=http://p11005ce4.weline.test:9997
+baseUrl=http://p11005ce4.test.weline.com:9997
 domain=codex-source-create-9997.local
 created=迁移前历史任务记录（已清理）
 policySave=wfm_notice=path_policy_saved

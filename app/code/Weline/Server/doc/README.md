@@ -2,6 +2,8 @@
 
 本目录记录 Weline Server（WLS）的现行架构、运行方式和历史设计。开发与排障优先阅读现行文档；带日期的修复报告和阶段方案只作为历史证据，不作为当前实现契约。
 
+认证诊断继续复用 `wls.connection.auth` 与 `.last_failure`，新增 `attempts`、`failure_stage`、`last_attempt_ms`。attempts 是实际 AUTH 尝试方法的调用数，不等同 TCP 建连数；last_attempt_ms 仅为最后一次该尝试的耗时，不含刷新间隔或重新连接。failure_stage 的 read 表示未获得完整数组回复（可能是等待、EOF、协议或读取失败），response 表示已收到非成功数组回复；deadline/write/reconnect/token_load 分别标记预算已尽、发送失败、重新连接失败和初次凭据不可用。成功标记 success。旧 reason/counter 保留兼容，token_mismatch 仍不能单独证明密钥不匹配。仅输出固定标签和数值，不记录凭据、路径或回复内容；原认证预算、重试、连接及返回行为保持。 两个真实 socket 用例先复现缺少诊断字段，正式回归及实际商品请求证据见 `/private/tmp/weline-goal/auth-timing-runtime-report.md`；整页冷请求与 Browser 验收仍以实测为准。
+
 当前完成度、真实运行证据、未实现高级能力和外部环境门禁统一见 [WLS 当前能力与验收状态](WLS当前能力与验收状态.md)。其它文档出现冲突时，以该页的当前状态为准；历史 checkpoint 仍保留为历史事实。
 
 WLS 2.0 启动统一使用 `--edge=auto|gateway|wls`。项目发布合同要求最终发行物必须在
@@ -51,6 +53,7 @@ Windows/MSVC/SCM 与冷重启、macOS system-domain 冷重启、专用 Windows �
 | 项目托管 Nginx、纯 WLS 回退、trusted loopback | [WLS 模式部署指南](WLS模式部署指南.md#13-本项目托管-nginx多项目互不干扰)、[域名接入](WLS模式部署指南.md#4-域名接入) |
 | 多项目共享 80/443、edge mode、项目 UUID 与降级 | [WLS 2.0 Gateway 使用指南](WLS-Gateway使用指南.md) |
 | 首页预热、常驻内存、请求长尾 | [WLS 运行时架构](WLS架构图.md) |
+| Fiber I/O 等待、共享缓存 RPC 延迟 | [统一缓存范围与性能计时](../../Framework/doc/统一缓存范围与性能优化.md) |
 | Session/Memory 服务异常 | [共享服务架构](WLS_Session共享服务架构.md) |
 | SSE/长连接 | [SSE 无阻塞检测方法](SSE无阻塞检测方法.md) |
 | Worker 扩缩容 | [Worker 动态扩缩容架构](WLS-Worker动态扩缩容架构设计.md)、[用户手册](WLS-Worker扩缩容用户手册.md) |
@@ -66,6 +69,10 @@ Windows/MSVC/SCM 与冷重启、macOS system-domain 冷重启、专用 Windows �
 - Worker Fiber 恢复/捕获：`WorkerFiberContextTracker` 必须把目标
   `Fiber` 显式传给 `restoreForFiber()` 与 capture callback；不得退回
   无参上下文切换，否则请求级上下文会在 tick 热路径失配。
+  I/O 慢等待的统一 timing 另区分新 await 挂起后的 afterResume 捕获与后续收集/poll；
+  首次 Fiber::start 未经调度器恢复的边界保留 null。主循环原 ChildMasterGuard 检查的
+  起止另填入尚未首次收集的既有 I/O 载体，由原请求输出；无 Trace 载体不读计时时钟，
+  授权检查、返回/异常和循环顺序保持不变。详见 Framework 统一缓存与性能计时文档。
 - 宿主网关模式以 host Gateway Controller 的 epoch、配置 generation、路由租约与
   Nginx 数据面探针为宿主派生事实；项目的域名、证书源、UUID 和 generation 始终以
   项目文件为事实源。纯 WLS 以 Master endpoint、TLS/HTTP policy 和 Worker READY
@@ -75,6 +82,8 @@ Windows/MSVC/SCM 与冷重启、macOS system-domain 冷重启、专用 Windows �
 - SharedState registry：Session/Memory sidecar；只能由认证后的写路径修正。
 - `var/server/instances/*.json`：CLI endpoint 发现，不是运行时共识。
 - PID/端口索引：可重建缓存，不是存活或身份的最终事实源。
+- Darwin 出生/缺失检查继续只使用原稳定 libproc 指纹。managed-name 检查在无注入 resolver 时优先通过原生 `KERN_PROCARGS2` 读取完整 argv，用读取前后的出生指纹确认同一进程，并保持原名称/参数授权判据；公共 `inspectProcess` 完整探测接口不变。按 argc 保留空参数并止于环境区之前，沿用命令/名称长度上限；原生不可用、数据不完整、僵尸进程或非 ASCII 参数仍回原 ps 流程，不改变 guard 频率、lease、凭据或原重试规则。该探测复用现有 FFI handle，没有新增元数据结果缓存。
+- 有界 POSIX 命令的 stdout/stderr 均 EOF 时，仅在新鲜进程状态明确已退出后跳过这一轮空管道休眠，并把该退出状态交给原返回码流程。仍存活/状态未知及原五参数排空调用保持有界等待；READY token、绝对截止时间、输出限制、子孙进程检查和回收不变。
 
 ## 文档维护规则
 
