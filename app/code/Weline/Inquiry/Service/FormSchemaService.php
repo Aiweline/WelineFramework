@@ -33,7 +33,11 @@ final class FormSchemaService
             if (in_array($type, ['select', 'radio'], true) && $options === []) {
                 throw new \InvalidArgumentException('inquiry_schema_choice_options_required');
             }
-            $validation = $this->validation($field['validation'] ?? [], $type);
+            $validationRaw = is_array($field['validation'] ?? null) ? $field['validation'] : [];
+            if ($type === 'country' && !isset($validationRaw['catalog']) && isset($field['catalog'])) {
+                $validationRaw['catalog'] = $field['catalog'];
+            }
+            $validation = $this->validation($validationRaw, $type);
             $normalized[] = [
                 'key' => $key, 'type' => $type, 'required' => (bool)($field['required'] ?? false),
                 'options' => $options, 'validation' => $validation,
@@ -61,6 +65,21 @@ final class FormSchemaService
         if ($fieldType === 'country') {
             $catalog = strtolower(trim((string)($raw['catalog'] ?? 'global')));
             $result['catalog'] = in_array($catalog, ['installed', 'global'], true) ? $catalog : 'global';
+            $levelsRaw = trim((string)($raw['levels'] ?? 'country|province|city|district'));
+            $allowedLevels = ['country', 'province', 'city', 'district', 'street'];
+            $levels = [];
+            foreach (preg_split('/[|,]+/', $levelsRaw) ?: [] as $level) {
+                $level = strtolower(trim((string)$level));
+                if ($level !== '' && in_array($level, $allowedLevels, true) && !in_array($level, $levels, true)) {
+                    $levels[] = $level;
+                }
+            }
+            if ($levels === []) {
+                $levels = ['country', 'province', 'city', 'district'];
+            }
+            $result['levels'] = implode('|', $levels);
+            $selection = strtolower(trim((string)($raw['selection'] ?? 'single')));
+            $result['selection'] = $selection === 'multi' ? 'multi' : 'single';
         }
         return $result;
     }
