@@ -104,11 +104,11 @@ final class SearchQueryProvider implements QueryProviderInterface
     private function types(array $params): array
     {
         try {
-            $this->paramGuard->guardTypes($params);
+            $area = $this->paramGuard->guardTypes($params);
 
             return [
                 'success' => true,
-                'types' => $this->hub->listTypes(),
+                'types' => $this->hub->listTypes($area),
             ];
         } catch (SearchParamException $exception) {
             return [
@@ -125,7 +125,7 @@ final class SearchQueryProvider implements QueryProviderInterface
         return [
             'name' => $this->getProviderName(),
             'module' => 'Weline_Search',
-            'summary' => 'Universal storefront Search hub with shared param guard',
+            'summary' => 'Universal Search hub with frontend/backend area slots',
             'operations' => [
                 [
                     'name' => 'search',
@@ -137,11 +137,12 @@ final class SearchQueryProvider implements QueryProviderInterface
                     'params' => [
                         ['name' => 'q', 'type' => 'string', 'required' => false, 'max_length' => 255],
                         ['name' => 'type', 'type' => 'string', 'required' => false],
+                        ['name' => 'area', 'type' => 'string', 'required' => false, 'max_length' => 16],
                         ['name' => 'page', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 100],
                         ['name' => 'page_size', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 48],
                     ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Autocomplete/search within server-frozen Scope',
+                    'summary' => 'Autocomplete/search; area=backend requires an active admin session inside SearchParamGuard',
                 ],
                 [
                     'name' => 'hotWords',
@@ -163,9 +164,11 @@ final class SearchQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => false,
                     'cost' => 1,
-                    'params' => [],
+                    'params' => [
+                        ['name' => 'area', 'type' => 'string', 'required' => false, 'max_length' => 16],
+                    ],
                     'returns' => ['type' => 'array'],
-                    'summary' => 'Registered search provider types',
+                    'summary' => 'Registered search provider types (optional area filter)',
                 ],
             ],
         ];

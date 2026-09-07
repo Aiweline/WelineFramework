@@ -50,7 +50,7 @@ final class Index extends FrontendController
         $this->request->setGet('theme_public_route', 'search');
         $this->request->setGet('theme_page_title', $title);
         $this->assign('page_title', $title);
-        $searchTypes = $this->registry->listTypes();
+        $searchTypes = $this->registry->listTypes(area: 'frontend');
         $this->assign('search_query', $q);
         $this->assign('search_type', $type);
         $this->assign('search_category_id', $categoryId);
@@ -63,14 +63,31 @@ final class Index extends FrontendController
         );
 
         try {
-            $result = $this->hub->search($params, autocomplete: false);
-            $payload = $result->toArray();
-            $this->assign('search_result', $payload);
-            $this->assign('search_hits', $payload['hits'] ?? []);
-            $this->assign('search_sections', $payload['sections'] ?? []);
-            $this->assign('search_hit_count', (int)($payload['hit_count'] ?? 0));
-            $this->assign('search_error', $result->ok ? '' : (string)($payload['message'] ?? ''));
-            $this->assign('search_error_code', $result->ok ? '' : (string)($payload['error_code'] ?? ''));
+            if ($q === '') {
+                // Empty keyword UI does not render result grids; skip provider fan-out
+                // (product direct snapshot rebuild is multi-second without a query).
+                $this->assign('search_result', [
+                    'success' => true,
+                    'type' => $type,
+                    'hits' => [],
+                    'sections' => [],
+                    'hit_count' => 0,
+                ]);
+                $this->assign('search_hits', []);
+                $this->assign('search_sections', []);
+                $this->assign('search_hit_count', 0);
+                $this->assign('search_error', '');
+                $this->assign('search_error_code', '');
+            } else {
+                $result = $this->hub->search($params, autocomplete: false);
+                $payload = $result->toArray();
+                $this->assign('search_result', $payload);
+                $this->assign('search_hits', $payload['hits'] ?? []);
+                $this->assign('search_sections', $payload['sections'] ?? []);
+                $this->assign('search_hit_count', (int)($payload['hit_count'] ?? 0));
+                $this->assign('search_error', $result->ok ? '' : (string)($payload['message'] ?? ''));
+                $this->assign('search_error_code', $result->ok ? '' : (string)($payload['error_code'] ?? ''));
+            }
         } catch (SearchParamException $exception) {
             $this->assign('search_result', [
                 'success' => false,

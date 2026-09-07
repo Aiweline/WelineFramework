@@ -41,12 +41,15 @@ final class Search implements TaglibInterface
         return [
             'placeholder' => false,
             'type' => false,
+            'area' => false,
             'show-type' => false,
             'show-hot-words' => false,
             'auto-complete' => false,
+            'navigate-hits' => false,
             'class' => false,
             'value' => false,
             'id' => false,
+            'action' => false,
         ];
     }
 
@@ -55,7 +58,11 @@ final class Search implements TaglibInterface
         return static function ($tag_key, $config, $tag_data, $attributes): string {
             $registry = ObjectManager::getInstance(SearchProviderRegistry::class);
             $hotWords = ObjectManager::getInstance(HotWordsService::class);
-            $types = $registry->listTypes();
+            $area = strtolower(trim((string)($attributes['area'] ?? 'frontend')));
+            if ($area === '') {
+                $area = 'frontend';
+            }
+            $types = $registry->listTypes(area: $area);
             $lockedType = trim((string)($attributes['type'] ?? ''));
             $requestType = trim((string)($_GET['type'] ?? ''));
             $requestCategoryId = (int)($_GET['category_id'] ?? 0);
@@ -66,15 +73,20 @@ final class Search implements TaglibInterface
             }
             $placeholder = (string)($attributes['placeholder'] ?? __('输入关键词…'));
             $query = trim((string)($attributes['value'] ?? ''));
-            $showHot = ($attributes['show-hot-words'] ?? 'true') !== 'false';
+            $showHot = ($attributes['show-hot-words'] ?? ($area === 'backend' ? 'false' : 'true')) !== 'false';
             $autoComplete = ($attributes['auto-complete'] ?? 'true') !== 'false';
+            $navigateHits = ($attributes['navigate-hits'] ?? ($area === 'backend' ? 'true' : 'false')) !== 'false';
             $panelClass = trim((string)($attributes['class'] ?? ''));
             if ($panelClass === '') {
-                $panelClass = 'header-search-panel';
+                $panelClass = $area === 'backend' ? 'w-backend-topbar-search' : 'header-search-panel';
             }
             $panelId = trim((string)($attributes['id'] ?? ''));
-            $hot = $hotWords->resolve(8);
-            $words = $hot['words'];
+            $formAction = trim((string)($attributes['action'] ?? ''));
+            if ($formAction === '') {
+                $formAction = $area === 'backend' ? '#' : '/search';
+            }
+            $hot = $area === 'frontend' ? $hotWords->resolve(8) : ['words' => []];
+            $words = is_array($hot['words'] ?? null) ? $hot['words'] : [];
             $esc = static fn (string $v): string => htmlspecialchars($v, ENT_QUOTES, 'UTF-8');
             $typeMenuId = ($panelId !== '' ? $panelId : 'header-search-panel') . '-type-menu';
             $typeDropdown = '';
@@ -94,8 +106,11 @@ final class Search implements TaglibInterface
             ?>
 <div class="<?= $esc($panelClass) ?> w-search-root"<?= $panelId !== '' ? ' id="' . $esc($panelId) . '"' : '' ?>
      data-w-search
+     data-search-area="<?= $esc($area) ?>"
+     data-navigate-hits="<?= $navigateHits ? 'true' : 'false' ?>"
      data-autocomplete="<?= $autoComplete ? 'true' : 'false' ?>">
-    <form action="/search" method="get" class="header-search-form search-form w-search-form">
+    <form action="<?= $esc($formAction) ?>" method="get" class="header-search-form search-form w-search-form"<?= $area === 'backend' ? ' data-w-search-backend-form="1"' : '' ?>>
+        <input type="hidden" name="area" value="<?= $esc($area) ?>">
         <?php if (!$showType && $lockedType !== '' && $lockedType !== 'all'): ?>
             <input type="hidden" name="type" value="<?= $esc($lockedType) ?>">
         <?php elseif ($showType): ?>
@@ -133,5 +148,30 @@ final class Search implements TaglibInterface
             <?php
             return (string)ob_get_clean();
         };
+    }
+
+    public static function tag_self_close(): bool
+    {
+        return true;
+    }
+
+    public static function tag_self_close_with_attrs(): bool
+    {
+        return true;
+    }
+
+    public static function parent(): ?string
+    {
+        return null;
+    }
+
+    public static function document(): string
+    {
+        $document = <<<'HTML'
+<h3><code>&lt;w:search&gt;</code> 使用文档</h3>
+<p>渲染万能搜索栏。支持 <code>area</code>（<code>frontend</code>/<code>backend</code>）、类型选择、热搜词、自动补全，以及后台 <code>navigate-hits</code> 直达命中 URL。业务通过 <code>Searcher</code> 扩展按 area 注册。</p>
+HTML;
+
+        return \htmlspecialchars($document, ENT_NOQUOTES);
     }
 }

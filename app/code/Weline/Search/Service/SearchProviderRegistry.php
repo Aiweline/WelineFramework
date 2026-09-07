@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Search\Service;
 
+use Weline\Framework\Cache\CachePolicy;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Context;
 use Weline\Framework\Extends\ExtendsData;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Search\Api\SearchProviderInterface;
@@ -22,9 +25,9 @@ class SearchProviderRegistry
     /**
      * @return array<string, SearchProviderInterface>
      */
-    public function all(bool $forceReload = false): array
+    public function all(bool $forceReload = false, ?string $area = null): array
     {
-        if (!$forceReload && $this->providers !== null) {
+        if (!$forceReload && $this->providers !== null && $area === null) {
             return $this->providers;
         }
 
@@ -58,25 +61,74 @@ class SearchProviderRegistry
             $map,
             static fn (SearchProviderInterface $a, SearchProviderInterface $b): int => $a->sortOrder() <=> $b->sortOrder()
         );
-        $this->providers = $map;
+        if ($area === null) {
+            $this->providers = $map;
 
-        return $this->providers;
+            return $this->providers;
+        }
+
+        return $this->filterByArea($map, $area);
     }
 
-    public function get(string $code): ?SearchProviderInterface
+    public function get(string $code, ?string $area = null): ?SearchProviderInterface
     {
         $code = trim($code);
         if ($code === '' || $code === 'all') {
             return null;
         }
 
-        return $this->all()[$code] ?? null;
+        $provider = $this->all()[$code] ?? null;
+        if ($provider === null) {
+            return null;
+        }
+        if ($area === null || $area === '') {
+            return $provider;
+        }
+
+        return $this->providerServesArea($provider, $area) ? $provider : null;
     }
 
     /**
      * @return list<array{code:string,label:string,children:list<array{code:string,label:string,params:array<string,int|string|float|bool>,children:list<array<string,mixed>>}>}>
      */
-    public function listTypes(bool $withScopes = true): array
+    public function listTypes(bool $withScopes = true, ?string $area = null): array
+    {
+        $logicalKey = 'search.provider_types.v2.'
+            . ($withScopes ? 'scoped' : 'flat')
+            . '.'
+            . ($area !== null && trim($area) !== '' ? strtolower(trim($area)) : 'all');
+        $builder = fn(): array => $this->buildTypes($withScopes, $area);
+
+        // Search type metadata is storefront presentation data. Keep the
+        // request memo in HeaderCommerceData, and reuse the same channel /
+        // language variant across workers through the unified hot-cache.
+        if (!Context::hasCurrent()) {
+            return $builder();
+        }
+        try {
+            /** @var StorefrontScopeHotCache $cache */
+            $cache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+            return $cache->rememberPolicy(self::typesPolicy(), $logicalKey, $builder);
+        } catch (\Throwable) {
+            return $builder();
+        }
+    }
+
+    private static function typesPolicy(): CachePolicy
+    {
+        return new CachePolicy(
+            resource: 'search.provider_types',
+            pool: 'view',
+            scope: 'channel',
+            vary: ['lang', 'area'],
+            dependencies: ['catalog', 'config'],
+            freshTtlSeconds: 300,
+            staleTtlSeconds: 1800,
+        );
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function buildTypes(bool $withScopes, ?string $area): array
     {
         $out = [
             [
@@ -85,7 +137,7 @@ class SearchProviderRegistry
                 'children' => [],
             ],
         ];
-        foreach ($this->all() as $provider) {
+        foreach ($this->all(area: $area) as $provider) {
             $item = [
                 'code' => $provider->code(),
                 'label' => $provider->label(),
@@ -98,6 +150,38 @@ class SearchProviderRegistry
         }
 
         return $out;
+    }
+
+    /**
+     * @param array<string, SearchProviderInterface> $map
+     * @return array<string, SearchProviderInterface>
+     */
+    private function filterByArea(array $map, string $area): array
+    {
+        $area = strtolower(trim($area));
+        if ($area === '') {
+            return $map;
+        }
+        $filtered = [];
+        foreach ($map as $code => $provider) {
+            if ($this->providerServesArea($provider, $area)) {
+                $filtered[$code] = $provider;
+            }
+        }
+
+        return $filtered;
+    }
+
+    private function providerServesArea(SearchProviderInterface $provider, string $area): bool
+    {
+        $area = strtolower(trim($area));
+        foreach ($provider->areas() as $item) {
+            if (strtolower(trim((string)$item)) === $area) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

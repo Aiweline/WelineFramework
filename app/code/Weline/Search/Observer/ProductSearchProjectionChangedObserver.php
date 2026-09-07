@@ -8,15 +8,14 @@ use Weline\Framework\Api\Event\AsyncObserverInterface;
 use Weline\Framework\Event\Async\Exception\NonRetryableAsyncEventException;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ResourceChange\ResourceChange;
-use Weline\Framework\Runtime\ScopeEnvelope;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Product\Api\ProductSearchProjectionMutationCoordinatorInterface;
-use Weline\Queue\Api\QueueStatus;
+use Weline\Search\Api\SearchProjectionQueueAdmissionInterface;
 use Weline\Search\Queue\SearchIndexIncrementalQueue;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 
 /**
- * Converts immutable Product projection changes into idempotent scoped Queue rows.
+ * Converts immutable Product projection changes into coalesced scoped Queue slots.
  */
 final class ProductSearchProjectionChangedObserver implements AsyncObserverInterface
 {
@@ -24,6 +23,7 @@ final class ProductSearchProjectionChangedObserver implements AsyncObserverInter
 
     public function __construct(
         private readonly StoreCatalogInterface $stores,
+        private readonly SearchProjectionQueueAdmissionInterface $admission,
     ) {
     }
 
@@ -61,37 +61,18 @@ final class ProductSearchProjectionChangedObserver implements AsyncObserverInter
         ) {
             throw new NonRetryableAsyncEventException(
                 'search_product_projection_payload_invalid',
-                (string)__('Product Search 投影事件负载无效'),
+                (string)__('Product Search 投影负载无效'),
             );
         }
 
         $scope = $this->scope($change, $after);
-        $payload = [
+        $this->admission->admit([
             'contract' => SearchIndexIncrementalQueue::CONTRACT,
             'event_id' => $change->eventId(),
             'event_seq' => $change->revision(),
             'target_type' => (string)$after['target_type'],
             'target_id' => (int)$after['target_id'],
-        ];
-        $idempotencyKey = 'search-projection:' . $change->eventId();
-        $created = \w_query('queue', 'createIfAbsent', [
-            'class' => SearchIndexIncrementalQueue::class,
-            'name' => (string)__('Search Product 投影事件 %{1}', [$change->eventId()]),
-            'module' => 'Weline_Search',
-            'content' => $payload,
-            'status' => QueueStatus::PENDING,
-            'auto' => true,
-            'biz_key' => $idempotencyKey,
-            'idempotency_scope' => 'search_product_projection',
-            'idempotency_key' => $idempotencyKey,
-            'scope_envelope' => ScopeEnvelope::of($scope)->toArray(),
-        ], 'backend');
-        if (!\is_array($created)
-            || empty($created['success'])
-            || (int)($created['queue_id'] ?? 0) < 1
-        ) {
-            throw new \RuntimeException('search_incremental_queue_admission_failed');
-        }
+        ], $scope);
     }
 
     /** @param array<string,mixed> $after */

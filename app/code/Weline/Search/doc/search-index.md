@@ -67,16 +67,29 @@ watermark 的权威 fingerprint。
 ```text
 Product transaction
   → ResourceChange outbox
-  → async Search observer
-  → Queue createIfAbsent
-  → SearchIndexIncrementalQueue
-  → Product projectChange
-  → DatabaseSearchIndexStore atomic apply
+    → async Search observer
+    → SearchProjectionQueueAdmission（按 target+scope 合并槽位）
+    → 同一商品/店品在同 Scope 下最多 1 条 pending（运行中最多再 +1 followup）
+    → SearchIndexIncrementalQueue（批消费 Worker）
+    → 同进程 drain 兄弟 pending 投影行
+    → Product projectChange
+    → DatabaseSearchIndexStore atomic apply
 ```
 
 Queue content 只允许 `contract`、`event_id`、`event_seq`、`target_type`
 和 `target_id` 五个字段。Website/Store 维度仅从持久 `scope_envelope`
 读取；content 携带额外 Scope 字段会 fail-closed。
+
+入队幂等槽位键为 `slot:{target_type}:{target_id}:{scope…}`（scope=
+`search_product_projection_slot`）。同一槽位上的新事件只刷新 pending
+content 的最新 `event_seq`；槽位已 done/error/stop 时 reopen 后再派发；
+主槽 running 时写入唯一 `:followup` 槽。一万次同商品变更不会建一万条队列。
+
+`SearchIndexIncrementalQueue` 实现 `BatchDrainingQueueConsumerInterface`：
+调度侧对该消费者类保持单飞行（最多 1 个 active Worker，claim+spawn
+带类级 flock），Worker 在完成主任务后同进程手工认领并 apply 最多
+`DEFAULT_BATCH_DRAIN_LIMIT`（100）条兄弟 pending，避免「每事件一次 PHP
+CLI 冷启动」把本机 CPU 打满。索引动作仍是异步增量，不进入商品保存请求。
 
 增量应用在一个事务内完成 applied-event 幂等、document version/hash CAS、
 scope delete/upsert 和连续 watermark 推进。低版本不能覆盖高版本；同版本

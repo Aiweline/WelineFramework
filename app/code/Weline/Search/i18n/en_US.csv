@@ -105,15 +105,17 @@ chart,chart
 "Search shard 无法进入 provisioning：status=%{1}","Search shard cannot enter provisioning: status=%{1}"
 "Search shard provision 返回身份不匹配","Search shard provision returns identity mismatch"
 "Search shard provision 失败","Search shard provision failed"
+未知搜索区域：%{1},"Unknown search area: %{1}"
 搜索不接受未知参数,搜索不接受未知参数
 搜索关键词过长,搜索关键词过长
 搜索页码超出范围,搜索页码超出范围
 搜索每页数量超出范围,搜索每页数量超出范围
 缺少搜索参数：%{1},缺少搜索参数：%{1}
+后台搜索需要已登录的管理员会话,"Backend search requires an active admin session"
 "当前 storefront 请求没有冻结完整商城 Scope","The current storefront request has no frozen complete commerce Scope"
 热搜接口不接受未知参数,热搜接口不接受未知参数
 热搜数量超出范围,热搜数量超出范围
-搜索类型列表不接受参数,搜索类型列表不接受参数
+搜索类型列表不接受未知参数,搜索类型列表不接受未知参数
 搜索参数类型无效：%{1},搜索参数类型无效：%{1}
 搜索参数过小：%{1},搜索参数过小：%{1}
 搜索参数过大：%{1},搜索参数过大：%{1}
@@ -159,6 +161,7 @@ chart,chart
 显示帮助,显示帮助
 "重建全部 Provider 索引","重建全部 Provider 索引"
 "仅重建 Blog 索引","仅重建 Blog 索引"
+搜索类型列表不接受参数,搜索类型列表不接受参数
 """Search shard 重复声明表 %{1}""","""Search shard duplicate declaration table %{1}"""
 当前类型,"Current type"
 全部%{1},"All %{1}"
