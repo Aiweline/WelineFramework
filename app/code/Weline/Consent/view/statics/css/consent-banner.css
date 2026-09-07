@@ -83,16 +83,16 @@
 }
 
 .w-consent-banner__btn--primary {
-    border: 1px solid #fcd200;
-    background: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
-    color: #0f1111;
-    box-shadow: 0 2px 5px rgba(213, 217, 217, 0.45);
+    border: 1px solid var(--color-primary-dark, #963b30);
+    background: var(--color-primary, #b84a3c);
+    color: var(--color-on-primary, #f7f4ef);
+    box-shadow: 0 2px 5px rgba(28, 28, 28, 0.12);
 }
 
 .w-consent-banner__btn--primary:hover {
-    background: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
-    border-color: #e7b92e;
-    color: #0f1111;
+    background: var(--color-primary-hover, #963b30);
+    border-color: var(--color-primary-active, #7a3028);
+    color: var(--color-on-primary, #f7f4ef);
 }
 
 .w-consent-banner__btn--secondary {
