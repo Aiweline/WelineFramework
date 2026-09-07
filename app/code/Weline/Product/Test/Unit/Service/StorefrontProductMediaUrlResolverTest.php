@@ -15,6 +15,26 @@ use Weline\Storage\Api\Data\StorageUrlOptions;
 
 final class StorefrontProductMediaUrlResolverTest extends TestCase
 {
+    public function testListingResolvesCardImageWithoutLoadingDescriptionAssets(): void
+    {
+        $assetId = '73ead77d-800c-4a08-ad46-ae4461996aaa';
+        $detailAssetId = '12345678-1234-4123-8123-123456789abc';
+        $assets = $this->createMock(FileAssetManagerInterface::class);
+        $locale = $this->getMockBuilder(FileAssetLocale::class)->disableOriginalConstructor()->getMock();
+        $assets->expects(self::once())->method('locale')->with($assetId, 'en_US')->willReturn($locale);
+        $assets->expects(self::once())->method('resolveUrl')->with($assetId, self::isInstanceOf(FileAccessContext::class))
+            ->willReturn(new ResolvedStorageUrl('/card.jpg', StorageUrlOptions::KIND_PUBLIC, true));
+        $description = '<div data-weline-product-description="1688"><img src="asset://' . $detailAssetId . '"></div>';
+        $result = (new StorefrontProductMediaUrlResolver($assets))->resolveListingOffer([
+            'image' => 'asset://' . $assetId, 'images' => ['asset://' . $assetId],
+            'description' => $description, 'description_html' => '<p>old detail projection</p>',
+        ], ScopeIdentity::website(0, 'default'), 'en_US');
+        self::assertSame('/card.jpg', $result['image']);
+        self::assertSame(['/card.jpg'], $result['images']);
+        self::assertSame($description, $result['description']);
+        self::assertArrayNotHasKey('description_html', $result);
+    }
+
     public function testAssetReferenceUsesExactLocaleMetadataAndPublicFileManagerUrl(): void
     {
         $assetId = '73ead77d-800c-4a08-ad46-ae4461996aaa';
@@ -233,5 +253,109 @@ final class StorefrontProductMediaUrlResolverTest extends TestCase
             '/pub/media/catalog/hanfu/r2/products/crane-memo.webp',
             $resolved[1]['image'],
         );
+    }
+
+    public function testBulkReferencesPreserveOptionalCapabilityScopeAndLegacyFallback(): void
+    {
+        $assetId = '12345678-1234-4123-8123-123456789abc';
+        $scope = ScopeIdentity::channel(7, 'site', 'shop', 'web', ScopeIdentity::MODE_NORMAL);
+        $otherChannel = ScopeIdentity::channel(7, 'site', 'shop', 'feed', ScopeIdentity::MODE_NORMAL);
+        $references = [
+            'card' => 'asset://' . $assetId,
+            7 => 'asset://' . $assetId,
+            'legacy' => '/legacy.jpg',
+            'invalid' => 'asset://not-a-uuid',
+            'v1' => 'asset://12345678-1234-1123-8123-123456789abc',
+        ];
+        $locale = $this->getMockBuilder(FileAssetLocale::class)->disableOriginalConstructor()->getMock();
+        $oldManager = $this->createMock(FileAssetManagerInterface::class);
+        $attemptedLocales = [];
+        $oldManager->method('locale')->willReturnCallback(static function (string $id, string $localeCode) use (&$attemptedLocales, $locale): FileAssetLocale {
+            $attemptedLocales[] = $localeCode;
+            if ($localeCode === 'fr_FR') { throw new \RuntimeException('missing requested locale'); }
+            return $locale;
+        });
+        $oldManager->method('resolveUrl')->willReturnCallback(static function (string $id, FileAccessContext $context) use ($scope): ResolvedStorageUrl {
+            self::assertSame($scope, $context->scope);
+            self::assertSame('en_US', $context->localeCode);
+            self::assertSame(FileAccessContext::PURPOSE_PUBLIC_PUBLISH, $context->purpose);
+            return new ResolvedStorageUrl('/old-manager.jpg', StorageUrlOptions::KIND_PUBLIC, true);
+        });
+        $old = $this->resolveReferenceBatch(new StorefrontProductMediaUrlResolver($oldManager), $references, $scope, 'fr_FR');
+        self::assertSame(['card' => '/old-manager.jpg', 7 => '/old-manager.jpg', 'legacy' => '/legacy.jpg', 'invalid' => '', 'v1' => ''], $old);
+        self::assertSame(['fr_FR', 'en_US'], $attemptedLocales);
+
+        $batches = [];
+        $manager = $this->createMockForIntersectionOfInterfaces([
+            FileAssetManagerInterface::class,
+            \Weline\FileManager\Api\FileAssetBatchUrlResolverInterface::class,
+        ]);
+        $manager->method('locale')->willThrowException(new \LogicException('Bulk-capable manager must not take the legacy read path.'));
+        $manager->method('resolveUrl')->willThrowException(new \LogicException('Bulk-capable manager must not take the legacy URL path.'));
+        $manager->method('resolveUrls')->willReturnCallback(static function (array $requests) use (&$batches): array {
+            $batches[] = $requests;
+            $result = [];
+            foreach ($requests as $key => $request) {
+                $result[$key] = new ResolvedStorageUrl('/batch/' . count($batches) . '/' . $request['asset_id'] . '.jpg', StorageUrlOptions::KIND_PUBLIC, true);
+            }
+            return $result;
+        });
+        $resolver = new StorefrontProductMediaUrlResolver($manager);
+        $resolved = $this->resolveReferenceBatch($resolver, $references, $scope, 'fr_FR');
+        self::assertSame([
+            'card' => '/batch/1/' . $assetId . '.jpg', 7 => '/batch/1/' . $assetId . '.jpg',
+            'legacy' => '/legacy.jpg', 'invalid' => '', 'v1' => '',
+        ], $resolved);
+        self::assertCount(1, $batches);
+        self::assertSame(['card', 7], array_keys($batches[0]), 'Preserve each input for independent access checks and URL resolution.');
+        $request = array_values($batches[0])[0];
+        self::assertSame($assetId, $request['asset_id']);
+        self::assertSame(['fr_FR', 'en_US'], array_slice(array_map(static fn(FileAccessContext $context): string => $context->localeCode, $request['contexts']), 0, 2));
+        foreach ($request['contexts'] as $context) {
+            self::assertSame($scope, $context->scope);
+            self::assertSame(FileAccessContext::PURPOSE_PUBLIC_PUBLISH, $context->purpose);
+        }
+        $other = $this->resolveReferenceBatch($resolver, ['same' => 'asset://' . $assetId], $otherChannel, 'fr_FR');
+        self::assertSame(['same' => '/batch/2/' . $assetId . '.jpg'], $other);
+        self::assertCount(2, $batches, 'A later scope must resolve its own URL.');
+        foreach (array_values($batches[1])[0]['contexts'] as $context) { self::assertSame($otherChannel, $context->scope); }
+    }
+
+    private function resolveReferenceBatch(StorefrontProductMediaUrlResolver $resolver, array $references, ScopeIdentity $scope, string $locale): array
+    {
+        return $resolver->resolveReferences($references, $scope, $locale);
+    }
+
+    public function testRenderDescriptionHtmlStripsPromoRecommendedProductTables(): void
+    {
+        $detailAsset = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+        $promoAsset = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+        $html = '<div data-weline-product-description="1688">'
+            . '<table><tr><td>火爆大促销 欢迎你加入 五一狂欢购 <strong>WUYIKUANHUANGOU</strong></td></tr></table>'
+            . '<table><tr><td><img src="asset://' . $promoAsset . '"></td></tr>'
+            . '<tr><td>国潮风少女旗袍批发</td></tr>'
+            . '<tr><td>￥55</td><td>55</td></tr></table>'
+            . '<p>关于绣花颜色款式和面料。上衣面料柔软。</p>'
+            . '<p><img src="asset://' . $detailAsset . '"></p>'
+            . '</div>';
+
+        $rendered = StorefrontProductMediaUrlResolver::renderDescriptionHtml(
+            $html,
+            static function (string $reference) use ($detailAsset, $promoAsset): string {
+                return match ($reference) {
+                    'asset://' . $detailAsset => '/pub/media/catalog/hanfu/detail-real.jpg',
+                    'asset://' . $promoAsset => '/pub/media/catalog/hanfu/promo-other.jpg',
+                    default => '',
+                };
+            },
+        );
+
+        self::assertStringContainsString('关于绣花颜色款式和面料', $rendered);
+        self::assertStringContainsString('/pub/media/catalog/hanfu/detail-real.jpg', $rendered);
+        self::assertStringNotContainsString('火爆大促销', $rendered);
+        self::assertStringNotContainsString('WUYIKUANHUANGOU', $rendered);
+        self::assertStringNotContainsString('国潮风少女旗袍', $rendered);
+        self::assertStringNotContainsString('￥55', $rendered);
+        self::assertStringNotContainsString('promo-other.jpg', $rendered);
     }
 }

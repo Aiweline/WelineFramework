@@ -45,6 +45,14 @@ final class ProductAdminQueryProvider implements QueryProviderInterface
             'bulkCommand' => $this->bulkCommand($params),
             'bulkAssignCategories' => $this->bulkAssignCategories($params),
             'command' => $this->command($params),
+            'listProductLayouts' => $this->listProductLayouts($params),
+            'createProductLayout' => $this->createProductLayout($params),
+            'resolveProductLayout' => $this->resolveProductLayout($params),
+            'saveProductLayoutSelection' => $this->saveProductLayoutSelection($params),
+            'deleteProductLayoutSelection' => $this->deleteProductLayoutSelection($params),
+            'listProductLayoutSchedules' => $this->listProductLayoutSchedules($params),
+            'saveProductLayoutSchedule' => $this->saveProductLayoutSchedule($params),
+            'deleteProductLayoutSchedule' => $this->deleteProductLayoutSchedule($params),
             default => throw new \InvalidArgumentException(
                 (string)__('商品后台 Resource 不支持操作：%{1}', [$operation]),
             ),
@@ -96,6 +104,43 @@ final class ProductAdminQueryProvider implements QueryProviderInterface
                 ]),
                 $this->operation('command', (string)__('执行商品创建、保存、校验与生命周期命令'), 'write', [
                     ['name' => 'command', 'type' => 'object', 'required' => true],
+                ]),
+                $this->operation('listProductLayouts', (string)__('列出产品布局选项'), 'read', [
+                    ['name' => 'website_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                    ['name' => 'product_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                ]),
+                $this->operation('createProductLayout', (string)__('新建产品布局选项'), 'write', [
+                    ['name' => 'layout_option', 'type' => 'string', 'required' => true, 'max_length' => 64],
+                    ['name' => 'name', 'type' => 'string', 'required' => false, 'max_length' => 255],
+                    ['name' => 'clone_from', 'type' => 'string', 'required' => false, 'max_length' => 64],
+                ]),
+                $this->operation('resolveProductLayout', (string)__('解析产品有效布局'), 'read', [
+                    ['name' => 'product_id', 'type' => 'int', 'required' => true, 'min' => 1],
+                    ['name' => 'category_ids', 'type' => 'array', 'required' => false],
+                    ['name' => 'website_id', 'type' => 'int', 'required' => false, 'min' => 0],
+                ]),
+                $this->operation('saveProductLayoutSelection', (string)__('保存产品/分类默认布局选择'), 'write', [
+                    ['name' => 'target_type', 'type' => 'string', 'required' => true, 'max_length' => 64],
+                    ['name' => 'target_id', 'type' => 'int', 'required' => true, 'min' => 1],
+                    ['name' => 'layout_option', 'type' => 'string', 'required' => true, 'max_length' => 64],
+                ]),
+                $this->operation('deleteProductLayoutSelection', (string)__('清除产品/分类默认布局选择'), 'write', [
+                    ['name' => 'target_type', 'type' => 'string', 'required' => true, 'max_length' => 64],
+                    ['name' => 'target_id', 'type' => 'int', 'required' => true, 'min' => 1],
+                ]),
+                $this->operation('listProductLayoutSchedules', (string)__('列出布局定时计划'), 'read', [
+                    ['name' => 'target_type', 'type' => 'string', 'required' => true, 'max_length' => 64],
+                    ['name' => 'target_id', 'type' => 'int', 'required' => true, 'min' => 1],
+                ]),
+                $this->operation('saveProductLayoutSchedule', (string)__('保存布局定时计划'), 'write', [
+                    ['name' => 'target_type', 'type' => 'string', 'required' => true, 'max_length' => 64],
+                    ['name' => 'target_id', 'type' => 'int', 'required' => true, 'min' => 1],
+                    ['name' => 'layout_option', 'type' => 'string', 'required' => true, 'max_length' => 64],
+                    ['name' => 'starts_at', 'type' => 'string', 'required' => true],
+                    ['name' => 'ends_at', 'type' => 'string', 'required' => true],
+                ]),
+                $this->operation('deleteProductLayoutSchedule', (string)__('删除布局定时计划'), 'write', [
+                    ['name' => 'schedule_id', 'type' => 'int', 'required' => true, 'min' => 1],
                 ]),
             ],
         ];
@@ -231,6 +276,221 @@ final class ProductAdminQueryProvider implements QueryProviderInterface
         // context contract is available; callers cannot inject an actor ID.
         $raw['actor_id'] = 0;
         return $this->commands->execute(ProductAdminCommand::fromArray($raw))->toArray();
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function listProductLayouts(array $params): array
+    {
+        $this->assertThemeLayoutServices();
+        $options = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\ProductLayoutOptionService::class
+        )->listProductOptions('frontend');
+        $productId = max(0, (int)($params['product_id'] ?? 0));
+        $categoryId = max(0, (int)($params['category_id'] ?? 0));
+        $websiteId = $this->optionalWebsiteId($params);
+        $resolved = null;
+        $selection = null;
+        $virtual = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\ThemeVirtualLayoutService::class
+        );
+        if ($productId > 0) {
+            $resolved = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ProductLayoutResolveService::class
+            )->resolveForProduct(
+                $productId,
+                $categoryId > 0 ? [$categoryId] : [],
+                null,
+                null,
+                null,
+                $websiteId,
+            );
+            $selection = $virtual->resolveLayoutSelection(
+                \Weline\Theme\Model\ThemeVirtualLayout::TARGET_PRODUCT,
+                $productId,
+                'product',
+            );
+        } elseif ($categoryId > 0) {
+            $schedule = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ProductLayoutScheduleService::class
+            )->resolveActive(
+                \Weline\Theme\Model\ThemeVirtualLayout::TARGET_CATEGORY_PRODUCT_DEFAULT,
+                $categoryId,
+                'product',
+                null,
+                null,
+                $websiteId,
+            );
+            $selection = $virtual->resolveLayoutSelection(
+                \Weline\Theme\Model\ThemeVirtualLayout::TARGET_CATEGORY_PRODUCT_DEFAULT,
+                $categoryId,
+                'product',
+            );
+            if (is_array($schedule)) {
+                $resolved = [
+                    'layout_option' => (string)($schedule['layout_option'] ?? 'default'),
+                    'source' => 'schedule',
+                    'schedule_id' => (int)($schedule['schedule_id'] ?? 0),
+                    'target_type' => \Weline\Theme\Model\ThemeVirtualLayout::TARGET_CATEGORY_PRODUCT_DEFAULT,
+                    'target_id' => $categoryId,
+                    'fallback_chain' => ['schedule:category_product_default'],
+                ];
+            } elseif (is_array($selection) && ($selection['layout_option'] ?? '') !== '') {
+                $resolved = [
+                    'layout_option' => (string)$selection['layout_option'],
+                    'source' => 'category_product_default',
+                    'schedule_id' => 0,
+                    'target_type' => \Weline\Theme\Model\ThemeVirtualLayout::TARGET_CATEGORY_PRODUCT_DEFAULT,
+                    'target_id' => $categoryId,
+                    'fallback_chain' => ['selection:category_product_default'],
+                ];
+            } else {
+                $resolved = [
+                    'layout_option' => 'default',
+                    'source' => 'file',
+                    'schedule_id' => 0,
+                    'target_type' => \Weline\Theme\Model\ThemeVirtualLayout::TARGET_GLOBAL,
+                    'target_id' => 0,
+                    'fallback_chain' => ['file:default'],
+                ];
+            }
+        }
+
+        return [
+            'success' => true,
+            'options' => $options,
+            'resolved' => $resolved,
+            'selection' => $selection,
+            'editor_base' => [
+                'page_type' => 'product',
+                'lock_layout' => 1,
+                'lock_source' => 'product',
+                'product_layout_mode' => 1,
+            ],
+        ];
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function createProductLayout(array $params): array
+    {
+        $this->assertThemeLayoutServices();
+
+        return \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\ProductLayoutOptionService::class
+        )->createOption(
+            (string)($params['layout_option'] ?? ''),
+            (string)($params['name'] ?? ''),
+            (string)($params['clone_from'] ?? 'default'),
+        );
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function resolveProductLayout(array $params): array
+    {
+        $this->assertThemeLayoutServices();
+        $categoryIds = [];
+        if (is_array($params['category_ids'] ?? null)) {
+            foreach ($params['category_ids'] as $id) {
+                $categoryIds[] = (int)$id;
+            }
+        }
+        $resolved = \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\ProductLayoutResolveService::class
+        )->resolveForProduct(
+            max(0, (int)($params['product_id'] ?? 0)),
+            $categoryIds,
+            null,
+            null,
+            null,
+            $this->optionalWebsiteId($params),
+        );
+
+        return ['success' => true, 'resolved' => $resolved];
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function saveProductLayoutSelection(array $params): array
+    {
+        $this->assertThemeLayoutServices();
+
+        return \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\ThemeVirtualLayoutService::class
+        )->saveLayoutSelection(
+            (string)($params['target_type'] ?? ''),
+            (int)($params['target_id'] ?? 0),
+            (string)($params['layout_type'] ?? 'product'),
+            (string)($params['layout_option'] ?? ''),
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null,
+        );
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function deleteProductLayoutSelection(array $params): array
+    {
+        $this->assertThemeLayoutServices();
+
+        return \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\ThemeVirtualLayoutService::class
+        )->deleteLayoutSelection(
+            (string)($params['target_type'] ?? ''),
+            (int)($params['target_id'] ?? 0),
+            (string)($params['layout_type'] ?? 'product'),
+            isset($params['scope']) ? (string)$params['scope'] : null,
+            isset($params['locale']) ? (string)$params['locale'] : null,
+        );
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function listProductLayoutSchedules(array $params): array
+    {
+        $this->assertThemeLayoutServices();
+
+        return [
+            'success' => true,
+            'schedules' => \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Theme\Service\ProductLayoutScheduleService::class
+            )->listForTarget(
+                (string)($params['target_type'] ?? ''),
+                (int)($params['target_id'] ?? 0),
+            ),
+        ];
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function saveProductLayoutSchedule(array $params): array
+    {
+        $this->assertThemeLayoutServices();
+
+        return \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\ProductLayoutScheduleService::class
+        )->save($params);
+    }
+
+    /** @param array<string,mixed> $params @return array<string,mixed> */
+    private function deleteProductLayoutSchedule(array $params): array
+    {
+        $this->assertThemeLayoutServices();
+
+        return \Weline\Framework\Manager\ObjectManager::getInstance(
+            \Weline\Theme\Service\ProductLayoutScheduleService::class
+        )->delete((int)($params['schedule_id'] ?? 0));
+    }
+
+    private function assertThemeLayoutServices(): void
+    {
+        if (!class_exists(\Weline\Theme\Service\ProductLayoutOptionService::class)) {
+            throw new \RuntimeException((string)__('Theme 产品布局服务不可用'));
+        }
+    }
+
+    /** @param array<string,mixed> $params */
+    private function optionalWebsiteId(array $params): int
+    {
+        if (!array_key_exists('website_id', $params) || $params['website_id'] === null || $params['website_id'] === '') {
+            return 0;
+        }
+
+        return max(0, $this->websiteId($params));
     }
 
     /** @return array<string,mixed> */

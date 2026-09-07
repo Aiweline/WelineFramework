@@ -130,14 +130,14 @@ final class PriceRepository extends AbstractWebsiteShardRepository
         if ($offerIds === [] || $storeIds === []) {
             return [];
         }
-        $raw = $this->newModel($websiteId)
+        $query = $this->newModel($websiteId)
             ->clear()
             ->where(Price::schema_fields_OFFER_ID, $offerIds, 'IN')
             ->where(Price::schema_fields_STORE_ID, $storeIds, 'IN')
             ->select()
-            ->fetchArray();
+            ->fetchIterator();
         $rows = [];
-        foreach ($raw as $item) {
+        foreach ($query as $item) {
             $cleared = (string)($item['scope_state'] ?? '') === 'cleared'
                 || (int)($item[Price::schema_fields_CLEARED] ?? 0) === 1;
             $rows[] = [

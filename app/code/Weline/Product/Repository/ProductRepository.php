@@ -96,6 +96,33 @@ final class ProductRepository extends AbstractWebsiteShardRepository
     }
 
     /**
+     * @param list<int> $productIds
+     * @return list<array<string, mixed>>
+     */
+    public function listByIds(int $websiteId, array $productIds): array
+    {
+        $this->assertWebsite($websiteId);
+        $productIds = array_values(array_unique(array_filter(
+            array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        if ($productIds === []) {
+            return [];
+        }
+        $rows = $this->newModel($websiteId)
+            ->clear()
+            ->where(Product::schema_fields_ID, $productIds, 'IN')
+            ->select()
+            ->fetchArray();
+        usort(
+            $rows,
+            static fn(array $left, array $right): int => (int)($left[Product::schema_fields_ID] ?? 0)
+                <=> (int)($right[Product::schema_fields_ID] ?? 0),
+        );
+        return $rows;
+    }
+
+    /**
      * @param array<string, mixed> $data
      */
     public function create(int $websiteId, array $data): Product

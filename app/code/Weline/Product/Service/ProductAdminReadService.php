@@ -25,7 +25,7 @@ use Weline\Product\Repository\StoreProductRepository;
 use Weline\Theme\Helper\StorefrontImagePlaceholder;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 
-final class ProductAdminReadService implements ProductAdminReadInterface
+final class ProductAdminReadService implements ProductAdminReadInterface, \Weline\Product\Api\ProductSelectionReadInterface
 {
     private ?InventoryCatalogCopyCapabilityInterface $resolvedInventory = null;
     private bool $inventoryResolved = false;
@@ -56,6 +56,16 @@ final class ProductAdminReadService implements ProductAdminReadInterface
 
     public function search(int $websiteId, array $filters = []): array
     {
+        return $this->searchRows($websiteId, $filters, true);
+    }
+
+    public function searchSelectionRows(int $websiteId, array $filters = []): array
+    {
+        return $this->searchRows($websiteId, $filters, false);
+    }
+
+    private function searchRows(int $websiteId, array $filters, bool $includeDetails): array
+    {
         $websiteId = $this->websiteId($websiteId);
         $storeId = isset($filters['store_id']) ? (int)$filters['store_id'] : null;
         $nameFilter = strtolower(trim((string)($filters['name'] ?? '')));
@@ -66,8 +76,16 @@ final class ProductAdminReadService implements ProductAdminReadInterface
         $ownerFilter = array_key_exists('owner_website_id', $filters)
             ? (int)$filters['owner_website_id']
             : null;
+        // Selection projections only return the durable product id and update
+        // marker.  Identity is authoritative for identity-dependent filters,
+        // but resolving it for every published product adds one DB read per
+        // row to the common promotion-selection path.
+        $selectionNeedsIdentity = $includeDetails
+            || $codeFilter !== ''
+            || $typeFilter !== ''
+            || $ownerFilter !== null;
 
-        $rows = [];
+        $products = [];
         foreach ($this->products->listAll($websiteId) as $product) {
             $productId = (int)($product['product_id'] ?? 0);
             if ($productId <= 0 || ($storeId !== null
@@ -75,83 +93,177 @@ final class ProductAdminReadService implements ProductAdminReadInterface
             ) {
                 continue;
             }
-            $uuid = trim((string)($product['global_product_uuid'] ?? ''));
-            $identity = $uuid === '' ? null : $this->identities->resolveProductByUuid($uuid);
-            $offers = $this->offers->listByProductIds($websiteId, [$productId]);
-            $offerIds = array_values(array_map(
-                static fn(array $offer): int => (int)($offer['offer_id'] ?? 0),
-                $offers,
-            ));
-            $attributes = $this->attributes->listExplicitRows(
-                $websiteId,
-                'product',
-                [$productId],
-                [0],
-            );
-            $name = '';
-            foreach ($attributes as $attribute) {
-                if ((string)($attribute['attribute_code'] ?? '') === 'name'
-                    && !($attribute['cleared'] ?? false)
-                ) {
-                    $name = trim((string)($attribute['value'] ?? ''));
-                    break;
-                }
-            }
-            $skus = array_values(array_filter(array_map(
-                static fn(array $offer): string => trim((string)($offer['sku'] ?? '')),
-                $offers,
-            )));
-            if ($skus === []) {
-                $skus[] = trim((string)($product['sku'] ?? ''));
-            }
-            $productCode = $identity?->productCode ?? (string)($product['product_code'] ?? '');
-            $productType = $identity?->productType ?? (string)($product['product_type'] ?? 'simple');
-            $status = (string)($product['status'] ?? 'draft');
-            $ownerWebsiteId = $identity?->ownerWebsiteId
-                ?? (int)($product['owner_website_id'] ?? $websiteId);
+            $products[] = $product;
+        }
 
-            if (($nameFilter !== '' && !str_contains(strtolower($name), $nameFilter))
-                || ($skuFilter !== '' && !$this->containsAny($skus, $skuFilter))
-                || ($codeFilter !== '' && !str_contains(strtolower($productCode), $codeFilter))
-                || ($typeFilter !== '' && strtolower($productType) !== $typeFilter)
-                || ($statusFilter !== '' && strtolower($status) !== $statusFilter)
-                || ($ownerFilter !== null && $ownerWebsiteId !== $ownerFilter)
-            ) {
+        $rows = [];
+        $activeStores = null;
+        // Bound the temporary read maps while reusing the repositories' bulk APIs.
+        foreach (array_chunk($products, 200) as $productBatch) {
+            $productIds = array_values(array_unique(array_map(
+                static fn(array $product): int => (int)$product['product_id'],
+                $productBatch,
+            )));
+            $offersByProduct = [];
+            foreach ($this->offers->listByProductIds($websiteId, $productIds) as $offer) {
+                $offersByProduct[(int)($offer['product_id'] ?? 0)][] = $offer;
+            }
+            $attributesByProduct = [];
+            foreach ($this->attributes->listExplicitRows($websiteId, 'product', $productIds, [0]) as $attribute) {
+                $attributesByProduct[(int)($attribute['entity_id'] ?? 0)][] = $attribute;
+            }
+
+            $matchedProducts = [];
+            foreach ($productBatch as $product) {
+                $productId = (int)$product['product_id'];
+                $offers = $offersByProduct[$productId] ?? [];
+                $offerIds = array_values(array_map(
+                    static fn(array $offer): int => (int)($offer['offer_id'] ?? 0),
+                    $offers,
+                ));
+                $attributes = $attributesByProduct[$productId] ?? [];
+                $name = '';
+                foreach ($attributes as $attribute) {
+                    if ((string)($attribute['attribute_code'] ?? '') === 'name'
+                        && !($attribute['cleared'] ?? false)
+                    ) {
+                        $name = trim((string)($attribute['value'] ?? ''));
+                        break;
+                    }
+                }
+                $skus = array_values(array_filter(array_map(
+                    static fn(array $offer): string => trim((string)($offer['sku'] ?? '')),
+                    $offers,
+                )));
+                if ($skus === []) {
+                    $skus[] = trim((string)($product['sku'] ?? ''));
+                }
+                $status = (string)($product['status'] ?? 'draft');
+
+                if (($nameFilter !== '' && !str_contains(strtolower($name), $nameFilter))
+                    || ($skuFilter !== '' && !$this->containsAny($skus, $skuFilter))
+                    || ($statusFilter !== '' && strtolower($status) !== $statusFilter)
+                ) {
+                    continue;
+                }
+
+                if (!$selectionNeedsIdentity) {
+                    $rows[] = [
+                        'product_id' => (int)$product['product_id'],
+                        'updated_at' => (string)($product['updated_at'] ?? ''),
+                    ];
+                    continue;
+                }
+
+                $uuid = trim((string)($product['global_product_uuid'] ?? ''));
+                $identity = $uuid === '' ? null : $this->identities->resolveProductByUuid($uuid);
+                $productCode = $identity?->productCode ?? (string)($product['product_code'] ?? '');
+                $productType = $identity?->productType ?? (string)($product['product_type'] ?? 'simple');
+                $ownerWebsiteId = $identity?->ownerWebsiteId
+                    ?? (int)($product['owner_website_id'] ?? $websiteId);
+
+                if (($codeFilter !== '' && !str_contains(strtolower($productCode), $codeFilter))
+                    || ($typeFilter !== '' && strtolower($productType) !== $typeFilter)
+                    || ($ownerFilter !== null && $ownerWebsiteId !== $ownerFilter)
+                ) {
+                    continue;
+                }
+
+                $matchedProducts[] = [
+                    'product' => $product,
+                    'identity' => $identity,
+                    'uuid' => $uuid,
+                    'offers' => $offers,
+                    'offer_ids' => $offerIds,
+                    'name' => $name,
+                    'skus' => $skus,
+                    'product_code' => $productCode,
+                    'product_type' => $productType,
+                    'status' => $status,
+                    'owner_website_id' => $ownerWebsiteId,
+                ];
+            }
+            if ($matchedProducts === []) {
+                continue;
+            }
+            if (!$includeDetails) {
+                foreach ($matchedProducts as $matched) {
+                    $rows[] = [
+                        'product_id' => (int)$matched['product']['product_id'],
+                        'updated_at' => (string)($matched['product']['updated_at'] ?? ''),
+                    ];
+                }
                 continue;
             }
 
-            $priceRows = $this->prices->listExplicitRows($websiteId, $offerIds, [0]);
-            $mediaRows = $this->media->listByProductIds($websiteId, [$productId]);
-            $activeStores = $this->activeStores($websiteId);
-            $selectedStores = array_values(array_filter(
-                array_map(
-                    fn(array $store): ?int => $this->storeProducts->isSelected(
-                        $websiteId,
-                        (int)$store['store_id'],
-                        $productId,
-                    ) ? (int)$store['store_id'] : null,
-                    $activeStores,
-                ),
-                static fn(?int $id): bool => $id !== null,
-            ));
-            $rows[] = [
-                'website_id' => $websiteId,
-                'product_id' => $productId,
-                'global_product_uuid' => $uuid,
-                'product_code' => $productCode,
-                'owner_website_id' => $ownerWebsiteId,
-                'product_type' => $productType,
-                'status' => $status,
+            $matchedProductIds = [];
+            $offerProductIds = [];
+            foreach ($matchedProducts as $matched) {
+                $productId = (int)$matched['product']['product_id'];
+                $matchedProductIds[] = $productId;
+                foreach ($matched['offer_ids'] as $offerId) {
+                    $offerProductIds[$offerId] = $productId;
+                }
+            }
+            $pricesByProduct = [];
+            foreach ($this->prices->listExplicitRows($websiteId, array_keys($offerProductIds), [0]) as $priceRow) {
+                $ownerProductId = $offerProductIds[(int)($priceRow['offer_id'] ?? 0)] ?? null;
+                if ($ownerProductId !== null) {
+                    $pricesByProduct[$ownerProductId][] = $priceRow;
+                }
+            }
+            $mediaByProduct = [];
+            foreach ($this->media->listByProductIds($websiteId, $matchedProductIds) as $mediaRow) {
+                $mediaByProduct[(int)($mediaRow['product_id'] ?? 0)][] = $mediaRow;
+            }
+            $activeStores ??= $this->activeStores($websiteId);
+
+            foreach ($matchedProducts as [
+                'product' => $product,
+                'identity' => $identity,
+                'uuid' => $uuid,
+                'offers' => $offers,
+                'offer_ids' => $offerIds,
                 'name' => $name,
                 'skus' => $skus,
-                'offer_count' => count($offers),
-                'prices' => $priceRows,
-                'main_media' => $this->mediaPresenter->presentMainMedia($mediaRows[0] ?? null, $websiteId),
-                'selected_store_ids' => $selectedStores,
-                'updated_at' => (string)($product['updated_at'] ?? ''),
-                'identity_version' => $identity?->version ?? 0,
-                'local_version' => (int)($product['publish_version'] ?? 0),
-            ];
+                'product_code' => $productCode,
+                'product_type' => $productType,
+                'status' => $status,
+                'owner_website_id' => $ownerWebsiteId,
+            ]) {
+                $productId = (int)$product['product_id'];
+                $priceRows = $pricesByProduct[$productId] ?? [];
+                $mediaRows = $mediaByProduct[$productId] ?? [];
+                $selectedStores = array_values(array_filter(
+                    array_map(
+                        fn(array $store): ?int => $this->storeProducts->isSelected(
+                            $websiteId,
+                            (int)$store['store_id'],
+                            $productId,
+                        ) ? (int)$store['store_id'] : null,
+                        $activeStores,
+                    ),
+                    static fn(?int $id): bool => $id !== null,
+                ));
+                $rows[] = [
+                    'website_id' => $websiteId,
+                    'product_id' => $productId,
+                    'global_product_uuid' => $uuid,
+                    'product_code' => $productCode,
+                    'owner_website_id' => $ownerWebsiteId,
+                    'product_type' => $productType,
+                    'status' => $status,
+                    'name' => $name,
+                    'skus' => $skus,
+                    'offer_count' => count($offers),
+                    'prices' => $priceRows,
+                    'main_media' => $this->mediaPresenter->presentMainMedia($mediaRows[0] ?? null, $websiteId),
+                    'selected_store_ids' => $selectedStores,
+                    'updated_at' => (string)($product['updated_at'] ?? ''),
+                    'identity_version' => $identity?->version ?? 0,
+                    'local_version' => (int)($product['publish_version'] ?? 0),
+                ];
+            }
         }
 
         usort(
@@ -928,6 +1040,9 @@ final class ProductAdminReadService implements ProductAdminReadInterface
                     'color' => '颜色',
                     'size' => '尺码',
                     'style_type' => '类型',
+                    'character' => '角色',
+                    'look_ref' => '图款',
+                    'prop' => '配件',
                     default => $code,
                 }),
                 'options' => $options,

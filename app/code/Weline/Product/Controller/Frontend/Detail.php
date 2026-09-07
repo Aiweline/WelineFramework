@@ -6,9 +6,14 @@ namespace Weline\Product\Controller\Frontend;
 
 use Weline\Framework\App\Controller\FrontendController;
 use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Service\StorefrontCatalogViewService;
 use Weline\Product\Service\StorefrontEavLabelResolver;
 use Weline\Product\Service\StorefrontVariantSelectionService;
+use Weline\Theme\Model\ThemeVirtualLayout;
+use Weline\Theme\Service\ProductLayoutCacheBustService;
+use Weline\Theme\Service\ProductLayoutResolveService;
 
 final class Detail extends FrontendController
 {
@@ -39,6 +44,11 @@ final class Detail extends FrontendController
         }
 
         $canonicalSlug = strtolower(trim((string)($offers[0]['slug'] ?? '')));
+        $productIdForLabels = max(
+            0,
+            (int)($offers[0]['product_id'] ?? $productId),
+        );
+        $variantLabels = $this->variantLabels->forProduct($productIdForLabels);
         if ($slug === '' && $canonicalSlug !== '') {
             $target = $this->getUrl('product/' . $canonicalSlug);
             $query = [];
@@ -48,7 +58,7 @@ final class Detail extends FrontendController
                 foreach ($this->variantSelection->collectAxisCodes($offers) as $axisCode) {
                     $axisValue = trim((string)$this->request->getParam($axisCode, ''));
                     if ($axisValue !== '') {
-                        $query[$axisCode] = $this->variantLabels->publicOptionCode($axisCode, $axisValue);
+                        $query[$axisCode] = $variantLabels->publicOptionCode($axisCode, $axisValue);
                     }
                 }
             }
@@ -60,7 +70,7 @@ final class Detail extends FrontendController
 
         $selectedOffer = $this->variantSelection->resolveSelectedOffer(
             $offers,
-            $this->variantLabels->canonicalizeAxisQuery(
+            $variantLabels->canonicalizeAxisQuery(
                 $this->request->getParams(),
                 $this->variantSelection->collectAxisCodes($offers),
             ),
@@ -86,6 +96,28 @@ final class Detail extends FrontendController
 
         $this->layoutType = 'product';
         $this->request->setGet('page_type', 'product');
+        $productIdForLayout = max(0, (int)($displayOffer['product_id'] ?? 0));
+        $layoutResolution = $this->resolveProductLayoutOption($productIdForLayout, $displayOffer);
+        $layoutOption = (string)($layoutResolution['layout_option'] ?? 'default');
+        if ($layoutOption === '') {
+            $layoutOption = 'default';
+        }
+        $this->layoutType = 'product.' . $layoutOption;
+        $this->request->setGet('layout_type', 'product');
+        $this->request->setGet('layout_option', $layoutOption);
+        $this->request->setGet('theme_layout_option', $layoutOption);
+        if ((int)($layoutResolution['schedule_id'] ?? 0) > 0) {
+            $this->request->setGet('theme_layout_schedule_id', (string)(int)$layoutResolution['schedule_id']);
+        }
+        $resolvedTargetType = (string)($layoutResolution['target_type'] ?? '');
+        $resolvedTargetId = (int)($layoutResolution['target_id'] ?? 0);
+        if ($resolvedTargetType !== '' && $resolvedTargetType !== ThemeVirtualLayout::TARGET_GLOBAL && $resolvedTargetId > 0) {
+            $this->request->setGet('theme_layout_target_type', $resolvedTargetType);
+            $this->request->setGet('theme_layout_target_id', (string)$resolvedTargetId);
+            $this->request->setGet('theme_layout_source_target_type', $resolvedTargetType);
+            $this->request->setGet('theme_layout_source_target_id', (string)$resolvedTargetId);
+        }
+        $this->assign('product_layout_resolution', $layoutResolution);
         $this->request->setGet('theme_public_route', $publicRoute);
         $this->request->setGet('theme_page_title', $name !== '' ? $name : (string)__('商品详情'));
         $seoTitle = trim((string)($displayOffer['meta_name'] ?? '')) ?: ($name !== '' ? $name : (string)__('商品详情'));
@@ -121,9 +153,10 @@ final class Detail extends FrontendController
         );
         $this->assign(
             'variant_catalog',
-            $this->enrichCatalogOptionCodes(
+            $this->variantSelection->compactCatalogMedia($this->enrichCatalogOptionCodes(
                 $this->variantSelection->buildCatalog($offers, $displayOffer),
-            ),
+                $variantLabels,
+            )),
         );
 
         $productIdForView = max(0, (int)($displayOffer['product_id'] ?? 0));
@@ -133,7 +166,8 @@ final class Detail extends FrontendController
         }
 
         // Product main info is rendered by the product-info widget (default_injections → product-main).
-        return (string)$this->fetch('Weline_Product::templates/frontend/catalog/detail-shell.phtml');
+        $html = (string)$this->fetch('Weline_Product::templates/frontend/catalog/detail-shell.phtml');
+        return $html;
     }
 
     /** @param list<array<string, mixed>> $offers */
@@ -152,8 +186,11 @@ final class Detail extends FrontendController
      * @param array{axes:list<array<string,mixed>>,offers:list<array<string,mixed>>,selected:array<string,string>} $catalog
      * @return array{axes:list<array<string,mixed>>,offers:list<array<string,mixed>>,selected:array<string,string>}
      */
-    private function enrichCatalogOptionCodes(array $catalog): array
-    {
+    private function enrichCatalogOptionCodes(
+        array $catalog,
+        ?StorefrontEavLabelResolver $variantLabels = null,
+    ): array {
+        $variantLabels ??= $this->variantLabels;
         foreach ($catalog['axes'] as $axisIndex => $axis) {
             if (!is_array($axis)) {
                 continue;
@@ -171,8 +208,13 @@ final class Detail extends FrontendController
                 if ($value === '') {
                     continue;
                 }
+                $label = trim((string)($option['label'] ?? ''));
+                $resolvedLabel = trim($variantLabels->resolve($axisCode, $value));
+                if ($resolvedLabel !== '' && ($label === '' || $label === $value)) {
+                    $option['label'] = $resolvedLabel;
+                }
                 if (trim((string)($option['code'] ?? '')) === '') {
-                    $option['code'] = $this->variantLabels->publicOptionCode($axisCode, $value);
+                    $option['code'] = $variantLabels->publicOptionCode($axisCode, $value);
                 }
                 $options[] = $option;
             }
@@ -180,5 +222,80 @@ final class Detail extends FrontendController
         }
 
         return $catalog;
+    }
+
+    /**
+     * @param array<string,mixed> $displayOffer
+     * @return array<string,mixed>
+     */
+    private function resolveProductLayoutOption(int $productId, array $displayOffer): array
+    {
+        if ($productId <= 0 || !class_exists(ProductLayoutResolveService::class)) {
+            return [
+                'layout_option' => 'default',
+                'source' => 'file',
+                'schedule_id' => 0,
+                'target_type' => ThemeVirtualLayout::TARGET_GLOBAL,
+                'target_id' => 0,
+                'fallback_chain' => ['file:default'],
+            ];
+        }
+        $categoryIds = $this->categoryIdsForProduct($productId, $displayOffer);
+        /** @var ProductLayoutResolveService $resolver */
+        $resolver = ObjectManager::getInstance(ProductLayoutResolveService::class);
+        $resolved = $resolver->resolveForProduct(
+            $productId,
+            $categoryIds,
+            null,
+            null,
+            null,
+            max(0, (int)($displayOffer['website_id'] ?? $this->request->getParam('website_id', 0))),
+        );
+        if (class_exists(ProductLayoutCacheBustService::class)) {
+            ObjectManager::getInstance(ProductLayoutCacheBustService::class)
+                ->bustIfScheduleMembershipChanged($productId, (int)($resolved['schedule_id'] ?? 0));
+        }
+
+        return $resolved;
+    }
+
+    /**
+     * @param array<string,mixed> $displayOffer
+     * @return list<int>
+     */
+    private function categoryIdsForProduct(int $productId, array $displayOffer): array
+    {
+        $ids = [];
+        foreach (['category_id', 'primary_category_id', 'main_category_id'] as $key) {
+            $id = (int)($displayOffer[$key] ?? 0);
+            if ($id > 0) {
+                $ids[$id] = $id;
+            }
+        }
+        $pathCategory = max(0, (int)$this->request->getParam('category_id', 0));
+        if ($pathCategory > 0) {
+            $ids = [$pathCategory => $pathCategory] + $ids;
+        }
+        if (!class_exists(CategoryLinkRepository::class)) {
+            return array_values($ids);
+        }
+        try {
+            $websiteId = max(0, (int)($displayOffer['website_id'] ?? $this->request->getParam('website_id', 0)));
+            /** @var CategoryLinkRepository $links */
+            $links = ObjectManager::getInstance(CategoryLinkRepository::class);
+            foreach ($links->listByProductIds($websiteId, [$productId], [0]) as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $categoryId = (int)($row['category_id'] ?? 0);
+                $selected = (int)($row['selected'] ?? 1);
+                if ($categoryId > 0 && $selected === 1) {
+                    $ids[$categoryId] = $categoryId;
+                }
+            }
+        } catch (\Throwable) {
+        }
+
+        return array_values($ids);
     }
 }

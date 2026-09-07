@@ -43,5 +43,28 @@ return [
                 ],
             ],
         ],
+        'StorefrontPriceAdjustmentProvider' => [
+            'path' => 'extends/module/Weline_Product/StorefrontPriceAdjustmentProvider',
+            'type' => ['module'],
+            'description' => '前台成交价调整 SPI：Promotion/Marketing/会员价等注册 unit-layer 优惠；Product Assembler 合并为 StorefrontOfferPriceView',
+            'required' => false,
+            'multiple' => true,
+            'interface' => 'Weline\Product\Api\Storefront\StorefrontPriceAdjustmentProviderInterface',
+            'details' => [
+                'file_location' => [
+                    'path' => 'extends/module/Weline_Product/StorefrontPriceAdjustmentProvider/{Name}Provider.php',
+                    'description' => '实现 StorefrontPriceAdjustmentProviderInterface；禁止模板内私算折扣',
+                    'example' => 'app/code/Weline/Promotion/extends/module/Weline_Product/StorefrontPriceAdjustmentProvider/PromotionThemeDealPriceAdjustmentProvider.php',
+                ],
+                'interface' => [
+                    'interface' => 'Weline\Product\Api\Storefront\StorefrontPriceAdjustmentProviderInterface',
+                    'required_methods' => [
+                        'getCode' => '唯一 Provider code',
+                        'getPriority' => '收集优先级（高者先）',
+                        'collectAdjustments' => '按 StorefrontPriceContext 返回调整列表（含活动名/URL）',
+                    ],
+                ],
+            ],
+        ],
     ],
 ];

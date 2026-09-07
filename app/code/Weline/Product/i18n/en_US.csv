@@ -1,5 +1,15 @@
 ﻿商品详情已浏览,商品详情已浏览
 前台商品详情成功解析报价后派发，供最近浏览、联盟等监听。,前台商品详情成功解析报价后派发，供最近浏览、联盟等监听。
+店面报价列表筛选,店面报价列表筛选
+"分类/商品列表在价格与排序之后派发，供 Filters 等模块应用 af_* 属性面筛选并回写 offers。","分类/商品列表在价格与排序之后派发，供 Filters 等模块应用 af_* 属性面筛选并回写 offers。"
+商品询价已提交,商品询价已提交
+"前台询价单落库成功后派发（含 quote_request_id / status=new）。","前台询价单落库成功后派发（含 quote_request_id / status=new）。"
+商品询价状态可否流转,商品询价状态可否流转
+"状态机规则检查时可扩展/改写 can_transition 与 transitions。","状态机规则检查时可扩展/改写 can_transition 与 transitions。"
+商品询价状态变更前,商品询价状态变更前
+"写库前派发；观察者可将 can_change=false 阻止流转。","写库前派发；观察者可将 can_change=false 阻止流转。"
+商品询价状态已变更,商品询价状态已变更
+"写库成功后派发；含 old_status / new_status / quote_request_id。","写库成功后派发；含 old_status / new_status / quote_request_id。"
 供应商名称与编码不能为空,"Supplier name and code are required"
 供应商编码已存在：%{1},"Supplier code already exists: %{1}"
 供应商创建后无法回读：%{1},"Supplier could not be reloaded after create: %{1}"
@@ -94,6 +104,7 @@
 商品,Products
 "商品价格在当前 Scope 已清除","Product price in current Scope has been cleared"
 商品价格未配置,"Product price is not configured"
+仅询价，不可加入购物车,"Quote only — cannot add to cart"
 下载商品需要登录后购买,下载商品需要登录后购买
 下载资产当前不可用，请联系管理员,下载资产当前不可用，请联系管理员
 商品库存不足,"Out of stock"
@@ -127,6 +138,15 @@
 批量执行商品后台命令,批量执行商品后台命令
 "批量调整商品 Website 分类","批量调整商品 Website 分类"
 执行商品创建、保存、校验与生命周期命令,执行商品创建、保存、校验与生命周期命令
+列出产品布局选项,列出产品布局选项
+新建产品布局选项,新建产品布局选项
+解析产品有效布局,解析产品有效布局
+保存产品/分类默认布局选择,保存产品/分类默认布局选择
+清除产品/分类默认布局选择,清除产品/分类默认布局选择
+列出布局定时计划,列出布局定时计划
+保存布局定时计划,保存布局定时计划
+删除布局定时计划,删除布局定时计划
+"Theme 产品布局服务不可用","Theme 产品布局服务不可用"
 商品复制查询器不支持操作：%{1},"Product copy query does not support operation: %{1}"
 "Store 商品复制","Store product copy"
 "后台创建复制草稿、预览并幂等提交 Product 目录到目标 Website 的所选 Stores。","后台创建复制草稿、预览并幂等提交 Product 目录到目标 Website 的所选 Stores。"
@@ -165,6 +185,8 @@ id属性不能为空,id属性不能为空
 未找到匹配项,未找到匹配项
 未选择,未选择
 搜索名称或编码,搜索名称或编码
+商品详情价格之后,商品详情价格之后
+"在商品详情页价格区块之后注入扩展内容，例如 ToC/ToB 售卖模式切换。","在商品详情页价格区块之后注入扩展内容，例如 ToC/ToB 售卖模式切换。"
 商品详情加购之后,商品详情加购之后
 在商品详情页加购操作区域之后注入扩展内容，例如分销分享面板。,在商品详情页加购操作区域之后注入扩展内容，例如分销分享面板。
 商品目录批量操作扩展,商品目录批量操作扩展
@@ -176,6 +198,7 @@ id属性不能为空,id属性不能为空
 价格从高到低,"Price: High to Low"
 "名称 A-Z","Name: A-Z"
 热销榜,"Best Sellers"
+提交失败，请稍后重试。,"Submission failed. Please try again later."
 商品未找到,商品未找到
 新品上架,"New Arrivals"
 商品不存在或当前不可用。,"The product does not exist or is currently unavailable."
@@ -261,6 +284,21 @@ play,play
 创建商品媒体,"Create product media"
 保存站点文案,"Save site copy"
 "保存商品站点与 Store View 文案","Save product site and Store View copy"
+商品询价,"Product quote requests"
+待处理,New
+处理中,Processing
+已回复,Replied
+已关闭,Closed
+已取消,Cancelled
+无法更新询价单,"Unable to update quote request"
+"询价单 #%{1}：%{2} → %{3}","Quote #%{1}: %{2} → %{3}"
+message,message
+查看和处理仅询价商品的询价单,查看和处理仅询价商品的询价单
+标记询价已处理,标记询价已处理
+check,check
+将询价单标记为已处理,将询价单标记为已处理
+询价状态流转,"Quote status transition"
+按状态机规则变更询价单状态,"Change quote status by state machine rules"
 "Product Search 水位原子建件后无法回读：website_id=%{1}","Product Search The water level atomic component cannot be read back after being built: website_id=%{1}"
 "Product Search 水位 CAS 冲突超过 %{1} 次：website_id=%{2}","Product Search water level CAS conflicts exceed %{1} times: website_id=%{2}"
 "Product Search 水位建件失败：website_id=%{1}","Product Search Water level build failed: website_id=%{1}"
@@ -282,16 +320,24 @@ play,play
 "请在规格维度中至少选择一个规格值，系统将按笛卡尔积生成子 SKU。","请在规格维度中至少选择一个规格值，系统将按笛卡尔积生成子 SKU。"
 个子规格,个子规格
 "填写 SKU 前缀后可预览正式 SKU","填写 SKU 前缀后可预览正式 SKU"
-预览,预览
+预览,Preview
 组合,组合
 "SKU 预览","SKU 预览"
 未找到属性集目录，请重新选择属性集。,未找到属性集目录，请重新选择属性集。
 "多选规格值后将按笛卡尔积生成子 SKU。","多选规格值后将按笛卡尔积生成子 SKU。"
 当前属性集没有可填写的商品属性（非规格组）。,当前属性集没有可填写的商品属性（非规格组）。
-"织艺谱系 · Textile Heritage","织艺谱系 · Textile Heritage"
-上一组,上一组
-下一组,下一组
 热销榜内容由控制器渲染,"Best-seller content is rendered by the controller"
+我的询价,"My quotes"
+查看询价进度与回复,"View quote status and replies"
+查看您提交的商品询价与处理状态,"Review your product quote requests and status"
+暂无询价记录,"No quote requests yet"
+SKU,SKU
+状态,Status
+参考价,"Reference price"
+时间,时间
+沟通,沟通
+查看沟通,查看沟通
+"询价沟通 #%{1}","询价沟通 #%{1}"
 面包屑,Breadcrumb
 首页,Home
 "第 %{1}–%{2} 件，共 %{3} 件结果","%{1}–%{2} of %{3} results"
@@ -301,12 +347,11 @@ play,play
 排序,Sort
 当前筛选条件下暂无商品，请调整筛选。,"No products match the current filters."
 该分类下暂无已发布商品。,该分类下暂无已发布商品。
-联系询价,"Contact for quote"
 分页,分页
 全部商品,全部商品
 浏览当前网站已发布的商品，可按分类与价格筛选。,浏览当前网站已发布的商品，可按分类与价格筛选。
-"第 %{1}–%{2} 件，共 %{3} 件商品","第 %{1}–%{2} 件，共 %{3} 件商品"
-"0 件商品","0 件商品"
+"第 %{1}–%{2} 件，共 %{3} 件商品","%{1}–%{2} of %{3} products"
+"0 件商品","0 products"
 当前网站暂无已发布商品。,"There are currently no products published on the website."
 查看购物车,"View cart"
 新作入藏,"New to the Collection"
@@ -325,6 +370,8 @@ play,play
 "共 %{1} 件热销商品","%{1} best-selling products"
 排名,排名
 "已售 %{1}","%{1} sold"
+联系询价,"Contact for quote"
+查看详情,查看详情
 请至少选择一个商品,请至少选择一个商品
 已添加,已添加
 已加入购物车,已加入购物车
@@ -335,7 +382,8 @@ play,play
 当前商品,当前商品
 总价,总价
 精选好物，为你推荐,精选好物，为你推荐
-查看详情,查看详情
+上一组,上一组
+下一组,下一组
 商品信息暂不可用,"Product information is unavailable"
 商品类型,"Product type"
 属性集,"Attribute set"
@@ -389,12 +437,16 @@ DPI,DPI
 暂时缺货,"Currently unavailable"
 返回商品目录,"Back to products"
 商品图片,"Product images"
-选择图片,"Choose image"
+选择图片或视频,"Choose image or video"
+"查看商品视频 %{1}","View product video %{1}"
 "查看商品图片 %{1}","View product image %{1}"
+商品视频,"Product video"
 "平均 %{1} 星","Average %{1} stars"
 "%{1} 条评价","%{1} ratings"
 查看买家评价,"See customer reviews"
 价格,Price
+仅询价商品：以上为参考活动价，不可直接加购,"Quote-only item: price above is a promotional reference and cannot be added to cart"
+售卖模式,售卖模式
 规格,Options
 请选择规格,"Select an option"
 暂不可购买,"Not available for this option"
@@ -407,15 +459,44 @@ DPI,DPI
 数量,Quantity
 购买数量,Quantity
 购买操作,"Purchase actions"
-仅询价,"Quote only"
+提交询价,"Submit quote request"
 加入购物车,"Add to Cart"
 立即结账,"Proceed to checkout"
 安全交易保障,"Secure transaction"
 技术细节,"Technical details"
+展示更多,"Show more"
+收起,"Show less"
 关于该商品,"About this item"
+关闭,Close
+联系人,Contact
+邮箱,Email
+手机,手机
+需求数量,"Quantity needed"
+备注,Notes
+请至少填写邮箱或手机号。提交后我们会尽快联系您。,"Provide at least an email or phone number. We will contact you after submission."
+取消,Cancel
+查看商品视频,查看商品视频
+查看商品图片,查看商品图片
+请填写邮箱或手机号,"Please provide an email or phone number"
+提交成功，我们会尽快联系您。,"Submitted successfully. We will contact you soon."
 "Customers also viewed","Customers also viewed"
 Website,Website
 切换,切换
+默认产品布局,默认产品布局
+"该分类下商品若无产品专属选择，详情将使用此布局；定时只改有效 option，不写回永久选择。","该分类下商品若无产品专属选择，详情将使用此布局；定时只改有效 option，不写回永久选择。"
+加载中…,加载中…
+保存默认布局,保存默认布局
+打开可视化编辑,打开可视化编辑
+清除默认,清除默认
+定时计划（目标=本分类）,定时计划（目标=本分类）
+"+ 添加定时","+ 添加定时"
+"到点：切有效 option + 清本分类下全部关联商品详情/FPC","到点：切有效 option + 清本分类下全部关联商品详情/FPC"
+开始,开始
+结束,结束
+优先,优先
+编辑定时布局,编辑定时布局
+优先级,优先级
+保存计划,保存计划
 添加子分类,添加子分类
 分类已保存,"Category saved"
 分类保存失败,"Failed to save category"
@@ -448,7 +529,6 @@ Website,Website
 顶级分类,"Root categories"
 启用分类,"Enable category"
 删除,删除
-取消,Cancel
 保存,Save
 "Catalog workspace","Catalog workspace"
 "商品主体、销售规格、价格、Store 与发布诊断集中管理","商品主体、销售规格、价格、Store 与发布诊断集中管理"
@@ -535,13 +615,12 @@ SPU,SPU
 管理,管理
 刷新,Refresh
 全部类型,全部类型
-全部状态,全部状态
+全部状态,"All statuses"
 "全部 Store","全部 Store"
-筛选,筛选
+筛选,Filter
 ID,ID
 主图,Image
 总货号,总货号
-状态,Status
 更新时间,更新时间
 "选择商品主图 / 图集","选择商品主图 / 图集"
 选择规格预览图,选择规格预览图
@@ -562,7 +641,6 @@ ID,ID
 未命名草稿,未命名草稿
 未选择属性集,未选择属性集
 创建并立即发布,"Create and publish now"
-关闭,Close
 "维护 Website 级品牌目录（名称、编码、Logo、状态）。创建商品时从启用品牌中选择。","Maintain the website brand catalog (name, code, logo, status). Pick an active brand when creating products."
 品牌名称,"Brand name"
 品牌编码,"Brand code"
@@ -591,18 +669,16 @@ ID,ID
 店铺地址,"Store URL"
 "选填。供应商网店 / 店铺主页链接。","Optional. Supplier storefront URL."
 供应商图片,"Supplier image"
+选择图片,"Choose image"
 选填。从媒体库选择供应商形象图。,"Optional. Pick a supplier image from the media library."
 关联品牌,"Linked brands"
 暂无启用品牌。请先在「品牌管理」中创建。,"No active brands yet. Create one in Brand management first."
 多选：一个供应商可挂多个品牌（N:N）。已选显示为标签，可点叉移除。,多选：一个供应商可挂多个品牌（N:N）。已选显示为标签，可点叉移除。
-联系人,Contact
 电话,Phone
-邮箱,Email
 默认币种,"Default currency"
 付款条款,"Payment terms"
 默认交期(天),"Default lead time (days)"
 默认起订量,"Default MOQ"
-备注,Notes
 供应商列表,"Supplier list"
 暂无供应商，请先在左侧创建。,"No suppliers yet. Create one on the left."
 图片,Image
@@ -645,7 +721,7 @@ ID,ID
 "新组合将按“前缀-规格值”生成人类可读 SKU，可在矩阵中逐条修改。","新组合将按“前缀-规格值”生成人类可读 SKU，可在矩阵中逐条修改。"
 添加规格轴,添加规格轴
 重新生成矩阵,重新生成矩阵
-勾选规格值生成矩阵；有色块时显示颜色胶囊。,勾选规格值生成矩阵；有色块时显示颜色胶囊。
+回车填写属性项（颜色/图片等随属性能力显示）；勾选规格值生成矩阵。,"Press Enter to fill attribute fields (color/image depend on capability); check options to build the matrix."
 "当前变更不会停用已有 Offer。","当前变更不会停用已有 Offer。"
 "个 Offer 组合；显式零价有效，留空表示清除基础价。","个 Offer 组合；显式零价有效，留空表示清除基础价。"
 产品图片,"Product image"
@@ -664,6 +740,12 @@ ID,ID
 没有可覆盖的分类。,没有可覆盖的分类。
 "Website 图片媒体","Website 图片媒体"
 "从受权限保护的媒体库选择 FileAsset。主图不是统一必填，由产品 Provider 决定。","从受权限保护的媒体库选择 FileAsset。主图不是统一必填，由产品 Provider 决定。"
+"在主图旁配置本地视频或粘贴 YouTube / Vimeo 链接、iframe 嵌入代码。","Configure a local video beside the main image, or paste a YouTube/Vimeo URL or iframe embed."
+添加链接,"Add link"
+选择本地视频,"Choose local video"
+来源,Source
+视频,Video
+尚未配置商品视频。,"No product videos yet."
 图集,图集
 "暂无 FileAsset 图片。可先保存没有图片的草稿。","暂无 FileAsset 图片。可先保存没有图片的草稿。"
 "检测到旧 path/blob 媒体。它们会继续兼容读取，但不会由本编辑器覆盖或重新写入；请逐步替换为 FileAsset。","检测到旧 path/blob 媒体。它们会继续兼容读取，但不会由本编辑器覆盖或重新写入；请逐步替换为 FileAsset。"
@@ -674,6 +756,27 @@ ID,ID
 "先为 Website 添加图片并保存，再配置 Store 差异。","先为 Website 添加图片并保存，再配置 Store 差异。"
 选择商品图片,选择商品图片
 "只会接收媒体库返回的 FileAsset 身份，不保存文件路径。","只会接收媒体库返回的 FileAsset 身份，不保存文件路径。"
+选择商品视频,"Choose product video"
+"选择 mp4 / webm 等本地视频 FileAsset。","Select mp4/webm FileAsset videos."
+产品布局,产品布局
+"后台新建/编辑 layout_option；指派本商品或继承分类默认；定时只改有效 option 并清理本商品缓存。","后台新建/编辑 layout_option；指派本商品或继承分类默认；定时只改有效 option 并清理本商品缓存。"
+当前有效布局,当前有效布局
+本商品布局选择,本商品布局选择
+"继承（分类默认 → 文件 default）","继承（分类默认 → 文件 default）"
+"指定 layout_option","指定 layout_option"
+保存选择,保存选择
+清除专属选择,清除专属选择
+可用布局,可用布局
+"+ 新建布局","+ 新建布局"
+定时计划（目标=本商品）,定时计划（目标=本商品）
+暂无定时,暂无定时
+"定时只改有效 option，不改永久选择；到点清本商品详情缓存。","定时只改有效 option，不改永久选择；到点清本商品详情缓存。"
+新建产品布局,新建产品布局
+"代码 layout_option","代码 layout_option"
+显示名称,"Display name"
+克隆自,克隆自
+创建并打开编辑器,创建并打开编辑器
+"目标=产品 → 只清该商品详情/FPC；不写回永久布局选择。","目标=产品 → 只清该商品详情/FPC；不写回永久布局选择。"
 "Store 可见性","Store 可见性"
 "Website 保存目录事实；Store 默认继承并可显式覆盖。","Website 保存目录事实；Store 默认继承并可显式覆盖。"
 库存与配送,库存与配送
@@ -737,6 +840,13 @@ Store,Store
 这条历史事件的详情无法解析，主审计记录仍然有效。,这条历史事件的详情无法解析，主审计记录仍然有效。
 保存草稿,保存草稿
 只读归档,"Read-only archive"
+新增规格值,"Add option value"
+规格值代码,"Option code"
+用于组合键；默认同显示名称，可按需改成稳定代码。,"Used in combination keys; defaults to the display name."
+规格图,"Option image"
+添加规格值,"Add option"
+选择规格图,"Choose option image"
+为当前规格值选择色板/图板预览图。,"Pick a swatch/preview image for this option."
 创建商品身份,创建商品身份
 创建销售规格身份,创建销售规格身份
 "重命名 SKU","重命名 SKU"
@@ -771,6 +881,14 @@ Store,Store
 当前为归属站,当前为归属站
 当前为复制站,当前为复制站
 属性结构,属性结构
+已处理,Processed
+暂无询价单,"No quote requests yet"
+联系方式,"Contact details"
+地址,地址
+标记已处理,"Mark processed"
+企业邮箱回复,企业邮箱回复
+当前账号邮箱不是本机企业邮箱，需外部发送,当前账号邮箱不是本机企业邮箱，需外部发送
+外部邮件客户端,外部邮件客户端
 "批量分类调整完成：成功 %{1}，失败 %{2}","批量分类调整完成：成功 %{1}，失败 %{2}"
 "至少选择一个活动 Store 才能发布","至少选择一个活动 Store 才能发布"
 库存模块当前不可用，商品其他信息仍可编辑,库存模块当前不可用，商品其他信息仍可编辑
@@ -929,6 +1047,18 @@ Store,Store
 图书音像,"Books & Media"
 食品饮料,"Food & Beverages"
 未命名分类,未命名分类
+该询价单无有效邮箱，无法邮件回复,该询价单无有效邮箱，无法邮件回复
+尚未开通本机企业邮箱账号，请先在企业邮箱管理中创建测试或客服邮箱,尚未开通本机企业邮箱账号，请先在企业邮箱管理中创建测试或客服邮箱
+可选择本机客服或测试邮箱代发,可选择本机客服或测试邮箱代发
+使用本人本机企业邮箱回复,使用本人本机企业邮箱回复
+"询价回复 #%{1} %{2}","询价回复 #%{1} %{2}"
+您好，关于您的商品询价：,您好，关于您的商品询价：
+SKU：%{1},SKU：%{1}
+数量：%{1},数量：%{1}
+参考价：%{1},参考价：%{1}
+联系人：%{1},联系人：%{1}
+客户留言：%{1},客户留言：%{1}
+（请在此填写报价与说明）,（请在此填写报价与说明）
 "Product shard 正在 provisioning：website_id=%{1}","Product shard is provisioning: website_id=%{1}"
 "Product shard 无法进入 provisioning：status=%{1}","Product shard cannot enter provisioning: status=%{1}"
 "Product shard provision 失败","Product shard provision failed"
@@ -992,6 +1122,16 @@ Store,Store
 "Product Search 找不到 Website：%{1}","Product Search cannot find Website:%{1}"
 "Product Search 参数 %{1} 必须是规范整数","Product Search parameter %{1} must be a canonical integer"
 "Product Search 参数 %{1} 不能小于 %{2}","Product Search parameter %{1} cannot be less than %{2}"
+人机验证失败或已过期，请重试,"Captcha failed or expired; try again"
+无效的幂等提交键,"Invalid idempotency key"
+请填写联系人姓名,"Please enter a contact name"
+邮箱格式不正确,"Invalid email address"
+缺少商品规格信息，请刷新后重试,"Missing product offer details; refresh and try again"
+商品规格无效或已下架,"This offer is invalid or unpublished"
+该规格可直接购买，无需提交询价,"This offer can be purchased directly; a quote is not required"
+询价单不存在,"Quote request not found"
+"询价单状态不能从 %{1} 转换到 %{2}","Cannot transition quote from %{1} to %{2}"
+询价单状态转换被阻止,"Quote status transition blocked"
 "SKU claim 写入后无法回读：%{1}","SKU claim cannot be read back after writing: %{1}"
 "SKU 不存在：%{1}","SKU does not exist: %{1}"
 "SKU 已 tombstone：%{1}","SKU has tombstoned:%{1}"
@@ -1036,6 +1176,12 @@ Store,Store
 "必须与当前 env 配置一致的 mig_clone_* 数据库","必须与当前 env 配置一致的 mig_clone_* 数据库"
 "cutover/rollback 必填的切换状态版本","cutover/rollback 必填的切换状态版本"
 "rollback 目标：dual_read（默认）或 legacy","rollback 目标：dual_read（默认）或 legacy"
+已标记为已处理,"Marked as processed"
+仅询价,"Quote only"
+图款,Look
+勾选规格值生成矩阵；有色块时显示颜色胶囊。,勾选规格值生成矩阵；有色块时显示颜色胶囊。
+展开更多,"Show more"
+"织艺谱系 · Textile Heritage","织艺谱系 · Textile Heritage"
 "共 %{1} 件商品","%{1} products"
 查找分类,查找分类
 "当前 Website 还没有分类。请先建立分类目录，再回到商品选择。","当前 Website 还没有分类。请先建立分类目录，再回到商品选择。"
@@ -1143,7 +1289,6 @@ Store,Store
 "页面价格、库存与购物车均来自当前网站的持久化商品 Offer。","The page price, inventory, and shopping cart all come from the persistent product Offers of the current website."
 商品内核管理工作台,"Product core management workbench"
 切换网站,"Switch website"
-SKU,SKU
 请求哈希,"request hash"
 "已注册 SKU","Registered SKU"
 "商品 SKU","Product SKU"
@@ -1203,7 +1348,6 @@ Available,Available
 "必须以 / 开头，仅允许字母、数字、/、-、_。示例：","Must start with /; only letters, numbers, /, -, and _ are allowed. Example:"
 分类详情,"Category details"
 请从左侧选择分类查看详情，或使用上方表单创建新分类。,"Select a category on the left or create one with the form above."
-显示名称,"Display name"
 "分类 ID","Category ID"
 清除选择,"Clear selection"
 已停用,Inactive
@@ -1241,3 +1385,9 @@ AI翻译,"AI Translation"
 商品身份摘要,"Product identity summary"
 显示品牌,"Show brand"
 显示供应商,"Show supplier"
+自定义规格值，回车填写属性项,"Custom option: Enter to fill attribute fields"
+颜色色值,"Color hex"
+"粘贴 YouTube / Vimeo 链接或 iframe 代码","Paste YouTube/Vimeo URL or iframe embed"
+视频链接,"Video URL"
+视频排序,"Video position"
+视频媒体库,"Video media library"

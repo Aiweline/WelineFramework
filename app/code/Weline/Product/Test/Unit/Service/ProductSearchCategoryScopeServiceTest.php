@@ -15,6 +15,9 @@ final class ProductSearchCategoryScopeServiceTest extends TestCase
         $source = (string)file_get_contents($path);
         self::assertStringContainsString('ProductCatalogQueryConsumer', $source);
         self::assertStringContainsString('$this->catalog->tree', $source);
+        self::assertStringContainsString('StorefrontAllMenuCategoryTreeService', $source);
+        self::assertStringContainsString('navTree', $source);
+        self::assertStringContainsString("['meta']['category_id']", $source);
         self::assertStringContainsString('listFromCatalog', $source);
         self::assertStringContainsString('private function demoScopes()', $source);
         self::assertStringNotContainsString('CategoryRepository', $source);

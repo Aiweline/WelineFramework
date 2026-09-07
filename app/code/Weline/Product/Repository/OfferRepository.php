@@ -70,6 +70,37 @@ final class OfferRepository extends AbstractWebsiteShardRepository
      */
     public function listByProductIds(int $websiteId, array $productIds): array
     {
+        return $this->listByProductIdsWithStatus($websiteId, $productIds, null);
+    }
+
+    /**
+     * Read only published offers for storefront projections.
+     *
+     * Keeping this predicate in the shard query avoids materializing draft,
+     * disabled, and archived rows before the storefront representative scan.
+     *
+     * @param list<int> $productIds
+     * @return list<array<string, mixed>>
+     */
+    public function listPublishedByProductIds(int $websiteId, array $productIds): array
+    {
+        return $this->listByProductIdsWithStatus($websiteId, $productIds, Offer::STATUS_PUBLISHED);
+    }
+
+    /**
+     * Read the first published offer for each product directly in SQL.
+     *
+     * Storefront listing pages only expose one representative offer per
+     * product. Grouping the published shard rows before hydrating the full
+     * offer records avoids transferring every variant into PHP for that
+     * path; the second query preserves the existing offer-id ordering and
+     * returns the same complete rows as listPublishedByProductIds().
+     *
+     * @param list<int> $productIds
+     * @return list<array<string, mixed>>
+     */
+    public function listPublishedRepresentativeByProductIds(int $websiteId, array $productIds): array
+    {
         $this->assertWebsite($websiteId);
         $productIds = array_values(array_unique(array_filter(
             array_map('intval', $productIds),
@@ -78,17 +109,59 @@ final class OfferRepository extends AbstractWebsiteShardRepository
         if ($productIds === []) {
             return [];
         }
-        $rows = $this->newModel($websiteId)
+
+        $representatives = $this->newModel($websiteId)
             ->clear()
+            ->fields([
+                Offer::schema_fields_PRODUCT_ID,
+                'representative_offer_id' => 'MIN(' . Offer::schema_fields_ID . ')',
+            ])
             ->where(Offer::schema_fields_PRODUCT_ID, $productIds, 'IN')
+            ->where(Offer::schema_fields_STATUS, Offer::STATUS_PUBLISHED)
+            ->group(Offer::schema_fields_PRODUCT_ID)
             ->select()
             ->fetchArray();
-        usort(
-            $rows,
-            static fn(array $left, array $right): int => (int)($left[Offer::schema_fields_ID] ?? 0)
-                <=> (int)($right[Offer::schema_fields_ID] ?? 0),
-        );
-        return $rows;
+        $offerIds = array_values(array_filter(array_map(
+            static fn(array $row): int => (int)($row['representative_offer_id'] ?? 0),
+            $representatives,
+        ), static fn(int $id): bool => $id > 0));
+        if ($offerIds === []) {
+            return [];
+        }
+
+        return $this->newModel($websiteId)
+            ->clear()
+            ->where(Offer::schema_fields_ID, $offerIds, 'IN')
+            ->order(Offer::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @return list<array<string, mixed>>
+     */
+    private function listByProductIdsWithStatus(int $websiteId, array $productIds, ?string $status): array
+    {
+        $this->assertWebsite($websiteId);
+        $productIds = array_values(array_unique(array_filter(
+            array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        if ($productIds === []) {
+            return [];
+        }
+        $query = $this->newModel($websiteId)
+            ->clear()
+            ->where(Offer::schema_fields_PRODUCT_ID, $productIds, 'IN');
+        if ($status !== null && trim($status) !== '') {
+            $query->where(Offer::schema_fields_STATUS, trim($status));
+        }
+
+        return $query
+            ->order(Offer::schema_fields_ID, 'ASC')
+            ->select()
+            ->fetchArray();
     }
     /**
      * @param list<int> $productIds

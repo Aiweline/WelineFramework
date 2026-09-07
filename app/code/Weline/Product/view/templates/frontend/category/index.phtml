@@ -1,8 +1,6 @@
 <?php
 
-use Weline\Product\Helper\StorefrontOfferDetailQuery;
-use Weline\Theme\Helper\ProductCardAddToCartParams;
-use Weline\Theme\Helper\StorefrontImagePlaceholder;
+use Weline\Product\Service\ProductCardRenderer;
 /**
  * Amazon-style category results: breadcrumb, results bar, compact product grid.
  *
@@ -172,73 +170,15 @@ $to = $visibleCount > 0 ? min($page * $pageSize, $visibleCount) : 0;
             <?php endif; ?>
         </div>
     <?php else: ?>
-        <div class="amz-plp__grid" data-testid="storefront-category-grid">
-            <?php foreach ($offers as $offer): ?>
+        <div class="amz-plp__grid weline-product-card-shelf" data-testid="storefront-category-grid">
+            <?php foreach ($offers as $index => $offer): ?>
                 <?php
-                $minor = max(0, (int)($offer['unit_price_minor'] ?? 0));
-                $sellable = !empty($offer['sellable']);
-                $quoteOnly = !empty($offer['quote_only']);
-                $uuid = trim((string)($offer['global_offer_uuid'] ?? ''));
-                $productId = max(0, (int)($offer['product_id'] ?? 0));
-                $productName = trim((string)($offer['name'] ?? ''));
-                $productSlug = trim((string)($offer['slug'] ?? ''));
-                $productUrl = '';
-                if ($productSlug !== '') {
-                    $productPath = 'product/' . $productSlug;
-$productUrl = $productPath; // route path; render with @url
-                } elseif ($productId > 0) {
-                    $productPath = 'product/' . $productId;
-$productUrl = $productPath; // route path; render with @url
+                $product = ProductCardRenderer::fromStorefrontOffer(is_array($offer) ? $offer : [], (int)$index);
+                if ((int)($product['id'] ?? 0) <= 0) {
+                    continue;
                 }
-                $productUrlParams = StorefrontOfferDetailQuery::params(is_array($offer) ? $offer : []);
-                $imageResolved = StorefrontImagePlaceholder::resolve((string)($offer['image'] ?? ''), $productId);
-                $image = $imageResolved['src'];
-                $imageFallback = $imageResolved['fallback'];
                 ?>
-                <article class="amz-card product-card<?= $productUrl !== '' ? ' is-clickable' : '' ?>"
-                         data-testid="storefront-category-product-card"
-                         data-product-id="<?= $productId ?>"
-                         data-global-offer-uuid="<?= $escape($uuid) ?>">
-                    <?php if ($productUrl !== ''): ?>
-                        <a class="amz-card__hit"
-                           href="@url{$productUrl|$productUrlParams}"
-                           aria-label="<?= $escape($productName) ?>"
-                           data-testid="storefront-category-product-card-link"></a>
-                    <?php endif; ?>
-                    <div class="amz-card__media-wrap">
-                        <div class="amz-card__media"<?= $productUrl === '' ? ' aria-hidden="true"' : '' ?>>
-                            <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
-                                'product_id' => $productId,
-                                'show_wishlist' => true,
-                                'show_compare' => true,
-                                'show_quickview' => true,
-                            ]) ?>
-                            <img src="<?= $escape($image) ?>"
-                                 alt=""
-                                 data-storefront-img="1"
-                                 data-fallback="<?= $escape($imageFallback) ?>"
-                                 loading="lazy"
-                                 decoding="async">
-                        </div>
-                    </div>
-                    <div class="amz-card__body">
-                        <h2 class="amz-card__title"><?= $escape($productName) ?></h2>
-                        <p class="amz-card__price">
-                            <?php if ($quoteOnly): ?>
-                                <?= __('联系询价') ?>
-                            <?php else: ?>
-                                <span class="amz-card__currency"><?= $escape($offer['currency'] ?? 'CNY') ?></span>
-                                <span class="amz-card__amount"><?= number_format($minor / 100, 2) ?></span>
-                            <?php endif; ?>
-                        </p>
-                        <?= $this->fetch(
-                            'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
-                            ProductCardAddToCartParams::fetchDictionaryFromOffer($offer, [
-                                'variant' => 'amz-card',
-                            ])
-                        ) ?>
-                    </div>
-                </article>
+                <w:product:card product="product" show-price="true" show-rating="false" show-add-to-cart="true" show-wishlist="true" show-compare="true" show-quickview="true" show-labels="true" show-sku="true" density="standard" class="wpc-listing-card" wishlist-pixel="true" />
             <?php endforeach; ?>
         </div>
         <?php if ($totalPages > 1 && $pageOptions !== []): ?>
@@ -403,127 +343,17 @@ $productUrl = $productPath; // route path; render with @url
 }
 .amz-plp__notice { min-height: 0; margin: 0 0 10px; color: #067d62; font-size: 13px; }
 .amz-plp__notice.is-error { color: #b12704; }
+.amz-plp__grid > .weline-product-card {
+    min-width: 0;
+    height: 100%;
+}
 .amz-plp__grid {
     display: grid;
     grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 12px;
     align-items: stretch;
 }
-.amz-card {
-    position: relative;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    border: 1px solid #d5d9d9;
-    border-radius: 8px;
-    background: #fff;
-    overflow: hidden;
-}
-.amz-card.is-clickable { cursor: pointer; }
-.amz-card.is-clickable:hover { border-color: #bbb; box-shadow: 0 2px 8px rgba(15, 17, 17, .08); }
-.amz-card__hit {
-    position: absolute;
-    inset: 0;
-    z-index: 1;
-    color: inherit;
-    text-decoration: none;
-}
-.amz-card__media-wrap { background: #fff; overflow: hidden; }
-.amz-card__media {
-    position: relative;
-    display: block;
-    height: 160px;
-    max-height: 160px;
-    overflow: hidden;
-    background: #fff;
-}
-.amz-card__media img {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center;
-    box-sizing: border-box;
-}
-.amz-card__media .product-actions {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    z-index: 2;
-    display: flex;
-    flex-direction: column;
-    gap: 6px;
-    opacity: 0;
-    transition: opacity .2s ease;
-}
 .amz-card:hover .product-actions,
-.amz-card:focus-within .product-actions {
-    opacity: 1;
-}
-.amz-card__media .action-btn {
-    width: 2rem;
-    height: 2rem;
-    border: 0;
-    border-radius: 999px;
-    background: rgba(255, 255, 255, .96);
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    cursor: pointer;
-    box-shadow: 0 2px 8px rgba(15, 17, 17, .12);
-}
-.amz-card__placeholder {
-    position: absolute;
-    inset: 0;
-    display: grid;
-    place-items: center;
-    color: #bbb;
-    font-size: 36px;
-    font-weight: 800;
-    line-height: 1;
-}
-.amz-card__body {
-    display: grid;
-    gap: 4px;
-    padding: 8px 10px 10px;
-    flex: 1;
-    align-content: start;
-    position: relative;
-    z-index: 1;
-    background: #fff;
-}
-.amz-card__title {
-    margin: 0;
-    font-size: 13px;
-    font-weight: 400;
-    line-height: 1.35;
-    color: #0f1111;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    min-height: 2.5em;
-}
-.amz-card.is-clickable:hover .amz-card__title { color: #c45500; }
-.amz-card__sku {
-    margin: 0;
-    color: #565959;
-    font-size: 11px;
-}
-.amz-card__price {
-    margin: 2px 0 0;
-    color: #0f1111;
-    font-size: 16px;
-    font-weight: 700;
-    line-height: 1.2;
-}
-.amz-card__currency {
-    margin-right: 3px;
-    font-size: 11px;
-    font-weight: 600;
-    vertical-align: super;
-}
 .amz-plp .product-card-purchase-actions {
     display: grid;
     gap: 6px;
@@ -534,50 +364,11 @@ $productUrl = $productPath; // route path; render with @url
 .amz-plp .product-card-purchase-actions > .weline-checkout-product-card-buy-now {
     width: 100%;
 }
-.amz-plp .product-card-purchase-actions button {
-    display: flex;
-    width: 100%;
-    min-height: 30px;
-    align-items: center;
-    justify-content: center;
-    padding: 0 12px;
-    border-radius: 999px;
-    font: inherit;
-    font-size: 12px;
-    font-weight: 600;
-    line-height: 1.2;
-    cursor: pointer;
-    appearance: none;
-    -webkit-appearance: none;
-    box-sizing: border-box;
-    box-shadow: 0 2px 5px rgba(213, 217, 217, 0.45);
-}
-.amz-plp .amz-card__add {
-    border: 1px solid #fcd200;
-    background: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
-    color: #0f1111;
-}
-.amz-plp .amz-card__add:hover:not(:disabled) {
-    background: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
-    border-color: #e7b92e;
-}
-.amz-plp .amz-card__buy-now {
-    border: 1px solid #ff8f00;
-    background: linear-gradient(180deg, #ffb84d 0%, #ffa41c 100%);
-    color: #0f1111;
-}
-.amz-plp .amz-card__buy-now:hover:not(:disabled) {
-    background: linear-gradient(180deg, #ff9f1a 0%, #fa8900 100%);
-    border-color: #e77600;
-}
+.amz-plp .product-card-purchase-actions button,
+.amz-plp .product-card-purchase-actions a.amz-card__add,
 .amz-plp .amz-card__add:disabled,
-.amz-plp .amz-card__buy-now:disabled {
-    border-color: #d5d9d9;
-    background: #f0f2f2;
-    color: #565959;
-    cursor: not-allowed;
-    box-shadow: none;
-}
+.amz-plp .amz-card__add[aria-disabled="true"],
+.amz-plp .amz-card__buy-now:disabled,
 .amz-plp__pager {
     display: flex;
     flex-wrap: wrap;

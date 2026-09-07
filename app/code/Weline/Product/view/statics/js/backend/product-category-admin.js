@@ -270,4 +270,209 @@ if (root) {
             link.addEventListener('dragstart', (event) => event.preventDefault());
         });
     }
+
+    async function productAdminApi() {
+        const Weline = window.Weline;
+        const api = Weline?.Api?.resource ? Weline.Api : await Weline?.load?.('api');
+        if (!api?.resource) throw new Error('Weline API runtime is unavailable.');
+        return api.resource('product_admin');
+    }
+
+    async function productAdminExecute(operation, params) {
+        const client = await productAdminApi();
+        const result = await client.execute(operation, { website_id: websiteId, ...params });
+        const payload = result?.data && typeof result.data === 'object' ? result.data : result;
+        if (result?.success === false || Number(result?.code || 200) >= 400) {
+            throw new Error(resultMessage(result, '布局操作失败'));
+        }
+        return payload?.data && typeof payload.data === 'object' && !payload.options ? payload.data : payload;
+    }
+
+    function bindCategoryProductLayoutPanel() {
+        const panel = root.querySelector('[data-category-product-layout-panel]');
+        if (!panel) return;
+        const categoryId = Number(panel.getAttribute('data-category-id') || 0);
+        const editorBase = String(panel.getAttribute('data-theme-editor-base') || '').trim();
+        const optionSelect = panel.querySelector('[data-category-product-layout-option]');
+        const scheduleOption = panel.querySelector('[data-category-product-layout-schedule-option]');
+        const scheduleBody = panel.querySelector('[data-category-product-layout-schedule-body]');
+        const effectiveText = panel.querySelector('[data-category-product-layout-effective-text]');
+        const scheduleDialog = panel.querySelector('[data-category-product-layout-schedule-dialog]');
+
+        const fillOptions = (options) => {
+            [optionSelect, scheduleOption].forEach((select) => {
+                if (!(select instanceof HTMLSelectElement)) return;
+                select.innerHTML = '';
+                (options || []).forEach((opt) => {
+                    const option = document.createElement('option');
+                    option.value = opt.value;
+                    option.textContent = `${opt.label} (${opt.value})`;
+                    select.appendChild(option);
+                });
+            });
+        };
+
+        const openEditor = (layoutOption) => {
+            if (!editorBase || !layoutOption) {
+                window.Weline?.UI?.toast?.error('缺少可视化编辑入口');
+                return;
+            }
+            const url = new URL(editorBase, window.location.origin);
+            url.searchParams.set('page_type', 'product');
+            url.searchParams.set('layout_type', 'product');
+            url.searchParams.set('layout_option', layoutOption);
+            url.searchParams.set('lock_layout', '1');
+            url.searchParams.set('lock_layout_context', '1');
+            url.searchParams.set('lock_source', 'product');
+            url.searchParams.set('product_layout_mode', '1');
+            url.searchParams.set('hide_chrome_editing', '1');
+            url.searchParams.set('virtual_target_type', 'category_product_default');
+            url.searchParams.set('virtual_target_id', String(categoryId));
+            url.searchParams.set('layout_lock_target_type', 'category_product_default');
+            url.searchParams.set('layout_lock_target_id', String(categoryId));
+            if (websiteId > 0) url.searchParams.set('website_id', String(websiteId));
+            window.open(url.toString(), '_blank', 'noopener');
+        };
+
+        const renderSchedules = (schedules) => {
+            if (!scheduleBody) return;
+            scheduleBody.innerHTML = '';
+            if (!schedules?.length) {
+                scheduleBody.innerHTML = '<tr><td colspan="6" data-tone="muted">暂无定时</td></tr>';
+                return;
+            }
+            schedules.forEach((row) => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = '<td></td><td></td><td></td><td></td><td></td><td></td>';
+                tr.cells[0].textContent = row.name || '';
+                tr.cells[1].textContent = row.layout_option || '';
+                tr.cells[2].textContent = row.starts_at || '';
+                tr.cells[3].textContent = row.ends_at || '';
+                tr.cells[4].textContent = String(row.priority || 0);
+                const del = document.createElement('button');
+                del.type = 'button';
+                del.className = 'w-button';
+                del.textContent = '删除';
+                del.addEventListener('click', async () => {
+                    if (!window.confirm('确认删除该定时计划？')) return;
+                    try {
+                        await productAdminExecute('deleteProductLayoutSchedule', { schedule_id: row.schedule_id });
+                        window.Weline?.UI?.toast?.success('已删除');
+                        await refresh();
+                    } catch (error) {
+                        window.Weline?.UI?.toast?.error(error instanceof Error ? error.message : '删除失败');
+                    }
+                });
+                tr.cells[5].appendChild(del);
+                scheduleBody.appendChild(tr);
+            });
+        };
+
+        const refresh = async () => {
+            try {
+                const [layouts, schedules] = await Promise.all([
+                    productAdminExecute('listProductLayouts', { category_id: categoryId }),
+                    productAdminExecute('listProductLayoutSchedules', {
+                        target_type: 'category_product_default',
+                        target_id: categoryId,
+                    }),
+                ]);
+                fillOptions(layouts.options || []);
+                const resolved = layouts.resolved || {};
+                const selection = layouts.selection || null;
+                if (effectiveText) {
+                    effectiveText.textContent = `option: ${resolved.layout_option || 'default'} · 来源: ${resolved.source || 'file'}`
+                        + (resolved.schedule_id ? ` · 定时#${resolved.schedule_id}` : '');
+                }
+                if (optionSelect && selection?.layout_option) {
+                    optionSelect.value = selection.layout_option;
+                }
+                renderSchedules(schedules.schedules || []);
+            } catch (error) {
+                if (effectiveText) {
+                    effectiveText.textContent = error instanceof Error ? error.message : '布局信息加载失败';
+                }
+            }
+        };
+
+        panel.querySelector('[data-category-product-layout-save]')?.addEventListener('click', async () => {
+            try {
+                await productAdminExecute('saveProductLayoutSelection', {
+                    target_type: 'category_product_default',
+                    target_id: categoryId,
+                    layout_option: optionSelect?.value || 'default',
+                });
+                window.Weline?.UI?.toast?.success('默认产品布局已保存');
+                await refresh();
+            } catch (error) {
+                window.Weline?.UI?.toast?.error(error instanceof Error ? error.message : '保存失败');
+            }
+        });
+        panel.querySelector('[data-category-product-layout-clear]')?.addEventListener('click', async () => {
+            try {
+                await productAdminExecute('deleteProductLayoutSelection', {
+                    target_type: 'category_product_default',
+                    target_id: categoryId,
+                });
+                window.Weline?.UI?.toast?.success('已清除分类默认布局');
+                await refresh();
+            } catch (error) {
+                window.Weline?.UI?.toast?.error(error instanceof Error ? error.message : '清除失败');
+            }
+        });
+        panel.querySelector('[data-category-product-layout-open-editor]')?.addEventListener('click', () => {
+            openEditor(optionSelect?.value || 'default');
+        });
+        panel.querySelector('[data-category-product-layout-schedule-add]')?.addEventListener('click', () => {
+            if (scheduleDialog && typeof scheduleDialog.showModal === 'function') {
+                const idInput = scheduleDialog.querySelector('[data-category-layout-schedule-id]');
+                const nameInput = scheduleDialog.querySelector('[data-category-layout-schedule-name]');
+                const priorityInput = scheduleDialog.querySelector('[data-category-layout-schedule-priority]');
+                if (idInput) idInput.value = '0';
+                if (nameInput) nameInput.value = '';
+                if (priorityInput) priorityInput.value = '10';
+                scheduleDialog.showModal();
+            }
+        });
+        scheduleDialog?.querySelector('[data-category-layout-schedule-cancel]')?.addEventListener('click', () => {
+            scheduleDialog.close?.();
+        });
+        scheduleDialog?.querySelector('[data-category-layout-schedule-submit]')?.addEventListener('click', async () => {
+            const idInput = scheduleDialog.querySelector('[data-category-layout-schedule-id]');
+            const nameInput = scheduleDialog.querySelector('[data-category-layout-schedule-name]');
+            const startsInput = scheduleDialog.querySelector('[data-category-layout-schedule-starts]');
+            const endsInput = scheduleDialog.querySelector('[data-category-layout-schedule-ends]');
+            const priorityInput = scheduleDialog.querySelector('[data-category-layout-schedule-priority]');
+            const name = String(nameInput?.value || '').trim();
+            const startsAt = String(startsInput?.value || '').trim();
+            const endsAt = String(endsInput?.value || '').trim();
+            if (!name || !startsAt || !endsAt) {
+                window.Weline?.UI?.toast?.error('请完整填写定时名称与起止时间');
+                return;
+            }
+            try {
+                await productAdminExecute('saveProductLayoutSchedule', {
+                    schedule_id: Number(idInput?.value || 0) || 0,
+                    name,
+                    target_type: 'category_product_default',
+                    target_id: categoryId,
+                    layout_option: String(scheduleOption?.value || '').trim(),
+                    starts_at: startsAt,
+                    ends_at: endsAt,
+                    priority: Number(priorityInput?.value || 0) || 0,
+                    website_id: websiteId,
+                    status: 'enabled',
+                });
+                scheduleDialog.close?.();
+                window.Weline?.UI?.toast?.success('定时计划已保存');
+                await refresh();
+            } catch (error) {
+                window.Weline?.UI?.toast?.error(error instanceof Error ? error.message : '保存定时失败');
+            }
+        });
+
+        refresh();
+    }
+
+    bindCategoryProductLayoutPanel();
 }

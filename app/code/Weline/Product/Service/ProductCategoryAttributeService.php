@@ -207,6 +207,23 @@ final class ProductCategoryAttributeService
     }
 
     /**
+     * Read the category presentation in one repository batch. Locale fallback
+     * remains identical to the individual attribute readers.
+     *
+     * @param list<int> $categoryIds
+     * @return array{name: array<int, string>, image: array<int, string>, banner: array<int, string>, summary: array<int, string>, description: array<int, string>}
+     */
+    public function readPresentationMaps(int $websiteId, array $categoryIds, string $locale = ''): array
+    {
+        return $this->readAttributeMaps(
+            $websiteId,
+            $categoryIds,
+            ['name', 'image', 'banner', 'summary', 'description'],
+            $locale,
+        );
+    }
+
+    /**
      * @param list<int> $categoryIds
      * @return array<int, string>
      */
@@ -216,23 +233,39 @@ final class ProductCategoryAttributeService
         string $attributeCode,
         string $locale = '',
     ): array {
-        $categoryIds = array_values(array_filter(
+        return $this->readAttributeMaps($websiteId, $categoryIds, [$attributeCode], $locale)[$attributeCode];
+    }
+
+    /**
+     * @param list<int> $categoryIds
+     * @param list<string> $attributeCodes
+     * @return array<string, array<int, string>>
+     */
+    private function readAttributeMaps(
+        int $websiteId,
+        array $categoryIds,
+        array $attributeCodes,
+        string $locale,
+    ): array {
+        $maps = array_fill_keys($attributeCodes, []);
+        $categoryIds = array_values(array_unique(array_filter(
             array_map('intval', $categoryIds),
             static fn(int $id): bool => $id > 0,
-        ));
+        )));
         if ($categoryIds === []) {
-            return [];
+            return $maps;
         }
 
         $locale = self::normalizeLocaleKey($locale !== '' ? $locale : (string)State::getLangLocal());
-        $byEntity = [];
+        $byAttribute = [];
         foreach ($this->attributes->listExplicitRows(
             $websiteId,
             self::ENTITY_TYPE,
             $categoryIds,
             [AttributeValue::WEBSITE_STORE_ID],
         ) as $attribute) {
-            if ((string)($attribute['attribute_code'] ?? '') !== $attributeCode || !empty($attribute['cleared'])) {
+            $attributeCode = (string)($attribute['attribute_code'] ?? '');
+            if (!isset($maps[$attributeCode]) || !empty($attribute['cleared'])) {
                 continue;
             }
             $entityId = (int)($attribute['entity_id'] ?? 0);
@@ -244,21 +277,22 @@ final class ProductCategoryAttributeService
             if ($value === '') {
                 continue;
             }
-            $byEntity[$entityId][$attributeLocale] = $value;
+            $byAttribute[$attributeCode][$entityId][$attributeLocale] = $value;
         }
 
-        $values = [];
-        foreach ($categoryIds as $entityId) {
-            if (!isset($byEntity[$entityId])) {
-                continue;
-            }
-            $picked = self::pickLocalizedAttributeValue($byEntity[$entityId], $locale);
-            if ($picked !== '') {
-                $values[$entityId] = $picked;
+        foreach ($attributeCodes as $attributeCode) {
+            foreach ($categoryIds as $entityId) {
+                if (!isset($byAttribute[$attributeCode][$entityId])) {
+                    continue;
+                }
+                $picked = self::pickLocalizedAttributeValue($byAttribute[$attributeCode][$entityId], $locale);
+                if ($picked !== '') {
+                    $maps[$attributeCode][$entityId] = $picked;
+                }
             }
         }
 
-        return $values;
+        return $maps;
     }
 
     /**

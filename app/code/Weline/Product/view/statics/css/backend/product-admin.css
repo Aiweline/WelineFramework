@@ -681,6 +681,91 @@
     gap: var(--weline-space-2, 0.5rem);
 }
 
+.w-product-variant__axis-clamp {
+    --product-axis-clamp-max: 5.75rem;
+    --product-axis-fade-size: 2.25rem;
+    position: relative;
+}
+
+.w-product-variant__axis-clamp-body {
+    overflow: hidden;
+}
+
+.w-product-variant__axis-clamp[data-collapsed="1"].is-overflow .w-product-variant__axis-clamp-body {
+    max-height: var(--product-axis-clamp-max);
+    -webkit-mask-image: linear-gradient(
+        to bottom,
+        #000 0,
+        #000 calc(100% - var(--product-axis-fade-size)),
+        transparent 100%
+    );
+    mask-image: linear-gradient(
+        to bottom,
+        #000 0,
+        #000 calc(100% - var(--product-axis-fade-size)),
+        transparent 100%
+    );
+    -webkit-mask-size: 100% 100%;
+    mask-size: 100% 100%;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+}
+
+.w-product-variant__axis-more {
+    display: none;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    position: absolute;
+    left: 50%;
+    bottom: 0.15rem;
+    z-index: 2;
+    transform: translateX(-50%);
+    margin: 0;
+    padding: 0.15rem 0.65rem;
+    border: 0;
+    background: transparent;
+    color: var(--weline-theme-primary, #0d9488);
+    font: inherit;
+    font-size: 0.8125rem;
+    cursor: pointer;
+}
+
+.w-product-variant__axis-more::after {
+    content: "▼";
+    font-size: 0.625rem;
+    line-height: 1;
+}
+
+.w-product-variant__axis-clamp.is-overflow .w-product-variant__axis-more {
+    display: inline-flex;
+}
+
+.w-product-variant__axis-clamp[data-collapsed="0"].is-overflow {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.w-product-variant__axis-clamp[data-collapsed="0"] .w-product-variant__axis-clamp-body {
+    width: 100%;
+}
+
+.w-product-variant__axis-clamp[data-collapsed="0"] .w-product-variant__axis-more {
+    position: static;
+    transform: none;
+    margin-top: 0.35rem;
+}
+
+.w-product-variant__axis-clamp[data-collapsed="0"] .w-product-variant__axis-more::after {
+    content: "▲";
+}
+
+.w-product-variant__axis-more:hover {
+    text-decoration: underline;
+}
+
+
 .w-product-create__axis-chip {
     display: inline-flex;
     align-items: center;
@@ -1607,6 +1692,48 @@ body.w-product-eav-drawer-open {
     background: color-mix(in srgb, var(--backend-color-border-default, #dbe3ef) 45%, transparent);
 }
 
+.w-product-video-panel {
+    display: grid;
+    gap: var(--weline-space-3, 0.75rem);
+    margin-bottom: var(--weline-space-5, 1.25rem);
+    padding-bottom: var(--weline-space-5, 1.25rem);
+    border-bottom: 1px solid var(--product-border);
+}
+
+.w-product-video-compose {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    gap: var(--weline-space-2, 0.5rem);
+    align-items: center;
+}
+
+@media (max-width: 760px) {
+    .w-product-video-compose {
+        grid-template-columns: 1fr;
+    }
+}
+
+.w-product-video-source {
+    display: block;
+    margin-top: 0.2rem;
+    color: var(--product-muted);
+    overflow-wrap: anywhere;
+}
+
+.w-product-video-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 3rem;
+    min-height: 3rem;
+    padding: 0.35rem 0.5rem;
+    border-radius: var(--weline-radius-sm, 0.25rem);
+    border: 1px solid var(--product-border);
+    background: var(--product-surface-muted);
+    color: var(--product-muted);
+    font-size: 0.75rem;
+}
+
 .w-product-media-picker {
     width: min(76rem, calc(100vw - 2rem));
     height: min(52rem, calc(100vh - 2rem));
@@ -1615,6 +1742,101 @@ body.w-product-eav-drawer-open {
     border-radius: var(--product-radius);
     background: var(--product-surface);
     color: inherit;
+}
+
+.w-product-layout-dialog {
+    width: min(28rem, calc(100vw - 2rem));
+    max-height: min(40rem, calc(100vh - 2rem));
+    padding: 0;
+    border: 0;
+    border-radius: var(--product-radius);
+    background: var(--product-surface);
+    color: inherit;
+    overflow: auto;
+}
+
+.w-product-layout-dialog::backdrop {
+    background: color-mix(in srgb, var(--weline-theme-text) 55%, transparent);
+}
+
+.w-product-layout-dialog__body {
+    padding: var(--product-gap, 1.25rem);
+}
+
+.w-product-variant-option-dialog {
+    width: min(32rem, calc(100vw - 2rem));
+    max-height: min(40rem, calc(100vh - 2rem));
+    padding: 0;
+    border: 0;
+    border-radius: var(--product-radius);
+    background: var(--product-surface);
+    color: inherit;
+    overflow: auto;
+}
+
+.w-product-variant-option-dialog::backdrop {
+    background: color-mix(in srgb, var(--weline-theme-text) 55%, transparent);
+}
+
+.w-product-variant-option-dialog__form {
+    display: grid;
+    grid-template-rows: auto auto auto;
+    min-height: 0;
+}
+
+.w-product-variant-option-dialog__header,
+.w-product-variant-option-dialog__footer {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--product-gap);
+    padding: var(--product-gap);
+    border-block-end: 1px solid var(--product-border);
+}
+
+.w-product-variant-option-dialog__footer {
+    border-block-end: 0;
+    border-block-start: 1px solid var(--product-border);
+    align-items: center;
+}
+
+.w-product-variant-option-dialog__header h2,
+.w-product-variant-option-dialog__header p {
+    margin: 0;
+}
+
+.w-product-variant-option-dialog__body {
+    padding: var(--product-gap);
+}
+
+.w-product-variant-option-dialog__color {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+}
+
+.w-product-variant-option-dialog__color input[type="color"] {
+    inline-size: 2.75rem;
+    block-size: 2.5rem;
+    padding: 0;
+    border: 1px solid var(--product-border);
+    border-radius: var(--weline-radius-sm, 0.25rem);
+    background: transparent;
+    cursor: pointer;
+}
+
+.w-product-variant-option-dialog__image {
+    display: grid;
+    gap: 0.75rem;
+}
+
+.w-product-variant-option-dialog__preview {
+    inline-size: 4.5rem;
+    block-size: 4.5rem;
+    object-fit: cover;
+    border-radius: var(--weline-radius-sm, 0.25rem);
+    border: 1px solid var(--product-border);
+    background: color-mix(in srgb, var(--backend-color-border-default, #dbe3ef) 45%, transparent);
 }
 
 .w-product-media-picker::backdrop {

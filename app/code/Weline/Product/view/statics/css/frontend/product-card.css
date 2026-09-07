@@ -1,0 +1,284 @@
+/**
+ * Canonical Weline storefront product card.
+ * Visual language: image-led commerce shelf (ink / teal link / sale red),
+ * shared by widgets via <w:product:card />.
+ */
+.weline-product-card {
+  --wpc-ink: var(--weline-theme-text, #0f1111);
+  --wpc-muted: var(--weline-theme-text-muted, #565959);
+  --wpc-link: #007185;
+  --wpc-link-hover: #c45500;
+  --wpc-border: var(--weline-theme-border-subtle, #e7e7e7);
+  --wpc-surface: var(--weline-chrome-bg-primary, #ffffff);
+  --wpc-price: #b12704;
+  --wpc-star: #de7921;
+  --wpc-shadow: 0 1px 2px rgba(15, 17, 17, 0.06), 0 8px 24px rgba(15, 17, 17, 0.04);
+  --wpc-shadow-hover: 0 12px 32px rgba(15, 17, 17, 0.12);
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--wpc-border);
+  border-radius: var(--weline-radius-xl, 1rem);
+  background: var(--wpc-surface);
+  color: var(--wpc-ink);
+  box-shadow: var(--wpc-shadow);
+  box-sizing: border-box;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease;
+}
+
+.weline-product-card:hover {
+  transform: translateY(-3px);
+  border-color: color-mix(in srgb, var(--weline-theme-primary, #c45500) 24%, var(--wpc-border));
+  box-shadow: var(--wpc-shadow-hover);
+}
+
+.weline-product-card.density-shelf,
+.weline-product-card.density-compact {
+  border-radius: 0.75rem;
+}
+
+.weline-product-card .wpc-media {
+  position: relative;
+  aspect-ratio: 1 / 1;
+  overflow: hidden;
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%);
+}
+
+.weline-product-card .wpc-media-link {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.weline-product-card .wpc-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.4s ease;
+}
+
+.weline-product-card:hover .wpc-image {
+  transform: scale(1.05);
+}
+
+.weline-product-card .wpc-badges,
+.weline-product-card .w-product-labels {
+  position: absolute;
+  top: 0.65rem;
+  left: 0.65rem;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  max-width: calc(100% - 3.5rem);
+  pointer-events: none;
+}
+
+.weline-product-card .product-actions {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 3;
+  display: flex;
+  gap: 0.35rem;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s ease;
+}
+
+.weline-product-card:hover .product-actions,
+.weline-product-card:focus-within .product-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.weline-product-card .wpc-body {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.45rem;
+  padding: 0.9rem 0.95rem 1rem;
+  box-sizing: border-box;
+}
+
+.weline-product-card.density-compact .wpc-body,
+.weline-product-card.density-shelf .wpc-body {
+  padding: 0.7rem 0.65rem 0.85rem;
+  gap: 0.35rem;
+}
+
+.weline-product-card .wpc-title {
+  margin: 0;
+  min-height: calc(2 * 1.4em);
+  font-size: 0.92rem;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.weline-product-card.density-shelf .wpc-title,
+.weline-product-card.density-compact .wpc-title {
+  font-size: 0.8125rem;
+  font-weight: 400;
+  min-height: 2.8em;
+}
+
+.weline-product-card .wpc-title a {
+  color: var(--wpc-link);
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.weline-product-card .wpc-title a:hover {
+  color: var(--wpc-link-hover);
+  text-decoration: underline;
+}
+
+.weline-product-card .wpc-sku {
+  margin: 0;
+  color: var(--wpc-muted);
+  font-size: 0.75rem;
+}
+
+.weline-product-card .wpc-rating {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--wpc-link);
+  font-size: 0.75rem;
+}
+
+.weline-product-card .wpc-stars {
+  --rating: 0;
+  display: inline-block;
+  width: 5.2em;
+  height: 1em;
+  background:
+    linear-gradient(90deg, var(--wpc-star) calc(var(--rating) / 5 * 100%), #d5d9d9 0);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 20'%3E%3Cpath fill='%23000' d='M10 1.5l2.4 5 5.5.5-4.2 3.7 1.3 5.3L10 13.4 5 16l1.3-5.3L2.1 7l5.5-.5L10 1.5zm22 0l2.4 5 5.5.5-4.2 3.7 1.3 5.3L32 13.4 27 16l1.3-5.3L24.1 7l5.5-.5L32 1.5zm22 0l2.4 5 5.5.5-4.2 3.7 1.3 5.3L54 13.4 49 16l1.3-5.3L46.1 7l5.5-.5L54 1.5zm22 0l2.4 5 5.5.5-4.2 3.7 1.3 5.3L76 13.4 71 16l1.3-5.3L68.1 7l5.5-.5L76 1.5zm22 0l2.4 5 5.5.5-4.2 3.7 1.3 5.3L98 13.4 93 16l1.3-5.3L90.1 7l5.5-.5L98 1.5z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 110 20'%3E%3Cpath fill='%23000' d='M10 1.5l2.4 5 5.5.5-4.2 3.7 1.3 5.3L10 13.4 5 16l1.3-5.3L2.1 7l5.5-.5L10 1.5zm22 0l2.4 5 5.5.5-4.2 3.7 1.3 5.3L32 13.4 27 16l1.3-5.3L24.1 7l5.5-.5L32 1.5zm22 0l2.4 5 5.5.5-4.2 3.7 1.3 5.3L54 13.4 49 16l1.3-5.3L46.1 7l5.5-.5L54 1.5zm22 0l2.4 5 5.5.5-4.2 3.7 1.3 5.3L76 13.4 71 16l1.3-5.3L68.1 7l5.5-.5L76 1.5zm22 0l2.4 5 5.5.5-4.2 3.7 1.3 5.3L98 13.4 93 16l1.3-5.3L90.1 7l5.5-.5L98 1.5z'/%3E%3C/svg%3E") center / 100% 100% no-repeat;
+}
+
+.weline-product-card .wpc-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4rem 0.55rem;
+  margin-top: auto;
+}
+
+.weline-product-card .wpc-price-now {
+  color: var(--wpc-price);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.weline-product-card.density-shelf .wpc-price-now,
+.weline-product-card.density-compact .wpc-price-now {
+  color: var(--wpc-ink);
+  font-size: 1.15rem;
+  font-weight: 400;
+}
+
+.weline-product-card .wpc-price-was {
+  color: var(--wpc-muted);
+  font-size: 0.8125rem;
+  text-decoration: line-through;
+}
+
+.weline-product-card .wpc-campaign,
+.weline-product-card .wpc-price-quote {
+  color: var(--wpc-link);
+  font-size: 0.75rem;
+  text-decoration: none;
+}
+
+.weline-product-card .wpc-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin-top: 0.35rem;
+}
+
+.weline-product-card .wpc-cta .wpc-cart-wrap,
+.weline-product-card .wpc-cta .product-card-purchase-actions,
+.weline-product-card .wpc-cta .product-purchase-actions {
+  display: flex;
+  width: 100%;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.weline-product-card .wpc-detail-link,
+.weline-product-card .wpc-cart-btn,
+.weline-product-card .wpc-cta .btn-add-to-cart,
+.weline-product-card .wpc-cta .btn-buy-now,
+.weline-product-card .wpc-cta a,
+.weline-product-card .wpc-cta button {
+  display: inline-flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.35rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.65rem;
+  box-sizing: border-box;
+  font-size: 0.875rem;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.weline-product-card .wpc-detail-link,
+.weline-product-card .wpc-cart-btn,
+.weline-product-card .wpc-cta .btn-add-to-cart {
+  border: 1px solid var(--color-primary, #b84a3c);
+  background: var(--color-primary-bg-subtle, #f8ede9);
+  color: var(--color-primary-text-emphasis, #7a3028);
+}
+
+.weline-product-card .wpc-cta .btn-buy-now {
+  border: 1px solid var(--color-primary-dark, #963b30);
+  background: var(--color-primary, #b84a3c);
+  color: var(--color-on-primary, #f7f4ef);
+}
+
+.weline-product-card .wpc-detail-link:hover,
+.weline-product-card .wpc-cart-btn:hover,
+.weline-product-card .wpc-cta .btn-add-to-cart:hover {
+  background: color-mix(in srgb, var(--color-primary, #b84a3c) 16%, #ffffff);
+  border-color: var(--color-primary-hover, #963b30);
+}
+
+.weline-product-card .wpc-cta .btn-buy-now:hover {
+  background: var(--color-primary-hover, #963b30);
+  border-color: var(--color-primary-active, #7a3028);
+}
+
+@media (max-width: 768px) {
+  .weline-product-card .product-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .weline-product-card,
+  .weline-product-card .wpc-image {
+    transition: none;
+  }
+  .weline-product-card:hover {
+    transform: none;
+  }
+  .weline-product-card:hover .wpc-image {
+    transform: none;
+  }
+}

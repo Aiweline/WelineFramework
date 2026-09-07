@@ -345,7 +345,7 @@ final class AttributeValueRepository extends AbstractWebsiteShardRepository
             ->where(AttributeValue::schema_fields_ENTITY_ID, $entityIds, 'IN')
             ->where(AttributeValue::schema_fields_STORE_ID, $storeIds, 'IN')
             ->select()
-            ->fetchArray();
+            ->fetchIterator();
         $rows = [];
         foreach ($raw as $item) {
             $cleared = (string)($item['scope_state'] ?? '') === 'cleared'

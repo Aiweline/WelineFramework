@@ -32,4 +32,12 @@
                   shared="true"
                   sort="10"/>
     </event>
+    <event name="Weline_Mail::mail_message_sent">
+        <observer name="Weline_Product::quote_request_mail_message_sent"
+                  instance="Weline\Product\Observer\QuoteRequestMailMessageSentObserver"
+                  disabled="false"
+                  shared="true"
+                  sort="10"
+                  delivery="sync"/>
+    </event>
 </config>

@@ -37,7 +37,11 @@ final class ProductSearchHitPresenter
             return $rows;
         }
 
-        $offers = $this->catalog->publishedOffersForProductIds(array_keys($productIds), 200);
+        // Cap offer hydration to the incoming row set (callers should page first).
+        $offers = $this->catalog->publishedOffersForProductIds(
+            array_keys($productIds),
+            max(1, count($productIds)),
+        );
         $byProductId = [];
         $byOfferId = [];
         $byOfferUuid = [];
