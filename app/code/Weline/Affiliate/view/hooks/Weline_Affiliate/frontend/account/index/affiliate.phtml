@@ -8,8 +8,5 @@
  * @hook-sort-order 0
  * @hook-solo false
  */
-$affiliateCardMode = 'section';
 ?>
-<css>Weline_Affiliate::css/affiliate-account.css</css>
-<?php
-include BP . '/app/code/Weline/Affiliate/view/templates/frontend/account/affiliate-summary-card.phtml';
+<?= $this->fetch('Weline_Affiliate::templates/frontend/account/affiliate-summary-card.phtml') ?>

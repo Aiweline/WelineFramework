@@ -37,13 +37,23 @@ final class AffiliateAccountHookTemplateTest extends TestCase
         $englishTranslationContent = (string) file_get_contents($englishTranslations);
 
         $this->assertStringContainsString("w_query('affiliate', 'getMySummary', [], 'frontend')", $summaryContent);
+        $this->assertStringContainsString("fetchTagSource(", $summaryContent);
+        $this->assertStringContainsString('Weline_Affiliate::css/affiliate-account.css', $summaryContent);
+        $this->assertStringContainsString('<link rel="stylesheet"', $summaryContent);
+        $this->assertStringContainsString('data-testid="affiliate-account-unavailable"', $summaryContent);
+        $this->assertStringContainsString('weline-affiliate-account-card__scope', $summaryContent);
+        $this->assertStringContainsString('data-testid="affiliate-current-scope"', $summaryContent);
+        $this->assertStringContainsString('<lang>当前访问范围</lang>', $summaryContent);
+        $this->assertStringContainsString('<lang>账户范围</lang>', $summaryContent);
+        $this->assertStringNotContainsString("__('Current scope')", $summaryContent);
         $this->assertStringContainsString("\$catalogUrl = \$this->getUrl('products')", $summaryContent);
         $this->assertStringContainsString("\$homeUrl = \$this->getUrl('')", $summaryContent);
         $this->assertStringContainsString('data-affiliate-account-panel', $summaryContent);
         $this->assertStringContainsString('data-weline-load="affiliateAccount"', $summaryContent);
         $this->assertStringContainsString('data-affiliate-i18n=', $summaryContent);
         $this->assertStringContainsString('data-affiliate-referral-link', $summaryContent);
-        $this->assertStringContainsString('affiliate-workbench-body.phtml', $summaryContent);
+        $this->assertStringContainsString("include BP . '/app/code/Weline/Affiliate/view/templates/frontend/account/affiliate-workbench-body.phtml'", $summaryContent);
+        $this->assertStringNotContainsString("<css>", $summaryContent);
         $this->assertStringNotContainsString('<script>', $summaryContent);
         $this->assertStringContainsString('data-affiliate-generate-link', $workbenchContent);
         $this->assertStringContainsString('data-affiliate-default-share-link', $workbenchContent);
@@ -55,9 +65,11 @@ final class AffiliateAccountHookTemplateTest extends TestCase
         $this->assertStringContainsString('data-affiliate-withdrawals-table', $workbenchContent);
         $this->assertStringContainsString('data-affiliate-withdrawal-submit', $workbenchContent);
         $this->assertStringNotContainsString('data-account-nav-link="true"', $summaryContent);
-        $this->assertStringNotContainsString("getUrl('affiliate')", $discoveryContent);
-        $this->assertStringContainsString('affiliate-summary-card.phtml', $discoveryContent);
-        $this->assertStringContainsString('Hook: Weline_Affiliate::frontend::account::index::affiliate', $sectionContent);
+        $this->assertStringContainsString("fetch('Weline_Affiliate::templates/frontend/account/affiliate-summary-card.phtml')", $sectionContent);
+        $this->assertStringNotContainsString('include BP', $sectionContent);
+        $this->assertStringNotContainsString('<css>', $sectionContent);
+        $this->assertStringContainsString("fetch('Weline_Affiliate::templates/frontend/account/affiliate-summary-card.phtml')", $discoveryContent);
+        $this->assertStringNotContainsString('include BP', $discoveryContent);
         $this->assertStringContainsString('RequestContext::get', $sidebarContent);
         $this->assertStringContainsString('RequestContext::get', $sidebarSectionContent);
         $this->assertStringNotContainsString('$GLOBALS', $sidebarContent);
@@ -70,6 +82,8 @@ final class AffiliateAccountHookTemplateTest extends TestCase
         $this->assertStringContainsString('<lang>分享、转化与佣金</lang>', $sidebarContent);
         $this->assertStringContainsString('我的分销,"My Affiliate"', $englishTranslationContent);
         $this->assertStringContainsString('分享、转化与佣金,"Shares, conversions, and commission"', $englishTranslationContent);
+        $this->assertStringContainsString('当前访问范围,"Current scope"', $englishTranslationContent);
+        $this->assertStringContainsString('账户范围,"Account scope"', $englishTranslationContent);
 
         $accountJs = BP . 'app/code/Weline/Affiliate/view/statics/js/affiliate-account.js';
         $modulesJs = BP . 'app/code/Weline/Affiliate/view/statics/frontend/weline.modules.js';
