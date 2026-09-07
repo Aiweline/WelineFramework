@@ -16,6 +16,10 @@ final class CartJsPendingCouponContractTest extends TestCase
         $provider = (string)\file_get_contents($root . '/extends/module/Weline_Framework/Query/CartQueryProvider.php');
 
         self::assertStringContainsString('weline.cart.pending_coupon', $cartJs);
+        self::assertStringContainsString('weline.cart.summary_cache', $cartJs);
+        self::assertStringContainsString('rememberSummary', $cartJs);
+        self::assertStringContainsString('getCachedSummary', $cartJs);
+        self::assertStringContainsString('clearCachedSummary', $cartJs);
         self::assertStringContainsString('weline:cart:apply-coupon', $cartJs);
         self::assertStringContainsString('renewGuestSession', $cartJs);
         self::assertStringContainsString('Weline_Cart::js/cart.js', $modules);

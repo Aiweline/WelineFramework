@@ -97,7 +97,10 @@ class CartQueryProvider implements QueryProviderInterface
     /** @return array<string, mixed> */
     private function issueGuestToken(): array
     {
-        $token = $this->cartService->issueGuestToken();
+        $token = trim((string)Cookie::get(CartService::GUEST_TOKEN_COOKIE));
+        if ($token === '') {
+            $token = $this->cartService->issueGuestToken();
+        }
         Cookie::set(
             CartService::GUEST_TOKEN_COOKIE,
             $token,
@@ -172,7 +175,12 @@ class CartQueryProvider implements QueryProviderInterface
             if ($customerId === null && ($guestToken === null || trim($guestToken) === '')) {
                 $guestToken = (string)Cookie::get(CartService::GUEST_TOKEN_COOKIE);
             }
-            $summary = $this->cartService->getCart($scope, $guestToken, $customerId);
+            $summary = $this->cartService->getCart(
+                $scope,
+                $guestToken,
+                $customerId,
+                $this->cartServicePreference($params),
+            );
             $summary = $this->enrichSummaryWithDiscountPreview($summary, $params);
             return $this->successFromSummary($summary);
         } catch (\Throwable $e) {
@@ -529,6 +537,37 @@ class CartQueryProvider implements QueryProviderInterface
         ];
     }
 
+    /** @return array<string, array<string, mixed>> */
+    private function sellingModeParams(): array
+    {
+        return [
+            'cart_type' => ['type' => 'string', 'max_length' => 16],
+            'selling_mode' => ['type' => 'string', 'max_length' => 16],
+        ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     */
+    private function cartServicePreference(array $params): ?string
+    {
+        foreach (['cart_type', 'selling_mode', 'sellingMode'] as $key) {
+            if (!isset($params[$key])) {
+                continue;
+            }
+            $value = strtolower(trim((string)$params[$key]));
+            if ($value !== '') {
+                return $value;
+            }
+        }
+        $cookie = strtolower(trim((string)Cookie::get('weline_selling_mode')));
+        if ($cookie === 'toc' || $cookie === 'tob') {
+            return $cookie;
+        }
+
+        return null;
+    }
+
     /**
      * @return array<string, mixed>
      */
@@ -549,7 +588,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'params' => $this->guestTokenParam(),
+                    'params' => $this->guestTokenParam() + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Read cart summary',
                 ],
@@ -560,7 +599,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'mode' => 'read',
                     'graph' => true,
                     'cost' => 1,
-                    'params' => $this->guestTokenParam(),
+                    'params' => $this->guestTokenParam() + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Read cart item count',
                 ],
@@ -574,7 +613,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'params' => [
                         'limit' => ['type' => 'int', 'min' => 1, 'max' => 50],
                         'max_items' => ['type' => 'int', 'min' => 1, 'max' => 50],
-                    ] + $this->guestTokenParam(),
+                    ] + $this->guestTokenParam() + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Read cart items',
                 ],
@@ -588,7 +627,7 @@ class CartQueryProvider implements QueryProviderInterface
                     'params' => [
                         'limit' => ['type' => 'int', 'min' => 1, 'max' => 50],
                         'max_items' => ['type' => 'int', 'min' => 1, 'max' => 50],
-                    ] + $this->guestTokenParam(),
+                    ] + $this->guestTokenParam() + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Read mini cart items',
                     'attack' => [
@@ -620,7 +659,7 @@ class CartQueryProvider implements QueryProviderInterface
                         'scope' => ['type' => 'array', 'max_items' => 7],
                         'currency' => ['type' => 'string', 'max_length' => 8],
                         'legacy_product_id' => ['type' => 'int', 'min' => 1],
-                    ],
+                    ] + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Add offer line to cart',
                 ],
@@ -639,7 +678,7 @@ class CartQueryProvider implements QueryProviderInterface
                         'channel_code' => ['type' => 'string', 'max_length' => 64],
                         'store_mode' => ['type' => 'string', 'max_length' => 32],
                         'scope' => ['type' => 'array', 'max_items' => 7],
-                    ],
+                    ] + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Merge guest cart into the authenticated customer cart (same Scope)',
                 ],
@@ -658,7 +697,7 @@ class CartQueryProvider implements QueryProviderInterface
                         'channel_code' => ['type' => 'string', 'max_length' => 64],
                         'store_mode' => ['type' => 'string', 'max_length' => 32],
                         'scope' => ['type' => 'array', 'max_items' => 7],
-                    ],
+                    ] + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Read the current guest or authenticated customer cart',
                 ],
@@ -720,7 +759,7 @@ class CartQueryProvider implements QueryProviderInterface
                         'channel_code' => ['type' => 'string', 'max_length' => 64],
                         'store_mode' => ['type' => 'string', 'max_length' => 32],
                         'scope' => ['type' => 'array', 'max_items' => 7],
-                    ],
+                    ] + $this->sellingModeParams(),
                     'returns' => $commonReturns,
                     'summary' => 'Clear the current trusted cart',
                 ],

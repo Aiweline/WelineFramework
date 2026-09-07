@@ -31,9 +31,10 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
         ScopeIdentity $scope,
         ?string $guestToken = null,
         ?int $customerId = null,
+        ?string $cartTypePreference = null,
     ): array {
         $customerId = $customerId !== null && $customerId > 0 ? $customerId : null;
-        $summary = $this->cart->getCart($scope, $guestToken, $customerId);
+        $summary = $this->cart->getCart($scope, $guestToken, $customerId, $cartTypePreference);
         if ((string)($summary['scope_key'] ?? '') !== $scope->canonicalKey()) {
             throw new CartConflictException(
                 self::ERROR_SCOPE,
@@ -129,6 +130,12 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
                 'sku' => $snapshot->sku,
                 'qty_minor' => $quantity,
                 'unit_price_minor' => $snapshot->unitPriceMinor,
+                'compare_at_minor' => max(0, $snapshot->compareAtMinor),
+                'original_price' => round(max(0, $snapshot->compareAtMinor) / 100, 2),
+                'has_deal' => $snapshot->compareAtMinor > $snapshot->unitPriceMinor
+                    && $snapshot->unitPriceMinor > 0,
+                'campaign_label' => trim($snapshot->campaignLabel),
+                'campaign_url' => trim($snapshot->campaignUrl),
                 'row_total_minor' => $quantity * $snapshot->unitPriceMinor,
                 'currency' => $lineCurrency,
                 'split_key' => trim($snapshot->splitKey) ?: 'default',
@@ -139,6 +146,9 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
                 'tax_class_code' => trim($snapshot->taxClassCode) ?: 'standard',
                 'selection' => CartSelectionHash::normalizeSelection($selection),
                 'selection_hash' => $serverSelectionHash,
+                'options' => $snapshot->options !== []
+                    ? $snapshot->options
+                    : (is_array($line['options'] ?? null) ? $line['options'] : []),
             ];
             if ($snapshot->fulfillmentMetadata !== []) {
                 $frozenLine['fulfillment_metadata'] = $snapshot->fulfillmentMetadata;
@@ -152,6 +162,7 @@ final class CheckoutCartSnapshotService implements CheckoutCartSnapshotInterface
             'customer_id' => $customerId,
             'owner_kind' => (string)($summary['owner_kind'] ?? ''),
             'owner_id' => (string)($summary['owner_id'] ?? ''),
+            'cart_type' => (string)($summary['cart_type'] ?? CommerceCartTypeRegistry::CODE_TOC),
             'lines' => $lines,
         ];
 

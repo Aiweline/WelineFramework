@@ -22,6 +22,7 @@ interface CheckoutCartSnapshotInterface
      *   customer_id:?int,
      *   owner_kind:string,
      *   owner_id:string,
+     *   cart_type:string,
      *   lines:list<array<string,mixed>>,
      *   cart_hash:string
      * }
@@ -30,5 +31,6 @@ interface CheckoutCartSnapshotInterface
         ScopeIdentity $scope,
         ?string $guestToken = null,
         ?int $customerId = null,
+        ?string $cartTypePreference = null,
     ): array;
 }

@@ -27,7 +27,7 @@ $copy = [
 ];
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260903-cart-summary-minicart2">
+      href="@static(Weline_Cart::css/cart-page-amazon.css)&v=20260907-price-header-layout3">
 
 <section class="weline-cart-shell weline-cart-shell--amazon"
          data-cart-content="1"
@@ -307,6 +307,105 @@ $copy = [
         return copy.subtotal + ' (' + count + ')';
     }
 
+    function formatLineOptions(item) {
+        const options = item && Array.isArray(item.options) ? item.options : [];
+        const parts = [];
+        options.forEach(function (option) {
+            if (!option || typeof option !== 'object') {
+                return;
+            }
+            const label = text(option.label || option.code).trim();
+            const value = text(option.value_label || option.value).trim();
+            if (!label || !value) {
+                return;
+            }
+            parts.push(label + ': ' + value);
+        });
+        if (parts.length) {
+            return parts.join(' · ');
+        }
+
+        const selection = item && item.selection && typeof item.selection === 'object' ? item.selection : null;
+        if (!selection) {
+            return '';
+        }
+        Object.keys(selection).sort().forEach(function (code) {
+            const value = text(selection[code]).trim();
+            const axis = text(code).trim();
+            if (axis && value) {
+                parts.push(axis + ': ' + value);
+            }
+        });
+        return parts.join(' · ');
+    }
+
+    function isDisplayableSwatchUrl(value) {
+        const image = text(value).trim();
+        if (!image) {
+            return false;
+        }
+        if (/^asset:\/\//i.test(image)) {
+            return false;
+        }
+        if (/^[a-z][a-z0-9+.-]*:/i.test(image) && !/^(https?:)?\/\//i.test(image)) {
+            return false;
+        }
+        return true;
+    }
+
+    function appendLineOptions(details, item) {
+        const options = item && Array.isArray(item.options) ? item.options : [];
+        if (!options.length) {
+            const fallback = formatLineOptions(item);
+            if (!fallback) {
+                return;
+            }
+            const optionsEl = document.createElement('small');
+            optionsEl.className = 'weline-cart-shell__line-options';
+            optionsEl.textContent = fallback;
+            details.appendChild(optionsEl);
+            return;
+        }
+
+        const list = document.createElement('ul');
+        list.className = 'weline-cart-shell__line-options';
+        options.forEach(function (option) {
+            if (!option || typeof option !== 'object') {
+                return;
+            }
+            const label = text(option.label || option.code).trim();
+            const value = text(option.value_label || option.value).trim();
+            if (!label || !value) {
+                return;
+            }
+            const li = document.createElement('li');
+            li.className = 'weline-cart-shell__line-option';
+            const swatchImage = text(option.swatch_image).trim();
+            const swatchColor = text(option.swatch_color).trim();
+            if (isDisplayableSwatchUrl(swatchImage)) {
+                const img = document.createElement('img');
+                img.className = 'weline-cart-shell__line-option-swatch';
+                img.src = swatchImage;
+                img.alt = '';
+                li.appendChild(img);
+            } else if (swatchColor) {
+                const swatch = document.createElement('span');
+                swatch.className = 'weline-cart-shell__line-option-swatch weline-cart-shell__line-option-swatch--color';
+                swatch.style.backgroundColor = swatchColor;
+                swatch.setAttribute('aria-hidden', 'true');
+                li.appendChild(swatch);
+            }
+            const copy = document.createElement('span');
+            copy.className = 'weline-cart-shell__line-option-text';
+            copy.textContent = label + ': ' + value;
+            li.appendChild(copy);
+            list.appendChild(li);
+        });
+        if (list.childNodes.length) {
+            details.appendChild(list);
+        }
+    }
+
     function buildLine(item, currency) {
         const row = document.createElement('article');
         row.className = 'weline-cart-shell__line';
@@ -346,6 +445,8 @@ $copy = [
             sku.textContent = 'SKU: ' + skuValue;
             details.appendChild(sku);
         }
+
+        appendLineOptions(details, item);
 
         const meta = document.createElement('div');
         meta.className = 'weline-cart-shell__line-meta';
@@ -400,7 +501,47 @@ $copy = [
 
         const priceCol = document.createElement('div');
         priceCol.className = 'weline-cart-shell__line-price';
-        priceCol.textContent = money(rowAmount, currency);
+
+        const priceRow = document.createElement('span');
+        priceRow.className = 'weline-cart-shell__line-price-row';
+
+        const nowEl = document.createElement('span');
+        nowEl.className = 'weline-cart-shell__line-price-now';
+        nowEl.textContent = money(rowAmount, currency);
+        priceRow.appendChild(nowEl);
+
+        const compareAtMinor = Math.max(0, Number(item && item.compare_at_minor) || 0);
+        const unitMinor = Math.max(0, Number(item && item.unit_price_minor) || 0);
+        let originalMajor = Number(item && item.original_price);
+        if (!(originalMajor > 0) && compareAtMinor > 0) {
+            originalMajor = compareAtMinor / 100;
+        }
+        const hasDeal = Boolean(item && item.has_deal)
+            || (compareAtMinor > unitMinor && unitMinor > 0)
+            || (originalMajor > unitAmount && unitAmount > 0);
+        if (hasDeal && originalMajor > 0) {
+            const wasEl = document.createElement('span');
+            wasEl.className = 'weline-cart-shell__line-price-was';
+            wasEl.textContent = money(originalMajor * quantity, currency);
+            priceRow.appendChild(wasEl);
+        }
+        priceCol.appendChild(priceRow);
+
+        if (hasDeal && originalMajor > 0) {
+            const campaignLabel = text(item && item.campaign_label).trim();
+            const campaignUrl = text(item && item.campaign_url).trim();
+            if (campaignLabel) {
+                const campaignEl = campaignUrl
+                    ? document.createElement('a')
+                    : document.createElement('span');
+                campaignEl.className = 'weline-cart-shell__line-price-campaign';
+                campaignEl.textContent = campaignLabel;
+                if (campaignUrl) {
+                    campaignEl.href = campaignUrl;
+                }
+                priceCol.appendChild(campaignEl);
+            }
+        }
 
         const unitPrice = document.createElement('small');
         unitPrice.className = 'weline-cart-shell__line-unit';
