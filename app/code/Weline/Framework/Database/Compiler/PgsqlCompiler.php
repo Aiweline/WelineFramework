@@ -19,6 +19,20 @@ final class PgsqlCompiler extends AbstractCompiler
         parent::__construct($dialect ?? new PgsqlDialect());
     }
 
+    /**
+     * PDO treats boolean values passed through execute(array $params) as an
+     * empty string for false. PostgreSQL then rejects that value for boolean
+     * columns, so normalize booleans before they reach the driver.
+     */
+    protected function valueToBinding(mixed $v): string|float|int|bool|null
+    {
+        if (is_bool($v)) {
+            return $v ? '1' : '0';
+        }
+
+        return parent::valueToBinding($v);
+    }
+
     protected function buildInsert(array $ast, string $table, array $options): string
     {
         $insert = $ast['insert'] ?? [];

@@ -20,7 +20,14 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
      * @var array<string, float>
      */
     private static array $remoteUnavailableUntil = [];
+    /**
+     * A slow shared-memory read affects every pool in the worker. Keep a
+     * short process-wide cooldown so the next cache lookup can fall back to
+     * its local/database path instead of queueing behind the same service.
+     */
+    private static float $remoteGloballyUnavailableUntil = 0.0;
     private const REMOTE_FAILURE_COOLDOWN_SECONDS = 2.0;
+    private const REMOTE_SLOW_THRESHOLD_MS = 75.0;
     private const EPOCH_NAMESPACE = 'wls_adapter_local_epoch';
 
     /** 进程内缓存（减少网络请求） */
@@ -89,8 +96,9 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         }
 
         try {
-            $value = $this->memoryFacade()->getCache($this->identity, $key);
-            $this->markRemoteAvailable();
+            $value = $this->remoteCall(
+                fn() => $this->memoryFacade()->getCache($this->identity, $key)
+            );
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
             $this->recordMiss();
@@ -123,8 +131,9 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         }
 
         try {
-            $result = $this->memoryFacade()->setCache($this->identity, $key, $value, $ttl);
-            $this->markRemoteAvailable();
+            $result = $this->remoteCall(
+                fn() => $this->memoryFacade()->setCache($this->identity, $key, $value, $ttl)
+            );
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
             return false;
@@ -145,8 +154,9 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         }
 
         try {
-            $result = $this->memoryFacade()->deleteCache($this->identity, $key);
-            $this->markRemoteAvailable();
+            $result = $this->remoteCall(
+                fn() => $this->memoryFacade()->deleteCache($this->identity, $key)
+            );
             return $result;
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
@@ -163,8 +173,9 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         }
 
         try {
-            $result = $this->memoryFacade()->clearCache($this->identity);
-            $this->markRemoteAvailable();
+            $result = $this->remoteCall(
+                fn() => $this->memoryFacade()->clearCache($this->identity)
+            );
             $this->bumpRemoteEpoch();
             return $result;
         } catch (\Throwable $throwable) {
@@ -189,8 +200,9 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         }
 
         try {
-            $result = $this->memoryFacade()->compareAndSetCache($this->identity, $key, $expected, $value, $ttl);
-            $this->markRemoteAvailable();
+            $result = $this->remoteCall(
+                fn() => $this->memoryFacade()->compareAndSetCache($this->identity, $key, $expected, $value, $ttl)
+            );
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
             return false;
@@ -245,8 +257,9 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         }
 
         try {
-            $result = $this->memoryFacade()->hasCache($this->identity, $key);
-            $this->markRemoteAvailable();
+            $result = $this->remoteCall(
+                fn() => $this->memoryFacade()->hasCache($this->identity, $key)
+            );
             return $result;
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
@@ -410,6 +423,8 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
     public static function clearAllMemory(): void
     {
         self::$stats = [];
+        self::$remoteUnavailableUntil = [];
+        self::$remoteGloballyUnavailableUntil = 0.0;
     }
 
     private array $config = [];
@@ -554,12 +569,20 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
         if ($requestId !== null && $this->epochSyncedRequestId === $requestId) {
             return;
         }
+        // An empty L1 has no stale value to invalidate. Defer the shared
+        // epoch probe until this worker has materialized a local entry; the
+        // first business read still goes through the shared cache below.
+        if ($this->localCache === []) {
+            $this->epochSyncedRequestId = $requestId;
+            return;
+        }
         if ($this->isRemoteUnavailable()) {
             return;
         }
         try {
-            $remote = (int)($this->memoryFacade()->get(self::EPOCH_NAMESPACE, $this->identity) ?? 0);
-            $this->markRemoteAvailable();
+            $remote = (int)($this->remoteCall(
+                fn() => $this->memoryFacade()->get(self::EPOCH_NAMESPACE, $this->identity)
+            ) ?? 0);
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
             return;
@@ -580,8 +603,9 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
             return;
         }
         try {
-            $next = $this->memoryFacade()->incr(self::EPOCH_NAMESPACE, $this->identity, 1);
-            $this->markRemoteAvailable();
+            $next = $this->remoteCall(
+                fn() => $this->memoryFacade()->incr(self::EPOCH_NAMESPACE, $this->identity, 1)
+            );
             $this->localEpoch = $next !== null ? \max(1, (int)$next) : ($this->localEpoch + 1);
         } catch (\Throwable $throwable) {
             $this->markRemoteUnavailable($throwable);
@@ -604,12 +628,20 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
 
     private function isRemoteUnavailable(): bool
     {
+        $now = \microtime(true);
+        if (self::$remoteGloballyUnavailableUntil > $now) {
+            return true;
+        }
+        if (self::$remoteGloballyUnavailableUntil > 0.0) {
+            self::$remoteGloballyUnavailableUntil = 0.0;
+        }
+
         $until = self::$remoteUnavailableUntil[$this->identity] ?? 0.0;
         if ($until <= 0.0) {
             return false;
         }
 
-        if ($until > \microtime(true)) {
+        if ($until > $now) {
             return true;
         }
 
@@ -620,7 +652,20 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
     private function markRemoteUnavailable(\Throwable $throwable): void
     {
         unset($throwable);
-        self::$remoteUnavailableUntil[$this->identity] = \microtime(true) + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
+        $until = \microtime(true) + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
+        self::$remoteUnavailableUntil[$this->identity] = $until;
+        self::$remoteGloballyUnavailableUntil = \max(self::$remoteGloballyUnavailableUntil, $until);
+        if ($this->memoryFacade !== null) {
+            $this->memoryFacade->disconnect();
+            $this->memoryFacade = null;
+        }
+    }
+
+    private function markRemoteSlow(): void
+    {
+        $until = \microtime(true) + self::REMOTE_FAILURE_COOLDOWN_SECONDS;
+        self::$remoteUnavailableUntil[$this->identity] = $until;
+        self::$remoteGloballyUnavailableUntil = \max(self::$remoteGloballyUnavailableUntil, $until);
         if ($this->memoryFacade !== null) {
             $this->memoryFacade->disconnect();
             $this->memoryFacade = null;
@@ -630,5 +675,38 @@ class WlsMemoryAdapter implements CacheAdapterInterface, MemoryStoreInterface, S
     private function markRemoteAvailable(): void
     {
         unset(self::$remoteUnavailableUntil[$this->identity]);
+    }
+
+    /**
+     * Execute one remote operation and turn a slow response into the same
+     * short cooldown used for hard failures. Cache reads can return null on a
+     * socket timeout, so relying on exceptions alone leaves every pool paying
+     * the timeout repeatedly.
+     */
+    private function remoteCall(callable $operation): mixed
+    {
+        $started = \hrtime(true);
+        try {
+            $result = $operation();
+        } finally {
+            $elapsedMs = (\hrtime(true) - $started) / 1_000_000;
+            if ($elapsedMs >= $this->remoteSlowThresholdMs()) {
+                $this->markRemoteSlow();
+            } else {
+                $this->markRemoteAvailable();
+            }
+        }
+
+        return $result;
+    }
+
+    private function remoteSlowThresholdMs(): float
+    {
+        $configured = $this->config['remote_slow_threshold_ms'] ?? self::REMOTE_SLOW_THRESHOLD_MS;
+        if (!\is_numeric($configured) || (float) $configured <= 0.0) {
+            return self::REMOTE_SLOW_THRESHOLD_MS;
+        }
+
+        return (float) $configured;
     }
 }

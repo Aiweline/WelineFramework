@@ -48,6 +48,8 @@ final class DatabaseFreeTranslator
                 $candidates[] = 'en_US';
             } elseif (str_starts_with(strtolower($candidate), 'zh')) {
                 $candidates[] = 'zh_Hans_CN';
+            } else {
+                $candidates[] = 'en_US';
             }
         }
         $candidates[] = 'zh_Hans_CN';
@@ -117,7 +119,11 @@ final class DatabaseFreeTranslator
                     continue;
                 }
                 $translation = (string)$row[1];
-                return $translation !== '' ? $translation : $source;
+                if ($translation === '' || $translation === $source) {
+                    return null;
+                }
+
+                return $translation;
             }
         } finally {
             fclose($handle);

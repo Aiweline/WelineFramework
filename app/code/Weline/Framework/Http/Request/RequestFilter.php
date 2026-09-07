@@ -491,6 +491,7 @@ class RequestFilter extends DataObject
             || $host === '::1'
             || str_ends_with($host, '.localhost')
             || str_ends_with($host, '.weline.localhost')
+            || str_ends_with($host, '.test.weline.com')
             || str_ends_with($host, '.weline.test');
     }
 

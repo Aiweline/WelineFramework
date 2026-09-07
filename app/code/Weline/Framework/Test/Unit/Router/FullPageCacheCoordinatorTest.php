@@ -128,6 +128,24 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertTrue((bool)WelineEnv::get('response.from_cache', false));
     }
 
+    public function testExternalizedLargePayloadRemainsEligibleForSharedStale(): void
+    {
+        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $method = new \ReflectionMethod(FullPageCacheCoordinator::class, 'shouldPublishSharedStalePayload');
+        $method->setAccessible(true);
+
+        self::assertTrue($method->invoke($coordinator, [
+            'fpc_body_file' => [
+                'path' => 'var/cache/weline-fpc-body/test',
+                'bytes' => 2 * 1024 * 1024,
+            ],
+        ]));
+        self::assertTrue($method->invoke($coordinator, [
+            KeyBuilder::UNIFIED_CACHE_FPC_KEY => str_repeat('x', 1024),
+            'fpc_gzip_b64' => str_repeat('a', 2048),
+        ]));
+    }
+
     public function testCooperativeFpcYieldIsOptInForPersistentRequests(): void
     {
         $method = new \ReflectionMethod(FullPageCacheCoordinator::class, 'cooperativeBuildYield');
@@ -267,17 +285,17 @@ final class FullPageCacheCoordinatorTest extends TestCase
         self::assertTrue($method->invoke(
             $coordinator,
             'WELINE_SESSID_9555_w0=' . $sid,
-            'https://p05113ef3.weline.test:9555/',
+            'https://p05113ef3.test.weline.com:9555/',
         ));
         self::assertTrue($method->invoke(
             $coordinator,
             'WELINE_SESSID_9555=' . $sid . '; WELINE_SESSID_9555_w0=' . str_repeat('e', 32),
-            'https://p05113ef3.weline.test:9555/',
+            'https://p05113ef3.test.weline.com:9555/',
         ));
         self::assertFalse($method->invoke(
             $coordinator,
             'weline_cart_item_count_w0=2',
-            'https://p05113ef3.weline.test:9555/',
+            'https://p05113ef3.test.weline.com:9555/',
         ));
     }
 
@@ -570,6 +588,61 @@ final class FullPageCacheCoordinatorTest extends TestCase
         $deletePayload = new \ReflectionMethod($coordinator, 'deleteProcessCachedPayload');
         $deletePayload->invoke($coordinator, $receipt['cache_key']);
         self::assertNull($coordinator->resolveLocalizedHomepageProcessReceipt($fullUri));
+    }
+
+    public function testAnonymousRootHomepageNaturalHitRegistersExactProcessReceipt(): void
+    {
+        $coordinator = new FullPageCacheCoordinator(null, new InMemoryCachePool());
+        $fullUri = 'https://example.test/';
+        $this->setCurrentFpcUri($fullUri, '/');
+        $coordinator->publishResponse(
+            Response::html('<html><body>anonymous root homepage</body></html>')
+                ->setHeader('Cache-Control', 'public, max-age=60'),
+            '/',
+            ['id' => 'home'],
+            ['module' => 'Test_Module'],
+            [],
+            'GET',
+        );
+
+        $receipt = $coordinator->resolveRootHomepageProcessReceipt($fullUri);
+        self::assertIsArray($receipt);
+        self::assertSame($fullUri, $receipt['full_uri']);
+        self::assertSame(hash('sha256', $receipt['cache_key']), $receipt['identity_digest']);
+        self::assertNull(
+            $coordinator->resolveLocalizedHomepageProcessReceipt($fullUri),
+            'The localized compatibility API must remain localized-only.',
+        );
+
+        FullPageCacheCoordinator::clearProcessCache();
+        Context::current()->set('input.server.HTTP_COOKIE', 'WELINE_USER_LANG=en_US');
+        WelineEnv::setServer('HTTP_COOKIE', 'WELINE_USER_LANG=en_US', 'unit-test');
+        $coordinator->publishResponse(
+            Response::html('<html><body>cookie root homepage</body></html>')
+                ->setHeader('Cache-Control', 'public, max-age=60'),
+            '/',
+            ['id' => 'home'],
+            ['module' => 'Test_Module'],
+            [],
+            'GET',
+        );
+        self::assertNull($coordinator->resolveRootHomepageProcessReceipt($fullUri));
+
+        FullPageCacheCoordinator::clearProcessCache();
+        Context::current()->set('input.server.HTTP_COOKIE', '');
+        WelineEnv::setServer('HTTP_COOKIE', '', 'unit-test');
+        $queryFullUri = 'https://example.test/?ref=campaign';
+        $this->setCurrentFpcUri($queryFullUri, '/?ref=campaign');
+        $coordinator->publishResponse(
+            Response::html('<html><body>query root homepage</body></html>')
+                ->setHeader('Cache-Control', 'public, max-age=60'),
+            '/?ref=campaign',
+            ['id' => 'home'],
+            ['module' => 'Test_Module'],
+            [],
+            'GET',
+        );
+        self::assertNull($coordinator->resolveRootHomepageProcessReceipt($queryFullUri));
     }
 
     private function buildCurrentUnifiedFpcCacheKey(FullPageCacheCoordinator $coordinator, string $method): string

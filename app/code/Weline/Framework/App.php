@@ -41,6 +41,7 @@ use Weline\Framework\Runtime\TelemetryBroadcaster;
 use Weline\Framework\Runtime\System;
 use Weline\Framework\Router\Core as Router;
 use Weline\Framework\Router\FullPageCacheCoordinator;
+use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Framework\Session\SessionFactory;
 
 class App
@@ -1309,6 +1310,14 @@ class App
             return;
         }
 
+        // A first-time public GET can derive Website/Store/Channel from its
+        // host and path on every request. Avoid emitting route-state cookies
+        // for that anonymous shell so the response remains publishable to FPC.
+        // Existing cookie-bearing visitors keep the legacy synchronization.
+        if ($this->shouldDeferAnonymousFrontendRouteStateCookies()) {
+            return;
+        }
+
         if ($this->shouldSuppressResponseCookiesForCurrentRequest()) {
             return;
         }
@@ -1346,6 +1355,56 @@ class App
         // Website cookies flip CookieScope on; re-emit Session under the same wire
         // name so login does not remain on an unscoped alias that later expires.
         $this->reassertSessionCookieWire();
+    }
+
+    private function shouldDeferAnonymousFrontendRouteStateCookies(): bool
+    {
+        $method = \strtoupper(\trim((string)(
+            WelineEnv::server('REQUEST_METHOD', '')
+            ?: $this->context->get('input.server.REQUEST_METHOD', '')
+            ?: 'GET'
+        )));
+        if (!\in_array($method, ['GET', 'HEAD'], true)) {
+            return false;
+        }
+
+        if ((bool)WelineEnv::get('is_backend', false)) {
+            return false;
+        }
+        $area = \strtolower(\trim((string)WelineEnv::get('area', 'frontend')));
+        if ($area !== '' && $area !== 'frontend') {
+            return false;
+        }
+
+        try {
+            if (SessionCookieNameResolver::hasRequestCookie()) {
+                return false;
+            }
+        } catch (\Throwable) {
+            // If the session-cookie resolver cannot inspect the request, keep
+            // the existing route-state behavior rather than suppressing state.
+            return false;
+        }
+
+        $cookieHeader = \trim((string)(
+            $this->context->get('input.server.HTTP_COOKIE', '')
+            ?: WelineEnv::server('HTTP_COOKIE', '')
+            ?: WelineEnv::get('server.http_cookie', '')
+        ));
+        if ($cookieHeader !== '') {
+            return false;
+        }
+
+        $cookies = $this->context->get('input.cookie', []);
+        if (\is_array($cookies)) {
+            foreach ($cookies as $value) {
+                if ($value !== null && \trim((string)$value) !== '') {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     /**

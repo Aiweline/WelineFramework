@@ -274,7 +274,7 @@ class WlsRequest extends Request
     /**
      * Public listen port for a direct WLS client connection when Host omits it.
      *
-     * Local browsers often hit `*.weline.test` via 127.0.0.1 and are therefore
+     * Local browsers often hit `*.test.weline.com` via 127.0.0.1 and are therefore
      * classified as a trusted proxy. They do not send X-Forwarded-*. In that
      * case the worker listen port is the public authority. Explicit forwarded
      * 80/443 (or forwarded proto without a non-standard port) still keep the

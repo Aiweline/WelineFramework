@@ -125,11 +125,13 @@ final class StorefrontCacheKeyContextResolver
             $this->namespacePath->global('storefront', ['config']),
             $this->namespacePath->global('storefront', ['price']),
             $this->namespacePath->global('storefront', ['theme']),
+            $this->namespacePath->global('storefront', ['auth']),
             $this->namespacePath->website($websiteCode),
             $this->namespacePath->website($websiteCode, ['config']),
             $this->namespacePath->website($websiteCode, ['catalog']),
             $this->namespacePath->website($websiteCode, ['price']),
             $this->namespacePath->website($websiteCode, ['theme']),
+            $this->namespacePath->website($websiteCode, ['auth']),
         ];
     }
 

@@ -34,6 +34,9 @@ class CacheManager implements CacheManagerInterface
      */
     private array $pools = [];
 
+    /** @var array<string, CachePolicy> */
+    private array $policies = [];
+
     /**
      * 配置
      */
@@ -106,6 +109,24 @@ class CacheManager implements CacheManagerInterface
         $this->adapterFactory = $adapterFactory ?? new AdapterFactory();
     }
 
+    public function registerPolicy(CachePolicy $policy): CachePolicy
+    {
+        $this->policies[$policy->resource] = $policy;
+        return $policy;
+    }
+
+    public function getPolicy(string $resource): CachePolicy
+    {
+        return $this->policies[$resource]
+            ?? throw new \InvalidArgumentException('Unknown cache policy resource: ' . $resource);
+    }
+
+    /** @return array<string, CachePolicy> */
+    public function getPolicies(): array
+    {
+        return $this->policies;
+    }
+
     public function pool(string $identity): CachePoolInterface
     {
         if (!isset($this->pools[$identity])) {
@@ -140,6 +161,7 @@ class CacheManager implements CacheManagerInterface
 
     public function clearAll(): void
     {
+        Service\StorefrontScopeHotCache::resetProcessCache();
         foreach ($this->getPoolIdentities() as $identity) {
             $pool = $this->pool($identity);
             if (!$pool->isPermanent()) {
@@ -150,6 +172,7 @@ class CacheManager implements CacheManagerInterface
 
     public function flushAll(): void
     {
+        Service\StorefrontScopeHotCache::resetProcessCache();
         foreach ($this->getPoolIdentities() as $identity) {
             $this->pool($identity)->clear();
         }

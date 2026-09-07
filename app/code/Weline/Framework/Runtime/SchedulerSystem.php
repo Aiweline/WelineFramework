@@ -252,21 +252,125 @@ class SchedulerSystem
         }
 
         $timeoutSec = \max(0.0, $timeoutSec);
-        if (!self::$schedulerActive || !self::$ioWaitEnabled || !\Fiber::getCurrent()) {
-            return self::selectOnce($stream, $writable, $timeoutSec);
-        }
-        if (!self::prepareCurrentFiberForSuspend()) {
-            return self::selectOnce($stream, $writable, $timeoutSec);
+        // Core I/O must not autoload request tracing outside an already traced request.
+        if (!\class_exists(RequestLifecycleTrace::class, false) || !RequestLifecycleTrace::isEnabled()) {
+            if (!self::$schedulerActive || !self::$ioWaitEnabled || !\Fiber::getCurrent()) {
+                return self::selectOnce($stream, $writable, $timeoutSec);
+            }
+            if (!self::prepareCurrentFiberForSuspend()) {
+                return self::selectOnce($stream, $writable, $timeoutSec);
+            }
+            self::dispatchWait($writable ? 'io_writable' : 'io_readable', [
+                'stream' => $stream,
+                'timeout' => $timeoutSec,
+                'fiber' => \Fiber::getCurrent(),
+            ]);
+            $result = self::suspendCurrentFiber();
+
+            return $result === true;
         }
 
-        self::dispatchWait($writable ? 'io_writable' : 'io_readable', [
-            'stream' => $stream,
-            'timeout' => $timeoutSec,
-            'fiber' => \Fiber::getCurrent(),
-        ]);
-        $result = self::suspendCurrentFiber();
+        $startNs = \hrtime(true);
+        $stages = [];
+        $ioTiming = null;
+        $stage = '';
+        $mode = 'select';
+        $outcome = 'not_ready';
+        $exceptionClass = null;
+        try {
+            $useFiber = self::$schedulerActive && self::$ioWaitEnabled && \Fiber::getCurrent();
+            if ($useFiber) {
+                $mode = 'fiber';
+                $stage = 'prepare';
+                $stageStartNs = \hrtime(true);
+                try {
+                    $useFiber = self::prepareCurrentFiberForSuspend();
+                } finally {
+                    $stages['prepare'] = [$stageStartNs, \hrtime(true)];
+                }
+            }
+            if (!$useFiber) {
+                $mode = 'select';
+                $stage = 'select';
+                $stageStartNs = \hrtime(true);
+                try {
+                    $ready = self::selectOnce($stream, $writable, $timeoutSec);
+                } finally {
+                    $stages['select'] = [$stageStartNs, \hrtime(true)];
+                }
+                $outcome = $ready ? 'ready' : 'not_ready';
 
-        return $result === true;
+                return $ready;
+            }
+
+            $ioTiming = new \stdClass();
+            $stage = 'dispatch';
+            $stageStartNs = \hrtime(true);
+            try {
+                self::dispatchWait($writable ? 'io_writable' : 'io_readable', [
+                    'stream' => $stream,
+                    'timeout' => $timeoutSec,
+                    'fiber' => \Fiber::getCurrent(),
+                    'io_timing' => $ioTiming,
+                ]);
+            } finally {
+                $stages['dispatch'] = [$stageStartNs, \hrtime(true)];
+            }
+            $stage = 'suspend';
+            $stageStartNs = \hrtime(true);
+            try {
+                $result = self::suspendCurrentFiber();
+            } finally {
+                $stages['suspend'] = [$stageStartNs, \hrtime(true)];
+            }
+            $ready = $result === true;
+            $outcome = $ready ? 'ready' : 'not_ready';
+
+            return $ready;
+        } catch (\Throwable $error) {
+            $outcome = 'exception';
+            $exceptionClass = $error::class;
+            throw $error;
+        } finally {
+            $endNs = \hrtime(true);
+            $durationMs = ($endNs - $startNs) / 1_000_000;
+            if ($durationMs >= 10.0 || $exceptionClass !== null) {
+                $meta = [
+                    'direction' => $writable ? 'write' : 'read',
+                    'mode' => $mode,
+                    'timeout_sec' => $timeoutSec,
+                    'result' => $outcome,
+                    'exception_class' => $exceptionClass,
+                    'failed_stage' => $exceptionClass === null ? null : $stage,
+                    'start_monotonic_us' => \intdiv($startNs, 1000),
+                    'end_monotonic_us' => \intdiv($endNs, 1000),
+                    'measurement' => 'monotonic_wall',
+                ];
+                foreach (['prepare', 'dispatch', 'suspend', 'select'] as $name) {
+                    $bounds = $stages[$name] ?? null;
+                    $meta[$name . '_ms'] = $bounds === null ? null : \round(($bounds[1] - $bounds[0]) / 1_000_000, 3);
+                    $meta[$name . '_start_monotonic_us'] = $bounds === null ? null : \intdiv($bounds[0], 1000);
+                    $meta[$name . '_end_monotonic_us'] = $bounds === null ? null : \intdiv($bounds[1], 1000);
+                }
+                foreach ([
+                    'registered', 'deadline', 'yield_return', 'after_resume_start',
+                    'after_resume_end', 'guard_start', 'guard_end', 'collect_seen',
+                    'first_poll_start', 'first_poll_end',
+                    'resolved', 'before_resume_start', 'before_resume_end', 'resume_call',
+                ] as $name) {
+                    $stamp = $ioTiming->{$name . '_ns'} ?? null;
+                    $meta['io_' . $name . '_monotonic_us'] = $stamp === null
+                        ? null
+                        : (int) \floor($stamp / 1000);
+                }
+                $meta['io_resolution'] = $ioTiming->resolution ?? null;
+                try {
+                    RequestLifecycleTrace::recordSpan('runtime.io.await_socket', $durationMs, 'runtime', null, $meta);
+                } catch (\Throwable) {
+                    // Observability must preserve the original await result or exception.
+                }
+            }
+        }
     }
 
     /**

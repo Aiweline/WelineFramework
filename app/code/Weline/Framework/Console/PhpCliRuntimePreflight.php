@@ -23,6 +23,9 @@ final class PhpCliRuntimePreflight
 
     public static function enforce(array $argv, string $entryScript, string $projectRoot): ?int
     {
+        // Agent shells sometimes assign HOME to a site URL or curl %{http_code}.
+        // Repair before any descendant work that may mkdir under $HOME.
+        self::sanitizeUnixHomeEnvironment();
         $projectRoot = self::resolveWindowsPersistentPath($projectRoot);
         $entryScript = self::resolveWindowsPersistentPath($entryScript);
         $profile = self::applyForDescendants($projectRoot);
@@ -465,5 +468,95 @@ final class PhpCliRuntimePreflight
         }
         $_ENV[$name] = $value;
         $_SERVER[$name] = $value;
+    }
+
+    /**
+     * Restore a polluted Unix HOME (URL / HTTP status / relative path) to the
+     * login directory so CLI tools cannot create <cwd>/https:/host/... trees.
+     */
+    public static function sanitizeUnixHomeEnvironment(): ?string
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            return null;
+        }
+
+        $home = \trim((string)(\getenv('HOME') ?: ''));
+        if (self::isSafeUnixAbsoluteFilesystemPath($home, true)) {
+            self::clearUnsafeUnixStateOverrides();
+            return null;
+        }
+
+        $repaired = self::resolveUnixLoginHomeDirectory();
+        if ($repaired === null || !self::isSafeUnixAbsoluteFilesystemPath($repaired, true)) {
+            throw new \RuntimeException(
+                'HOME is missing or unsafe (must be an absolute filesystem directory;'
+                . ' not a URL, URI scheme, or HTTP status). Current HOME='
+                . \var_export($home, true)
+            );
+        }
+
+        self::publishEnvironment('HOME', $repaired);
+        self::clearUnsafeUnixStateOverrides();
+        \fwrite(
+            \STDERR,
+            '[Weline] Restored unsafe HOME to ' . $repaired . \PHP_EOL
+        );
+
+        return $repaired;
+    }
+
+    private static function isSafeUnixAbsoluteFilesystemPath(string $path, bool $mustExistAsDirectory): bool
+    {
+        $path = \trim($path);
+        if ($path === '' || !\str_starts_with($path, '/')) {
+            return false;
+        }
+        if (\preg_match('#\A[a-z][a-z0-9+.-]*:#i', $path) === 1) {
+            return false;
+        }
+        if (\preg_match('/\A\d{3}\z/D', $path) === 1) {
+            return false;
+        }
+        if (\str_contains($path, "\0") || \strlen($path) > 4096) {
+            return false;
+        }
+        if (\in_array('..', \preg_split('#/+#', $path) ?: [], true)) {
+            return false;
+        }
+        if ($mustExistAsDirectory && !\is_dir($path)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static function resolveUnixLoginHomeDirectory(): ?string
+    {
+        if (\function_exists('posix_geteuid') && \function_exists('posix_getpwuid')) {
+            $account = @\posix_getpwuid(\posix_geteuid());
+            $dir = \is_array($account) ? \trim((string)($account['dir'] ?? '')) : '';
+            if ($dir !== '' && self::isSafeUnixAbsoluteFilesystemPath($dir, true)) {
+                $real = \realpath($dir);
+                return \is_string($real) && $real !== '' ? $real : $dir;
+            }
+        }
+
+        return null;
+    }
+
+    private static function clearUnsafeUnixStateOverrides(): void
+    {
+        foreach (['XDG_STATE_HOME', 'WLS_EDGE_STATE_HOME'] as $name) {
+            $value = \getenv($name);
+            if ($value === false) {
+                continue;
+            }
+            $trimmed = \trim((string)$value);
+            if ($trimmed === '' || self::isSafeUnixAbsoluteFilesystemPath($trimmed, false)) {
+                continue;
+            }
+            @\putenv($name);
+            unset($_ENV[$name], $_SERVER[$name]);
+        }
     }
 }

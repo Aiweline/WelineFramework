@@ -15,6 +15,7 @@ use Weline\Framework\Cache\CacheFactory;
 use Weline\Framework\Cache\CacheFactoryInterface;
 use Weline\Framework\Cache\Contract\CachePoolInterface;
 use Weline\Framework\Cache\Scanner;
+use Weline\Framework\Cache\Service\CacheWarmerRegistry;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Output\Cli\Printing;
 use Weline\Framework\Runtime\RuntimeControlBroadcasterInterface;
@@ -39,13 +40,19 @@ class Clear implements \Weline\Framework\Console\CommandInterface
      */
     private ?RuntimeControlBroadcasterInterface $broadcastService = null;
 
+    private ?CacheWarmerRegistry $cacheWarmerRegistry = null;
+
     public function __construct(
         Scanner  $scanner,
-        Printing $printing
+        Printing $printing,
+        ?RuntimeControlBroadcasterInterface $broadcastService = null,
+        ?CacheWarmerRegistry $cacheWarmerRegistry = null,
     )
     {
         $this->scanner  = $scanner;
         $this->printing = $printing;
+        $this->broadcastService = $broadcastService;
+        $this->cacheWarmerRegistry = $cacheWarmerRegistry;
     }
 
     /**
@@ -102,8 +109,9 @@ class Clear implements \Weline\Framework\Console\CommandInterface
         $this->printOverallSummary($totalStats);
 
         // 向 WLS 发送缓存清理命令（进程内缓存失效，不重启 Worker）
-        $this->sendWlsCacheClearCommand();
-        $this->warmStorefrontFpcAfterClear();
+        if ($this->sendWlsCacheClearCommand()) {
+            $this->warmStorefrontFpcAfterClear();
+        }
     }
 
     /**
@@ -112,12 +120,12 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     private function warmStorefrontFpcAfterClear(): void
     {
         try {
-            if (!\class_exists(\Weline\Theme\Service\StorefrontFpcWarmer::class)) {
-                return;
-            }
-            /** @var \Weline\Framework\Cache\Service\CacheWarmerRegistry $registry */
-            $registry = ObjectManager::getInstance(\Weline\Framework\Cache\Service\CacheWarmerRegistry::class);
+            $registry = $this->cacheWarmerRegistry
+                ??= ObjectManager::getInstance(CacheWarmerRegistry::class);
             if (!$registry->has('theme.storefront_fpc')) {
+                if (!\class_exists(\Weline\Theme\Service\StorefrontFpcWarmer::class)) {
+                    return;
+                }
                 $registry->register(ObjectManager::getInstance(\Weline\Theme\Service\StorefrontFpcWarmer::class));
             }
             $result = $registry->warmUp('fpc');
@@ -163,23 +171,30 @@ class Clear implements \Weline\Framework\Console\CommandInterface
     /**
      * 向 WLS 发送缓存清理 IPC 命令
      */
-    private function sendWlsCacheClearCommand(): void
+    private function sendWlsCacheClearCommand(): bool
     {
         try {
             $service = $this->getBroadcastService();
-            $result = $service->cacheClear();
+            $result = $service->cacheClearAndWait(null, 12.0);
 
-            if (!empty($result['success'])) {
-                $this->printing->successIcon(__('WLS 缓存清理命令已发送'));
-                if ($result['message']) {
+            if (!empty($result['success']) && !empty($result['completed'])) {
+                $this->printing->successIcon(__('WLS 缓存清理已完成'));
+                if (!empty($result['message'])) {
                     $this->printing->note($result['message']);
                 }
-            } else {
-                $this->printing->warning(__('WLS 缓存清理命令发送失败：%{1}', [$result['message'] ?? __('未知错误')]));
+
+                return true;
             }
+
+            $this->printing->warning(__(
+                'WLS 缓存清理未完成，已跳过店面 FPC 预热：%{1}',
+                [$result['message'] ?? __('未知错误')]
+            ));
         } catch (\Throwable $e) {
             // WLS 未运行时静默忽略，不影响本地缓存清理的展示
         }
+
+        return false;
     }
     
     /**
