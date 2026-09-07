@@ -247,12 +247,17 @@ final class PromotionThemeProductService
             ));
         }
 
-        $ids = [];
+        // Validate all manual bindings sharing one storefront scope with one
+        // bounded reader call. The previous per-binding search repeated the
+        // full published-product scan for every selected SKU (N+1 on promotion
+        // pages with a large manual selection).
+        $scopeGroups = [];
         foreach ($bindings as $binding) {
             $bindingWebsiteId = (int)$binding['website_id'] > 0
                 ? (int)$binding['website_id']
                 : (int)$scope['website_id'];
-            if ($bindingWebsiteId <= 0) {
+            // website_id=0 is the default website — keep it eligible.
+            if ($bindingWebsiteId < 0) {
                 continue;
             }
             $bindingScope = [
@@ -260,12 +265,37 @@ final class PromotionThemeProductService
                 'store_code' => (string)$scope['store_code'],
                 'channel_code' => (string)$scope['channel_code'],
             ];
-            $allowed = array_fill_keys(
-                $this->searchIds($bindingScope, ['status' => 'published'], 500),
+            $scopeKey = serialize($bindingScope);
+            $scopeGroups[$scopeKey] ??= [
+                'scope' => $bindingScope,
+            ];
+        }
+
+        /** @var array<string, array<int, true>> $allowedByScope */
+        $allowedByScope = [];
+        foreach ($scopeGroups as $scopeKey => $group) {
+            $allowedByScope[$scopeKey] = array_fill_keys(
+                $this->searchIds($group['scope'], ['status' => 'published'], 500),
                 true,
             );
+        }
+
+        $ids = [];
+        foreach ($bindings as $binding) {
+            $bindingWebsiteId = (int)$binding['website_id'] > 0
+                ? (int)$binding['website_id']
+                : (int)$scope['website_id'];
+            if ($bindingWebsiteId < 0) {
+                continue;
+            }
+            $bindingScope = [
+                'website_id' => $bindingWebsiteId,
+                'store_code' => (string)$scope['store_code'],
+                'channel_code' => (string)$scope['channel_code'],
+            ];
+            $scopeKey = serialize($bindingScope);
             $productId = (int)$binding['product_id'];
-            if ($productId > 0 && isset($allowed[$productId])) {
+            if ($productId > 0 && isset($allowedByScope[$scopeKey][$productId])) {
                 $ids[] = $productId;
             }
         }
@@ -517,14 +547,26 @@ final class PromotionThemeProductService
     /** @param array{website_id:int,store_code:string,channel_code:string} $scope @param array<string,mixed> $filters @return list<int> */
     private function searchIds(array $scope, array $filters, int $limit): array
     {
-        $reader = $this->productReader();
+        // Selection is a base-product read. Re-entering the priced storefront
+        // catalog here recurses back through active-deal resolution.
+        $reader = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'promotion.selection.reader',
+            fn() => $this->productReader(),
+        );
         if ($reader === null || (int)$scope['website_id'] < 0) {
-            return $this->catalogFallbackIds($filters, $limit);
+            return [];
         }
 
         $ids = [];
         try {
-            foreach ($reader->search((int)$scope['website_id'], $this->readerFilters($scope, $filters)) as $row) {
+            $readerFilters = $this->readerFilters($scope, $filters);
+            $rows = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                'promotion.selection.search',
+                fn() => $reader instanceof \Weline\Product\Api\ProductSelectionReadInterface
+                    ? $reader->searchSelectionRows((int)$scope['website_id'], $readerFilters)
+                    : $reader->search((int)$scope['website_id'], $readerFilters),
+            );
+            foreach ($rows as $row) {
                 if (!$this->matchesProductFilters($row, $filters)) {
                     continue;
                 }
@@ -538,49 +580,7 @@ final class PromotionThemeProductService
                 }
             }
         } catch (\Throwable) {
-            return $this->catalogFallbackIds($filters, $limit);
-        }
-
-        return $ids !== [] ? $ids : $this->catalogFallbackIds($filters, $limit);
-    }
-
-    /** @param array<string,mixed> $filters @return list<int> */
-    private function catalogFallbackIds(array $filters, int $limit): array
-    {
-        if (!class_exists(\Weline\Product\Service\StorefrontCatalogViewService::class)) {
             return [];
-        }
-        $sku = trim((string)($filters['sku'] ?? ''));
-        try {
-            $catalog = \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Product\Service\StorefrontCatalogViewService::class);
-            $offers = $catalog->publishedOffersForProductIds([], max(50, $limit * 5));
-        } catch (\Throwable) {
-            return [];
-        }
-
-        $ids = [];
-        $seen = [];
-        foreach ($offers as $offer) {
-            if (!is_array($offer)) {
-                continue;
-            }
-            $productId = (int)($offer['product_id'] ?? 0);
-            if ($productId <= 0 || isset($seen[$productId])) {
-                continue;
-            }
-            if ($sku !== '' && trim((string)($offer['sku'] ?? '')) !== $sku) {
-                continue;
-            }
-            $status = strtolower(trim((string)($offer['status'] ?? 'published')));
-            $wanted = strtolower(trim((string)($filters['status'] ?? 'published'))) ?: 'published';
-            if ($wanted !== '' && $status !== '' && $status !== $wanted && $wanted === 'published' && empty($offer['sellable']) && $status !== 'published') {
-                // keep published/catalog offers even when sellable is false for activity shelf
-            }
-            $seen[$productId] = true;
-            $ids[] = $productId;
-            if (count($ids) >= $limit) {
-                break;
-            }
         }
 
         return $ids;

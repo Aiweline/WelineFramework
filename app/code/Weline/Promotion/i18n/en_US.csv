@@ -31,17 +31,16 @@
 预览条件选品,预览条件选品
 "mdi mdi-table-eye","mdi mdi-table-eye"
 按筛选规则预览活动命中商品,按筛选规则预览活动命中商品
-浏览活动商品，进入商品详情、购物车与结账路径。本页不展示虚假折扣，只承接真实可售商品。,浏览活动商品，进入商品详情、购物车与结账路径。本页不展示虚假折扣，只承接真实可售商品。
-浏览活动商品,浏览活动商品
-匹配商品,匹配商品
-活动入口,活动入口
-打开,打开
-活动商品,"Promotion Products"
+浏览活动商品，进入商品详情、购物车与结账路径。本页不展示虚假折扣，只承接真实可售商品。,"Browse campaign pieces and continue into product detail, cart and checkout. This page never invents fake discounts — only real sellable products."
+浏览活动商品,"Shop campaign pieces"
+匹配商品,"Matching products"
+活动入口,"Campaign collections"
+打开,Explore
+活动商品,"Featured Hanfu"
 货架展示真实可售商品成交价，不虚构折扣。,"Shelf shows sellable product prices only — no fabricated discounts."
-查看商品,"View product"
-暂无活动商品,暂无活动商品
-当前视图没有可展示商品，请稍后再试或从商品列表继续购物。,当前视图没有可展示商品，请稍后再试或从商品列表继续购物。
-浏览商品,浏览商品
+暂无活动商品,"No campaign products yet"
+当前视图没有可展示商品，请稍后再试或从商品列表继续购物。,"There are no products in this collection right now. Try again later or continue from the catalog."
+浏览商品,"Browse products"
 营销活动运营台,"Campaign Operations Desk"
 把优惠规则、活动商品、投放入口、客服恢复和效果复盘放到同一条后台路径里。当前不伪装完整折扣引擎，先让店长知道活动上线前要核对什么、出问题找哪里、收班交接怎么写。,把优惠规则、活动商品、投放入口、客服恢复和效果复盘放到同一条后台路径里。当前不伪装完整折扣引擎，先让店长知道活动上线前要核对什么、出问题找哪里、收班交接怎么写。
 前台活动页,前台活动页
@@ -157,34 +156,34 @@ SKU,SKU
 图片,Image
 ID,ID
 名称,Name
-活动首页,活动首页
+活动首页,"Promotion home"
 "主题键与路径 slug 不能为空。","主题键与路径 slug 不能为空。"
 "路径 slug 仅允许小写字母、数字、下划线或连字符。","路径 slug 仅允许小写字母、数字、下划线或连字符。"
 不支持的主题状态。,不支持的主题状态。
 "活动主题必须指定 Website（一站一活动）。","Activity themes require a Website (one site per campaign)."
 "活动主题 Website 无效。","Activity theme Website is invalid."
 "配置渠道范围时必须同时指定店铺 code。","配置渠道范围时必须同时指定店铺 code。"
-今日精选,今日精选
-今日搭配精选,"Today Deals"
-从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。,从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。
-轻量搭配入口,轻量搭配入口
-看今日精选,看今日精选
-主题陈列,主题陈列
-周末焕新,周末焕新
-礼盒专场,礼盒专场
-季节主题陈列,"Seasonal Sale"
-周末焕新专场,周末焕新专场
-礼盒馈赠专场,礼盒馈赠专场
-围绕节庆、礼服和高客单穿搭做主题陈列，不改变商品原始成交价格。,围绕节庆、礼服和高客单穿搭做主题陈列，不改变商品原始成交价格。
-围绕周末出行、居家放松和轻运动场景，展示真实可售商品，不做虚假折扣。,围绕周末出行、居家放松和轻运动场景，展示真实可售商品，不做虚假折扣。
-围绕送礼场景做主题陈列，只展示真实成交价，不虚构划线价或折扣比例。,围绕送礼场景做主题陈列，只展示真实成交价，不虚构划线价或折扣比例。
-季节主题搭配,季节主题搭配
-看主题陈列,看主题陈列
-适合周末短途、居家升级和轻量运动场景的真实可售商品。,适合周末短途、居家升级和轻量运动场景的真实可售商品。
-进入周末专场,进入周末专场
-礼盒馈赠,礼盒馈赠
-节庆、生日与企业赠礼场景下的高客单主题商品集合。,节庆、生日与企业赠礼场景下的高客单主题商品集合。
-进入礼盒专场,进入礼盒专场
+今日精选,"Today's picks"
+今日搭配精选,"Today's Hanfu edit"
+从价格友好的配饰和日常单品开始，引导买家进入购物车和结账路径。,"Begin with accessible accessories and everyday Hanfu, then move smoothly into cart and checkout."
+轻量搭配入口,"Everyday Hanfu edit"
+看今日精选,"View today's picks"
+主题陈列,"Seasonal edit"
+周末焕新,"Weekend refresh"
+礼盒专场,"Gift edit"
+季节主题陈列,"Seasonal Hanfu edit"
+周末焕新专场,"Weekend refresh"
+礼盒馈赠专场,"Hanfu gifting"
+围绕节庆、礼服和高客单穿搭做主题陈列，不改变商品原始成交价格。,"A seasonal edit for ceremonies, occasion dress and premium ensembles, shown at their real selling prices."
+围绕周末出行、居家放松和轻运动场景，展示真实可售商品，不做虚假折扣。,"Pieces for short trips, relaxed weekends and light movement — real sellable stock, no fabricated discounts."
+围绕送礼场景做主题陈列，只展示真实成交价，不虚构划线价或折扣比例。,"A gifting edit that shows real selling prices only — no invented compare-at prices or discount percentages."
+季节主题搭配,"Seasonal styling"
+看主题陈列,"View seasonal edit"
+适合周末短途、居家升级和轻量运动场景的真实可售商品。,"Sellable pieces chosen for short trips, relaxed weekends and light movement."
+进入周末专场,"Explore weekend edit"
+礼盒馈赠,"Hanfu gifting"
+节庆、生日与企业赠礼场景下的高客单主题商品集合。,"Premium Hanfu and accessories selected for festivals, birthdays and considered gifting."
+进入礼盒专场,"Explore gift edit"
 活动键不能为空。,活动键不能为空。
 不支持的活动状态。,不支持的活动状态。
 交接包格式无效。,交接包格式无效。
@@ -291,6 +290,10 @@ ID,ID
 配置渠道范围时必须同时选择店铺。,"Store is required when a channel scope is set."
 "店铺 code「%{1}」在当前 Website 下不存在。","Store code \"%{1}\" does not exist for the selected website."
 默认网站,"Default website"
+全部店铺,"All stores"
+全部渠道,"All channels"
+"活动主题 ResourceChange 缺少有效 id","活动主题 ResourceChange 缺少有效 id"
+查看商品,"View product"
 "已接入 Weline 商品、购物车和结账链路。","已接入 Weline 商品、购物车和结账链路。"
 精选,精选
 活动,活动
@@ -298,9 +301,6 @@ ID,ID
 "Product 模块未就绪时展示占位商品，便于验收活动页布局。","Product 模块未就绪时展示占位商品，便于验收活动页布局。"
 "示例商品 B","示例商品 B"
 "接入 w_query(product, list) 后会自动替换为真实可售商品。","Products from w_query(product, list) replace placeholders once Product is ready."
-全部店铺,"All stores"
-全部渠道,"All channels"
-"活动主题 ResourceChange 缺少有效 id","活动主题 ResourceChange 缺少有效 id"
 """Activity theme saved""","Activity theme saved"
 多语言翻译,"Multilingual Translation"
 "预览命中商品（上限同「前台最多展示」；仅当前 Website）。","Preview matches (same cap as Max storefront display; current Website only)."

@@ -9,7 +9,7 @@ use Weline\Promotion\Service\PromotionStorefrontPageService;
 
 class Index extends FrontendController
 {
-    protected ?string $layoutType = 'default.default';
+    protected ?string $layoutType = 'promotion.default';
 
     public function __construct(
         private readonly PromotionStorefrontPageService $pageService,
