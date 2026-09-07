@@ -29,7 +29,7 @@ final class ResourceChangedZeroSiteTest extends TestCase
                 return ['errors' => 0];
             }
         };
-        $observer = new ResourceChanged($service);
+        $observer = new ResourceChanged($service, $this->createMock(\Weline\Seo\Service\SitemapRefreshService::class));
         $event = new Event(ResourceChange::EVENT_NAME, ['data' => $this->change()]);
 
         $observer->execute($event);
@@ -59,7 +59,7 @@ final class ResourceChangedZeroSiteTest extends TestCase
                 return ['errors' => 1, 'error' => 'forced'];
             }
         };
-        $observer = new ResourceChanged($service);
+        $observer = new ResourceChanged($service, $this->createMock(\Weline\Seo\Service\SitemapRefreshService::class));
         $event = new Event(ResourceChange::EVENT_NAME, ['data' => $this->change()]);
 
         $this->expectException(\RuntimeException::class);
@@ -81,7 +81,7 @@ final class ResourceChangedZeroSiteTest extends TestCase
                 return ['errors' => 0];
             }
         };
-        $observer = new ResourceChanged($service);
+        $observer = new ResourceChanged($service, $this->createMock(\Weline\Seo\Service\SitemapRefreshService::class));
         $event = new Event(ResourceChange::EVENT_NAME, ['data' => ['website_id' => 0]]);
 
         try {
@@ -92,9 +92,32 @@ final class ResourceChangedZeroSiteTest extends TestCase
         }
     }
 
-    private function change(): ResourceChange
+    public function testProductUpdateDoesNotAlsoDeleteItsUnchangedUrl(): void
     {
-        return ResourceChange::fromArray([
+        $service = new class extends UrlSubmitService {
+            public array $calls = [];
+            public function __construct() {}
+            public function enqueueTargets(array $targets, string $scope, array $extra = []): array {
+                $this->calls[] = compact('targets', 'scope', 'extra');
+                return ['errors' => 0];
+            }
+        };
+        $observer = new ResourceChanged($service, $this->createMock(\Weline\Seo\Service\SitemapRefreshService::class));
+        $event = new Event(ResourceChange::EVENT_NAME, ['data' => $this->change([
+            'resource' => ['type' => 'product_search_projection', 'id' => '0:100', 'action' => 'upsert', 'revision' => 4],
+            'after' => ['target_type' => 'product', 'target_id' => 83],
+            'impact' => ['previous_urls' => ['https://new.example.test/', 'https://old.example.test/']],
+        ])]);
+        $observer->execute($event);
+        self::assertCount(2, $service->calls);
+        self::assertSame('Weline_Product', $service->calls[0]['extra']['module']);
+        self::assertSame(83, $service->calls[0]['extra']['subject_id']);
+        self::assertSame([['website_id' => 0, 'url' => 'https://old.example.test/']], $service->calls[1]['targets']);
+    }
+
+    private function change(array $overrides = []): ResourceChange
+    {
+        return ResourceChange::fromArray(array_replace_recursive([
             'schema_version' => 1,
             'event_id' => 'abcdef0123456789abcdef0123456789',
             'event_name' => ResourceChange::EVENT_NAME,
@@ -136,6 +159,6 @@ final class ResourceChangedZeroSiteTest extends TestCase
                 'timezone' => 'UTC',
                 'user' => ['type' => 'admin', 'id' => 1],
             ],
-        ]);
+        ], $overrides));
     }
 }

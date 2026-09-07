@@ -105,6 +105,228 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
         ];
     }
 
+    /** Read-only Search Console property permission check; no sitemap or URL submission. */
+    public function verifyAccount(array $accountConfig): array
+    {
+        $config = $this->resolveGoogleConfig($accountConfig);
+        $proxyConfig = $this->extractProxyConfig($accountConfig);
+        $helpUrl = 'https://search.google.com/search-console';
+        $site = trim((string)($config['site_url'] ?? ''));
+        $clientEmail = trim((string)($config['client_email'] ?? ''));
+
+        if ($site === '') {
+            return [
+                'success' => false,
+                'remote_verified' => false,
+                'help_url' => $helpUrl,
+                'message' => (string)__('未填写 Search Console 站点属性 URL。请填写与 GSC 完全一致的属性（如 https://www.example.com/ 或 sc-domain:example.com），再到 Google Search Console 验证该属性。'),
+                'data' => [
+                    'error_code' => 'missing_site_url',
+                    'http_code' => 0,
+                    'help_url' => $helpUrl,
+                ],
+            ];
+        }
+
+        $tokenResult = $this->requestAccessToken($config, $proxyConfig, self::WEBMASTER_API_SCOPE);
+        $token = $tokenResult['access_token'] ?? null;
+        if (!$token) {
+            return [
+                'success' => false,
+                'remote_verified' => false,
+                'help_url' => $helpUrl,
+                'message' => (string)($tokenResult['message'] ?? __('Google 身份验证失败，请检查 Service Account 凭证')),
+                'data' => [
+                    'token_error' => (string)($tokenResult['error_code'] ?? 'token_failed'),
+                    'http_code' => (int)($tokenResult['http_code'] ?? 0),
+                    'help_url' => $helpUrl,
+                    'client_email' => $clientEmail,
+                ],
+            ];
+        }
+
+        $ch = curl_init();
+        $curlOptions = [
+            CURLOPT_URL => 'https://www.googleapis.com/webmasters/v3/sites/' . rawurlencode($site),
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $token],
+        ];
+        if (!empty($proxyConfig['proxy'])) {
+            $curlOptions[CURLOPT_PROXY] = $proxyConfig['proxy'];
+            if (($proxyConfig['proxy_type'] ?? 'http') === 'socks5') {
+                $curlOptions[CURLOPT_PROXYTYPE] = CURLPROXY_SOCKS5_HOSTNAME;
+            }
+        }
+        curl_setopt_array($ch, $curlOptions);
+        $body = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $error = curl_error($ch);
+        $errno = (int)curl_errno($ch);
+        curl_close($ch);
+
+        if ($error !== '') {
+            $timeout = in_array($errno, [CURLE_OPERATION_TIMEDOUT, CURLE_COULDNT_CONNECT], true)
+                || stripos($error, 'timed out') !== false
+                || stripos($error, 'timeout') !== false;
+            $message = $timeout
+                ? (string)__('无法连接 Google Search Console API（超时）。凭证已读到，请检查服务器出网/代理（浏览器能开 Google 不等于 PHP/WLS 能出网），再到 GSC 确认属性权限。')
+                : (string)__('无法连接 Google Search Console API：%{1}。请检查服务器出网/代理后重试。', $error);
+
+            return [
+                'success' => false,
+                'remote_verified' => false,
+                'help_url' => $helpUrl,
+                'message' => $message,
+                'data' => [
+                    'error_code' => $timeout ? 'gsc_timeout' : 'gsc_network',
+                    'http_code' => $code,
+                    'curl_errno' => $errno,
+                    'help_url' => $helpUrl,
+                ],
+            ];
+        }
+
+        $data = json_decode((string)$body, true);
+        $permission = is_array($data) ? (string)($data['permissionLevel'] ?? '') : '';
+        $success = $code === 200 && in_array($permission, ['siteOwner', 'siteFullUser'], true);
+        if ($success) {
+            return [
+                'success' => true,
+                'remote_verified' => true,
+                'message' => (string)__('Google Search Console 站点权限验证通过'),
+                'data' => [
+                    'http_code' => $code,
+                    'permission_level' => $permission,
+                    'site_url' => $site,
+                ],
+            ];
+        }
+
+        $googleMessage = '';
+        if (is_array($data)) {
+            $googleMessage = trim((string)(($data['error']['message'] ?? '') ?: ''));
+        }
+        $visibleSites = $this->listSearchConsoleSites($token, $proxyConfig);
+        $message = $this->buildSearchConsoleVerifyFailureMessage(
+            $code,
+            $permission,
+            $site,
+            $clientEmail,
+            $googleMessage,
+            $visibleSites,
+            $helpUrl
+        );
+
+        return [
+            'success' => false,
+            'remote_verified' => false,
+            'help_url' => $helpUrl,
+            'message' => $message,
+            'data' => [
+                'error_code' => $code === 404 ? 'gsc_site_not_found' : ($code === 403 ? 'gsc_forbidden' : 'gsc_permission'),
+                'http_code' => $code,
+                'permission_level' => $permission,
+                'site_url' => $site,
+                'client_email' => $clientEmail,
+                'google_message' => $googleMessage,
+                'visible_sites' => $visibleSites,
+                'help_url' => $helpUrl,
+            ],
+        ];
+    }
+
+    /**
+     * @return list<string>
+     */
+    protected function listSearchConsoleSites(string $accessToken, array $proxyConfig = []): array
+    {
+        $ch = curl_init();
+        $curlOptions = [
+            CURLOPT_URL => 'https://www.googleapis.com/webmasters/v3/sites',
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 20,
+            CURLOPT_HTTPHEADER => ['Authorization: Bearer ' . $accessToken],
+        ];
+        if (!empty($proxyConfig['proxy'])) {
+            $curlOptions[CURLOPT_PROXY] = $proxyConfig['proxy'];
+            if (($proxyConfig['proxy_type'] ?? 'http') === 'socks5') {
+                $curlOptions[CURLOPT_PROXYTYPE] = CURLPROXY_SOCKS5_HOSTNAME;
+            }
+        }
+        curl_setopt_array($ch, $curlOptions);
+        $body = curl_exec($ch);
+        $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+        if ($code !== 200) {
+            return [];
+        }
+        $decoded = json_decode((string)$body, true);
+        $entries = is_array($decoded['siteEntry'] ?? null) ? $decoded['siteEntry'] : [];
+        $sites = [];
+        foreach ($entries as $entry) {
+            if (!is_array($entry)) {
+                continue;
+            }
+            $url = trim((string)($entry['siteUrl'] ?? ''));
+            if ($url !== '') {
+                $sites[] = $url;
+            }
+        }
+
+        return array_values(array_unique($sites));
+    }
+
+    /**
+     * @param list<string> $visibleSites
+     */
+    protected function buildSearchConsoleVerifyFailureMessage(
+        int $httpCode,
+        string $permission,
+        string $site,
+        string $clientEmail,
+        string $googleMessage,
+        array $visibleSites,
+        string $helpUrl
+    ): string {
+        $emailHint = $clientEmail !== '' ? $clientEmail : (string)__('（当前 JSON 中的 client_email）');
+
+        if ($httpCode === 404) {
+            if ($visibleSites === []) {
+                return (string)__(
+                    'GSC 属性「%{1}」对该服务账号不可见（HTTP 404），且该账号下暂无任何属性。请先在 Google Search Console 验证域名/网址前缀，再将 %{2} 加成「所有者」，并把本处属性 URL 改成与 GSC 完全一致后再验证。前往：%{3}',
+                    [$site, $emailHint, $helpUrl]
+                );
+            }
+
+            return (string)__(
+                '属性 URL 不一致：本处填写「%{1}」，但服务账号 %{2} 当前可见的是「%{3}」。说明账号多半已加入 GSC，请把本处改成与 GSC 左侧属性名完全相同的字符串（常见：域名属性要用 sc-domain:example.com，不能写成 https://www.example.com）。改完保存后再点验证。前往：%{4}',
+                [$site, $emailHint, implode('、', array_slice($visibleSites, 0, 5)), $helpUrl]
+            );
+        }
+
+        if ($httpCode === 403) {
+            return (string)__(
+                '服务账号 %{1} 无权访问 GSC 属性「%{2}」（HTTP 403）。请到 Search Console → 设置 → 用户和权限，将其加成「所有者」。前往：%{3}',
+                [$emailHint, $site, $helpUrl]
+            );
+        }
+
+        if ($httpCode === 200 && $permission !== '') {
+            return (string)__(
+                'GSC 属性「%{1}」当前权限为 %{2}，需要 siteOwner 或 siteFullUser。请将服务账号 %{3} 加成「所有者」。前往：%{4}',
+                [$site, $permission, $emailHint, $helpUrl]
+            );
+        }
+
+        $detail = $googleMessage !== '' ? $googleMessage : (string)__('请确认属性已验证、URL 一致，且 Service Account 已是所有者。');
+
+        return (string)__(
+            'Google Search Console 站点权限验证失败（HTTP %{1}）。%{2} 前往：%{3}',
+            [$httpCode, $detail, $helpUrl]
+        );
+    }
+
     /**
      * 从账户配置中提取代理设置
      */
@@ -254,7 +476,7 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             if ($error) {
                 return [
                     'success' => false,
-                    'message' => __('Google Search Console API 请求失败：%{1}', $error),
+                    'message' => __('Google Search Console API 连接失败'),
                     'response' => null,
                 ];
             }
@@ -262,7 +484,7 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             $responseData = json_decode($response, true);
             
             // HTTP 200 表示成功
-            $success = $httpCode >= 200 && $httpCode < 300;
+            $success = $httpCode >= 200 && $httpCode < 300 && !isset($responseData['error']);
             
             if (!$success && isset($responseData['error'])) {
                 $errorMessage = $responseData['error']['message'] ?? __('未知错误');
@@ -273,14 +495,14 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
                     return [
                         'success' => false,
                         'message' => __('权限被拒绝：请确保 Service Account 已在 Search Console 中被添加为站点所有者'),
-                        'response' => $responseData,
+                        'response' => ['http_code' => $httpCode],
                     ];
                 }
                 
                 return [
                     'success' => false,
-                    'message' => __('Google Search Console API 错误：%{1}', $errorMessage),
-                    'response' => $responseData,
+                    'message' => __('Google Search Console API 请求失败（HTTP %{1}）', $httpCode),
+                    'response' => ['http_code' => $httpCode],
                 ];
             }
             
@@ -293,13 +515,13 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
                     'api_url' => $apiUrl,
                     'site_url' => $siteUrl,
                     'http_code' => $httpCode,
-                    'body' => $responseData,
+                    'body' => null,
                 ],
             ];
         } catch (\Exception $e) {
             return [
                 'success' => false,
-                'message' => __('提交异常：%{1}', $e->getMessage()),
+                'message' => __('Google Sitemap 提交失败，请检查账户配置和网络连接'),
                 'response' => null,
             ];
         }
@@ -314,26 +536,35 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
      */
     protected function getAccessToken(array $config, array $proxyConfig = [], string $scope = ''): ?string
     {
-        $clientEmail = $config['client_email'] ?? '';
-        $privateKey = $config['private_key'] ?? '';
-        $tokenUri = $config['token_uri'] ?? 'https://oauth2.googleapis.com/token';
-        
-        if (empty($clientEmail) || empty($privateKey)) {
-            return null;
+        $result = $this->requestAccessToken($config, $proxyConfig, $scope);
+        $token = $result['access_token'] ?? null;
+        return is_string($token) && $token !== '' ? $token : null;
+    }
+
+    /**
+     * @return array{access_token:?string,message:string,error_code:string,http_code:int}
+     */
+    protected function requestAccessToken(array $config, array $proxyConfig = [], string $scope = ''): array
+    {
+        $clientEmail = trim((string)($config['client_email'] ?? ''));
+        $privateKey = (string)($config['private_key'] ?? '');
+        $tokenUri = 'https://oauth2.googleapis.com/token';
+
+        if ($clientEmail === '' || $privateKey === '') {
+            return [
+                'access_token' => null,
+                'message' => (string)__('未读取到 Service Account（client_email/private_key 为空），请重新上传 JSON 凭证'),
+                'error_code' => 'missing_credentials',
+                'http_code' => 0,
+            ];
         }
-        
-        // 默认使用 Indexing API scope
-        if (empty($scope)) {
+
+        if ($scope === '') {
             $scope = self::INDEXING_API_SCOPE;
         }
-        
-        // 构建 JWT
+
         $now = time();
-        $header = [
-            'alg' => 'RS256',
-            'typ' => 'JWT',
-        ];
-        
+        $header = ['alg' => 'RS256', 'typ' => 'JWT'];
         $claims = [
             'iss' => $clientEmail,
             'scope' => $scope,
@@ -341,25 +572,33 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             'iat' => $now,
             'exp' => $now + 3600,
         ];
-        
+
         $headerEncoded = $this->base64UrlEncode(json_encode($header));
         $claimsEncoded = $this->base64UrlEncode(json_encode($claims));
         $signatureInput = $headerEncoded . '.' . $claimsEncoded;
-        
-        // 使用私钥签名
+
         $signature = '';
         $privateKeyResource = openssl_pkey_get_private($privateKey);
         if (!$privateKeyResource) {
-            return null;
+            return [
+                'access_token' => null,
+                'message' => (string)__('Service Account 私钥无法解析，请检查 JSON 中 private_key 是否完整'),
+                'error_code' => 'invalid_private_key',
+                'http_code' => 0,
+            ];
         }
-        
+
         if (!openssl_sign($signatureInput, $signature, $privateKeyResource, OPENSSL_ALGO_SHA256)) {
-            return null;
+            return [
+                'access_token' => null,
+                'message' => (string)__('Service Account JWT 签名失败，请检查私钥'),
+                'error_code' => 'jwt_sign_failed',
+                'http_code' => 0,
+            ];
         }
-        
+
         $jwt = $signatureInput . '.' . $this->base64UrlEncode($signature);
-        
-        // 请求 Access Token
+
         $ch = curl_init();
         $curlOptions = [
             CURLOPT_URL => $tokenUri,
@@ -376,27 +615,66 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
             CURLOPT_SSL_VERIFYPEER => true,
             CURLOPT_SSL_VERIFYHOST => 2,
         ];
-        
-        // 添加代理设置
+
         if (!empty($proxyConfig['proxy'])) {
             $curlOptions[CURLOPT_PROXY] = $proxyConfig['proxy'];
             if (($proxyConfig['proxy_type'] ?? 'http') === 'socks5') {
                 $curlOptions[CURLOPT_PROXYTYPE] = CURLPROXY_SOCKS5_HOSTNAME;
             }
         }
-        
+
         curl_setopt_array($ch, $curlOptions);
-        
+
         $response = curl_exec($ch);
-        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $httpCode = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curlError = (string)curl_error($ch);
         curl_close($ch);
-        
-        if ($httpCode !== 200) {
-            return null;
+
+        if ($response === false || $curlError !== '') {
+            $timeout = stripos($curlError, 'timed out') !== false || stripos($curlError, 'timeout') !== false;
+            return [
+                'access_token' => null,
+                'message' => $timeout
+                    ? (string)__('无法连接 Google OAuth（oauth2.googleapis.com 超时）。凭证已读到，请检查服务器出网/代理，而非重新上传 JSON')
+                    : (string)__('无法连接 Google OAuth：%{1}', $curlError !== '' ? $curlError : 'network_error'),
+                'error_code' => $timeout ? 'oauth_timeout' : 'oauth_network',
+                'http_code' => $httpCode,
+            ];
         }
-        
-        $data = json_decode($response, true);
-        return $data['access_token'] ?? null;
+
+        if ($httpCode !== 200) {
+            $payload = json_decode((string)$response, true);
+            $description = '';
+            if (is_array($payload)) {
+                $description = trim((string)($payload['error_description'] ?? $payload['error'] ?? ''));
+            }
+            return [
+                'access_token' => null,
+                'message' => $description !== ''
+                    ? (string)__('Google OAuth 拒绝令牌（HTTP %{1}）：%{2}', [$httpCode, $description])
+                    : (string)__('Google OAuth 拒绝令牌（HTTP %{1}），请检查 Service Account 与 API 启用状态', $httpCode),
+                'error_code' => 'oauth_http_' . $httpCode,
+                'http_code' => $httpCode,
+            ];
+        }
+
+        $data = json_decode((string)$response, true);
+        $token = is_array($data) ? ($data['access_token'] ?? null) : null;
+        if (!is_string($token) || $token === '') {
+            return [
+                'access_token' => null,
+                'message' => (string)__('Google OAuth 响应缺少 access_token'),
+                'error_code' => 'oauth_empty_token',
+                'http_code' => $httpCode,
+            ];
+        }
+
+        return [
+            'access_token' => $token,
+            'message' => '',
+            'error_code' => '',
+            'http_code' => $httpCode,
+        ];
     }
     
     /**
@@ -429,6 +707,13 @@ class GoogleSitemapAdapter extends AbstractSitemapPlatformAdapter
 
         if (is_array($serviceAccount)) {
             $config = array_merge($config, $serviceAccount);
+        }
+
+        if (isset($config['site_url']) && is_string($config['site_url'])) {
+            $config['site_url'] = \Weline\Seo\Service\SeoAccountConfig::normalizeGoogleSiteProperty($config['site_url']);
+        }
+        if (isset($config['search_console_site_url']) && is_string($config['search_console_site_url'])) {
+            $config['search_console_site_url'] = \Weline\Seo\Service\SeoAccountConfig::normalizeGoogleSiteProperty($config['search_console_site_url']);
         }
 
         return $config;

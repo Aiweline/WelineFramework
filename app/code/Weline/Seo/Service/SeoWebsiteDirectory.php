@@ -92,22 +92,19 @@ class SeoWebsiteDirectory
 
         $matches = [];
         foreach ($this->listWebsites() as $website) {
-            $websiteParts = $this->urlParts((string)($website['url'] ?? ''));
-            if ($websiteParts['host'] === '' || strcasecmp($websiteParts['host'], $urlParts['host']) !== 0) {
-                continue;
+            $matchedLength = -1;
+            foreach ($this->listPublicOrigins($website) as $origin) {
+                $websiteParts = $this->urlParts((string)($origin['base_url'] ?? ''));
+                if ($websiteParts['host'] === '' || $websiteParts['host'] !== $urlParts['host']
+                    || $websiteParts['port'] !== $urlParts['port']
+                    || !$this->pathOwnsUrl($websiteParts['path'], $urlParts['path'])) {
+                    continue;
+                }
+                $matchedLength = max($matchedLength, strlen($websiteParts['path']));
             }
-            if (
-                $websiteParts['port'] !== ''
-                && $urlParts['port'] !== ''
-                && $websiteParts['port'] !== $urlParts['port']
-            ) {
-                continue;
+            if ($matchedLength >= 0) {
+                $matches[] = $website + ['_seo_match_path_length' => $matchedLength];
             }
-            if (!$this->pathOwnsUrl($websiteParts['path'], $urlParts['path'])) {
-                continue;
-            }
-
-            $matches[] = $website + ['_seo_match_path_length' => strlen($websiteParts['path'])];
         }
 
         usort(
@@ -173,7 +170,7 @@ class SeoWebsiteDirectory
      * Real configured website URLs stay authoritative. The system default website
      * keeps `http://localhost` / `127.0.0.1` as a DB placeholder; when that
      * placeholder is present, prefer the live request origin so admins see the
-     * current project entry such as `https://p{hash}.weline.test:{port}`.
+     * current project entry such as `https://p{hash}.test.weline.com:{port}`.
      *
      * @param array<string, mixed> $website
      */
@@ -200,7 +197,7 @@ class SeoWebsiteDirectory
      * Includes the canonical `Website.url` (via {@see effectivePublicBaseUrl()})
      * plus every active `WebsiteDomain` binding. Deduped by scheme+host+port+path.
      * Canonical generation / same-origin checks still use the primary origin only;
-     * this list is for admin display and robots Sitemap declarations.
+     * this list is for admin display and URL ownership resolution.
      *
      * @param array<string, mixed> $website
      * @return list<array{
@@ -482,9 +479,10 @@ class SeoWebsiteDirectory
             $parts = parse_url($websiteUrl);
             if (is_array($parts) && !empty($parts['host'])) {
                 $port = isset($parts['port']) ? ':' . $parts['port'] : '';
-                $fromWebsiteUrl = (string)($parts['scheme'] ?? 'https') . '://' . (string)$parts['host'] . $port;
+                $fromWebsiteUrl = (string)($parts['scheme'] ?? 'https') . '://' . (string)$parts['host'] . $port
+                    . rtrim((string)($parts['path'] ?? ''), '/');
                 // DB/default placeholder `http://localhost` must not hide the live
-                // project host (e.g. https://p0cc9fac7.weline.test:9513).
+                // project host (e.g. https://p0cc9fac7.test.weline.com:9513).
                 if (!$this->isLoopbackBaseUrl($fromWebsiteUrl) || $fromRequestHost === '' || $this->isLoopbackBaseUrl($fromRequestHost)) {
                     return $fromWebsiteUrl;
                 }
@@ -594,7 +592,7 @@ class SeoWebsiteDirectory
             return ['host' => '', 'port' => '', 'path' => '/'];
         }
 
-        $host = strtolower(preg_replace('/^www\./i', '', (string)($parts['host'] ?? '')) ?: (string)($parts['host'] ?? ''));
+        $host = strtolower((string)($parts['host'] ?? ''));
         $path = '/' . trim((string)($parts['path'] ?? ''), '/');
         if ($path !== '/') {
             $path = rtrim($path, '/');
@@ -602,7 +600,7 @@ class SeoWebsiteDirectory
 
         return [
             'host' => $host,
-            'port' => isset($parts['port']) ? (string)$parts['port'] : '',
+            'port' => (string)($parts['port'] ?? (strtolower((string)($parts['scheme'] ?? 'https')) === 'https' ? 443 : 80)),
             'path' => $path,
         ];
     }

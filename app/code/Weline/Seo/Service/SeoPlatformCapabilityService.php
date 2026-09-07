@@ -7,6 +7,7 @@ namespace Weline\Seo\Service;
 class SeoPlatformCapabilityService
 {
     private const INDEXNOW_PLATFORMS = [
+        'indexnow',
         'bing',
         'yandex',
         'naver',
@@ -92,6 +93,7 @@ class SeoPlatformCapabilityService
                 'placeholder' => (string)($field['placeholder'] ?? ''),
                 'hint' => (string)($field['hint'] ?? ''),
                 'accept' => (string)($field['accept'] ?? ''),
+                'sensitive' => !empty($field['sensitive']) || $type === 'password' || $key === 'service_account',
             ];
         }
 
@@ -116,6 +118,10 @@ class SeoPlatformCapabilityService
     {
         $platform = strtolower(trim($platform));
         if ($platform === '') {
+            return false;
+        }
+
+        if (in_array($platform, ['google', 'google_search_console', 'google_indexing_api'], true)) {
             return false;
         }
 

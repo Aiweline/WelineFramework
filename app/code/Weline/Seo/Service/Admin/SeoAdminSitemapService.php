@@ -655,6 +655,10 @@ final class SeoAdminSitemapService
     /** @param array<string,mixed> $params @return array<string,mixed> */
     public function generateSitemaps(array $params): array
     {
+        $synced = $this->syncSitemapUrls($params);
+        if (empty($synced['success'])) {
+            return $synced;
+        }
         $results = [];
         $errors = [];
         foreach ($this->resolveWebsiteIds($params) as $websiteId) {

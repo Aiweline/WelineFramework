@@ -1,13 +1,27 @@
 (function () {
     'use strict';
 
-    function toast(type, message) {
-        if (window.Weline.UI.toast && typeof window.Weline.UI.toast[type] === 'function') {
-            window.Weline.UI.toast[type](message);
+    function toast(type, message, options) {
+        var text = String(message || '');
+        var toastApi = window.Weline && window.Weline.UI ? window.Weline.UI.toast : null;
+        if (!toastApi) {
+            if (window.console && typeof window.console[type === 'error' ? 'error' : 'info'] === 'function') {
+                window.console[type === 'error' ? 'error' : 'info'](text);
+            }
+            return;
+        }
+        var tone = type === 'error' ? 'danger' : (type === 'success' ? 'success' : (type === 'warning' ? 'warning' : 'info'));
+        var opts = options && typeof options === 'object' ? options : {};
+        if (typeof toastApi.show === 'function') {
+            toastApi.show(text, Object.assign({ tone: tone, duration: type === 'error' ? 8000 : 4200 }, opts));
+            return;
+        }
+        if (typeof toastApi[type] === 'function') {
+            toastApi[type](text);
             return;
         }
         if (window.console && typeof window.console[type === 'error' ? 'error' : 'info'] === 'function') {
-            window.console[type === 'error' ? 'error' : 'info'](message);
+            window.console[type === 'error' ? 'error' : 'info'](text);
         }
     }
 
@@ -77,12 +91,21 @@
     function setButtonLoading(button, loading) {
         if (!button) return;
         if (loading) {
-            button.dataset.originalHtml = button.innerHTML;
             button.disabled = true;
-            button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>' + (button.dataset.loadingLabel || '');
+            button.setAttribute('aria-busy', 'true');
+            if (button.dataset.loadingLabel) {
+                if (!button.dataset.originalHtml) {
+                    button.dataset.originalHtml = button.innerHTML;
+                }
+                button.textContent = button.dataset.loadingLabel;
+            }
         } else {
             button.disabled = false;
-            if (button.dataset.originalHtml) button.innerHTML = button.dataset.originalHtml;
+            button.removeAttribute('aria-busy');
+            if (button.dataset.originalHtml) {
+                button.innerHTML = button.dataset.originalHtml;
+                delete button.dataset.originalHtml;
+            }
         }
     }
 
@@ -638,24 +661,105 @@
 
     function initAccountForm(root) {
         var form = root.querySelector('[data-seo-account-form]');
-        if (!form) return;
+        if (!form || form.dataset.seoFormInitialized === '1') return;
+        form.dataset.seoFormInitialized = '1';
+
+        function showAccountFeedback(type, text, options) {
+            var target = root.querySelector('[data-seo-account-feedback]');
+            var content = String(text || '').trim();
+            var opts = options && typeof options === 'object' ? options : {};
+            if (target) {
+                if (content === '') {
+                    target.setAttribute('hidden', 'hidden');
+                    target.textContent = '';
+                } else {
+                    target.removeAttribute('hidden');
+                    target.className = 'w-alert';
+                    target.setAttribute('data-tone', type === 'success' ? 'success' : 'danger');
+                    target.setAttribute('role', type === 'success' ? 'status' : 'alert');
+                    target.textContent = content;
+                }
+            }
+            if (!content) {
+                return;
+            }
+            toast(type === 'success' ? 'success' : 'error', content, { duration: type === 'success' ? 4200 : 10000 });
+            if (opts.modal && type !== 'success' && window.Weline && window.Weline.UI && window.Weline.UI.dialog) {
+                var helpUrl = String(opts.helpUrl || '').trim();
+                var dialogApi = window.Weline.UI.dialog;
+                var title = message(root, 'verifyFailedTitle') || '验证失败';
+                if (helpUrl && typeof dialogApi.request === 'function') {
+                    Promise.resolve(dialogApi.request({
+                        message: content,
+                        tone: 'danger',
+                        title: title,
+                        cancelable: true,
+                        confirmLabel: message(root, 'openGsc') || '去 Google Search Console',
+                        cancelLabel: message(root, 'close') || '关闭',
+                        confirmTone: 'danger'
+                    })).then(function (result) {
+                        if (result && result.confirmed) {
+                            window.open(helpUrl, '_blank', 'noopener');
+                        }
+                    }).catch(function () {});
+                } else if (typeof dialogApi.alert === 'function') {
+                    dialogApi.alert(content, {
+                        tone: 'danger',
+                        title: title
+                    });
+                    if (helpUrl) {
+                        window.open(helpUrl, '_blank', 'noopener');
+                    }
+                }
+            }
+        }
+
         form.addEventListener('submit', function (event) {
+            if (event.defaultPrevented) return;
             event.preventDefault();
-            var button = form.querySelector('[type="submit"]');
+            var button = event.submitter || form.querySelector('[type="submit"]');
+            var isVerify = !!(button && button.hasAttribute('data-seo-account-verify'));
             var formData = new FormData(form);
             var payload = {};
-            formData.forEach(function (value, key) { payload[key] = value; });
-            payload.account_id = Number.parseInt(payload.account_id || payload.id || '0', 10) || 0;
+            ['name', 'platform', 'scope', 'description', 'config_json'].forEach(function (key) {
+                if (formData.has(key)) payload[key] = String(formData.get(key));
+            });
+            payload.account_id = Number.parseInt(String(formData.get('id') || '0'), 10) || 0;
+            payload.config_action = isVerify ? 'verify' : 'save';
             payload.is_active = form.querySelector('[name="is_active"]:checked') ? 1 : 0;
             payload.enable_cron_push_urls = !!form.querySelector('[name="enable_cron_push_urls"]:checked');
             payload.enable_cron_sitemap = !!form.querySelector('[name="enable_cron_sitemap"]:checked');
             if (!String(payload.config_json || '').trim()) delete payload.config_json;
+            if (button) {
+                button.dataset.loadingLabel = isVerify
+                    ? (message(root, 'verifying') || button.dataset.loadingLabel || '')
+                    : (message(root, 'saving') || button.dataset.loadingLabel || '');
+            }
+            showAccountFeedback('success', '');
             setButtonLoading(button, true);
-            resource(root).then(function (api) { return api.saveAccount(payload); }).then(function (response) {
+            resource(root).then(function (api) {
+                return api.saveAccount(payload, { keepBusinessResult: true, silent: true });
+            }).then(function (response) {
                 var data = unwrap(response);
-                toast(data && data.success ? 'success' : 'error', data && data.message || message(root, 'saveCompleted'));
-                if (data && data.success) window.setTimeout(function () { window.location.href = root.dataset.returnUrl; }, 600);
-            }).catch(function (error) { toast('error', formatApiError(error, root) || message(root, 'saveFailed')); }).finally(function () { setButtonLoading(button, false); });
+                var ok = !!(data && data.success);
+                var resultMessage = String((data && data.message) || '').trim()
+                    || message(root, ok ? (isVerify ? 'verifyCompleted' : 'saveCompleted') : 'saveFailed')
+                    || (ok ? 'OK' : 'Request failed');
+                var helpUrl = '';
+                if (data) {
+                    helpUrl = String(data.help_url || (data.data && data.data.help_url) || '').trim();
+                }
+                showAccountFeedback(ok ? 'success' : 'error', resultMessage, {
+                    modal: isVerify && !ok,
+                    helpUrl: (!ok && isVerify) ? helpUrl : ''
+                });
+                if (ok && !isVerify && root.dataset.returnUrl) {
+                    window.setTimeout(function () { window.location.href = root.dataset.returnUrl; }, 600);
+                }
+            }).catch(function (error) {
+                var errText = formatApiError(error, root) || (error && error.message) || message(root, 'saveFailed') || 'Request failed';
+                showAccountFeedback('error', errText, { modal: isVerify });
+            }).finally(function () { setButtonLoading(button, false); });
         });
     }
 

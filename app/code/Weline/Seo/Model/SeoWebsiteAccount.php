@@ -219,7 +219,7 @@ class SeoWebsiteAccount extends Model
      */
     public function unbindWebsite(int $websiteId): bool
     {
-        if ($websiteId <= 0) {
+        if ($websiteId < 0) {
             return false;
         }
 

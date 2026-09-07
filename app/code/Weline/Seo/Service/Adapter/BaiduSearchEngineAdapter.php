@@ -44,71 +44,43 @@ class BaiduSearchEngineAdapter implements SearchEngineAdapterInterface
     public function pushUrls(array $urls, array $options = []): array
     {
         $config = $this->resolveConfig($options);
-        $token = $config['token'] ?? $config['api_key'] ?? '';
-        $site = $config['site'] ?? $config['site_url'] ?? '';
-        $useFastPush = !empty($config['use_fast_push']);
-
-        if (empty($token)) {
-            return [
-                'success' => false,
-                'message' => __('缺少百度站长平台 Token'),
-            ];
+        $token = trim((string)($config['token'] ?? $config['api_key'] ?? ''));
+        $site = trim((string)($config['site'] ?? $config['site_url'] ?? ''));
+        if ($token === '' || !SubmissionResult::validUrl($site)) {
+            return SubmissionResult::failure(__('请配置百度 Token 和已验证站点 URL'), 'not_configured');
         }
-
-        if (empty($site) && !empty($urls[0])) {
-            $parsed = parse_url((string)$urls[0]);
-            $site = ($parsed['scheme'] ?? 'https') . '://' . ($parsed['host'] ?? '');
+        if (strtolower((string)($options['action'] ?? '')) === 'delete') {
+            return SubmissionResult::failure(__('百度普通链接提交不提供删除接口，请在资源平台处理死链'), 'unsupported');
         }
-
-        if (empty($site)) {
-            return [
-                'success' => false,
-                'message' => __('缺少百度站点 URL'),
-            ];
+        $urls = SubmissionResult::urls($urls);
+        foreach ($urls as $url) {
+            if (!SubmissionResult::belongsToSite($url, $site)) { return SubmissionResult::failure(__('百度 URL 必须属于已配置站点')); }
         }
-
-        $filteredUrls = array_values(array_filter(array_map('trim', $urls)));
-        if (empty($filteredUrls)) {
-            return [
-                'success' => false,
-                'message' => __('URL 列表为空'),
-            ];
+        $submitted = $rejected = $errors = [];
+        $remain = null;
+        foreach (array_chunk($urls, 2000) as $chunk) {
+            $result = $this->submitBatch($chunk, $site, $token, !empty($config['use_fast_push']));
+            $remain = $result['remain'];
+            $rejectedChunk = array_values(array_intersect($chunk, $result['rejected_urls']));
+            $acceptedChunk = array_values(array_diff($chunk, $rejectedChunk));
+            // Baidu returns a count, not an accepted list. Never guess which URL succeeded.
+            if ($result['success_count'] === count($acceptedChunk)) { array_push($submitted, ...$acceptedChunk); }
+            elseif ($result['success_count'] > 0) {
+                return [
+                    'success' => false, 'accepted' => true, 'status' => 'partial',
+                    'message' => __('百度部分接收 %{1} 个 URL，无法确定其余 URL；请在资源平台核对后再提交', $result['success_count'] + count($submitted)),
+                    'data' => ['submitted_urls' => $result['success_count'] + count($submitted), 'remain' => $remain, 'rejected_urls' => $rejectedChunk, 'acceptance_unknown' => true],
+                ];
+            } else { $rejectedChunk = $chunk; }
+            array_push($rejected, ...$rejectedChunk);
+            if ($result['error'] !== '') { $errors[] = $result['error']; }
         }
-
-        // 百度每次最多提交 2000 条
-        $chunks = array_chunk($filteredUrls, 2000);
-        $totalSuccess = 0;
-        $totalRemain = 0;
-        $errors = [];
-
-        foreach ($chunks as $chunk) {
-            $result = $this->submitBatch($chunk, $site, $token, $useFastPush);
-            $totalSuccess += $result['success_count'];
-            $totalRemain = $result['remain'];
-            if (!empty($result['error'])) {
-                $errors[] = $result['error'];
-            }
-        }
-
-        $type = $useFastPush ? __('快速收录') : __('普通收录');
-
-        return [
-            'success' => $totalSuccess > 0,
-            'message' => $totalSuccess > 0
-                ? __('已通过百度%{1}提交 %{2} 个 URL，剩余配额 %{3}', [$type, $totalSuccess, $totalRemain])
-                : __('百度 URL 提交失败'),
-            'data' => [
-                'total_success' => $totalSuccess,
-                'remain' => $totalRemain,
-                'errors' => $errors,
-            ],
-        ];
+        return SubmissionResult::complete(count($urls), $submitted, [], $rejected, $errors, ['remain' => $remain, 'total_success' => count($submitted)]);
     }
 
     public function submitSitemap(string $sitemapUrl, array $options = []): array
     {
-        // 百度不支持直接提交 sitemap URL，使用链接提交 API 提交 sitemap URL 本身
-        return $this->pushUrls([$sitemapUrl], $options);
+        return SubmissionResult::failure(__('百度未提供公开 Sitemap 提交 API，请在搜索资源平台提交 Sitemap；链接 API 仅推送页面 URL'), 'unsupported');
     }
 
     public function getRequirements(): array
@@ -183,28 +155,17 @@ class BaiduSearchEngineAdapter implements SearchEngineAdapterInterface
         $error = curl_error($ch);
         curl_close($ch);
 
-        if ($error) {
-            return [
-                'success_count' => 0,
-                'remain' => 0,
-                'error' => $error,
-            ];
+        $result = json_decode((string)$response, true);
+        if ($error || $httpCode < 200 || $httpCode >= 300 || !is_array($result) || isset($result['error'])) {
+            return ['success_count' => 0, 'remain' => null, 'rejected_urls' => $urls,
+                'error' => __('百度请求失败（HTTP %{1}），请检查 Token、站点权限与配额', $httpCode)];
         }
-
-        $result = json_decode($response, true);
-
-        if (isset($result['error'])) {
-            return [
-                'success_count' => 0,
-                'remain' => $result['remain'] ?? 0,
-                'error' => ($result['message'] ?? '') . ' (' . ($result['error'] ?? '') . ')',
-            ];
-        }
-
+        $rejected = array_merge((array)($result['not_valid'] ?? []), (array)($result['not_same_site'] ?? []));
         return [
-            'success_count' => (int)($result['success'] ?? 0),
-            'remain' => (int)($result['remain'] ?? 0),
-            'error' => '',
+            'success_count' => max(0, min(count($urls), (int)($result[$useFastPush ? 'success_daily' : 'success'] ?? $result['success'] ?? 0))),
+            'remain' => isset($result['remain_daily']) ? (int)$result['remain_daily'] : (isset($result['remain']) ? (int)$result['remain'] : null),
+            'rejected_urls' => $rejected,
+            'error' => $rejected === [] ? '' : __('百度拒绝部分 URL（无效 URL 或不属于该站点）'),
         ];
     }
 

@@ -8,11 +8,15 @@ use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 use Weline\Framework\Event\ResourceChange\ResourceChange;
 use Weline\Seo\Service\UrlSubmitService;
+use Weline\Seo\Service\SitemapRefreshService;
 
 /** Critical DB-only SEO registration for URL-bearing ResourceChange v1. */
 final class ResourceChanged implements ObserverInterface
 {
-    public function __construct(private readonly UrlSubmitService $urlSubmitService)
+    public function __construct(
+        private readonly UrlSubmitService $urlSubmitService,
+        private readonly SitemapRefreshService $sitemapRefreshService,
+    )
     {
     }
 
@@ -22,14 +26,20 @@ final class ResourceChanged implements ObserverInterface
         if (!$change instanceof ResourceChange) {
             throw new \InvalidArgumentException(__('SEO ResourceChange Observer 只接受 v1 契约'));
         }
-        if (!in_array($change->resourceType(), ['website', 'cms_page', 'url_rewrite'], true)) {
+        if (!in_array($change->resourceType(), ['website', 'cms_page', 'url_rewrite', 'product_search_projection'], true)) {
             return;
         }
 
         $payload = $change->toArray();
+        // A website URL change affects every provider; products only affect their owner.
+        $this->sitemapRefreshService->enqueue($change->websiteId(), match ($change->resourceType()) {
+            'product_search_projection' => 'Weline_Product',
+            'cms_page' => 'Weline_Cms',
+            default => '',
+        }, $change->eventId());
         $impact = is_array($payload['impact'] ?? null) ? $payload['impact'] : [];
         $current = $this->targets($impact['urls'] ?? [], $change->websiteId());
-        $previous = $this->targets($impact['previous_urls'] ?? [], $change->websiteId());
+        $previous = $this->targets(array_diff((array)($impact['previous_urls'] ?? []), (array)($impact['urls'] ?? [])), $change->websiteId());
 
         if ($current !== []) {
             $this->enqueue($current, $change, $change->action());
@@ -59,16 +69,19 @@ final class ResourceChanged implements ObserverInterface
     private function enqueue(array $targets, ResourceChange $change, string $action): void
     {
         $resourceType = $change->resourceType();
+        $after = $change->toArray()['after'] ?? [];
         $result = $this->urlSubmitService->enqueueTargets($targets, $resourceType, [
             'module' => match ($resourceType) {
                 'cms_page' => 'Weline_Cms',
                 'url_rewrite' => 'Weline_UrlManager',
+                'product_search_projection' => 'Weline_Product',
                 default => 'Weline_Websites',
             },
             'subject_type' => $resourceType,
             'subject_id' => $resourceType === 'website'
                 ? $change->websiteId()
-                : $change->resourceId(),
+                : ($resourceType === 'product_search_projection' ? ($after['target_id'] ?? $change->resourceId()) : $change->resourceId()),
+            'store_id' => $after['store_id'] ?? null,
             'action' => $action,
             'resource_revision' => $change->revision(),
             'resource_event_id' => $change->eventId(),

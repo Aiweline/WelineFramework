@@ -30,87 +30,52 @@ class IndexNowSearchEngineAdapter implements SearchEngineAdapterInterface
     public function pushUrls(array $urls, array $options = []): array
     {
         $config = $this->resolveConfig($options);
-        $key = trim((string)($config['indexnow_key'] ?? $config['api_key'] ?? $config['key'] ?? ''));
-
-        if ($key === '') {
-            return [
-                'success' => false,
-                'message' => __('缺少 IndexNow Key'),
-            ];
+        $key = trim((string)($config['indexnow_key'] ?? $config['key'] ?? ''));
+        if (!preg_match('/^[a-zA-Z0-9-]{8,128}$/', $key)) {
+            return SubmissionResult::failure(__('请配置有效的 IndexNow Key（8-128 位字母、数字或连字符）'), 'not_configured');
         }
-
-        $filteredUrls = array_values(array_filter(array_map('trim', $urls)));
-        if (empty($filteredUrls)) {
-            return [
-                'success' => false,
-                'message' => __('URL 列表为空'),
-            ];
+        $urls = SubmissionResult::urls($urls);
+        if ($urls === []) { return SubmissionResult::failure(__('URL 列表为空')); }
+        $host = strtolower((string)(parse_url($urls[0], PHP_URL_HOST) ?: ''));
+        $keyLocation = trim((string)($config['key_location'] ?? $config['keyLocation'] ?? ''));
+        if ($keyLocation !== '' && (!SubmissionResult::validUrl($keyLocation) || strtolower((string)parse_url($keyLocation, PHP_URL_HOST)) !== $host)) {
+            return SubmissionResult::failure(__('IndexNow Key 文件必须与提交 URL 同主机'), 'not_configured');
         }
-
-        $endpoint = trim((string)($config['indexnow_endpoint'] ?? self::INDEX_NOW_URL));
-        if ($endpoint === '') {
-            $endpoint = self::INDEX_NOW_URL;
-        }
-
-        $successCount = 0;
-        $lastResponse = [];
-        $errors = [];
-
-        foreach (array_chunk($filteredUrls, 10000) as $chunk) {
-            $parsed = parse_url($chunk[0]);
-            $host = (string)($parsed['host'] ?? '');
-            if ($host === '') {
-                $errors[] = __('URL 缺少主机名：%{1}', $chunk[0]);
-                continue;
+        foreach ($urls as $url) {
+            if (!SubmissionResult::validUrl($url) || strtolower((string)parse_url($url, PHP_URL_HOST)) !== $host
+                || (!empty($config['site_url']) && !SubmissionResult::belongsToSite($url, (string)$config['site_url']))) {
+                return SubmissionResult::failure(__('IndexNow URL 必须属于同一已配置站点'));
             }
-
-            $payload = [
-                'host' => $host,
-                'key' => $key,
-                'urlList' => $chunk,
-            ];
-
-            $keyLocation = trim((string)($config['key_location'] ?? $config['keyLocation'] ?? ''));
             if ($keyLocation !== '') {
-                $payload['keyLocation'] = $keyLocation;
+                $keyDirectory = rtrim(str_replace('\\', '/', dirname((string)parse_url($keyLocation, PHP_URL_PATH))), '/');
+                if ($keyDirectory !== '' && $keyDirectory !== '.' && !str_starts_with((string)parse_url($url, PHP_URL_PATH), $keyDirectory . '/')) {
+                    return SubmissionResult::failure(__('IndexNow URL 不在 Key 文件验证范围内'));
+                }
             }
-
-            $response = $this->httpRequest(
-                $endpoint,
-                json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)
-            );
-            $lastResponse = $response;
-
-            if (!empty($response['error'])) {
-                $errors[] = __('IndexNow 请求失败：%{1}', $response['error']);
-                continue;
-            }
-
-            $httpCode = (int)($response['http_code'] ?? 0);
-            if ($httpCode >= 200 && $httpCode < 300) {
-                $successCount += count($chunk);
-                continue;
-            }
-
-            $errors[] = __('IndexNow 返回错误码：%{1}', $httpCode);
         }
-
-        return [
-            'success' => $successCount > 0,
-            'message' => $successCount > 0
-                ? __('已通过 IndexNow 提交 %{1} 个 URL', $successCount)
-                : implode('; ', $errors),
-            'data' => [
-                'submitted_urls' => $successCount,
-                'errors' => $errors,
-                'last_response' => $lastResponse,
-            ],
-        ];
+        $endpoint = trim((string)($config['indexnow_endpoint'] ?? '')) ?: self::INDEX_NOW_URL;
+        if (!SubmissionResult::validUrl($endpoint) || strtolower((string)parse_url($endpoint, PHP_URL_SCHEME)) !== 'https') {
+            return SubmissionResult::failure(__('IndexNow 端点必须为 HTTPS URL'), 'not_configured');
+        }
+        $submitted = $pending = $rejected = $errors = [];
+        foreach (array_chunk($urls, 10000) as $chunk) {
+            $payload = ['host' => $host, 'key' => $key, 'urlList' => $chunk];
+            if ($keyLocation !== '') { $payload['keyLocation'] = $keyLocation; }
+            $response = $this->httpRequest($endpoint, json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+            $httpCode = (int)($response['http_code'] ?? 0);
+            if (empty($response['error']) && $httpCode === 200) { array_push($submitted, ...$chunk); }
+            elseif (empty($response['error']) && $httpCode === 202) { array_push($pending, ...$chunk); }
+            else {
+                array_push($rejected, ...$chunk);
+                $errors[] = __('IndexNow 请求失败（HTTP %{1}）', $httpCode);
+            }
+        }
+        return SubmissionResult::complete(count($urls), $submitted, $pending, $rejected, $errors);
     }
 
     public function submitSitemap(string $sitemapUrl, array $options = []): array
     {
-        return $this->pushUrls([$sitemapUrl], $options);
+        return SubmissionResult::failure(__('IndexNow 仅通知页面 URL 变更；Sitemap 请通过 robots.txt 或站长平台提交'), 'unsupported');
     }
 
     public function getRequirements(): array
@@ -127,7 +92,7 @@ class IndexNowSearchEngineAdapter implements SearchEngineAdapterInterface
             [
                 'key' => 'indexnow_key',
                 'label' => (string)__('IndexNow Key'),
-                'type' => 'text',
+                'type' => 'password',
                 'required' => true,
                 'placeholder' => '8-128 位密钥',
                 'hint' => (string)__('网站根目录 Key 文件内容须与此一致'),
