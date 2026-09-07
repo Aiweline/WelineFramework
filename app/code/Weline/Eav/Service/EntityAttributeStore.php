@@ -558,13 +558,30 @@ final class EntityAttributeStore implements EntityAttributeStoreInterface
         try {
             $table = $valueModel->getTable();
             $connector = $valueModel->getConnection()->getConnector();
-            $sql = "SELECT 1 FROM information_schema.columns WHERE table_name = "
-                . $connector->quote(\str_replace('"', '', \preg_replace('/^.*\./', '', $table) ?? $table))
-                . " AND column_name = " . $connector->quote(EavScopeColumns::SCOPE_KIND)
-                . " LIMIT 1";
-            $result = $connector->query($sql)->fetch();
+            $config = $connector->getConfigProvider();
+            // Match the connection pool's database identity; model clones may use distinct wrappers.
+            $key = serialize([
+                $config->getDbType(),
+                $config->getHostName(),
+                $config->getHostPort(),
+                $config->getDatabase(),
+                method_exists($config, 'getData') ? (string)$config->getData('path') : '',
+                $config->getUsername(),
+                $table,
+                EavScopeColumns::SCOPE_KIND,
+            ]);
 
-            return !empty($result);
+            return \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Framework\Cache\Service\StorefrontScopeHotCache::class,
+            )->rememberForRequest('eav.value_table.scope_columns', $key, static function () use ($table, $connector): bool {
+                $sql = "SELECT 1 FROM information_schema.columns WHERE table_name = "
+                    . $connector->quote(\str_replace('"', '', \preg_replace('/^.*\./', '', $table) ?? $table))
+                    . " AND column_name = " . $connector->quote(EavScopeColumns::SCOPE_KIND)
+                    . " LIMIT 1";
+                $result = $connector->query($sql)->fetch();
+
+                return !empty($result);
+            });
         } catch (\Throwable) {
             return false;
         }
