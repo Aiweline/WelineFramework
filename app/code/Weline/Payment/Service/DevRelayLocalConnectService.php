@@ -750,8 +750,8 @@ final class DevRelayLocalConnectService
             CURLOPT_TIMEOUT => max(5, $timeout),
             CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
         ];
-        // 本机 *.weline.test 自签证书：静默 worker 回放 inbound 必须放行。
-        if (preg_match('#^https://[^/]*\\.weline\\.test(?::\\d+)?/#i', $url)
+        // 本机 *.test.weline.com 自签证书：静默 worker 回放 inbound 必须放行。
+        if (preg_match('#^https://[^/]*\\.(?:test\\.weline\\.com|weline\\.test)(?::\\d+)?/#i', $url)
             || preg_match('#^https://127\\.0\\.0\\.1(?::\\d+)?/#i', $url)
             || preg_match('#^https://localhost(?::\\d+)?/#i', $url)) {
             $opts[CURLOPT_SSL_VERIFYPEER] = false;

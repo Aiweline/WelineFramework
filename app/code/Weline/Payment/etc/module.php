@@ -2,7 +2,7 @@
 
 return [
     "name" => 'Weline_Payment',
-    "version" => '1.9.36',
+    "version" => '1.9.39',
     "requires" => [
         'Weline_Acl' => '*',
         'Weline_Backend' => '*',
@@ -12,7 +12,7 @@ return [
         'Weline_Hook' => '*',
         'Weline_I18n' => '*',
         'Weline_Inventory' => '*',
-        'Weline_Queue' => '*',
+        'Weline_Queue' => '>=1.2.5',
         'Weline_SystemConfig' => '*',
         'Weline_Theme' => '*',
     ],

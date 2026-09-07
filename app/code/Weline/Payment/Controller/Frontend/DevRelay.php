@@ -416,7 +416,7 @@ final class DevRelay extends FrontendController
         $primary = $endpoints[0]['url'] ?? ($base . $path . '?endpoint_code=paypal.sandbox.default');
 
         return [
-            'hint' => (string) __('搜索并选择支付方式后，复制线上官方回调到对应支付后台 Webhook（勿填本机 *.weline.test，勿填 /payment/dev-relay/*）'),
+            'hint' => (string) __('搜索并选择支付方式后，复制线上官方回调到对应支付后台 Webhook（勿填本机 *.test.weline.com，勿填 /payment/dev-relay/*）'),
             'notify_path' => $path,
             'template' => $primary,
             'endpoints' => $endpoints,
