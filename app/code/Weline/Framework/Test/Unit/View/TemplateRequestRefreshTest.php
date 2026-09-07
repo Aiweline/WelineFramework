@@ -155,6 +155,30 @@ final class TemplateRequestRefreshTest extends TestCase
         self::assertSame('stable', $template->getData('existing_marker'));
     }
 
+    public function testObFileNeverLeaksInternalLocaleSeparatorsIntoHtmlLang(): void
+    {
+        ObjectManager::setInstance(Request::class, $this->createRequestStub('http://locale.test/ar_SA/about'));
+        $template = Template::getInstance();
+
+        $tempFile = tempnam(sys_get_temp_dir(), 'weline-template-html-lang-');
+        if ($tempFile === false) {
+            self::fail('Failed to allocate temp template file.');
+        }
+
+        file_put_contents($tempFile, '<html lang="<?= $htmlLang ?>" data-lang="<?= $lang ?>"></html>');
+
+        try {
+            $rendered = $template->ob_file($tempFile, [
+                'htmlLang' => 'ar_SA',
+                'lang' => 'ar_SA',
+            ]);
+        } finally {
+            @unlink($tempFile);
+        }
+
+        self::assertSame('<html lang="ar-SA" data-lang="ar_SA"></html>', trim($rendered));
+    }
+
     public function testInitUsesLazyEnvProxy(): void
     {
         Context::enter(new Context([

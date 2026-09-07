@@ -93,10 +93,15 @@ class Template extends DataObject
     private static array $scopedInstances = [];
     /** @var array<string, array{compiled_mtime: int, compiled_size: int, template_mtime: int, template_size: int, force: string, result: bool}> */
     private static array $compiledTemplateFreshnessCache = [];
+    private const PROCESS_VIEW_FILE_CACHE_TTL = 3600.0;
+    private const PROCESS_VIEW_FILE_CACHE_MAX = 2048;
+    /** @var array<string, array{compiled: string, tpl: string, expires_at: float}> */
+    private static array $processViewFileCache = [];
     private const STATIC_HOOK_OUTPUT_CACHE_TTL = 60.0;
     private const STATIC_HOOK_AGGREGATE_CACHE_TTL = 30.0;
     private const STATIC_HOOK_STALE_TTL = 300;
     private const STATIC_HOOK_REFRESH_LOCK_TTL = 10;
+    private const STATIC_HOOK_SHARED_WRITE_IDLE_GRACE_SECONDS = 2.0;
     private const REUSABLE_TEMPLATE_OUTPUT_CACHE_TTL = 120;
     private const REUSABLE_TEMPLATE_OUTPUT_CACHE_MAX_ITEMS = 32;
     public const DATA_FORCE_MODULE_THEME_SOURCE = '__weline_force_module_theme_source';
@@ -194,9 +199,70 @@ class Template extends DataObject
         self::$staticHookOutputCache = [];
         self::$staticHookAggregateOutputCache = [];
         self::$reusableTemplateOutputCache = [];
+        self::clearProcessViewFileCache();
         self::$staticHookRuntimeCache = null;
         self::$staticHookRuntimeCacheResolved = false;
         self::$templateCachePolicyRegistry = null;
+    }
+
+    public static function clearProcessViewFileCache(): void
+    {
+        self::$processViewFileCache = [];
+    }
+
+    public static function processViewFileCacheItemCount(): int
+    {
+        return count(self::$processViewFileCache);
+    }
+
+    /**
+     * @return array{compiled: string, tpl: string}|null
+     */
+    private static function readProcessViewFileCache(string $key): ?array
+    {
+        $entry = self::$processViewFileCache[$key] ?? null;
+        if (!is_array($entry)) {
+            return null;
+        }
+
+        if ((float)($entry['expires_at'] ?? 0.0) <= microtime(true)
+            || !is_file((string)($entry['compiled'] ?? ''))
+            || !is_file((string)($entry['tpl'] ?? ''))
+        ) {
+            unset(self::$processViewFileCache[$key]);
+            return null;
+        }
+
+        // Touch the entry so frequently used templates stay in the bounded map.
+        unset(self::$processViewFileCache[$key]);
+        self::$processViewFileCache[$key] = $entry;
+
+        return [
+            'compiled' => (string)$entry['compiled'],
+            'tpl' => (string)$entry['tpl'],
+        ];
+    }
+
+    private static function rememberProcessViewFileCache(string $key, string $compiled, string $tpl): void
+    {
+        if ($compiled === '' || $tpl === '' || !is_file($compiled) || !is_file($tpl)) {
+            return;
+        }
+
+        unset(self::$processViewFileCache[$key]);
+        self::$processViewFileCache[$key] = [
+            'compiled' => $compiled,
+            'tpl' => $tpl,
+            'expires_at' => microtime(true) + self::PROCESS_VIEW_FILE_CACHE_TTL,
+        ];
+
+        while (count(self::$processViewFileCache) > self::PROCESS_VIEW_FILE_CACHE_MAX) {
+            $oldestKey = array_key_first(self::$processViewFileCache);
+            if ($oldestKey === null) {
+                break;
+            }
+            unset(self::$processViewFileCache[$oldestKey]);
+        }
     }
 
     private static function currentScopeKey(): ?string
@@ -569,14 +635,23 @@ class Template extends DataObject
             . '|' . $this->resolveThemeCacheKeyForFetchFile($this->view_dir . $fileName);
         $comFileName_cache_key = $this->view_dir . $fileName . '_comFileName|' . $templateContextKey;
         $tplFile_cache_key = $this->view_dir . $fileName . '_tplFile|' . $templateContextKey;
+        $processViewFileCacheKey = $comFileName_cache_key . "\0" . $tplFile_cache_key;
         $comFileName = '';
         $tplFile = '';
         $forceModuleThemeSource = (bool)$this->getData(self::DATA_FORCE_MODULE_THEME_SOURCE);
         $skipCache = $forceModuleThemeSource || (isset($this->request) && $this->request && $this->request->getData('skip_view_file_cache'));
-        # 让非生产环境实时读取文件
-        if (PROD && !$skipCache) {
-            $comFileName = $this->viewCache->get($comFileName_cache_key);
-            $tplFile = $this->viewCache->get($tplFile_cache_key);
+        $useProcessViewFileCache = !$skipCache && (PROD || (defined('DEV') && DEV && Runtime::isPersistent()));
+        $useSharedViewFileCache = PROD && !$skipCache;
+        # 生产模式或常驻开发 Worker 复用映射；普通开发进程仍实时读取文件
+        if ($useProcessViewFileCache) {
+            $processCached = self::readProcessViewFileCache($processViewFileCacheKey);
+            if ($processCached !== null) {
+                $comFileName = $processCached['compiled'];
+                $tplFile = $processCached['tpl'];
+            } elseif ($useSharedViewFileCache) {
+                $comFileName = $this->viewCache->get($comFileName_cache_key);
+                $tplFile = $this->viewCache->get($tplFile_cache_key);
+            }
         }
         # 测试
         //        file_put_contents(__DIR__ . '/test.txt', $comFileName . PHP_EOL, FILE_APPEND);
@@ -643,10 +718,14 @@ class Template extends DataObject
             }
             $comFileName = $this->fetchFile($comFileName);
             # 生产模式缓存: 根据管道设置缓存
-            if (PROD && !$skipCache) {
+            if ($useSharedViewFileCache) {
                 $this->viewCache->set($comFileName_cache_key, $comFileName);
                 $this->viewCache->set($tplFile_cache_key, $tplFile);
             };
+        }
+
+        if ($useProcessViewFileCache && is_string($comFileName) && is_string($tplFile)) {
+            self::rememberProcessViewFileCache($processViewFileCacheKey, $comFileName, $tplFile);
         }
 
         # 测试
@@ -1373,6 +1452,15 @@ class Template extends DataObject
         }
         FiberOutputBuffer::beginCapture();
         $temporaryTemplateData = $this->pushTemporaryTemplateData($dictionary);
+        // Child dictionaries may carry the framework's internal locale form
+        // (for example ar_SA). Keep that value for data-lang, but never let it
+        // override the BCP 47 value exposed as the document html lang.
+        $htmlLang = \trim((string)$this->getData('htmlLang'));
+        if ($htmlLang === '') {
+            $htmlLang = (string)State::getLang();
+        }
+        $htmlLang = \str_replace('_', '-', $htmlLang);
+        $this->setData('htmlLang', $htmlLang);
         $captureEnding = false;
         try {
             // 框架级保障：模板内 $block 永远指向当前 Template 实例。
@@ -2673,6 +2761,22 @@ class Template extends DataObject
     }
 
     private static function runtimeHookCacheSet(string $key, mixed $value, int $ttl): void
+    {
+        if (Runtime::isPersistent() && !PostResponseTaskQueue::isDraining()) {
+            PostResponseTaskQueue::enqueue(
+                'theme-runtime-cache-set:' . \sha1($key),
+                static function () use ($key, $value, $ttl): void {
+                    self::runtimeHookCacheSetImmediate($key, $value, $ttl);
+                },
+                \microtime(true) + self::STATIC_HOOK_SHARED_WRITE_IDLE_GRACE_SECONDS,
+            );
+            return;
+        }
+
+        self::runtimeHookCacheSetImmediate($key, $value, $ttl);
+    }
+
+    private static function runtimeHookCacheSetImmediate(string $key, mixed $value, int $ttl): void
     {
         $cache = self::runtimeHookCache();
         if ($cache === null) {

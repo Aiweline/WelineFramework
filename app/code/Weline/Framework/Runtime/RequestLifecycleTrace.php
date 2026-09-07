@@ -26,9 +26,20 @@ final class RequestLifecycleTraceState
     public bool $recordingDisabledUntilReset = false;
     public ?int $maxSpansCapCache = null;
     public ?int $metaStringMaxBytesCache = null;
+    public int $dbSpanCount = 0;
+    public float $dbDurationMs = 0.0;
+    public int $wlsSpanCount = 0;
+    public float $wlsDurationMs = 0.0;
+    public int $droppedSpanCount = 0;
+
+    /** @var array<string, array<string, mixed>> */
+    public array $phases = [];
 
     /** @var list<array{name: string, duration_ms: float, category?: string, parent?: string, meta?: array<string, mixed>}> */
     public array $spans = [];
+
+    /** @var list<array<string, mixed>> Slow overflow samples, sorted by duration ascending. */
+    public array $slowOverflowSpans = [];
 
     public string $requestId = '';
     public int $nextSeq = 1;
@@ -74,6 +85,7 @@ class RequestLifecycleTrace
 
     /** 极端重试/风暴时防止静态 span 无限增长导致 OOM（可被 wls.debug.request_trace_max_spans 覆盖） */
     private const DEFAULT_MAX_SPANS = 4096;
+    private const MAX_SUMMARY_PHASES = 48;
 
     private const HEAVY_ROUTE_PREFIXES = [
         '/websites/backend/site-builder-agent/',
@@ -343,16 +355,29 @@ class RequestLifecycleTrace
             return;
         }
         $state = self::state();
+        // Keep scalar DB/WLS totals even when detailed spans have reached the cap.
+        // Accumulate before rounding so many sub-centisecond calls are not lost.
+        if ($category === 'db') {
+            ++$state->dbSpanCount;
+            $state->dbDurationMs += $durationMs;
+        } elseif ($category === 'wls') {
+            ++$state->wlsSpanCount;
+            $state->wlsDurationMs += $durationMs;
+        }
         if ($state->recordingDisabledUntilReset) {
+            ++$state->droppedSpanCount;
+            self::retainSlowOverflowSpan($name, $durationMs, $category, $parent, $meta, $state);
             return;
         }
         $maxSpans = self::getMaxSpansCap($state);
         if (\count($state->spans) >= $maxSpans) {
             if (!$state->maxSpansLogged) {
                 $state->maxSpansLogged = true;
-                \error_log('[RequestLifecycleTrace] span 已达上限 ' . (string) $maxSpans . '，已停止记录直至 reset');
+                \error_log('[RequestLifecycleTrace] span 已达上限 ' . (string) $maxSpans . '，顺序明细停止，慢样本与 DB/WLS 统计继续直至 reset');
             }
             $state->recordingDisabledUntilReset = true;
+            ++$state->droppedSpanCount;
+            self::retainSlowOverflowSpan($name, $durationMs, $category, $parent, $meta, $state);
 
             return;
         }
@@ -374,6 +399,127 @@ class RequestLifecycleTrace
         }
         $state->spans[] = $span;
         self::appendCompactSpan($span, $state);
+    }
+
+    /** Keep late enclosing spans visible without expanding the chronological trace or its dictionaries. */
+    private static function retainSlowOverflowSpan(
+        string $name,
+        float $durationMs,
+        string $category,
+        ?string $parent,
+        array $meta,
+        RequestLifecycleTraceState $state
+    ): void
+    {
+        // Reject fast calls before resolving parents or allocating/sanitizing metadata.
+        if ($durationMs < 10.0) {
+            return;
+        }
+        $limit = 40;
+        $count = \count($state->slowOverflowSpans);
+        if ($count >= $limit
+            && $durationMs <= $state->slowOverflowSpans[0]['duration_ms']) {
+            return;
+        }
+        $resolvedParent = $parent;
+        if ($resolvedParent === null || $resolvedParent === '') {
+            $resolvedParent = self::getCurrentParent();
+        }
+        $span = [
+            'name' => $name,
+            'duration_ms' => \round($durationMs, 2),
+            'category' => $category,
+            'sampled_after_cap' => true,
+        ];
+        if ($resolvedParent !== null && $resolvedParent !== '') {
+            $span['parent'] = $resolvedParent;
+        }
+        if (!empty($meta)) {
+            $span['meta'] = self::sanitizeMetaForStorage($meta, $state);
+        }
+        if ($count >= $limit) {
+            \array_shift($state->slowOverflowSpans);
+        }
+        $state->slowOverflowSpans[] = $span;
+        \usort($state->slowOverflowSpans, static fn(array $a, array $b): int =>
+            $a['duration_ms'] <=> $b['duration_ms']);
+    }
+
+    /**
+     * Retain a completed phase independently of the detailed-span cap.
+     * Existing names may be updated after the fixed phase-name limit is reached.
+     *
+     * @param array<string, mixed> $meta
+     */
+    public static function recordPhase(string $name, float $durationMs, array $meta = []): void
+    {
+        if (!self::isEnabled()) {
+            return;
+        }
+
+        $state = self::state();
+        if (isset($state->phases[$name]) || \count($state->phases) < self::MAX_SUMMARY_PHASES) {
+            $phase = ['duration_ms' => \round($durationMs, 2)];
+            if ($meta !== []) {
+                $phase['meta'] = self::sanitizeMetaForStorage($meta, $state);
+            }
+            $state->phases[$name] = $phase;
+        }
+
+        self::recordSpan($name, $durationMs, 'phase', null, $meta);
+    }
+
+    /**
+     * Measure a callback with bounded, request-local aggregates even after the detail cap.
+     * Durations include children and Fiber suspension; overlapping phases must not be summed.
+     * Use stable phase names, never product IDs or raw request values.
+     *
+     * @template T
+     * @param callable(): T $callback
+     * @param array<string, mixed> $meta
+     * @return T
+     */
+    public static function measurePhase(string $name, callable $callback, array $meta = []): mixed
+    {
+        if (!self::isEnabled()) {
+            return $callback();
+        }
+
+        $state = self::state();
+        $dbCount = $state->dbSpanCount;
+        $dbMs = $state->dbDurationMs;
+        $wlsCount = $state->wlsSpanCount;
+        $wlsMs = $state->wlsDurationMs;
+        $startedAt = \hrtime(true);
+        $failed = false;
+        try {
+            return $callback();
+        } catch (\Throwable $error) {
+            $failed = true;
+            throw $error;
+        } finally {
+            $durationMs = \round((\hrtime(true) - $startedAt) / 1e6, 2);
+            if (isset($state->phases[$name]) || \count($state->phases) < self::MAX_SUMMARY_PHASES) {
+                $previous = $state->phases[$name] ?? [];
+                $phase = [
+                    'duration_ms' => \round((float)($previous['duration_ms'] ?? 0.0) + $durationMs, 2),
+                    'calls' => (int)($previous['calls'] ?? 0) + 1,
+                    'max_ms' => \max((float)($previous['max_ms'] ?? 0.0), $durationMs),
+                    'errors' => (int)($previous['errors'] ?? 0) + (int)$failed,
+                    'db_span_count' => (int)($previous['db_span_count'] ?? 0) + $state->dbSpanCount - $dbCount,
+                    'db_duration_ms' => \round((float)($previous['db_duration_ms'] ?? 0.0) + $state->dbDurationMs - $dbMs, 2),
+                    'wls_span_count' => (int)($previous['wls_span_count'] ?? 0) + $state->wlsSpanCount - $wlsCount,
+                    'wls_duration_ms' => \round((float)($previous['wls_duration_ms'] ?? 0.0) + $state->wlsDurationMs - $wlsMs, 2),
+                    'measurement' => 'inclusive',
+                ];
+                if ($meta !== []) {
+                    $phase['meta'] = self::sanitizeMetaForStorage($meta, $state);
+                }
+                $state->phases[$name] = $phase;
+            }
+            // Detail rows contain this invocation only, never the cumulative phase total.
+            self::recordSpan($name, $durationMs, 'phase', null, $meta);
+        }
     }
 
     /**
@@ -477,14 +623,14 @@ class RequestLifecycleTrace
     public static function exportCompactPayload(): array
     {
         $state = self::state();
-        $spans = self::getSpansWithDbSummary();
+        // Compact rows and category maps keep the original chronological detail contract.
+        $spans = $state->spans;
         if (empty($state->compactRows) && !empty($spans)) {
             foreach ($spans as $span) {
                 self::appendCompactSpan($span, $state);
             }
         }
 
-        $dbDurationMs = 0.0;
         $totalMs = 0.0;
         $categoryCounts = [];
         $categoryTotals = [];
@@ -495,9 +641,6 @@ class RequestLifecycleTrace
             $categoryTotals[$category] = ($categoryTotals[$category] ?? 0.0) + $durationMs;
             if ((string)($span['parent'] ?? '') === '') {
                 $totalMs += $durationMs;
-            }
-            if ($category === 'db') {
-                $dbDurationMs += $durationMs;
             }
         }
         if ($totalMs <= 0.0) {
@@ -513,16 +656,39 @@ class RequestLifecycleTrace
                 'categories' => $state->categories,
                 'metas' => $state->metas,
             ],
-            'summary' => [
-                'span_count' => \count($spans),
+            'summary' => self::getAggregateSummary() + [
                 'request_id' => self::ensureRequestId(),
                 'total_ms' => \round($totalMs, 2),
-                'db_duration_ms' => \round($dbDurationMs, 2),
+                // Category maps describe retained details; DB scalar totals also include dropped details.
                 'category_counts' => $categoryCounts,
                 'category_totals' => self::roundFloatMap($categoryTotals),
-                'truncated' => $state->recordingDisabledUntilReset,
-                'max_spans' => self::getMaxSpansCap($state),
             ],
+        ];
+    }
+
+    /**
+     * DB/WLS totals cover all enabled span calls in those categories, independently of the detail cap.
+     * span_count remains the number of retained details for compact trace consumers.
+     * These are instrumented DB spans, not a count of SQL statements or server waits.
+     *
+     * @return array{span_count: int, dropped_span_count: int, db_span_count: int, db_duration_ms: float, wls_span_count: int, wls_duration_ms: float, truncated: bool, max_spans: int, phases: array<string, array<string, mixed>>}
+     */
+    public static function getAggregateSummary(): array
+    {
+        $state = self::state();
+
+        return [
+            'span_count' => \count($state->spans),
+            'dropped_span_count' => $state->droppedSpanCount,
+            'db_span_count' => $state->dbSpanCount,
+            'db_duration_ms' => \round($state->dbDurationMs, 2),
+            'wls_span_count' => $state->wlsSpanCount,
+            'wls_duration_ms' => \round($state->wlsDurationMs, 2),
+            'truncated' => $state->recordingDisabledUntilReset,
+            'max_spans' => self::getMaxSpansCap($state),
+            'slow_overflow_span_count' => \count($state->slowOverflowSpans),
+            'slow_overflow_span_limit' => 40,
+            'phases' => $state->phases,
         ];
     }
 
@@ -766,13 +932,14 @@ class RequestLifecycleTrace
     public static function getSpansWithDbSummary(): array
     {
         // 先复制一份，避免直接修改内部静态数组
-        $spans = self::state()->spans;
+        $state = self::state();
+        $spans = $state->spans;
 
         if (empty($spans)) {
-            return $spans;
+            return \array_merge($spans, $state->slowOverflowSpans);
         }
 
-        // 1. 聚合所有 db span：按 parent 名称累计 duration_ms
+        // 1. Only chronological details contribute to partial parent DB summaries; samples are not complete children.
         $dbByParent = [];
         foreach ($spans as $span) {
             $category = $span['category'] ?? 'framework';
@@ -791,7 +958,7 @@ class RequestLifecycleTrace
         }
 
         if (empty($dbByParent)) {
-            return $spans;
+            return \array_merge($spans, $state->slowOverflowSpans);
         }
 
         // 2. 遍历所有非 db span，如有聚合结果则附加 db_duration_ms 字段
@@ -808,7 +975,7 @@ class RequestLifecycleTrace
         }
         unset($span);
 
-        return $spans;
+        return \array_merge($spans, $state->slowOverflowSpans);
     }
 
     /**

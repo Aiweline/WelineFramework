@@ -170,7 +170,14 @@ class EventsManager
             return $this->observerCache[$eventName] !== [];
         }
 
-        return $this->eventRegistry->hasObservers($eventName);
+        if ($this->eventRegistry->hasObservers($eventName)) {
+            return true;
+        }
+
+        // Registry may lag newly added etc/event.xml observers when the event
+        // spec (event.php) was missing at last rebuild. Resolve via the same
+        // scan-capable path dispatch uses ($registryKnownToHaveObservers=true).
+        return $this->getEventObservers($eventName, true) !== [];
     }
     
     /**

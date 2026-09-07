@@ -1522,8 +1522,10 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                 foreach ($this->updates[0] as $update_field => $field_value) {
                     $update_key = ':' . md5($update_field);
                     $update_field_quoted = '"' . $update_field . '"';
-                    // 🔧 修复：正确处理 null 值，避免将 null 转换为空字符串导致 PostgreSQL 整数字段错误
-                    $this->bound_values[$update_key] = $field_value === null ? null : (string)$field_value;
+                    // PostgreSQL 布尔值不能通过 (string)false 绑定，否则会变成空字符串。
+                    $this->bound_values[$update_key] = is_bool($field_value)
+                        ? ($field_value ? '1' : '0')
+                        : ($field_value === null ? null : (string)$field_value);
                     // 单条更新时也通过数组覆盖，确保同一字段只有一个赋值
                     $updateExpressions[$update_field] = "{$update_field_quoted} = $update_key";
                 }
@@ -1535,8 +1537,10 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             foreach ($this->single_updates as $update_field => $update_value) {
                 $update_field_quoted = '"' . $update_field . '"';
                 $update_key = ':' . md5($update_field);
-                // 🔧 修复：正确处理 null 值，避免将 null 转换为空字符串导致 PostgreSQL 整数字段错误
-                $this->bound_values[$update_key] = $update_value === null ? null : (string)$update_value;
+                // 与单条 updates 保持一致，布尔值统一按 PostgreSQL 可接受的 0/1 绑定。
+                $this->bound_values[$update_key] = is_bool($update_value)
+                    ? ($update_value ? '1' : '0')
+                    : ($update_value === null ? null : (string)$update_value);
                 // single_updates 的值优先级最高，覆盖前面的表达式
                 $updateExpressions[$update_field] = "{$update_field_quoted}=$update_key";
             }
@@ -3157,6 +3161,19 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             return;
         }
 
+        $dbTraceStart = 0;
+        $dbTraceSuspended = 0;
+        $dbTraceLabel = '';
+        $dbTraceSql = '';
+        $traceOperation = $this->fetch_type ?: 'query';
+        $traceTable = $this->table !== '' ? $this->table : 'unknown';
+        if (RequestLifecycleTrace::isEnabled()) {
+            $dbTraceStart = hrtime(true);
+            $dbTraceLabel = 'db::' . $traceOperation . '::' . $traceTable;
+            // Keep placeholders: iterator diagnostics never interpolate bound values.
+            $dbTraceSql = RequestLifecycleTrace::redactDatabaseSql($this->sql);
+        }
+
         $stmt = $this->PDOStatement;
         $primaryFailure = null;
         try {
@@ -3181,9 +3198,15 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             if ($batchSize === 1) {
                 while (($row = $stmt->fetch(PDO::FETCH_ASSOC)) !== false) {
                     if ($model_class && is_array($row)) {
-                        yield ObjectManager::make($model_class, ['data' => $row], '__construct');
-                    } else {
+                        $row = ObjectManager::make($model_class, ['data' => $row], '__construct');
+                    }
+                    $dbTraceYieldStart = $dbTraceStart > 0 ? hrtime(true) : 0;
+                    try {
                         yield $row;
+                    } finally {
+                        if ($dbTraceYieldStart > 0) {
+                            $dbTraceSuspended += hrtime(true) - $dbTraceYieldStart;
+                        }
                     }
                 }
             } else {
@@ -3195,12 +3218,26 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
                         $batch[] = $row;
                     }
                     if (count($batch) >= $batchSize) {
-                        yield $batch;
+                        $dbTraceYieldStart = $dbTraceStart > 0 ? hrtime(true) : 0;
+                        try {
+                            yield $batch;
+                        } finally {
+                            if ($dbTraceYieldStart > 0) {
+                                $dbTraceSuspended += hrtime(true) - $dbTraceYieldStart;
+                            }
+                        }
                         $batch = [];
                     }
                 }
                 if (!empty($batch)) {
-                    yield $batch;
+                    $dbTraceYieldStart = $dbTraceStart > 0 ? hrtime(true) : 0;
+                    try {
+                        yield $batch;
+                    } finally {
+                        if ($dbTraceYieldStart > 0) {
+                            $dbTraceSuspended += hrtime(true) - $dbTraceYieldStart;
+                        }
+                    }
                 }
             }
         } catch (\Throwable $e) {
@@ -3212,7 +3249,27 @@ abstract class Query extends \Weline\Framework\Database\Connection\Api\Sql\Query
             }
             throw $e;
         } finally {
-            $this->cleanupFetchIteratorState($primaryFailure);
+            try {
+                $this->cleanupFetchIteratorState($primaryFailure);
+            } finally {
+                if ($dbTraceStart > 0) {
+                    // Generator suspension belongs to its consumer, not the database driver.
+                    $duration = max(0, hrtime(true) - $dbTraceStart - $dbTraceSuspended) / 1_000_000;
+                    RequestLifecycleTrace::recordSpan(
+                        $dbTraceLabel,
+                        $duration,
+                        'db',
+                        null,
+                        [
+                            'sql' => $dbTraceSql,
+                            'operation' => $traceOperation,
+                            'table' => $traceTable,
+                            'fetch_mode' => 'iterator',
+                            'measurement' => 'driver_active_excluding_yield',
+                        ],
+                    );
+                }
+            }
         }
     }
 

@@ -126,32 +126,41 @@ final class QueryDelegator
                 $model->getEventManager()->dispatch($model->getProcessTableName() . '_model_delete_after', $eventData);
                 $model->delete_after();
             }
-            $model->fetch_before();
-            if (is_object($query_data)) {
-                $model->setFetchData($query_data->getData());
-                $model->setObjectData($query_data->getData());
-            } elseif (is_array($query_data)) {
-                $model->setFetchData($query_data);
-                $model->setObjectData($query_data);
-            } elseif ($model->getIsInsert() && (is_numeric($query_data) || is_string($query_data))) {
-                $model->setId($query_data);
-            }
-            $model->fetch_after();
-            $model->clearQuery();
-            $model->setDeleteFlag(false);
-            if ($model->getFindFieldsValue() !== '') {
-                $find_fields = explode(',', $model->getFindFieldsValue());
-                $model->setFindFieldsValue('');
-                $model->clearData();
-                foreach ($find_fields as $find_field) {
-                    $model->setData($find_field, $query_data[$find_field] ?? null);
-                }
-                return $query_data;
-            }
-            return $model;
+            return $this->hydrateFetchResult($model, $query_data);
         }
         if (in_array($method, ['getPrepareSql', 'getSql'], true)) {
             return $query_data;
+        }
+        return $model;
+    }
+    /**
+     * Apply an already fetched result using the standard model lifecycle.
+     * The caller records queryData before this step, as delegate() does. This
+     * entry point performs no SQL or delete events.
+     */
+    public function hydrateFetchResult(AbstractModel $model, mixed $queryData): mixed
+    {
+        $model->fetch_before();
+        if (is_object($queryData)) {
+            $model->setFetchData($queryData->getData());
+            $model->setObjectData($queryData->getData());
+        } elseif (is_array($queryData)) {
+            $model->setFetchData($queryData);
+            $model->setObjectData($queryData);
+        } elseif ($model->getIsInsert() && (is_numeric($queryData) || is_string($queryData))) {
+            $model->setId($queryData);
+        }
+        $model->fetch_after();
+        $model->clearQuery();
+        $model->setDeleteFlag(false);
+        if ($model->getFindFieldsValue() !== '') {
+            $find_fields = explode(',', $model->getFindFieldsValue());
+            $model->setFindFieldsValue('');
+            $model->clearData();
+            foreach ($find_fields as $find_field) {
+                $model->setData($find_field, $queryData[$find_field] ?? null);
+            }
+            return $queryData;
         }
         return $model;
     }

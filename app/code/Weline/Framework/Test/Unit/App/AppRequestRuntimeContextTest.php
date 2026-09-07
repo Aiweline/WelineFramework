@@ -70,14 +70,14 @@ final class AppRequestRuntimeContextTest extends TestCase
                 'uri' => '/pagebuilder/backend/ai-site-agent/index?legacy=1',
                 'origin_request_uri' => '/pagebuilder/backend/ai-site-agent/index?legacy=1',
                 'scheme' => 'https',
-                'host' => 'p11005ce4.weline.test',
+                'host' => 'p11005ce4.test.weline.com',
             ],
         ]));
 
         $_SERVER = [
             'REQUEST_URI' => '/pagebuilder/backend/ai-site-agent/index?legacy=1',
             'REQUEST_SCHEME' => 'https',
-            'HTTP_HOST' => 'p11005ce4.weline.test',
+            'HTTP_HOST' => 'p11005ce4.test.weline.com',
             'SERVER_PORT' => '443',
         ];
 
@@ -88,7 +88,7 @@ final class AppRequestRuntimeContextTest extends TestCase
             Context::current()?->get('input.server.WELINE_ORIGIN_REQUEST_URI')
         );
         self::assertSame(
-            'https://p11005ce4.weline.test/pagebuilder/backend/ai-site-agent/index?legacy=1',
+            'https://p11005ce4.test.weline.com/pagebuilder/backend/ai-site-agent/index?legacy=1',
             Context::current()?->get('input.server.WELINE_FULL_REQUEST_URI')
         );
     }
@@ -140,6 +140,25 @@ final class AppRequestRuntimeContextTest extends TestCase
                 ],
             ],
         ]);
+
+        $method = new ReflectionMethod($app, 'syncCookieRouteStateFromServer');
+        $method->setAccessible(true);
+        $method->invoke($app);
+
+        self::assertSame([], HeaderCollector::getInstance()->getCookies());
+    }
+
+    public function testAnonymousFrontendGetDefersRouteStateCookiesForFpc(): void
+    {
+        $app = $this->createAppForRequest('/en_US/products', [
+            'REQUEST_METHOD' => 'GET',
+            'HTTP_HOST' => 'p05113ef3.test.weline.com',
+            'WELINE_WEBSITE_ID' => '0',
+            'WELINE_WEBSITE_CODE' => 'default',
+            'WELINE_WEBSITE_URL' => 'https://p05113ef3.test.weline.com/',
+        ]);
+        WelineEnv::set('area', 'frontend', 'unit test');
+        WelineEnv::set('is_backend', false, 'unit test');
 
         $method = new ReflectionMethod($app, 'syncCookieRouteStateFromServer');
         $method->setAccessible(true);
