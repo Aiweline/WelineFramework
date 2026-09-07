@@ -13,7 +13,7 @@ use Weline\Framework\Manager\ObjectManager;
 
 class DeployOrchestratorService
 {
-    private const LOCAL_APPSTORE_PLATFORM_URL = 'https://app.weline.test:9523';
+    private const LOCAL_APPSTORE_PLATFORM_URL = 'https://app.test.weline.com:9523';
     private const PRODUCTION_APPSTORE_PLATFORM_URL = 'https://app.aiweline.com';
 
     /**
@@ -1075,7 +1075,9 @@ class DeployOrchestratorService
         }
 
         return str_starts_with($host, 'www.')
-            && (str_ends_with($host, 'weline.test') || str_ends_with($host, 'aiweline.com'));
+            && (str_ends_with($host, 'test.weline.com')
+                || str_ends_with($host, 'weline.test')
+                || str_ends_with($host, 'aiweline.com'));
     }
 
     /**
