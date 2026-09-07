@@ -20,10 +20,10 @@
 ## 探针示例
 
 ```bash
-curl -sS 'https://p05113ef3.weline.test:9555/order/frontend/dev-relay/probe?endpoint_code=fake_carrier.sandbox.default&order_number=DEMO'
+curl -sS 'https://p05113ef3.test.weline.com:9555/order/frontend/dev-relay/probe?endpoint_code=fake_carrier.sandbox.default&order_number=DEMO'
 ```
 
 ## 约束
 
-- 生产承运商 Webhook 应指向统一 notify，而不是 `*.weline.test` 专用路径。
+- 生产承运商 Webhook 应指向统一 notify，而不是 `*.test.weline.com` 专用路径。
 - Provider verify/parse 不得推进订单状态；应用侧监听 `order_tracking_feedback_received`。

@@ -9,6 +9,7 @@ use Weline\Order\Api\Data\OrderReadResult;
 use Weline\Order\Api\Data\ScopeSnapshot;
 use Weline\Order\Api\OrderFacadeInterface;
 use Weline\Order\Service\OrderFacade;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Payment\Api\Data\Actor;
 use Weline\Payment\Api\Data\PayableContext;
 use Weline\Payment\Api\Data\PayableSnapshot;
@@ -209,6 +210,31 @@ final class OrderPayableResolver implements PayableResolverInterface
         $payableId = (string) $intent->getData(PaymentIntent::schema_fields_PAYABLE_ID);
         if (isset($this->memoryOrders[$payableId])) {
             $this->memoryOrders[$payableId]['payment_status'] = 'partial';
+        }
+        $this->notifyB2BHangPartial($intent);
+    }
+
+    private function notifyB2BHangPartial(PaymentIntent $intent): void
+    {
+        if (!class_exists(\Weline\B2B\Service\B2BHangOrderService::class)) {
+            return;
+        }
+        try {
+            $hang = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
+            if (!$hang instanceof \Weline\B2B\Service\B2BHangOrderService) {
+                return;
+            }
+            $meta = [];
+            $terms = $intent->getData(PaymentIntent::schema_fields_TERMS_SNAPSHOT);
+            if (is_string($terms) && $terms !== '') {
+                $decoded = json_decode($terms, true);
+                if (is_array($decoded)) {
+                    $meta = $decoded;
+                }
+            }
+            $hang->onPaymentIntentLifecycle($intent, $meta);
+        } catch (\Throwable) {
+            // Hang lifecycle is optional; payment SPI must not fail closed on missing B2B.
         }
     }
 

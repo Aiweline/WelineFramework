@@ -45,8 +45,32 @@ final class AccountSidebarHookTemplateTest extends TestCase
         $this->assertStringContainsString("assign('accountOrderTracking'", $content);
         $this->assertStringContainsString('OrderTrackingService', $content);
         $this->assertStringContainsString('data-order-tracking-resolved=', $content);
+        $this->assertStringContainsString('<css>Weline_Order::css/account-orders.css</css>', $content);
+        $this->assertStringContainsString('<css>Weline_Order::css/order-tracking.css</css>', $content);
+        $trackingCss = $moduleRoot . '/view/statics/css/order-tracking.css';
+        $this->assertFileExists($trackingCss);
+        $trackingCssBody = (string) file_get_contents($trackingCss);
+        $this->assertStringContainsString('[data-state="current"]', $trackingCssBody);
+        $this->assertStringContainsString('--otr-primary', $trackingCssBody);
+        $trackingPanel = $moduleRoot . '/view/templates/frontend/tracking/result-panel.phtml';
+        $this->assertFileExists($trackingPanel);
+        $trackingPanelBody = (string) file_get_contents($trackingPanel);
+        $this->assertStringContainsString('order-tracking-result__stages', $trackingPanelBody);
+        $this->assertStringContainsString('order-tracking-result__current-tag', $trackingPanelBody);
+        $this->assertStringContainsString('aria-current="step"', $trackingPanelBody);
+        $this->assertStringContainsString('fetchTagSource', $trackingPanelBody);
+        $this->assertStringContainsString('<img class="order-tracking-result__icon"', $trackingPanelBody);
+        $this->assertStringNotContainsString('<w:static', $trackingPanelBody);
+        $this->assertStringContainsString('禁止写未编译的 w:static', $trackingPanelBody);
         $this->assertStringNotContainsString('$GLOBALS', $content);
         $this->assertStringNotContainsString('Weline_Customer::frontend::account::index::orders', $content);
+
+        $ordersCss = $moduleRoot . '/view/statics/css/account-orders.css';
+        $this->assertFileExists($ordersCss);
+        $css = (string) file_get_contents($ordersCss);
+        $this->assertStringContainsString('[data-account-orders="true"]', $css);
+        $this->assertStringContainsString('.account-orders__groups', $css);
+        $this->assertStringContainsString('list-style: none', $css);
 
         $ordersPanel = $moduleRoot . '/view/hooks/Weline_Order/frontend/account/index/orders.phtml';
         $this->assertFileExists($ordersPanel);

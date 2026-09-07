@@ -13,6 +13,7 @@ final class OrderReadResult
      * @param array<string, mixed> $scope
      * @param array<string, mixed> $tax
      * @param array<string, mixed> $shipping
+     * @param array<string, mixed> $typePayload
      */
     public function __construct(
         public readonly string $orderUuid,
@@ -31,6 +32,8 @@ final class OrderReadResult
         public readonly ?string $displayNumber = null,
         public readonly ?int $customerId = null,
         public readonly ?string $customerEmail = null,
+        public readonly string $orderType = 'toc',
+        public readonly array $typePayload = [],
     ) {
     }
 
@@ -54,6 +57,8 @@ final class OrderReadResult
             'display_number' => $this->displayNumber,
             'customer_id' => $this->customerId,
             'customer_email' => $this->customerEmail,
+            'order_type' => $this->orderType,
+            'type_payload' => $this->typePayload,
         ];
     }
 }

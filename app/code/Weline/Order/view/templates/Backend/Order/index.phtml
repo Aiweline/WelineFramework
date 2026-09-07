@@ -13,6 +13,9 @@ $page = $this->getData('page') ?? 1;
 $pageSize = $this->getData('page_size') ?? 20;
 $totalPages = $this->getData('total_pages') ?? 1;
 $filters = $this->getData('filters') ?? [];
+$orderTypeRows = $this->getData('order_type_rows') ?? [];
+/** @var \Weline\Order\Service\CommerceOrderTypeRegistry|null $orderTypeRegistry */
+$orderTypeRegistry = $this->getData('order_type_registry');
 $listPresenter = new BackendOrderListPresenter();
 
 ?>
@@ -69,6 +72,20 @@ $listPresenter = new BackendOrderListPresenter();
                             </select>
                         </div>
                         <div style="--w-span-md:2;">
+                            <select name="order_type" class="w-select" data-testid="order-type-filter">
+                                <option value=""><?= __('全部类型') ?></option>
+                                <?php foreach ($orderTypeRows as $row): ?>
+                                    <?php
+                                    $code = (string)($row['code'] ?? '');
+                                    if ($code === '') {
+                                        continue;
+                                    }
+                                    ?>
+                                    <option value="<?= htmlspecialchars($code) ?>" <?= ($filters['order_type'] ?? '') === $code ? 'selected' : '' ?>><?= htmlspecialchars((string)($row['label'] ?? $code)) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div style="--w-span-md:2;">
                             <button type="submit" class="w-button" data-w-width="full" data-tone="primary">
                                 <w:icon name="search" size="sm"></w:icon> <?= __('搜索') ?>
                             </button>
@@ -86,6 +103,7 @@ $listPresenter = new BackendOrderListPresenter();
                         <thead>
                             <tr>
                                 <th><?= __('订单号') ?></th>
+                                <th><?= __('类型') ?></th>
                                 <th><?= __('客户') ?></th>
                                 <th><?= __('订单总额') ?></th>
                                 <th><?= __('订单状态') ?></th>
@@ -98,7 +116,7 @@ $listPresenter = new BackendOrderListPresenter();
                         <tbody>
                             <?php if (empty($orders)): ?>
                                 <tr>
-                                    <td colspan="8" class="w-text" data-align="center"><?= __('暂无数据') ?></td>
+                                    <td colspan="9" class="w-text" data-align="center"><?= __('暂无数据') ?></td>
                                 </tr>
                             <?php else: ?>
                                 <?php foreach ($orders as $order): ?>
@@ -108,12 +126,28 @@ $listPresenter = new BackendOrderListPresenter();
                                     $status = $orderData[Order::schema_fields_STATUS] ?? '';
                                     $paymentStatus = $orderData[Order::schema_fields_PAYMENT_STATUS] ?? '';
                                     $fulfillmentStatus = $orderData[Order::schema_fields_FULFILLMENT_STATUS] ?? '';
+                                    $rowOrderType = strtolower(trim((string)($orderData[Order::schema_fields_ORDER_TYPE] ?? '')));
+                                    if ($rowOrderType === '') {
+                                        $rowOrderType = \Weline\Order\Service\CommerceOrderTypeRegistry::CODE_TOC;
+                                    }
+                                    $rowTypeLabel = $orderTypeRegistry instanceof \Weline\Order\Service\CommerceOrderTypeRegistry
+                                        ? $orderTypeRegistry->resolveLabel($rowOrderType)
+                                        : $rowOrderType;
+                                    $rowTypeTone = $orderTypeRegistry instanceof \Weline\Order\Service\CommerceOrderTypeRegistry
+                                        ? $orderTypeRegistry->resolveBadgeTone($rowOrderType)
+                                        : 'secondary';
+                                    if ($rowTypeTone === 'muted') {
+                                        $rowTypeTone = 'secondary';
+                                    }
                                     ?>
                                     <tr>
                                         <td>
                                             <a href="@backend-url{'order/backend/order/view'|['id' => $orderData[Order::schema_fields_ID] ?? '']}">
                                                 <?= htmlspecialchars($orderData[Order::schema_fields_ORDER_NUMBER] ?? '') ?>
                                             </a>
+                                        </td>
+                                        <td>
+                                            <span class="w-badge bg-<?= htmlspecialchars($rowTypeTone) ?>" data-testid="order-type-badge"><?= htmlspecialchars($rowTypeLabel) ?></span>
                                         </td>
                                         <td data-testid="order-list-customer">
                                             <div class="w-cluster" data-align="center" style="--w-gap:var(--weline-space-1);">

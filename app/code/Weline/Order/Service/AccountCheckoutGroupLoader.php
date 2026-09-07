@@ -98,6 +98,11 @@ final class AccountCheckoutGroupLoader
                     'refund_status' => $refundByOrder[$orderUuid] ?? 'none',
                     'invoice_status' => $invoiceByOrder[$orderId] ?? 'none',
                     'fulfillment_status' => (string) ($row[Order::schema_fields_FULFILLMENT_STATUS] ?? 'none'),
+                    'order_type' => strtolower(trim((string) ($row[Order::schema_fields_ORDER_TYPE] ?? 'toc'))) ?: 'toc',
+                    'hang' => $this->resolveHangProjection(
+                        $orderUuid,
+                        strtolower(trim((string) ($row[Order::schema_fields_ORDER_TYPE] ?? 'toc'))) ?: 'toc',
+                    ),
                 ];
             }
 
@@ -281,5 +286,31 @@ final class AccountCheckoutGroupLoader
         $fraction = str_pad((string)($match[2] ?? ''), 2, '0');
 
         return $major * 100 + (int)$fraction;
+    }
+
+    /**
+     * Fail-soft ToB hang projection for account orders UI.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function resolveHangProjection(string $orderUuid, string $orderType): ?array
+    {
+        $orderUuid = trim($orderUuid);
+        if ($orderUuid === '' || $orderType !== 'tob') {
+            return null;
+        }
+        if (!class_exists(\Weline\B2B\Service\B2BHangOrderService::class)) {
+            return null;
+        }
+        try {
+            /** @var \Weline\B2B\Service\B2BHangOrderService $service */
+            $service = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\B2B\Service\B2BHangOrderService::class
+            );
+            $hang = $service->getByOrderRef($orderUuid);
+            return $hang !== null ? $hang->toArray() : null;
+        } catch (\Throwable) {
+            return null;
+        }
     }
 }
