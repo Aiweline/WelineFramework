@@ -4,6 +4,7 @@ declare(strict_types=1);
 namespace Weline\Database\test;
 
 use Weline\Database\Model\DatabaseAdminAuditLog;
+use Weline\Database\Service\Admin\DatabaseAdminService;
 use Weline\Database\Service\Admin\SqlGuardService;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Test\TestCore;
@@ -49,5 +50,32 @@ class AdminServicesTest extends TestCore
         $model = ObjectManager::getInstance(DatabaseAdminAuditLog::class);
         $this->assertInstanceOf(DatabaseAdminAuditLog::class, $model);
         $this->assertSame('weline_database_admin_audit_log', DatabaseAdminAuditLog::schema_table);
+    }
+
+    public function testListTablesAcceptsOptionalModuleFilter(): void
+    {
+        $ref = new \ReflectionMethod(DatabaseAdminService::class, 'listTables');
+        $this->assertSame(2, $ref->getNumberOfParameters());
+        $moduleParam = $ref->getParameters()[1];
+        $this->assertSame('module', $moduleParam->getName());
+        $this->assertTrue($moduleParam->isDefaultValueAvailable());
+        $this->assertSame('', $moduleParam->getDefaultValue());
+    }
+
+    public function testBrowseTemplateUsesOfficialModuleSelectTaglib(): void
+    {
+        $path = BP . '/app/code/Weline/Database/view/backend/templates/admin/index.phtml';
+        $this->assertFileExists($path);
+        $source = (string) file_get_contents($path);
+        $this->assertStringContainsString('module-manager:module:select', $source);
+        $this->assertStringContainsString('id="db-module-select"', $source);
+        $this->assertStringContainsString('welineDbAdminLoadTables', $source);
+        $this->assertStringContainsString('loadSelectedTableRows', $source);
+        $this->assertStringNotContainsString('id="load-table"', $source);
+        $this->assertStringContainsString('id="database-refresh"', $source);
+        $this->assertStringContainsString('data-w-component="tabs"', $source);
+        $this->assertStringContainsString('w-tabs__panel', $source);
+        $this->assertStringContainsString('aria-selected=', $source);
+        $this->assertStringNotContainsString('tab-pane fade', $source);
     }
 }

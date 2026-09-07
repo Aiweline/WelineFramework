@@ -6,11 +6,13 @@ namespace Weline\Database\Service\Admin;
 
 use Weline\Framework\Database\Connection\Api\ConnectorInterface;
 use Weline\Framework\Database\ConnectionFactory;
+use Weline\Framework\Setup\Model\ModuleTable;
 
 class DatabaseAdminService
 {
     public function __construct(
-        private readonly ConnectionFactory $connectionFactory
+        private readonly ConnectionFactory $connectionFactory,
+        private readonly ModuleTable $moduleTable,
     ) {
     }
 
@@ -38,10 +40,10 @@ class DatabaseAdminService
         return $this->ensureDefaultDatabase($databases);
     }
 
-    public function listTables(string $database): array
+    public function listTables(string $database, string $module = ''): array
     {
         $this->validateIdentifier($database, 'database');
-        return match ($this->dbType()) {
+        $tables = match ($this->dbType()) {
             'pgsql' => array_map(
                 static fn(array $row): string => (string) ($row['n'] ?? ''),
                 $this->queryRows(
@@ -62,6 +64,61 @@ class DatabaseAdminService
                 )
             ),
         };
+
+        return $this->filterTablesByModule($tables, $module);
+    }
+
+    /**
+     * @param list<string> $tables
+     * @return list<string>
+     */
+    private function filterTablesByModule(array $tables, string $module): array
+    {
+        $module = trim($module);
+        if ($module === '') {
+            return $tables;
+        }
+
+        $registered = [];
+        foreach ($this->moduleTable
+            ->reset()
+            ->where(ModuleTable::schema_fields_module_name, $module)
+            ->select()
+            ->fetch()
+            ->getItems() as $row) {
+            $name = $this->normalizeTableName((string) $row->getName());
+            if ($name !== '') {
+                $registered[$name] = true;
+            }
+        }
+
+        if ($registered === []) {
+            return [];
+        }
+
+        $filtered = [];
+        foreach ($tables as $table) {
+            $normalized = $this->normalizeTableName((string) $table);
+            if ($normalized !== '' && isset($registered[$normalized])) {
+                $filtered[] = (string) $table;
+            }
+        }
+
+        return $filtered;
+    }
+
+    private function normalizeTableName(string $name): string
+    {
+        $name = trim(str_replace(['`', '"'], '', $name));
+        if ($name === '') {
+            return '';
+        }
+        if (str_contains($name, '.')) {
+            $parts = explode('.', $name);
+            $name = (string) end($parts);
+        }
+
+        return $name;
     }
 
     public function getTableMeta(string $database, string $table): array
