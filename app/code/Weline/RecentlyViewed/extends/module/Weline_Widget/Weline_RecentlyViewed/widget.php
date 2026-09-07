@@ -33,7 +33,7 @@ return [
             'reason' => '商品详情默认最近浏览槽',
             'config' => [
                 'title' => '最近浏览',
-                'limit' => 6,
+                'limit' => 24,
                 'columns' => '6',
                 'layout' => 'carousel',
             ],
@@ -45,7 +45,7 @@ return [
                 'label' => '标题',
             ],
             'limit' => [
-                'default' => 6,
+                'default' => 24,
                 'type' => 'number',
                 'label' => '显示数量',
             ],

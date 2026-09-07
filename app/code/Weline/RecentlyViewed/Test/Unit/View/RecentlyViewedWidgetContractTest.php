@@ -21,6 +21,8 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertSame('product-recently-viewed', $injection['slot'] ?? null);
         self::assertSame('product', $injection['layout_type'] ?? null);
         self::assertTrue((bool)($injection['required'] ?? false));
+        self::assertSame(24, (int)(($injection['config']['limit'] ?? 0)));
+        self::assertSame(24, (int)(($widget['params']['limit']['default'] ?? 0)));
     }
 
     public function testEmptyPathEmitsNonEmptyShellWithTestId(): void
@@ -36,8 +38,15 @@ final class RecentlyViewedWidgetContractTest extends TestCase
         self::assertStringContainsString('Never return a blank string', $source);
         self::assertStringContainsString('RecentlyViewedService', $source);
         self::assertStringContainsString('data-weline-load="recentlyViewed"', $source);
+        self::assertStringContainsString('"limit":24', $source);
+        self::assertStringContainsString('@param limit {default=24', $source);
         self::assertStringContainsString('data-wrv-track', $source);
         self::assertStringContainsString('wrv-stage', $source);
+        self::assertStringContainsString('<w:product:card', $source);
+        self::assertStringContainsString('density="shelf"', $source);
+        self::assertStringContainsString('class="wrv-card"', $source);
+        self::assertStringNotContainsString('ProductCardRenderer::render', $source);
+        self::assertStringContainsString('wrv-nav--prev', $source);
         self::assertDoesNotMatchRegularExpression(
             '/if\s*\(\s*(?:empty\(\s*\$products\s*\)|\$products\s*===\s*\[\])\s*\)\s*\{\s*return\s*;\s*\}/s',
             $source,
