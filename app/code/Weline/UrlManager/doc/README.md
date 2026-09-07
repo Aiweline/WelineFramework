@@ -70,3 +70,7 @@
 指纹只是候选集索引键。`UrlRewrite::findLatestByWebsiteAndPath()` 必须再用 PHP 严格 `===` 比较存储 path 与输入原始字节，避免 MySQL 默认 collation 的大小写/重音等值影响，并防御理论上的 SHA-256 碰撞。迁移窗口内只有 `path_fingerprint IS NULL` 或空字符串的旧行可进入兼容候选集，仍由 PHP 原始字节比较决定是否命中；候选集继续使用 `(website_id, path_fingerprint, rewrite_id)` 索引，正常 miss 不会退化为 TEXT path 全表扫描。非空但不匹配的指纹必须失败关闭。
 
 `Setup/Upgrade.php` 是纯数据 phase-1 迁移：先对全表指纹与 path 做无写入预检，然后在写事务内回填缺失值并再次全表校验。列和索引 DDL 只由 `#[Col]` / `#[Index]` 与 `php bin/w setup:upgrade` 处理，Upgrade 不执行手写 DDL。
+
+从 `1.0.4` 起，路径查询将指纹、NULL 和空字符串候选合并为一次绑定查询：`(website_id = ? AND path_fingerprint IN (?, '')) OR (website_id = ? AND path_fingerprint IS NULL)`。两条 OR 分支都限定网站；新查询关闭框架按索引字段重排 WHERE 条件，数据库仍可使用既有复合索引。候选按 `rewrite_id DESC` 返回，再按“精确指纹 → NULL 旧行 → 空字符串旧行”的原优先级做 PHP 严格原始路径比较。该优化不新增缓存，插入、更新和删除后的下一次读取仍访问当前连接。
+
+定向回归：`Test/Unit/UrlRewriteLookupTest.php` 使用真实 PostgreSQL 查询编译器，在 SQLite 内存库执行绑定 SQL，覆盖查询数量、跨网站隔离、候选优先级、大小写/尾空格/换行及写后可见性。模型升级执行 `php bin/w setup:upgrade -m Weline_UrlManager`；运行结果记录在本次验收报告。
