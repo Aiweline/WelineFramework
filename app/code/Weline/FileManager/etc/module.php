@@ -2,11 +2,11 @@
 
 return [
     "name" => 'Weline_FileManager',
-    "version" => '1.1.5',
+    "version" => '1.1.13',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Eav' => '*',
-        'Weline_Queue' => '*',
+        'Weline_Queue' => '>=1.2.5',
         'Weline_SystemConfig' => '*',
         'Weline_Cron' => '*',
         'Weline_Storage' => '>=1.2.0',

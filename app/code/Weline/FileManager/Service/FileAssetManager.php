@@ -16,7 +16,7 @@ use Weline\Storage\Api\Data\ResolvedStorageUrl;
 use Weline\Storage\Api\Data\StorageUrlOptions;
 use Weline\Storage\Api\StorageManagerInterface;
 
-final class FileAssetManager implements FileAssetManagerInterface
+final class FileAssetManager implements FileAssetManagerInterface, \Weline\FileManager\Api\FileAssetBatchUrlResolverInterface
 {
     public function __construct(
         private readonly FileAsset $assets,
@@ -59,7 +59,14 @@ final class FileAssetManager implements FileAssetManagerInterface
         FileAccessContext $context,
         ?StorageUrlOptions $options = null,
     ): ResolvedStorageUrl {
-        $asset = $this->get($assetId);
+        return $this->resolveLoadedAssetUrl($this->get($assetId), $context, $options);
+    }
+
+    private function resolveLoadedAssetUrl(
+        FileAsset $asset,
+        FileAccessContext $context,
+        ?StorageUrlOptions $options = null,
+    ): ResolvedStorageUrl {
         $this->accessPolicy->assertCanRead($asset, $context);
         $privateTtl = null;
         if ($asset->getVisibility() === FileAsset::VISIBILITY_PRIVATE) {
@@ -77,6 +84,109 @@ final class FileAssetManager implements FileAssetManagerInterface
             );
         }
         return $resolved;
+    }
+
+    /** @inheritDoc */
+    public function resolveUrls(array $requests): array
+    {
+        $assetIds = [];
+        $localeCodes = [];
+        foreach ($requests as $request) {
+            $assetId = trim($request['asset_id']);
+            if ($assetId === '') {
+                continue;
+            }
+            $assetIds[$assetId] = $assetId;
+            foreach ($request['contexts'] as $context) {
+                $localeCode = self::normalizeLocale($context->localeCode);
+                $localeCodes[$localeCode] = $localeCode;
+            }
+        }
+
+        $assetRows = [];
+        $localeRows = [];
+        $assetAliases = [];
+        $localeAliases = [];
+        $bulkReadAvailable = true;
+        try {
+            foreach (array_chunk(array_values($assetIds), 200) as $ids) {
+                $assets = clone $this->assets;
+                foreach ($assets->clearData()->reset()->where(FileAsset::schema_fields_ID, $ids, 'in')->select()->fetchIterator() as $row) {
+                    $id = (string)$row[FileAsset::schema_fields_ID];
+                    $assetRows[$id] = $row;
+                    $assetAliases[strtolower($id)] = true;
+                }
+                foreach (array_chunk(array_values($localeCodes), 200) as $codes) {
+                    $locales = clone $this->locales;
+                    foreach ($locales->clearData()->reset()
+                        ->where(FileAssetLocale::schema_fields_ASSET_ID, $ids, 'in')
+                        ->where(FileAssetLocale::schema_fields_LOCALE_CODE, $codes, 'in')
+                        ->select()->fetchIterator() as $row
+                    ) {
+                        $id = (string)$row[FileAssetLocale::schema_fields_ASSET_ID];
+                        $code = (string)$row[FileAssetLocale::schema_fields_LOCALE_CODE];
+                        $localeRows[$id][$code] ??= $row;
+                        $localeAliases[strtolower($id)][strtolower($code)] = true;
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            // Keep the existing per-item lookup path if an adapter cannot batch.
+            $bulkReadAvailable = false;
+        }
+
+        $result = [];
+        foreach ($requests as $key => $request) {
+            $result[$key] = null;
+            $assetId = trim($request['asset_id']);
+            foreach ($request['contexts'] as $context) {
+                try {
+                    $localeCode = self::normalizeLocale($context->localeCode);
+                    if (!$bulkReadAvailable) {
+                        $this->locale($assetId, $localeCode);
+                        $asset = $this->get($assetId);
+                    } else {
+                        if (isset($localeRows[$assetId][$localeCode])
+                            || !isset($localeAliases[strtolower($assetId)][strtolower($localeCode)])
+                        ) {
+                            $locale = $this->hydrateBatchRow($this->locales, $localeRows[$assetId][$localeCode] ?? []);
+                            if ((int)$locale->getData(FileAssetLocale::schema_fields_ID) < 1) {
+                                continue;
+                            }
+                        } else {
+                            // Let the adapter decide non-exact collation matches.
+                            $this->locale($assetId, $localeCode);
+                        }
+                        if (isset($assetRows[$assetId]) || !isset($assetAliases[strtolower($assetId)])) {
+                            $asset = $this->hydrateBatchRow($this->assets, $assetRows[$assetId] ?? []);
+                            if ($asset->getAssetId() === '') {
+                                continue;
+                            }
+                        } else {
+                            $asset = $this->get($assetId);
+                        }
+                    }
+                    $result[$key] = $this->resolveLoadedAssetUrl($asset, $context, $request['options'] ?? null);
+                    break;
+                } catch (\Throwable) {
+                    // One unavailable locale, denied asset, or failed URL adapter
+                    // does not prevent the next candidate or another input.
+                }
+            }
+        }
+        return $result;
+    }
+
+    private function hydrateBatchRow(FileAsset|FileAssetLocale $prototype, array $row): FileAsset|FileAssetLocale
+    {
+        // Mirror find()->fetch() construction and fetch hooks for each use. Only
+        // raw rows are shared within resolveUrls; policy receives a fresh model.
+        $queryData = \Weline\Framework\Manager\ObjectManager::make($prototype::class, ['data' => $row]);
+        $model = clone $prototype;
+        $model->clearData()->reset();
+        $model->setFindFieldsValue('');
+        $model->setQueryData($queryData);
+        return (new \Weline\Framework\Database\Query\QueryDelegator())->hydrateFetchResult($model, $queryData);
     }
 
     public function validateImageUsage(ImageUsage $usage, FileAccessContext $context): void

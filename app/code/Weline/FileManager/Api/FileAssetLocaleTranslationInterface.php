@@ -52,9 +52,11 @@ interface FileAssetLocaleTranslationInterface
     public function enqueueAutoFill(string $requestedBy = 'cron', bool $force = false): int;
 
     /**
-     * Queue worker: gap-fill a limited batch of assets.
+     * Queue worker: gap-fill a limited batch of assets that still need work.
+     * Walks the READY catalog from $offset, skipping complete assets, and returns
+     * next_offset as the catalog cursor for continuation.
      *
-     * @return array{processed:int,filled:int,skipped:int,errors:list<string>,continuation:bool}
+     * @return array{processed:int,filled:int,skipped:int,errors:list<string>,continuation:bool,next_offset:int,aborted_busy?:bool}
      */
     public function processPendingBatch(int $offset = 0, int $limit = 20): array;
 }

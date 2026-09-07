@@ -25,6 +25,7 @@ final class FileAssetLibrary implements FileAssetLibraryInterface
         private readonly FileAccessPolicyInterface $accessPolicy,
         private readonly FileAssetUploadService $uploads,
         private readonly FileAssetMutationService $mutations,
+        private readonly FileAssetReferenceIndexer $references,
         private readonly WriteIntentTransactionCoordinatorInterface $transactions,
     ) {
     }
@@ -72,6 +73,7 @@ final class FileAssetLibrary implements FileAssetLibraryInterface
         $ready = $asset->isReady();
         $selectable = $ready && $reviewed
             && $displayName !== '' && $defaultAlt !== '' && $description !== '';
+        $assetMetadata = trim((string)$asset->getData(FileAsset::schema_fields_METADATA));
 
         $previewUrl = null;
         try {
@@ -96,6 +98,7 @@ final class FileAssetLibrary implements FileAssetLibraryInterface
             'sha256' => (string)$asset->getData(FileAsset::schema_fields_SHA256),
             'created_at' => (string)$asset->getData(FileAsset::schema_fields_CREATED_AT),
             'updated_at' => (string)$asset->getData(FileAsset::schema_fields_UPDATED_AT),
+            'asset_metadata_sha256' => hash('sha256', $assetMetadata),
             'asset_ready' => $ready,
             'asset_selectable' => $selectable,
             'locale_code' => $localeCode,
@@ -247,6 +250,87 @@ final class FileAssetLibrary implements FileAssetLibraryInterface
         }
 
         return $this->describe($canonical, $objectKey, $localeCode, $access);
+    }
+
+    public function saveAssetMetadata(
+        string $assetId,
+        string $diskCode,
+        string $objectKey,
+        string $localeCode,
+        FileAccessContext $access,
+        int $expectedRevision,
+        array $metadata,
+    ): array {
+        if ($expectedRevision < 1) {
+            throw new \InvalidArgumentException((string)__('文件资源修订版本无效。'));
+        }
+        $asset = $this->assetManager->get($assetId);
+        $this->accessPolicy->assertCanManage($asset, $access);
+        if ($asset->isDeleted()) {
+            throw new \RuntimeException((string)__('文件资源不可用。'));
+        }
+        $canonical = $this->storage->canonicalizeDiskCode($diskCode);
+        $objectKey = trim($objectKey, '/');
+        if (!hash_equals($asset->getDiskCode(), $canonical)
+            || !hash_equals($asset->getObjectKey(), $objectKey)
+        ) {
+            throw new \InvalidArgumentException((string)__('资源身份与当前存储对象不匹配。'));
+        }
+        $localeCode = $this->normalizeLocale($localeCode);
+        $save = function () use ($asset, $metadata, $access, $expectedRevision): void {
+            $current = $this->lockAssetForMetadataMutation($asset, $expectedRevision);
+            $this->accessPolicy->assertCanManage($current, $access);
+            $nextMetadata = $metadata;
+            if ($current->getVisibility() === FileAsset::VISIBILITY_PRIVATE) {
+                $stored = json_decode(
+                    trim((string)$current->getData(FileAsset::schema_fields_METADATA)) ?: '{}',
+                    true,
+                    64,
+                    JSON_THROW_ON_ERROR,
+                );
+                $storedPolicy = is_array($stored) ? ($stored['access_policy'] ?? null) : null;
+                if (!is_array($storedPolicy)) {
+                    throw new \RuntimeException((string)__('私有文件资源缺少既有访问策略。'));
+                }
+                if (isset($nextMetadata['access_policy'])
+                    && $nextMetadata['access_policy'] !== $storedPolicy
+                ) {
+                    throw new \InvalidArgumentException((string)__('资源元数据更新不能修改私有访问策略。'));
+                }
+                $nextMetadata['access_policy'] = $storedPolicy;
+            }
+            $encoded = json_encode(
+                $nextMetadata,
+                JSON_THROW_ON_ERROR | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES,
+            );
+            $storedRaw = trim((string)$current->getData(FileAsset::schema_fields_METADATA));
+            if (hash_equals($storedRaw, $encoded)) {
+                return;
+            }
+            $current->setData(FileAsset::schema_fields_METADATA, $encoded);
+            $current->save();
+        };
+        $connection = $asset->getConnection();
+        if ($this->transactions->isActive($connection)) {
+            if (!$this->transactions->isWriteIntent($connection)) {
+                throw new \LogicException((string)__('文件资源元数据保存必须位于写意图事务内。'));
+            }
+            $this->transactions->withSavepoint($connection, 'file_asset_provenance_save', $save);
+        } else {
+            $this->transactions->runWrite($connection, $save);
+        }
+
+        return $this->describe($canonical, $objectKey, $localeCode, $access);
+    }
+
+    public function referenceCount(string $assetId, FileAccessContext $access): int
+    {
+        $asset = $this->assetManager->get($assetId);
+        $this->accessPolicy->assertCanManage($asset, $access);
+        if ($asset->isDeleted()) {
+            throw new \RuntimeException((string)__('文件资源不可用。'));
+        }
+        return $this->references->countForAsset($asset->getAssetId());
     }
 
     public function moveObject(
