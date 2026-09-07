@@ -253,6 +253,49 @@
         return cachedDevWorkerUrls[cacheKey];
     }
 
+    // Same Chrome storefront hang: `new Worker(httpUrl)` can Network-pending forever
+    // while fetch() succeeds. Prefer fetch + Blob URL for classic Workers.
+    function createDedicatedWorkerFromScriptUrl(workerUrl) {
+        if (typeof window.Worker !== 'function') {
+            return Promise.reject(new Error('[Weline.Api] Worker is unavailable; backend direct requests are disabled.'));
+        }
+        var scriptUrl = String(workerUrl || '');
+        if (!scriptUrl) {
+            return Promise.reject(new Error('[Weline.Api] backend workerUrl is not configured.'));
+        }
+        return fetch(scriptUrl, {
+            credentials: 'same-origin',
+            cache: isDevMode() ? 'no-store' : 'force-cache'
+        }).then(function (response) {
+            if (!response.ok) {
+                throw new Error('[Weline.Api] worker script HTTP ' + response.status);
+            }
+            return response.text();
+        }).then(function (code) {
+            if (!code || !String(code).trim()) {
+                throw new Error('[Weline.Api] worker script body is empty.');
+            }
+            var blob = new Blob([code], {type: 'text/javascript'});
+            var blobUrl = URL.createObjectURL(blob);
+            try {
+                var worker = new Worker(blobUrl);
+                window.setTimeout(function () {
+                    try {
+                        URL.revokeObjectURL(blobUrl);
+                    } catch (_error) {
+                    }
+                }, 0);
+                return worker;
+            } catch (error) {
+                try {
+                    URL.revokeObjectURL(blobUrl);
+                } catch (_error) {
+                }
+                throw error;
+            }
+        });
+    }
+
     function sameOriginUrl(value) {
         var url = new URL(value, window.location.origin);
         if (url.origin !== window.location.origin) {
@@ -884,6 +927,7 @@
     function BackendApiClient(config) {
         this.config = config || {};
         this.worker = null;
+        this.workerStartPromise = null;
         this.requestId = 0;
         this.pending = {};
         this.handleWorkerMessage = this.handleWorkerMessage.bind(this);
@@ -892,18 +936,25 @@
 
     BackendApiClient.prototype.ensureWorker = function () {
         if (this.worker) {
-            return;
+            return Promise.resolve(this.worker);
         }
-        if (typeof window.Worker !== 'function') {
-            throw new Error('[Weline.Api] Worker is unavailable; backend direct requests are disabled.');
+        if (this.workerStartPromise) {
+            return this.workerStartPromise;
         }
-        if (!this.config.workerUrl) {
-            throw new Error('[Weline.Api] backend workerUrl is not configured.');
-        }
-        this.worker = new Worker(this.config.workerUrl);
-        this.worker.addEventListener('message', this.handleWorkerMessage);
-        this.worker.addEventListener('error', this.handleWorkerError);
-        this.worker.addEventListener('messageerror', this.handleWorkerError);
+        var client = this;
+        this.workerStartPromise = createDedicatedWorkerFromScriptUrl(this.config.workerUrl)
+            .then(function (worker) {
+                client.worker = worker;
+                client.worker.addEventListener('message', client.handleWorkerMessage);
+                client.worker.addEventListener('error', client.handleWorkerError);
+                client.worker.addEventListener('messageerror', client.handleWorkerError);
+                return worker;
+            })
+            .catch(function (error) {
+                client.workerStartPromise = null;
+                throw error;
+            });
+        return this.workerStartPromise;
     };
 
     BackendApiClient.prototype.nextId = function () {
@@ -915,56 +966,55 @@
         var requestUrl = sameOriginUrl(url);
         var requestOptions = normalizeOptions(options);
         var mode = responseMode || 'body';
-        try {
-            this.ensureWorker();
-        } catch (error) {
-            return directFetch(requestUrl, requestOptions, mode);
-        }
+        var client = this;
         var messageId = this.nextId();
         var timeoutMs = Math.max(1000, parseInt((options && options.timeoutMs) || this.config.requestTimeoutMs || 60000, 10));
-        var worker = this.worker;
         var pending = this.pending;
 
-        return new Promise(function (resolve, reject) {
-            var timeoutId = window.setTimeout(function () {
-                if (!pending[messageId]) {
-                    return;
+        return this.ensureWorker().then(function (worker) {
+            return new Promise(function (resolve, reject) {
+                var timeoutId = window.setTimeout(function () {
+                    if (!pending[messageId]) {
+                        return;
+                    }
+                    delete pending[messageId];
+                    directFetch(requestUrl, requestOptions, mode).then(resolve).catch(function (error) {
+                        reject(error || buildError('[Weline.Api] backend worker request timed out.', {
+                            ok: false,
+                            status: 0,
+                            statusText: '',
+                            data: null,
+                            maintenance: false
+                        }, requestUrl));
+                    });
+                }, timeoutMs);
+
+                pending[messageId] = {
+                    resolve: resolve,
+                    reject: reject,
+                    timeoutId: timeoutId,
+                    requestUrl: requestUrl,
+                    requestOptions: requestOptions,
+                    responseMode: mode
+                };
+
+                try {
+                    worker.postMessage({
+                        id: messageId,
+                        type: 'request',
+                        url: requestUrl,
+                        options: requestOptions
+                    });
+                } catch (error) {
+                    window.clearTimeout(timeoutId);
+                    delete pending[messageId];
+                    directFetch(requestUrl, requestOptions, mode).then(resolve).catch(function () {
+                        reject(error);
+                    });
                 }
-                delete pending[messageId];
-                directFetch(requestUrl, requestOptions, mode).then(resolve).catch(function (error) {
-                    reject(error || buildError('[Weline.Api] backend worker request timed out.', {
-                        ok: false,
-                        status: 0,
-                        statusText: '',
-                        data: null,
-                        maintenance: false
-                    }, requestUrl));
-                });
-            }, timeoutMs);
-
-            pending[messageId] = {
-                resolve: resolve,
-                reject: reject,
-                timeoutId: timeoutId,
-                requestUrl: requestUrl,
-                requestOptions: requestOptions,
-                responseMode: mode
-            };
-
-            try {
-                worker.postMessage({
-                    id: messageId,
-                    type: 'request',
-                    url: requestUrl,
-                    options: requestOptions
-                });
-            } catch (error) {
-                window.clearTimeout(timeoutId);
-                delete pending[messageId];
-                directFetch(requestUrl, requestOptions, mode).then(resolve).catch(function () {
-                    reject(error);
-                });
-            }
+            });
+        }).catch(function () {
+            return directFetch(requestUrl, requestOptions, mode);
         });
     };
 
@@ -1025,6 +1075,7 @@
             this.worker.terminate();
         }
         this.worker = null;
+        this.workerStartPromise = null;
         this.config.workerUrl = '';
         Object.keys(this.pending).forEach(function (id) {
             var pending = this.pending[id];
@@ -1064,6 +1115,7 @@
 
     function BackendQueryBinClient() {
         this.worker = null;
+        this.workerStartPromise = null;
         this.requestId = 0;
         this.pending = {};
         this.devTraces = {};
@@ -1078,22 +1130,35 @@
         // pending (common when SSE stream-ticket refresh races a slow AI call)
         // causes "bin-query worker request timed out" even though the server finished.
         if (this.worker) {
-            return;
+            return Promise.resolve(this.worker);
+        }
+        if (this.workerStartPromise) {
+            return this.workerStartPromise;
         }
         if (this.backendWarmupComplete && config.backendBootstrapId) {
             var reloadError = new Error('[Weline.Api] backend Worker authority cannot be re-created after the one-time proof was consumed. Reload the page.');
             reloadError.code = 'backend_attestation_invalid';
             reloadError.status = 401;
-            throw reloadError;
+            return Promise.reject(reloadError);
         }
         if (typeof window.Worker !== 'function') {
-            throw new Error('[Weline.Api] Worker is unavailable; bin-query requests are disabled.');
+            return Promise.reject(new Error('[Weline.Api] Worker is unavailable; bin-query requests are disabled.'));
         }
         this.workerUrl = config.workerUrl;
-        this.worker = new Worker(config.workerUrl);
-        this.worker.addEventListener('message', this.handleWorkerMessage);
-        this.worker.addEventListener('error', this.handleWorkerError);
-        this.worker.addEventListener('messageerror', this.handleWorkerError);
+        var client = this;
+        this.workerStartPromise = createDedicatedWorkerFromScriptUrl(config.workerUrl)
+            .then(function (worker) {
+                client.worker = worker;
+                client.worker.addEventListener('message', client.handleWorkerMessage);
+                client.worker.addEventListener('error', client.handleWorkerError);
+                client.worker.addEventListener('messageerror', client.handleWorkerError);
+                return worker;
+            })
+            .catch(function (error) {
+                client.workerStartPromise = null;
+                throw error;
+            });
+        return this.workerStartPromise;
     };
 
     BackendQueryBinClient.prototype.nextId = function () {
@@ -1248,60 +1313,60 @@
 
     BackendQueryBinClient.prototype.sendToWorker = function (payload, config) {
         config = config || buildQueryBinConfig();
-        this.ensureWorker(config);
+        var client = this;
         var messageId = this.nextId();
         var optionTimeout = payload && payload.options
             ? (payload.options.requestTimeoutMs || payload.options.timeoutMs || payload.options.timeout)
             : null;
         var configuredTimeout = parseInt(optionTimeout || config.requestTimeoutMs || 60000, 10);
         var timeoutMs = isFinite(configuredTimeout) ? Math.max(1000, configuredTimeout) : 60000;
-        var worker = this.worker;
         var pending = this.pending;
-        var client = this;
 
-        return new Promise(function (resolve, reject) {
-            var timeoutId = window.setTimeout(function () {
-                if (!pending[messageId]) {
-                    return;
-                }
-                var timedOut = pending[messageId];
-                delete pending[messageId];
-                var error = new Error('[Weline.Api] bin-query worker request timed out.');
-                error.code = 'worker_timeout';
-                client.finishDevTrace(messageId, {
-                    ok: false,
-                    error: {code: error.code, message: error.message}
-                });
-                client.reportDevError(error, {
-                    type: 'timeout',
-                    request: timedOut && timedOut.payload,
-                    skipConsole: true
-                });
-                reject(error);
-            }, timeoutMs);
+        return this.ensureWorker(config).then(function (worker) {
+            return new Promise(function (resolve, reject) {
+                var timeoutId = window.setTimeout(function () {
+                    if (!pending[messageId]) {
+                        return;
+                    }
+                    var timedOut = pending[messageId];
+                    delete pending[messageId];
+                    var error = new Error('[Weline.Api] bin-query worker request timed out.');
+                    error.code = 'worker_timeout';
+                    client.finishDevTrace(messageId, {
+                        ok: false,
+                        error: {code: error.code, message: error.message}
+                    });
+                    client.reportDevError(error, {
+                        type: 'timeout',
+                        request: timedOut && timedOut.payload,
+                        skipConsole: true
+                    });
+                    reject(error);
+                }, timeoutMs);
 
-            pending[messageId] = {
-                resolve: resolve,
-                reject: reject,
-                timeoutId: timeoutId,
-                payload: payload
-            };
+                pending[messageId] = {
+                    resolve: resolve,
+                    reject: reject,
+                    timeoutId: timeoutId,
+                    payload: payload
+                };
 
-            client.beginDevTrace(messageId, payload);
-            worker.postMessage(Object.assign({}, payload, {
-                id: messageId,
-                config: {
-                    endpoint: config.endpoint,
-                    deployVersion: config.deployVersion,
-                    workerBuildId: config.workerBuildId,
-                    locale: config.locale,
-                    pathname: config.pathname || (window.location && window.location.pathname) || '/',
-                    currency: config.currency,
-                    defaultCurrency: config.defaultCurrency,
-                    availableCurrencies: config.availableCurrencies,
-                    backendBootstrapId: config.backendBootstrapId
-                }
-            }));
+                client.beginDevTrace(messageId, payload);
+                worker.postMessage(Object.assign({}, payload, {
+                    id: messageId,
+                    config: {
+                        endpoint: config.endpoint,
+                        deployVersion: config.deployVersion,
+                        workerBuildId: config.workerBuildId,
+                        locale: config.locale,
+                        pathname: config.pathname || (window.location && window.location.pathname) || '/',
+                        currency: config.currency,
+                        defaultCurrency: config.defaultCurrency,
+                        availableCurrencies: config.availableCurrencies,
+                        backendBootstrapId: config.backendBootstrapId
+                    }
+                }));
+            });
         });
     };
 
@@ -1394,6 +1459,7 @@
             this.worker.terminate();
         }
         this.worker = null;
+        this.workerStartPromise = null;
         Object.keys(this.pending).forEach(function (id) {
             var pending = this.pending[id];
             delete this.pending[id];
