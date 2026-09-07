@@ -125,6 +125,14 @@ final class ProjectIndexer
             $removed = [];
             $warnings = [];
             $skipped = ['policy' => 0, 'missing' => 0, 'oversized' => 0, 'binary' => 0, 'unreadable' => 0, 'parser_capacity' => 0];
+            // Existing configs may retain the former 512 KiB default. Every
+            // accepted edit must fit the same index on later refreshes too.
+            $maxFileBytes = max(
+                (int) $this->config->get('index.max_file_bytes', 1_048_576),
+                (bool) $this->config->get('editing.enabled', true)
+                    ? (int) $this->config->get('editing.max_file_bytes', 1_048_576)
+                    : 0,
+            );
 
             foreach ($discovered as $path) {
                 if (!$this->pathAllowed($path, $requestedPaths !== null)) {
@@ -152,7 +160,7 @@ final class ProjectIndexer
                     continue;
                 }
                 $size = (int) ($stat['size'] ?? 0);
-                if ($size > (int) $this->config->get('index.max_file_bytes', 524_288)) {
+                if ($size > $maxFileBytes) {
                     ++$skipped['oversized'];
                     $removed[$path] = true;
                     continue;
@@ -783,52 +791,69 @@ final class ProjectIndexer
     private function discover(?array $requestedPaths): array
     {
         $paths = [];
+        $root = $this->index->root();
+        $explicit = $requestedPaths !== null;
+        $directories = $explicit ? [] : [''];
         if ($requestedPaths !== null) {
             foreach ($requestedPaths as $path) {
-                if (!$this->pathAllowed($path, true)) {
-                    continue;
-                }
                 try {
                     $absolute = $this->index->absolutePath($path);
                 } catch (Throwable) {
                     continue;
                 }
-                if (is_file($absolute)) {
+                if (is_file($absolute) && $this->pathAllowed($path, true)) {
                     $paths[$path] = true;
-                }
-            }
-        } else {
-            $root = $this->index->root();
-            $directories = [''];
-            while ($directories !== []) {
-                $relativeDirectory = array_pop($directories);
-                $absoluteDirectory = $relativeDirectory === ''
-                    ? $root
-                    : $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeDirectory);
-                try {
-                    $iterator = new \FilesystemIterator(
-                        $absoluteDirectory,
-                        \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::CURRENT_AS_FILEINFO,
-                    );
-                    foreach ($iterator as $entry) {
-                        $relativePath = ltrim($relativeDirectory . '/' . $entry->getFilename(), '/');
-                        if ($entry->isLink()) {
-                            continue;
-                        }
-                        if ($entry->isDir()) {
-                            if ($this->directoryAllowed($relativePath)) {
-                                $directories[] = $relativePath;
-                            }
-                            continue;
-                        }
-                        if ($entry->isFile() && $this->pathAllowed($relativePath)) {
-                            $paths[$relativePath] = true;
+                } elseif (is_dir($absolute)) {
+                    // Apply the same ancestor exclusions as a root traversal;
+                    // a deep explicit path must not jump through a denied tree.
+                    $ancestor = '';
+                    $allowed = true;
+                    foreach (explode('/', $path) as $segment) {
+                        $ancestor = ltrim($ancestor . '/' . $segment, '/');
+                        if (is_link($root . '/' . $ancestor) || !$this->directoryAllowed($ancestor, true)) {
+                            $allowed = false;
+                            break;
                         }
                     }
-                } catch (Throwable) {
-                    // An unreadable directory is isolated from the rest of the project catalogue.
-                    continue;
+                    if ($allowed) {
+                        $directories[] = $path;
+                    }
                 }
+            }
+        }
+        $visited = [];
+        while ($directories !== []) {
+            $relativeDirectory = array_pop($directories);
+            if (isset($visited[$relativeDirectory])) {
+                continue;
+            }
+            $visited[$relativeDirectory] = true;
+            $absoluteDirectory = $relativeDirectory === ''
+                ? $root
+                : $root . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $relativeDirectory);
+            try {
+                $iterator = new \FilesystemIterator(
+                    $absoluteDirectory,
+                    \FilesystemIterator::SKIP_DOTS | \FilesystemIterator::CURRENT_AS_FILEINFO,
+                );
+                foreach ($iterator as $entry) {
+                    $relativePath = ltrim($relativeDirectory . '/' . $entry->getFilename(), '/');
+                    if ($entry->isLink()) {
+                        continue;
+                    }
+                    if ($entry->isDir()) {
+                        if ($this->directoryAllowed($relativePath, $explicit)) {
+                            $directories[] = $relativePath;
+                        }
+                        continue;
+                    }
+                    if ($entry->isFile() && $this->pathAllowed($relativePath, $explicit)) {
+                        $paths[$relativePath] = true;
+                    }
+                }
+            } catch (Throwable) {
+                // An unreadable directory is isolated from the rest of the project catalogue.
+                continue;
             }
         }
 
@@ -1447,20 +1472,24 @@ final class ProjectIndexer
         $fileId = (int) $lookup->fetchColumn();
         $storedContent = is_array($write['stored_content'] ?? null) ? $write['stored_content'] : [];
         $this->writeStoredContent($database, $fileId, (string) $write['hash'], $storedContent, $revision);
+        $deletes = [];
         foreach (['relations', 'skills', 'symbols', 'chunks'] as $table) {
-            $delete = $database->prepare('DELETE FROM ' . $table . ' WHERE file_id = :file_id');
-            $delete->execute(['file_id' => $fileId]);
+            $deletes[$table] = $database->prepare('DELETE FROM ' . $table . ' WHERE file_id = :file_id');
+            $deletes[$table]->execute(['file_id' => $fileId]);
         }
 
         $symbolChunks = [];
+        $chunkInsert = $database->prepare(
+            'INSERT INTO chunks(chunk_id, file_id, kind, title, symbol_uid, start_line, end_line, start_byte,
+                                end_byte, content, content_hash, token_estimate, revision, metadata_json)
+             VALUES(:chunk_id, :file_id, :kind, :title, :symbol_uid, :start_line, :end_line, :start_byte,
+                    :end_byte, :content, :content_hash, :token_estimate, :revision, :metadata_json)'
+        );
+        $vectorStatement = $database->prepare(
+            'INSERT INTO chunk_vector_terms(chunk_id, term_hash, weight) VALUES(:chunk_id, :term_hash, :weight)'
+        );
         foreach ($write['chunks'] as $chunk) {
-            $insert = $database->prepare(
-                'INSERT INTO chunks(chunk_id, file_id, kind, title, symbol_uid, start_line, end_line, start_byte,
-                                    end_byte, content, content_hash, token_estimate, revision, metadata_json)
-                 VALUES(:chunk_id, :file_id, :kind, :title, :symbol_uid, :start_line, :end_line, :start_byte,
-                        :end_byte, :content, :content_hash, :token_estimate, :revision, :metadata_json)'
-            );
-            $insert->execute([
+            $chunkInsert->execute([
                 'chunk_id' => $chunk['chunk_id'],
                 'file_id' => $fileId,
                 'kind' => $chunk['kind'],
@@ -1479,9 +1508,6 @@ final class ProjectIndexer
             if (is_string($chunk['symbol_uid']) && $chunk['symbol_uid'] !== '' && !isset($symbolChunks[$chunk['symbol_uid']])) {
                 $symbolChunks[$chunk['symbol_uid']] = $chunk['chunk_id'];
             }
-            $vectorStatement = $database->prepare(
-                'INSERT INTO chunk_vector_terms(chunk_id, term_hash, weight) VALUES(:chunk_id, :term_hash, :weight)'
-            );
             foreach ($this->vectorizer->vectorize(
                 $chunk['title'] . "\n" . $write['path'] . "\n" . $chunk['content']
             ) as $termHash => $weight) {
@@ -1493,14 +1519,14 @@ final class ProjectIndexer
             }
         }
 
+        $symbolInsert = $database->prepare(
+            'INSERT INTO symbols(symbol_uid, file_id, chunk_id, name, fq_name, kind, namespace, signature,
+                                 parent_uid, start_line, end_line, start_byte, end_byte, body_hash, revision, metadata_json)
+             VALUES(:symbol_uid, :file_id, :chunk_id, :name, :fq_name, :kind, :namespace, :signature,
+                    :parent_uid, :start_line, :end_line, :start_byte, :end_byte, :body_hash, :revision, :metadata_json)'
+        );
         foreach ($write['symbols'] as $symbol) {
-            $insert = $database->prepare(
-                'INSERT INTO symbols(symbol_uid, file_id, chunk_id, name, fq_name, kind, namespace, signature,
-                                     parent_uid, start_line, end_line, start_byte, end_byte, body_hash, revision, metadata_json)
-                 VALUES(:symbol_uid, :file_id, :chunk_id, :name, :fq_name, :kind, :namespace, :signature,
-                        :parent_uid, :start_line, :end_line, :start_byte, :end_byte, :body_hash, :revision, :metadata_json)'
-            );
-            $insert->execute([
+            $symbolInsert->execute([
                 'symbol_uid' => $symbol['symbol_uid'],
                 'file_id' => $fileId,
                 'chunk_id' => $symbolChunks[$symbol['symbol_uid']] ?? null,
@@ -1519,14 +1545,14 @@ final class ProjectIndexer
                 'metadata_json' => Json::encode($symbol['metadata']),
             ]);
         }
+        $relationInsert = $database->prepare(
+            'INSERT INTO relations(file_id, source_symbol_uid, target_name, target_symbol_uid, relation_kind,
+                                   line, confidence, revision, metadata_json)
+             VALUES(:file_id, :source_symbol_uid, :target_name, NULL, :relation_kind,
+                    :line, :confidence, :revision, :metadata_json)'
+        );
         foreach ($write['relations'] as $relation) {
-            $insert = $database->prepare(
-                'INSERT INTO relations(file_id, source_symbol_uid, target_name, target_symbol_uid, relation_kind,
-                                       line, confidence, revision, metadata_json)
-                 VALUES(:file_id, :source_symbol_uid, :target_name, NULL, :relation_kind,
-                        :line, :confidence, :revision, :metadata_json)'
-            );
-            $insert->execute([
+            $relationInsert->execute([
                 'file_id' => $fileId,
                 'source_symbol_uid' => $relation['source_symbol_uid'],
                 'target_name' => $relation['target_name'],

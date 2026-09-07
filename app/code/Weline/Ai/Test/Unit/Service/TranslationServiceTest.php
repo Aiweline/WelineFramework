@@ -41,7 +41,8 @@ class TranslationServiceTest extends TestCore
             $this->aiService,
             $cache,
             $this->i18nIntegration,
-            $this->defaultModelManager
+            $this->defaultModelManager,
+            ObjectManager::getInstance(\Weline\Ai\Service\TranslationConcurrencyGate::class)
         );
     }
     

@@ -5,8 +5,8 @@
   "type": "object",
   "required": [
     "schema_version", "guidance_id", "project_id", "repository", "readiness_id",
-    "client_session_id", "project_revision", "task", "session_directives", "rules",
-    "fragments", "sources", "token_usage", "query", "routing_contract"
+    "client_session_id", "project_revision", "task", "session_directives",
+    "fragments", "token_usage", "query", "routing_contract"
   ],
   "properties": {
     "schema_version": {"const": "guidance-bundle.v1"},
@@ -18,25 +18,39 @@
     "project_revision": {"type": "integer", "minimum": 0},
     "task": {"type": "string", "minLength": 1},
     "session_directives": {"type": "array", "maxItems": 50, "items": {"type": "string"}},
-    "rules": {"type": "array", "items": {"type": "object"}},
+    "rules": {"type": "array", "description": "Optional validated-learning guidance; legacy responses may also include duplicated rule summaries.", "items": {"type": "object"}},
     "fragments": {
       "type": "array",
       "items": {
         "type": "object",
         "required": ["kind", "path", "content", "file_hash", "content_hash", "token_estimate"],
         "properties": {
-          "kind": {"enum": ["documents", "rules", "configuration", "code"]},
+          "kind": {"enum": ["documents", "rules", "configuration", "code", "workflow"]},
           "path": {"type": "string"},
           "content": {"type": "string"},
           "file_hash": {"type": "string"},
-          "content_hash": {"type": "string"},
+          "content_hash": {"type": "string", "description": "Hash of the complete indexed source chunk, retained as provenance when content is a bounded excerpt. This is not a digest of the returned content and is not an editable-symbol guard."},
+          "content_truncated": {"type": "boolean", "description": "True when final guidance budgeting shortened this fragment. Its source content_hash remains unchanged."},
           "token_estimate": {"type": "integer", "minimum": 0}
         },
         "additionalProperties": true
       }
     },
-    "sources": {"type": "array", "items": {"type": "object"}},
-    "token_usage": {"type": "object"},
+    "sources": {"type": "array", "description": "Optional legacy alias for provenance already carried by fragments.", "items": {"type": "object"}},
+    "pinned_fragments": {"type": "array", "description": "Optional legacy workflow fragments; normal task responses use task-matched workflow_contract guidance.", "items": {"type": "object"}},
+    "workflow_contract": {"type": "object", "description": "Task-matched workflow-contract.v1 with authoritative document pointers; full session constraints come from prepare_project."},
+    "token_usage": {
+      "type": "object",
+      "properties": {
+        "budget": {"type": "integer", "minimum": 0},
+        "estimated": {"type": "integer", "minimum": 0},
+        "estimate_method": {"type": "string"},
+        "scope": {"type": "string", "description": "guidance_body for direct service results; tools_call_result includes the serialized MCP tool envelope."},
+        "omitted_fragments": {"type": "integer", "minimum": 0},
+        "budget_exceeded": {"type": "boolean", "description": "True if required guidance and envelope overhead exceed the request even after optional fragments are omitted; this does not block execution."}
+      },
+      "additionalProperties": true
+    },
     "query": {"type": "object"},
     "routing_contract": {"type": "object"}
   },

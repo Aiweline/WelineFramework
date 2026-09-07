@@ -245,7 +245,7 @@ gateCheck(
 
 $urlRejected = false;
 try {
-    \LearningMcp\RepositoryScope::assertFilesystemRepository('https://p05113ef3.weline.test:9555/.learning-mcp/foo');
+    \LearningMcp\RepositoryScope::assertFilesystemRepository('https://p05113ef3.test.weline.com:9555/.learning-mcp/foo');
 } catch (\RuntimeException) {
     $urlRejected = true;
 }
@@ -255,7 +255,7 @@ $homeUsable = true;
 try {
     $resolvedHome = \LearningMcp\HomeDirectory::resolve();
     $homeUsable = \LearningMcp\HomeDirectory::isUsable($resolvedHome)
-        && !str_contains($resolvedHome, 'weline.test');
+        && !str_contains($resolvedHome, 'test.weline.com');
 } catch (\RuntimeException) {
     $homeUsable = false;
 }

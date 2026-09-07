@@ -3,16 +3,17 @@
 declare(strict_types=1);
 
 /**
- * Decide whether the current Codex host must reload before project work continues.
+ * Report MCP refresh needs without restarting the shared Codex app-server.
  *
- * Updating the Hook-only Codex plugin registration does not invalidate the explicit
- * STDIO MCP process. A current, healthy runtime can therefore keep serving this
- * session while the refreshed plugin artifact is picked up by a future host start.
+ * Updating Codex plugin files does not establish the state of an already loaded
+ * tool catalog. A healthy STDIO server remains runnable while the host picks up
+ * the updated configuration through its supported MCP refresh mechanism.
  *
  * Cursor IDE Agent snapshots tools/list at chat start. When the Cursor Helper
- * mcp-process is older than MCP source, or the STDIO probe is missing required
- * tools (especially submit_task_plan), agents must bounce the helper and open a
- * new Agent turn — continuing on a stale catalog yields HOST_MCP_NOT_ATTACHED.
+ * mcp-process is older than MCP source, has no learning-mcp child (orphan
+ * Transport), or the STDIO probe is missing required tools (especially
+ * submit_task_plan), agents must bounce the helper and open a new Agent turn —
+ * continuing on a stale catalog yields HOST_MCP_NOT_ATTACHED.
  *
  * @param array<string,mixed> $hostRuntime
  * @param array<string,mixed>|null $cursorMcpProcess
@@ -32,24 +33,25 @@ function welineGuidanceReloadDecision(
     ?array $missingRequiredTools = null,
 ): array {
     $isCodexHost = ($hostRuntime['kind'] ?? 'other') === 'codex_app_server';
-    $runtimeStale = ($hostRuntime['current'] ?? false) !== true;
-    $reloadRequired = $isCodexHost && ($mcpConfigChanged || $runtimeStale);
-    $pluginRefreshDeferred = $isCodexHost && $pluginChanged && !$reloadRequired;
+    // The app-server's start time says nothing about its independently spawned
+    // PHP MCP process or the tool catalog held by this conversation.
+    $reloadRequired = false;
+    $pluginRefreshDeferred = $isCodexHost && ($pluginChanged || $mcpConfigChanged);
     $missing = is_array($missingRequiredTools) ? array_values($missingRequiredTools) : [];
     $cursorStale = is_array($cursorMcpProcess)
         && ($cursorMcpProcess['current'] ?? false) !== true
         && (int) ($cursorMcpProcess['pid'] ?? 0) > 1;
     // Missing required tools are a STDIO definition failure (blocked separately).
-    // Cursor bounce only when the Helper mcp-process is older than MCP source.
+    // Cursor bounce when Helper mcp-process is stale or orphaned (no STDIO child).
     $cursorBounceRequired = (!$isCodexHost) && $cursorStale;
 
     $reason = 'not_required';
-    if ($reloadRequired) {
-        $reason = $runtimeStale ? 'runtime_generation_stale' : 'mcp_registration_changed';
-    } elseif ($missing !== []) {
+    if ($missing !== []) {
         $reason = 'required_tools_missing';
     } elseif ($cursorBounceRequired) {
-        $reason = 'cursor_mcp_process_stale';
+        $reason = (($cursorMcpProcess['reason'] ?? '') === 'orphan_no_learning_mcp_child')
+            ? 'cursor_mcp_process_orphan'
+            : 'cursor_mcp_process_stale';
     } elseif ($pluginRefreshDeferred) {
         $reason = 'plugin_refresh_non_blocking';
     }
