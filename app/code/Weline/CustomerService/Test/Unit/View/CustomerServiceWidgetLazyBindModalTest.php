@@ -63,7 +63,7 @@ final class CustomerServiceWidgetLazyBindModalTest extends TestCase
         $content = (string) file_get_contents($hookFile);
 
         $this->assertStringContainsString(
-            "@static(Weline_CustomerService::css/customer-service.css)",
+            "fetchTagSource('statics', 'Weline_CustomerService::css/customer-service.css')",
             $content
         );
         $this->assertStringContainsString('window.Weline.load(', $content);
