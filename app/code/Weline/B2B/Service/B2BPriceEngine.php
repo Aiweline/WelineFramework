@@ -83,6 +83,7 @@ final class B2BPriceEngine implements B2BPriceCandidateInterface
             ? (string) $request['channel_id']
             : null;
         $sku = trim((string) ($request['sku'] ?? ''));
+        $qty = max(1, (int) ($request['qty'] ?? 1));
         $retail = (int) ($request['retail_amount_minor'] ?? -1);
         $claimedListId = isset($request['claimed_price_list_id']) && $request['claimed_price_list_id'] !== null && $request['claimed_price_list_id'] !== ''
             ? (string) $request['claimed_price_list_id']
@@ -188,9 +189,18 @@ final class B2BPriceEngine implements B2BPriceCandidateInterface
             ];
         }
 
-        $amount = $selected->amountForSku($sku);
+        $amount = $selected->amountForSku($sku, $qty);
         if ($amount === null) {
-            return $this->retailResult($retail, ['sku_missing_on_list', 'retail'], self::SOURCE_RETAIL, true);
+            return [
+                'ok' => false,
+                'source' => $selected->channelId !== null ? self::SOURCE_B2B_CHANNEL : self::SOURCE_B2B_WEBSITE,
+                'amount_minor' => $retail,
+                'price_list_id' => $selected->listId,
+                'version' => $selected->version,
+                'group_id' => $group->groupId,
+                'rule_stack' => [self::ERROR_NO_SKU],
+                'error' => self::ERROR_NO_SKU,
+            ];
         }
 
         $source = $selected->channelId !== null ? self::SOURCE_B2B_CHANNEL : self::SOURCE_B2B_WEBSITE;
@@ -219,7 +229,7 @@ final class B2BPriceEngine implements B2BPriceCandidateInterface
         $channelHit = null;
         $websiteHit = null;
         foreach ($candidates as $list) {
-            if ($list->amountForSku($sku) === null) {
+            if (!$list->hasSku($sku)) {
                 continue;
             }
             if ($channelId !== null && $list->channelId === $channelId) {

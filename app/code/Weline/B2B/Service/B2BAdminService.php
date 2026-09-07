@@ -12,8 +12,28 @@ use Weline\B2B\Model\CustomerGroup;
  */
 final class B2BAdminService
 {
-    public function __construct(private readonly B2BService $service)
+    private ?MembershipApplicationService $membershipApplicationsLazy = null;
+    private ?B2BHangOrderService $hangOrdersLazy = null;
+
+    public function __construct(
+        private readonly B2BService $service,
+        ?MembershipApplicationService $membershipApplications = null,
+        ?B2BHangOrderService $hangOrders = null,
+    ) {
+        $this->membershipApplicationsLazy = $membershipApplications;
+        $this->hangOrdersLazy = $hangOrders;
+    }
+
+    private function membershipApplications(): MembershipApplicationService
     {
+        return $this->membershipApplicationsLazy ??= new MembershipApplicationService(
+            new CustomerGroupStore(),
+        );
+    }
+
+    private function hangOrders(): B2BHangOrderService
+    {
+        return $this->hangOrdersLazy ??= new B2BHangOrderService();
     }
 
     /** @param array<string,mixed> $input @return array<string,mixed> */
@@ -44,6 +64,48 @@ final class B2BAdminService
             trim((string)($input['channel_id'] ?? '')) ?: null,
             true,
         )->toMeta();
+    }
+
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    public function approveMembershipApplication(array $input): array
+    {
+        $websiteId = (int)($input['website_id'] ?? -1);
+        if ($websiteId >= 0) {
+            $this->assertMutable($websiteId);
+        }
+        return $this->membershipApplications()->approve(
+            trim((string)($input['application_id'] ?? '')),
+            trim((string)($input['group_id'] ?? '')),
+        );
+    }
+
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    public function rejectMembershipApplication(array $input): array
+    {
+        return $this->membershipApplications()->reject(
+            trim((string)($input['application_id'] ?? '')),
+            trim((string)($input['notes'] ?? '')),
+        );
+    }
+
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    public function approveHangOrder(array $input): array
+    {
+        $key = trim((string)($input['hang_id'] ?? $input['order_ref'] ?? ''));
+        $balanceIntent = trim((string)($input['balance_intent_code'] ?? '')) ?: null;
+
+        return $this->hangOrders()->approve($key, $balanceIntent);
+    }
+
+    /** @param array<string,mixed> $input @return array<string,mixed> */
+    public function rejectHangOrder(array $input): array
+    {
+        $key = trim((string)($input['hang_id'] ?? $input['order_ref'] ?? ''));
+
+        return $this->hangOrders()->reject(
+            $key,
+            notes: trim((string)($input['notes'] ?? '')),
+        );
     }
 
     /** @param array<string,mixed> $input @return array<string,mixed> */

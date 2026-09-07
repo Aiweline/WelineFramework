@@ -1,0 +1,88 @@
+<?php
+/**
+ * Account order hang-status progress + deposit/balance CTAs.
+ *
+ * @var array<string,mixed> $hang
+ * @var string $orderUuid
+ * @var string $checkoutUrl
+ */
+$hang = is_array($hang ?? null) ? $hang : [];
+$hangStatus = strtolower(trim((string)($hang['hang_status'] ?? '')));
+if ($hangStatus === '') {
+    return;
+}
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$orderUuid = trim((string)($orderUuid ?? $hang['order_ref'] ?? ''));
+$checkoutUrl = trim((string)($checkoutUrl ?? ''));
+if ($checkoutUrl === '') {
+    $checkoutUrl = '/checkout';
+}
+
+$tone = match ($hangStatus) {
+    'awaiting_deposit', 'awaiting_balance' => 'warning',
+    'awaiting_merchant_approval' => 'info',
+    'completed' => 'success',
+    'rejected', 'expired' => 'danger',
+    default => 'secondary',
+};
+$showDeposit = $hangStatus === 'awaiting_deposit';
+$showBalance = $hangStatus === 'awaiting_balance';
+$depositHref = $checkoutUrl . (str_contains($checkoutUrl, '?') ? '&' : '?')
+    . 'purpose=deposit&order_uuid=' . rawurlencode($orderUuid);
+$balanceHref = $checkoutUrl . (str_contains($checkoutUrl, '?') ? '&' : '?')
+    . 'purpose=balance&order_uuid=' . rawurlencode($orderUuid);
+$progressSteps = [
+    'awaiting_deposit',
+    'awaiting_merchant_approval',
+    'awaiting_balance',
+    'completed',
+];
+?>
+<link rel="stylesheet" href="@static(Weline_B2B::css/b2b-storefront.css)?v=20260907-toc-tob1" data-no-extract="true">
+<div class="b2b-account-hang"
+     data-b2b-account-hang="1"
+     data-hang-status="<?= $escape($hangStatus) ?>"
+     data-order-uuid="<?= $escape($orderUuid) ?>"
+     data-testid="b2b-account-hang">
+    <div class="b2b-account-hang__progress" role="list">
+        <?php foreach ($progressSteps as $code): ?>
+            <span class="w-badge"
+                  role="listitem"
+                  data-tone="<?= $hangStatus === $code ? $tone : 'secondary' ?>"
+                  data-hang-step="<?= $escape($code) ?>"
+                  data-state="<?= $hangStatus === $code ? 'current' : 'idle' ?>">
+                <?php if ($code === 'awaiting_deposit'): ?><lang>待付定金</lang>
+                <?php elseif ($code === 'awaiting_merchant_approval'): ?><lang>待商家审批</lang>
+                <?php elseif ($code === 'awaiting_balance'): ?><lang>待付尾款</lang>
+                <?php else: ?><lang>已完成</lang><?php endif; ?>
+            </span>
+        <?php endforeach; ?>
+    </div>
+    <span class="w-badge" data-tone="<?= $escape($tone) ?>" data-testid="b2b-hang-status-badge">
+        <?php if ($hangStatus === 'awaiting_deposit'): ?><lang>待付定金</lang>
+        <?php elseif ($hangStatus === 'awaiting_merchant_approval'): ?><lang>待商家审批</lang>
+        <?php elseif ($hangStatus === 'awaiting_balance'): ?><lang>待付尾款</lang>
+        <?php elseif ($hangStatus === 'completed'): ?><lang>已完成</lang>
+        <?php elseif ($hangStatus === 'rejected'): ?><lang>已驳回</lang>
+        <?php elseif ($hangStatus === 'expired'): ?><lang>已过期</lang>
+        <?php else: ?><?= $escape($hangStatus) ?><?php endif; ?>
+    </span>
+    <div class="b2b-account-hang__actions">
+        <?php if ($showDeposit && $orderUuid !== ''): ?>
+            <a class="w-button"
+               data-variant="primary"
+               data-testid="b2b-pay-deposit"
+               href="<?= $escape($depositHref) ?>">
+                <lang>支付定金</lang>
+            </a>
+        <?php endif; ?>
+        <?php if ($showBalance && $orderUuid !== ''): ?>
+            <a class="w-button"
+               data-variant="primary"
+               data-testid="b2b-pay-balance"
+               href="<?= $escape($balanceHref) ?>">
+                <lang>支付尾款</lang>
+            </a>
+        <?php endif; ?>
+    </div>
+</div>

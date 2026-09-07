@@ -6,6 +6,8 @@ namespace Weline\B2B\Extends\Module\Weline_Framework\Query;
 
 use Weline\B2B\Service\B2BConflictException;
 use Weline\B2B\Service\B2BQueryHarnessCatalog;
+use Weline\B2B\Service\MembershipApplicationService;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 
 /**
@@ -22,6 +24,7 @@ class B2BQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'resolve' => $this->resolve($params),
+            'membership.submit' => $this->submitMembership($params),
             default => throw new \InvalidArgumentException((string)__('B2B 接口不支持该操作：%{1}', $operation)),
         };
     }
@@ -82,12 +85,47 @@ class B2BQueryProvider implements QueryProviderInterface
         }
     }
 
+    /**
+     * Frontend membership application. Rejects any client-supplied group_id.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function submitMembership(array $params): array
+    {
+        try {
+            /** @var MembershipApplicationService $service */
+            $service = ObjectManager::getInstance(MembershipApplicationService::class);
+            $result = $service->submit($params);
+            return [
+                'success' => true,
+                'ok' => true,
+                'application' => $result,
+            ];
+        } catch (B2BConflictException $e) {
+            return [
+                'success' => false,
+                'ok' => false,
+                'error' => $e->errorCode,
+                'message' => $e->getMessage(),
+                'context' => $e->context,
+            ];
+        } catch (\Throwable $e) {
+            return [
+                'success' => false,
+                'ok' => false,
+                'error' => 'b2b_membership_submit_failed',
+                'message' => $e->getMessage(),
+            ];
+        }
+    }
+
     public function getDescriptor(): array
     {
         return [
             'name' => $this->getProviderName(),
             'module' => 'Weline_B2B',
-            'summary' => 'B2B price candidate resolve (group vs retail)',
+            'summary' => 'B2B price candidate resolve and membership application',
             'operations' => [
                 [
                     'name' => 'resolve',
@@ -107,6 +145,23 @@ class B2BQueryProvider implements QueryProviderInterface
                     ],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Resolve B2B price candidate for customer/sku',
+                ],
+                [
+                    'name' => 'membership.submit',
+                    'frontend' => true,
+                    'auth' => 'customer',
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => [
+                        'customer_id' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'website_id' => ['type' => 'int', 'required' => true, 'min' => 0],
+                        'company_name' => ['type' => 'string', 'required' => true, 'max_length' => 191],
+                        'contact_phone' => ['type' => 'string', 'required' => true, 'max_length' => 64],
+                        'notes' => ['type' => 'string', 'required' => false, 'max_length' => 2000],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Submit B2B membership application (no client group_id)',
                 ],
             ],
         ];

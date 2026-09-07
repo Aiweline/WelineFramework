@@ -180,6 +180,70 @@ final class B2BPriceCandidateEngineTest extends TestCase
         self::assertSame(B2BPriceEngine::ERROR_GROUP_DISABLED, $result['error']);
     }
 
+    public function testQtyTierPickHighestEligibleMinQty(): void
+    {
+        $this->service->enableShadow();
+        $this->service->seedPriceList('pl-tier', 'g-dealer', 0, 3, [
+            'SKU-A' => [
+                1 => 800,
+                10 => 700,
+                50 => 600,
+            ],
+        ]);
+
+        $low = $this->service->resolve([
+            'customer_id' => 'cust-b2b',
+            'website_id' => 0,
+            'sku' => 'SKU-A',
+            'qty' => 1,
+            'retail_amount_minor' => 1000,
+        ]);
+        self::assertTrue($low['ok']);
+        self::assertSame(800, $low['amount_minor']);
+
+        $mid = $this->service->resolve([
+            'customer_id' => 'cust-b2b',
+            'website_id' => 0,
+            'sku' => 'SKU-A',
+            'qty' => 10,
+            'retail_amount_minor' => 1000,
+        ]);
+        self::assertTrue($mid['ok']);
+        self::assertSame(700, $mid['amount_minor']);
+
+        $high = $this->service->resolve([
+            'customer_id' => 'cust-b2b',
+            'website_id' => 0,
+            'sku' => 'SKU-A',
+            'qty' => 55,
+            'retail_amount_minor' => 1000,
+        ]);
+        self::assertTrue($high['ok']);
+        self::assertSame(600, $high['amount_minor']);
+    }
+
+    public function testQtyBelowLowestTierReturnsErrorNoSku(): void
+    {
+        $this->service->enableShadow();
+        $this->service->seedPriceList('pl-moq-only', 'g-dealer', 0, 4, [
+            'SKU-A' => [
+                5 => 750,
+            ],
+        ]);
+
+        $result = $this->service->resolve([
+            'customer_id' => 'cust-b2b',
+            'website_id' => 0,
+            'sku' => 'SKU-A',
+            'qty' => 1,
+            'retail_amount_minor' => 1000,
+        ]);
+
+        self::assertFalse($result['ok']);
+        self::assertSame(B2BPriceEngine::ERROR_NO_SKU, $result['error']);
+        self::assertSame('pl-moq-only', $result['price_list_id']);
+    }
+
     public function testZeroDiffShadowCompare(): void
     {
         $svc = B2BService::forTesting();
