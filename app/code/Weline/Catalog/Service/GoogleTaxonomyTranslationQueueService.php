@@ -4,8 +4,8 @@ declare(strict_types=1);
 
 namespace Weline\Catalog\Service;
 
-use Weline\Framework\Async\TaskStatus;
 use Weline\I18n\Service\AiTranslationConfig;
+use Weline\Queue\Service\IdempotentQueueAdmission;
 
 /**
  * Enqueue AI translation jobs for Google taxonomy dictionary keys.
@@ -14,9 +14,11 @@ final class GoogleTaxonomyTranslationQueueService
 {
     public const QUEUE_CLASS = 'Weline\\I18n\\Queue\\AiTranslateQueue';
     public const WORD_PREFIX = 'google_taxonomy.';
+    public const IDEMPOTENCY_SCOPE = 'google_taxonomy_ai_translation_slot';
 
     public function __construct(
         private readonly AiTranslationConfig $translationConfig,
+        private readonly IdempotentQueueAdmission $admission,
     ) {
     }
 
@@ -36,11 +38,6 @@ final class GoogleTaxonomyTranslationQueueService
         }
 
         $bizKey = $this->buildBizKey($localeCode);
-        $existing = $this->getLatestQueueByBizKey($bizKey);
-        if ($existing && in_array((string)($existing['status'] ?? ''), [TaskStatus::PENDING, TaskStatus::RUNNING], true)) {
-            return (int)($existing['queue_id'] ?? 0);
-        }
-
         $words = [];
         foreach ($googleIds as $googleId) {
             $googleId = trim((string)$googleId);
@@ -65,41 +62,15 @@ final class GoogleTaxonomyTranslationQueueService
             $content['word_prefix'] = self::WORD_PREFIX;
         }
 
-        $result = w_query('queue', 'create', [
+        return $this->admission->admit([
             'class' => self::QUEUE_CLASS,
             'name' => (string)__('Google 分类 AI 翻译 %{1}', [$localeCode]),
             'module' => 'Weline_Catalog',
             'content' => $content,
-            'status' => TaskStatus::PENDING,
-            'auto' => true,
             'biz_key' => $bizKey,
+            'idempotency_scope' => self::IDEMPOTENCY_SCOPE,
+            'idempotency_key' => $bizKey,
+            'auto' => true,
         ]);
-
-        if (is_array($result)) {
-            return (int)($result['queue_id'] ?? $result['id'] ?? 0);
-        }
-        if (is_object($result) && method_exists($result, 'getData')) {
-            return (int)($result->getData('queue_id') ?? 0);
-        }
-
-        return 0;
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function getLatestQueueByBizKey(string $bizKey): ?array
-    {
-        try {
-            $row = w_query('queue', 'getByBizKey', ['biz_key' => $bizKey]);
-        } catch (\Throwable) {
-            return null;
-        }
-
-        if (!is_array($row)) {
-            return null;
-        }
-
-        return $row;
     }
 }
