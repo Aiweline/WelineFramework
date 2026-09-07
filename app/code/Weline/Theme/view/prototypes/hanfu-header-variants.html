@@ -1,0 +1,1577 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — Hanfu header variants</title>
+  <!--
+    Question: How should the Yunshang storefront header be structured for a Hanfu atelier
+    (not Amazon marketplace chrome)? Three structural variants via ?variant=A|B|C (default A).
+    Throwaway — not production. Fold winner into Theme header chrome after pick.
+  -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@500;700&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --ink: #1c1c1c;
+      --ink-soft: #4a4a48;
+      --ink-faint: #7a7874;
+      --paper: #f7f4ef;
+      --paper-bright: #fffefa;
+      --paper-deep: #ede9e1;
+      --cinnabar: #b84a3c;
+      --cinnabar-deep: #963b30;
+      --cinnabar-soft: #f8ede9;
+      --gold: #c4a35a;
+      --stone-cyan: #3d6b78;
+      --xuan: #1f2124;
+      --line: #d4cfc5;
+      --font-brand: "ZCOOL XiaoWei", "Noto Serif SC", "Songti SC", serif;
+      --font-body: "Noto Serif SC", "Songti SC", "PingFang SC", serif;
+      --font-ui: "Helvetica Neue", Arial, "PingFang SC", sans-serif;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.45 var(--font-ui);
+      color: var(--ink);
+      background: var(--paper);
+      padding-bottom: 96px;
+    }
+    a { color: inherit; text-decoration: none; }
+    button { font: inherit; }
+    .proto-banner {
+      background: #111;
+      color: #9fef9f;
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      padding: 10px 16px;
+    }
+    .state {
+      margin: 12px 16px 0;
+      padding: 10px 12px;
+      background: #111;
+      color: #9fef9f;
+      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      border-radius: 8px;
+      white-space: pre-wrap;
+    }
+    .lede {
+      margin: 12px 16px 20px;
+      max-width: 54rem;
+      color: var(--ink-soft);
+      font-family: var(--font-body);
+    }
+    .stage {
+      min-height: 70vh;
+      background: var(--paper);
+    }
+    .hero-mock {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 28px 20px 40px;
+    }
+    .hero-mock h2 {
+      font-family: var(--font-brand);
+      font-weight: 500;
+      font-size: 1.75rem;
+      margin: 0 0 8px;
+    }
+    .hero-mock p { margin: 0 0 18px; color: var(--ink-soft); max-width: 36rem; }
+    .fabric-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 10px;
+    }
+    .fabric {
+      aspect-ratio: 1;
+      border-radius: 4px;
+      background:
+        linear-gradient(135deg, rgba(184,74,60,.15), transparent 40%),
+        linear-gradient(225deg, #d4cfc5, #ede9e1 40%, #c4a35a55);
+      border: 1px solid var(--line);
+    }
+    .note {
+      margin: 0 16px;
+      color: var(--ink-faint);
+      font-size: 12px;
+      max-width: 54rem;
+    }
+
+    /* ===== Shared chrome bits ===== */
+    .icon {
+      width: 18px; height: 18px; display: inline-block; vertical-align: -3px;
+      stroke: currentColor; fill: none; stroke-width: 1.6;
+    }
+    .seal {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 28px; height: 28px; border: 1.5px solid var(--cinnabar);
+      color: var(--cinnabar); font-family: var(--font-brand); font-size: 13px;
+      border-radius: 2px; transform: rotate(-6deg);
+    }
+
+    /* ===== Variant A: Xuan Atelier — light paper, brand-led row ===== */
+    .A .chrome { background: var(--paper-bright); border-bottom: 1px solid var(--line); }
+    .A .utility {
+      display: flex; justify-content: space-between; align-items: center;
+      gap: 12px; padding: 6px 20px;
+      background: color-mix(in srgb, var(--cinnabar) 8%, var(--paper));
+      color: var(--ink-soft); font-size: 12px;
+      border-bottom: 1px solid color-mix(in srgb, var(--cinnabar) 18%, var(--line));
+    }
+    .A .utility a:hover { color: var(--cinnabar); }
+    .A .belt {
+      display: grid;
+      grid-template-columns: auto minmax(120px, 200px) 1fr auto;
+      gap: 16px 12px;
+      align-items: center;
+      padding: 16px 20px 12px;
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+    .A .brand {
+      display: flex; align-items: center; gap: 10px;
+    }
+    .A .brand-mark {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: radial-gradient(circle at 35% 30%, #e8d5a3, var(--gold) 55%, #8a6b2e);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+    }
+    .A .brand-name {
+      font-family: var(--font-brand);
+      font-size: 1.85rem;
+      line-height: 1;
+      letter-spacing: 0.08em;
+      color: var(--ink);
+    }
+    .A .brand-sub {
+      display: block;
+      margin-top: 4px;
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--ink-faint);
+      font-family: var(--font-ui);
+    }
+    .A .search-wrap { display: flex; flex-direction: column; gap: 8px; }
+    .A .search {
+      display: flex; align-items: stretch;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      overflow: hidden;
+    }
+    .A .search select {
+      border: 0; background: var(--paper-deep); padding: 0 12px; color: var(--ink-soft);
+    }
+    .A .search input {
+      flex: 1; border: 0; padding: 12px 14px; outline: none; background: transparent;
+      min-width: 0;
+    }
+    .A .search button {
+      border: 0; background: var(--cinnabar); color: var(--paper);
+      padding: 0 18px; cursor: pointer;
+    }
+    .A .search button:hover { background: var(--cinnabar-deep); }
+    .A .hots { display: flex; flex-wrap: wrap; gap: 12px; font-size: 12px; color: var(--stone-cyan); }
+    .A .hots a:hover { color: var(--cinnabar); }
+    .A .tools {
+      display: flex; align-items: stretch; gap: 4px;
+    }
+    .A .tool {
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 2px; min-width: 64px; padding: 6px 8px; color: var(--ink-soft); font-size: 11px;
+      border-radius: 8px;
+    }
+    button.tool {
+      background: transparent; border: 0; cursor: pointer; font: inherit;
+    }
+    .A .tool:hover { background: var(--cinnabar-soft); color: var(--cinnabar-deep); }
+    .A .tool strong { font-size: 12px; font-weight: 600; color: var(--ink); }
+    .A .nav {
+      display: flex; gap: 22px; align-items: center;
+      max-width: 1280px; margin: 0 auto; padding: 0 20px 14px;
+      font-family: var(--font-body);
+      font-size: 15px;
+    }
+    .A .nav a { position: relative; padding: 6px 0; color: var(--ink-soft); }
+    .A .nav a.is-active, .A .nav a:hover { color: var(--cinnabar); }
+    .A .nav a.is-active::after {
+      content: ""; position: absolute; left: 0; right: 0; bottom: 0;
+      height: 2px; background: var(--cinnabar);
+    }
+    .A .nav .spacer { flex: 1; }
+    .A .nav .aside { font-size: 13px; color: var(--ink-faint); font-family: var(--font-ui); }
+
+    .menu-btn {
+      display: inline-flex;
+      align-items: center; justify-content: center;
+      width: 40px; height: 40px; padding: 0;
+      border: 1px solid var(--line); border-radius: 10px;
+      background: #fff; color: var(--ink); cursor: pointer;
+    }
+    .menu-btn:hover { border-color: var(--cinnabar); color: var(--cinnabar); }
+    .menu-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.8; }
+
+    /* ===== categories-sidebar mock (align Theme header drawer contract) ===== */
+    .categories-sidebar-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(28, 25, 23, 0.42); z-index: 80;
+    }
+    body.drawer-open .categories-sidebar-overlay { display: block; }
+    body.drawer-open { overflow: hidden; }
+    .categories-sidebar {
+      position: fixed; top: 0; left: 0; bottom: 0;
+      width: min(360px, 92vw); z-index: 90;
+      background: var(--paper);
+      border-right: 1px solid var(--line);
+      transform: translateX(-105%);
+      transition: transform 0.22s ease;
+      display: flex; flex-direction: column;
+      box-shadow: 6px 0 28px rgba(0,0,0,.12);
+    }
+    body.drawer-open .categories-sidebar { transform: none; }
+    .categories-sidebar-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 10px; padding: 14px 14px 12px;
+      background: color-mix(in srgb, var(--xuan) 92%, #000);
+      color: #f7f4ef;
+    }
+    .categories-sidebar-kicker {
+      display: block; font-size: 11px; letter-spacing: 0.08em; opacity: 0.75;
+    }
+    .categories-sidebar-title {
+      margin: 2px 0 0; font-family: var(--font-brand); font-size: 1.35rem; font-weight: 500;
+    }
+    .categories-sidebar-header-actions { display: flex; align-items: center; gap: 8px; }
+    .categories-sidebar-signin {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 6px 10px; border-radius: 8px; color: #f7f4ef; font-size: 13px;
+      border: 1px solid rgba(255,255,255,.25);
+    }
+    .categories-sidebar-close-inline {
+      width: 36px; height: 36px; border: 0; border-radius: 8px;
+      background: rgba(255,255,255,.12); color: #fff; cursor: pointer; font-size: 18px;
+    }
+    .categories-sidebar-scroll {
+      flex: 1; overflow: auto; position: relative;
+    }
+    .categories-sidebar-section { border-bottom: 1px solid var(--line); }
+    .categories-sidebar-home {
+      display: block; padding: 12px 14px; color: var(--ink-soft);
+    }
+    .categories-sidebar-home__label {
+      display: inline-flex; align-items: center; gap: 8px; font-weight: 600;
+    }
+    .sidebar-section-toggle {
+      width: 100%; display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; padding: 12px 14px; border: 0; background: transparent;
+      font: inherit; font-weight: 600; color: var(--ink); cursor: pointer;
+    }
+    .sidebar-section-panel[hidden] { display: none !important; }
+    .sidebar-section-title {
+      margin: 0; padding: 12px 14px 6px; font-size: 12px; letter-spacing: 0.1em;
+      text-transform: uppercase; color: var(--ink-faint);
+    }
+    .categories-sidebar-list { list-style: none; margin: 0; padding: 0 8px 10px; }
+    .sidebar-category-item { margin: 0 0 4px; }
+    .sidebar-category-card,
+    .sidebar-category-card--row,
+    .sidebar-category-card--trigger {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%; padding: 8px; border-radius: 10px;
+      border: 1px solid transparent; background: #fff; color: var(--ink-soft);
+      text-align: left; cursor: pointer;
+    }
+    .sidebar-category-card:hover,
+    .sidebar-category-card--trigger:hover,
+    .sidebar-category-item.has-children[data-state="open"] > .sidebar-category-card--trigger {
+      border-color: color-mix(in srgb, var(--cinnabar) 30%, var(--line));
+      background: var(--cinnabar-soft);
+    }
+    .sidebar-category-card__link {
+      display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; color: inherit;
+    }
+    .sidebar-category-card__media {
+      width: 44px; height: 44px; border-radius: 8px; flex-shrink: 0;
+      background: linear-gradient(135deg, #ebe4d8, #d9cfc0);
+    }
+    .sidebar-category-card__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+    .sidebar-category-card__title { font-size: 14px; font-weight: 600; color: var(--ink); }
+    .sidebar-category-card__desc {
+      font-size: 11px; color: var(--ink-faint);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .sidebar-category-card__chevron { color: var(--ink-faint); font-size: 12px; padding-right: 4px; }
+    .sidebar-shortcuts-list { list-style: none; margin: 0; padding: 0 8px 12px; }
+    .sidebar-shortcuts-list a {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 8px; border-radius: 8px; color: var(--ink-soft); font-size: 14px;
+    }
+    .sidebar-shortcuts-list a:hover { background: var(--cinnabar-soft); color: var(--cinnabar-deep); }
+    .sidebar-locale-row { padding: 0 12px 10px; }
+    .sidebar-locale-row + .sidebar-locale-row { padding-top: 0; }
+    .drawer-tag-note {
+      margin: 0 14px 8px; font-size: 11px; color: var(--ink-faint); line-height: 1.4;
+    }
+    .drawer-tag-note code {
+      font-size: 10px; background: var(--paper-deep); padding: 1px 5px; border-radius: 4px;
+    }
+
+    /* L2/L3 flyout panel (drawer right-start mega mock) */
+    .header-category-panel.is-drawer-flyout {
+      position: absolute; inset: 0; z-index: 5;
+      background: var(--paper);
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.2s ease;
+    }
+    .header-category-panel.is-drawer-flyout[data-state="open"] { transform: none; }
+    .header-category-panel.is-drawer-flyout[hidden] { display: none !important; }
+    .drawer-flyout-head {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 12px; border-bottom: 1px solid var(--line);
+    }
+    .drawer-flyout-back {
+      border: 0; background: var(--paper-deep); border-radius: 8px;
+      width: 36px; height: 36px; cursor: pointer; font-size: 16px;
+    }
+    .drawer-flyout-head strong { font-size: 15px; }
+    .drawer-flyout-scroll { flex: 1; overflow: auto; padding: 10px 12px 16px; }
+    .mega-l2 { list-style: none; margin: 0; padding: 0; }
+    .mega-l2 > li { margin: 0 0 12px; }
+    .mega-l2 > li > a {
+      display: block; font-weight: 600; color: var(--cinnabar-deep);
+      margin-bottom: 6px; font-size: 14px;
+    }
+    .mega-l3 {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+      list-style: none; margin: 0; padding: 0;
+    }
+    .mega-l3 a {
+      display: block; padding: 10px; border-radius: 10px;
+      border: 1px solid var(--line); background: #fff;
+      color: var(--ink-soft); font-size: 12px;
+    }
+    .mega-l3 a:hover { border-color: var(--cinnabar); color: var(--cinnabar-deep); }
+    .mega-see-all {
+      display: inline-block; margin-bottom: 12px; font-size: 13px; color: var(--stone-cyan);
+    }
+
+    /* Official Taglib chrome mocks — fold uses real <w:i18n:switcher/> + header-currency-switcher */
+    .w-language-switcher,
+    .w-currency-switcher {
+      position: relative;
+      display: inline-flex;
+      flex-direction: column;
+      align-items: stretch;
+    }
+    .w-button {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid transparent;
+      background: transparent;
+      color: var(--ink-soft);
+      border-radius: 8px;
+      padding: 6px 8px;
+      cursor: pointer;
+      font: inherit;
+      line-height: 1.2;
+    }
+    .w-button:hover {
+      border-color: color-mix(in srgb, var(--cinnabar) 35%, var(--line));
+      background: var(--cinnabar-soft);
+      color: var(--cinnabar-deep);
+    }
+    .w-language-switcher__trigger,
+    .w-currency-switcher__trigger {
+      min-height: 40px;
+    }
+    .w-language-switcher__flag {
+      display: inline-flex;
+      width: 22px;
+      height: 16px;
+      overflow: hidden;
+      border-radius: 2px;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.08);
+      flex-shrink: 0;
+    }
+    .w-language-switcher__flag svg { width: 100%; height: 100%; display: block; }
+    .w-language-switcher__current,
+    .w-currency-switcher__current {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--ink);
+      white-space: nowrap;
+    }
+    .w-chevron { font-size: 10px; opacity: 0.7; }
+    .w-cash-icon {
+      width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 1.5;
+    }
+    .w-menu {
+      position: absolute;
+      top: calc(100% + 6px);
+      right: 0;
+      z-index: 40;
+      width: min(320px, 78vw);
+      max-height: min(360px, 60vh);
+      overflow: auto;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 12px 32px rgba(28,25,23,.14);
+      padding: 8px;
+    }
+    .w-menu[hidden] { display: none !important; }
+    .categories-sidebar .w-menu {
+      position: static;
+      width: 100%;
+      max-height: none;
+      margin-top: 8px;
+      box-shadow: none;
+    }
+    .w-language-switcher__search-wrap,
+    .w-currency-switcher__search { margin-bottom: 8px; }
+    .w-input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 8px 10px;
+      font: inherit;
+      background: var(--paper);
+    }
+    .w-menu__header {
+      display: flex; justify-content: space-between; gap: 8px;
+      padding: 6px 8px 4px;
+      font-size: 11px; color: var(--ink-faint); text-transform: uppercase;
+      letter-spacing: 0.06em;
+    }
+    .w-menu__item {
+      display: flex; align-items: center; gap: 10px;
+      width: 100%;
+      padding: 8px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--ink-soft);
+      text-align: left;
+      cursor: pointer;
+      font: inherit;
+    }
+    .w-menu__item:hover,
+    .w-menu__item[data-state="active"],
+    .w-menu__item[aria-current="true"] {
+      background: var(--cinnabar-soft);
+      color: var(--cinnabar-deep);
+    }
+    .w-language-switcher__copy,
+    .w-currency-switcher__copy {
+      display: flex; flex-direction: column; gap: 2px; min-width: 0;
+    }
+    .w-language-switcher__copy strong,
+    .w-currency-switcher__copy strong {
+      font-size: 13px; font-weight: 600; color: inherit;
+    }
+    .w-language-switcher__copy small,
+    .w-currency-switcher__copy small {
+      font-size: 11px; color: var(--ink-faint);
+    }
+    .w-currency-switcher__symbol {
+      width: 28px; text-align: center; font-weight: 600; color: var(--ink);
+    }
+    .header-action-item {
+      display: inline-flex;
+      align-items: center;
+    }
+    .A .tools .header-action-item .w-button {
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      min-width: 64px;
+      padding: 6px 8px;
+      font-size: 11px;
+    }
+    .A .tools .w-language-switcher__current,
+    .A .tools .w-currency-switcher__current {
+      font-size: 12px;
+    }
+    .A .tools .w-chevron { display: none; }
+
+    /* ===== Variant B: Search Gallery — search is the chrome hero ===== */
+    .B .chrome { background: var(--paper); }
+    .B .ink-bar {
+      display: flex; align-items: center; gap: 16px;
+      padding: 10px 20px;
+      background: var(--xuan);
+      color: var(--paper);
+    }
+    .B .ink-bar .brand {
+      font-family: var(--font-brand);
+      font-size: 1.35rem;
+      letter-spacing: 0.12em;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .B .ink-bar .brand span { color: var(--gold); }
+    .B .ink-bar .grow { flex: 1; }
+    .B .ink-bar .mini {
+      display: flex; gap: 14px; align-items: center; font-size: 12px; color: #d4cfc5;
+    }
+    .B .ink-bar .mini a:hover { color: var(--gold); }
+    .B .gallery {
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 28px 20px 18px;
+      text-align: center;
+    }
+    .B .eyebrow {
+      font-size: 12px; letter-spacing: 0.28em; text-transform: uppercase;
+      color: var(--ink-faint); margin-bottom: 10px;
+    }
+    .B .gallery h1 {
+      margin: 0 0 18px;
+      font-family: var(--font-brand);
+      font-weight: 500;
+      font-size: clamp(1.6rem, 3vw, 2.2rem);
+      letter-spacing: 0.06em;
+    }
+    .B .dynasties {
+      display: inline-flex; flex-wrap: wrap; justify-content: center; gap: 6px;
+      margin-bottom: 14px;
+      padding: 4px;
+      background: var(--paper-deep);
+      border-radius: 999px;
+    }
+    .B .dynasties button {
+      border: 0; background: transparent; padding: 8px 14px; border-radius: 999px;
+      color: var(--ink-soft); cursor: pointer;
+    }
+    .B .dynasties button.is-on {
+      background: var(--paper-bright);
+      color: var(--cinnabar);
+      box-shadow: 0 1px 2px rgba(28,28,28,.08);
+    }
+    .B .search-hero {
+      display: flex; align-items: stretch;
+      border: 1.5px solid var(--ink);
+      background: var(--paper-bright);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .B .search-hero input {
+      flex: 1; border: 0; padding: 16px 18px; outline: none; font-size: 16px;
+      background: transparent; min-width: 0;
+    }
+    .B .search-hero button {
+      border: 0; background: var(--cinnabar); color: var(--paper);
+      padding: 0 22px; cursor: pointer; font-weight: 600;
+    }
+    .B .flow {
+      display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 18px;
+      margin-top: 14px; font-size: 13px; color: var(--stone-cyan);
+    }
+    .B .flow a:hover { color: var(--cinnabar); }
+    .B .pouch-row {
+      display: flex; justify-content: center; gap: 10px; margin-top: 16px;
+    }
+    .B .pouch {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 8px 14px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--paper-bright);
+      color: var(--ink-soft);
+      font-size: 13px;
+    }
+    .B .pouch.primary {
+      background: var(--cinnabar-soft);
+      border-color: color-mix(in srgb, var(--cinnabar) 35%, var(--line));
+      color: var(--cinnabar-deep);
+    }
+
+    /* ===== Variant C: Mast Brand Column — shopfront signboard ===== */
+    .C .chrome {
+      display: grid;
+      grid-template-columns: 148px 1fr auto;
+      gap: 0;
+      min-height: 148px;
+      background: var(--paper-bright);
+      border-bottom: 1px solid var(--line);
+    }
+    .C .mast {
+      background: var(--xuan);
+      color: var(--paper);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 10px; padding: 16px 10px;
+      border-right: 3px solid var(--gold);
+    }
+    .C .mast .vert {
+      writing-mode: vertical-rl;
+      font-family: var(--font-brand);
+      font-size: 2rem;
+      letter-spacing: 0.35em;
+      color: var(--paper);
+    }
+    .C .mast .en {
+      font-size: 10px; letter-spacing: 0.16em; text-transform: uppercase;
+      color: #a8a299; text-align: center;
+    }
+    .C .mid {
+      display: flex; flex-direction: column; justify-content: center;
+      gap: 12px; padding: 14px 20px;
+    }
+    .C .cats {
+      display: flex; flex-wrap: wrap; gap: 8px 18px;
+      font-family: var(--font-body); font-size: 16px;
+    }
+    .C .cats a { color: var(--ink-soft); }
+    .C .cats a.is-active { color: var(--cinnabar); font-weight: 700; }
+    .C .cats a:hover { color: var(--cinnabar); }
+    .C .search {
+      display: flex; border-bottom: 1.5px solid var(--ink); max-width: 640px;
+    }
+    .C .search input {
+      flex: 1; border: 0; background: transparent; padding: 10px 0; outline: none;
+      font-size: 15px; min-width: 0;
+    }
+    .C .search button {
+      border: 0; background: transparent; color: var(--cinnabar);
+      padding: 0 4px 0 12px; cursor: pointer; font-weight: 700;
+    }
+    .C .hots { font-size: 12px; color: var(--ink-faint); display: flex; gap: 12px; flex-wrap: wrap; }
+    .C .hots a:hover { color: var(--stone-cyan); }
+    .C .side {
+      display: flex; flex-direction: column; justify-content: center; gap: 10px;
+      padding: 14px 18px; border-left: 1px solid var(--line); min-width: 168px;
+    }
+    .C .side .ship { font-size: 12px; color: var(--ink-soft); }
+    .C .side .acct { font-size: 13px; color: var(--ink); }
+    .C .side .cart {
+      display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+      background: var(--cinnabar); color: var(--paper);
+      padding: 10px 14px; border-radius: 2px; font-weight: 600;
+    }
+    .C .side .cart:hover { background: var(--cinnabar-deep); }
+
+    .switcher {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 10px;
+      background: #111; color: #fff; padding: 10px 14px; border-radius: 999px;
+      z-index: 50; font-size: 13px;
+      border: 1px solid #333;
+    }
+    .switcher button {
+      background: #333; color: #fff; border: 0; width: 32px; height: 32px;
+      border-radius: 50%; cursor: pointer; font-size: 16px;
+    }
+    .switcher button:hover { background: #555; }
+    .switcher #label { min-width: 12rem; text-align: center; }
+
+    /* Keep nav/hot labels intact — Chinese chars must not wrap vertically */
+    .A .nav a,
+    .A .hots a,
+    .B .flow a,
+    .C .cats a,
+    .C .hots a { white-space: nowrap; }
+
+    /* ===== Tablet: keep brand + tools on one row; search full width ===== */
+    @media (max-width: 1100px) {
+      .A .belt {
+        grid-template-columns: auto minmax(100px, 1fr) auto;
+        grid-template-areas:
+          "menu brand tools"
+          "search search search";
+        gap: 12px 10px;
+        padding: 12px 16px 8px;
+      }
+      .A .menu-btn { grid-area: menu; }
+      .A .brand { grid-area: brand; }
+      .A .search-wrap { grid-area: search; }
+      .A .tools { grid-area: tools; justify-content: flex-end; flex-wrap: nowrap; gap: 2px; }
+      .A .tool {
+        min-width: 44px;
+        padding: 6px 8px;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .A .tool[data-tool="ship"] { display: none; } /* in drawer */
+      .A .tool[data-tool="favorite"] span,
+      .A .tool[data-tool="account"] span,
+      .A .tool[data-tool="cart"] span { display: none; }
+      .A .tool strong { font-size: 11px; }
+      .A .tools .header-action-item .w-button {
+        min-width: 52px;
+        padding: 6px;
+      }
+      .A .tools .w-language-switcher__current,
+      .A .tools .w-currency-switcher__current { font-size: 11px; }
+      .A .nav {
+        gap: 16px;
+        padding: 0 16px 12px;
+        overflow-x: auto;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+      }
+      .A .nav::-webkit-scrollbar { display: none; }
+      .A .nav .spacer { display: none; }
+      .B .ink-bar { gap: 10px; }
+      .B .gallery { padding: 20px 16px 14px; }
+      .B .gallery h1 { font-size: 1.55rem; }
+      .C .chrome { grid-template-columns: 112px 1fr auto; }
+      .C .mast .menu-btn { margin-right: 4px; }
+      .C .mast .vert { font-size: 1.55rem; letter-spacing: 0.22em; }
+      .fabric-row { grid-template-columns: repeat(4, 1fr); }
+    }
+
+    /* ===== Phone: compact chrome + drawer ===== */
+    @media (max-width: 720px) {
+      .proto-banner { font-size: 11px; padding: 8px 12px; }
+      .lede, .note { display: none; }
+      .state {
+        margin: 8px 12px 0;
+        padding: 8px 10px;
+        font-size: 11px;
+        max-height: 4.5rem;
+        overflow: auto;
+      }
+
+      .A .utility {
+        padding: 5px 12px;
+        font-size: 11px;
+      }
+      .A .utility span:last-child { display: none; }
+      .A .belt {
+        grid-template-columns: auto 1fr auto;
+        grid-template-areas:
+          "menu brand tools"
+          "search search search";
+        gap: 10px;
+        padding: 10px 12px 8px;
+      }
+      .A .brand-mark { width: 32px; height: 32px; }
+      .A .brand-name { font-size: 1.45rem; }
+      .A .brand-sub { display: none; }
+      .A .search { border-radius: 10px; }
+      .A .search select { display: none; }
+      .A .search input { padding: 11px 12px; font-size: 15px; }
+      .A .search button { padding: 0 14px; }
+      .A .hots {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        gap: 14px;
+        padding-bottom: 2px;
+        -webkit-overflow-scrolling: touch;
+        scrollbar-width: none;
+        mask-image: linear-gradient(90deg, #000 88%, transparent);
+        -webkit-mask-image: linear-gradient(90deg, #000 88%, transparent);
+      }
+      .A .hots::-webkit-scrollbar { display: none; }
+      .A .tools { gap: 0; align-items: center; }
+      .A .tool {
+        min-width: 40px;
+        padding: 6px 6px;
+        flex-direction: row;
+        gap: 4px;
+        align-items: center;
+      }
+      .A .tool span { display: none; }
+      .A .tool strong { font-size: 11px; }
+      .A .tool[data-tool="ship"],
+      .A .tool[data-tool="favorite"] { display: none; }
+      .A .tool[data-tool="account"] strong { display: none; }
+      .A .tools .header-action-item .w-button {
+        min-width: 44px;
+        padding: 6px 4px;
+        flex-direction: column;
+      }
+      .A .tools .w-language-switcher__flag { width: 18px; height: 13px; }
+      .A .tools .w-cash-icon { width: 14px; height: 14px; }
+      .A .nav { display: none; } /* full nav lives in hamburger drawer */
+
+      .B .ink-bar { padding: 8px 12px; gap: 8px; }
+      .B .ink-bar .brand { font-size: 1.05rem; letter-spacing: 0.06em; }
+      .B .ink-bar .mini a[data-mini="ship"],
+      .B .ink-bar .mini a[data-mini="help"] { display: none; }
+      .B .ink-bar .mini .header-action-item .w-button {
+        color: #f5f0e8;
+        padding: 4px 6px;
+      }
+      .B .ink-bar .mini .w-language-switcher__current,
+      .B .ink-bar .mini .w-currency-switcher__current { color: #fff; font-size: 11px; }
+      .B .gallery { padding: 16px 12px 12px; text-align: left; }
+      .B .eyebrow { letter-spacing: 0.18em; }
+      .B .gallery h1 { font-size: 1.35rem; margin-bottom: 12px; }
+      .B .dynasties {
+        display: flex;
+        width: 100%;
+        overflow-x: auto;
+        justify-content: flex-start;
+        border-radius: 10px;
+        scrollbar-width: none;
+      }
+      .B .dynasties::-webkit-scrollbar { display: none; }
+      .B .dynasties button { flex: 0 0 auto; padding: 8px 12px; }
+      .B .search-hero { border-radius: 10px; }
+      .B .search-hero input { padding: 13px 12px; font-size: 15px; }
+      .B .flow {
+        justify-content: flex-start;
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        scrollbar-width: none;
+      }
+      .B .flow::-webkit-scrollbar { display: none; }
+      .B .pouch-row { justify-content: stretch; }
+      .B .pouch { flex: 1; justify-content: center; }
+
+      .C .chrome {
+        grid-template-columns: 1fr;
+        min-height: 0;
+      }
+      .C .mast {
+        flex-direction: row;
+        justify-content: flex-start;
+        gap: 10px;
+        padding: 10px 12px;
+        border-right: 0;
+        border-bottom: 2px solid var(--gold);
+      }
+      .C .mast .menu-btn { position: static; }
+      .C .mast .vert {
+        writing-mode: horizontal-tb;
+        letter-spacing: 0.1em;
+        font-size: 1.4rem;
+      }
+      .C .mast .en { display: none; }
+      .C .mid { padding: 10px 12px 8px; gap: 10px; }
+      .C .cats { display: none; }
+      .C .side {
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 8px 12px 12px;
+        border-left: 0;
+        border-top: 1px solid var(--line);
+        min-width: 0;
+      }
+      .C .side .ship { display: none; }
+      .C .side .header-action-item { display: inline-flex; }
+      .C .side .cart { flex: 0 0 auto; padding: 8px 12px; }
+
+      .hero-mock { padding: 18px 12px 28px; }
+      .hero-mock h2 { font-size: 1.35rem; }
+      .fabric-row { grid-template-columns: repeat(3, 1fr); gap: 8px; }
+      .switcher { bottom: 12px; padding: 8px 12px; }
+      .switcher #label { min-width: 9rem; font-size: 12px; }
+    }
+
+    @media (max-width: 420px) {
+      .B .pouch:first-child { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="proto-banner">PROTOTYPE · Theme/view/prototypes/hanfu-header-variants.html · not production</div>
+  <p class="lede">问题：红框里的 Amazon 式深色顶栏如何改成汉服工坊气质？三套<strong>结构不同</strong>的顶栏。汉堡抽屉必须对齐现网 <code>categories-sidebar</code>（首页 / 全部分类多级飞出 / 热门入口 / 账户与服务 / 设置区官方语言货币），语言货币走 <code>&lt;w:i18n:switcher /&gt;</code> + <code>header-currency-switcher</code>。选型后再 fold。</p>
+  <div class="state" id="state"></div>
+  <div class="stage" id="root"></div>
+  <p class="note">Throwaway only. Winner → Theme header chrome / search / account；本文件不进生产路由。键盘 ← → 切换变体。</p>
+  <div class="switcher" role="toolbar" aria-label="Prototype variant switcher">
+    <button type="button" id="prev" aria-label="Previous variant">←</button>
+    <span id="label">A</span>
+    <button type="button" id="next" aria-label="Next variant">→</button>
+  </div>
+
+  <script>
+    const VARIANTS = [
+      {
+        key: 'A',
+        name: '宣纸工坊顶栏',
+        blurb: '浅色宣纸底；Logo 字号主导；搜索居中圆角；工具图标竖排；形制导航丝带下划线。最接近「精品店」而非货架站。'
+      },
+      {
+        key: 'B',
+        name: '寻裳廊 · 搜索即入口',
+        blurb: '仅一条玄墨工具条；搜索升为顶栏主舞台（朝代分段 + 宽搜索）；分类流成热词。信息层级完全反转。'
+      },
+      {
+        key: 'C',
+        name: '旗号分栏店招',
+        blurb: '左侧竖排「云裳」店招柱；中间形制导航优先、搜索降为下划线；右侧结账 CTA 实心朱砂。像实体店门面。'
+      }
+    ];
+
+    const I = {
+      pin: '<svg class="icon" viewBox="0 0 24 24"><path d="M12 21s7-5.3 7-11a7 7 0 1 0-14 0c0 5.7 7 11 7 11z"/><circle cx="12" cy="10" r="2.2"/></svg>',
+      heart: '<svg class="icon" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9.2A4.2 4.2 0 0 1 12 7a4.2 4.2 0 0 1 7 3.8C19 15.6 12 20 12 20z"/></svg>',
+      user: '<svg class="icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2"/><path d="M5 19c1.5-3.2 4-4.8 7-4.8s5.5 1.6 7 4.8"/></svg>',
+      cart: '<svg class="icon" viewBox="0 0 24 24"><path d="M4 6h2l1.2 9h11.1l1.4-7H7"/><circle cx="10" cy="19" r="1.3"/><circle cx="17" cy="19" r="1.3"/></svg>',
+      search: '<svg class="icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="5.5"/><path d="M16 16l4 4"/></svg>',
+      menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>'
+    };
+
+    const localeState = {
+      lang: 'en_US',
+      langLabel: 'English',
+      currency: 'CNY',
+      currencySymbol: '¥',
+      ship: 'China'
+    };
+
+    const FLAG_US = '<svg viewBox="0 0 640 480" aria-hidden="true"><path fill="#bd3d44" d="M0 0h640v480H0z"/><path stroke="#fff" stroke-width="37" d="M0 55.3h640M0 129h640M0 203h640M0 277h640M0 351h640M0 425h640"/><path fill="#192f5d" d="M0 0h247v259H0z"/></svg>';
+    const FLAG_CN = '<svg viewBox="0 0 640 480" aria-hidden="true"><path fill="#ee1c25" d="M0 0h640v480H0z"/><path fill="#ff0" d="m67 36 14 42-36-26h45l-36 26z"/></svg>';
+
+    function menuBtn() {
+      return `<button type="button" class="menu-btn" data-open-drawer aria-label="Open menu" aria-expanded="false">${I.menu}</button>`;
+    }
+
+    function languageSwitcherMount(opts = {}) {
+      const id = opts.id || 'lang';
+      const panelOpen = !!opts.panelOpen;
+      const flag = localeState.lang === 'zh_Hans_CN' ? FLAG_CN : FLAG_US;
+      return `<div class="header-action-item header-language-switcher"
+        data-proto-tag="w:i18n:switcher"
+        title="Production: &lt;w:i18n:switcher navigation=&quot;path&quot; /&gt;">
+        <div class="w-language-switcher w-menu-root" data-w-component="menu language-switcher" data-i18n-switcher data-proto-switcher="lang-${id}">
+          <button type="button" class="w-button w-language-switcher__trigger" data-tone="quiet" data-size="sm"
+            data-w-menu-trigger aria-expanded="${panelOpen ? 'true' : 'false'}" aria-haspopup="menu"
+            aria-label="Switch Language">
+            <span class="w-language-switcher__flag">${flag}</span>
+            <span class="w-language-switcher__current current-language">${localeState.langLabel}</span>
+            <span class="w-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="w-menu w-language-switcher__menu" data-w-menu-panel role="menu" ${panelOpen ? '' : 'hidden'}>
+            <div class="w-language-switcher__search-wrap">
+              <input class="w-input w-language-switcher__search" type="search"
+                placeholder="Search country, language, or code..." data-w-language-search>
+            </div>
+            <div class="w-language-switcher__list" data-w-language-list>
+              <div class="w-language-switcher__group" role="group">
+                <div class="w-menu__header w-language-switcher__group-label"><span>United States</span><small>US</small></div>
+                <button type="button" class="w-menu__item w-language-switcher__option" role="menuitemradio"
+                  data-state="${localeState.lang === 'en_US' ? 'active' : 'idle'}"
+                  data-lang="en_US" data-lang-label="English" aria-checked="${localeState.lang === 'en_US'}">
+                  <span class="w-language-switcher__flag">${FLAG_US}</span>
+                  <span class="w-language-switcher__copy"><strong>English (United States)</strong><small>en_US | United States</small></span>
+                </button>
+              </div>
+              <div class="w-language-switcher__group" role="group">
+                <div class="w-menu__header w-language-switcher__group-label"><span>China</span><small>CN</small></div>
+                <button type="button" class="w-menu__item w-language-switcher__option" role="menuitemradio"
+                  data-state="${localeState.lang === 'zh_Hans_CN' ? 'active' : 'idle'}"
+                  data-lang="zh_Hans_CN" data-lang-label="中文" aria-checked="${localeState.lang === 'zh_Hans_CN'}">
+                  <span class="w-language-switcher__flag">${FLAG_CN}</span>
+                  <span class="w-language-switcher__copy"><strong>Chinese (Simplified, China)</strong><small>zh_Hans_CN | 中文（简体，中国）</small></span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    function currencySwitcherMount(opts = {}) {
+      const id = opts.id || 'cur';
+      const panelOpen = !!opts.panelOpen;
+      const rows = [
+        { code: 'CNY', name: '人民币', symbol: '¥' },
+        { code: 'USD', name: '美元', symbol: '$' },
+        { code: 'EUR', name: '欧元', symbol: '€' },
+        { code: 'GBP', name: '英镑', symbol: '£' }
+      ];
+      return `<div class="header-action-item header-currency-switcher"
+        data-proto-tag="w:hook>header-currency-switcher"
+        title="Production: &lt;w:hook&gt;header-currency-switcher&lt;/w:hook&gt;">
+        <div class="w-currency-switcher w-menu-root" data-currency-switcher="true"
+          data-w-component="menu choice-filter" data-proto-switcher="cur-${id}">
+          <button type="button" class="w-button w-currency-switcher__trigger" data-tone="quiet" data-size="sm"
+            data-w-menu-trigger aria-expanded="${panelOpen ? 'true' : 'false'}" aria-label="切换货币">
+            <svg class="w-cash-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 7v10M9 10h6M9 14h6"/></svg>
+            <span class="w-currency-switcher__current current-currency">${localeState.currency}</span>
+            <span>${localeState.currencySymbol}</span>
+            <span class="w-chevron" aria-hidden="true">▾</span>
+          </button>
+          <div class="w-menu w-currency-switcher__panel" data-w-menu-panel data-w-choice-panel role="menu" ${panelOpen ? '' : 'hidden'}>
+            <label class="w-field w-currency-switcher__search">
+              <span class="w-visually-hidden" style="position:absolute;width:1px;height:1px;overflow:hidden">搜索货币</span>
+              <input class="w-input" type="search" data-w-choice-search placeholder="搜索货币、货币码、符号或翻译" autocomplete="off">
+            </label>
+            <div class="w-currency-switcher__items" data-w-choice-items>
+              ${rows.map(r => `
+                <button type="button" class="w-menu__item w-currency-switcher__option" role="menuitem"
+                  data-currency-option="true" data-currency="${r.code}" data-currency-symbol="${r.symbol}"
+                  aria-current="${localeState.currency === r.code ? 'true' : 'false'}">
+                  <span class="w-currency-switcher__symbol" aria-hidden="true">${r.symbol}</span>
+                  <span class="w-currency-switcher__copy"><strong>${r.name}</strong><small>${r.code}</small></span>
+                </button>`).join('')}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    const CATEGORY_TREE = [
+      {
+        id: 'all',
+        title: 'Shop All Hanfu',
+        desc: '浏览全部已发布商品',
+        leaf: true
+      },
+      {
+        id: 'women',
+        title: 'Women',
+        desc: 'Ruqun, aoqun, mamian, quju…',
+        children: [
+          {
+            title: 'Ruqun & Sets',
+            children: ['Qixiong Ruqun', 'Aoqun Sets', 'Wedding Ruqun']
+          },
+          {
+            title: 'Mamian Skirts',
+            children: ['Ming Mamian', 'Daily Mamian', 'Formal Mamian']
+          },
+          {
+            title: 'Outerwear',
+            children: ['Beizi', 'Bijia', 'Banbi']
+          }
+        ]
+      },
+      {
+        id: 'men',
+        title: 'Men',
+        desc: 'Yuanlingpao, zhishen, lanshan…',
+        children: [
+          {
+            title: 'Robes',
+            children: ['Yuanlingpao', 'Zhishen', 'Daopao']
+          },
+          {
+            title: 'Scholarly',
+            children: ['Lanshan', 'Beizi', 'Daily Sets']
+          }
+        ]
+      },
+      {
+        id: 'kids',
+        title: 'Kids',
+        desc: 'Children’s Hanfu by season',
+        children: [
+          {
+            title: 'Girls',
+            children: ['Festival Sets', 'Daily Wear']
+          },
+          {
+            title: 'Boys',
+            children: ['Robes', 'School Style']
+          }
+        ]
+      },
+      {
+        id: 'accessories',
+        title: 'Accessories',
+        desc: 'Hair, belts, shoes, bags',
+        children: [
+          {
+            title: 'Hair & Headwear',
+            children: ['Buyao', 'Hairpins', 'Veils']
+          },
+          {
+            title: 'Footwear & Bags',
+            children: ['Cloth Shoes', 'Embroidered Bags']
+          }
+        ]
+      },
+      {
+        id: 'sets',
+        title: 'Complete Sets',
+        desc: 'Ready-to-wear coordinated looks',
+        leaf: true
+      }
+    ];
+
+    function categoryThumb(seed) {
+      const hues = [28, 8, 200, 150, 340, 45];
+      const h = hues[seed % hues.length];
+      return `linear-gradient(135deg, hsl(${h} 35% 78%), hsl(${h} 28% 62%))`;
+    }
+
+    function categoryListHtml() {
+      return CATEGORY_TREE.map((item, i) => {
+        if (item.leaf) {
+          return `<li class="sidebar-category-item">
+            <a class="sidebar-category-card sidebar-category-card--row" href="#">
+              <span class="sidebar-category-card__media" style="background:${categoryThumb(i)}"></span>
+              <span class="sidebar-category-card__body">
+                <span class="sidebar-category-card__title">${item.title}</span>
+                <span class="sidebar-category-card__desc">${item.desc}</span>
+              </span>
+            </a>
+          </li>`;
+        }
+        return `<li class="sidebar-category-item has-children sidebar-category-item--mega"
+          data-w-placement="right-start" data-category-id="${item.id}">
+          <div class="sidebar-category-card sidebar-category-card--trigger"
+               data-open-flyout="${item.id}" aria-haspopup="dialog" aria-expanded="false">
+            <a class="sidebar-category-card__link" href="#" data-prevent>
+              <span class="sidebar-category-card__media" style="background:${categoryThumb(i)}"></span>
+              <span class="sidebar-category-card__body">
+                <span class="sidebar-category-card__title">${item.title}</span>
+                <span class="sidebar-category-card__desc">${item.desc}</span>
+              </span>
+            </a>
+            <span class="sidebar-category-card__chevron" aria-hidden="true">▶</span>
+          </div>
+        </li>`;
+      }).join('');
+    }
+
+    function flyoutPanelHtml(item) {
+      const groups = (item.children || []).map(group => `
+        <li>
+          <a href="#">${group.title}</a>
+          <ul class="mega-l3">
+            ${(group.children || []).map(leaf => `<li><a href="#">${leaf}</a></li>`).join('')}
+          </ul>
+        </li>`).join('');
+      return `<div class="header-category-panel is-drawer-flyout is-megamenu"
+        id="flyout-${item.id}" data-state="closed" hidden>
+        <div class="drawer-flyout-head">
+          <button type="button" class="drawer-flyout-back" data-close-flyout aria-label="Back">←</button>
+          <strong>${item.title}</strong>
+        </div>
+        <div class="drawer-flyout-scroll">
+          <a class="mega-see-all" href="#">See all in ${item.title}</a>
+          <ul class="mega-l2">${groups}</ul>
+        </div>
+      </div>`;
+    }
+
+    function drawerHtml() {
+      const flyouts = CATEGORY_TREE.filter(x => !x.leaf).map(flyoutPanelHtml).join('');
+      return `
+        <div class="categories-sidebar-overlay" data-close-drawer aria-hidden="true"></div>
+        <div class="categories-sidebar" id="categories-sidebar" role="dialog" aria-modal="true"
+          aria-labelledby="categories-sidebar-title" aria-hidden="true"
+          data-proto-contract="Theme categories-sidebar">
+          <div class="categories-sidebar-header">
+            <div class="categories-sidebar-brand">
+              <span class="categories-sidebar-kicker">云裳 · Hanfu Atelier</span>
+              <h2 class="categories-sidebar-title" id="categories-sidebar-title">Browse</h2>
+            </div>
+            <div class="categories-sidebar-header-actions">
+              <a href="#" class="categories-sidebar-signin">👤 <span>登录</span></a>
+              <button type="button" class="categories-sidebar-close-inline" data-close-drawer aria-label="关闭菜单">×</button>
+            </div>
+          </div>
+          <div class="categories-sidebar-scroll">
+            <section class="categories-sidebar-section categories-sidebar-section--home" weline-code="theme.header.sidebar_home">
+              <a href="#" class="categories-sidebar-home">
+                <span class="categories-sidebar-home__label">⌂ 首页</span>
+              </a>
+            </section>
+
+            <section class="categories-sidebar-section categories-sidebar-section--categories"
+                     weline-code="theme.header.sidebar_categories"
+                     data-sidebar-accordion="categories">
+              <button type="button" class="sidebar-section-toggle" id="categories-sidebar-categories-toggle"
+                      aria-expanded="true" aria-controls="categories-sidebar-nav-panel">
+                <span class="sidebar-section-toggle__label">全部分类</span>
+                <span class="sidebar-section-toggle__chevron" aria-hidden="true">▾</span>
+              </button>
+              <div class="sidebar-section-panel" id="categories-sidebar-nav-panel" role="region"
+                   aria-labelledby="categories-sidebar-categories-toggle">
+                <nav class="categories-sidebar-nav" aria-label="分类导航">
+                  <ul class="categories-sidebar-list" data-sidebar-category-tree="1">
+                    ${categoryListHtml()}
+                  </ul>
+                </nav>
+              </div>
+            </section>
+
+            <section class="categories-sidebar-section categories-sidebar-section--quick" weline-code="theme.header.sidebar_quick">
+              <p class="sidebar-section-title">热门入口</p>
+              <div class="sidebar-shortcuts">
+                <ul class="sidebar-shortcuts-list">
+                  <li><a href="#">⚡ 今日特价</a></li>
+                  <li><a href="#">🔥 热销榜</a></li>
+                  <li><a href="#">★ 新品上市</a></li>
+                  <li><a href="#">？ 客户服务</a></li>
+                </ul>
+              </div>
+            </section>
+
+            <section class="categories-sidebar-section categories-sidebar-section--services" weline-code="theme.header.sidebar_services">
+              <p class="sidebar-section-title">账户与服务</p>
+              <div class="sidebar-shortcuts">
+                <ul class="sidebar-shortcuts-list">
+                  <li><a href="#">👤 我的账户</a></li>
+                  <li><a href="#">📦 我的订单</a></li>
+                  <li><a href="#">🛒 购物车</a></li>
+                  <li><a href="#">▣ 商品对比</a></li>
+                  <li><a href="#" data-ship>📍 Ship to · <strong data-ship-label>${localeState.ship}</strong></a></li>
+                  <li><a href="#">♡ Favorite · 0</a></li>
+                </ul>
+              </div>
+            </section>
+
+            <section class="categories-sidebar-section categories-sidebar-section--settings sidebar-locale-tools"
+                     weline-code="theme.header.sidebar_settings">
+              <p class="sidebar-section-title">设置</p>
+              <p class="drawer-tag-note">官方挂载：<code>&lt;w:i18n:switcher /&gt;</code> · <code>header-currency-switcher</code></p>
+              <div class="sidebar-locale-row" data-locale-tool="language">
+                ${languageSwitcherMount({ id: 'drawer', panelOpen: false })}
+              </div>
+              <div class="sidebar-locale-row" data-locale-tool="currency">
+                ${currencySwitcherMount({ id: 'drawer', panelOpen: false })}
+              </div>
+            </section>
+
+            ${flyouts}
+          </div>
+        </div>`;
+    }
+
+    function currentKey() {
+      const v = new URLSearchParams(location.search).get('variant') || 'A';
+      return VARIANTS.some(x => x.key === v) ? v : 'A';
+    }
+
+    function setVariant(key) {
+      closeDrawer();
+      const url = new URL(location.href);
+      url.searchParams.set('variant', key);
+      history.replaceState(null, '', url);
+      render();
+    }
+
+    function cycle(delta) {
+      const i = VARIANTS.findIndex(x => x.key === currentKey());
+      setVariant(VARIANTS[(i + delta + VARIANTS.length) % VARIANTS.length].key);
+    }
+
+    function hero() {
+      return `<section class="hero-mock">
+        <h2>Peach Garden Dream · Ming-Style Set</h2>
+        <p>Ivory and blush florals — used only as page context so header variants are judged against real density, not a vacuum.</p>
+        <div class="fabric-row" aria-hidden="true">
+          <div class="fabric"></div><div class="fabric"></div><div class="fabric"></div>
+          <div class="fabric"></div><div class="fabric"></div><div class="fabric"></div>
+        </div>
+      </section>`;
+    }
+
+    function renderA() {
+      return `<div class="chrome">
+        <div class="utility">
+          <span>欢迎光临 · 形制精选上新 · 满 ¥299 包邮</span>
+          <span><a href="#">Help center</a> · <a href="#">Order Tracking</a></span>
+        </div>
+        <div class="belt">
+          ${menuBtn()}
+          <a class="brand" href="#">
+            <span class="brand-mark" aria-hidden="true"></span>
+            <span>
+              <span class="brand-name">云裳</span>
+              <span class="brand-sub">Hanfu Atelier</span>
+            </span>
+          </a>
+          <div class="search-wrap">
+            <div class="search">
+              <select aria-label="Category"><option>All</option><option>Women</option><option>Men</option></select>
+              <input placeholder="Search Hanfu, garment forms, and accessories..." data-ph-full="Search Hanfu, garment forms, and accessories..." data-ph-short="Search Hanfu…">
+              <button type="button" aria-label="Search">${I.search}</button>
+            </div>
+            <div class="hots">
+              <a href="#">Mamian Skirts</a><a href="#">Ming Dynasty</a><a href="#">Song Dynasty</a>
+              <a href="#">Qixiong Ruqun</a><a href="#">Accessories</a>
+            </div>
+          </div>
+          <div class="tools">
+            <a class="tool" data-tool="ship" href="#">${I.pin}<span>Ship to</span><strong data-ship-label>${localeState.ship}</strong></a>
+            ${languageSwitcherMount({ id: 'a' })}
+            ${currencySwitcherMount({ id: 'a' })}
+            <a class="tool" data-tool="favorite" href="#">${I.heart}<span>Favorite</span><strong>0</strong></a>
+            <a class="tool" data-tool="account" href="#">${I.user}<span>Account</span><strong>Log in</strong></a>
+            <a class="tool" data-tool="cart" href="#">${I.cart}<span>Cart</span><strong>¥0</strong></a>
+          </div>
+        </div>
+        <nav class="nav" aria-label="Primary">
+          <a class="is-active" href="#">Shop All</a>
+          <a href="#">Women</a><a href="#">Men</a><a href="#">Kids</a>
+          <a href="#">Accessories</a><a href="#">Complete&nbsp;Sets</a>
+          <span class="spacer"></span>
+          <a class="aside" href="#">云裳志</a>
+          <a class="aside" href="#">Today's&nbsp;Deals</a>
+        </nav>
+        ${drawerHtml()}
+      </div>`;
+    }
+
+    function renderB() {
+      return `<div class="chrome">
+        <div class="ink-bar">
+          ${menuBtn()}
+          <a class="brand" href="#"><span>☁</span>云裳 · Hanfu Atelier</a>
+          <div class="grow"></div>
+          <div class="mini">
+            <a href="#" data-mini="ship">Ship to ${localeState.ship}</a>
+            ${languageSwitcherMount({ id: 'b' })}
+            ${currencySwitcherMount({ id: 'b' })}
+            <a href="#" data-mini="help">Help</a>
+            <a href="#" data-mini="account">Account</a>
+          </div>
+        </div>
+        <div class="gallery">
+          <div class="eyebrow">Ink-Wash Hanfu Boutique</div>
+          <h1>寻一袭衣 · Find your silhouette</h1>
+          <div class="dynasties" role="tablist">
+            <button type="button" class="is-on">All</button>
+            <button type="button">Ming</button>
+            <button type="button">Song</button>
+            <button type="button">Tang</button>
+            <button type="button">Accessories</button>
+          </div>
+          <div class="search-hero">
+            <input placeholder="Mamian, ruqun, aoqun, fabric…">
+            <button type="button">Search</button>
+          </div>
+          <div class="flow">
+            <a href="#">Mamian Skirts</a><a href="#">Qixiong Ruqun</a>
+            <a href="#">Ming Dynasty Hanfu</a><a href="#">Song Dynasty Hanfu</a>
+            <a href="#">Wedding Sets</a>
+          </div>
+          <div class="pouch-row">
+            <a class="pouch" href="#">${I.heart} Favorite</a>
+            <a class="pouch primary" href="#">${I.cart} Cart · ¥0.00</a>
+          </div>
+        </div>
+        ${drawerHtml()}
+      </div>`;
+    }
+
+    function renderC() {
+      return `<div class="chrome">
+        <aside class="mast">
+          ${menuBtn()}
+          <span class="seal" aria-hidden="true">汉</span>
+          <div class="vert">云裳</div>
+          <div class="en">Hanfu<br>Atelier</div>
+        </aside>
+        <div class="mid">
+          <nav class="cats" aria-label="Primary">
+            <a class="is-active" href="#">Women</a>
+            <a href="#">Men</a>
+            <a href="#">Kids</a>
+            <a href="#">Accessories</a>
+            <a href="#">Complete Sets</a>
+            <a href="#">云裳志</a>
+          </nav>
+          <div class="search">
+            <input placeholder="Search form, dynasty, fabric…">
+            <button type="button">寻</button>
+          </div>
+          <div class="hots">
+            <span>Hot:</span>
+            <a href="#">Mamian</a><a href="#">Ming</a><a href="#">Song</a><a href="#">Qixiong</a>
+          </div>
+        </div>
+        <div class="side">
+          <div class="ship">${I.pin} Ship to ${localeState.ship}</div>
+          ${languageSwitcherMount({ id: 'c' })}
+          ${currencySwitcherMount({ id: 'c' })}
+          <div class="acct">${I.user} Log in / Register</div>
+          <a class="cart" href="#">${I.cart} Cart · ¥0</a>
+        </div>
+        ${drawerHtml()}
+      </div>`;
+    }
+
+    function openDrawer() {
+      document.body.classList.add('drawer-open');
+      const sidebar = document.getElementById('categories-sidebar');
+      const overlay = document.querySelector('.categories-sidebar-overlay');
+      if (sidebar) sidebar.setAttribute('aria-hidden', 'false');
+      if (overlay) overlay.setAttribute('aria-hidden', 'false');
+      document.querySelectorAll('[data-open-drawer]').forEach(btn => btn.setAttribute('aria-expanded', 'true'));
+      updateState();
+    }
+
+    function closeFlyouts() {
+      document.querySelectorAll('.header-category-panel.is-drawer-flyout').forEach(panel => {
+        panel.hidden = true;
+        panel.setAttribute('data-state', 'closed');
+      });
+      document.querySelectorAll('[data-open-flyout]').forEach(btn => {
+        btn.setAttribute('aria-expanded', 'false');
+        const item = btn.closest('.sidebar-category-item');
+        if (item) item.setAttribute('data-state', 'closed');
+      });
+    }
+
+    function closeDrawer() {
+      closeFlyouts();
+      document.body.classList.remove('drawer-open');
+      const sidebar = document.getElementById('categories-sidebar');
+      const overlay = document.querySelector('.categories-sidebar-overlay');
+      if (sidebar) sidebar.setAttribute('aria-hidden', 'true');
+      if (overlay) overlay.setAttribute('aria-hidden', 'true');
+      document.querySelectorAll('[data-open-drawer]').forEach(btn => btn.setAttribute('aria-expanded', 'false'));
+      updateState();
+    }
+
+    function openFlyout(id) {
+      closeFlyouts();
+      const panel = document.getElementById(`flyout-${id}`);
+      const trigger = document.querySelector(`[data-open-flyout="${id}"]`);
+      if (!panel) return;
+      panel.hidden = false;
+      panel.setAttribute('data-state', 'open');
+      if (trigger) {
+        trigger.setAttribute('aria-expanded', 'true');
+        const item = trigger.closest('.sidebar-category-item');
+        if (item) item.setAttribute('data-state', 'open');
+      }
+      updateState();
+    }
+
+    function closeAllSwitcherMenus(exceptRoot) {
+      document.querySelectorAll('[data-proto-switcher]').forEach(root => {
+        if (exceptRoot && root === exceptRoot) return;
+        if (root.closest('.categories-sidebar') && !root.closest('.sidebar-locale-row')) return;
+        const panel = root.querySelector('[data-w-menu-panel]');
+        const trigger = root.querySelector('[data-w-menu-trigger]');
+        if (panel) panel.hidden = true;
+        if (trigger) trigger.setAttribute('aria-expanded', 'false');
+      });
+    }
+
+    function bindChrome() {
+      document.querySelectorAll('[data-open-drawer]').forEach(btn => {
+        btn.addEventListener('click', () => openDrawer());
+      });
+      document.querySelectorAll('[data-close-drawer]').forEach(el => {
+        el.addEventListener('click', closeDrawer);
+      });
+      document.querySelectorAll('[data-ship]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          localeState.ship = localeState.ship === 'China' ? 'United States' : 'China';
+          render();
+          openDrawer();
+        });
+      });
+      const accordionToggle = document.getElementById('categories-sidebar-categories-toggle');
+      const accordionPanel = document.getElementById('categories-sidebar-nav-panel');
+      if (accordionToggle && accordionPanel) {
+        accordionToggle.addEventListener('click', () => {
+          const open = accordionToggle.getAttribute('aria-expanded') === 'true';
+          accordionToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+          accordionPanel.hidden = open;
+          accordionToggle.closest('.categories-sidebar-section')
+            ?.classList.toggle('is-collapsed', open);
+        });
+      }
+      document.querySelectorAll('[data-open-flyout]').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          openFlyout(btn.getAttribute('data-open-flyout'));
+        });
+      });
+      document.querySelectorAll('[data-close-flyout]').forEach(btn => {
+        btn.addEventListener('click', closeFlyouts);
+      });
+      document.querySelectorAll('[data-prevent]').forEach(a => {
+        a.addEventListener('click', (e) => e.preventDefault());
+      });
+      document.querySelectorAll('[data-w-menu-trigger]').forEach(trigger => {
+        trigger.addEventListener('click', (e) => {
+          e.stopPropagation();
+          const root = trigger.closest('[data-proto-switcher]');
+          const panel = root?.querySelector('[data-w-menu-panel]');
+          if (!panel) return;
+          const open = panel.hidden;
+          closeAllSwitcherMenus(root);
+          panel.hidden = !open;
+          trigger.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+      });
+      document.querySelectorAll('.w-language-switcher__option').forEach(btn => {
+        btn.addEventListener('click', () => {
+          localeState.lang = btn.getAttribute('data-lang');
+          localeState.langLabel = btn.getAttribute('data-lang-label') || localeState.lang;
+          const wasOpen = document.body.classList.contains('drawer-open');
+          render();
+          if (wasOpen) openDrawer();
+        });
+      });
+      document.querySelectorAll('.w-currency-switcher__option').forEach(btn => {
+        btn.addEventListener('click', () => {
+          localeState.currency = btn.getAttribute('data-currency');
+          localeState.currencySymbol = btn.getAttribute('data-currency-symbol') || '';
+          const wasOpen = document.body.classList.contains('drawer-open');
+          render();
+          if (wasOpen) openDrawer();
+        });
+      });
+    }
+
+    function updateState() {
+      const key = currentKey();
+      const meta = VARIANTS.find(x => x.key === key);
+      const w = window.innerWidth;
+      const band = w <= 420 ? 'phone-sm' : w <= 720 ? 'phone' : w <= 1100 ? 'tablet' : 'desktop';
+      const input = document.querySelector('.A .search input');
+      if (input) {
+        const full = input.getAttribute('data-ph-full') || input.placeholder;
+        const short = input.getAttribute('data-ph-short') || 'Search Hanfu…';
+        input.placeholder = w <= 720 ? short : full;
+      }
+      const drawer = document.body.classList.contains('drawer-open') ? 'open' : 'closed';
+      const flyout = document.querySelector('.header-category-panel.is-drawer-flyout[data-state="open"]');
+      const flyoutId = flyout ? flyout.id.replace('flyout-', '') : 'none';
+      document.getElementById('state').textContent =
+        `variant=${key} · viewport=${w}px (${band}) · drawer=${drawer} · flyout=${flyoutId}\n` +
+        `contract=categories-sidebar (home / all-categories L1→L2/L3 / hot / account / settings)\n` +
+        `taglib=w:i18n:switcher + header-currency-switcher (mock)\n` +
+        `locale=${localeState.lang} (${localeState.langLabel}) · currency=${localeState.currency} · ship=${localeState.ship}\n` +
+        `name=${meta.name}\nstructure=${meta.blurb}`;
+    }
+
+    function render() {
+      const key = currentKey();
+      const meta = VARIANTS.find(x => x.key === key);
+      document.body.className = key;
+      document.body.classList.remove('drawer-open');
+      const chrome = key === 'A' ? renderA() : key === 'B' ? renderB() : renderC();
+      document.getElementById('root').innerHTML = chrome + hero();
+      document.getElementById('label').textContent = `${key} (${meta.name})`;
+      bindChrome();
+      updateState();
+    }
+
+    document.getElementById('prev').addEventListener('click', () => cycle(-1));
+    document.getElementById('next').addEventListener('click', () => cycle(1));
+    document.addEventListener('click', (e) => {
+      if (!(e.target instanceof Element)) return;
+      if (e.target.closest('[data-proto-switcher]')) return;
+      closeAllSwitcherMenus();
+    });
+    document.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+      if (e.key === 'Escape') {
+        const flyout = document.querySelector('.header-category-panel.is-drawer-flyout[data-state="open"]');
+        if (flyout) closeFlyouts();
+        else {
+          closeDrawer();
+          closeAllSwitcherMenus();
+        }
+      }
+      if (e.key === 'ArrowLeft') cycle(-1);
+      if (e.key === 'ArrowRight') cycle(1);
+    });
+    window.addEventListener('resize', updateState);
+    render();
+  </script>
+</body>
+</html>

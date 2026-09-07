@@ -16,7 +16,7 @@
  * @param link {default="",type="string",label="链接地址"}
  * @param alt_text {default="广告",type="string",label="替代文字"}
  * @param open_new_tab {default=false,type="bool",label="新窗口打开"}
- * @param border_radius {default="8px",type="string",label="圆角大小"}
+ * @param border_radius {default="var(--weline-radius-md)",type="string",label="圆角大小"}
  */
 
 use Weline\Theme\Helper\ThemeUiColor;
@@ -31,26 +31,13 @@ $image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('image') ?
 $imageFileHtml = (string)($this->getData('image_file_html') ?? '');
 $link = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('link') ?? '');
 $altText = $this->getData('alt_text') ?? __('广告');
-$openNewTab = (bool)($this->getData('open_new_tab') ?? false);
-$borderRadius = trim((string)($this->getData('border_radius') ?? '8px'));
-if (preg_match('/^(?:0|[0-9]+(?:\\.[0-9]+)?(?:px|rem|em|%))$/D', $borderRadius) !== 1) {
-    $borderRadius = '8px';
-}
-$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
-
-if ($isPreviewMode && $image === '') {
-    $image = '';
-} elseif (empty($image)) {
-    $image = $placeholder;
-}
-
+$openNewTab = \Weline\Theme\Helper\SiteBlockConfig::boolean($this->getData('open_new_tab'));
+$borderRadius = \Weline\Theme\Helper\SiteBlockConfig::length($this->getData('border_radius'), 'var(--weline-radius-md)');
 $rootStyle = 'border-radius:' . $borderRadius . ';';
-if ($isPreviewMode && $image === '') {
-    $rootStyle .= 'background:linear-gradient(135deg,var(--weline-theme-primary) 0%,var(--weline-theme-primary-hover) 100%);min-height:56px;';
-}
 ?>
 
-<section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<section class="weline-site-block <?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"
          data-uid="<?= $esc($scope->uid) ?>"
          data-js-ns="<?= $esc($scope->jsNs) ?>"
@@ -67,9 +54,9 @@ if ($isPreviewMode && $image === '') {
         <img src="<?= $esc($image) ?>"
              alt="<?= $esc((string)$altText) ?>"
              class="ad-image"
-             loading="lazy">
-    <?php elseif ($isPreviewMode): ?>
-        <div class="ad-image ad-image--preview" aria-hidden="true"></div>
+             loading="lazy" decoding="async">
+    <?php else: ?>
+        <p class="sb-empty"><lang>请选择真实图片</lang></p>
     <?php endif; ?>
 
     <span class="ad-label"><?= __('广告') ?></span>
@@ -122,27 +109,4 @@ if ($isPreviewMode && $image === '') {
     letter-spacing: var(--token-size-0-5px);
 }
 
-.widget-preview-canvas .<?= $wc ?>,
-.<?= $wc ?>.is-preview {
-    min-height: var(--size-control-2xl);
-}
-
-.widget-preview-canvas .<?= $wc ?> .ad-image,
-.<?= $wc ?>.is-preview .ad-image {
-    min-height: var(--size-control-2xl);
-}
-
-.widget-preview-canvas .<?= $wc ?> .ad-image--preview,
-.<?= $wc ?>.is-preview .ad-image--preview {
-    width: 100%;
-    min-height: var(--size-control-2xl);
-    background: linear-gradient(135deg, color-mix(in srgb, var(--weline-theme-on-primary) 15%, transparent) 0%, color-mix(in srgb, var(--weline-theme-on-primary) 5%, transparent) 100%);
-}
-
-.widget-preview-canvas .<?= $wc ?> .ad-label,
-.<?= $wc ?>.is-preview .ad-label {
-    top: var(--spacing-1_5);
-    right: var(--spacing-1_5);
-    font-size: var(--token-size-9px);
-}
 </style>

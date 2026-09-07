@@ -54,21 +54,44 @@ $resolveImage = static function (array $node, int $seed): string {
     return ThemeDemoCatalog::productImage($seed);
 };
 
-$resolveName = static function (array $node) use ($resolveLocale, $esc): string {
+$resolveName = static function (array $node) use ($resolveLocale): string {
     $name = trim((string)($node['text'] ?? $node['name'] ?? ''));
     $locale = $resolveLocale();
     $i18nMap = $node['i18n']['name'] ?? null;
     if (is_array($i18nMap)) {
         $localized = trim((string)($i18nMap[$locale] ?? ''));
         if ($localized !== '') {
-            return htmlspecialchars($localized, ENT_QUOTES, 'UTF-8');
+            // EN 店面：拒绝用错误 i18n 映射把已英文化的 text（Hanfu）覆盖成 CJK（汉服）。
+            $rejectCjkOverwrite = $locale === 'en_US'
+                && $name !== ''
+                && !preg_match('/\p{Han}/u', $name)
+                && preg_match('/\p{Han}/u', $localized);
+            if (!$rejectCjkOverwrite) {
+                $name = $localized;
+            }
         }
     }
     if ($name === '') {
         return '';
     }
 
-    return $esc($name);
+    // 中文源串（如「全部商品」）在 EN 店面仍需按 CSV 解析；已是拉丁文的 catalog 名不要再翻。
+    if ($locale === 'en_US' && preg_match('/\p{Han}/u', $name)) {
+        try {
+            $translated = trim(WidgetI18n::label($name));
+            if ($translated !== '') {
+                $name = $translated;
+            }
+        } catch (\Throwable) {
+            $translated = (string)__($name);
+            if ($translated !== '') {
+                $name = $translated;
+            }
+        }
+    }
+
+    // Catalog / toNavItems 已解析店面语言；勿再走 headerEsc/__()（会把 Hanfu 反向翻成 汉服）。
+    return htmlspecialchars($name, ENT_QUOTES, 'UTF-8');
 };
 
 $resolveDescription = static function (array $node, string $label) use ($resolveLocale, $escDesc): string {
@@ -102,7 +125,8 @@ foreach ($items as $index => $item) {
     $children = is_array($item['children'] ?? null) ? $item['children'] : [];
     $hasChildren = $children !== [];
     $image = $resolveImage($item, ((int)$index + 1) * 19);
-    $labelForFallback = $textPlain !== '' ? (string)__($textPlain) : strip_tags($textHtml);
+    // text 已由 MenuTreeNormalizer / catalog locale 解析；勿再 __()，避免 KeyBuilder 滞后时 Hanfu→汉服。
+    $labelForFallback = $textPlain !== '' ? $textPlain : strip_tags($textHtml);
     $descHtml = $resolveDescription($item, $labelForFallback);
 
     if (!$hasChildren):
@@ -122,17 +146,14 @@ foreach ($items as $index => $item) {
         continue;
     endif;
 
-    $panelId = 'drawer-mega-' . preg_replace('/[^a-z0-9_-]+/i', '-', strtolower($textPlain));
-    $panelId = trim((string)$panelId, '-');
-    if ($panelId === '' || $panelId === 'drawer-mega') {
-        $panelId = 'drawer-mega-' . substr(md5($textPlain . '|' . $url), 0, 10);
-    }
     ?>
     <li class="sidebar-category-item has-children sidebar-category-item--mega"
         data-w-component="popover"
         data-w-open-on="hover"
         data-w-placement="right-start"
-        data-w-gap="0">
+        data-w-gap="0"
+        data-sidebar-mega-source="<?= $escAttr($url) ?>"
+        data-sidebar-mega-deferred="1">
         <div class="sidebar-category-card sidebar-category-card--trigger"
              data-w-popover-trigger
              data-w-gap="0"
@@ -149,14 +170,7 @@ foreach ($items as $index => $item) {
             </a>
             <span class="sidebar-category-card__chevron" aria-hidden="true">▶</span>
         </div>
-        <?= \Weline\Theme\Helper\HeaderNavFragment::fetchMegaMenuPanel($this, [
-            'item' => $item,
-            'panel_id' => $panelId,
-            'esc' => $esc,
-            'esc_desc' => $escDesc,
-            'drawer_flyout' => true,
-            'show_banner_with_children' => $show_banner_with_children ?? $this->getData('show_banner_with_children') ?? true,
-        ]) ?>
+        <!-- Mega panel is cloned from the desktop category-menu only when the drawer opens. -->
     </li>
     <?php
 }

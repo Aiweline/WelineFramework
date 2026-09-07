@@ -38,17 +38,8 @@ $showIcons = (bool)($this->getData('show_icons') ?? false);
 $maxDepth = (int)($this->getData('max_depth') ?? 3);
 
 $defaultShortcuts = [
-    ['label' => __('今日特价'), 'url' => '/promotion/deals'],
-    ['label' => __('客户服务'), 'url' => '/help'],
-];
-$defaultCategories = [
-    ['label' => __('电子产品'), 'url' => '/category/electronics', 'children' => [
-        ['label' => __('手机通讯'), 'url' => '/category/electronics/phones'],
-        ['label' => __('电脑办公'), 'url' => '/category/electronics/computers'],
-        ['label' => __('智能设备'), 'url' => '/category/electronics/smart-devices'],
-    ]],
-    ['label' => __('服装鞋帽'), 'url' => '/category/fashion'],
-    ['label' => __('家居生活'), 'url' => '/category/home'],
+    ['label' => __('今日特价'), 'url' => $this->getFrontendUrl('promotion/deals')],
+    ['label' => __('客户服务'), 'url' => $this->getFrontendUrl('help')],
 ];
 
 $categoryItems = $this->getData('category_items');

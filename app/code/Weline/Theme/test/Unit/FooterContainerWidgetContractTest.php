@@ -39,11 +39,15 @@ final class FooterContainerWidgetContractTest extends TestCase
         self::assertStringContainsString('footer-section__link', $src);
         self::assertStringContainsString('resolveFrontendSiteName', $src);
         self::assertStringContainsString('留空使用当前网站名称', $src);
+        self::assertStringContainsString('if ($showSocial && $socialItems !== [])', $src);
         self::assertStringNotContainsString('<ul class="footer-section__list">', $src);
         self::assertStringNotContainsString('<li>', $src);
         self::assertStringNotContainsString('getFooter()->getHtml()', $src);
         self::assertStringNotContainsString('Weline\\Frontend\\Block\\Footer\\Base', $src);
         self::assertStringContainsString('<w:hook>footer</w:hook>', $src);
+        self::assertStringContainsString('id="navBackToTop"', $src);
+        self::assertStringContainsString("window.scrollTo({", $src);
+        self::assertStringContainsString("getElementById('navBackToTop')", $src);
     }
 
     public function testNormalizeSkipsDisabledGroups(): void
@@ -99,6 +103,18 @@ final class FooterContainerWidgetContractTest extends TestCase
         self::assertStringNotContainsString('rgba(', $css);
         self::assertStringNotContainsString('1440px', $css);
         self::assertStringNotContainsString('Amazon footer chrome', $css);
+    }
+
+    public function testBackToTopButtonBindsWindowScrollToTop(): void
+    {
+        $path = dirname(__DIR__, 2) . '/view/theme/frontend/widgets/container/footer/default.phtml';
+        $src = (string)file_get_contents($path);
+
+        self::assertStringContainsString('class="footer-back-to-top"', $src);
+        self::assertStringContainsString('id="navBackToTop"', $src);
+        self::assertStringContainsString("getElementById('navBackToTop')", $src);
+        self::assertStringContainsString("window.scrollTo({", $src);
+        self::assertStringContainsString("top: 0", $src);
     }
 
 }

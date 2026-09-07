@@ -96,12 +96,16 @@ final class ThemeColorModeContractTest extends TestCase
             "record.name === 'tooltip'",
             "close(false, 'anchor-hidden', true)",
             'function resolveFloatingHost(from)',
-            'function applyFloatingStackElevation(floating, host)',
+            'function applyFloatingStackElevation(floating, host, origin = null)',
+            'function resolveContainerStackZ(from, maxDepth = FLOATING_CONTAINER_Z_DEPTH)',
+            'const FLOATING_CONTAINER_Z_DEPTH = 4',
             'function floatingLayerFloor(floating)',
             'function effectiveStackZ(element)',
             'let peak = base + 1',
             "floating.dataset.wFloatingPortal = 'true'",
-            'resolveFloatingHost(marker.parentElement || marker)',
+            'resolveFloatingHost(origin || marker)',
+            'applyFloatingStackElevation(floating, host, origin)',
+            '#categories-sidebar:not([aria-hidden="true"])',
             "createFloatingPortal(tooltip, 'tooltip')",
         ] as $contract) {
             self::assertStringContainsString($contract, $runtime);
@@ -227,13 +231,13 @@ final class ThemeColorModeContractTest extends TestCase
             self::assertStringContainsString('Weline_Theme::ui/weline-frontend.css', $frontend);
             self::assertStringContainsString('Weline_Theme::ui/weline-ui.js', $frontend);
             self::assertSame(1, substr_count($frontend, 'colors/_light.css'));
-            self::assertSame(1, substr_count($frontend, 'colors/_ink.css'));
             self::assertSame(0, substr_count($frontend, 'colors/_default.css'));
+            self::assertSame(1, substr_count($frontend, 'colors/_ink.css'));
             self::assertSame(1, substr_count($frontend, 'colors/_dark.css'));
             self::assertLessThan(
                 strpos($frontend, 'colors/_dark.css'),
                 strpos($frontend, 'colors/_ink.css'),
-                'The default ink brand palette must load before dark mode so dark tokens can override.',
+                'The ink brand palette must load before dark mode so dark tokens can override.',
             );
             self::assertDoesNotMatchRegularExpression('/<script(?:\s[^>]*)?>\s*\(function/s', $frontend);
             self::assertStringNotContainsString('assets/js/theme.js', $frontend);

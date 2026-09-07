@@ -80,6 +80,21 @@ class ThemeLayout extends Model implements SchemaDiffExcludedModelInterface
     public const PAGE_TYPE_SEARCH = 'search';         // layouts/search/
     public const PAGE_TYPE_BLOG = 'blog';             // layouts/blog/
     public const PAGE_TYPE_BLOG_CATEGORY = 'blog_category'; // layouts/blog_category/
+    public const PAGE_TYPE_PROMOTION = 'promotion';   // layouts/promotion/
+    public const PAGE_TYPE_ACTIVITY = 'activity';     // layouts/activity/
+    public const PAGE_TYPE_CHECKOUT_SUCCESS = 'checkout_success'; // layouts/checkout_success/
+    public const PAGE_TYPE_CHECKOUT_FAILURE = 'checkout_failure'; // layouts/checkout_failure/
+    public const PAGE_TYPE_HELP = 'help';              // layouts/help/
+    public const PAGE_TYPE_PAYMENT_GUIDE = 'payment_guide'; // layouts/payment_guide/
+    public const PAGE_TYPE_GUIDE = 'guide';            // layouts/guide/
+    public const PAGE_TYPE_ABOUT = 'about';            // layouts/about/
+    public const PAGE_TYPE_CONTACT = 'contact';        // layouts/contact/
+    public const PAGE_TYPE_REVIEW = 'review';          // layouts/review/
+    public const PAGE_TYPE_QA = 'qa';                  // layouts/qa/
+    public const PAGE_TYPE_RMA = 'rma';                // layouts/rma/
+    public const PAGE_TYPE_POLICY = 'policy';          // layouts/policy/
+    public const PAGE_TYPE_TERMS = 'terms';            // layouts/terms/
+    public const PAGE_TYPE_NOT_FOUND = 'not_found';    // layouts/not_found/
     public const PAGE_TYPE_DEFAULT = 'default';       // layouts/default/
     // 区域常量
     public const AREA_HEADER = 'header';
@@ -120,6 +135,21 @@ class ThemeLayout extends Model implements SchemaDiffExcludedModelInterface
             self::PAGE_TYPE_SEARCH => __('搜索页'),
             self::PAGE_TYPE_BLOG => __('博客详情'),
             self::PAGE_TYPE_BLOG_CATEGORY => __('博客分类'),
+            self::PAGE_TYPE_PROMOTION => __('促销页'),
+            self::PAGE_TYPE_ACTIVITY => __('活动页'),
+            self::PAGE_TYPE_CHECKOUT_SUCCESS => __('结算成功页'),
+            self::PAGE_TYPE_CHECKOUT_FAILURE => __('结算失败页'),
+            self::PAGE_TYPE_HELP => __('帮助中心'),
+            self::PAGE_TYPE_PAYMENT_GUIDE => __('支付指南'),
+            self::PAGE_TYPE_GUIDE => __('指南页'),
+            self::PAGE_TYPE_ABOUT => __('关于我们'),
+            self::PAGE_TYPE_CONTACT => __('联系我们'),
+            self::PAGE_TYPE_REVIEW => __('评价页'),
+            self::PAGE_TYPE_QA => __('问答页'),
+            self::PAGE_TYPE_RMA => __('退换货页'),
+            self::PAGE_TYPE_POLICY => __('政策页'),
+            self::PAGE_TYPE_TERMS => __('服务条款'),
+            self::PAGE_TYPE_NOT_FOUND => __('404 页面'),
             self::PAGE_TYPE_DEFAULT => __('默认布局'),
         ];
     }

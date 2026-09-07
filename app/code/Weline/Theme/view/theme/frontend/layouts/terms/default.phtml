@@ -188,7 +188,7 @@ $toc = [
             display: block;
             padding: 0.4rem 0.55rem;
             border-radius: 4px;
-            color: var(--color-link, #007185);
+            color: var(--color-link);
             text-decoration: none;
             font-size: 0.9rem;
             line-height: 1.35;
@@ -196,7 +196,7 @@ $toc = [
 
         .amazon-terms__toc a:hover {
             background: var(--color-bg-hover, #f7fafa);
-            color: var(--color-link-hover, #c45500);
+            color: var(--color-link-hover);
             text-decoration: underline;
         }
 
@@ -257,13 +257,13 @@ $toc = [
         }
 
         .amazon-terms__related a {
-            color: var(--color-link, #007185);
+            color: var(--color-link);
             text-decoration: none;
             font-size: 0.92rem;
         }
 
         .amazon-terms__related a:hover {
-            color: var(--color-link-hover, #c45500);
+            color: var(--color-link-hover);
             text-decoration: underline;
         }
 
@@ -340,7 +340,7 @@ $toc = [
 
                                 <div class="amazon-terms__panel">
                                     <aside class="amazon-terms__toc" aria-label="<?= $escape(__('条款目录')) ?>">
-                                        <h2><?= $escape(__('目录')) ?></h2>
+                                        <h2><lang>目录</lang></h2>
                                         <nav>
                                             <?php foreach ($toc as $item): ?>
                                                 <a href="#<?= $escape($item['id']) ?>"><?= $escape($item['label']) ?></a>

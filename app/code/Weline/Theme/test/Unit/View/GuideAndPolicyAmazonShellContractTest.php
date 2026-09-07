@@ -31,6 +31,7 @@ final class GuideAndPolicyAmazonShellContractTest extends TestCase
         self::assertStringContainsString('border-radius: 8px', $source);
         self::assertStringContainsString('amazon-terms__panel', $source);
         self::assertStringContainsString('amazon-terms__toc', $source);
+        self::assertStringContainsString('<lang>目录</lang>', $source);
         self::assertStringNotContainsString('amazon-terms__hero-inner', $source);
         self::assertStringNotContainsString('1440px', $source);
     }
@@ -59,9 +60,20 @@ final class GuideAndPolicyAmazonShellContractTest extends TestCase
             'privacy' => ['privacy.phtml'],
             'cookie' => ['cookie.phtml'],
             'refund' => ['refund.phtml'],
-            'ads-preferences' => ['ads-preferences.phtml'],
             'disclaimer' => ['disclaimer.phtml'],
             'term-condition' => ['term-condition.phtml'],
         ];
+    }
+
+    public function testEnglishCsvTranslatesPolicyTocHeading(): void
+    {
+        $csv = (string)file_get_contents(dirname(__DIR__, 3) . '/i18n/en_US.csv');
+        self::assertStringContainsString('目录,Contents', $csv);
+        self::assertStringNotContainsString("\n目录,目录\n", $csv);
+        self::assertStringContainsString('隐私政策目录,"Privacy policy contents"', $csv);
+        self::assertStringContainsString('"Cookie 政策目录","Cookie policy contents"', $csv);
+        self::assertStringContainsString('服务条款目录,"Terms of service contents"', $csv);
+        self::assertStringContainsString('免责声明目录,"Disclaimer contents"', $csv);
+        self::assertStringContainsString('退款政策目录,"Refund policy contents"', $csv);
     }
 }

@@ -78,6 +78,9 @@ final class ThemeAccountLayoutsPartialsGuardTest extends TestCase
         $this->assertStringContainsString('Weline\\Theme\\Block\\Partials', $content);
         $this->assertStringContainsString('account-login', $content);
         $this->assertStringContainsString('account-auth-stage', $content);
+        $this->assertStringContainsString('default-option="default"', $content);
+        $this->assertStringNotContainsString('default-option="auth"', $content);
+        $this->assertStringNotContainsString('auth_secondary_url', $content);
         // Header chrome includes mini-cart drawer; base body-end loads its CSS/JS.
         $this->assertStringContainsString(
             'Weline_Theme::frontend::layouts::base::body-end',

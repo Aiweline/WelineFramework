@@ -1,6 +1,6 @@
 # 主题编辑器「基础信息」身份槽
 
-Hook：`Weline_Theme::backend::theme-editor::brand-basics::identity`
+Hook：`Weline_Theme::backend::partials::theme-editor-brand-basics::identity`
 
 用于在主题编辑器「基础信息」Drawer 顶部挂载 Website / Store / Channel 等真实身份字段。
 

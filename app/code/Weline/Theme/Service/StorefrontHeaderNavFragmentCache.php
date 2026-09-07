@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Theme\Service;
 
+use Weline\Framework\Cache\CachePolicy;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 
 /**
@@ -14,6 +15,17 @@ final class StorefrontHeaderNavFragmentCache
     private const CACHE_POOL = 'weline_theme_storefront_header_nav';
     private const FRESH_TTL_SECONDS = 3600;
     private const STALE_TTL_SECONDS = 86400;
+
+    /**
+     * Rendered navigation is a channel resource: the category tree may differ
+     * by website/store/channel, while its labels and localized URLs vary by
+     * language/currency. Keep the boundary declarative so every caller uses
+     * the same scope and invalidation rules.
+     */
+    public static function cachePolicy(): CachePolicy
+    {
+        return StorefrontThemeCacheCoordinator::headerNavigationPolicy();
+    }
 
     public function __construct(
         private readonly StorefrontScopeHotCache $hotCache,
@@ -35,16 +47,13 @@ final class StorefrontHeaderNavFragmentCache
         callable $builder,
         bool $showBannerWithChildren = true,
     ): string {
-        $html = $this->hotCache->remember(
-            self::CACHE_POOL,
+        $html = $this->hotCache->rememberPolicy(
+            self::cachePolicy(),
             $this->megaMenuPanelLogicalKey($panelId, $drawerFlyout, $item, $showBannerWithChildren),
-            self::FRESH_TTL_SECONDS,
             static function () use ($builder): string {
                 $rendered = $builder();
                 return \is_string($rendered) ? $rendered : '';
             },
-            ['website' => true, 'lang' => true],
-            self::STALE_TTL_SECONDS,
         );
 
         return \is_string($html) ? $html : '';
@@ -55,16 +64,13 @@ final class StorefrontHeaderNavFragmentCache
      */
     public function rememberCategoriesSidebarNav(array $items, callable $builder): string
     {
-        $html = $this->hotCache->remember(
-            self::CACHE_POOL,
+        $html = $this->hotCache->rememberPolicy(
+            self::cachePolicy(),
             $this->sidebarNavLogicalKey($items),
-            self::FRESH_TTL_SECONDS,
             static function () use ($builder): string {
                 $rendered = $builder();
                 return \is_string($rendered) ? $rendered : '';
             },
-            ['website' => true, 'lang' => true],
-            self::STALE_TTL_SECONDS,
         );
 
         return \is_string($html) ? $html : '';
@@ -92,7 +98,8 @@ final class StorefrontHeaderNavFragmentCache
         $structureFp = $this->navStructureFingerprint($item);
 
         return \sprintf(
-            'theme.header.mega_panel.v2.%s.%s.%s.%s',
+            'theme.header.mega_panel.v4.%s.%s.%s.%s.%s',
+            $this->storefrontLocaleSegment(),
             $drawerFlyout ? 'drawer' : 'top',
             $panelSlug,
             $showBannerWithChildren ? 'banner1' : 'banner0',
@@ -105,7 +112,25 @@ final class StorefrontHeaderNavFragmentCache
      */
     public function sidebarNavLogicalKey(array $items): string
     {
-        return 'theme.header.sidebar_nav.' . $this->navListFingerprint($items);
+        return 'theme.header.sidebar_nav.v4.'
+            . $this->storefrontLocaleSegment()
+            . '.'
+            . $this->navListFingerprint($items);
+    }
+
+    private function storefrontLocaleSegment(): string
+    {
+        try {
+            $locale = \trim(\str_replace('-', '_', (string)\Weline\Framework\App\State::getLangLocal()));
+        } catch (\Throwable) {
+            $locale = '';
+        }
+        $requestUri = (string)(\Weline\Framework\Env\WelineEnv::server('REQUEST_URI', '') ?: ($_SERVER['REQUEST_URI'] ?? ''));
+        if ($requestUri !== '' && \preg_match('#/(ar_SA|en_US|zh_Hans_CN|zh_CN)(?:/|$)#', $requestUri, $matches)) {
+            $locale = (string)$matches[1];
+        }
+
+        return $locale !== '' ? $locale : 'zh_Hans_CN';
     }
 
     /**

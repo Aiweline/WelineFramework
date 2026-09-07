@@ -156,6 +156,7 @@ final class ProductCardAddToCartParams
         return [
             'product_id' => $productId,
             'global_offer_uuid' => trim((string)($product['global_offer_uuid'] ?? '')),
+            'slug' => strtolower(trim((string)($product['slug'] ?? ''))),
             'sellable' => array_key_exists('sellable', $product)
                 ? !empty($product['sellable'])
                 : $inStock,
@@ -176,6 +177,7 @@ final class ProductCardAddToCartParams
         return [
             'product_id' => $productId,
             'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
+            'slug' => strtolower(trim((string)($offer['slug'] ?? ''))),
             'sellable' => !empty($offer['sellable']),
             'quote_only' => !empty($offer['quote_only']),
             'provider_code' => trim((string)($offer['provider_code'] ?? 'product')) ?: 'product',

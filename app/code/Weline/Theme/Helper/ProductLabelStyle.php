@@ -83,10 +83,15 @@ final class ProductLabelStyle
      */
     public static function resolveFlags(array $product, int $index = 0): array
     {
+        unset($index);
+
+        // Only honor explicit catalog/demo flags. Never fabricate NEW/SALE by
+        // card index — that made homepage widgets look inconsistently tagged
+        // and duplicated real deal copy (今日精选) with a fake 促销 badge.
         return [
-            'is_new' => (bool)($product['is_new'] ?? ($index % 3 === 0)),
-            'is_sale' => (bool)($product['is_sale'] ?? ($index % 4 === 0)),
-            'is_demo' => (bool)($product['is_demo'] ?? false),
+            'is_new' => !empty($product['is_new']),
+            'is_sale' => !empty($product['is_sale']),
+            'is_demo' => !empty($product['is_demo']),
         ];
     }
 }

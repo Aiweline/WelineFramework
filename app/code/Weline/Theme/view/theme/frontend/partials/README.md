@@ -16,6 +16,7 @@
   - `default`
 
 - `header`
+  - `auth` — 可选精简认证顶栏（非默认；登录/注册默认继承全局 `default`）
   - `centered`
   - `default`
   - `minimal`

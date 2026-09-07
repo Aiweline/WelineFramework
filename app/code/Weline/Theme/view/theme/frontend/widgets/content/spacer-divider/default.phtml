@@ -1,0 +1,30 @@
+<?php
+/**
+ * @widget.code {spacer-divider}
+ * @widget.name {间距与分隔线}
+ * @widget.description {使用主题间距变量组织内容节奏，可选分隔线}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content","sidebar","footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * @param size {default="md",type="select",label="垂直留白",options={none:"无",sm:"小",md:"中",lg:"大",xl:"加大"}}
+ * @param show_line {default=true,type="bool",label="显示分隔线"}
+ */
+
+use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Helper\WidgetI18n;
+
+$scope = WidgetUiScope::forWidget('spacer-divider');
+$esc = [Block::class, 'escape'];
+$t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::text($value)));
+$size = Block::choice($this->getData('size'), ['none','sm','md','lg','xl'], 'md');
+$space = $size === 'none' ? '0' : 'var(--spacing-' . $size . ')';
+$line = Block::boolean($this->getData('show_line'), true);
+?>
+
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<div class="<?= $esc($scope->cssClass) ?> weline-site-block sb-spacer" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>" style="--sb-space:<?= $esc($space) ?>">
+    <?php if ($line): ?><hr><?php endif; ?>
+</div>

@@ -38,7 +38,7 @@ $logoText = 'Weline';
 try {
     $siteBrandForName = ObjectManager::getInstance(SiteBrand::class);
     if ($siteBrandForName instanceof SiteBrand) {
-        $logoText = $siteBrandForName->resolveFrontendSiteName($configuredLogoText, '云裳 Hanfu Atelier');
+        $logoText = $siteBrandForName->resolveFrontendSiteName($configuredLogoText, 'Weline Store');
     } elseif ($configuredLogoText !== '') {
         $logoText = $configuredLogoText;
     }

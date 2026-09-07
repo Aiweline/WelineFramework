@@ -1,0 +1,119 @@
+<?php
+/**
+ * 问答页默认布局：Theme 只提供共享壳层与问答内容槽。
+ *
+ * @meta.name {default="问答页默认布局",name="问答页默认布局",description="问答页面的共享头尾与内容槽"}
+ * @meta.description {default="共享站点 chrome、语义主内容和问答业务槽",name="描述",description="问答数据与结构化内容由业务模块提供"}
+ * @preview.login {default=0,option={0:不需要登录,1:需要登录},name="是否需要登录",description="问答页通常允许访客访问"}
+ * @param title {default="问答",name="页面标题",description="用于主内容区的无障碍名称"}
+ * @param content {default="",name="主要内容（HTML）",description="由业务模块或编辑器注入的内容"}
+ * @param contentTemplate {default="",name="内容模板",description="由业务模块提供的模板标识"}
+ * @param showHeader {default=true,name="显示 header",description="是否渲染站点头部"}
+ * @param showFooter {default=true,name="显示 footer",description="是否渲染站点底部"}
+ * @param class {default="",name="额外 CSS 类",description="主内容额外 CSS 类"}
+ */
+$meta = $this->getData('meta') ?? [];
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES, 'UTF-8');
+$title = (string)($meta['title'] ?? __('问答'));
+$rawContent = (string)($this->getData('meta.content') ?: $this->getData('content') ?: ($meta['content'] ?? ''));
+$contentTemplate = (string)($this->getData('meta.contentTemplate') ?: ($meta['contentTemplate'] ?? ''));
+$renderedTemplateContent = trim($rawContent) === '' && $contentTemplate !== ''
+    ? (string)$this->fetch($contentTemplate)
+    : '';
+?>
+<!DOCTYPE html>
+<html lang="{{htmlLang}}" dir="{{htmlDir}}" data-local="{{lang_local}}" data-lang="{{lang}}" data-dir="{{htmlDir}}" data-w-area="frontend">
+<head>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-before</w:hook>
+    <w:block class="Weline\Theme\Block\Partials" area="frontend" type="head" default-option="default"/>
+    <w:hook>Weline_Theme::frontend::layouts::base::head-after</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::qa::head-after</w:hook>
+    <style>
+        body.w-theme-qa-layout { margin: 0; min-height: 100vh; color: var(--weline-layout-text-primary); background: var(--weline-layout-surface-primary); }
+        .w-theme-qa-shell { min-height: 100vh; display: flex; flex-direction: column; }
+        .w-theme-qa-main { flex: 1 0 auto; width: 100%; }
+        .w-theme-qa-stage { box-sizing: border-box; width: min(100%, var(--weline-layout-content-max-width)); max-width: 100%; min-width: 0; margin-inline: auto; padding: var(--weline-layout-spacing-2xl) var(--weline-layout-content-padding-inline) var(--weline-layout-spacing-3xl); }
+        .w-theme-qa-fallback { display: grid; gap: clamp(1.5rem, 3vw, 2.25rem); }
+        .w-theme-qa-fallback__intro { position: relative; overflow: hidden; padding: clamp(1.75rem, 5vw, 3.5rem); border: 1px solid color-mix(in srgb, var(--weline-layout-text-primary) 14%, transparent); border-radius: 1rem; background: linear-gradient(145deg, color-mix(in srgb, var(--weline-layout-surface-primary) 94%, #d9cfbd), var(--weline-layout-surface-primary)); }
+        .w-theme-qa-fallback__intro::before { content: '问'; position: absolute; inset-block-start: -.35em; inset-inline-end: .05em; color: color-mix(in srgb, #83302a 8%, transparent); font-family: "Noto Serif SC", "Songti SC", serif; font-size: clamp(9rem, 23vw, 18rem); line-height: 1; pointer-events: none; }
+        .w-theme-qa-fallback__eyebrow { position: relative; margin: 0 0 .65rem; color: #83302a; font-size: .78rem; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+        .w-theme-qa-fallback h1 { position: relative; margin: 0; font-family: "Noto Serif SC", "Songti SC", serif; font-size: clamp(1.8rem, 4vw, 3rem); line-height: 1.25; font-weight: 600; }
+        .w-theme-qa-fallback__lead { position: relative; margin: .9rem 0 0; max-width: 45rem; color: var(--weline-layout-text-secondary); line-height: 1.8; }
+        .w-theme-qa-fallback__actions { position: relative; display: flex; flex-wrap: wrap; gap: .75rem; margin-top: 1.25rem; }
+        .w-theme-qa-fallback__link { display: inline-flex; min-height: 2.75rem; align-items: center; justify-content: center; padding-inline: 1.2rem; border: 1px solid currentColor; border-radius: 999px; color: var(--weline-layout-text-primary); text-decoration: none; font-weight: 700; }
+        .w-theme-qa-fallback__link--primary { border-color: #83302a; background: #83302a; color: #fff; }
+        .w-theme-qa-fallback__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+        .w-theme-qa-fallback__card { padding: 1.25rem; border-block-start: 2px solid #83302a; background: var(--weline-layout-surface-primary); box-shadow: 0 .75rem 2rem rgba(30, 27, 22, .06); }
+        .w-theme-qa-fallback__card h2 { margin: 0 0 .5rem; font-family: "Noto Serif SC", "Songti SC", serif; font-size: 1.05rem; }
+        .w-theme-qa-fallback__card p { margin: 0; color: var(--weline-layout-text-secondary); line-height: 1.75; font-size: .94rem; }
+        @media (max-width: 760px) { .w-theme-qa-fallback__grid { grid-template-columns: 1fr; } }
+    </style>
+    <w:hook>seo::head</w:hook>
+</head>
+<body class="w-theme-qa-layout <?= $escape($meta['class'] ?? '') ?>">
+    <w:hook>seo::body</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-start</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::qa::body-start</w:hook>
+    <div class="weline-page-wrapper w-theme-qa-shell" data-layout="qa">
+        <if condition="meta.showHeader">
+            <w:hook>Weline_Theme::frontend::layouts::base::header-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="header" default-option="default" vars="logo,logoText,navItems,showSearch,showUserMenu"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::header-after</w:hook>
+        </if>
+        <main class="w-theme-qa-main" id="main-content" aria-label="<?= $escape($title) ?>">
+            <div class="w-theme-qa-stage">
+                <w:slot id="content"
+                        name="问答业务内容"
+                        accept="qa-main,qa-list,qa-detail,faq,content"
+                        reject="header,footer,navigation"
+                        multiple="true"
+                        position="content">
+                    <w:hook>
+                        Weline_Theme::frontend::layouts::qa::content
+                        <else/>
+                        <?php if (trim($rawContent) !== ''): ?>
+                            <?= $rawContent ?>
+                        <?php elseif (trim($renderedTemplateContent) !== ''): ?>
+                            <?= $renderedTemplateContent ?>
+                        <?php else: ?>
+                            <section weline-code="theme-qa-fallback" class="w-theme-qa-fallback" data-testid="storefront-qa-page" aria-labelledby="qa-page-title">
+                                <div class="w-theme-qa-fallback__intro">
+                                    <p class="w-theme-qa-fallback__eyebrow"><?= $escape(__('选购答疑')) ?></p>
+                                    <h1 id="qa-page-title"><?= $escape(__('商品问答')) ?></h1>
+                                    <p class="w-theme-qa-fallback__lead"><?= $escape(__('关于形制、尺码、面料或穿着场景的问题，请进入对应商品详情页查看已公开的回答；需要订单协助时，可直接联系客户服务。')) ?></p>
+                                    <div class="w-theme-qa-fallback__actions">
+                                        <a class="w-theme-qa-fallback__link w-theme-qa-fallback__link--primary" href="@url{'categories'}"><?= $escape(__('按分类选购')) ?></a>
+                                        <a class="w-theme-qa-fallback__link" href="@url{'contact'}"><?= $escape(__('联系客户服务')) ?></a>
+                                    </div>
+                                </div>
+                                <div class="w-theme-qa-fallback__grid" aria-label="<?= $escape(__('问答使用说明')) ?>">
+                                    <article class="w-theme-qa-fallback__card">
+                                        <h2><?= $escape(__('商品问题')) ?></h2>
+                                        <p><?= $escape(__('在商品详情页提问，问题会与具体款式关联，便于获得准确回复。')) ?></p>
+                                    </article>
+                                    <article class="w-theme-qa-fallback__card">
+                                        <h2><?= $escape(__('订单与售后')) ?></h2>
+                                        <p><?= $escape(__('订单状态、退换与配送问题请通过帮助中心或账户订单页处理。')) ?></p>
+                                    </article>
+                                    <article class="w-theme-qa-fallback__card">
+                                        <h2><?= $escape(__('公开信息提示')) ?></h2>
+                                        <p><?= $escape(__('请勿在公开问题中填写电话、地址、订单号或其他个人信息。')) ?></p>
+                                    </article>
+                                </div>
+                            </section>
+                        <?php endif; ?>
+                    </w:hook>
+                </w:slot>
+            </div>
+        </main>
+        <if condition="meta.showFooter">
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-before</w:hook>
+            <w:block class="Weline\Theme\Block\Partials" area="frontend" type="footer" default-option="default" vars="copyright,links,showBackToTop,socialMedia,showSocialMedia"/>
+            <w:hook>Weline_Theme::frontend::layouts::base::footer-after</w:hook>
+        </if>
+    </div>
+    <w:hook>Weline_Theme::frontend::layouts::qa::body-end</w:hook>
+    <w:hook>Weline_Theme::frontend::layouts::base::body-end</w:hook>
+    <w:hook>seo::footer</w:hook>
+</body>
+</html>

@@ -22,7 +22,7 @@
  * @param.backgroundColor {default="",name="背景色",description="支持 #fff、rgba()、var(--token)"}
  * @param.backgroundImage {default="",type="image",name="背景图",description="从媒体库选择背景图片"}
  * @param.textColor {default="",name="文字颜色",description="支持 #111、rgba()、var(--token)"}
- * @param.shadow {default="md",name="阴影",description="none/sm/md/lg"}
+ * @param.shadow {default="sm",name="阴影",description="none/sm/md/lg"}
  * @param.class {default="",name="额外 CSS 类",description="追加样式类"}
  */
 
@@ -74,7 +74,7 @@ $textColor = ThemeUiColor::sanitize(
     $this->getData('textColor') ?? $this->getData('meta.textColor') ?? '',
     'var(--weline-theme-text)'
 );
-$shadow = strtolower(trim((string)($this->getData('shadow') ?? $this->getData('meta.shadow') ?? 'md')));
+$shadow = strtolower(trim((string)($this->getData('shadow') ?? $this->getData('meta.shadow') ?? 'sm')));
 $class = trim((string)($this->getData('class') ?? $this->getData('meta.class') ?? ''));
 $editorMode = (bool)($this->getData('editor_mode') ?? $this->getData('preview_mode') ?? false);
 $bodySlotId = 'card-body:' . ($layoutId !== '' ? $layoutId : 'preview');
@@ -163,14 +163,19 @@ $rootClass = trim($wc . ' w-card card w-builder-card w-builder-card--' . $varian
     display: flex;
     flex-direction: column;
     min-height: var(--wc-card-min-height);
-    padding: var(--wc-card-padding);
-    border-radius: var(--wc-card-radius);
+    padding: var(--wc-card-padding, var(--weline-layout-spacing-md));
+    border-radius: var(--wc-card-radius, var(--weline-theme-radius-lg));
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);
     background-color: var(--wc-card-bg);
     background-size: cover;
     background-position: center;
     color: var(--wc-card-color);
     text-align: left;
     overflow: hidden;
+}
+
+.<?= $wc ?>[data-shadow="none"] {
+    box-shadow: none;
 }
 
 .<?= $wc ?>.w-builder-align-center {

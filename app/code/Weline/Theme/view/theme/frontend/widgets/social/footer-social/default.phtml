@@ -23,6 +23,7 @@
  * @var \Weline\Framework\View\Template $this
  */
 
+use Weline\Theme\Helper\LegacyMediaUrl;
 use Weline\Theme\Helper\SocialIconHelper;
 use Weline\Theme\Helper\WidgetUiScope;
 
@@ -38,17 +39,9 @@ $iconStyle = $this->getData('icon_style') ?? 'colored';
 $gap = $this->getData('gap') ?? '10px';
 
 $safeHref = static function (mixed $url): string {
-    $url = trim((string)$url);
-    if ($url === '') return '#';
-    $normalized = strtolower(str_replace(["\r", "\n", "\t", ' '], '', $url));
-    if ($url[0] === '#') return preg_match('/^#[A-Za-z0-9_\-:.]*$/', $url) ? $url : '#';
-    if (preg_match('#^(javascript:|data:|vbscript:)#i', $normalized)) return '#';
-    if (str_starts_with($url, '//')) return '#';
-    if (preg_match('#^[a-z][a-z0-9+.-]*:#i', $url)) {
-        $scheme = strtolower((string)parse_url($url, PHP_URL_SCHEME));
-        return in_array($scheme, ['http', 'https', 'mailto', 'tel'], true) ? $url : '#';
-    }
-    return preg_match('#^(/(?!/)|\./|\.\./|[A-Za-z0-9_\-./?=&%+#:]+)$#', $url) ? $url : '#';
+    $url = LegacyMediaUrl::sanitize($url);
+
+    return $url !== '' && !str_starts_with($url, '#') ? $url : '';
 };
 
 if (preg_match('/^(\d{1,3}(?:\.\d{1,2})?)(px|rem|em)$/', trim((string)$gap), $gapMatch)) {
@@ -70,10 +63,14 @@ if ($customLinks) {
         foreach ($customLinksArray as $link) {
             if (!empty($link['platform']) && !empty($link['url'])) {
                 $platform = preg_replace('/[^a-z0-9_-]/', '', strtolower((string)$link['platform'])) ?: 'link';
+                $url = $safeHref($link['url']);
+                if ($url === '') {
+                    continue;
+                }
                 $socials[] = [
                     'platform' => $platform,
                     'name' => SocialIconHelper::getName($platform) ?? $link['name'] ?? $platform,
-                    'url' => $safeHref($link['url']),
+                    'url' => $url,
                     'color' => SocialIconHelper::getColor($platform) ?? '#666',
                 ];
             }
@@ -85,23 +82,22 @@ if (empty($socials)) {
     foreach (['facebook', 'twitter', 'instagram', 'youtube', 'linkedin', 'pinterest', 'tiktok', 'weibo', 'wechat', 'github', 'telegram', 'whatsapp', 'discord', 'reddit', 'snapchat'] as $platform) {
         $url = $this->getData($platform) ?? '';
         if ($url) {
+            $url = $safeHref($url);
+            if ($url === '') {
+                continue;
+            }
             $socials[] = [
                 'platform' => $platform,
                 'name' => SocialIconHelper::getName($platform) ?? ucfirst($platform),
-                'url' => $safeHref($url),
+                'url' => $url,
                 'color' => SocialIconHelper::getColor($platform) ?? '#666',
             ];
         }
     }
 }
 
-if (empty($socials)) {
-    $socials = [
-        ['platform' => 'facebook', 'name' => 'Facebook', 'url' => '#', 'color' => '#1877f2'],
-        ['platform' => 'twitter', 'name' => 'Twitter/X', 'url' => '#', 'color' => '#000000'],
-        ['platform' => 'instagram', 'name' => 'Instagram', 'url' => '#', 'color' => '#e4405f'],
-        ['platform' => 'youtube', 'name' => 'YouTube', 'url' => '#', 'color' => '#ff0000'],
-    ];
+if ($socials === [] && !$isPreviewMode) {
+    return;
 }
 ?>
 

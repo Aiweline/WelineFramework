@@ -29,6 +29,17 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringContainsString('categories-sidebar-home', $source);
         self::assertStringContainsString('categories-sidebar-signin', $source);
         self::assertStringContainsString('<w:i18n:switcher />', $source);
+        self::assertStringContainsString(
+            'class="my-menu-submenu-content my-menu-submenu-content--language"',
+            $source,
+        );
+        self::assertStringContainsString('<w:i18n:switcher navigation="path" />', $source);
+        self::assertStringContainsString('<w:hook>header-currency-switcher</w:hook>', $source);
+        self::assertStringContainsString('<button type="button"', $source);
+        self::assertStringContainsString('id="hamburger-menu-fallback"', $source);
+        self::assertStringNotContainsString('href="#"', $source);
+        self::assertStringNotContainsString('class="language-option', $source);
+        self::assertStringNotContainsString('class="currency-option', $source);
 
         self::assertStringContainsString('.header-search-toggle', $source);
         self::assertStringContainsString('display: none !important;', $source);
@@ -88,11 +99,14 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         );
         self::assertStringContainsString('data-w-placement="right-start"', $sidebarNav);
         self::assertStringContainsString('data-w-gap="0"', $sidebarNav);
-        self::assertStringContainsString('fetchMegaMenuPanel', $sidebarNav);
-        self::assertStringContainsString('drawer_flyout', $sidebarNav);
+        self::assertStringNotContainsString('fetchMegaMenuPanel', $sidebarNav);
+        self::assertStringContainsString('data-sidebar-mega-source', $sidebarNav);
+        self::assertStringContainsString('data-sidebar-mega-deferred', $sidebarNav);
+        self::assertStringContainsString('data-sidebar-mega-deferred="1"', $sidebarNav);
         self::assertStringContainsString('sidebar-category-card__media', $sidebarNav);
         self::assertStringNotContainsString('sidebar-category-children', $sidebarNav);
         self::assertStringContainsString('bindHeaderMegaMenu(categoriesSidebar)', $source);
+        self::assertStringContainsString('hydrateSidebarMegaPanels(categoriesSidebar)', $source);
         self::assertStringContainsString('bindDrawerFlyoutAlign', $source);
         self::assertStringContainsString('bindSidebarAccordions', $source);
         self::assertStringContainsString('is-drawer-flyout', $source);
@@ -179,6 +193,15 @@ final class ThemeHeaderMobileAmazonContractTest extends TestCase
         self::assertStringContainsString('data-weline-load="api,account"', $accountSource);
         self::assertStringContainsString('header-account-links', $accountSource);
         self::assertStringContainsString('account-dropdown-menu', $accountSource);
+        self::assertStringContainsString('data-account-logout-confirm', $accountSource);
+        $hookClose = strpos($accountSource, '</w:hook>');
+        $logoutAction = strpos($accountSource, 'data-account-logout-confirm');
+        self::assertNotFalse($hookClose);
+        self::assertNotFalse($logoutAction);
+        self::assertStringContainsString('data-account-avatar', $accountSource);
+        self::assertStringContainsString('data-account-avatar-fallback', $accountSource);
+        self::assertStringContainsString('account-avatar__img', $accountSource);
+        self::assertGreaterThan($hookClose, $logoutAction, 'Logout must render after header-account-links, not as a hook menu item');
         self::assertStringContainsString('display: block', $accountSource);
         self::assertStringContainsString('.account-dropdown .dropdown-menu', $accountSource);
         self::assertStringNotContainsString('data-weline-load="api,account"', (string)file_get_contents(

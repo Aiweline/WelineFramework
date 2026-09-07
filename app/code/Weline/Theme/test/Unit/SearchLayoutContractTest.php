@@ -21,11 +21,19 @@ final class SearchLayoutContractTest extends TestCase
         self::assertStringContainsString('type-filter.phtml', $source);
         self::assertStringContainsString('storefront-search__filter-panel', $source);
         self::assertStringContainsString('.weline-page-wrapper.search-layout', $source);
+        self::assertStringContainsString('search-layout__surface', $source);
         self::assertStringContainsString('data-surface="body"', $source);
         self::assertStringContainsString('w-surface-body', $source);
+        self::assertDoesNotMatchRegularExpression(
+            '/weline-page-wrapper search-layout[^"\n]*w-surface-body/',
+            $source,
+            'body surface must not wrap global header/footer chrome',
+        );
         self::assertStringContainsString('--weline-theme-body-text', $source);
         self::assertStringContainsString('search-layout__recommendations > .widget-wrapper', $source);
         self::assertStringContainsString('--weline-space-5', $source);
+        self::assertStringContainsString('Weline_Theme::frontend::layouts::search::recommendations', $source);
+        self::assertStringNotContainsString('<w:widget type="product" name="bestsellers"', $source);
         self::assertStringNotContainsString('minmax(var(--size-panel-220), var(--layout-sidebar-width))', $source);
     }
 }

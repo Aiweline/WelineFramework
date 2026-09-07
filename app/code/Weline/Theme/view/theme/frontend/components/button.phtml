@@ -235,7 +235,7 @@ $attrString = implode(' ', $attrs);
     gap: var(--weline-space-2);
     padding: var(--weline-space-2) var(--weline-space-4);
     border: var(--weline-theme-border-width) var(--weline-theme-border-style) transparent;
-    border-radius: var(--wc-button-radius);
+    border-radius: var(--wc-button-radius, var(--weline-theme-radius-md));
     background: var(--wc-button-bg);
     color: var(--wc-button-color);
     font-size: var(--weline-font-size-base);
@@ -243,7 +243,7 @@ $attrString = implode(' ', $attrs);
     line-height: 1.2;
     text-decoration: none;
     cursor: pointer;
-    transition: opacity var(--weline-theme-transition-base), transform var(--weline-theme-transition-base);
+    transition: background-color var(--weline-theme-transition-base), border-color var(--weline-theme-transition-base), color var(--weline-theme-transition-base), box-shadow var(--weline-theme-transition-base), transform var(--weline-theme-transition-base);
 }
 
 .<?= $wc ?> .w-btn-sm,
@@ -260,7 +260,26 @@ $attrString = implode(' ', $attrs);
 
 .<?= $wc ?> .w-btn:hover,
 .<?= $wc ?> .w-builder-button:hover {
-    opacity: 0.9;
+    background: var(--weline-theme-primary-hover);
+    color: var(--wc-button-color);
+    box-shadow: var(--weline-theme-shadow-sm);
+}
+
+.<?= $wc ?> .w-btn[data-tone="secondary"]:hover,
+.<?= $wc ?> .w-btn-secondary:hover {
+    background: var(--weline-theme-surface-hover);
+    color: var(--weline-theme-text);
+}
+
+.<?= $wc ?> .w-btn[data-tone="danger"]:hover,
+.<?= $wc ?> .w-btn-danger:hover {
+    background: var(--weline-theme-danger-hover, var(--weline-theme-danger));
+}
+
+.<?= $wc ?> .w-btn:focus-visible,
+.<?= $wc ?> .w-builder-button:focus-visible {
+    outline: 0;
+    box-shadow: var(--weline-theme-focus-ring);
 }
 
 .<?= $wc ?> .w-btn:disabled,
@@ -268,10 +287,19 @@ $attrString = implode(' ', $attrs);
 .<?= $wc ?> .w-btn[aria-disabled="true"] {
     opacity: 0.55;
     cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
 }
 
 .<?= $wc ?> .w-btn-loading {
     pointer-events: none;
     opacity: 0.75;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .<?= $wc ?> .w-btn,
+    .<?= $wc ?> .w-builder-button {
+        transition: none;
+    }
 }
 </style>

@@ -36,6 +36,7 @@ class Router implements RouterInterface
             'cart' => ['layout_type' => 'cart', 'layout_option' => 'default', 'title' => '购物车'],
             'checkout' => ['layout_type' => 'checkout', 'layout_option' => 'default', 'title' => '结账'],
             'checkout/success' => ['layout_type' => 'checkout_success', 'layout_option' => 'default', 'title' => '下单成功'],
+            'checkout/failure' => ['layout_type' => 'checkout_failure', 'layout_option' => 'default', 'title' => '下单失败'],
             'checkout/failer' => ['layout_type' => 'checkout_failer', 'layout_option' => 'default', 'title' => '下单失败'],
             'account' => ['layout_type' => 'account', 'layout_option' => 'default', 'title' => '账户'],
             'account/login' => ['layout_type' => 'account_auth', 'layout_option' => 'default', 'title' => '登录'],
@@ -50,6 +51,9 @@ class Router implements RouterInterface
             'support' => ['layout_type' => 'contact', 'layout_option' => 'default', 'title' => '支持'],
             'help' => ['layout_type' => 'help', 'layout_option' => 'default', 'title' => '帮助中心'],
             'faq' => ['layout_type' => 'help', 'layout_option' => 'default', 'title' => '常见问题'],
+            'guide/payment' => ['layout_type' => 'payment_guide', 'layout_option' => 'default', 'title' => '支付指南'],
+            'guide/shipping' => ['layout_type' => 'guide', 'layout_option' => 'default', 'title' => '配送指南'],
+            'guide/returns' => ['layout_type' => 'guide', 'layout_option' => 'default', 'title' => '退换指南'],
             'about' => ['layout_type' => 'about', 'layout_option' => 'default', 'title' => '关于我们'],
             'solutions' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '解决方案'],
             'docs' => ['layout_type' => 'cms_page', 'layout_option' => 'default', 'title' => '文档'],
@@ -63,8 +67,6 @@ class Router implements RouterInterface
             // Footer legalLinks 使用 /cookies；保留 /cookie 兼容旧入口。
             'cookies' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
             'cookie-policy' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
-            'ads-preferences' => ['layout_type' => 'policy', 'layout_option' => 'ads-preferences', 'title' => '广告偏好'],
-            'advertising-preferences' => ['layout_type' => 'policy', 'layout_option' => 'ads-preferences', 'title' => '广告偏好'],
             'refund' => ['layout_type' => 'policy', 'layout_option' => 'refund', 'title' => '退款政策'],
             'returns' => ['layout_type' => 'policy', 'layout_option' => 'refund', 'title' => '退货政策'],
             'disclaimer' => ['layout_type' => 'policy', 'layout_option' => 'disclaimer', 'title' => '免责声明'],
@@ -73,13 +75,16 @@ class Router implements RouterInterface
             'policy/terms' => ['layout_type' => 'terms', 'layout_option' => 'default', 'title' => '服务条款'],
             'policy/cookie' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
             'policy/cookies' => ['layout_type' => 'policy', 'layout_option' => 'cookie', 'title' => 'Cookie 政策'],
-            'policy/ads-preferences' => ['layout_type' => 'policy', 'layout_option' => 'ads-preferences', 'title' => '广告偏好'],
             'policy/refund' => ['layout_type' => 'policy', 'layout_option' => 'refund', 'title' => '退款政策'],
             'policy/disclaimer' => ['layout_type' => 'policy', 'layout_option' => 'disclaimer', 'title' => '免责声明'],
             'search' => ['layout_type' => 'search', 'layout_option' => 'default', 'title' => '搜索'],
             'review' => ['layout_type' => 'review', 'layout_option' => 'default', 'title' => '评价'],
+            'qa' => ['layout_type' => 'qa', 'layout_option' => 'default', 'title' => '问答'],
             'rma' => ['layout_type' => 'rma', 'layout_option' => 'default', 'title' => '退换货'],
+            'promotion' => ['layout_type' => 'promotion', 'layout_option' => 'default', 'title' => '促销活动'],
             'activity' => ['layout_type' => 'activity', 'layout_option' => 'default', 'title' => '活动'],
+            'not-found' => ['layout_type' => 'not_found', 'layout_option' => 'default', 'title' => '页面未找到'],
+            '404' => ['layout_type' => 'not_found', 'layout_option' => 'default', 'title' => '页面未找到'],
         ];
     }
 
@@ -231,6 +236,9 @@ class Router implements RouterInterface
             }
             if (class_exists('Weline\\Payment\\Controller\\Router')) {
                 \Weline\Payment\Controller\Router::process($path, $rule);
+            }
+            if (class_exists('Weline\\Customer\\Controller\\Router')) {
+                \Weline\Customer\Controller\Router::process($path, $rule);
             }
             if (class_exists('Weline\\Order\\Controller\\Router')) {
                 \Weline\Order\Controller\Router::process($path, $rule);
@@ -415,7 +423,22 @@ class Router implements RouterInterface
             if (preg_match('#^guide/payment/([a-z0-9][a-z0-9_.-]*)/policy$#D', $normalizedPath) === 1) {
                 return true;
             }
+            if (preg_match('#^guide/payment/([a-z0-9][a-z0-9_.-]*)/agreement$#D', $normalizedPath) === 1) {
+                return true;
+            }
             if (preg_match('#^guide/payment/([a-z0-9][a-z0-9_.-]*)$#D', $normalizedPath) === 1) {
+                return true;
+            }
+        }
+
+        if (class_exists('Weline\\Customer\\Controller\\Router')) {
+            if ($normalizedPath === 'guide/social-login') {
+                return true;
+            }
+            if (preg_match('#^guide/social-login/([a-z0-9][a-z0-9_.-]*)/policy$#D', $normalizedPath) === 1) {
+                return true;
+            }
+            if (preg_match('#^guide/social-login/([a-z0-9][a-z0-9_.-]*)$#D', $normalizedPath) === 1) {
                 return true;
             }
         }

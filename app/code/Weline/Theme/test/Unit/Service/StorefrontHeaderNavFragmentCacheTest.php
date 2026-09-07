@@ -6,6 +6,7 @@ namespace Weline\Theme\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
 use Weline\Theme\Service\StorefrontHeaderNavFragmentCache;
+use Weline\Theme\Service\StorefrontThemeCacheCoordinator;
 
 final class StorefrontHeaderNavFragmentCacheTest extends TestCase
 {
@@ -36,8 +37,8 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
             ],
         ]);
 
-        self::assertStringContainsString('theme.header.mega_panel.v2.top.', $top);
-        self::assertStringContainsString('theme.header.mega_panel.v2.drawer.', $drawer);
+        self::assertStringContainsString('theme.header.mega_panel.v4.zh_Hans_CN.top.', $top);
+        self::assertStringContainsString('theme.header.mega_panel.v4.zh_Hans_CN.drawer.', $drawer);
         self::assertStringContainsString('.banner1.', $top);
         self::assertStringContainsString('.banner0.', $bannerOff);
         self::assertNotSame($top, $drawer);
@@ -58,5 +59,39 @@ final class StorefrontHeaderNavFragmentCacheTest extends TestCase
 
         self::assertStringStartsWith('theme.header.sidebar_nav.', $first);
         self::assertNotSame($first, $second);
+    }
+
+    public function testNavigationPolicyUsesChannelScopeAndLocalizedVariants(): void
+    {
+        $policy = StorefrontHeaderNavFragmentCache::cachePolicy();
+
+        self::assertSame('channel', $policy->scope);
+        self::assertSame(['currency', 'lang'], $policy->vary);
+        self::assertSame(['catalog', 'config'], $policy->dependencies);
+        self::assertSame(StorefrontHeaderNavFragmentCache::cachePool(), $policy->pool);
+    }
+
+    public function testThemeCoordinatorUsesTheSameChannelBoundaryForChrome(): void
+    {
+        $policy = StorefrontThemeCacheCoordinator::storefrontChromePolicy(45, 600);
+
+        self::assertSame('theme.storefront_chrome', $policy->resource);
+        self::assertSame(StorefrontThemeCacheCoordinator::STOREFRONT_CHROME_POOL, $policy->pool);
+        self::assertSame('channel', $policy->scope);
+        self::assertSame(['currency', 'lang'], $policy->vary);
+        self::assertSame(['catalog', 'config'], $policy->dependencies);
+        self::assertSame(45, $policy->freshTtlSeconds);
+        self::assertSame(600, $policy->staleTtlSeconds);
+    }
+
+    public function testHeaderSearchTypesUseAChannelLocalizedPolicy(): void
+    {
+        $policy = StorefrontThemeCacheCoordinator::headerSearchTypesPolicy();
+
+        self::assertSame('theme.header_search_types', $policy->resource);
+        self::assertSame(StorefrontThemeCacheCoordinator::HEADER_NAV_POOL, $policy->pool);
+        self::assertSame('channel', $policy->scope);
+        self::assertSame(['currency', 'lang'], $policy->vary);
+        self::assertSame(['config'], $policy->dependencies);
     }
 }

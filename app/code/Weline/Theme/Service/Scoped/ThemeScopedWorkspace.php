@@ -7,7 +7,11 @@ namespace Weline\Theme\Service\Scoped;
 use Weline\Backend\Api\Auth\BackendUserContextProviderInterface;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\App\Env;
+use Weline\Framework\Cache\Namespace\NamespacePath;
+use Weline\Framework\Event\ResourceChange\ResourceChangeFactory;
+use Weline\Framework\Event\ResourceChange\ResourceRevisionService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\SystemConfig\Api\Scope\ScopeContext;
 use Weline\SystemConfig\Api\Scope\ScopeHierarchyInterface;
@@ -18,6 +22,7 @@ use Weline\Theme\Api\Scoped\ThemeScopedResourceAdapterInterface;
 use Weline\Theme\Api\Scoped\ThemeScopedWorkspaceInterface;
 use Weline\Theme\Model\ThemeScopePatch;
 use Weline\Theme\Model\ThemeScopeRelease;
+use Weline\Theme\Model\ThemeScopeReleaseBatch;
 use Weline\Theme\Model\ThemeScopeRevision;
 use Weline\Theme\Model\ThemeScopeWorkspace;
 use Weline\Theme\Service\LayoutContentValidationRegistry;
@@ -25,6 +30,13 @@ use Weline\Theme\Service\LayoutContentValidationRegistry;
 /** Canonical per-path draft, merge and immutable release service. */
 final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
 {
+    private const REQUEST_LOAD_CACHE_PREFIX = 'theme.scoped.workspace.load.v1.';
+    private const REQUEST_LOAD_CACHE_KEYS = 'theme.scoped.workspace.load.v1.keys';
+    private const REQUEST_WORKSPACE_CACHE_PREFIX = 'theme.scoped.workspace.row.v1.';
+    private const REQUEST_WORKSPACE_CACHE_KEYS = 'theme.scoped.workspace.row.v1.keys';
+
+    private readonly ThemeScopeReleaseBatch $releaseBatches;
+
     public function __construct(
         private readonly ThemeScopeWorkspace $workspaces,
         private readonly ThemeScopeRevision $revisions,
@@ -37,11 +49,22 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         private readonly WriteIntentTransactionCoordinatorInterface $transactions,
         private readonly LayoutContentValidationRegistry $contentValidators,
         private readonly ThemeLayoutSnapshotNormalizer $layoutSnapshots,
+        ?ThemeScopeReleaseBatch $releaseBatches = null,
     ) {
+        $this->releaseBatches = $releaseBatches
+            ?? ObjectManager::getInstance(ThemeScopeReleaseBatch::class);
     }
 
     public function load(ThemeEditorContext $context, bool $includeDraft = true): array
     {
+        $cacheKey = $this->requestLoadCacheKey($context, $includeDraft);
+        if (RequestContext::isInitialized()) {
+            $cached = RequestContext::get($cacheKey, null);
+            if (\is_array($cached)) {
+                return $cached;
+            }
+        }
+
         $workspace = $this->findWorkspace($context);
         $parent = $this->parentPublishedState($context);
         $published = $this->publishedState($context);
@@ -64,7 +87,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
             ? $this->patchEngine->apply($parent['payload'], $commands)
             : $published['payload'];
 
-        return [
+        $state = [
             'context' => $context->toArray(),
             'revision' => $workspace?->getRevision() ?? 0,
             'draft_revision_id' => $workspace
@@ -105,6 +128,10 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
             'published_payload' => $published['payload'],
             'published_source_scope' => $published['source_scope'],
         ];
+
+        $this->rememberRequestLoad($cacheKey, $state);
+
+        return $state;
     }
 
     public function applyChanges(
@@ -116,6 +143,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         string $actorName = '',
         string $summary = '',
     ): array {
+        $this->flushRequestLoadCache();
         $this->assertActor($actorId, $actorName);
         $changes = $this->assertCommands($context, $changes);
         $expectedParentReleaseId = $this->nullablePositiveInt($expectedParentReleaseId);
@@ -219,6 +247,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         if ($context->resourceType !== ThemeEditorContext::RESOURCE_LAYOUT) {
             throw new \InvalidArgumentException('theme_scope_full_payload_replace_resource_invalid');
         }
+        $this->flushRequestLoadCache();
         $this->assertActor($actorId, $actorName);
         $expectedParentReleaseId = $this->nullablePositiveInt($expectedParentReleaseId);
 
@@ -308,6 +337,7 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         string $actorName = '',
         string $reason = '',
     ): array {
+        $this->flushRequestLoadCache();
         $this->assertActor($actorId, $actorName);
         $expectedParentReleaseId = $this->nullablePositiveInt($expectedParentReleaseId);
 
@@ -373,6 +403,12 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
                         $currentRelease->payload(),
                         $currentRelease->getId(),
                     );
+                    $this->dispatchScopedPublishResourceChange(
+                        $context,
+                        (int)$currentRelease->getId(),
+                        'theme.scoped.publish',
+                        true,
+                    );
                     return [
                         'release_id' => $currentRelease->getId(),
                         'revision' => $workspace->getRevision(),
@@ -409,6 +445,12 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
                     ThemeScopeWorkspace::schema_fields_STATUS => ThemeScopeWorkspace::STATUS_ACTIVE,
                     ThemeScopeWorkspace::schema_fields_CONFLICT_JSON => null,
                 ])->save();
+                $this->dispatchScopedPublishResourceChange(
+                    $context,
+                    (int)$release->getId(),
+                    'theme.scoped.publish',
+                    false,
+                );
 
                 return [
                     'release_id' => $release->getId(),
@@ -429,6 +471,250 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         $result['descendants'] = $this->propagateToDescendants($context, $actorId, $actorName);
 
         return $result;
+    }
+
+    public function publishBatch(
+        ThemeScopedReleaseBatch $batch,
+        string $actorId,
+        string $actorName = '',
+        string $reason = '',
+    ): array {
+        $this->flushRequestLoadCache();
+        $this->assertActor($actorId, $actorName);
+
+        return $this->transactions->runWrite(
+            $this->workspaces->getConnection(),
+            function () use ($batch, $actorId, $actorName, $reason): array {
+                $prepared = [];
+                $changed = 0;
+                foreach ($batch->items() as $item) {
+                    $preparedItem = $this->prepareReleaseBatchItem($item, $actorId);
+                    $prepared[] = $preparedItem;
+                    if (($preparedItem['status'] ?? '') === 'pending') {
+                        $changed++;
+                    }
+                }
+                if ($changed === 0) {
+                    throw new \RuntimeException('theme_scope_release_batch_no_changes');
+                }
+
+                $committedAt = \date('Y-m-d H:i:s');
+                $batchRecord = $this->insertReleaseBatch(
+                    $batch,
+                    $actorId,
+                    $actorName,
+                    $reason,
+                    $committedAt,
+                );
+                $resources = [];
+                foreach ($prepared as $preparedItem) {
+                    if (($preparedItem['status'] ?? '') === 'pending') {
+                        $resourceReceipt = $this->applyPreparedReleaseBatchItem(
+                            $preparedItem,
+                            $actorId,
+                            $actorName,
+                            $reason,
+                            $committedAt,
+                        );
+                        $resourceReceipt['descendants'] = $this->propagateFrozenDescendantsInTransaction(
+                            $preparedItem['descendants'],
+                            $actorId,
+                            $actorName,
+                            $committedAt,
+                        );
+                        $resources[] = $resourceReceipt;
+                        continue;
+                    }
+                    $resources[] = $this->unchangedReleaseBatchReceipt(
+                        $preparedItem,
+                        $actorId,
+                        $committedAt,
+                    );
+                }
+
+                $receipt = [
+                    'batch_id' => $batchRecord->getId(),
+                    'batch_digest' => $batch->digest(),
+                    'state' => ThemeScopeReleaseBatch::STATE_PUBLISHED,
+                    'scope' => $batch->baseContext()->scope->storageScope,
+                    'actor_id' => $actorId,
+                    'committed_at' => $committedAt,
+                    'resources' => $resources,
+                ];
+                $batchRecord->setData([
+                    ThemeScopeReleaseBatch::schema_fields_RECEIPT_JSON => $this->json($receipt),
+                    ThemeScopeReleaseBatch::schema_fields_STATE => ThemeScopeReleaseBatch::STATE_PUBLISHED,
+                ])->save();
+                $this->dispatchScopedPublishResourceChange(
+                    $batch->baseContext(),
+                    (int)$batchRecord->getId(),
+                    'theme.scoped.release_batch_publish',
+                    false,
+                );
+
+                return $receipt;
+            },
+        );
+    }
+
+    public function rollbackReleaseBatch(
+        int $sourceBatchId,
+        ThemeEditorContext $context,
+        string $actorId,
+        string $actorName = '',
+        string $reason = '',
+    ): array {
+        if ($sourceBatchId <= 0) {
+            throw new \InvalidArgumentException('theme_scope_release_batch_id_invalid');
+        }
+        $this->flushRequestLoadCache();
+        $this->assertActor($actorId, $actorName);
+
+        return $this->transactions->runWrite(
+            $this->workspaces->getConnection(),
+            function () use ($sourceBatchId, $context, $actorId, $actorName, $reason): array {
+                $source = $this->loadReleaseBatch($sourceBatchId, true);
+                if (!$source instanceof ThemeScopeReleaseBatch) {
+                    throw new \RuntimeException('theme_scope_release_batch_missing');
+                }
+                if (!\in_array((string)$source->getData(ThemeScopeReleaseBatch::schema_fields_STATE), [
+                    ThemeScopeReleaseBatch::STATE_PUBLISHED,
+                    ThemeScopeReleaseBatch::STATE_PUBLISHED_CACHE_DEGRADED,
+                ], true)) {
+                    throw new \RuntimeException('theme_scope_release_batch_not_committed');
+                }
+                $this->assertReleaseBatchContext($source, $context);
+                $sourceReceipt = $source->receipt();
+                $sourceResources = [];
+                foreach ((array)($sourceReceipt['resources'] ?? []) as $resourceReceipt) {
+                    if (!\is_array($resourceReceipt)) {
+                        continue;
+                    }
+                    $resourceType = (string)($resourceReceipt['resource_type'] ?? '');
+                    if (\in_array($resourceType, ThemeEditorContext::RESOURCES, true)) {
+                        $sourceResources[$resourceType] = $resourceReceipt;
+                    }
+                }
+                if (\array_keys($sourceResources) !== ThemeEditorContext::RESOURCES) {
+                    throw new \RuntimeException('theme_scope_release_batch_receipt_incomplete');
+                }
+
+                $prepared = [];
+                foreach (ThemeEditorContext::RESOURCES as $resourceType) {
+                    $prepared[] = $this->prepareReleaseBatchRollbackItem(
+                        $context->withResource($resourceType),
+                        $sourceResources[$resourceType],
+                        $actorId,
+                    );
+                }
+
+                $committedAt = \date('Y-m-d H:i:s');
+                $digest = \hash('sha256', $this->json([
+                    'source_batch_id' => $sourceBatchId,
+                    'source_batch_digest' => (string)$source->getData(
+                        ThemeScopeReleaseBatch::schema_fields_BATCH_DIGEST,
+                    ),
+                    'resources' => \array_map(static fn(array $item): array => [
+                        'resource_type' => $item['context']->resourceType,
+                        'release_id' => $item['target_release_id'],
+                        'effective_release_id' => $item['target_effective_release_id'],
+                    ], $prepared),
+                ]));
+                $batchRecord = $this->insertRollbackReleaseBatch(
+                    $context,
+                    $digest,
+                    $sourceBatchId,
+                    $actorId,
+                    $actorName,
+                    $reason,
+                    $committedAt,
+                );
+
+                $resources = [];
+                foreach ($prepared as $preparedItem) {
+                    $resourceReceipt = $this->applyPreparedReleaseBatchRollbackItem(
+                        $preparedItem,
+                        $sourceBatchId,
+                        $actorId,
+                        $committedAt,
+                    );
+                    $resourceReceipt['descendants'] = $this->rollbackFrozenDescendantsInTransaction(
+                        $preparedItem['descendants'],
+                        $preparedItem['source_descendants'],
+                        $sourceBatchId,
+                        $actorId,
+                        $actorName,
+                        $committedAt,
+                    );
+                    $resources[] = $resourceReceipt;
+                }
+
+                $receipt = [
+                    'batch_id' => $batchRecord->getId(),
+                    'source_batch_id' => $sourceBatchId,
+                    'batch_digest' => $digest,
+                    'state' => ThemeScopeReleaseBatch::STATE_PUBLISHED,
+                    'scope' => $context->scope->storageScope,
+                    'actor_id' => $actorId,
+                    'committed_at' => $committedAt,
+                    'resources' => $resources,
+                ];
+                $batchRecord->setData([
+                    ThemeScopeReleaseBatch::schema_fields_RECEIPT_JSON => $this->json($receipt),
+                    ThemeScopeReleaseBatch::schema_fields_STATE => ThemeScopeReleaseBatch::STATE_PUBLISHED,
+                ])->save();
+
+                return $receipt;
+            },
+        );
+    }
+
+    public function updateReleaseBatchCacheState(int $batchId, string $state, ?array $error = null): array
+    {
+        if ($batchId <= 0) {
+            throw new \InvalidArgumentException('theme_scope_release_batch_id_invalid');
+        }
+        if (!\in_array($state, [
+            ThemeScopeReleaseBatch::STATE_PUBLISHED,
+            ThemeScopeReleaseBatch::STATE_PUBLISHED_CACHE_DEGRADED,
+        ], true)) {
+            throw new \InvalidArgumentException('theme_scope_release_batch_cache_state_invalid');
+        }
+        if ($state === ThemeScopeReleaseBatch::STATE_PUBLISHED_CACHE_DEGRADED && ($error ?? []) === []) {
+            throw new \InvalidArgumentException('theme_scope_release_batch_cache_error_required');
+        }
+
+        return $this->transactions->runWrite(
+            $this->releaseBatches->getConnection(),
+            function () use ($batchId, $state, $error): array {
+                $record = $this->loadReleaseBatch($batchId, true);
+                if (!$record instanceof ThemeScopeReleaseBatch) {
+                    throw new \RuntimeException('theme_scope_release_batch_missing');
+                }
+                $record->setData([
+                    ThemeScopeReleaseBatch::schema_fields_STATE => $state,
+                    ThemeScopeReleaseBatch::schema_fields_CACHE_UPDATED_AT => \date('Y-m-d H:i:s'),
+                    ThemeScopeReleaseBatch::schema_fields_CACHE_ERROR_JSON => $error === null
+                        ? null
+                        : $this->json($error),
+                ])->save();
+
+                return $this->releaseBatchReadback($record);
+            },
+        );
+    }
+
+    public function getReleaseBatch(int $batchId): array
+    {
+        if ($batchId <= 0) {
+            throw new \InvalidArgumentException('theme_scope_release_batch_id_invalid');
+        }
+        $record = $this->loadReleaseBatch($batchId);
+        if (!$record instanceof ThemeScopeReleaseBatch) {
+            throw new \RuntimeException('theme_scope_release_batch_missing');
+        }
+
+        return $this->releaseBatchReadback($record);
     }
 
     public function resolveValue(ThemeEditorContext $context, string $path, bool $includeDraft = true): ThemeResolvedValue
@@ -609,6 +895,661 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         ];
     }
 
+    /**
+     * @param array{resource_type:string,context:ThemeEditorContext,expected_revision:int,expected_parent_release_id:?int} $item
+     * @return array<string,mixed>
+     */
+    private function prepareReleaseBatchItem(array $item, string $actorId): array
+    {
+        $context = $item['context'] ?? null;
+        if (!$context instanceof ThemeEditorContext) {
+            throw new \InvalidArgumentException('theme_scope_release_batch_context_invalid');
+        }
+        $workspace = $this->findWorkspace($context, true);
+        $actualRevision = $workspace?->getRevision() ?? 0;
+        if ($actualRevision !== $item['expected_revision']) {
+            throw new \RuntimeException('theme_scope_revision_conflict');
+        }
+        $parent = $this->parentPublishedState($context);
+        $expectedParentReleaseId = $this->nullablePositiveInt($item['expected_parent_release_id']);
+        if ($parent['release_id'] !== $expectedParentReleaseId) {
+            throw new \RuntimeException('theme_scope_parent_release_conflict');
+        }
+
+        $descendants = $this->freezeDescendantWorkspaces($context);
+        $published = $this->publishedState($context);
+        if (!$workspace instanceof ThemeScopeWorkspace) {
+            return [
+                'status' => 'unchanged',
+                'resource_type' => $context->resourceType,
+                'context' => $context,
+                'workspace' => null,
+                'revision_id' => null,
+                'parent' => $parent,
+                'current_release' => null,
+                'published' => $published,
+                'descendants' => $descendants,
+            ];
+        }
+
+        $revisionId = (int)$workspace->getData(ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID);
+        $currentRelease = $this->loadRelease((int)$workspace->getData(
+            ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
+        ));
+        if ($revisionId <= 0) {
+            if ($actualRevision > 0 && !$currentRelease instanceof ThemeScopeRelease) {
+                throw new \RuntimeException('theme_scope_draft_revision_missing');
+            }
+            return [
+                'status' => 'unchanged',
+                'resource_type' => $context->resourceType,
+                'context' => $context,
+                'workspace' => $workspace,
+                'revision_id' => null,
+                'parent' => $parent,
+                'current_release' => $currentRelease,
+                'published' => $published,
+                'descendants' => $descendants,
+            ];
+        }
+        if ($currentRelease instanceof ThemeScopeRelease
+            && (int)$currentRelease->getData(ThemeScopeRelease::schema_fields_REVISION_ID) === $revisionId
+            && $this->nullablePositiveInt($currentRelease->getData(
+                ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID,
+            )) === $parent['release_id']
+        ) {
+            return [
+                'status' => 'unchanged',
+                'resource_type' => $context->resourceType,
+                'context' => $context,
+                'workspace' => $workspace,
+                'revision_id' => $revisionId,
+                'parent' => $parent,
+                'current_release' => $currentRelease,
+                'published' => $published,
+                'descendants' => $descendants,
+            ];
+        }
+
+        $commands = $this->commandsForRevision($revisionId);
+        $oldParent = $this->payloadForReleaseOrRootBase(
+            $this->nullablePositiveInt($workspace->getData(
+                ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID,
+            )),
+            $context,
+        );
+        $conflicts = $this->patchEngine->structuralConflicts($oldParent, $parent['payload'], $commands);
+        if ($conflicts !== []) {
+            throw new \RuntimeException('theme_scope_structural_conflict');
+        }
+
+        $effective = $this->patchEngine->apply($parent['payload'], $commands);
+        $compiled = $this->adapter->compile($context, $effective);
+        $effective = \is_array($compiled['payload'] ?? null) ? $compiled['payload'] : $effective;
+        $artifact = \is_array($compiled['artifact'] ?? null) ? $compiled['artifact'] : [];
+        $this->validateLayoutPublication($context, $effective, $actorId);
+        $payloadJson = $this->json($effective);
+
+        return [
+            'status' => 'pending',
+            'resource_type' => $context->resourceType,
+            'context' => $context,
+            'workspace' => $workspace,
+            'revision_id' => $revisionId,
+            'parent' => $parent,
+            'current_release' => $currentRelease,
+            'published' => $published,
+            'effective' => $effective,
+            'artifact' => $artifact,
+            'content_digest' => \hash('sha256', $payloadJson),
+            'fingerprint' => (string)($artifact['fingerprint'] ?? \hash('sha256', $payloadJson)),
+            'descendants' => $descendants,
+        ];
+    }
+
+    /** @param array<string,mixed> $prepared @return array<string,mixed> */
+    private function applyPreparedReleaseBatchItem(
+        array $prepared,
+        string $actorId,
+        string $actorName,
+        string $reason,
+        string $committedAt,
+    ): array {
+        $workspace = $prepared['workspace'] ?? null;
+        $context = $prepared['context'] ?? null;
+        $revisionId = (int)($prepared['revision_id'] ?? 0);
+        if (!$workspace instanceof ThemeScopeWorkspace
+            || !$context instanceof ThemeEditorContext
+            || $revisionId <= 0
+        ) {
+            throw new \RuntimeException('theme_scope_release_batch_prepared_item_invalid');
+        }
+        $parentReleaseId = $this->nullablePositiveInt($prepared['parent']['release_id'] ?? null);
+        $effective = \is_array($prepared['effective'] ?? null) ? $prepared['effective'] : [];
+        $artifact = \is_array($prepared['artifact'] ?? null) ? $prepared['artifact'] : [];
+        $release = $this->insertRelease(
+            $workspace,
+            $context,
+            $revisionId,
+            $parentReleaseId,
+            $effective,
+            $artifact,
+            $actorId,
+            $actorName,
+            $reason,
+        );
+        $this->adapter->projectPublished($context, $effective, $release->getId());
+        $this->markRevisionPublished($revisionId);
+        $workspace->setData([
+            ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID => $release->getId(),
+            ThemeScopeWorkspace::schema_fields_LAST_GOOD_RELEASE_ID => $release->getId(),
+            ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID => $parentReleaseId,
+            ThemeScopeWorkspace::schema_fields_STATUS => ThemeScopeWorkspace::STATUS_ACTIVE,
+            ThemeScopeWorkspace::schema_fields_CONFLICT_JSON => null,
+        ])->save();
+
+        return [
+            'resource_type' => $context->resourceType,
+            'status' => 'published',
+            'workspace_id' => $workspace->getId(),
+            'identity_hash' => $context->identityHash(),
+            'context' => $context->toArray(),
+            'release_id' => $release->getId(),
+            'effective_release_id' => $release->getId(),
+            'revision_id' => $revisionId,
+            'revision' => $workspace->getRevision(),
+            'parent_release_id' => $parentReleaseId,
+            'fingerprint' => (string)$release->getData(ThemeScopeRelease::schema_fields_FINGERPRINT),
+            'content_digest' => (string)($prepared['content_digest'] ?? ''),
+            'scope' => $context->scope->storageScope,
+            'actor_id' => $actorId,
+            'committed_at' => $committedAt,
+        ];
+    }
+
+    /** @param array<string,mixed> $prepared @return array<string,mixed> */
+    private function unchangedReleaseBatchReceipt(
+        array $prepared,
+        string $actorId,
+        string $committedAt,
+    ): array {
+        $context = $prepared['context'] ?? null;
+        if (!$context instanceof ThemeEditorContext) {
+            throw new \RuntimeException('theme_scope_release_batch_prepared_item_invalid');
+        }
+        $currentRelease = $prepared['current_release'] ?? null;
+        $effectiveRelease = $prepared['published']['release'] ?? null;
+        $payload = \is_array($prepared['published']['payload'] ?? null)
+            ? $prepared['published']['payload']
+            : [];
+        $payloadJson = $this->json($payload);
+        $receiptRelease = $currentRelease instanceof ThemeScopeRelease ? $currentRelease : null;
+        $fingerprintRelease = $receiptRelease instanceof ThemeScopeRelease
+            ? $receiptRelease
+            : ($effectiveRelease instanceof ThemeScopeRelease ? $effectiveRelease : null);
+
+        return [
+            'resource_type' => $context->resourceType,
+            'status' => 'unchanged',
+            'workspace_id' => $prepared['workspace'] instanceof ThemeScopeWorkspace
+                ? $prepared['workspace']->getId()
+                : null,
+            'identity_hash' => $context->identityHash(),
+            'context' => $context->toArray(),
+            'release_id' => $receiptRelease?->getId(),
+            'effective_release_id' => $fingerprintRelease?->getId(),
+            'revision_id' => $receiptRelease instanceof ThemeScopeRelease
+                ? $this->nullablePositiveInt($receiptRelease->getData(ThemeScopeRelease::schema_fields_REVISION_ID))
+                : null,
+            'revision' => $prepared['workspace'] instanceof ThemeScopeWorkspace
+                ? $prepared['workspace']->getRevision()
+                : 0,
+            'parent_release_id' => $receiptRelease instanceof ThemeScopeRelease
+                ? $this->nullablePositiveInt($receiptRelease->getData(
+                    ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID,
+                ))
+                : $this->nullablePositiveInt($prepared['parent']['release_id'] ?? null),
+            'fingerprint' => $fingerprintRelease instanceof ThemeScopeRelease
+                ? (string)$fingerprintRelease->getData(ThemeScopeRelease::schema_fields_FINGERPRINT)
+                : \hash('sha256', $payloadJson),
+            'content_digest' => \hash('sha256', $payloadJson),
+            'scope' => $context->scope->storageScope,
+            'actor_id' => $actorId,
+            'committed_at' => $committedAt,
+            'descendants' => $this->frozenDescendantReceiptSnapshots(
+                \is_array($prepared['descendants'] ?? null) ? $prepared['descendants'] : [],
+                $committedAt,
+            ),
+        ];
+    }
+
+    /** @param list<array<string,mixed>> $frozen @return list<array<string,mixed>> */
+    private function frozenDescendantReceiptSnapshots(array $frozen, string $committedAt): array
+    {
+        $receipts = [];
+        foreach ($frozen as $snapshot) {
+            $context = $snapshot['context'] ?? null;
+            if (!$context instanceof ThemeEditorContext) {
+                continue;
+            }
+            $receipts[] = [
+                'status' => 'unchanged',
+                'workspace_id' => (int)($snapshot['workspace_id'] ?? 0),
+                'identity_hash' => $context->identityHash(),
+                'context' => $context->toArray(),
+                'scope' => $context->scope->storageScope,
+                'release_id' => $snapshot['published_release_id'] ?? null,
+                'revision_id' => $snapshot['release_revision_id'] ?? null,
+                'parent_release_id' => $snapshot['release_parent_id'] ?? null,
+                'fingerprint' => $snapshot['release_fingerprint'] ?? '',
+                'content_digest' => $snapshot['release_content_digest'] ?? '',
+                'actor_id' => $snapshot['release_actor_id'] ?? null,
+                'committed_at' => $committedAt,
+            ];
+        }
+
+        return $receipts;
+    }
+
+    private function insertReleaseBatch(
+        ThemeScopedReleaseBatch $batch,
+        string $actorId,
+        string $actorName,
+        string $reason,
+        string $committedAt,
+    ): ThemeScopeReleaseBatch {
+        $context = $batch->baseContext();
+        $record = clone $this->releaseBatches;
+        $record->clearData()->clearQuery()->setData([
+            ThemeScopeReleaseBatch::schema_fields_BATCH_DIGEST => $batch->digest(),
+            ThemeScopeReleaseBatch::schema_fields_SCOPE => $context->scope->storageScope,
+            ThemeScopeReleaseBatch::schema_fields_STORE_MODE => $context->scope->storeMode,
+            ThemeScopeReleaseBatch::schema_fields_AREA => $context->area,
+            ThemeScopeReleaseBatch::schema_fields_THEME_ID => $context->themeId,
+            ThemeScopeReleaseBatch::schema_fields_LAYOUT_TYPE => $context->layoutType,
+            ThemeScopeReleaseBatch::schema_fields_LAYOUT_OPTION => $context->layoutOption,
+            ThemeScopeReleaseBatch::schema_fields_LOCALE => $context->locale,
+            ThemeScopeReleaseBatch::schema_fields_TARGET_TYPE => $context->targetType,
+            ThemeScopeReleaseBatch::schema_fields_TARGET_ID => $context->targetId,
+            ThemeScopeReleaseBatch::schema_fields_STATE => ThemeScopeReleaseBatch::STATE_PREPARING,
+            ThemeScopeReleaseBatch::schema_fields_RECEIPT_JSON => null,
+            ThemeScopeReleaseBatch::schema_fields_SOURCE_BATCH_ID => null,
+            ThemeScopeReleaseBatch::schema_fields_ACTOR_ID => $actorId,
+            ThemeScopeReleaseBatch::schema_fields_ACTOR_NAME => $actorName !== '' ? $actorName : null,
+            ThemeScopeReleaseBatch::schema_fields_REASON => $reason !== '' ? $reason : null,
+            ThemeScopeReleaseBatch::schema_fields_COMMITTED_AT => $committedAt,
+        ])->save();
+
+        return $record;
+    }
+
+    private function assertReleaseBatchContext(
+        ThemeScopeReleaseBatch $record,
+        ThemeEditorContext $context,
+    ): void {
+        $matches = (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_SCOPE)
+                === $context->scope->storageScope
+            && (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_STORE_MODE)
+                === $context->scope->storeMode
+            && (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_AREA) === $context->area
+            && (int)$record->getData(ThemeScopeReleaseBatch::schema_fields_THEME_ID) === $context->themeId
+            && (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_LAYOUT_TYPE) === $context->layoutType
+            && (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_LAYOUT_OPTION) === $context->layoutOption
+            && (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_LOCALE) === $context->locale
+            && (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_TARGET_TYPE) === $context->targetType
+            && (int)$record->getData(ThemeScopeReleaseBatch::schema_fields_TARGET_ID) === $context->targetId;
+        if (!$matches) {
+            throw new \RuntimeException('theme_scope_release_batch_context_mismatch');
+        }
+    }
+
+    /** @param array<string,mixed> $sourceReceipt @return array<string,mixed> */
+    private function prepareReleaseBatchRollbackItem(
+        ThemeEditorContext $context,
+        array $sourceReceipt,
+        string $actorId,
+    ): array {
+        if ((string)($sourceReceipt['resource_type'] ?? '') !== $context->resourceType
+            || (string)($sourceReceipt['identity_hash'] ?? '') !== $context->identityHash()
+            || (string)($sourceReceipt['scope'] ?? '') !== $context->scope->storageScope
+        ) {
+            throw new \RuntimeException('theme_scope_release_batch_receipt_context_mismatch');
+        }
+        $workspace = $this->findWorkspace($context, true);
+        $targetReleaseId = $this->nullablePositiveInt($sourceReceipt['release_id'] ?? null);
+        $targetRelease = $targetReleaseId !== null ? $this->loadRelease($targetReleaseId) : null;
+        if ($targetReleaseId !== null) {
+            if (!$targetRelease instanceof ThemeScopeRelease
+                || (string)$targetRelease->getData(ThemeScopeRelease::schema_fields_IDENTITY_HASH)
+                    !== $context->identityHash()
+                || (string)$targetRelease->getData(ThemeScopeRelease::schema_fields_RESOURCE_TYPE)
+                    !== $context->resourceType
+                || !$workspace instanceof ThemeScopeWorkspace
+            ) {
+                throw new \RuntimeException('theme_scope_release_batch_historical_release_invalid');
+            }
+            $expectedFingerprint = (string)($sourceReceipt['fingerprint'] ?? '');
+            if ($expectedFingerprint !== ''
+                && (string)$targetRelease->getData(ThemeScopeRelease::schema_fields_FINGERPRINT)
+                    !== $expectedFingerprint
+            ) {
+                throw new \RuntimeException('theme_scope_release_batch_historical_release_changed');
+            }
+        }
+        $targetEffectiveReleaseId = $this->nullablePositiveInt(
+            $sourceReceipt['effective_release_id'] ?? $targetReleaseId,
+        );
+        $targetEffectiveRelease = $targetEffectiveReleaseId !== null
+            ? $this->loadRelease($targetEffectiveReleaseId)
+            : null;
+        if ($targetEffectiveReleaseId !== null
+            && (!$targetEffectiveRelease instanceof ThemeScopeRelease
+                || (string)$targetEffectiveRelease->getData(ThemeScopeRelease::schema_fields_RESOURCE_TYPE)
+                    !== $context->resourceType)
+        ) {
+            throw new \RuntimeException('theme_scope_release_batch_effective_release_invalid');
+        }
+        $effective = $targetRelease instanceof ThemeScopeRelease
+            ? $targetRelease->payload()
+            : ($targetEffectiveRelease instanceof ThemeScopeRelease
+                ? $targetEffectiveRelease->payload()
+                : $this->adapter->loadBase($context));
+        $compiled = $this->adapter->compile($context, $effective);
+        $effective = \is_array($compiled['payload'] ?? null) ? $compiled['payload'] : $effective;
+        $this->validateLayoutPublication($context, $effective, $actorId);
+
+        $descendants = $this->freezeDescendantWorkspaces($context);
+        $currentDescendants = [];
+        foreach ($descendants as $snapshot) {
+            $descendantContext = $snapshot['context'] ?? null;
+            if ($descendantContext instanceof ThemeEditorContext) {
+                $currentDescendants[$descendantContext->identityHash()] = $snapshot;
+            }
+        }
+        $sourceDescendants = [];
+        foreach ((array)($sourceReceipt['descendants'] ?? []) as $descendantReceipt) {
+            if (!\is_array($descendantReceipt)) {
+                continue;
+            }
+            $identityHash = (string)($descendantReceipt['identity_hash'] ?? '');
+            if ($identityHash === '' || !isset($currentDescendants[$identityHash])) {
+                throw new \RuntimeException('theme_scope_release_batch_descendant_snapshot_missing');
+            }
+            $sourceDescendants[$identityHash] = $descendantReceipt;
+        }
+
+        return [
+            'context' => $context,
+            'workspace' => $workspace,
+            'target_release_id' => $targetReleaseId,
+            'target_release' => $targetRelease,
+            'target_effective_release_id' => $targetEffectiveReleaseId,
+            'effective' => $effective,
+            'source_receipt' => $sourceReceipt,
+            'descendants' => $descendants,
+            'source_descendants' => $sourceDescendants,
+        ];
+    }
+
+    /** @param array<string,mixed> $prepared @return array<string,mixed> */
+    private function applyPreparedReleaseBatchRollbackItem(
+        array $prepared,
+        int $sourceBatchId,
+        string $actorId,
+        string $committedAt,
+    ): array {
+        $context = $prepared['context'] ?? null;
+        if (!$context instanceof ThemeEditorContext) {
+            throw new \RuntimeException('theme_scope_release_batch_rollback_item_invalid');
+        }
+        $workspace = $prepared['workspace'] ?? null;
+        $targetRelease = $prepared['target_release'] ?? null;
+        $targetReleaseId = $this->nullablePositiveInt($prepared['target_release_id'] ?? null);
+        $targetEffectiveReleaseId = $this->nullablePositiveInt(
+            $prepared['target_effective_release_id'] ?? null,
+        );
+        if ($workspace instanceof ThemeScopeWorkspace) {
+            $workspace->setData([
+                ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID => $targetReleaseId,
+                ThemeScopeWorkspace::schema_fields_LAST_GOOD_RELEASE_ID => $targetReleaseId,
+            ])->save();
+        } elseif ($targetReleaseId !== null) {
+            throw new \RuntimeException('theme_scope_release_batch_rollback_workspace_missing');
+        }
+        $effective = \is_array($prepared['effective'] ?? null) ? $prepared['effective'] : [];
+        $this->adapter->projectPublished(
+            $context,
+            $effective,
+            $targetReleaseId ?? $targetEffectiveReleaseId ?? 0,
+        );
+        $payloadJson = $this->json($effective);
+
+        return [
+            'resource_type' => $context->resourceType,
+            'status' => 'rolled_back',
+            'source_batch_id' => $sourceBatchId,
+            'source_release_id' => $targetReleaseId,
+            'workspace_id' => $workspace instanceof ThemeScopeWorkspace ? $workspace->getId() : null,
+            'identity_hash' => $context->identityHash(),
+            'context' => $context->toArray(),
+            'release_id' => $targetReleaseId,
+            'effective_release_id' => $targetEffectiveReleaseId,
+            'revision_id' => $targetRelease instanceof ThemeScopeRelease
+                ? $this->nullablePositiveInt($targetRelease->getData(
+                    ThemeScopeRelease::schema_fields_REVISION_ID,
+                ))
+                : null,
+            'parent_release_id' => $targetRelease instanceof ThemeScopeRelease
+                ? $this->nullablePositiveInt($targetRelease->getData(
+                    ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID,
+                ))
+                : null,
+            'fingerprint' => $targetRelease instanceof ThemeScopeRelease
+                ? (string)$targetRelease->getData(ThemeScopeRelease::schema_fields_FINGERPRINT)
+                : \hash('sha256', $payloadJson),
+            'content_digest' => \hash('sha256', $payloadJson),
+            'scope' => $context->scope->storageScope,
+            'actor_id' => $actorId,
+            'committed_at' => $committedAt,
+        ];
+    }
+
+    private function insertRollbackReleaseBatch(
+        ThemeEditorContext $context,
+        string $digest,
+        int $sourceBatchId,
+        string $actorId,
+        string $actorName,
+        string $reason,
+        string $committedAt,
+    ): ThemeScopeReleaseBatch {
+        $record = clone $this->releaseBatches;
+        $record->clearData()->clearQuery()->setData([
+            ThemeScopeReleaseBatch::schema_fields_BATCH_DIGEST => $digest,
+            ThemeScopeReleaseBatch::schema_fields_SCOPE => $context->scope->storageScope,
+            ThemeScopeReleaseBatch::schema_fields_STORE_MODE => $context->scope->storeMode,
+            ThemeScopeReleaseBatch::schema_fields_AREA => $context->area,
+            ThemeScopeReleaseBatch::schema_fields_THEME_ID => $context->themeId,
+            ThemeScopeReleaseBatch::schema_fields_LAYOUT_TYPE => $context->layoutType,
+            ThemeScopeReleaseBatch::schema_fields_LAYOUT_OPTION => $context->layoutOption,
+            ThemeScopeReleaseBatch::schema_fields_LOCALE => $context->locale,
+            ThemeScopeReleaseBatch::schema_fields_TARGET_TYPE => $context->targetType,
+            ThemeScopeReleaseBatch::schema_fields_TARGET_ID => $context->targetId,
+            ThemeScopeReleaseBatch::schema_fields_STATE => ThemeScopeReleaseBatch::STATE_PREPARING,
+            ThemeScopeReleaseBatch::schema_fields_RECEIPT_JSON => null,
+            ThemeScopeReleaseBatch::schema_fields_SOURCE_BATCH_ID => $sourceBatchId,
+            ThemeScopeReleaseBatch::schema_fields_ACTOR_ID => $actorId,
+            ThemeScopeReleaseBatch::schema_fields_ACTOR_NAME => $actorName !== '' ? $actorName : null,
+            ThemeScopeReleaseBatch::schema_fields_REASON => $reason !== '' ? $reason : null,
+            ThemeScopeReleaseBatch::schema_fields_COMMITTED_AT => $committedAt,
+        ])->save();
+
+        return $record;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $frozen
+     * @param array<string,array<string,mixed>> $sourceDescendants
+     * @return list<array<string,mixed>>
+     */
+    private function rollbackFrozenDescendantsInTransaction(
+        array $frozen,
+        array $sourceDescendants,
+        int $sourceBatchId,
+        string $actorId,
+        string $actorName,
+        string $committedAt,
+    ): array {
+        $receipts = [];
+        foreach ($frozen as $snapshot) {
+            $context = $snapshot['context'] ?? null;
+            if (!$context instanceof ThemeEditorContext) {
+                throw new \RuntimeException('theme_scope_descendant_snapshot_invalid');
+            }
+            $workspace = $this->findWorkspace($context, true);
+            if (!$workspace instanceof ThemeScopeWorkspace
+                || $workspace->getId() !== (int)($snapshot['workspace_id'] ?? 0)
+                || $workspace->getRevision() !== (int)($snapshot['revision'] ?? -1)
+                || $this->nullablePositiveInt($workspace->getData(
+                    ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID,
+                )) !== ($snapshot['draft_revision_id'] ?? null)
+                || $this->nullablePositiveInt($workspace->getData(
+                    ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
+                )) !== ($snapshot['published_release_id'] ?? null)
+            ) {
+                throw new \RuntimeException('theme_scope_descendant_snapshot_conflict');
+            }
+            $historical = $sourceDescendants[$context->identityHash()] ?? null;
+            if (!\is_array($historical)) {
+                $outcome = $this->propagateOneInTransaction($context, $actorId, $actorName, true);
+                if (($outcome['updated'] ?? false) !== true) {
+                    continue;
+                }
+                $receipts[] = [
+                    'status' => 'rollback_propagated',
+                    'source_batch_id' => $sourceBatchId,
+                    'source_release_id' => null,
+                    'workspace_id' => $workspace->getId(),
+                    'identity_hash' => $context->identityHash(),
+                    'context' => $context->toArray(),
+                    'scope' => $context->scope->storageScope,
+                    'release_id' => $outcome['release_id'] ?? null,
+                    'revision_id' => $outcome['revision_id'] ?? null,
+                    'parent_release_id' => $outcome['parent_release_id'] ?? null,
+                    'fingerprint' => $outcome['fingerprint'] ?? '',
+                    'actor_id' => 'system:parent-propagation:' . $actorId,
+                    'committed_at' => $committedAt,
+                ];
+                continue;
+            }
+
+            $targetReleaseId = $this->nullablePositiveInt($historical['release_id'] ?? null);
+            $targetRelease = $targetReleaseId !== null ? $this->loadRelease($targetReleaseId) : null;
+            if ($targetReleaseId !== null
+                && (!$targetRelease instanceof ThemeScopeRelease
+                    || (string)$targetRelease->getData(ThemeScopeRelease::schema_fields_IDENTITY_HASH)
+                        !== $context->identityHash()
+                    || (string)$targetRelease->getData(ThemeScopeRelease::schema_fields_RESOURCE_TYPE)
+                        !== $context->resourceType)
+            ) {
+                throw new \RuntimeException('theme_scope_release_batch_descendant_release_invalid');
+            }
+            $effective = $targetRelease instanceof ThemeScopeRelease
+                ? $targetRelease->payload()
+                : $this->parentPublishedState($context)['payload'];
+            $compiled = $this->adapter->compile($context, $effective);
+            $effective = \is_array($compiled['payload'] ?? null) ? $compiled['payload'] : $effective;
+            $this->validateLayoutPublication($context, $effective, $actorId);
+            $workspace->setData([
+                ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID => $targetReleaseId,
+                ThemeScopeWorkspace::schema_fields_LAST_GOOD_RELEASE_ID => $targetReleaseId,
+            ])->save();
+            $this->adapter->projectPublished($context, $effective, $targetReleaseId ?? 0);
+            $payloadJson = $this->json($effective);
+            $receipts[] = [
+                'status' => 'rolled_back',
+                'source_batch_id' => $sourceBatchId,
+                'source_release_id' => $targetReleaseId,
+                'workspace_id' => $workspace->getId(),
+                'identity_hash' => $context->identityHash(),
+                'context' => $context->toArray(),
+                'scope' => $context->scope->storageScope,
+                'release_id' => $targetReleaseId,
+                'revision_id' => $targetRelease instanceof ThemeScopeRelease
+                    ? $this->nullablePositiveInt($targetRelease->getData(
+                        ThemeScopeRelease::schema_fields_REVISION_ID,
+                    ))
+                    : null,
+                'parent_release_id' => $targetRelease instanceof ThemeScopeRelease
+                    ? $this->nullablePositiveInt($targetRelease->getData(
+                        ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID,
+                    ))
+                    : null,
+                'fingerprint' => $targetRelease instanceof ThemeScopeRelease
+                    ? (string)$targetRelease->getData(ThemeScopeRelease::schema_fields_FINGERPRINT)
+                    : \hash('sha256', $payloadJson),
+                'content_digest' => \hash('sha256', $payloadJson),
+                'actor_id' => $actorId,
+                'committed_at' => $committedAt,
+            ];
+        }
+
+        return $receipts;
+    }
+
+    private function loadReleaseBatch(int $batchId, bool $lockingRead = false): ?ThemeScopeReleaseBatch
+    {
+        $record = clone $this->releaseBatches;
+        $record->clearData()->clearQuery()
+            ->where(ThemeScopeReleaseBatch::schema_fields_ID, $batchId);
+        if ($lockingRead && $this->supportsForUpdate()) {
+            $record->additional('FOR UPDATE');
+        }
+        $record->find()->fetch();
+
+        return $record->getId() > 0 ? $record : null;
+    }
+
+    /** @return array<string,mixed> */
+    private function releaseBatchReadback(ThemeScopeReleaseBatch $record): array
+    {
+        $receipt = $record->receipt();
+        $cacheError = $record->getData(ThemeScopeReleaseBatch::schema_fields_CACHE_ERROR_JSON);
+        if (\is_string($cacheError) && $cacheError !== '') {
+            $cacheError = \json_decode($cacheError, true);
+        }
+        $receipt['batch_id'] = $record->getId();
+        $receipt['source_batch_id'] = $this->nullablePositiveInt($record->getData(
+            ThemeScopeReleaseBatch::schema_fields_SOURCE_BATCH_ID,
+        ));
+        $receipt['scope'] = (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_SCOPE);
+        $receipt['store_mode'] = (string)$record->getData(
+            ThemeScopeReleaseBatch::schema_fields_STORE_MODE,
+        );
+        $receipt['area'] = (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_AREA);
+        $receipt['theme_id'] = (int)$record->getData(ThemeScopeReleaseBatch::schema_fields_THEME_ID);
+        $receipt['layout_type'] = (string)$record->getData(
+            ThemeScopeReleaseBatch::schema_fields_LAYOUT_TYPE,
+        );
+        $receipt['layout_option'] = (string)$record->getData(
+            ThemeScopeReleaseBatch::schema_fields_LAYOUT_OPTION,
+        );
+        $receipt['locale'] = (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_LOCALE);
+        $receipt['target_type'] = (string)$record->getData(
+            ThemeScopeReleaseBatch::schema_fields_TARGET_TYPE,
+        );
+        $receipt['target_id'] = (int)$record->getData(ThemeScopeReleaseBatch::schema_fields_TARGET_ID);
+        $receipt['state'] = (string)$record->getData(ThemeScopeReleaseBatch::schema_fields_STATE);
+        $receipt['cache_updated_at'] = $record->getData(
+            ThemeScopeReleaseBatch::schema_fields_CACHE_UPDATED_AT,
+        );
+        $receipt['cache_error'] = \is_array($cacheError) ? $cacheError : null;
+        $receipt['cache_retryable'] = $receipt['state']
+            === ThemeScopeReleaseBatch::STATE_PUBLISHED_CACHE_DEGRADED;
+
+        return $receipt;
+    }
+
     private function createWorkspace(ThemeEditorContext $context): ThemeScopeWorkspace
     {
         $workspace = clone $this->workspaces;
@@ -635,6 +1576,19 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
 
     private function findWorkspace(ThemeEditorContext $context, bool $lockingRead = false): ?ThemeScopeWorkspace
     {
+        // A single render request resolves the same scoped workspace from
+        // several observers (head/header/footer/slot). Reuse the immutable
+        // read result, but never reuse it for a locking read: write paths must
+        // still obtain a fresh row under FOR UPDATE after the request cache is
+        // flushed.
+        $requestCacheKey = self::REQUEST_WORKSPACE_CACHE_PREFIX . $context->identityHash();
+        if (!$lockingRead && RequestContext::isInitialized() && $context->identityHash() !== '') {
+            if (RequestContext::has($requestCacheKey)) {
+                $cached = RequestContext::get($requestCacheKey);
+                return $cached instanceof ThemeScopeWorkspace ? clone $cached : null;
+            }
+        }
+
         $workspace = clone $this->workspaces;
         $workspace->clearData()->clearQuery()
             ->where(ThemeScopeWorkspace::schema_fields_IDENTITY_HASH, $context->identityHash());
@@ -643,7 +1597,18 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         }
         $workspace->find()->fetch();
 
-        return $workspace->getId() > 0 ? $workspace : null;
+        $resolved = $workspace->getId() > 0 ? $workspace : null;
+        if (!$lockingRead && RequestContext::isInitialized() && $context->identityHash() !== '') {
+            RequestContext::set($requestCacheKey, $resolved);
+            $keys = RequestContext::get(self::REQUEST_WORKSPACE_CACHE_KEYS, []);
+            if (!is_array($keys)) {
+                $keys = [];
+            }
+            $keys[] = $requestCacheKey;
+            RequestContext::set(self::REQUEST_WORKSPACE_CACHE_KEYS, array_values(array_unique($keys)));
+        }
+
+        return $resolved;
     }
 
     private function insertRevision(
@@ -834,10 +1799,10 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         return $this->adapter->loadBase($root);
     }
 
-    /** @return array{updated:int,conflicted:int,conflicts:list<array<string,mixed>>,errors:list<array<string,string>>} */
-    private function propagateToDescendants(ThemeEditorContext $publishedContext, string $actorId, string $actorName): array
+    /** @return list<ThemeEditorContext> */
+    private function descendantContexts(ThemeEditorContext $publishedContext, bool $lockingRead = false): array
     {
-        $rows = (clone $this->workspaces)->clearData()->clearQuery()
+        $query = (clone $this->workspaces)->clearData()->clearQuery()
             ->where(ThemeScopeWorkspace::schema_fields_AREA, $publishedContext->area)
             ->where(ThemeScopeWorkspace::schema_fields_RESOURCE_TYPE, $publishedContext->resourceType)
             ->where(ThemeScopeWorkspace::schema_fields_THEME_ID, $publishedContext->identityThemeId())
@@ -845,8 +1810,11 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
             ->where(ThemeScopeWorkspace::schema_fields_LAYOUT_OPTION, $publishedContext->identityLayoutOption())
             ->where(ThemeScopeWorkspace::schema_fields_LOCALE, $publishedContext->identityLocale())
             ->where(ThemeScopeWorkspace::schema_fields_TARGET_TYPE, $publishedContext->identityTargetType())
-            ->where(ThemeScopeWorkspace::schema_fields_TARGET_ID, $publishedContext->identityTargetId())
-            ->select()->fetchArray();
+            ->where(ThemeScopeWorkspace::schema_fields_TARGET_ID, $publishedContext->identityTargetId());
+        if ($lockingRead && $this->supportsForUpdate()) {
+            $query->additional('FOR UPDATE');
+        }
+        $rows = $query->select()->fetchArray();
         $candidates = [];
         foreach (\is_array($rows) ? $rows : [] as $row) {
             if (!\is_array($row)) {
@@ -863,6 +1831,117 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         // Rebase direct parents before their descendants: Website, then Store, then Channel.
         \usort($candidates, static fn(ThemeEditorContext $a, ThemeEditorContext $b): int =>
             \count($a->scope->fallbackStorageScopes) <=> \count($b->scope->fallbackStorageScopes));
+
+        return $candidates;
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function freezeDescendantWorkspaces(ThemeEditorContext $publishedContext): array
+    {
+        $frozen = [];
+        foreach ($this->descendantContexts($publishedContext, true) as $context) {
+            $workspace = $this->findWorkspace($context, true);
+            if (!$workspace instanceof ThemeScopeWorkspace) {
+                continue;
+            }
+            $currentReleaseId = $this->nullablePositiveInt($workspace->getData(
+                ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
+            ));
+            $currentRelease = $currentReleaseId !== null ? $this->loadRelease($currentReleaseId) : null;
+            $frozen[] = [
+                'context' => $context,
+                'workspace_id' => $workspace->getId(),
+                'revision' => $workspace->getRevision(),
+                'draft_revision_id' => $this->nullablePositiveInt($workspace->getData(
+                    ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID,
+                )),
+                'published_release_id' => $currentReleaseId,
+                'parent_release_id' => $this->nullablePositiveInt($workspace->getData(
+                    ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID,
+                )),
+                'release_parent_id' => $currentRelease instanceof ThemeScopeRelease
+                    ? $this->nullablePositiveInt($currentRelease->getData(
+                        ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID,
+                    ))
+                    : null,
+                'release_revision_id' => $currentRelease instanceof ThemeScopeRelease
+                    ? $this->nullablePositiveInt($currentRelease->getData(
+                        ThemeScopeRelease::schema_fields_REVISION_ID,
+                    ))
+                    : null,
+                'release_fingerprint' => $currentRelease instanceof ThemeScopeRelease
+                    ? (string)$currentRelease->getData(ThemeScopeRelease::schema_fields_FINGERPRINT)
+                    : null,
+                'release_content_digest' => $currentRelease instanceof ThemeScopeRelease
+                    ? \hash('sha256', $this->json($currentRelease->payload()))
+                    : null,
+                'release_actor_id' => $currentRelease instanceof ThemeScopeRelease
+                    ? (string)$currentRelease->getData(ThemeScopeRelease::schema_fields_ACTOR_ID)
+                    : null,
+            ];
+        }
+
+        return $frozen;
+    }
+
+    /**
+     * @param list<array<string,mixed>> $frozen
+     * @return list<array<string,mixed>>
+     */
+    private function propagateFrozenDescendantsInTransaction(
+        array $frozen,
+        string $actorId,
+        string $actorName,
+        string $committedAt,
+    ): array {
+        $receipts = [];
+        foreach ($frozen as $snapshot) {
+            $context = $snapshot['context'] ?? null;
+            if (!$context instanceof ThemeEditorContext) {
+                throw new \RuntimeException('theme_scope_descendant_snapshot_invalid');
+            }
+            $workspace = $this->findWorkspace($context, true);
+            if (!$workspace instanceof ThemeScopeWorkspace
+                || $workspace->getId() !== (int)($snapshot['workspace_id'] ?? 0)
+                || $workspace->getRevision() !== (int)($snapshot['revision'] ?? -1)
+                || $this->nullablePositiveInt($workspace->getData(
+                    ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID,
+                )) !== ($snapshot['draft_revision_id'] ?? null)
+                || $this->nullablePositiveInt($workspace->getData(
+                    ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
+                )) !== ($snapshot['published_release_id'] ?? null)
+                || $this->nullablePositiveInt($workspace->getData(
+                    ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID,
+                )) !== ($snapshot['parent_release_id'] ?? null)
+            ) {
+                throw new \RuntimeException('theme_scope_descendant_snapshot_conflict');
+            }
+            $outcome = $this->propagateOneInTransaction($context, $actorId, $actorName, true);
+            if (($outcome['updated'] ?? false) !== true) {
+                continue;
+            }
+            $receipts[] = [
+                'status' => 'published',
+                'workspace_id' => (int)($snapshot['workspace_id'] ?? 0),
+                'identity_hash' => $context->identityHash(),
+                'context' => $context->toArray(),
+                'scope' => $context->scope->storageScope,
+                'release_id' => $outcome['release_id'] ?? null,
+                'revision_id' => $outcome['revision_id'] ?? null,
+                'parent_release_id' => $outcome['parent_release_id'] ?? null,
+                'fingerprint' => $outcome['fingerprint'] ?? '',
+                'actor_id' => 'system:parent-propagation:' . $actorId,
+                'committed_at' => $committedAt,
+            ];
+        }
+
+        return $receipts;
+    }
+
+    /** @return array{updated:int,conflicted:int,conflicts:list<array<string,mixed>>,errors:list<array<string,string>>} */
+    private function propagateToDescendants(ThemeEditorContext $publishedContext, string $actorId, string $actorName): array
+    {
+        $candidates = $this->descendantContexts($publishedContext);
 
         $updated = 0;
         $conflicted = 0;
@@ -906,83 +1985,104 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
     {
         return $this->transactions->runWrite(
             $this->workspaces->getConnection(),
-            function () use ($context, $actorId, $actorName): array {
-                $workspace = $this->findWorkspace($context, true);
-                if (!$workspace instanceof ThemeScopeWorkspace) {
-                    return ['updated' => false, 'conflicts' => []];
-                }
-                $currentRelease = $this->loadRelease((int)$workspace->getData(
-                    ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
-                ));
-                $publishedRevisionId = $currentRelease
-                    ? (int)$currentRelease->getData(ThemeScopeRelease::schema_fields_REVISION_ID)
-                    : 0;
-                $commands = $this->commandsForRevision($publishedRevisionId);
-                $newParent = $this->parentPublishedState($context);
-                $oldParentId = $currentRelease
-                    ? $this->nullablePositiveInt($currentRelease->getData(ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID))
-                    : null;
-                $oldParent = $this->payloadForReleaseOrRootBase($oldParentId, $context);
-                $conflicts = $this->patchEngine->structuralConflicts($oldParent, $newParent['payload'], $commands);
-                if ($conflicts !== []) {
-                    $workspace->setData([
-                        ThemeScopeWorkspace::schema_fields_STATUS => ThemeScopeWorkspace::STATUS_CONFLICT,
-                        ThemeScopeWorkspace::schema_fields_CONFLICT_JSON => $this->json($conflicts),
-                    ])->save();
-
-                    return ['updated' => false, 'conflicts' => $conflicts];
-                }
-                $effective = $this->patchEngine->apply($newParent['payload'], $commands);
-                $compiled = $this->adapter->compile($context, $effective);
-                $effective = \is_array($compiled['payload'] ?? null) ? $compiled['payload'] : $effective;
-                $artifact = \is_array($compiled['artifact'] ?? null) ? $compiled['artifact'] : [];
-                $this->validateLayoutPublication($context, $effective, $actorId);
-                $draftRevisionId = (int)$workspace->getData(ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID);
-                $draftConflicts = [];
-                if ($draftRevisionId > 0 && $draftRevisionId !== $publishedRevisionId) {
-                    $draftOldParent = $this->payloadForReleaseOrRootBase(
-                        $this->nullablePositiveInt($workspace->getData(
-                            ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID,
-                        )),
-                        $context,
-                    );
-                    $draftConflicts = $this->patchEngine->structuralConflicts(
-                        $draftOldParent,
-                        $newParent['payload'],
-                        $this->commandsForRevision($draftRevisionId),
-                    );
-                    $this->markRevisionConflictState($draftRevisionId, $draftConflicts);
-                }
-                $release = $this->insertRelease(
-                    $workspace,
-                    $context,
-                    $publishedRevisionId > 0 ? $publishedRevisionId : null,
-                    $newParent['release_id'],
-                    $effective,
-                    $artifact,
-                    'system:parent-propagation:' . $actorId,
-                    $actorName,
-                    'parent_release_propagation',
-                );
-                $this->adapter->projectPublished($context, $effective, $release->getId());
-                $updates = [
-                    ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID => $release->getId(),
-                    ThemeScopeWorkspace::schema_fields_LAST_GOOD_RELEASE_ID => $release->getId(),
-                    ThemeScopeWorkspace::schema_fields_STATUS => $draftConflicts === []
-                        ? ThemeScopeWorkspace::STATUS_ACTIVE
-                        : ThemeScopeWorkspace::STATUS_CONFLICT,
-                    ThemeScopeWorkspace::schema_fields_CONFLICT_JSON => $draftConflicts === []
-                        ? null
-                        : $this->json($draftConflicts),
-                ];
-                if ($draftConflicts === []) {
-                    $updates[ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID] = $newParent['release_id'];
-                }
-                $workspace->setData($updates)->save();
-
-                return ['updated' => true, 'conflicts' => $draftConflicts];
-            },
+            fn(): array => $this->propagateOneInTransaction($context, $actorId, $actorName),
         );
+    }
+
+    /** @return array<string,mixed> */
+    private function propagateOneInTransaction(
+        ThemeEditorContext $context,
+        string $actorId,
+        string $actorName,
+        bool $strict = false,
+    ): array {
+        $workspace = $this->findWorkspace($context, true);
+        if (!$workspace instanceof ThemeScopeWorkspace) {
+            return ['updated' => false, 'conflicts' => []];
+        }
+        $currentRelease = $this->loadRelease((int)$workspace->getData(
+            ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID,
+        ));
+        $publishedRevisionId = $currentRelease
+            ? (int)$currentRelease->getData(ThemeScopeRelease::schema_fields_REVISION_ID)
+            : 0;
+        $commands = $this->commandsForRevision($publishedRevisionId);
+        $newParent = $this->parentPublishedState($context);
+        $oldParentId = $currentRelease
+            ? $this->nullablePositiveInt($currentRelease->getData(ThemeScopeRelease::schema_fields_PARENT_RELEASE_ID))
+            : null;
+        $oldParent = $this->payloadForReleaseOrRootBase($oldParentId, $context);
+        $conflicts = $this->patchEngine->structuralConflicts($oldParent, $newParent['payload'], $commands);
+        if ($conflicts !== []) {
+            if ($strict) {
+                throw new \RuntimeException('theme_scope_descendant_structural_conflict');
+            }
+            $workspace->setData([
+                ThemeScopeWorkspace::schema_fields_STATUS => ThemeScopeWorkspace::STATUS_CONFLICT,
+                ThemeScopeWorkspace::schema_fields_CONFLICT_JSON => $this->json($conflicts),
+            ])->save();
+
+            return ['updated' => false, 'conflicts' => $conflicts];
+        }
+        $effective = $this->patchEngine->apply($newParent['payload'], $commands);
+        $compiled = $this->adapter->compile($context, $effective);
+        $effective = \is_array($compiled['payload'] ?? null) ? $compiled['payload'] : $effective;
+        $artifact = \is_array($compiled['artifact'] ?? null) ? $compiled['artifact'] : [];
+        $this->validateLayoutPublication($context, $effective, $actorId);
+        $draftRevisionId = (int)$workspace->getData(ThemeScopeWorkspace::schema_fields_DRAFT_REVISION_ID);
+        $draftConflicts = [];
+        if ($draftRevisionId > 0 && $draftRevisionId !== $publishedRevisionId) {
+            $draftOldParent = $this->payloadForReleaseOrRootBase(
+                $this->nullablePositiveInt($workspace->getData(
+                    ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID,
+                )),
+                $context,
+            );
+            $draftConflicts = $this->patchEngine->structuralConflicts(
+                $draftOldParent,
+                $newParent['payload'],
+                $this->commandsForRevision($draftRevisionId),
+            );
+            if ($strict && $draftConflicts !== []) {
+                throw new \RuntimeException('theme_scope_descendant_draft_conflict');
+            }
+            $this->markRevisionConflictState($draftRevisionId, $draftConflicts);
+        }
+        $release = $this->insertRelease(
+            $workspace,
+            $context,
+            $publishedRevisionId > 0 ? $publishedRevisionId : null,
+            $newParent['release_id'],
+            $effective,
+            $artifact,
+            'system:parent-propagation:' . $actorId,
+            $actorName,
+            'parent_release_propagation',
+        );
+        $this->adapter->projectPublished($context, $effective, $release->getId());
+        $updates = [
+            ThemeScopeWorkspace::schema_fields_PUBLISHED_RELEASE_ID => $release->getId(),
+            ThemeScopeWorkspace::schema_fields_LAST_GOOD_RELEASE_ID => $release->getId(),
+            ThemeScopeWorkspace::schema_fields_STATUS => $draftConflicts === []
+                ? ThemeScopeWorkspace::STATUS_ACTIVE
+                : ThemeScopeWorkspace::STATUS_CONFLICT,
+            ThemeScopeWorkspace::schema_fields_CONFLICT_JSON => $draftConflicts === []
+                ? null
+                : $this->json($draftConflicts),
+        ];
+        if ($draftConflicts === []) {
+            $updates[ThemeScopeWorkspace::schema_fields_PARENT_RELEASE_ID] = $newParent['release_id'];
+        }
+        $workspace->setData($updates)->save();
+
+        return [
+            'updated' => true,
+            'conflicts' => $draftConflicts,
+            'release_id' => $release->getId(),
+            'revision_id' => $publishedRevisionId > 0 ? $publishedRevisionId : null,
+            'parent_release_id' => $newParent['release_id'],
+            'fingerprint' => (string)$release->getData(ThemeScopeRelease::schema_fields_FINGERPRINT),
+        ];
     }
 
     /** @param array<string,mixed> $row */
@@ -1393,6 +2493,120 @@ final class ThemeScopedWorkspace implements ThemeScopedWorkspaceInterface
         $value = (int)$value;
 
         return $value > 0 ? $value : null;
+    }
+
+    private function requestLoadCacheKey(ThemeEditorContext $context, bool $includeDraft): string
+    {
+        return self::REQUEST_LOAD_CACHE_PREFIX . \hash(
+            'xxh3',
+            \implode("\0", [
+                ...$context->identityParts(),
+                $includeDraft ? '1' : '0',
+            ]),
+        );
+    }
+
+    /** @param array<string,mixed> $state */
+    private function rememberRequestLoad(string $cacheKey, array $state): void
+    {
+        if (!RequestContext::isInitialized()) {
+            return;
+        }
+        RequestContext::set($cacheKey, $state);
+        $keys = RequestContext::get(self::REQUEST_LOAD_CACHE_KEYS, []);
+        if (!\is_array($keys)) {
+            $keys = [];
+        }
+        $keys[] = $cacheKey;
+        RequestContext::set(self::REQUEST_LOAD_CACHE_KEYS, \array_values(\array_unique($keys)));
+    }
+
+    private function dispatchScopedPublishResourceChange(
+        ThemeEditorContext $context,
+        int $releaseId,
+        string $entry,
+        bool $idempotent,
+    ): void {
+        $themeId = max(0, $context->themeId);
+        $resourceType = $context->resourceType === ThemeEditorContext::RESOURCE_THEME_BINDING
+            ? 'theme'
+            : 'theme_layout';
+        $resourceId = $themeId > 0 ? (string)$themeId : ('scope:' . $context->scope->storageScope);
+        if (\strlen($resourceId) > 191) {
+            $resourceId = 'sha256:' . \hash('sha256', $resourceId);
+        }
+        $identity = $context->scope->identity;
+        $websiteId = max(0, (int)($identity->websiteId ?? 0));
+        $websiteCode = \trim((string)($identity->websiteCode ?? ''));
+        if ($websiteCode === '') {
+            $websiteCode = $identity->isGlobal() ? 'default' : ($websiteId === 0 ? 'default' : ('w' . $websiteId));
+        }
+        $namespacePath = ObjectManager::getInstance(NamespacePath::class);
+        $namespaces = [$namespacePath->global('storefront', ['theme'])];
+        if ($websiteCode !== '') {
+            $namespaces[] = $namespacePath->website($websiteCode, ['theme']);
+            if ($themeId > 0) {
+                $namespaces[] = $namespacePath->website($websiteCode, ['theme', (string)$themeId]);
+            }
+        }
+        $namespaces = \array_values(\array_unique($namespaces));
+        \sort($namespaces, \SORT_STRING);
+        $revision = ObjectManager::getInstance(ResourceRevisionService::class)->next($resourceType, $resourceId);
+        $change = ObjectManager::getInstance(ResourceChangeFactory::class)->create(
+            resourceType: $resourceType,
+            resourceId: $resourceId,
+            action: 'publish',
+            revision: $revision,
+            websiteId: $websiteId,
+            websiteCode: $websiteCode,
+            before: [],
+            after: [
+                'theme_id' => $themeId,
+                'release_id' => max(0, $releaseId),
+                'resource_type' => $context->resourceType,
+                'area' => $context->area,
+                'layout_type' => $context->layoutType,
+                'layout_option' => $context->layoutOption,
+                'locale' => $context->locale,
+                'storage_scope' => $context->scope->storageScope,
+                'scope' => $context->scope->toArray(),
+                'idempotent' => $idempotent,
+            ],
+            changedFields: ['published_release', 'static_version'],
+            impact: [
+                'namespaces' => $namespaces,
+                'urls' => ['/'],
+            ],
+            origin: ['entry' => $entry],
+            siteId: $websiteId,
+        );
+        \w_changed($change);
+    }
+
+    private function flushRequestLoadCache(): void
+    {
+        if (!RequestContext::isInitialized()) {
+            return;
+        }
+        $keys = RequestContext::get(self::REQUEST_LOAD_CACHE_KEYS, []);
+        if (\is_array($keys)) {
+            foreach ($keys as $key) {
+                if (\is_string($key) && $key !== '') {
+                    RequestContext::remove($key);
+                }
+            }
+        }
+        RequestContext::remove(self::REQUEST_LOAD_CACHE_KEYS);
+
+        $workspaceKeys = RequestContext::get(self::REQUEST_WORKSPACE_CACHE_KEYS, []);
+        if (is_array($workspaceKeys)) {
+            foreach ($workspaceKeys as $key) {
+                if (is_string($key) && $key !== '') {
+                    RequestContext::remove($key);
+                }
+            }
+        }
+        RequestContext::remove(self::REQUEST_WORKSPACE_CACHE_KEYS);
     }
 
     private function json(mixed $value): string

@@ -274,27 +274,9 @@ class ThemeData
             unset(self::$runtimeCache[$key]);
         }
 
-        $cache = self::sharedRuntimeCache();
-        if ($cache === null) {
-            return [false, null];
-        }
-
-        try {
-            $value = $cache->get(self::SHARED_CACHE_NAMESPACE, 'theme.' . $key);
-            if ($value === null) {
-                return [false, null];
-            }
-            self::pruneRuntimeCache();
-            self::$runtimeCache[$key] = [
-                'expires_at' => microtime(true) + self::runtimeCacheTtl(),
-                'value' => $value,
-            ];
-            return [true, $value];
-        } catch (\Throwable) {
-            self::$sharedRuntimeCache = null;
-            self::$sharedRuntimeCacheResolved = true;
-            return [false, null];
-        }
+        // Hot path stays process-local. Shared weline_site_runtime get/set burns
+        // ~200ms each under pool pressure (same class of regression as theme_runtime).
+        return [false, null];
     }
 
     private static function setRuntimeCache(string $key, mixed $value): void
@@ -304,18 +286,7 @@ class ThemeData
             'expires_at' => microtime(true) + self::runtimeCacheTtl(),
             'value' => $value,
         ];
-
-        $cache = self::sharedRuntimeCache();
-        if ($cache === null) {
-            return;
-        }
-
-        try {
-            $cache->set(self::SHARED_CACHE_NAMESPACE, 'theme.' . $key, $value, self::runtimeCacheTtl());
-        } catch (\Throwable) {
-            self::$sharedRuntimeCache = null;
-            self::$sharedRuntimeCacheResolved = true;
-        }
+        // Do not mirror to SharedState on the request hot path.
     }
 
     private static function pruneRuntimeCache(): void

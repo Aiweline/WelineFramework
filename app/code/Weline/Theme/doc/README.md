@@ -14,6 +14,7 @@
    - 部件：[`部件开发指南.md`](./部件开发指南.md)
    - **前台 section `weline-code`（强约束）**：[`frontend-section-weline-code.md`](./frontend-section-weline-code.md) — 字面 `<section>` 与 `w:slot wrapper="section"` 必须非空语义 code；改模板后跑 `php bin/w frontend:check-section-code`
    - **CSS/PHTML 变量强约束（`REQ-THEME-0007`）**：[`theme-css-variables-only.md`](./theme-css-variables-only.md) — 禁止硬编码颜色/尺寸，须用主题 Token；待改清单见 [`theme-hardcoded-visual-audit.md`](./theme-hardcoded-visual-audit.md)
+   - **店面 Token 消费约定**：[`theme-storefront-token-consumption.md`](./theme-storefront-token-consumption.md) — 间距/圆角/字号只走 `--weline-space-*` / `--weline-theme-radius-*` / `--weline-font-size-*`
    - **语义色重要程度矩阵**：[`theme-semantic-color-matrix.md`](./theme-semantic-color-matrix.md) — 角色×强度、Foundation 桥接、`data-tone` 用法、外观盘分组
    - **Surface / Text 语义（反色顶栏）**：[`theme-surface-text-roles.md`](./theme-surface-text-roles.md) — `data-surface` + `.w-text*`，禁止裸 span 黑底黑字
    - Slot：[`widget-slot-attributes.md`](./widget-slot-attributes.md)
@@ -146,6 +147,10 @@ I18n 不反向感知 Theme。新增 I18n 集成时必须沿用这个方向，不
 - **源文含逗号**（如 `支持 .ico, .png`）：必须用 `<lang>…</lang>` 或加引号的 `@lang('…')` / `@lang{"…"}`；禁止裸 `@lang{a, b}`（逗号当参数分隔 → 编译 `ParseError` / 500）
 
 `__()` 仅保留在 PHP 逻辑层（Controller / Block / `<?php ?>` 块）或向外部 `.js` 注入全局翻译变量时使用。详见 [`开发/Theme开发总指南.md`](./开发/Theme开发总指南.md) §4.1 与 [`Framework/doc/4-内置标签/01-lang标签使用指南.md`](../../Framework/doc/4-内置标签/01-lang标签使用指南.md)（摘要硬规则 +「参数分隔」专节）。
+
+### 插槽性能计时
+
+统一 `timing.log` 中，`theme.slots.cooperative_yield` 记录原有协作让出执行的次数和等待，`theme.slots.boundary_scan` 记录原有边界枚举的次数与耗时。它们直接复用 Framework RequestLifecycleTrace::measurePhase，不新增让出、扫描或缓存。父阶段包含这些子阶段；让出等待不能算作扫描 CPU，完整说明见 [统一缓存范围与性能优化](../../Framework/doc/统一缓存范围与性能优化.md)。
 
 ### 7. 跨模块边界
 
