@@ -72,6 +72,7 @@ class DeployReleaseRuntimeService
     {
         Env::getInstance()->setConfig('deploy_version', $deployVersion);
         Env::getInstance()->setConfig('worker_build_id', $workerBuildId);
+        Env::getInstance()->setConfig('theme_static_version', $deployVersion);
         Env::getInstance()->setConfig('theme.static_version', $deployVersion);
     }
 
