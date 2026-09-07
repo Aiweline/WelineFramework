@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Weline\Review\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Review\Model\ProductReview;
 use Weline\Review\Service\ReviewAiModerationService;
 
 final class ReviewAiModerationServiceTest extends TestCase
@@ -38,5 +39,26 @@ final class ReviewAiModerationServiceTest extends TestCase
         $parsed = $svc->parseDecision('不是 JSON');
         self::assertSame(ReviewAiModerationService::DECISION_UNCERTAIN, $parsed['decision']);
         self::assertNotSame('', $parsed['reason']);
+    }
+
+    public function testPersistStatusNormalizesEmptyAnonymousFlagBeforeSave(): void
+    {
+        $review = $this->getMockBuilder(ProductReview::class)
+            ->onlyMethods(['save'])
+            ->getMock();
+        $review->setData(ProductReview::schema_fields_IS_ANONYMOUS, '');
+        $review->expects(self::once())->method('save')->willReturn(true);
+
+        $method = new \ReflectionMethod(ReviewAiModerationService::class, 'persistStatus');
+        $method->setAccessible(true);
+        $method->invoke(
+            $this->service(),
+            $review,
+            ProductReview::STATUS_AI_PENDING_BLOCKED,
+            [],
+            '2026-09-07 09:00:00',
+        );
+
+        self::assertFalse($review->getData(ProductReview::schema_fields_IS_ANONYMOUS));
     }
 }
