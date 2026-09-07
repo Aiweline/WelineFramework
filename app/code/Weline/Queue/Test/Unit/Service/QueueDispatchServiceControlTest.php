@@ -771,6 +771,29 @@ final class QueueDispatchServiceControlTest extends TestCase
         self::assertSame(self::TOKEN_A, $service->leaseRemovalCalls[0]['expected_launch_id']);
     }
 
+    public function testRemoveManagedQueueProcessLeaseUsesCanonicalUnicodeIdentity(): void
+    {
+        $source = (string)\file_get_contents(
+            \dirname(__DIR__, 3) . '/Service/QueueDispatchService.php'
+        );
+        self::assertStringContainsString(
+            "'--name=' . \$expectedProcessName . ' --launch-id=' . \$expectedLaunchId",
+            $source
+        );
+        self::assertMatchesRegularExpression(
+            '/protected function removeManagedQueueProcessLease\([\s\S]*?Processer::removeManagedProcessLeaseRecord\(/',
+            $source
+        );
+    }
+
+    public function testReconcileSweepsDeadQueuePidJsonOrphans(): void
+    {
+        $service = new InMemoryQueueDispatchService($this->row());
+        $service->runningRows = [];
+        $service->reconcileRunningQueues();
+        self::assertSame(1, $service->deadPidOrphanCleanupCalls);
+    }
+
     public function testTerminationSignalWithoutConfirmedReleaseNeverWritesOrCleansLease(): void
     {
         $original = $this->row(pid: 9001, token: self::TOKEN_A);
@@ -1326,6 +1349,7 @@ final class InMemoryQueueDispatchService extends QueueDispatchService
     public array $managedTerminationCalls = [];
     /** @var list<array<string,mixed>> */
     public array $leaseRemovalCalls = [];
+    public int $deadPidOrphanCleanupCalls = 0;
     public string $probeState = Processer::PROCESS_STATE_EXITED;
     /** @var array<string,mixed> */
     public array $managedTerminationResult = [
@@ -1529,6 +1553,13 @@ final class InMemoryQueueDispatchService extends QueueDispatchService
         ];
 
         return true;
+    }
+
+    protected function cleanupDeadQueuePidJsonOrphans(): int
+    {
+        $this->deadPidOrphanCleanupCalls++;
+
+        return 0;
     }
 
     public function queueSnapshot(): Queue

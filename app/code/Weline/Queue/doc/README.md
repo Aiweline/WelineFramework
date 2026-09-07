@@ -137,7 +137,10 @@ token 且仍为 `pid=0` 的调度者恢复 `pending`，不会覆盖已经被 Wor
 - `markQueueWorkerExecutingSafely()` / `completeQueueWorkerSafely()` /
   `failQueueWorkerSafely()`：按 PID 与 dispatch-token 代次写入执行中、成功或失败终态；
 - `releaseClaimedWorkerLease()`：Worker 退出时只清理自身 PID、队列名与 dispatch token
-  精确匹配的受管租约，不发送信号。
+  精确匹配的受管租约，不发送信号；lease 移除时传入 canonical `--name=… --launch-id=…`，
+  避免非 ASCII 队列名被 Processer 误哈希成 `weline-cmd-*` 后删不掉 `*-pid.json`。
+- `reconcileRunningQueues()`：在同步 Queue 行状态后，额外快速清理已死进程的
+  `var/process/pid/*-pid.json` 孤儿，防止短命队列 Worker 元数据无限堆积。
 
 控制操作遵循以下不变量：
 
@@ -313,6 +316,9 @@ php bin/w queue:run --id=77 --force
 当前生效配置：
 
 - `queue.cron.max_concurrent`：自动队列的最大并发数。
+- `queue.cron.max_concurrent_by_class.<FQCN>`：按消费者类覆盖并发；实现
+  `BatchDrainingQueueConsumerInterface` 的类默认按 1 单飞行调度，并在
+  `startQueueProcess` 用类级 flock 串行 claim+spawn，避免同波次冷启动风暴。
 - `queue.worker.memory_limit`：队列 Worker 默认内存上限。
 - `queue.worker.memory_limit_by_class.<FQCN>`：按消费者类覆盖内存上限。
 
