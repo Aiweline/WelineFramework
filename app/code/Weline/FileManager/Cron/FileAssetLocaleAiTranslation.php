@@ -46,7 +46,7 @@ class FileAssetLocaleAiTranslation implements CronTaskInterface
         $queueId = $this->translations->enqueueAutoFill('cron');
         $duration = round(microtime(true) - $start, 2);
         if ($queueId <= 0) {
-            return (string)__('文件资源 AI 翻译未入队（未启用或已有待运行任务），耗时 %{1} 秒', [$duration]);
+            return (string)__('文件资源 AI 翻译未入队（未启用、无缺口或已有待运行任务），耗时 %{1} 秒', [$duration]);
         }
 
         return (string)__('文件资源 AI 翻译已入队 #%{1}，耗时 %{2} 秒', [$queueId, $duration]);

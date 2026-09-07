@@ -56,9 +56,16 @@ final class FileAssetLocaleAiTranslationQueue implements TaskConsumerInterface
         if ($result['errors'] !== []) {
             $lines[] = (string)__('errors=%{1}', [implode('; ', array_slice($result['errors'], 0, 5))]);
         }
-        if (!empty($result['continuation'])) {
-            $this->queueService->enqueue('continuation', true);
+        if (!empty($result['aborted_busy'])) {
+            $lines[] = (string)__('AI翻译繁忙或报错，已结束本批；不立刻续队，等待下一轮定时任务');
+        }
+        // continuation is false on busy/error; only productive batches requeue.
+        if (!empty($result['continuation']) && empty($result['aborted_busy'])) {
+            // Prefer service cursor (accounts for skipped complete assets).
+            $nextOffset = max($offset + 1, (int)($result['next_offset'] ?? ($offset + $batchSize)));
+            $this->queueService->enqueueContinuation($nextOffset, $batchSize, (string)($content['requested_by'] ?? 'continuation'));
             $lines[] = (string)__('已续队下一批');
+            $lines[] = (string)__('next_offset=%{1}', [$nextOffset]);
         }
 
         return implode(', ', $lines);

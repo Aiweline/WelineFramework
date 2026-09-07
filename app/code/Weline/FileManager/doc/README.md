@@ -12,14 +12,42 @@ Cross-module code may depend only on `Weline\FileManager\Api\*`:
 - `FileAssetManagerInterface`: page rendering and image-usage validation. This
   established interface still exposes legacy model return types for compatibility.
 - `FileAssetLibraryInterface`: the data-only management boundary for asset lookup,
-  upload, localized metadata, URL resolution, move and delete. New management
+  upload, localized metadata, revision-guarded asset provenance metadata,
+  authorized reference counts, URL resolution, move and delete. New management
   consumers should use this interface instead of models or `Service\*` classes.
 - `FileAccessPolicyInterface` and `Api\Data\FileAccessContext`: scoped access checks.
 - `LayoutContentValidatorInterface`: validates saved layout references.
 
-`etc/module.php` registers each interface to its owning implementation. FileManager
-must not depend on MediaManager; the dependency direction is
+`etc/module.php` registers injectable interfaces to their owning implementations.
+FileManager must not depend on MediaManager; the dependency direction is
 `MediaManager -> FileManager -> Storage`.
+
+## Batched render URLs
+
+`Api\FileAssetBatchUrlResolverInterface::resolveUrls()` is an optional capability
+on the existing asset manager instance; it is not a separate injection binding.
+`FileAssetManagerInterface` and third-party implementations remain compatible.
+Each keyed input supplies an asset ID, an ordered list of `FileAccessContext`
+values, and optional `StorageUrlOptions`; the result preserves the key and is a
+`ResolvedStorageUrl` or null when no context succeeds.
+
+The manager reads raw asset and exact-locale rows in chunks of 200 IDs/codes.
+These maps live only for the current call. Each input still receives independent
+models, the standard fetch hooks, its own access-policy checks and Storage URL
+resolution. Batch-read failure falls back to the existing scalar reads;
+non-exact case matches remain subject to the database's original scalar lookup.
+Private assets retain shared-response-cache prohibition, the existing temporary
+URL TTL, and kind/cacheability/expiry checks. Final URLs are not cached here.
+
+`Framework\Database\Query\QueryDelegator::hydrateFetchResult()` applies the
+same model lifecycle used by normal fetch after the caller records queryData.
+It performs no SQL or delete events; FileManager does not maintain a private
+copy of the ORM hydration rules.
+
+Development coverage: `test/Unit/Service/FileAssetBatchUrlResolverTest.php`
+executes real SQLite queries across the 200-item boundary and verifies independent
+models, hooks, scoped policy, private URLs, and query-result forms. Actual
+storefront response and performance acceptance remain separate from these tests.
 
 ## FileAsset record
 

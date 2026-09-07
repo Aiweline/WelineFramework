@@ -84,6 +84,16 @@ final class FileAssetReferenceIndexer
         return (int)$model->getData(FileAssetReference::schema_fields_ID) > 0;
     }
 
+    public function countForAsset(string $assetId): int
+    {
+        $model = clone $this->references;
+        $rows = $model->clearData()->reset()
+            ->where(FileAssetReference::schema_fields_ASSET_ID, trim($assetId))
+            ->select()
+            ->fetchArray();
+        return is_array($rows) ? count($rows) : 0;
+    }
+
     /**
      * @param list<array{asset_id:string,scope_key:string,locale_code:string,field_path:string}> $items
      * @return list<array{asset_id:string,scope_key:string,locale_code:string,field_path:string}>
