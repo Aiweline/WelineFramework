@@ -76,7 +76,7 @@ describe('PageBuilder optimization Pixel runtime', () => {
         window.__WelineConsentState = {analytics};
         window.__WelinePixelEnv = {
             website_id: '0',
-            website_url: 'https://default.weline.test',
+            website_url: 'https://default.test.weline.com',
             language: 'en_US',
             currency: 'CNY',
         };
