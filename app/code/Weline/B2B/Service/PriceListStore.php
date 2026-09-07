@@ -177,12 +177,13 @@ final class PriceListStore
                 PriceListRecord::schema_fields_ACTIVE => $list->active ? 1 : 0,
                 PriceListRecord::schema_fields_CREATED_AT => gmdate('Y-m-d H:i:s'),
             ])->save();
-            foreach ($list->skuAmountsMinor as $sku => $amountMinor) {
+            foreach ($list->itemRows() as $row) {
                 $this->newItemRecord()->clear()->setData([
                     PriceListItemRecord::schema_fields_LIST_ID => $list->listId,
                     PriceListItemRecord::schema_fields_LIST_VERSION => $list->version,
-                    PriceListItemRecord::schema_fields_SKU => $sku,
-                    PriceListItemRecord::schema_fields_AMOUNT_MINOR => $amountMinor,
+                    PriceListItemRecord::schema_fields_SKU => $row['sku'],
+                    PriceListItemRecord::schema_fields_MIN_QTY => $row['min_qty'],
+                    PriceListItemRecord::schema_fields_AMOUNT_MINOR => $row['amount_minor'],
                 ])->save();
             }
         } catch (Throwable $exception) {
@@ -218,19 +219,23 @@ final class PriceListStore
             ->where(PriceListItemRecord::schema_fields_LIST_VERSION, $version)
             ->select()
             ->fetchArray();
-        $amounts = [];
+        $tiers = [];
         foreach ($items as $item) {
-            $amounts[(string)$item[PriceListItemRecord::schema_fields_SKU]]
-                = (int)$item[PriceListItemRecord::schema_fields_AMOUNT_MINOR];
+            $sku = (string)$item[PriceListItemRecord::schema_fields_SKU];
+            $minQty = max(1, (int)($item[PriceListItemRecord::schema_fields_MIN_QTY] ?? 1));
+            $tiers[$sku][$minQty] = (int)$item[PriceListItemRecord::schema_fields_AMOUNT_MINOR];
         }
-        ksort($amounts, SORT_STRING);
+        foreach ($tiers as $sku => $byMin) {
+            ksort($tiers[$sku], SORT_NUMERIC);
+        }
+        ksort($tiers, SORT_STRING);
         $channel = $header[PriceListRecord::schema_fields_CHANNEL_ID] ?? null;
         return new PriceList(
             $listId,
             (string)$header[PriceListRecord::schema_fields_GROUP_ID],
             (int)$header[PriceListRecord::schema_fields_WEBSITE_ID],
             $version,
-            $amounts,
+            $tiers,
             $channel !== null && $channel !== '' ? (string)$channel : null,
             (int)$header[PriceListRecord::schema_fields_ACTIVE] === 1,
         );
@@ -238,8 +243,11 @@ final class PriceListStore
 
     private function fingerprint(PriceList $list): string
     {
-        $amounts = $list->skuAmountsMinor;
-        ksort($amounts, SORT_STRING);
+        $tiers = $list->skuQtyTiers;
+        ksort($tiers, SORT_STRING);
+        foreach ($tiers as $sku => $byMin) {
+            ksort($tiers[$sku], SORT_NUMERIC);
+        }
         return hash('sha256', (string)json_encode([
             'list_id' => $list->listId,
             'group_id' => $list->groupId,
@@ -247,7 +255,7 @@ final class PriceListStore
             'version' => $list->version,
             'channel_id' => $list->channelId,
             'active' => $list->active,
-            'sku_amounts' => $amounts,
+            'sku_qty_tiers' => $tiers,
         ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 

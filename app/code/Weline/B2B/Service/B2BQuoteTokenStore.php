@@ -148,6 +148,88 @@ final class B2BQuoteTokenStore
         );
     }
 
+    /**
+     * Atomically consume every token in the set after the snapshot callback.
+     * Any missing/expired/not-open token fails the whole set (no partial consume).
+     *
+     * @param list<string> $tokenIds
+     * @param callable(list<B2BQuoteToken>): void $snapshotWriter
+     */
+    public function consumeSetWith(
+        array $tokenIds,
+        string $orderRef,
+        int $nowEpoch,
+        callable $snapshotWriter,
+    ): string {
+        $tokenIds = array_values(array_unique(array_filter(array_map(
+            static fn (mixed $id): string => trim((string)$id),
+            $tokenIds,
+        ))));
+        if ($tokenIds === []) {
+            return self::RESULT_NOT_FOUND;
+        }
+
+        if ($this->rows !== null) {
+            $tokens = [];
+            foreach ($tokenIds as $tokenId) {
+                $token = $this->rows[$tokenId] ?? null;
+                if ($token === null) {
+                    return self::RESULT_NOT_FOUND;
+                }
+                if ($token->status() !== B2BQuoteToken::STATUS_OPEN) {
+                    return self::RESULT_NOT_OPEN;
+                }
+                if ($token->isExpired($nowEpoch)) {
+                    return self::RESULT_EXPIRED;
+                }
+                $tokens[] = $token;
+            }
+            $snapshotWriter($tokens);
+            foreach ($tokens as $token) {
+                $token->markConsumed($orderRef);
+                $this->rows[$token->tokenId] = $token;
+            }
+
+            return self::RESULT_CONSUMED;
+        }
+
+        return $this->transactionRunner()->run(
+            $this->connection(),
+            function () use ($tokenIds, $orderRef, $nowEpoch, $snapshotWriter): string {
+                $models = [];
+                $tokens = [];
+                foreach ($tokenIds as $tokenId) {
+                    $model = $this->findModel($tokenId, true);
+                    if ($model === null) {
+                        return self::RESULT_NOT_FOUND;
+                    }
+                    $token = $this->hydrate($model->getData());
+                    if ($token->status() !== B2BQuoteToken::STATUS_OPEN) {
+                        return self::RESULT_NOT_OPEN;
+                    }
+                    if ($token->isExpired($nowEpoch)) {
+                        return self::RESULT_EXPIRED;
+                    }
+                    $models[] = $model;
+                    $tokens[] = $token;
+                }
+
+                $snapshotWriter($tokens);
+                foreach ($models as $index => $model) {
+                    $token = $tokens[$index];
+                    $token->markConsumed($orderRef);
+                    $model
+                        ->setData(B2BQuoteTokenRecord::schema_fields_STATUS, $token->status())
+                        ->setData(B2BQuoteTokenRecord::schema_fields_CONSUMED_ORDER_REF, $orderRef)
+                        ->setData(B2BQuoteTokenRecord::schema_fields_CONSUMED_AT_EPOCH, $nowEpoch)
+                        ->save();
+                }
+
+                return self::RESULT_CONSUMED;
+            },
+        );
+    }
+
     public function count(): int
     {
         if ($this->rows !== null) {

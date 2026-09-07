@@ -8,6 +8,7 @@ use Weline\B2B\Model\B2BOrderPriceSnapshotRecord;
 use Weline\B2B\Model\B2BQuoteTokenRecord;
 use Weline\B2B\Model\CustomerGroupMembershipRecord;
 use Weline\B2B\Model\CustomerGroupRecord;
+use Weline\B2B\Model\MembershipApplicationRecord;
 use Weline\B2B\Model\PriceListItemRecord;
 use Weline\B2B\Model\PriceListRecord;
 use Weline\B2B\Service\B2BAdminService;
@@ -54,6 +55,56 @@ final class ControlCenter extends BackendController
         return $this->renderWorkspace('snapshots', '订单价格快照', ['订单价格快照' => [B2BOrderPriceSnapshotRecord::class, ['order_ref', 'token_id', 'customer_id', 'website_id', 'sku', 'retail_amount_minor', 'amount_minor', 'source', 'group_id', 'price_list_id', 'list_version', 'channel_id', 'created_at_epoch', 'created_at']]]);
     }
 
+    #[Acl('Weline_B2B::commerce:partner:applications', '身份申请', 'user-check', '查看与审核 B2B 身份申请')]
+    public function applications(): string
+    {
+        return $this->renderWorkspace('applications', '身份申请', [
+            '身份申请' => [MembershipApplicationRecord::class, [
+                'application_id',
+                'customer_id',
+                'website_id',
+                'company_name',
+                'contact_phone',
+                'status',
+                'assigned_group_id',
+                'notes',
+                'created_at',
+                'updated_at',
+            ]],
+        ], [], [
+            'kind' => 'membership-application',
+            'action' => 'b2b/backend/control-center/approve-membership-application',
+            'reject_action' => 'b2b/backend/control-center/reject-membership-application',
+        ]);
+    }
+
+    #[Acl('Weline_B2B::commerce:partner:hang-orders', '定金挂单', 'clock', '查看与审批 B2B 定金挂单')]
+    public function hangOrders(): string
+    {
+        return $this->renderWorkspace('hang-orders', '定金挂单', [
+            '定金挂单' => [\Weline\B2B\Model\B2BOrderHangRecord::class, [
+                'hang_id',
+                'order_ref',
+                'customer_id',
+                'website_id',
+                'hang_status',
+                'goods_subtotal_taxed_minor',
+                'deposit_amount_minor',
+                'balance_amount_minor',
+                'shipping_amount_minor',
+                'deposit_ratio_bps',
+                'deposit_intent_code',
+                'balance_intent_code',
+                'created_at_epoch',
+                'updated_at_epoch',
+            ]],
+        ], [], [
+            'kind' => 'hang-order',
+            'action' => 'b2b/backend/control-center/approve-hang-order',
+            'reject_action' => 'b2b/backend/control-center/reject-hang-order',
+        ]);
+    }
+
     #[Acl('Weline_B2B::commerce:partner:migration', '迁移状态', 'eye', '只读查看 B2B 迁移状态')]
     public function migration(): string
     {
@@ -79,6 +130,38 @@ final class ControlCenter extends BackendController
     public function approveQuote()
     {
         return $this->executeWrite('approveQuote', 'quotes', '报价已审批并生成订单价格快照。');
+    }
+
+    #[Acl('Weline_B2B::commerce:partner:applications', '批准身份申请', 'check', '批准 B2B 身份申请并指定客户组')]
+    public function approveMembershipApplication()
+    {
+        return $this->executeWrite(
+            'approveMembershipApplication',
+            'applications',
+            '身份申请已批准并写入客户组。',
+        );
+    }
+
+    #[Acl('Weline_B2B::commerce:partner:applications', '驳回身份申请', 'x', '驳回 B2B 身份申请')]
+    public function rejectMembershipApplication()
+    {
+        return $this->executeWrite(
+            'rejectMembershipApplication',
+            'applications',
+            '身份申请已驳回。',
+        );
+    }
+
+    #[Acl('Weline_B2B::commerce:partner:hang-orders', '批准挂单', 'check', '批准 B2B 定金挂单进入尾款')]
+    public function approveHangOrder()
+    {
+        return $this->executeWrite('approveHangOrder', 'hang-orders', '挂单已批准，进入尾款。');
+    }
+
+    #[Acl('Weline_B2B::commerce:partner:hang-orders', '驳回挂单', 'x', '驳回 B2B 定金挂单并退定金')]
+    public function rejectHangOrder()
+    {
+        return $this->executeWrite('rejectHangOrder', 'hang-orders', '挂单已驳回。');
     }
 
     /** @param array<string,array{0:class-string,1:list<string>}> $sources */
