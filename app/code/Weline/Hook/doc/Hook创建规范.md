@@ -20,8 +20,25 @@
 
 示例：
 
-- `Weline_Product::frontend::product::detail::after-add-to-cart`
+- `Weline_Product::frontend::product::detail::after-add-to-cart`（历史/领域 Hook；**新 Hook 第三段 type 仍须为 `partials` 或 `layouts`**）
 - `Weline_Theme::frontend::layouts::base::head-after`
+- `Weline_Theme::backend::partials::theme-editor-brand-basics::identity`
+
+## type 段（强制）
+
+五段格式中第三段 **type** 只能是 `partials` 或 `layouts`：
+
+| type | 用途 |
+|------|------|
+| `partials` | 可复用片段（header、footer、后台 topbar、编辑器 Drawer 槽等） |
+| `layouts` | 页面布局插槽 |
+
+**页面/功能名放在 component 或 position**，禁止把功能名塞进 type：
+
+- ❌ `Weline_Theme::backend::theme-editor::brand-basics::identity`（`theme-editor` 不是合法 type，`setup:upgrade` 会致命中断）
+- ✅ `Weline_Theme::backend::partials::theme-editor-brand-basics::identity`
+
+后台编辑器、结账、账户等同理：type 用 `partials` 或 `layouts`，再把 `theme-editor`、`checkout` 写进 component。
 
 短名 Hook（如 `header-currency-switcher`）由 Theme 在 `hook.php` 中声明，模板用 `<w:hook>header-currency-switcher</w:hook>`。
 
@@ -59,6 +76,7 @@ return [
 - `hook.php` 的 `doc` 字段与 `doc/hook/` 实际路径不一致
 - 在**实现方**模块的 `hook.php` 声明**他人拥有**的 Theme 布局 Hook（应改 Owner 或扩展现有 Hook）
 - 使用 Hook 却未在 `setup:upgrade` 前补全 doc
+- **type 段发明功能名**（如 `::backend::theme-editor::`、`::frontend::checkout::`）；第三段只能是 `partials` 或 `layouts`
 
 ## 验证
 
