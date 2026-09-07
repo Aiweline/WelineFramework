@@ -7,6 +7,7 @@ namespace Weline\Captcha\Service;
 use Weline\Captcha\Interface\VerificationProviderInterface;
 use Weline\Captcha\Provider\GoogleRecaptchaEnterprise;
 use Weline\Captcha\Provider\LocalImageCaptcha;
+use Weline\Captcha\Provider\TencentCaptcha;
 use Weline\Framework\DataObject\DataObject;
 use Weline\Framework\Event\EventsManager;
 use Weline\Framework\Manager\ObjectManager;
@@ -31,6 +32,7 @@ final class CaptchaProviderRegistry
         $providers = [
             'local_image' => ObjectManager::getInstance(LocalImageCaptcha::class),
             'google_enterprise' => ObjectManager::getInstance(GoogleRecaptchaEnterprise::class),
+            'tencent_captcha' => ObjectManager::getInstance(TencentCaptcha::class),
         ];
         $data = new DataObject(['providers' => $providers]);
         ObjectManager::getInstance(EventsManager::class)->dispatch('Weline_Captcha::providers::collect', $data);

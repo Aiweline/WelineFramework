@@ -30,11 +30,22 @@ final class LocalImageCaptchaLayoutContractTest extends TestCase
         self::assertStringNotContainsString('<style>', $template, 'Layout CSS must live in captcha-local.css for lazy injection');
 
         self::assertStringContainsString('flex-direction: row', $css);
-        self::assertStringContainsString('flex-wrap: nowrap', $css);
+        self::assertStringContainsString('aspect-ratio: 168 / 40', $css);
+        self::assertStringContainsString('object-fit: contain', $css);
+        self::assertStringContainsString('flex: 0 1 auto', $css);
+        self::assertStringContainsString('width: fit-content', $css);
         self::assertStringContainsString('height: var(--weline-control-height', $css);
         self::assertStringContainsString('width: auto !important', $css);
+        self::assertStringNotContainsString('flex: 1 1 auto', $css);
+        self::assertStringNotContainsString('object-fit: cover', $css);
 
         self::assertStringContainsString('ensureStylesheet', $lazyJs);
         self::assertStringContainsString('hoistFragmentStyles', $lazyJs);
+        self::assertStringContainsString('refreshWhenShown', $lazyJs);
+        self::assertStringContainsString('20260905-open-refresh1', $lazyJs);
+
+        $runtime = (string) \file_get_contents(\dirname(__DIR__, 3) . '/Service/LazyCaptchaClientRuntime.php');
+        self::assertStringContainsString('20260905-open-refresh1', $runtime);
+        self::assertStringNotContainsString('20260905-input-fit1', $runtime);
     }
 }

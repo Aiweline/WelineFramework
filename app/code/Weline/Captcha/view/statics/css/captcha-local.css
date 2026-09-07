@@ -14,7 +14,9 @@
 .weline-captcha-stack {
     display: flex;
     flex-direction: column;
+    align-items: stretch;
     gap: var(--weline-space-3, 0.75rem);
+    width: fit-content;
     max-width: 100%;
 }
 
@@ -22,21 +24,25 @@
 .weline-captcha-row {
     display: flex;
     flex-direction: row;
-    flex-wrap: nowrap;
-    align-items: stretch;
+    flex-wrap: wrap;
+    align-items: center;
     gap: var(--weline-space-3, 0.75rem);
-    width: 100%;
+    width: auto;
+    max-width: 100%;
     min-width: 0;
 }
 
 .weline-captcha-image {
     display: block;
-    flex: 1 1 auto;
+    flex: 0 1 auto;
+    box-sizing: border-box;
     width: auto;
     min-width: 0;
     max-width: 100%;
     height: var(--weline-control-height, 2.5rem);
-    object-fit: cover;
+    aspect-ratio: 168 / 40;
+    object-fit: contain;
+    object-position: left center;
     border: 1px solid var(--weline-theme-border, #cbd5e1);
     border-radius: var(--weline-radius-md, 0.5rem);
     background: var(--weline-theme-surface, #f8fafc);
@@ -45,7 +51,7 @@
 
 .weline-captcha-refresh {
     flex: 0 0 auto !important;
-    align-self: stretch;
+    align-self: center;
     width: auto !important;
     min-width: 3.25rem;
     max-width: none !important;
@@ -55,6 +61,7 @@
 .weline-captcha-field {
     display: flex;
     width: 100%;
+    max-width: 100%;
     min-width: 0;
     align-items: stretch;
 }

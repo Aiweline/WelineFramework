@@ -30,6 +30,10 @@ class Challenge extends FrontendController
         if (preg_match('/\A[A-Za-z0-9_-]{0,80}\z/D', $formId) !== 1) {
             $formId = '';
         }
+        $prefer = strtolower(trim((string)$this->request->getGet('prefer', '')));
+        if ($prefer !== 'local_image') {
+            $prefer = '';
+        }
 
         /** @var CaptchaManagerInterface $captcha */
         $captcha = ObjectManager::getInstance(CaptchaManagerInterface::class);
@@ -37,6 +41,8 @@ class Challenge extends FrontendController
             'form_id' => $formId,
             'intent' => $intent,
             'required' => true,
+            'prefer' => $prefer,
+            'server' => $_SERVER ?? [],
         ]);
 
         // PcController exposes fetchJson (not json).

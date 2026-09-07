@@ -290,7 +290,7 @@ final class GoogleOAuthService
 
     public function callbackUrl(): string
     {
-        return $this->url->getBackendUrl('captcha/backend/google/callback');
+        return $this->url->getBackendUrl('weline_captcha/backend/google/callback');
     }
 
     private function createEnterpriseKey(

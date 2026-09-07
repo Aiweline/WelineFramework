@@ -86,12 +86,8 @@ class CaptchaService
             return false;
         }
         
-        $type = (string)$captchaResult->getData(CaptchaResult::schema_fields_TYPE);
-        $provider = $this->getProvider($type);
         $storedCode = (string)$captchaResult->getData(CaptchaResult::schema_fields_CODE);
-        $verified = str_starts_with($type, 'google_recaptcha')
-            ? ($provider?->verify($token, $code) ?? false)
-            : password_verify(strtoupper(trim($code)), $storedCode);
+        $verified = password_verify(strtoupper(trim($code)), $storedCode);
 
         if (!$verified) {
             $this->recordFailedAttempt($ip);
@@ -161,8 +157,6 @@ class CaptchaService
     {
         $normalized = \strtolower(\trim($type));
         $known = [
-            'google_recaptcha_v2' => \Weline\Captcha\Provider\GoogleRecaptchaV2::class,
-            'google_recaptcha_v3' => \Weline\Captcha\Provider\GoogleRecaptchaV3::class,
             'fallback' => \Weline\Captcha\Provider\FallbackCaptcha::class,
             'image' => \Weline\Captcha\Provider\FallbackCaptcha::class,
         ];
