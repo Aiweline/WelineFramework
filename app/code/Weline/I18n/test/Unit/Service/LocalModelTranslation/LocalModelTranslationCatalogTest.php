@@ -19,5 +19,28 @@ final class LocalModelTranslationCatalogTest extends TestCase
         self::assertStringContainsString('inferParentModelClass', $source);
         self::assertStringContainsString('resolveTranslatableFields', $source);
         self::assertStringContainsString('schema_fields_', $source);
+        self::assertStringContainsString('isTestSourcePath', $source);
+        self::assertStringContainsString("['test', 'Test', 'UnitTest', 'tests']", $source);
+        self::assertStringContainsString('DIRECTORY_SEPARATOR . $segment . DIRECTORY_SEPARATOR', $source);
+    }
+
+    public function testCatalogIgnoresInheritedGenericLocalModelFields(): void
+    {
+        $catalog = new \Weline\I18n\Service\LocalModelTranslation\LocalModelTranslationCatalog();
+        $descriptors = $catalog->descriptors();
+        $optionFields = [];
+        $promotionFields = [];
+
+        foreach ($descriptors as $descriptor) {
+            if ($descriptor['local_model'] === 'Weline\\Eav\\Model\\EavAttribute\\Option\\LocalDescription') {
+                $optionFields = $descriptor['fields'];
+            }
+            if ($descriptor['local_model'] === 'Weline\\Promotion\\Model\\PromotionActivityThemeLocal') {
+                $promotionFields = $descriptor['fields'];
+            }
+        }
+
+        self::assertSame(['value'], $optionFields);
+        self::assertNotContains('name', $promotionFields);
     }
 }

@@ -89,10 +89,13 @@ class AiTranslateQueue implements TaskConsumerInterface
         $maxFailures = AiTranslationConfig::MAX_CONSECUTIVE_BATCH_FAILURES;
         $halted = $consecutiveFailures >= $maxFailures;
         $batchFailed = $this->isBatchFailure($result);
+        $busy = $this->resultIndicatesBusy($result);
+        // Busy or batch failure: stop this round; next cron continues when free.
+        $stopRound = $halted || $busy || $batchFailed;
 
         $nextQueueId = 0;
         if (
-            !$halted
+            !$stopRound
             && (int)($result['remaining'] ?? 0) > 0
             && $this->shouldContinue($localeCode, $content)
         ) {
@@ -112,9 +115,11 @@ class AiTranslateQueue implements TaskConsumerInterface
             ]
         );
 
-        if ($batchFailed && !$halted && $nextQueueId > 0) {
+        if ($busy) {
+            $message .= PHP_EOL . (string)__('AI翻译繁忙，已结束本批；不立刻续队，等待下一轮定时任务。');
+        } elseif ($batchFailed && !$halted) {
             $message .= PHP_EOL . (string)__(
-                '本批无进展，已安排重试（%{1}/%{2}）。',
+                '本批无进展，已停止续队（连续失败 %{1}/%{2}）；等待下一轮定时任务。',
                 [$consecutiveFailures, $maxFailures],
             );
         }
@@ -159,7 +164,7 @@ class AiTranslateQueue implements TaskConsumerInterface
     private function isManualQueue(array $content): bool
     {
         return !empty($content['manual'])
-            || in_array((string)($content['requested_by'] ?? ''), ['manual', 'catalog', 'payment_guide'], true);
+            || in_array((string)($content['requested_by'] ?? ''), ['manual', 'catalog', 'payment_guide', 'social_login_guide'], true);
     }
 
     /**
@@ -169,6 +174,7 @@ class AiTranslateQueue implements TaskConsumerInterface
     {
         return (string)($content['domain'] ?? '') === 'google_taxonomy'
             || (string)($content['domain'] ?? '') === 'payment_guide'
+            || (string)($content['domain'] ?? '') === 'social_login_guide'
             || !empty($content['allow_key_only_words']);
     }
 
@@ -272,5 +278,21 @@ class AiTranslateQueue implements TaskConsumerInterface
         }
 
         return (int)($result['failed'] ?? 0) > 0;
+    }
+
+    /**
+     * @param array<string, mixed> $result
+     */
+    private function resultIndicatesBusy(array $result): bool
+    {
+        foreach ((array)($result['errors'] ?? []) as $error) {
+            if (str_contains((string)$error, 'AI_TRANSLATION_BUSY')) {
+                return true;
+            }
+        }
+
+        $message = (string)($result['message'] ?? '');
+
+        return $message !== '' && str_contains($message, 'AI_TRANSLATION_BUSY');
     }
 }

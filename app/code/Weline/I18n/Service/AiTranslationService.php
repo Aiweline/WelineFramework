@@ -513,8 +513,11 @@ class AiTranslationService
     {
         $page = 1;
         while (true) {
+            // Service-layer scans must use limit/offset. Model::pagination() also
+            // renders jump-form HTML and crashes CLI/queue when base host is empty.
+            $offset = ($page - 1) * self::DEFAULT_SCAN_PAGE_SIZE;
             $rows = $this->dictionary->clear()->reset()
-                ->pagination($page, self::DEFAULT_SCAN_PAGE_SIZE)
+                ->limit(self::DEFAULT_SCAN_PAGE_SIZE, $offset)
                 ->select()
                 ->fetchArray();
 

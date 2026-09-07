@@ -260,9 +260,16 @@ class TranslationCollector implements TranslationCollectorInterface
                     }
                 }
                 
-                // 3. 匹配 @lang{...} 格式
+                // 3. 匹配 @lang{...} 格式（与运行时一致：剥离包裹引号）
                 if (preg_match_all('/@lang\{(.*?)}/s', $content, $matches)) {
                     foreach ($matches[1] as $match) {
+                        $match = trim($match);
+                        if (preg_match('/^([\'"])(.*)\1$/', $match, $quoted)) {
+                            $match = $quoted[2];
+                        } elseif (preg_match('/^([^,]+?)\s*,\s*(.+)$/', $match, $parts)) {
+                            // @lang{源文, $args}：只收集源文
+                            $match = trim($parts[1], " \t\n\r\0\x0B'\"");
+                        }
                         $match = trim($match);
                         if (!empty($match) && $this->isValidTranslationString($match)) {
                             yield $match => ['file' => $relativePath, 'context' => 'Template', 'module' => $moduleName];

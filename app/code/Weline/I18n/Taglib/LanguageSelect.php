@@ -468,10 +468,9 @@ DOC;
             $countryName = $countryCode !== ''
                 ? (string)($countryNames[$countryCode] ?? $countryCode)
                 : (string)__('未分组国家');
-            $flag = (string)($meta[Locale::schema_fields_FLAG] ?? '');
-            if ($flag === '' && $countryCode !== '') {
-                $flag = (string)$i18n->getCountryFlag($countryCode, 20, 15, true);
-            }
+            // Storefront/catalog SSR never embeds flag SVG; clients hydrate via
+            // i18n.getCountryFlags (CDN-cacheable binquery) + browser local cache.
+            $flag = '';
             $shortCode = (string)($meta[Locale::schema_fields_SHORT_CODE] ?? Locale::extractShortCode($code));
             $iso2 = (string)($meta[Locale::schema_fields_ISO2] ?? '');
             $iso3 = (string)($meta[Locale::schema_fields_ISO3] ?? '');

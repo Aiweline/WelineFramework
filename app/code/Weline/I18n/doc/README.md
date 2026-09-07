@@ -783,6 +783,10 @@ class Index
 ]
 ```
 
+### 语言控件性能诊断
+
+`LanguageSwitcher` 通过框架统一 `RequestLifecycleTrace::measurePhase` 记录 `i18n.language_switcher.render/catalog/flag`：分别覆盖完整控件、作用范围语言集合取得，以及原 XML 声明处理和 SVG ID 隔离。聚合记录位于同请求 `timing.log` 的 `trace_summary.phases`，render 包含后两项，不能重复相加。不记录 SVG/语言内容；保留既有缓存、网站语言范围、切换链接、空旗帜和自定义旗帜行为。
+
 ### 语言包配置
 ```php
 'language_packs' => [

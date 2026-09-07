@@ -8,8 +8,12 @@ use Weline\Framework\Http\Cookie;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Phrase\Parser;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Service\Query\Attribute\BinQueryCache;
+use Weline\Framework\Service\Query\Attribute\BinQueryOperation;
+use Weline\Framework\Service\Query\Attribute\BinQueryParam;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
 use Weline\I18n\Api\Translation\TranslationResolverInterface;
+use Weline\I18n\Helper\CountryFlagMarkup;
 use Weline\I18n\Model\Dictionary;
 use Weline\I18n\Model\I18n;
 use Weline\I18n\Model\Locale;
@@ -33,6 +37,7 @@ class I18nQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'getInstalledLocales' => $this->getInstalledLocales($params),
+            'getCountryFlags' => $this->getCountryFlags($params),
             'getLocaleByCode' => $this->getLocaleByCode($params),
             'getLocaleName' => $this->getLocaleName($params),
             'getTranslations' => $this->getTranslations($params),
@@ -43,13 +48,11 @@ class I18nQueryProvider implements QueryProviderInterface
     }
 
     /**
-     * @return list<array{code: string, name: string, flag: string}>
+     * @return list<array{code: string, name: string, flag: string, country_code: string}>
      */
     private function getInstalledLocales(array $params): array
     {
         $displayLocale = (string)($params['display_locale_code'] ?? Cookie::getLangLocal() ?? 'zh_Hans_CN');
-        $width = (int)($params['width'] ?? 20);
-        $height = (int)($params['height'] ?? 15);
         $installed = (bool)($params['installed'] ?? true);
 
         $list = [];
@@ -59,10 +62,9 @@ class I18nQueryProvider implements QueryProviderInterface
                 continue;
             }
 
-            $countryCode = (string)($row[Locale::schema_fields_COUNTRY_CODE] ?? '');
-            $flag = $countryCode !== ''
-                ? $this->i18n->getCountryFlag($countryCode, $width, $height)
-                : (string)($row[Locale::schema_fields_FLAG] ?? '');
+            $countryCode = CountryFlagMarkup::normalizeCountryCode(
+                (string)($row[Locale::schema_fields_COUNTRY_CODE] ?? '')
+            );
             $name = $this->i18n->getLocaleName($code, $displayLocale);
             $selfName = $this->i18n->getLocaleName($code, $code);
             if ($selfName !== '' && $selfName !== $name) {
@@ -72,10 +74,75 @@ class I18nQueryProvider implements QueryProviderInterface
             $list[] = [
                 'code' => $code,
                 'name' => $name !== '' ? $name : $code,
-                'flag' => $flag,
+                // Flag SVG is loaded via getCountryFlags (CDN + browser cache).
+                'flag' => '',
+                'country_code' => $countryCode,
             ];
         }
         return $list;
+    }
+
+    /**
+     * Batch country-flag SVG payloads for storefront hydration.
+     *
+     * @param array<string, mixed> $params
+     * @return array{success: bool, version: string, ratio: string, flags: array<string, array<string, string>>, missing: list<string>}
+     */
+    #[BinQueryOperation(
+        name: 'getCountryFlags',
+        description: 'Batch country flag SVG payloads for storefront lazy load',
+        mode: 'read',
+        external: true,
+        frontend: true,
+        auth: 'any',
+        cost: 1,
+        summary: 'CDN-cacheable country flag SVG group',
+    )]
+    #[BinQueryCache(
+        ttl: '7d',
+        description: 'Country flag SVG batch for CDN edge cache',
+        visibility: 'public',
+        keyParams: ['country_codes', 'ratio'],
+        vary: ['area'],
+        cdn: true,
+    )]
+    #[BinQueryParam(
+        name: 'country_codes',
+        type: 'list',
+        required: true,
+        maxItems: 16,
+        cacheKey: true,
+        description: 'ISO 3166-1 alpha-2 country codes (max 16 per group)',
+    )]
+    #[BinQueryParam(
+        name: 'ratio',
+        type: 'string',
+        required: false,
+        default: '4x3',
+        maxLength: 8,
+        cacheKey: true,
+        description: 'Flag aspect ratio: 4x3 or 1x1',
+    )]
+    private function getCountryFlags(array $params): array
+    {
+        $rawCodes = $params['country_codes'] ?? [];
+        if (!\is_array($rawCodes)) {
+            $rawCodes = [];
+        }
+        $ratio = CountryFlagMarkup::normalizeRatio((string)($params['ratio'] ?? '4x3'));
+        $batch = CountryFlagMarkup::payloadsFor(
+            array_map(static fn(mixed $code): string => (string)$code, $rawCodes),
+            $ratio,
+            16,
+        );
+
+        return [
+            'success' => true,
+            'version' => (string)$batch['version'],
+            'ratio' => (string)$batch['ratio'],
+            'flags' => $batch['flags'],
+            'missing' => $batch['missing'],
+        ];
     }
 
     /**
@@ -285,6 +352,21 @@ class I18nQueryProvider implements QueryProviderInterface
                         ['name' => 'width', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64],
                         ['name' => 'height', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 64],
                         ['name' => 'installed', 'type' => 'bool', 'required' => false],
+                    ],
+                    'returns' => ['type' => 'array'],
+                ],
+                [
+                    'name' => 'getCountryFlags',
+                    'frontend' => true,
+                    'external' => true,
+                    'auth' => 'any',
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'description' => __('Batch country flag SVG payloads for storefront lazy load.'),
+                    'params' => [
+                        ['name' => 'country_codes', 'type' => 'list', 'required' => true, 'max_items' => 16, 'cache_key' => true],
+                        ['name' => 'ratio', 'type' => 'string', 'required' => false, 'max_length' => 8, 'default' => '4x3', 'cache_key' => true],
                     ],
                     'returns' => ['type' => 'array'],
                 ],

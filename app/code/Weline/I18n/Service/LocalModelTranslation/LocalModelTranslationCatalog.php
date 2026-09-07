@@ -59,6 +59,11 @@ final class LocalModelTranslationCatalog
             if (!str_contains($path, DIRECTORY_SEPARATOR . 'Model' . DIRECTORY_SEPARATOR)) {
                 continue;
             }
+            // Test fixtures under */test|Test|UnitTest/* often reuse production
+            // namespaces (e.g. duplicate ReaderTest) and must never be autoloaded here.
+            if ($this->isTestSourcePath($path)) {
+                continue;
+            }
             $class = $this->classNameFromPath($path);
             if ($class === null || !class_exists($class)) {
                 continue;
@@ -148,7 +153,16 @@ final class LocalModelTranslationCatalog
         }
 
         $fields = [];
-        foreach ((new \ReflectionClass($localModelClass))->getConstants() as $name => $value) {
+        $reflection = new \ReflectionClass($localModelClass);
+        foreach ($reflection->getReflectionConstants() as $constant) {
+            // LocalModel contributes generic constants such as schema_fields_name
+            // and lifecycle fields. They are not columns unless the concrete local
+            // table declares them explicitly (for example Option only declares value).
+            if ($constant->getDeclaringClass()->getName() !== $localModelClass) {
+                continue;
+            }
+            $name = $constant->getName();
+            $value = $constant->getValue();
             if (!str_starts_with($name, 'schema_fields_') || !is_string($value) || $value === '') {
                 continue;
             }
@@ -158,7 +172,10 @@ final class LocalModelTranslationCatalog
             if (in_array($value, $skip, true)) {
                 continue;
             }
-            if (str_ends_with($value, '_at')) {
+            if (
+                str_ends_with($value, '_at')
+                || in_array($value, ['create_time', 'update_time', 'created_at', 'updated_at'], true)
+            ) {
                 continue;
             }
             $fields[] = $value;
@@ -179,5 +196,17 @@ final class LocalModelTranslationCatalog
         $relative = preg_replace('/\.php$/', '', $relative) ?? '';
 
         return str_replace(DIRECTORY_SEPARATOR, '\\', $relative);
+    }
+
+    private function isTestSourcePath(string $path): bool
+    {
+        $normalized = str_replace(['\\', '/'], DIRECTORY_SEPARATOR, $path);
+        foreach (['test', 'Test', 'UnitTest', 'tests'] as $segment) {
+            if (str_contains($normalized, DIRECTORY_SEPARATOR . $segment . DIRECTORY_SEPARATOR)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

@@ -19,30 +19,61 @@ final class LocalModelTranslationService
     }
 
     /**
+     * Collect pending LocalModel field work items.
+     * When $limit > 0, stop after collecting $offset + $limit candidates so queue
+     * workers do not materialize the entire catalog on every batch.
+     *
      * @return list<array{local_model:class-string,local_id_field:string,record_id:int,field:string,source_text:string}>
      */
-    public function collectWorkItems(): array
+    public function collectWorkItems(int $offset = 0, int $limit = 0): array
     {
+        $offset = max(0, $offset);
+        $limit = max(0, $limit);
+        $seen = 0;
         $items = [];
+        $targetLocales = $this->resolveTargetLocales();
+
         foreach ($this->catalog->descriptors() as $descriptor) {
-            foreach ($this->loadParentRows($descriptor) as $parentRow) {
-                $recordId = (int)($parentRow[$descriptor['parent_id_field']] ?? 0);
-                if ($recordId <= 0) {
-                    continue;
-                }
-                foreach ($descriptor['fields'] as $field) {
-                    $sourceText = $this->resolveSourceText($descriptor, $recordId, $field, $parentRow);
-                    if ($sourceText === '') {
+            try {
+                foreach ($this->iterateParentRows($descriptor) as $parentRow) {
+                    $recordId = (int)($parentRow[$descriptor['parent_id_field']] ?? 0);
+                    if ($recordId <= 0) {
                         continue;
                     }
-                    $items[] = [
-                        'local_model' => $descriptor['local_model'],
-                        'local_id_field' => $descriptor['local_id_field'],
-                        'record_id' => $recordId,
-                        'field' => $field,
-                        'source_text' => $sourceText,
-                    ];
+                    foreach ($descriptor['fields'] as $field) {
+                        $sourceText = $this->resolveSourceText($descriptor, $recordId, $field, $parentRow);
+                        if ($sourceText === '') {
+                            continue;
+                        }
+                        if ($targetLocales !== [] && $this->fieldTargetsAlreadyFilled(
+                            $descriptor['local_model'],
+                            $descriptor['local_id_field'],
+                            $recordId,
+                            $field,
+                            $sourceText,
+                            $targetLocales,
+                        )) {
+                            continue;
+                        }
+                        if ($seen < $offset) {
+                            $seen++;
+                            continue;
+                        }
+                        $items[] = [
+                            'local_model' => $descriptor['local_model'],
+                            'local_id_field' => $descriptor['local_id_field'],
+                            'record_id' => $recordId,
+                            'field' => $field,
+                            'source_text' => $sourceText,
+                        ];
+                        if ($limit > 0 && count($items) >= $limit) {
+                            return $items;
+                        }
+                    }
                 }
+            } catch (\Throwable) {
+                // One broken/huge parent table must not abort the whole LocalModel scan.
+                continue;
             }
         }
 
@@ -58,11 +89,22 @@ final class LocalModelTranslationService
         $processed = 0;
         $translated = 0;
         $errors = [];
+        $consumed = 0;
+        $abortedBusy = false;
         $sourceLocale = $this->translationConfig->getSourceLocale();
-        $targetLocales = array_values(array_filter(
-            $this->translationConfig->getInstalledActiveLocaleCodes(),
-            static fn(string $locale): bool => $locale !== $sourceLocale,
-        ));
+        // Respect AI translation enabled locales (same gate as dictionary cron).
+        // Using all installed actives burned Ollama on 16 languages while config
+        // only enabled en_US, so batches looked stuck with no storefront en_US writes.
+        $targetLocales = $this->resolveTargetLocales();
+        if ($targetLocales === []) {
+            return [
+                'processed' => 0,
+                'translated' => 0,
+                'consumed' => 0,
+                'aborted_busy' => false,
+                'errors' => [(string)__('未启用任何 AI 翻译目标语言，已跳过 LocalModel 批次。')],
+            ];
+        }
 
         foreach ($items as $item) {
             $localModelClass = (string)($item['local_model'] ?? '');
@@ -71,13 +113,19 @@ final class LocalModelTranslationService
             $sourceText = trim((string)($item['source_text'] ?? ''));
             $localIdField = (string)($item['local_id_field'] ?? 'id');
             if ($localModelClass === '' || $recordId <= 0 || $field === '' || $sourceText === '') {
+                $consumed++;
                 continue;
             }
 
             try {
-                $this->upsertLocalValue($localModelClass, $localIdField, $recordId, $sourceLocale, $field, $sourceText);
                 $existingByCode = $this->loadExistingLocalValues($localModelClass, $localIdField, $recordId);
+                $sourceStored = trim((string)(($existingByCode[$sourceLocale] ?? [])[$field] ?? ''));
+                if ($sourceStored !== $sourceText) {
+                    $this->upsertLocalValue($localModelClass, $localIdField, $recordId, $sourceLocale, $field, $sourceText);
+                    $existingByCode = $this->loadExistingLocalValues($localModelClass, $localIdField, $recordId);
+                }
                 $batchTranslated = 0;
+                $hitAbort = false;
 
                 foreach ($targetLocales as $localeCode) {
                     $existing = $existingByCode[$localeCode] ?? [];
@@ -93,8 +141,12 @@ final class LocalModelTranslationService
                         $this->translationConfig->getStrategy($localeCode),
                     );
                     if (!$result['success']) {
-                        $errors = array_merge($errors, array_map('strval', (array)$result['errors']));
-                        continue;
+                        $itemErrors = array_map('strval', (array)$result['errors']);
+                        $errors = array_merge($errors, $itemErrors);
+                        // Busy or hard AI error: stop this round; next cron continues.
+                        $hitAbort = true;
+                        $abortedBusy = $this->errorsIndicateBusy($itemErrors);
+                        break;
                     }
 
                     $translation = trim((string)($result['translations'][$sourceText] ?? ''));
@@ -106,22 +158,91 @@ final class LocalModelTranslationService
                     $batchTranslated++;
                 }
 
+                if ($hitAbort) {
+                    // Do not advance past this item — next cron round retries when free.
+                    if (!$abortedBusy) {
+                        $abortedBusy = true;
+                    }
+                    break;
+                }
+
                 $processed++;
                 $translated += $batchTranslated;
+                $consumed++;
             } catch (\Throwable $throwable) {
-                $processed++;
-                $errors[] = $localModelClass . '#' . $recordId . '.' . $field . ': ' . $throwable->getMessage();
+                $message = $throwable->getMessage();
+                $errors[] = $localModelClass . '#' . $recordId . '.' . $field . ': ' . $message;
+                // Any hard failure: stop this round; next cron continues.
+                $abortedBusy = true;
+                break;
             }
         }
 
         return [
             'processed' => $processed,
             'translated' => $translated,
+            'consumed' => $consumed,
+            'aborted_busy' => $abortedBusy,
             'errors' => array_values(array_unique($errors)),
         ];
     }
 
     /**
+     * @param list<string> $errors
+     */
+    private function errorsIndicateBusy(array $errors): bool
+    {
+        foreach ($errors as $error) {
+            if (str_contains((string)$error, 'AI_TRANSLATION_BUSY')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * AI-enabled target locales for LocalModel batch work (excludes source).
+     *
+     * @return list<string>
+     */
+    private function resolveTargetLocales(): array
+    {
+        return array_values(array_filter(
+            $this->translationConfig->getEnabledLocaleCodes(),
+            fn(string $locale): bool => $locale !== $this->translationConfig->getSourceLocale(),
+        ));
+    }
+
+    /**
+     * @param class-string<LocalModel> $localModelClass
+     * @param list<string> $targetLocales
+     */
+    private function fieldTargetsAlreadyFilled(
+        string $localModelClass,
+        string $localIdField,
+        int $recordId,
+        string $field,
+        string $sourceText,
+        array $targetLocales,
+    ): bool {
+        $existingByCode = $this->loadExistingLocalValues($localModelClass, $localIdField, $recordId);
+        foreach ($targetLocales as $localeCode) {
+            $stored = trim((string)(($existingByCode[$localeCode] ?? [])[$field] ?? ''));
+            if (!$this->isRealTranslation($stored, $sourceText)) {
+                return false;
+            }
+        }
+
+        return $targetLocales !== [];
+    }
+
+    /**
+     * Source text for a Local field:
+     * 1) parent/main table same-named column when present (Local may be empty);
+     * 2) else source-locale Local row.
+     * Target locales are filled by AI from this source — no source-locale Local row required.
+     *
      * @param array{local_model:class-string,parent_model:?class-string,local_id_field:string,parent_id_field:string,fields:list<string>} $descriptor
      * @param array<string, mixed> $parentRow
      */
@@ -147,42 +268,77 @@ final class LocalModelTranslationService
     /**
      * @param array{local_model:class-string,parent_model:?class-string,local_id_field:string,parent_id_field:string,fields:list<string>} $descriptor
      * @return list<array<string, mixed>>
+     * @deprecated Prefer iterateParentRows for large catalogs; kept for callers/tests.
      */
     private function loadParentRows(array $descriptor): array
     {
+        return iterator_to_array($this->iterateParentRows($descriptor), false);
+    }
+
+    /**
+     * Stream parent/main rows in pages so large tables (e.g. shipping regions) stay under unbounded SELECT limits.
+     *
+     * @param array{local_model:class-string,parent_model:?class-string,local_id_field:string,parent_id_field:string,fields:list<string>} $descriptor
+     * @return \Generator<int, array<string, mixed>>
+     */
+    private function iterateParentRows(array $descriptor): \Generator
+    {
+        $pageSize = 500;
         $parentModelClass = $descriptor['parent_model'];
         if ($parentModelClass && class_exists($parentModelClass)) {
             $parent = ObjectManager::getInstance($parentModelClass);
-            $rows = $parent->reset()->select()->fetchArray();
+            $offset = 0;
+            while (true) {
+                $rows = $parent->reset()
+                    ->limit($pageSize, $offset)
+                    ->select()
+                    ->fetchArray();
+                if (!is_array($rows) || $rows === []) {
+                    break;
+                }
+                foreach ($rows as $row) {
+                    if (is_array($row)) {
+                        yield $row;
+                    }
+                }
+                if (count($rows) < $pageSize) {
+                    break;
+                }
+                $offset += $pageSize;
+            }
 
-            return is_array($rows) ? $rows : [];
+            return;
         }
 
         /** @var LocalModel $localModel */
         $localModel = ObjectManager::getInstance($descriptor['local_model']);
-        $rows = $localModel->reset()
-            ->fields($descriptor['local_id_field'])
-            ->select()
-            ->fetchArray();
-        if (!is_array($rows)) {
-            return [];
-        }
-
+        $offset = 0;
         $seen = [];
-        $parentRows = [];
-        foreach ($rows as $row) {
-            if (!is_array($row)) {
-                continue;
+        while (true) {
+            $rows = $localModel->reset()
+                ->fields($descriptor['local_id_field'])
+                ->limit($pageSize, $offset)
+                ->select()
+                ->fetchArray();
+            if (!is_array($rows) || $rows === []) {
+                break;
             }
-            $recordId = (int)($row[$descriptor['local_id_field']] ?? 0);
-            if ($recordId <= 0 || isset($seen[$recordId])) {
-                continue;
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $recordId = (int)($row[$descriptor['local_id_field']] ?? 0);
+                if ($recordId <= 0 || isset($seen[$recordId])) {
+                    continue;
+                }
+                $seen[$recordId] = true;
+                yield [$descriptor['parent_id_field'] => $recordId];
             }
-            $seen[$recordId] = true;
-            $parentRows[] = [$descriptor['parent_id_field'] => $recordId];
+            if (count($rows) < $pageSize) {
+                break;
+            }
+            $offset += $pageSize;
         }
-
-        return $parentRows;
     }
 
     /**
@@ -274,18 +430,39 @@ final class LocalModelTranslationService
         string $value,
     ): void {
         $localeCode = trim($localeCode);
-        if ($localeCode === '' || $recordId <= 0) {
+        if ($localeCode === '' || $recordId <= 0 || $field === '') {
             return;
         }
 
         /** @var LocalModel $model */
         $model = ObjectManager::getInstance($localModelClass);
-        $model->reset()->insert([
-            [
-                $localIdField => $recordId,
-                $model::schema_fields_local_code => $localeCode,
-                $field => $value,
-            ],
-        ], $localIdField . ',local_code', $field)->fetch();
+        $localeField = $model::schema_fields_local_code;
+        $existing = $model->reset()
+            ->where($localIdField, $recordId)
+            ->where($localeField, $localeCode)
+            ->find()
+            ->fetch();
+
+        $exists = false;
+        if (is_object($existing)) {
+            $storedLocale = trim((string)$existing->getData($localeField));
+            $storedId = (int)$existing->getData($localIdField);
+            $exists = $storedLocale === $localeCode && $storedId === $recordId;
+            if (!$exists && method_exists($existing, 'getId') && (int)$existing->getId() > 0) {
+                $exists = true;
+            }
+        }
+
+        if ($exists) {
+            $existing->setData($field, $value)->save();
+
+            return;
+        }
+
+        $model->clearData()->reset()
+            ->setData($localIdField, $recordId)
+            ->setData($localeField, $localeCode)
+            ->setData($field, $value)
+            ->save();
     }
 }
