@@ -25,6 +25,21 @@
   Website/Store/Channel 任一不一致都返回 `cart_scope_request_conflict`，
   不能用客户端参数跨 Host 串车
 
+## 售卖类型 `cart_type`（ToC/ToB 一期合同）
+
+- **CommerceCartType SPI + Registry**：Cart 内置 `toc`；**不**依赖 `Weline_B2B`。B2B 启用后向本 Registry 注册 `tob`（须同时向 Order Registry 注册；单边禁止）。
+- **权威**：写入前 code ∈ Registry；会话/`selling_mode` 只是偏好，须经 `SellingTypeResolver`；禁止请求体直写未解析 `cart_type`；与行级 `business_code` 正交。
+- **可选 membership**：`Api/CommerceTypeMembershipCheckerInterface` + `CommerceTypeMembershipGate`（RuntimeProviderResolver）；B2B provides 实现。未配置时非 toc fail closed；Cart **不** import B2B。
+- **分车键**：由 **Scope + owner** 升级为 **Scope + owner + registered_cart_type**。UI 切换类型只切换当前车视图，**不合并**异型车；同 Scope 可并存 toc 车与 tob 车。
+- **旧键迁移**：无 `cart_type` 的历史键视为 **`toc`**，读路径一次迁移写入新键；新 tob 车只用新键。
+- **mismatch fail closed**：加购/改删/合车时目标类型未注册、与车头类型不一致、或行类型混合 → 拒绝；跨类型 `mergeGuest` 禁止。
+- **无游客 tob**：`cart_type=tob` 强制已登录客户；未登录切批发 → 登录回跳后再申请/进 tob 车。
+- **摘要**：`getCart` / Query 摘要始终含 `cart_type` + `type_payload`（由 Type Provider / B2B builder 填充；toc 可带 deal/券摘要，tob 标明 `discounts_applied=false` 等）。
+- **`presentLine` 必须携带 `cart_type`**：snapshot resolve / Assembler context 带当前车类型；tob 走 B2B 候选价（或跳过零售 deal 重算），禁止无类型重解析把批发价盖回零售价。
+- Checkout 冻结透传同一 `cart_type`；须在 Cart **与** Order Registry 均存在方可下单。
+- **后台 Inspection**：仅按完整 `scope_key` 查询该 Scope 下真实持久缓存结果，**不是**全局购物车列表；类型列/筛选走 `CommerceCartTypeRegistry`（仅已注册 code）。
+- **类型化事件**：`cart_item_added` / `cart_cleared` / `cart_merged` 经 `CartTypeEventEnvelope` 非破坏追加 `cart_type` + `type_payload`。
+
 ## Checkout 可信冻结（TEST-P2E-04）
 
 - Checkout 只能调用公开 `CheckoutCartSnapshotInterface`，不得读取 Cart

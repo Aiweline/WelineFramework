@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE — cart line price variants</title>
+  <!--
+    Question: How should strikethrough + campaign label pack into mini-cart / cart / checkout line rows?
+    Three variants via ?variant=A|B|C (default A). Throwaway — not production.
+  -->
+  <style>
+    :root {
+      --price: #b12704;
+      --muted: #565959;
+      --campaign: #c45500;
+      --border: #e3e6e6;
+      --bg: #f5f5f5;
+      --panel: #fff;
+      --ink: #0f1111;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.4 "Amazon Ember", "Helvetica Neue", Arial, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      padding: 24px 16px 96px;
+    }
+    h1 { font-size: 18px; margin: 0 0 8px; }
+    .lede { color: var(--muted); margin: 0 0 20px; max-width: 52rem; }
+    .state {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      background: #111;
+      color: #9fef9f;
+      padding: 10px 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      white-space: pre-wrap;
+    }
+    .surfaces { display: grid; gap: 20px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .surface {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .surface h2 {
+      margin: 0;
+      padding: 10px 14px;
+      font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      background: #fafafa;
+    }
+    .line {
+      display: grid;
+      grid-template-columns: 64px 1fr auto;
+      gap: 12px;
+      padding: 14px;
+      align-items: start;
+    }
+    .thumb {
+      width: 64px; height: 64px; border-radius: 4px;
+      background: linear-gradient(135deg, #d4a574, #8b5a2b);
+    }
+    .title { font-weight: 600; margin: 0 0 4px; }
+    .meta { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+    .qty { display: inline-flex; border: 1px solid #888; border-radius: 4px; overflow: hidden; }
+    .qty span { padding: 2px 8px; border-right: 1px solid #888; }
+    .qty span:last-child { border: 0; }
+
+    /* A — PDP inline (screenshot target) */
+    .A .price-block {
+      display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px;
+      justify-content: flex-end; text-align: right; max-width: 11rem;
+    }
+    .A .now { color: var(--price); font-weight: 700; font-size: 15px; }
+    .A .was { color: var(--muted); text-decoration: line-through; font-size: 12px; }
+    .A .campaign { color: var(--price); font-size: 12px; font-weight: 600; text-decoration: none; }
+
+    /* B — stacked under title (narrow-drawer first) */
+    .B .line { grid-template-columns: 64px 1fr; }
+    .B .price-block {
+      grid-column: 2;
+      display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+      margin-top: 6px;
+    }
+    .B .now { color: var(--price); font-weight: 800; font-size: 18px; }
+    .B .was-row { display: flex; gap: 8px; align-items: baseline; }
+    .B .was { color: var(--muted); text-decoration: line-through; font-size: 12px; }
+    .B .campaign { color: var(--campaign); font-size: 12px; font-weight: 600; }
+
+    /* C — deal chip beside title + unit was under qty */
+    .C .title-row { display: flex; gap: 8px; align-items: flex-start; }
+    .C .chip {
+      flex: 0 0 auto;
+      background: #fff5f0;
+      color: var(--price);
+      border: 1px solid #f0c2b0;
+      border-radius: 999px;
+      padding: 1px 8px;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .C .price-block { text-align: right; }
+    .C .now { color: var(--price); font-weight: 700; font-size: 15px; display: block; }
+    .C .was { color: var(--muted); text-decoration: line-through; font-size: 11px; }
+
+    /* D — Order summary header (screenshot): now+was row, campaign alone below right */
+    .D .price-block {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+      gap: 2px;
+      text-align: right;
+      max-width: 12rem;
+      line-height: 1.25;
+    }
+    .D .price-row {
+      display: inline-flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      align-items: baseline;
+      gap: 6px;
+    }
+    .D .now { color: var(--price); font-weight: 700; font-size: 15px; }
+    .D .was { color: var(--muted); text-decoration: line-through; font-size: 12px; }
+    .D .campaign {
+      display: block;
+      color: var(--price);
+      font-size: 12px;
+      font-weight: 600;
+      text-decoration: none;
+    }
+
+    .switcher {
+      position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%);
+      display: flex; align-items: center; gap: 10px;
+      background: #111; color: #fff; padding: 10px 14px; border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.28); z-index: 50;
+      font-size: 13px;
+    }
+    .switcher button {
+      background: #333; color: #fff; border: 0; width: 32px; height: 32px;
+      border-radius: 50%; cursor: pointer; font-size: 16px;
+    }
+    .switcher button:hover { background: #555; }
+    .note { margin-top: 16px; color: var(--muted); font-size: 12px; max-width: 52rem; }
+  </style>
+</head>
+<body>
+  <h1>PROTOTYPE · 购物车行划线价 + 活动标签</h1>
+  <p class="lede">问题：迷你购物车 / 购物车 / 结账行里，现价、划线原价、活动名应如何排版？默认 D 对齐结账 Order summary 截图（现价+划线同行，活动单独右对齐下一行）。</p>
+  <div class="state" id="state"></div>
+  <div class="surfaces" id="root"></div>
+  <p class="note">Throwaway only. Winner folds into Theme mini-cart / Cart page / CheckoutHtmlRenderer；本文件不进生产路由。</p>
+  <div class="switcher" role="toolbar" aria-label="Prototype variant switcher">
+    <button type="button" id="prev" aria-label="Previous variant">←</button>
+    <span id="label">A</span>
+    <button type="button" id="next" aria-label="Next variant">→</button>
+  </div>
+  <script>
+    const VARIANTS = [
+      { key: 'D', name: 'Summary header', blurb: '现价 + 划线同行；活动名单独右对齐下一行（对齐结账 Order summary 截图）' },
+      { key: 'A', name: 'PDP inline', blurb: '现价 + 划线价 + 活动名同排横排在行右侧' },
+      { key: 'B', name: 'Stacked under title', blurb: '现价放大压在标题下；划线价与活动名第二行——窄抽屉优先' },
+      { key: 'C', name: 'Deal chip', blurb: '活动名做成芯片贴标题旁；右侧只留现价，划线价缩到现价下方' },
+    ];
+    const SAMPLE = {
+      name: 'Chi Sui Tang-Style Winter Hanfu with Cloak',
+      meta: 'size · M · Type: 红色外套',
+      now: 'CNY 166.50',
+      was: 'CNY 185.00',
+      campaign: "Today's Picks",
+    };
+
+    function currentKey() {
+      const v = new URLSearchParams(location.search).get('variant') || 'D';
+      return VARIANTS.some(x => x.key === v) ? v : 'D';
+    }
+
+    function setVariant(key) {
+      const url = new URL(location.href);
+      url.searchParams.set('variant', key);
+      history.replaceState(null, '', url);
+      render();
+    }
+
+    function cycle(delta) {
+      const i = VARIANTS.findIndex(x => x.key === currentKey());
+      const next = VARIANTS[(i + delta + VARIANTS.length) % VARIANTS.length];
+      setVariant(next.key);
+    }
+
+    function priceBlock(v) {
+      if (v === 'D') {
+        return `<div class="price-block" data-line-price>
+          <span class="price-row">
+            <span class="now">${SAMPLE.now}</span>
+            <span class="was">${SAMPLE.was}</span>
+          </span>
+          <a class="campaign" href="#">${SAMPLE.campaign}</a>
+        </div>`;
+      }
+      if (v === 'A') {
+        return `<div class="price-block" data-line-price>
+          <span class="now">${SAMPLE.now}</span>
+          <span class="was">${SAMPLE.was}</span>
+          <a class="campaign" href="#">${SAMPLE.campaign}</a>
+        </div>`;
+      }
+      if (v === 'B') {
+        return `<div class="price-block" data-line-price>
+          <span class="now">${SAMPLE.now}</span>
+          <div class="was-row"><span class="was">${SAMPLE.was}</span><span class="campaign">${SAMPLE.campaign}</span></div>
+        </div>`;
+      }
+      return `<div class="price-block" data-line-price>
+        <span class="now">${SAMPLE.now}</span>
+        <span class="was">${SAMPLE.was}</span>
+      </div>`;
+    }
+
+    function titleBlock(v) {
+      if (v === 'C') {
+        return `<div class="title-row"><p class="title">${SAMPLE.name}</p><span class="chip">${SAMPLE.campaign}</span></div>`;
+      }
+      return `<p class="title">${SAMPLE.name}</p>`;
+    }
+
+    function lineHtml(v, surface) {
+      const price = priceBlock(v);
+      if (v === 'B') {
+        return `<article class="line ${v}">
+          <div class="thumb" aria-hidden="true"></div>
+          <div>
+            ${titleBlock(v)}
+            <p class="meta">${SAMPLE.meta} · ${surface}</p>
+            <div class="qty"><span>−</span><span>1</span><span>+</span></div>
+            ${price}
+          </div>
+        </article>`;
+      }
+      return `<article class="line ${v}">
+        <div class="thumb" aria-hidden="true"></div>
+        <div>
+          ${titleBlock(v)}
+          <p class="meta">${SAMPLE.meta} · ${surface}</p>
+          <div class="qty"><span>−</span><span>1</span><span>+</span></div>
+        </div>
+        ${price}
+      </article>`;
+    }
+
+    function render() {
+      const key = currentKey();
+      const meta = VARIANTS.find(x => x.key === key);
+      document.body.className = key;
+      document.getElementById('label').textContent = `${key} (${meta.name})`;
+      document.getElementById('state').textContent = JSON.stringify({
+        prototype: 'cart-line-price-variants',
+        variant: key,
+        name: meta.name,
+        blurb: meta.blurb,
+        sample: SAMPLE,
+      }, null, 2);
+      document.getElementById('root').innerHTML = ['迷你购物车', '购物车页', '结账页']
+        .map(s => `<section class="surface"><h2>${s}</h2>${lineHtml(key, s)}</section>`)
+        .join('');
+    }
+
+    document.getElementById('prev').onclick = () => cycle(-1);
+    document.getElementById('next').onclick = () => cycle(1);
+    document.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'ArrowLeft') cycle(-1);
+      if (e.key === 'ArrowRight') cycle(1);
+    });
+    render();
+  </script>
+</body>
+</html>

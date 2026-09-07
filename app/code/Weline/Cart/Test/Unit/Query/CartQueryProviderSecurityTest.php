@@ -2,7 +2,23 @@
 
 declare(strict_types=1);
 
-namespace Weline\Cart\Test\Unit\Query;
+namespace {
+    if (!function_exists('w_env_set')) {
+        function w_env_set(string $key, mixed $value, string $reason = ''): void
+        {
+            \Weline\Framework\Env\WelineEnv::set($key, $value, $reason);
+        }
+    }
+
+    if (!function_exists('w_env_cookie')) {
+        function w_env_cookie(?string $key = null, mixed $default = null): mixed
+        {
+            return \Weline\Framework\Env\WelineEnv::getCookie($key, $default);
+        }
+    }
+}
+
+namespace Weline\Cart\Test\Unit\Query {
 
 use PHPUnit\Framework\TestCase;
 use Weline\Cart\Api\Data\OfferIdentity;
@@ -11,11 +27,54 @@ use Weline\Cart\Service\CartCurrentCustomerResolver;
 use Weline\Cart\Service\CartItemSnapshotProviderRegistry;
 use Weline\Cart\Service\CartScopeResolver;
 use Weline\Cart\Service\CartService;
+use Weline\Framework\Context;
+use Weline\Framework\Http\CookieScope;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider\ProductCartItemSnapshotProvider;
 
 final class CartQueryProviderSecurityTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        CookieScope::setPolicyResolverOverride(static fn(): array => [
+            'active' => true,
+            'name_suffix' => '_w7',
+            'name_suffix_pattern' => '/_w\d+$/',
+            'mount_path' => '/',
+            'expire_unscoped_aliases' => true,
+            'revision' => 'cart-query-provider-security-test',
+        ]);
+        Context::current()->set('input.cookie', []);
+        $GLOBALS['weline_cart_test_env'] = [];
+    }
+
+    protected function tearDown(): void
+    {
+        Context::current()->set('input.cookie', []);
+        $GLOBALS['weline_cart_test_env'] = [];
+        CookieScope::setPolicyResolverOverride(null);
+    }
+
+    public function testIssueGuestTokenReusesTrustedScopedCookie(): void
+    {
+        $existingToken = str_repeat('a', 64);
+        Context::current()->set('input.cookie', [
+            CartService::GUEST_TOKEN_COOKIE . '_w7' => $existingToken,
+        ]);
+        $GLOBALS['weline_cart_test_env']['cookie.' . CartService::GUEST_TOKEN_COOKIE . '_w7'] = $existingToken;
+        $query = new CartQueryProvider(
+            CartService::forTesting(CartItemSnapshotProviderRegistry::forTesting()),
+            new CartScopeResolver(),
+            new CartCurrentCustomerResolver(static fn(): ?int => null),
+        );
+
+        $result = $query->execute('issueGuestToken');
+        $payload = is_array($result['data'] ?? null) ? $result['data'] : $result;
+
+        self::assertTrue($result['success']);
+        self::assertSame($existingToken, $payload['guest_token']);
+    }
+
     public function testFrontendDescriptorDoesNotExposeCustomerCartOwner(): void
     {
         $query = new CartQueryProvider(
@@ -206,4 +265,5 @@ final class CartQueryProviderSecurityTest extends TestCase
             'store_mode' => ScopeIdentity::MODE_NORMAL,
         ];
     }
+}
 }

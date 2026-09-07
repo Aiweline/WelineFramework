@@ -1,10 +1,16 @@
-﻿"Cart 查询器不支持的 operation：%{1}","Cart 查询器不支持的 operation：%{1}"
+﻿购物车加购成功后,"After cart item added"
+"购物车加购成功后触发；追加 cart_type + type_payload（非破坏）。","Dispatched after a successful cart add; appends cart_type + type_payload (non-breaking)."
+购物车清空成功后,"After cart cleared"
+"购物车清空成功后触发；追加 cart_type + type_payload（非破坏）。","Dispatched after a successful cart clear; appends cart_type + type_payload (non-breaking)."
+游客车合并成功后,"After guest cart merged"
+"游客车合并进客户车成功后触发；追加 cart_type + type_payload（非破坏）。","Dispatched after guest cart merges into customer cart; appends cart_type + type_payload (non-breaking)."
+"Cart 查询器不支持的 operation：%{1}","Cart 查询器不支持的 operation：%{1}"
 登录后才能合并游客购物车。,登录后才能合并游客购物车。
 缺少游客购物车凭证,缺少游客购物车凭证
-预计优惠暂不可用,预计优惠暂不可用
-预计优惠已计算,预计优惠已计算
-优惠,优惠
-预计优惠,预计优惠
+预计优惠暂不可用,"Estimated discount unavailable"
+预计优惠已计算,"Estimated discount calculated"
+优惠,Discount
+预计优惠,"Estimated discount"
 "Frontend cart API","Frontend cart API"
 "Storefront cart session operations exposed through Weline.Api.","Storefront cart session operations exposed through Weline.Api."
 购物车布局槽默认部件迁移失败（%{1}）：%{2},购物车布局槽默认部件迁移失败（%{1}）：%{2}
@@ -19,18 +25,10 @@
 购物车工作台,"Cart workspace"
 search,search
 "按 Scope 检查真实 Cart 持久缓存","Check the real Cart persistent cache by scope"
-仅询价,"Quote only"
-加入购物车,"Add to Cart"
-暂不可售,"Currently unavailable"
-正在加入购物车...,"Adding to cart..."
-已加入购物车,"Added to cart"
-加入购物车失败,"Failed to add to cart"
-已加入,"Added to cart"
-前往购物车,"Go to Cart"
-迷你购物车,迷你购物车
+迷你购物车,"Mini cart"
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,Subtotal
-税费与运费将在结算时计算,税费与运费将在结算时计算
+税费与运费将在结算时计算,"Tax and shipping calculated at checkout"
 去结算,"Proceed to checkout"
 查看购物车,"Go to Cart"
 正在加载购物车...,"Loading cart..."
@@ -52,18 +50,28 @@ search,search
 暂时无法加载购物车,"Unable to load cart right now"
 重试,Retry
 订单摘要,"Order summary"
-优惠券,优惠券
-自动优惠,自动优惠
-叠加优惠,叠加优惠
-购物车优惠券,购物车优惠券
-购物车订单留言,购物车订单留言
-商品小计,商品小计
+优惠券,Coupon
+自动优惠,"Automatic discount"
+叠加优惠,"Stacked discounts"
+购物车优惠券,"Cart coupon"
+购物车订单留言,"Cart order note"
+商品小计,"Items subtotal"
 继续购物,"Continue shopping"
-"Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。","Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。"
+仅询价,"Quote only"
+加入购物车,"Add to Cart"
+暂不可售,"Currently unavailable"
+正在加入购物车...,"Adding to cart..."
+已加入购物车,"Added to cart"
+加入购物车失败,"Failed to add to cart"
+已加入,"Added to cart"
+前往购物车,"Go to Cart"
+"Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。","Inspection queries real persistent cache results for one scope_key; it is not a global cart list and cannot enumerate across scopes."
 "输入完整 scope key","输入完整 scope key"
+全部类型,"All types"
 检查,检查
 匹配购物车：%{1},匹配购物车：%{1}
 Scope,Scope
+类型,Type
 所有者类型,所有者类型
 所有者,所有者
 货币,货币
@@ -73,9 +81,17 @@ Scope,Scope
 "provider_code 不能为空","provider_code 不能为空"
 "global_offer_uuid 不能为空","global_offer_uuid 不能为空"
 "legacy_product_id 须 >=0","legacy_product_id 须 >=0"
+未注册的售卖类型：%{1},未注册的售卖类型：%{1}
+该售卖类型需要登录,该售卖类型需要登录
+请先完成批发身份审核,请先完成批发身份审核
 "Cart Provider code 不能为空","Cart Provider code 不能为空"
 "重复的 Cart Provider code：%{1}","重复的 Cart Provider code：%{1}"
 "未找到 Cart Provider：%{1}","未找到 Cart Provider：%{1}"
+"Cart 售卖类型 code 不能为空","Cart 售卖类型 code 不能为空"
+"重复的 Cart 售卖类型 code：%{1}","重复的 Cart 售卖类型 code：%{1}"
+未注册的购物车售卖类型：%{1},未注册的购物车售卖类型：%{1}
+零售,Retail
+历史批发,"Historical wholesale"
 购物车可售校验服务暂不可用：%{1},购物车可售校验服务暂不可用：%{1}
 购物车可售校验服务暂不可用,购物车可售校验服务暂不可用
 购物车可售校验失败：%{1},购物车可售校验失败：%{1}
@@ -115,8 +131,11 @@ Scope,Scope
 商品已从购物车移除。,商品已从购物车移除。
 购物车已清空。,购物车已清空。
 "游客加购需要 guest_token","游客加购需要 guest_token"
+购物车售卖类型不匹配,购物车售卖类型不匹配
+购物车数量不符合规则,购物车数量不符合规则
 "channel_code 必须与 store_code 同时提供","channel_code 必须与 store_code 同时提供"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","购物车 Scope 与当前可信 Website/Store/Channel 请求不一致"
+"Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。","Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。"
 "迷你购物车 footer-extras 默认部件迁移失败：%{1}","迷你购物车 footer-extras 默认部件迁移失败：%{1}"
 "Cart 未启用","Cart 未启用"
 请选择要加入购物车的商品。,请选择要加入购物车的商品。
@@ -130,3 +149,4 @@ Scope,Scope
 商品数量,Items
 合计,Total
 商品已加入购物车。,"Added to cart."
+批发,Wholesale
