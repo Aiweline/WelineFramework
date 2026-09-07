@@ -1,3 +1,69 @@
-<div class="w-messages" aria-live="polite" aria-atomic="false">
+<div class="w-messages" data-flash-display="toast" hidden aria-hidden="true">
     <?= \Weline\Framework\Manager\ObjectManager::getInstance(\Weline\Framework\Manager\MessageManager::class) ?>
 </div>
+<script>
+(function () {
+    var root = document.currentScript && document.currentScript.previousElementSibling;
+    if (!root || root.getAttribute('data-flash-display') !== 'toast') {
+        return;
+    }
+    function toneOf(alertEl) {
+        var tone = (alertEl.getAttribute('data-tone') || '').toLowerCase();
+        if (tone === 'error') return 'danger';
+        if (tone === 'notes') return 'info';
+        if (['success', 'warning', 'danger', 'info', 'neutral'].indexOf(tone) >= 0) {
+            return tone;
+        }
+        return 'info';
+    }
+    function textOf(alertEl) {
+        var title = '';
+        var body = '';
+        var titleEl = alertEl.querySelector('.w-alert__title');
+        if (titleEl) {
+            title = (titleEl.textContent || '').trim();
+        }
+        var span = alertEl.querySelector('.w-alert__content > span');
+        if (span) {
+            body = (span.textContent || '').trim();
+        }
+        if (!body) {
+            var clone = alertEl.cloneNode(true);
+            clone.querySelectorAll('button,.w-alert__title').forEach(function (n) { n.remove(); });
+            body = (clone.textContent || '').trim();
+        }
+        if (title && body && body.indexOf(title) === 0) {
+            return body;
+        }
+        if (title && body) {
+            return title + ' ' + body;
+        }
+        return body || title;
+    }
+    function show() {
+        var toast = window.Weline && window.Weline.UI && window.Weline.UI.toast;
+        if (!toast || typeof toast.show !== 'function') {
+            root.hidden = false;
+            root.removeAttribute('aria-hidden');
+            return;
+        }
+        var alerts = root.querySelectorAll('.w-alert');
+        if (!alerts.length) {
+            return;
+        }
+        alerts.forEach(function (alertEl) {
+            var message = textOf(alertEl);
+            if (!message) {
+                return;
+            }
+            toast.show(message, { tone: toneOf(alertEl) });
+        });
+        root.remove();
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', show);
+    } else {
+        show();
+    }
+})();
+</script>
