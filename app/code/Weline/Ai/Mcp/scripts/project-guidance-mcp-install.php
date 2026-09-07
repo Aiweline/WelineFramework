@@ -12,15 +12,17 @@ declare(strict_types=1);
 require_once __DIR__ . DIRECTORY_SEPARATOR . 'project-guidance-mcp-server.php';
 
 /** @return array<string,mixed> */
-function welineMcpInstallResolveGuidance(string $mcpRoot): array
+function welineMcpInstallResolveGuidance(string $mcpRoot, ?string $hostKind = null): array
 {
     $context = welineMcpServerBuildContext($mcpRoot);
     $repoRoot = $context['repo_root'];
     $serverConfig = $context['server_config'];
     $serverName = WELINE_PROJECT_INTELLIGENCE_MCP_SERVER;
 
-    $cursorProbe = welineMcpInstallProbeCursor($repoRoot);
-    $claudeProbe = welineMcpInstallProbeClaude($repoRoot);
+    $primaryHost = welineMcpInstallDetectPrimaryHost([], [], $hostKind);
+    $inactiveHost = ['ready' => null, 'binary_found' => false, 'reason' => 'inactive_host_not_probed'];
+    $cursorProbe = $primaryHost === 'cursor' ? welineMcpInstallProbeCursor($repoRoot) : $inactiveHost;
+    $claudeProbe = $primaryHost === 'claude' ? welineMcpInstallProbeClaude($repoRoot) : $inactiveHost;
 
     $cursorDocument = [
         'mcpServers' => [
@@ -31,10 +33,15 @@ function welineMcpInstallResolveGuidance(string $mcpRoot): array
     $claudeAdd = welineMcpInstallClaudeAddCommand($serverName, $serverConfig, $context);
 
     $hosts = [
+        'codex' => welineMcpInstallHostEnvelope(
+            'codex-mcp-install.v1',
+            ['ready' => null, 'reason' => 'session_tool_catalog_not_probed'],
+            null,
+        ),
         'cursor' => welineMcpInstallHostEnvelope(
             'cursor-mcp-install.v1',
             $cursorProbe,
-            $cursorProbe['ready'] ? null : [
+            $cursorProbe['ready'] !== false ? null : [
                 'mode' => 'session_install',
                 'summary' => 'Write project Cursor MCP config, then approve/enable via cursor-agent.',
                 'steps' => [
@@ -55,7 +62,7 @@ function welineMcpInstallResolveGuidance(string $mcpRoot): array
         'claude' => welineMcpInstallHostEnvelope(
             'claude-mcp-install.v1',
             $claudeProbe,
-            $claudeProbe['ready'] ? null : [
+            $claudeProbe['ready'] !== false ? null : [
                 'mode' => 'session_install',
                 'summary' => 'Register the STDIO MCP with Claude Code project scope.',
                 'steps' => [
@@ -85,8 +92,7 @@ function welineMcpInstallResolveGuidance(string $mcpRoot): array
         ),
     ];
 
-    $primaryHost = welineMcpInstallDetectPrimaryHost($cursorProbe, $claudeProbe);
-    $primaryReady = (bool) (($hosts[$primaryHost]['host']['ready'] ?? false));
+    $primaryReady = $hosts[$primaryHost]['host']['ready'] ?? null;
 
     return [
         'schema_version' => 'host-mcp-install-guidance.v1',
@@ -98,9 +104,9 @@ function welineMcpInstallResolveGuidance(string $mcpRoot): array
         'primary_host' => $primaryHost,
         'primary_ready' => $primaryReady,
         'hosts' => $hosts,
-        'agent_next_action' => $primaryReady
-            ? 'Host MCP is attached for the detected primary host. Start a new Agent turn if tools are stale, then call prepare_project.'
-            : 'Execute host_mcp_install.hosts.' . $primaryHost . '.install.steps in this session (do not ask the user to open Settings), rerun ensure-project-guidance, then prepare_project.',
+        'agent_next_action' => $primaryReady === false
+            ? 'Execute host_mcp_install.hosts.' . $primaryHost . '.install.steps in this session (do not ask the user to open Settings), rerun ensure-project-guidance, then prepare_project.'
+            : 'Verify the current session exposes the required Weline tools, then call prepare_project. Local host guidance cannot observe the session tool catalog.',
     ];
 }
 
@@ -168,16 +174,34 @@ function welineMcpInstallHostEnvelope(string $schema, array $probe, ?array $inst
 /** @param array<string,mixed> $cursorProbe
  *  @param array<string,mixed> $claudeProbe
  */
-function welineMcpInstallDetectPrimaryHost(array $cursorProbe, array $claudeProbe): string
+function welineMcpInstallDetectPrimaryHost(array $cursorProbe, array $claudeProbe, ?string $hostKind = null): string
 {
-    if (($cursorProbe['binary_found'] ?? false) === true) {
-        return 'cursor';
+    // Keep the probe parameters for existing callers; installed binaries are not
+    // evidence of which host owns this task. ensure passes its process evidence.
+    if ($hostKind === null || $hostKind === '') {
+        $hostKind = getenv('CODEX_THREAD_ID') ? 'codex_app_server' : '';
+        if ($hostKind === '' && getenv('CLAUDECODE')) {
+            $hostKind = 'claude';
+        }
+        // Cursor Agent / extensionHost always export CURSOR_AGENT (or role) even
+        // when TERM_PROGRAM is empty — without this, ensure skips mcp-process bounce.
+        if ($hostKind === '' && (getenv('CURSOR_AGENT') || getenv('CURSOR_EXTENSION_HOST_ROLE'))) {
+            $hostKind = 'cursor';
+        }
+        if ($hostKind === '' && getenv('VSCODE_PID') && stripos((string) (getenv('VSCODE_PROCESS_TITLE') ?: ''), 'Cursor') !== false) {
+            $hostKind = 'cursor';
+        }
+        if ($hostKind === '') {
+            $hostKind = strtolower((string) (getenv('TERM_PROGRAM') ?: ''));
+        }
     }
-    if (($claudeProbe['binary_found'] ?? false) === true) {
-        return 'claude';
-    }
-
-    return 'cursor';
+    return match ($hostKind) {
+        'codex_app_server', 'codex' => 'codex',
+        'cursor' => 'cursor',
+        'claude', 'claude_code' => 'claude',
+        'vscode' => 'vscode',
+        default => 'unknown',
+    };
 }
 
 /** @return array<string,mixed> */

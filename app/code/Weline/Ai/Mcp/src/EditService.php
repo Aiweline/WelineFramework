@@ -436,6 +436,7 @@ final class EditService
             $indexStartedAt = hrtime(true);
             try {
                 $indexResult = $this->indexer->indexPaths($paths);
+                $this->assertIndexedSnapshots($snapshots, 'post');
             } catch (Throwable $exception) {
                 $indexDurationMs = self::elapsedMilliseconds($indexStartedAt);
                 [$message] = Redactor::string($exception->getMessage());
@@ -500,6 +501,7 @@ final class EditService
             $indexStartedAt = hrtime(true);
             try {
                 $indexResult = $this->indexer->indexPaths($paths);
+                $this->assertIndexedSnapshots($snapshots, 'post');
             } catch (Throwable $exception) {
                 [$message] = Redactor::string($exception->getMessage());
                 $result = $this->transactionResult($row);
@@ -702,6 +704,7 @@ final class EditService
             $indexStartedAt = hrtime(true);
             try {
                 $indexResult = $this->indexer->indexPaths($paths);
+                $this->assertIndexedSnapshots($snapshots, 'pre');
             } catch (Throwable $exception) {
                 $indexDurationMs = self::elapsedMilliseconds($indexStartedAt);
                 [$message] = Redactor::string($exception->getMessage());
@@ -992,6 +995,7 @@ final class EditService
         $startedAt = hrtime(true);
         try {
             $indexResult = $this->indexer->indexPaths($paths);
+            $this->assertIndexedSnapshots($this->decodeSnapshots($this->findTransaction($editId)), 'pre');
         } catch (Throwable $exception) {
             [$message] = Redactor::string($exception->getMessage());
             $this->withProjectLock(function () use ($editId, $message): void {
@@ -1825,6 +1829,20 @@ final class EditService
             'mode' => (int) (fileperms($absolute) & 0777),
             'create' => false,
         ];
+    }
+
+    /** @param list<array<string,mixed>> $snapshots */
+    private function assertIndexedSnapshots(array $snapshots, string $image): void
+    {
+        foreach ($snapshots as $snapshot) {
+            $path = (string) $snapshot['path'];
+            $expectedHash = $snapshot[$image . '_sha256'] ?? null;
+            $indexedHash = $this->indexedFileHash($path);
+            if ($expectedHash === null ? $indexedHash !== null
+                : ($indexedHash === null || !$this->hashEquals((string) $expectedHash, $indexedHash))) {
+                throw new RuntimeException('Index refresh did not cover the current ' . $image . 'image: ' . $path);
+            }
+        }
     }
 
     private function indexedFileHash(string $path): ?string

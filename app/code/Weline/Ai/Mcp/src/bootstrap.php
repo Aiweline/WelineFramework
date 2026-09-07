@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/Support.php';
+require_once __DIR__ . '/ContextResponseBudget.php';
 require_once __DIR__ . '/HardConstraintsCatalog.php';
 require_once __DIR__ . '/GuidanceWorkflowCatalog.php';
 require_once __DIR__ . '/Config.php';

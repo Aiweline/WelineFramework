@@ -394,15 +394,12 @@ final class ProjectRetriever
                         );
                     }
                 }
+                $requestedDefinitions = $this->completeRequestedSymbolDefinitions($requestedDefinitions);
                 foreach ($requestedDefinitions as $requestedSymbol => $definition) {
                     if (count($regions) >= $maxRegions || $usedTokens >= $regionBudget) {
                         break;
                     }
-                    $remainingTargets = max(1, count($requestedDefinitions) - count($regions));
-                    $remaining = max(32, min(
-                        600,
-                        (int) floor(($regionBudget - $usedTokens) / $remainingTargets),
-                    ));
+                    $remaining = max(1, $regionBudget - $usedTokens);
                     $region = $this->compactRequestedSymbolRegion(
                         $definition,
                         $requestedSymbol,
@@ -679,7 +676,8 @@ final class ProjectRetriever
             $matched = false;
             foreach ($regions as $region) {
                 $materializedSymbol = trim((string) ($region['symbol'] ?? $region['target_ref'] ?? ''));
-                if ($this->symbolTargetsMatch($materializedSymbol, $requestedSymbol)) {
+                if ($this->symbolTargetsMatch($materializedSymbol, $requestedSymbol)
+                    && ($region['content_complete'] ?? false) === true) {
                     $matched = true;
                     break;
                 }
@@ -1117,6 +1115,7 @@ final class ProjectRetriever
                     'expected_digest',
                 ],
                 'digest_rule' => 'Use expected_digest from the exact selected symbol region; content_sha256 is only the returned snippet digest and is not a symbol guard.',
+                'replacement_rule' => 'Use replace_symbol only with content_complete=true. A truncated region describes a partial range; obtain the remaining symbol content before reconstructing the whole symbol.',
                 'replan_rule' => 'On EDIT_REPLAN_REQUIRED, preserve unchanged operations and replace only failed operations from matching latest_regions guards.',
             ],
             'source' => 'project_sqlite_index',
@@ -2351,6 +2350,45 @@ final class ProjectRetriever
         return $leftShort !== false && ltrim($leftShort, '\\') === $right;
     }
 
+    /** @param array<string,array<string,mixed>> $definitions
+     *  @return array<string,array<string,mixed>>
+     */
+    private function completeRequestedSymbolDefinitions(array $definitions): array
+    {
+        if ($definitions === []) {
+            return [];
+        }
+        $byPath = [];
+        foreach ($definitions as $target => $definition) {
+            $byPath[(string) $definition['relative_path']][] = $target;
+        }
+        $statement = $this->index->pdo()->prepare(
+            'SELECT f.path, c.content_blob, c.encoding FROM indexed_files AS f
+               JOIN indexed_file_contents AS c ON c.file_id = f.id
+              WHERE f.path IN (' . implode(',', array_fill(0, count($byPath), '?')) . ')'
+        );
+        $statement->execute(array_keys($byPath));
+        while ($row = $statement->fetch()) {
+            $path = (string) $row['path'];
+            $content = $this->decodeStoredContent($row['content_blob'], (string) $row['encoding'], $path);
+            foreach ($byPath[$path] as $target) {
+                $definition = $definitions[$target];
+                $start = (int) ($definition['symbol_start_byte'] ?? -1);
+                $end = (int) ($definition['symbol_end_byte'] ?? -1);
+                if ($start < 0 || $end <= $start || $end > strlen($content)) {
+                    throw new ToolException('INDEX_CONTENT_CORRUPT', 'Complete indexed symbol range is unavailable: ' . $path, true);
+                }
+                $definition['snippet'] = substr($content, $start, $end - $start);
+                $definition['start_line'] = $definition['symbol_start_line'];
+                $definition['end_line'] = $definition['symbol_end_line'];
+                $definition['content_complete'] = true;
+                $definitions[$target] = $definition;
+            }
+        }
+
+        return $definitions;
+    }
+
     /** @param array<string,mixed> $definition
      *  @return array<string,mixed>
      */
@@ -2359,7 +2397,12 @@ final class ProjectRetriever
         string $symbol,
         int $tokenBudget,
     ): array {
-        $snippet = $this->snippet((string) ($definition['snippet'] ?? ''), $symbol, $tokenBudget);
+        $content = (string) ($definition['snippet'] ?? '');
+        $requiredTokens = max(1, (int) ceil(mb_strlen($content, 'UTF-8') / 4));
+        $complete = ($definition['content_complete'] ?? false) === true && $requiredTokens <= $tokenBudget;
+        $snippet = $complete
+            ? ['text' => $content, 'tokens' => $requiredTokens, 'line_offset' => 0]
+            : $this->snippet($content, $symbol, $tokenBudget);
 
         return [
             'path' => $definition['relative_path'] ?? '',
@@ -2380,6 +2423,13 @@ final class ProjectRetriever
             'symbol' => $definition['fq_name'] ?? $definition['name'] ?? $symbol,
             'target_ref' => $definition['fq_name'] ?? $definition['name'] ?? $symbol,
             'expected_digest' => $definition['body_hash'] ?? '',
+            'content_complete' => $complete,
+            'truncated' => !$complete,
+            'symbol_start_line' => (int) ($definition['symbol_start_line'] ?? $definition['start_line'] ?? 1),
+            'symbol_end_line' => (int) ($definition['symbol_end_line'] ?? $definition['end_line'] ?? 1),
+            'symbol_start_byte' => (int) ($definition['symbol_start_byte'] ?? 0),
+            'symbol_end_byte' => (int) ($definition['symbol_end_byte'] ?? 0),
+            'required_tokens' => $requiredTokens,
             'reason' => 'requested_symbol',
             'content' => $snippet['text'],
             'token_estimate' => $snippet['tokens'],
@@ -2403,6 +2453,11 @@ final class ProjectRetriever
             'absolute_path' => $this->index->absolutePath((string) $row['path']),
             'file_hash' => $row['file_hash'],
             'body_hash' => $row['body_hash'],
+            'content_complete' => false,
+            'symbol_start_line' => (int) $row['start_line'],
+            'symbol_end_line' => (int) $row['end_line'],
+            'symbol_start_byte' => (int) ($row['start_byte'] ?? 0),
+            'symbol_end_byte' => (int) ($row['end_byte'] ?? 0),
             'start_line' => (int) $row['start_line'] + (int) ($snippet['line_offset'] ?? 0),
             'end_line' => min(
                 (int) $row['end_line'],
