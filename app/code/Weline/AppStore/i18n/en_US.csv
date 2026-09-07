@@ -246,7 +246,7 @@ Surface,Surface
 本地商城,"Local App Store"
 已配置,Configured
 应用商城端点,"App Store endpoint"
-"本地开发应使用 https://app.weline.test:9523，部署后测试应自动使用 https://app.aiweline.com。","Local development should use https://app.weline.test:9523; deployed tests should automatically use https://app.aiweline.com."
+"本地开发应使用 https://app.test.weline.com:9523，部署后测试应自动使用 https://app.aiweline.com。","Local development should use https://app.test.weline.com:9523; deployed tests should automatically use https://app.aiweline.com."
 来源：,Source:
 文件：,document:
 目录：,"Table of contents:"
