@@ -11,14 +11,14 @@
 
 - 模块代码：`Weline_Captcha`
 - 目录：`app/code/Weline/Captcha`
-- 默认实现：表单级 Captcha 默认关闭；入口显式启用后，Google reCAPTCHA Enterprise
-  未启用或配置不完整时强制使用一次性本地图形挑战。
+- 默认实现：表单级 Captcha 默认关闭；入口显式启用后按国家路由选择
+  `tencent_captcha` / `google_enterprise` / `local_image`；未就绪或脚本不可达可降级本地图码。
 - 本地图形挑战固定为六位混合字符、有效期 5 分钟且成功/失败均一次性消费；字符集排除易混淆字符，图像使用块状字形、随机缩放/偏移/旋转、交叉遮挡曲线和密集噪声，兼顾人工可读性与 OCR 抗性。
 - 框架接入：观察 `Weline_Framework::view::form::before_close`，只为显式
   `captcha=auto|required` 的 `<w:form>` 注入挑战。服务端必须使用同一 `intent` 通过
   `CaptchaManagerInterface` 复验。
-- 兼容面：旧 `CaptchaProviderInterface` / `CaptchaService` 保留；旧独立配置只在
-  SystemConfig 对应键为空时迁移，不覆盖管理员新配置。
+- 兼容面：旧 `CaptchaProviderInterface` / `CaptchaService` 仍可用于本地图码路径；不再迁移或暴露旧 Google reCAPTCHA v2/v3。
+- 路由配置：SystemConfig「供应商路由」支持 china_codes / 国家覆盖 / 就绪降级链；GEO 依赖 CDN 国家头。
 
 ## 代码面概览
 

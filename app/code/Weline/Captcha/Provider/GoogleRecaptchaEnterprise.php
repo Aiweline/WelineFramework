@@ -35,8 +35,11 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
         $intentJson = $this->json($intent);
         $formIdJson = $this->json($formId);
         $scriptUrl = 'https://www.google.com/recaptcha/enterprise.js?render=' . \rawurlencode($siteKey);
+        $allowDegrade = $this->config->allowLocalDegrade();
+        $allowDegradeJson = $this->json($allowDegrade);
 
-        return '<div class="weline-captcha weline-captcha-google" data-weline-captcha-provider="google_enterprise">'
+        return '<div class="weline-captcha weline-captcha-google" data-weline-captcha-provider="google_enterprise"'
+            . ' data-allow-local-degrade="' . ($allowDegrade ? '1' : '0') . '">'
             . '<input type="hidden" name="captcha_provider" value="google_enterprise">'
             . '<input type="hidden" name="captcha_response" value="">'
             . '<input type="hidden" name="captcha_action" value="' . \htmlspecialchars($intent, ENT_QUOTES, 'UTF-8') . '">'
@@ -45,10 +48,13 @@ final class GoogleRecaptchaEnterprise implements VerificationProviderInterface
             . '<script src="' . \htmlspecialchars($scriptUrl, ENT_QUOTES, 'UTF-8') . '" async defer></script>'
             . '<script>(function(){var form=document.getElementById(' . $formIdJson . ');'
             . 'if(!form||form.dataset.welineCaptchaBound==="1"){return;}form.dataset.welineCaptchaBound="1";'
+            . 'var allowDegrade=' . $allowDegradeJson . ';'
             . 'form.addEventListener("weline:form:prepare-submit",function(event){'
             . 'if(form.dataset.welineCaptchaVerified==="1"){return;}event.preventDefault();'
             . 'if(form.dataset.welineCaptchaPending==="1"){return;}form.dataset.welineCaptchaPending="1";'
-            . 'var fail=function(error){delete form.dataset.welineCaptchaPending;form.dispatchEvent(new CustomEvent("weline:form:verification-error",{bubbles:true,detail:{form:form,error:error}}));};'
+            . 'var fail=function(error){delete form.dataset.welineCaptchaPending;'
+            . 'form.dispatchEvent(new CustomEvent("weline:form:verification-error",{bubbles:true,detail:{form:form,error:error,degrade:allowDegrade?"local_image":"",provider:"google_enterprise"}}));'
+            . 'if(allowDegrade){form.dispatchEvent(new CustomEvent("weline:captcha:degrade",{bubbles:true,detail:{form:form,prefer:"local_image",reason:String(error&&error.message||error||"recaptcha_unavailable")}}));};'
             . 'if(!window.grecaptcha||!grecaptcha.enterprise){fail(new Error("recaptcha_unavailable"));return;}'
             . 'grecaptcha.enterprise.ready(function(){grecaptcha.enterprise.execute(' . $siteKeyJson . ',{action:' . $intentJson . '}).then(function(token){'
             . 'var input=form.querySelector("[name=captcha_response]");if(!input||!token){fail(new Error("recaptcha_empty_token"));return;}'
