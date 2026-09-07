@@ -10,6 +10,37 @@ use Weline\Affiliate\Service\AffiliateService;
 
 class AffiliateServiceTest extends TestCase
 {
+    public function testNormalizeScopeAllowsDefaultWebsiteZeroWithStore(): void
+    {
+        $service = new class() extends AffiliateService {
+        };
+
+        $scope = $service->normalizeScope([
+            'website_id' => 0,
+            'store_code' => 'default',
+            'channel_code' => 'web',
+        ]);
+
+        $this->assertSame([
+            'website_id' => 0,
+            'store_code' => 'default',
+            'channel_code' => 'web',
+        ], $scope);
+    }
+
+    public function testNormalizeScopeRequiresStoreWhenChannelSelected(): void
+    {
+        $service = new class() extends AffiliateService {
+        };
+
+        $this->expectException(\InvalidArgumentException::class);
+        $service->normalizeScope([
+            'website_id' => 0,
+            'store_code' => '',
+            'channel_code' => 'web',
+        ]);
+    }
+
     public function testGetAffiliateSummaryCalculatesPendingCommission(): void
     {
         $service = new class() extends AffiliateService {
