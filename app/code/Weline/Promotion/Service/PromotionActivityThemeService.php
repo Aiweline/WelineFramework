@@ -6,6 +6,7 @@ namespace Weline\Promotion\Service;
 
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Http\Cookie;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\ScopeIdentity;
 use Weline\Promotion\Model\PromotionActivityTheme;
@@ -21,7 +22,18 @@ final class PromotionActivityThemeService
         private readonly PromotionActivityThemeResourceChangePublisher $resourceChanges,
         private readonly PromotionStorefrontCacheInvalidator $storefrontCache,
         private readonly PromotionThemeDealDiscountSyncService $dealDiscountSync,
+        private readonly Url $url,
     ) {
+    }
+
+    public function storefrontUrl(string $pageSlug = ''): string
+    {
+        $pageSlug = strtolower(trim($pageSlug));
+        if ($pageSlug === '' || $pageSlug === 'index') {
+            return $this->url->getFrontendUrl('promotion');
+        }
+
+        return $this->url->getFrontendUrl('promotion/' . rawurlencode($pageSlug));
     }
 
     public function hasActivePage(string $pageSlug): bool
@@ -68,7 +80,7 @@ final class PromotionActivityThemeService
             [
                 'slug' => 'index',
                 'label' => (string)__('活动首页'),
-                'url' => '/promotion',
+                'url' => $this->storefrontUrl(),
                 'active_key' => 'index',
             ],
         ];
@@ -86,7 +98,7 @@ final class PromotionActivityThemeService
             $tabs[] = [
                 'slug' => $slug,
                 'label' => $label,
-                'url' => '/promotion/' . rawurlencode($slug),
+                'url' => $this->storefrontUrl($slug),
                 'active_key' => $slug,
             ];
         }
@@ -108,7 +120,7 @@ final class PromotionActivityThemeService
                 'title' => (string)$copy['entry_title'],
                 'subtitle' => (string)$copy['entry_subtitle'],
                 'action_label' => (string)$copy['entry_action_label'],
-                'action_url' => '/promotion/' . rawurlencode($slug),
+                'action_url' => $this->storefrontUrl($slug),
             ];
         }
 
@@ -475,6 +487,51 @@ final class PromotionActivityThemeService
         ];
     }
 
+    /** @return list<array<string, mixed>> */
+    public function listActiveThemesForStorefront(?array $scope = null): array
+    {
+        return $this->listActiveThemes($scope ?? $this->scopeResolver->resolve());
+    }
+
+    /**
+     * Campaign label/URL for storefront price badges (nav_label → page_title → slug).
+     *
+     * @param array<string, mixed> $themeFallback
+     * @return array{campaign_label:string,campaign_url:string,page_title:string}
+     */
+    public function resolveStorefrontCampaignMeta(int $themeId, array $themeFallback = []): array
+    {
+        $themeId = max(0, $themeId);
+        $fallback = $themeFallback;
+        if ($themeId > 0 && (!isset($fallback['id']) || (int)$fallback['id'] !== $themeId)) {
+            $fallback['id'] = $themeId;
+        }
+        $copy = $themeId > 0
+            ? $this->resolveLocalizedCopy($themeId, $fallback)
+            : [
+                'nav_label' => '',
+                'page_title' => '',
+            ];
+        $slug = strtolower(trim((string)($fallback['page_slug'] ?? $copy['page_slug'] ?? '')));
+        $label = trim((string)($copy['nav_label'] ?: $copy['page_title'] ?: ''));
+        if ($label === '' && $slug !== '') {
+            $label = $this->defaultNavLabel($slug);
+        }
+        $pageTitle = trim((string)($copy['page_title'] ?? ''));
+        if ($pageTitle === '' && $slug !== '') {
+            $pageTitle = $this->defaultPageTitle($slug);
+        }
+        if ($label === '') {
+            $label = $pageTitle;
+        }
+
+        return [
+            'campaign_label' => $label,
+            'campaign_url' => $slug !== '' ? $this->storefrontUrl($slug) : '',
+            'page_title' => $pageTitle,
+        ];
+    }
+
     /** @param array{website_id:int,store_code:string,channel_code:string} $scope */
     private function findActiveByPageSlug(string $pageSlug, array $scope): ?array
     {
@@ -583,7 +640,7 @@ final class PromotionActivityThemeService
     /** @param array<string, mixed> $fallback */
     private function resolveLocalizedCopy(int $themeId, array $fallback): array
     {
-        $locale = trim((string)(Cookie::getLang() ?: Cookie::getLangLocal() ?: 'zh_Hans_CN'));
+        $locale = trim((string)(Cookie::getLangLocal() ?: Cookie::getLang() ?: 'zh_Hans_CN'));
         $local = clone $this->themeLocal;
         $local->clear()
             ->where(PromotionActivityThemeLocal::schema_fields_ID, $themeId)
@@ -591,20 +648,44 @@ final class PromotionActivityThemeService
             ->find()
             ->fetch();
 
-        $pick = static fn (string $field, string $inputKey): string => trim((string)(
-            $local->getData($field) ?: ($fallback[$inputKey] ?? '')
-        ));
+        $pickLocal = static fn (string $field): string => trim((string)$local->getData($field));
 
         $copy = [
-            'nav_label' => $pick(PromotionActivityThemeLocal::schema_fields_NAV_LABEL, 'nav_label'),
-            'page_title' => $pick(PromotionActivityThemeLocal::schema_fields_PAGE_TITLE, 'page_title'),
-            'hero_lede' => $pick(PromotionActivityThemeLocal::schema_fields_HERO_LEDE, 'hero_lede'),
-            'entry_title' => $pick(PromotionActivityThemeLocal::schema_fields_ENTRY_TITLE, 'entry_title'),
-            'entry_subtitle' => $pick(PromotionActivityThemeLocal::schema_fields_ENTRY_SUBTITLE, 'entry_subtitle'),
-            'entry_action_label' => $pick(PromotionActivityThemeLocal::schema_fields_ENTRY_ACTION_LABEL, 'entry_action_label'),
+            'nav_label' => $pickLocal(PromotionActivityThemeLocal::schema_fields_NAV_LABEL),
+            'page_title' => $pickLocal(PromotionActivityThemeLocal::schema_fields_PAGE_TITLE),
+            'hero_lede' => $pickLocal(PromotionActivityThemeLocal::schema_fields_HERO_LEDE),
+            'entry_title' => $pickLocal(PromotionActivityThemeLocal::schema_fields_ENTRY_TITLE),
+            'entry_subtitle' => $pickLocal(PromotionActivityThemeLocal::schema_fields_ENTRY_SUBTITLE),
+            'entry_action_label' => $pickLocal(PromotionActivityThemeLocal::schema_fields_ENTRY_ACTION_LABEL),
         ];
 
         $slug = strtolower(trim((string)($fallback['page_slug'] ?? '')));
+        if ($this->isBuiltInThemeSlug($slug)) {
+            $entryDefaults = $this->defaultEntryCopy($slug);
+            $translatedDefaults = [
+                'nav_label' => $this->defaultNavLabel($slug),
+                'page_title' => $this->defaultPageTitle($slug),
+                'hero_lede' => $this->defaultHeroLede($slug),
+                'entry_title' => (string)($entryDefaults['entry_title'] ?? ''),
+                'entry_subtitle' => (string)($entryDefaults['entry_subtitle'] ?? ''),
+                'entry_action_label' => (string)($entryDefaults['entry_action_label'] ?? ''),
+            ];
+            foreach ($translatedDefaults as $field => $value) {
+                if (
+                    $value !== ''
+                    && ($copy[$field] === '' || !$this->isCopyCompatibleWithLocale($copy[$field], $locale))
+                ) {
+                    $copy[$field] = $value;
+                }
+            }
+        }
+
+        foreach (array_keys($copy) as $field) {
+            if ($copy[$field] === '') {
+                $copy[$field] = trim((string)($fallback[$field] ?? ''));
+            }
+        }
+
         if ($copy['nav_label'] === '' && $slug !== '') {
             $copy['nav_label'] = $this->defaultNavLabel($slug);
         }
@@ -651,6 +732,32 @@ final class PromotionActivityThemeService
         }
 
         return $copy;
+    }
+
+    private function isBuiltInThemeSlug(string $pageSlug): bool
+    {
+        return in_array($pageSlug, ['deals', 'sale', 'weekend', 'gifts'], true);
+    }
+
+    private function isCopyCompatibleWithLocale(string $value, string $locale): bool
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return false;
+        }
+
+        $normalizedLocale = strtolower(str_replace('-', '_', trim($locale)));
+        if (str_starts_with($normalizedLocale, 'zh')) {
+            return preg_match('/\p{Han}/u', $value) === 1;
+        }
+        if (str_starts_with($normalizedLocale, 'ar')) {
+            return preg_match('/\p{Arabic}/u', $value) === 1;
+        }
+        if (str_starts_with($normalizedLocale, 'en')) {
+            return preg_match('/[A-Za-z]/', $value) === 1;
+        }
+
+        return true;
     }
 
     /** @param array<string, mixed> $defaults */
@@ -778,7 +885,7 @@ final class PromotionActivityThemeService
             'deal_discount_type' => (string)($data[PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_TYPE] ?? PromotionThemeDealDiscountSyncService::DISCOUNT_NONE),
             'deal_discount_value' => (float)($data[PromotionActivityTheme::schema_fields_DEAL_DISCOUNT_VALUE] ?? 0),
             'marketing_rule_id' => (int)($data[PromotionActivityTheme::schema_fields_MARKETING_RULE_ID] ?? 0),
-            'storefront_url' => '/promotion/' . rawurlencode((string)($data[PromotionActivityTheme::schema_fields_PAGE_SLUG] ?? '')),
+            'storefront_url' => $this->storefrontUrl((string)($data[PromotionActivityTheme::schema_fields_PAGE_SLUG] ?? '')),
         ];
     }
 }

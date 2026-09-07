@@ -10,7 +10,7 @@ use Weline\Promotion\Service\PromotionDeskService;
 
 final class PromotionAdminQueryProvider implements QueryProviderInterface
 {
-    public const ACL_SOURCE = 'Weline_Promotion::commerce:promotion:desk';
+    public const ACL_SOURCE = 'Weline_Promotion::commerce:promotion:desk_index';
 
     public function __construct(
         private readonly PromotionDeskService $deskService,

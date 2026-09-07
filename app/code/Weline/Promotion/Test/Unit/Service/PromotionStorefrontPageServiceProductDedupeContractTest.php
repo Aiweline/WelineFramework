@@ -29,4 +29,17 @@ final class PromotionStorefrontPageServiceProductDedupeContractTest extends Test
             $content,
         );
     }
+
+    public function testPromotionShelfUsesCatalogSummaryProjection(): void
+    {
+        $path = dirname(__DIR__, 3) . '/Service/PromotionStorefrontPageService.php';
+        self::assertFileExists($path);
+        $content = (string) file_get_contents($path);
+
+        self::assertStringContainsString('$catalog->publishedOfferSummaries(48)', $content);
+        self::assertMatchesRegularExpression(
+            '/publishedOffersForProductIds\(\s*\$orderedIds,\s*max\(count\(\$orderedIds\) \* 8, count\(\$orderedIds\)\),\s*false,\s*\)/s',
+            $content,
+        );
+    }
 }

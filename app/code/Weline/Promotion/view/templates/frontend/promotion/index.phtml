@@ -1,13 +1,15 @@
 <?php
 /** @var \Weline\Framework\View\Template $this */
 
+use Weline\Product\Service\ProductCardRenderer;
+
 $items = (array)($this->getData('items') ?? []);
 $promotions = (array)($this->getData('promotions') ?? []);
 $pageType = (string)($this->getData('page_type') ?? 'index');
 $total = (int)($this->getData('total') ?? count($items));
-$listUrl = (string)($this->getData('list_url') ?? '/promotion');
-$dealsUrl = (string)($this->getData('deals_url') ?? '/promotion/deals');
-$saleUrl = (string)($this->getData('sale_url') ?? '/promotion/sale');
+$listUrl = (string)($this->getData('list_url') ?: $this->getFrontendUrl('promotion'));
+$dealsUrl = (string)($this->getData('deals_url') ?: $this->getFrontendUrl('promotion/deals'));
+$saleUrl = (string)($this->getData('sale_url') ?: $this->getFrontendUrl('promotion/sale'));
 $navTabs = (array)($this->getData('nav_tabs') ?? []);
 $pageTitle = (string)($this->getData('title') ?? __('活动中心'));
 $heroLede = (string)($this->getData('hero_lede') ?? __('浏览活动商品，进入商品详情、购物车与结账路径。本页不展示虚假折扣，只承接真实可售商品。'));
@@ -15,16 +17,12 @@ $esc = static fn (mixed $value): string => htmlspecialchars((string)$value, ENT_
 $heroCtaUrl = $pageType === 'index'
     ? ($dealsUrl !== '' ? $dealsUrl : '#promotion-products')
     : '#promotion-products';
-$placeholderImage = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20width%3D%22400%22%20height%3D%22400%22%20viewBox%3D%220%200%20400%20400%22%3E%3Crect%20fill%3D%22%23f3f4f6%22%20width%3D%22400%22%20height%3D%22400%22/%3E%3Ctext%20x%3D%22200%22%20y%3D%22205%22%20text-anchor%3D%22middle%22%20fill%3D%22%239ca3af%22%20font-family%3D%22system-ui%2Csans-serif%22%20font-size%3D%2218%22%3EProduct%3C/text%3E%3C/svg%3E';
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/amazon-product-card.css)?v=20260826-amzcard1"
-      data-no-extract="true">
-<link rel="stylesheet"
-      href="@static(Weline_Promotion::css/promotion-hub.css)?v=20260827-promo-hub4"
+      href="@static(Weline_Promotion::css/promotion-hub.css)?v=20260907-promo-hub9"
       data-no-extract="true">
 
-<main class="w-promotion-page weline-amz-card-widget" data-testid="storefront-promotion-page" data-page-type="<?= $esc($pageType) ?>">
+<div class="w-promotion-page weline-product-card-shelf" data-testid="storefront-promotion-page" data-page-type="<?= $esc($pageType) ?>">
     <nav class="w-promotion-page__nav" aria-label="<?= $esc(__('活动中心')) ?>" weline-code="promotion.page.nav">
         <?php foreach ($navTabs as $tab): ?>
             <?php
@@ -78,40 +76,26 @@ $placeholderImage = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/
             <div class="products-grid" data-columns="4">
                 <?php foreach ($items as $item): ?>
                     <?php
-                    $productUrl = (string)($item['url'] ?? '#');
-                    $productName = (string)($item['name'] ?? '');
-                    $productImage = trim((string)($item['image'] ?? ''));
-                    $imageSrc = $productImage !== '' ? $productImage : $placeholderImage;
-                    $imageClass = $productImage !== '' ? 'product-image' : 'product-image product-image--empty';
                     $price = (float)($item['price'] ?? 0);
-                    $originalPrice = (float)($item['original_price'] ?? $price);
-                    $hasDeal = !empty($item['has_deal']) && $originalPrice > $price;
+                    $originalPrice = (float)($item['original_price'] ?? 0);
+                    $hasDeal = !empty($item['has_deal']) && $originalPrice > $price && $price > 0;
+                    $product = ProductCardRenderer::normalizeProduct([
+                        'product_id' => (int)($item['product_id'] ?? 0),
+                        'name' => (string)($item['name'] ?? ''),
+                        'url' => (string)($item['url'] ?? ''),
+                        'image' => trim((string)($item['image'] ?? '')),
+                        'price' => $price,
+                        'original_price' => $hasDeal ? $originalPrice : 0.0,
+                        'currency' => trim((string)($item['currency'] ?? 'CNY')) ?: 'CNY',
+                        'sku' => trim((string)($item['sku'] ?? '')),
+                        'sellable' => array_key_exists('sellable', $item) ? !empty($item['sellable']) : true,
+                        'global_offer_uuid' => trim((string)($item['global_offer_uuid'] ?? '')),
+                        'is_sale' => $hasDeal,
+                        'campaign_label' => trim((string)($item['campaign_label'] ?? '')),
+                        'campaign_url' => trim((string)($item['campaign_url'] ?? '')),
+                    ]);
                     ?>
-                    <article class="product-card" data-product-id="<?= (int)($item['product_id'] ?? 0) ?>">
-                        <div class="product-image-wrapper">
-                            <a href="<?= $esc($productUrl) ?>" class="product-image-link">
-                                <img src="<?= $esc($imageSrc) ?>"
-                                     alt="<?= $esc($productName) ?>"
-                                     class="<?= $esc($imageClass) ?>"
-                                     loading="lazy">
-                            </a>
-                        </div>
-                        <div class="product-info">
-                            <h3 class="product-name">
-                                <a href="<?= $esc($productUrl) ?>"><?= $esc($productName) ?></a>
-                            </h3>
-                            <?php if (trim((string)($item['short_description'] ?? '')) !== ''): ?>
-                                <p class="product-desc"><?= $esc((string)$item['short_description']) ?></p>
-                            <?php endif; ?>
-                            <div class="product-price">
-                                <span class="price-current">¥<?= $esc(number_format($price, 2)) ?></span>
-                                <?php if ($hasDeal): ?>
-                                    <span class="price-original">¥<?= $esc(number_format($originalPrice, 2)) ?></span>
-                                <?php endif; ?>
-                            </div>
-                            <a class="btn-add-to-cart" href="<?= $esc($productUrl) ?>"><?= __('查看商品') ?></a>
-                        </div>
-                    </article>
+                    <w:product:card product="product" show-price="true" show-rating="false" show-add-to-cart="true" show-wishlist="true" show-compare="true" show-quickview="true" show-labels="true" density="standard" class="wpc-promo-card" wishlist-pixel="true" />
                 <?php endforeach; ?>
             </div>
         <?php else: ?>
@@ -123,4 +107,4 @@ $placeholderImage = 'data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/
         <?php endif; ?>
         <w:hook name="Weline_Promotion::frontend::layouts::promotion::page-after"/>
     </section>
-</main>
+</div>
