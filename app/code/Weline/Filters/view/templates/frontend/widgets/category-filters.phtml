@@ -30,7 +30,12 @@ $offers = is_array($offers) ? $offers : [];
 
 /** @var Request $request */
 $request = ObjectManager::getInstance(Request::class);
-$requestUri = (string)($request->getServer('REQUEST_URI') ?? $request->getUri() ?? '');
+$requestUri = (string)(
+    $request->getServer('WELINE_ORIGIN_REQUEST_URI')
+    ?: $request->getServer('REQUEST_URI')
+    ?: $request->getUri()
+    ?: ''
+);
 $requestPath = strtolower(trim(str_replace('\\', '/', (string)(parse_url($requestUri, PHP_URL_PATH) ?: '')), '/'));
 
 /** @var StorefrontFilterPanelService $panelService */
@@ -61,8 +66,23 @@ if (preg_match('#(?:^|/)(categories|products|product-list)(?:/|$)#', $requestPat
     }
 }
 
+// WLS 下 REQUEST_URI 常无 query 段；优先用 Request 已解析的 GET，再回退 URI/QUERY_STRING。
 $query = [];
-parse_str((string)(parse_url($requestUri, PHP_URL_QUERY) ?: ''), $query);
+if (method_exists($request, 'getQueryParams')) {
+    $fromRequest = $request->getQueryParams();
+    if (is_array($fromRequest) && $fromRequest !== []) {
+        $query = $fromRequest;
+    }
+}
+if ($query === []) {
+    parse_str((string)(parse_url($requestUri, PHP_URL_QUERY) ?: ''), $query);
+}
+if ($query === []) {
+    $qs = (string)($request->getServer('QUERY_STRING') ?? '');
+    if ($qs !== '') {
+        parse_str($qs, $query);
+    }
+}
 if (!is_array($query)) {
     $query = [];
 }
@@ -75,6 +95,7 @@ $priceOptions = $panel['price'];
 $attributeGroups = $panel['attributes'];
 $hasActive = (bool)$panel['has_active'];
 $clearUrl = (string)$panel['clear_url'];
+$visibleOptionLimit = 6;
 ?>
 <aside class="w-filters wc-theme_widget_category_filters" data-testid="storefront-filters-panel" data-hook-source="Weline_Filters" weline-code="filters.widget.category_filters">
     <?php if ($hasActive): ?>
@@ -121,7 +142,7 @@ $clearUrl = (string)$panel['clear_url'];
                             aria-current="<?= !empty($opt['selected']) ? 'true' : 'false' ?>"
                         >
                             <span class="w-filters__radio" aria-hidden="true"></span>
-                            <span class="w-filters__label"><?= $escape($opt['label']) ?></span>
+                            <span class="w-filters__label"><?= $escape(__($opt['label'])) ?></span>
                             <span class="w-filters__count"><?= (int)$opt['count'] ?></span>
                         </a>
                     </li>
@@ -130,11 +151,32 @@ $clearUrl = (string)$panel['clear_url'];
         </section>
     <?php endif; ?>
 
-    <?php foreach ($attributeGroups as $group): ?>
-        <section class="w-filters__section" weline-code="filters-attr-<?= $escape($group['code']) ?>" data-filter-code="<?= $escape($group['code']) ?>">
-            <h3 class="w-filters__heading"><?= $escape($group['name']) ?></h3>
+    <?php foreach ($attributeGroups as $groupIndex => $group): ?>
+        <?php
+        $groupOptions = is_array($group['options'] ?? null) ? $group['options'] : [];
+        usort($groupOptions, static function (array $left, array $right): int {
+            $selectionOrder = (int)!empty($right['selected']) <=> (int)!empty($left['selected']);
+            return $selectionOrder !== 0
+                ? $selectionOrder
+                : strcasecmp((string)($left['label'] ?? ''), (string)($right['label'] ?? ''));
+        });
+        $groupHasSelection = count(array_filter(
+            $groupOptions,
+            static fn(array $option): bool => !empty($option['selected']),
+        )) > 0;
+        $visibleOptions = array_slice($groupOptions, 0, $visibleOptionLimit);
+        $moreOptions = array_slice($groupOptions, $visibleOptionLimit);
+        $groupOpen = $groupIndex < 4 || $groupHasSelection;
+        ?>
+        <details
+            class="w-filters__section w-filters__disclosure"
+            weline-code="filters-attr-<?= $escape($group['code']) ?>"
+            data-filter-code="<?= $escape($group['code']) ?>"
+            <?= $groupOpen ? 'open' : '' ?>
+        >
+            <summary class="w-filters__summary"><?= $escape(__($group['name'])) ?></summary>
             <ul class="w-filters__list" data-testid="storefront-filters-attribute">
-                <?php foreach ($group['options'] as $opt): ?>
+                <?php foreach ($visibleOptions as $opt): ?>
                     <li>
                         <a
                             class="w-filters__option<?= !empty($opt['selected']) ? ' is-active' : '' ?>"
@@ -142,13 +184,36 @@ $clearUrl = (string)$panel['clear_url'];
                             aria-current="<?= !empty($opt['selected']) ? 'true' : 'false' ?>"
                         >
                             <span class="w-filters__check" aria-hidden="true"></span>
-                            <span class="w-filters__label"><?= $escape($opt['label']) ?></span>
+                            <span class="w-filters__label"><?= $escape(__($opt['label'])) ?></span>
                             <span class="w-filters__count"><?= (int)$opt['count'] ?></span>
                         </a>
                     </li>
                 <?php endforeach; ?>
             </ul>
-        </section>
+            <?php if ($moreOptions !== []): ?>
+                <details class="w-filters__more">
+                    <summary class="w-filters__more-summary">
+                        <lang>查看更多</lang>
+                        <span aria-hidden="true">(<?= count($moreOptions) ?>)</span>
+                    </summary>
+                    <ul class="w-filters__list w-filters__list--more" data-testid="storefront-filters-attribute-more">
+                        <?php foreach ($moreOptions as $opt): ?>
+                            <li>
+                                <a
+                                    class="w-filters__option<?= !empty($opt['selected']) ? ' is-active' : '' ?>"
+                                    href="<?= $escape($opt['url']) ?>"
+                                    aria-current="<?= !empty($opt['selected']) ? 'true' : 'false' ?>"
+                                >
+                                    <span class="w-filters__check" aria-hidden="true"></span>
+                                    <span class="w-filters__label"><?= $escape(__($opt['label'])) ?></span>
+                                    <span class="w-filters__count"><?= (int)$opt['count'] ?></span>
+                                </a>
+                            </li>
+                        <?php endforeach; ?>
+                    </ul>
+                </details>
+            <?php endif; ?>
+        </details>
     <?php endforeach; ?>
 
     <?php if ($priceOptions === [] && $attributeGroups === [] && $departments === []): ?>
@@ -162,6 +227,26 @@ $clearUrl = (string)$panel['clear_url'];
 .w-filters__clear:hover { text-decoration: underline; }
 .w-filters__section + .w-filters__section { margin-top: 16px; padding-top: 14px; border-top: 1px solid #e5e7eb; }
 .w-filters__heading { margin: 0 0 8px; font-size: 14px; font-weight: 700; }
+.w-filters__disclosure { display: block; }
+.w-filters__summary {
+    margin: 0 0 8px;
+    color: inherit;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+}
+.w-filters__disclosure:not([open]) > .w-filters__summary { margin-bottom: 0; }
+.w-filters__summary:hover, .w-filters__summary:focus-visible { color: #c45500; }
+.w-filters__more { margin-top: 4px; }
+.w-filters__more-summary {
+    width: fit-content;
+    color: #2162a1;
+    cursor: pointer;
+    font-weight: 600;
+    padding: 4px 0;
+}
+.w-filters__more-summary:hover, .w-filters__more-summary:focus-visible { color: #c45500; }
+.w-filters__list--more { margin-top: 2px; }
 .w-filters__list { list-style: none; margin: 0; padding: 0; }
 .w-filters__dept { margin: 0; }
 .w-filters__dept[data-depth="1"] { padding-left: 12px; }
