@@ -48,6 +48,11 @@ final class MetaLocalTranslationService
             $translated += (int)($result['translated'] ?? 0);
             $skipped += (int)($result['skipped'] ?? 0);
             $errors = array_merge($errors, (array)($result['errors'] ?? []));
+            foreach ((array)($result['errors'] ?? []) as $error) {
+                if (str_contains((string)$error, 'AI_TRANSLATION_BUSY')) {
+                    return ['translated' => $translated, 'skipped' => $skipped, 'errors' => $errors];
+                }
+            }
         }
 
         return ['translated' => $translated, 'skipped' => $skipped, 'errors' => $errors];
@@ -94,18 +99,38 @@ final class MetaLocalTranslationService
                 }
 
                 try {
-                    $translation = $this->translationAdapter->translate($sourceText, $targetLocale, $sourceLocale);
-                    if (!is_string($translation) || trim($translation) === '') {
+                    $batch = $this->translationAdapter->translateBatch(
+                        [$sourceText],
+                        $sourceLocale,
+                        $targetLocale,
+                        $this->translationConfig->getStrategy($targetLocale),
+                    );
+                    if (!$batch['success']) {
+                        $itemErrors = array_map('strval', (array)($batch['errors'] ?? []));
+                        $errors = array_merge($errors, $itemErrors);
+                        // Busy/hard AI error: stop this round; next cron continues.
+                        if ($this->errorsIndicateBusy($itemErrors)) {
+                            break 2;
+                        }
+                        break 2;
+                    }
+                    $translation = trim((string)($batch['translations'][$sourceText] ?? ''));
+                    if ($translation === '') {
                         $skipped++;
                         continue;
                     }
-                    if (MetaTranslation::setTranslatedValue($metaIdentify, $configKey, $targetLocale, trim($translation))) {
+                    if (MetaTranslation::setTranslatedValue($metaIdentify, $configKey, $targetLocale, $translation)) {
                         $translated++;
                     } else {
                         $errors[] = $metaIdentify . '.' . $configKey;
                     }
                 } catch (\Throwable $throwable) {
-                    $errors[] = $metaIdentify . '.' . $configKey . ': ' . $throwable->getMessage();
+                    $message = $throwable->getMessage();
+                    $errors[] = $metaIdentify . '.' . $configKey . ': ' . $message;
+                    if (str_contains($message, 'AI_TRANSLATION_BUSY')) {
+                        break 2;
+                    }
+                    break 2;
                 }
 
                 $processed++;
@@ -113,5 +138,19 @@ final class MetaLocalTranslationService
         }
 
         return ['translated' => $translated, 'skipped' => $skipped, 'errors' => $errors];
+    }
+
+    /**
+     * @param list<string> $errors
+     */
+    private function errorsIndicateBusy(array $errors): bool
+    {
+        foreach ($errors as $error) {
+            if (str_contains((string)$error, 'AI_TRANSLATION_BUSY')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
