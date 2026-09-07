@@ -11,6 +11,7 @@ final class CartItemSnapshot
 {
     /**
      * @param array<string, scalar|null> $selection Canonical selection
+     * @param list<array{code:string,label:string,value:string,value_label:string}> $options Storefront display options
      */
     public function __construct(
         public readonly OfferIdentity $offer,
@@ -36,12 +37,18 @@ final class CartItemSnapshot
         public readonly int $volumeMinor = 0,
         public readonly string $taxClassCode = 'standard',
         public readonly array $fulfillmentMetadata = [],
+        public readonly array $options = [],
+        public readonly int $compareAtMinor = 0,
+        public readonly string $campaignLabel = '',
+        public readonly string $campaignUrl = '',
     ) {
     }
 
     /** @return array<string, mixed> */
     public function toArray(): array
     {
+        $compareAtMinor = max(0, $this->compareAtMinor);
+        $hasDeal = $compareAtMinor > $this->unitPriceMinor && $this->unitPriceMinor > 0;
         $data = [
             'offer' => $this->offer->toArray(),
             'name' => $this->name,
@@ -49,11 +56,13 @@ final class CartItemSnapshot
             'image' => $this->image,
             'currency' => $this->currency,
             'unit_price_minor' => $this->unitPriceMinor,
+            'compare_at_minor' => $compareAtMinor,
             'found' => $this->found,
             'sellable' => $this->sellable,
             'stock' => $this->stock,
             'message' => $this->message,
             'selection' => $this->selection,
+            'options' => $this->options,
             'product_type' => $this->productType,
             'source_module' => $this->sourceModule,
             'source_app' => $this->sourceApp,
@@ -67,6 +76,10 @@ final class CartItemSnapshot
             'tax_class_code' => $this->taxClassCode,
             // legacy float bridge for existing CartService rows
             'price' => round($this->unitPriceMinor / 100, 2),
+            'original_price' => round($compareAtMinor / 100, 2),
+            'has_deal' => $hasDeal,
+            'campaign_label' => trim($this->campaignLabel),
+            'campaign_url' => trim($this->campaignUrl),
             'legacy_product_id' => $this->offer->legacyProductId ?? 0,
         ];
         if ($this->fulfillmentMetadata !== []) {

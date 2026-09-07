@@ -159,6 +159,10 @@
             ? Number(summary.cart_count != null ? summary.cart_count : summary.item_count)
             : null;
 
+        if (summary && global.WelineCart && typeof global.WelineCart.rememberSummary === 'function') {
+            global.WelineCart.rememberSummary(summary);
+        }
+
         global.dispatchEvent(new CustomEvent('weline:cart-updated', {
             detail: summary || {},
         }));
@@ -170,6 +174,18 @@
         };
         global.dispatchEvent(new CustomEvent('weline:cart:update', { detail: detail }));
         global.dispatchEvent(new CustomEvent('weshop:cart:updated', { detail: detail }));
+
+        // Ensure mini-cart listeners exist even when the module loads after add-to-cart.
+        if (global.Weline && typeof global.Weline.load === 'function') {
+            Promise.resolve(global.Weline.load('miniCartIcon')).then(function () {
+                if (global.Weline && global.Weline.MiniCart
+                    && typeof global.Weline.MiniCart.applyCachedSummary === 'function') {
+                    global.Weline.MiniCart.applyCachedSummary();
+                }
+            }).catch(function () {
+                // Mini-cart chrome can still hydrate on next open via local cache.
+            });
+        }
     }
 
     async function waitForCartApi() {
@@ -258,6 +274,15 @@
     }
 
     async function addOfferFromButton(button) {
+        const sellingMode = String(
+            button.dataset.sellingMode
+            || button.dataset.cartType
+            || (document.documentElement.getAttribute('data-selling-mode') || '')
+            || (window.WelineB2BSellingMode && typeof window.WelineB2BSellingMode.preferredMode === 'function'
+                ? window.WelineB2BSellingMode.preferredMode()
+                : '')
+            || 'toc'
+        ).toLowerCase() === 'tob' ? 'tob' : 'toc';
         const result = await (await waitForCartApi()).add({
             provider_code: button.dataset.providerCode || 'product',
             global_offer_uuid: button.dataset.globalOfferUuid || '',
@@ -265,6 +290,8 @@
             selection: readEavSelection(button),
             guest_token: await ensureGuestToken(),
             qty: Math.max(1, Number(button.dataset.qty || 1) || 1),
+            selling_mode: sellingMode,
+            cart_type: sellingMode,
         }, { silent: true });
         if (!result || result.success === false) {
             throw new Error(result && result.message ? result.message : 'add_failed');

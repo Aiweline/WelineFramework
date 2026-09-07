@@ -1,4 +1,10 @@
-﻿"Cart 查询器不支持的 operation：%{1}","Cart 查询器不支持的 operation：%{1}"
+﻿购物车加购成功后,购物车加购成功后
+"购物车加购成功后触发；追加 cart_type + type_payload（非破坏）。","购物车加购成功后触发；追加 cart_type + type_payload（非破坏）。"
+购物车清空成功后,购物车清空成功后
+"购物车清空成功后触发；追加 cart_type + type_payload（非破坏）。","购物车清空成功后触发；追加 cart_type + type_payload（非破坏）。"
+游客车合并成功后,游客车合并成功后
+"游客车合并进客户车成功后触发；追加 cart_type + type_payload（非破坏）。","游客车合并进客户车成功后触发；追加 cart_type + type_payload（非破坏）。"
+"Cart 查询器不支持的 operation：%{1}","Cart 查询器不支持的 operation：%{1}"
 登录后才能合并游客购物车。,登录后才能合并游客购物车。
 缺少游客购物车凭证,缺少游客购物车凭证
 预计优惠暂不可用,预计优惠暂不可用
@@ -19,14 +25,6 @@
 购物车工作台,购物车工作台
 search,search
 "按 Scope 检查真实 Cart 持久缓存","按 Scope 检查真实 Cart 持久缓存"
-仅询价,仅询价
-加入购物车,加入购物车
-暂不可售,暂不可售
-正在加入购物车...,正在加入购物车...
-已加入购物车,已加入购物车
-加入购物车失败,加入购物车失败
-已加入,已加入
-前往购物车,前往购物车
 迷你购物车,迷你购物车
 商品行由购物车实时数据渲染，此处仅编辑底部扩展区。,商品行由购物车实时数据渲染，此处仅编辑底部扩展区。
 小计,小计
@@ -59,11 +57,21 @@ search,search
 购物车订单留言,购物车订单留言
 商品小计,商品小计
 继续购物,继续购物
-"Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。","Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。"
+仅询价,仅询价
+加入购物车,加入购物车
+暂不可售,暂不可售
+正在加入购物车...,正在加入购物车...
+已加入购物车,已加入购物车
+加入购物车失败,加入购物车失败
+已加入,已加入
+前往购物车,前往购物车
+"Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。","Inspection 按 scope_key 查询该 Scope 下真实持久缓存结果，不是全局购物车列表；不支持跨 Scope 枚举。"
 "输入完整 scope key","输入完整 scope key"
+全部类型,全部类型
 检查,检查
 匹配购物车：%{1},匹配购物车：%{1}
 Scope,Scope
+类型,类型
 所有者类型,所有者类型
 所有者,所有者
 货币,货币
@@ -73,9 +81,17 @@ Scope,Scope
 "provider_code 不能为空","provider_code 不能为空"
 "global_offer_uuid 不能为空","global_offer_uuid 不能为空"
 "legacy_product_id 须 >=0","legacy_product_id 须 >=0"
+未注册的售卖类型：%{1},未注册的售卖类型：%{1}
+该售卖类型需要登录,该售卖类型需要登录
+请先完成批发身份审核,请先完成批发身份审核
 "Cart Provider code 不能为空","Cart Provider code 不能为空"
 "重复的 Cart Provider code：%{1}","重复的 Cart Provider code：%{1}"
 "未找到 Cart Provider：%{1}","未找到 Cart Provider：%{1}"
+"Cart 售卖类型 code 不能为空","Cart 售卖类型 code 不能为空"
+"重复的 Cart 售卖类型 code：%{1}","重复的 Cart 售卖类型 code：%{1}"
+未注册的购物车售卖类型：%{1},未注册的购物车售卖类型：%{1}
+零售,零售
+历史批发,历史批发
 购物车可售校验服务暂不可用：%{1},购物车可售校验服务暂不可用：%{1}
 购物车可售校验服务暂不可用,购物车可售校验服务暂不可用
 购物车可售校验失败：%{1},购物车可售校验失败：%{1}
@@ -115,8 +131,11 @@ Scope,Scope
 商品已从购物车移除。,商品已从购物车移除。
 购物车已清空。,购物车已清空。
 "游客加购需要 guest_token","游客加购需要 guest_token"
+购物车售卖类型不匹配,购物车售卖类型不匹配
+购物车数量不符合规则,购物车数量不符合规则
 "channel_code 必须与 store_code 同时提供","channel_code 必须与 store_code 同时提供"
 "购物车 Scope 与当前可信 Website/Store/Channel 请求不一致","购物车 Scope 与当前可信 Website/Store/Channel 请求不一致"
+"Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。","Cart 按 Scope 隔离；请输入完整 scope key 查询真实持久缓存，不支持全局枚举。"
 "迷你购物车 footer-extras 默认部件迁移失败：%{1}","迷你购物车 footer-extras 默认部件迁移失败：%{1}"
 "Cart 未启用","Cart 未启用"
 请选择要加入购物车的商品。,请选择要加入购物车的商品。
@@ -130,3 +149,4 @@ Scope,Scope
 商品数量,商品数量
 合计,合计
 商品已加入购物车。,商品已加入购物车。
+批发,批发

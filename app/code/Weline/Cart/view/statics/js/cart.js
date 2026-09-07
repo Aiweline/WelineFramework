@@ -11,6 +11,7 @@
     var PENDING_COUPON_KEY = 'weline.cart.pending_coupon';
     var GUEST_TOKEN_KEY = 'weline.cart.guest_token';
     var GUEST_SESSION_KEY = 'weline.cart.guest_session';
+    var SUMMARY_CACHE_KEY = 'weline.cart.summary_cache';
     var APPLY_EVENT = 'weline:cart:apply-coupon';
     var APPLIED_EVENT = 'weline:cart:coupon-applied';
     var renewTimer = 0;
@@ -106,6 +107,58 @@
 
     function clearPendingCoupon() {
         writeJson(PENDING_COUPON_KEY, null);
+    }
+
+    function currentGuestToken() {
+        var session = getGuestSession();
+        if (session && session.token) {
+            return String(session.token).trim();
+        }
+        return readGuestTokenLegacy();
+    }
+
+    function isUsableSummary(summary) {
+        return !!(summary && typeof summary === 'object' && summary.success !== false);
+    }
+
+    function rememberSummary(summary, meta) {
+        if (!isUsableSummary(summary)) {
+            return null;
+        }
+        var token = currentGuestToken();
+        var payload = {
+            guest_token: token,
+            scope_key: String((summary && summary.scope_key) || (meta && meta.scope_key) || ''),
+            saved_at: nowMs(),
+            summary: summary,
+        };
+        writeJson(SUMMARY_CACHE_KEY, payload);
+        return payload;
+    }
+
+    function getCachedSummary(options) {
+        options = options || {};
+        var data = readJson(SUMMARY_CACHE_KEY);
+        if (!data || !isUsableSummary(data.summary)) {
+            return null;
+        }
+        var token = currentGuestToken();
+        var cachedToken = String(data.guest_token || '').trim();
+        // Bound cache to the active guest token when either side has one.
+        if (token && cachedToken && token !== cachedToken) {
+            return null;
+        }
+        if (token && !cachedToken && options.requireTokenMatch) {
+            return null;
+        }
+        if (!token && cachedToken && options.requireTokenMatch) {
+            return null;
+        }
+        return data.summary;
+    }
+
+    function clearCachedSummary() {
+        writeJson(SUMMARY_CACHE_KEY, null);
     }
 
     function getGuestSession() {
@@ -290,6 +343,7 @@
         WEEK_MS: WEEK_MS,
         PENDING_COUPON_KEY: PENDING_COUPON_KEY,
         GUEST_SESSION_KEY: GUEST_SESSION_KEY,
+        SUMMARY_CACHE_KEY: SUMMARY_CACHE_KEY,
         APPLY_EVENT: APPLY_EVENT,
         APPLIED_EVENT: APPLIED_EVENT,
         storePendingCoupon: storePendingCoupon,
@@ -299,6 +353,9 @@
         getGuestSession: getGuestSession,
         rememberGuestSession: rememberGuestSession,
         renewGuestSession: renewGuestSession,
+        rememberSummary: rememberSummary,
+        getCachedSummary: getCachedSummary,
+        clearCachedSummary: clearCachedSummary,
         dispatchApplyCoupon: function (code, meta) {
             var payload = storePendingCoupon(code, meta || {});
             global.dispatchEvent(new CustomEvent(APPLY_EVENT, {

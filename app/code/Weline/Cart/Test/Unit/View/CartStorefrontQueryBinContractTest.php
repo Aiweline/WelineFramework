@@ -123,6 +123,27 @@ final class CartStorefrontQueryBinContractTest extends TestCase
         self::assertStringNotContainsString('<table', $template);
     }
 
+    public function testCartPageRendersSelectedOptionLabels(): void
+    {
+        $template = $this->template();
+        $css = $this->amazonCss();
+
+        self::assertStringContainsString('function formatLineOptions(item)', $template);
+        self::assertStringContainsString('function appendLineOptions(details, item)', $template);
+        self::assertStringContainsString("weline-cart-shell__line-options", $template);
+        self::assertStringContainsString('weline-cart-shell__line-option-swatch', $template);
+        self::assertStringContainsString('option.swatch_image', $template);
+        self::assertStringContainsString('option.value_label || option.value', $template);
+        self::assertMatchesRegularExpression(
+            '/\\.weline-cart-shell--amazon \\.weline-cart-shell__line-options\\s*\\{/',
+            $css,
+        );
+        self::assertMatchesRegularExpression(
+            '/\\.weline-cart-shell--amazon \\.weline-cart-shell__line-option-swatch\\s*\\{/',
+            $css,
+        );
+    }
+
     private function template(): string
     {
         return (string)file_get_contents(
