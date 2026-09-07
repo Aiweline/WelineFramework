@@ -6,17 +6,27 @@ namespace Weline\Search\Queue;
 
 use Weline\Framework\Runtime\ScopeEnvelope;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Queue\Api\BatchDrainingQueueConsumerInterface;
 use Weline\Queue\Api\QueueTaskContextInterface;
 use Weline\Queue\Api\ScopedQueueConsumerInterface;
+use Weline\Search\Api\SearchProjectionPendingDrainerInterface;
 use Weline\Search\Service\SearchIndexIncrementalApplier;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 
 /**
  * Scope-fenced durable Search incremental consumer.
+ *
+ * Implements batch draining: one Worker process applies the primary event, then
+ * claims sibling pending projection rows in-process to avoid PHP CLI cold-start
+ * storms under product mutation bursts.
  */
-final class SearchIndexIncrementalQueue implements ScopedQueueConsumerInterface
+final class SearchIndexIncrementalQueue implements
+    ScopedQueueConsumerInterface,
+    BatchDrainingQueueConsumerInterface
 {
     public const CONTRACT = 'search.incremental_queue.v1';
+    public const DEFAULT_BATCH_DRAIN_LIMIT = 100;
+
     private const CONTENT_FIELDS = [
         'contract',
         'event_id',
@@ -28,6 +38,7 @@ final class SearchIndexIncrementalQueue implements ScopedQueueConsumerInterface
     public function __construct(
         private readonly SearchIndexIncrementalApplier $applier,
         private readonly StoreCatalogInterface $stores,
+        private readonly SearchProjectionPendingDrainerInterface $drainer,
     ) {
     }
 
@@ -44,6 +55,11 @@ final class SearchIndexIncrementalQueue implements ScopedQueueConsumerInterface
     public function tip(): string
     {
         return (string)__('从 Product current source 刷新 Website/Store Search 投影');
+    }
+
+    public function batchDrainLimit(): int
+    {
+        return self::DEFAULT_BATCH_DRAIN_LIMIT;
     }
 
     public function validate(QueueTaskContextInterface $queue): bool
@@ -68,6 +84,33 @@ final class SearchIndexIncrementalQueue implements ScopedQueueConsumerInterface
     }
 
     public function execute(QueueTaskContextInterface $queue): string
+    {
+        $primary = $this->applyEvent($queue);
+        $limit = $this->batchDrainLimit();
+        if ($limit < 1) {
+            return $primary;
+        }
+
+        $batch = $this->drainer->drainSiblings(
+            $this,
+            (int)$queue->getId(),
+            $limit,
+        );
+        if (($batch['drained'] ?? 0) < 1 && ($batch['failed'] ?? 0) < 1) {
+            return $primary;
+        }
+
+        return $primary
+            . '; batch_drained=' . (int)$batch['drained']
+            . '; batch_failed=' . (int)$batch['failed']
+            . '; batch_remaining=' . (int)$batch['remaining'];
+    }
+
+    /**
+     * Apply one projection event without draining siblings.
+     * Used by the in-process batch drainer for sibling rows.
+     */
+    public function applyEvent(QueueTaskContextInterface $queue): string
     {
         $payload = $this->decode($queue);
         $envelope = $queue->getScopeEnvelope()

@@ -7,6 +7,7 @@ namespace Weline\Search\Test\Unit\Observer;
 use PHPUnit\Framework\TestCase;
 use Weline\Framework\Event\ResourceChange\ResourceChange;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Search\Api\SearchProjectionQueueAdmissionInterface;
 use Weline\Search\Observer\ProductSearchProjectionChangedObserver;
 use Weline\Websites\Api\Catalog\Data\StoreSummary;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
@@ -18,7 +19,10 @@ final class ProductSearchProjectionDefaultStoreTest extends TestCase
         $store = new StoreSummary(0, 0, 'default', '默认店铺', 'normal', true, true, 'active', null);
         $catalog = $this->createMock(StoreCatalogInterface::class);
         $catalog->expects(self::once())->method('byId')->with(0)->willReturn($store);
-        $observer = new ProductSearchProjectionChangedObserver($catalog);
+        $observer = new ProductSearchProjectionChangedObserver(
+            $catalog,
+            $this->createMock(SearchProjectionQueueAdmissionInterface::class),
+        );
         $method = new \ReflectionMethod($observer, 'scope');
 
         $scope = $method->invoke($observer, $this->change(), [
