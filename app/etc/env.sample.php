@@ -270,12 +270,22 @@ return [
         // 运行期保温只读取仍有效的 shared FPC，不会在业务 Worker 内触发冷渲染。
         'worker' => [
             'fpc_buildahead_roles' => ['maintenance'],
-            'dynamic_ready_gate_enabled' => true,
-            'dynamic_ready_gate_paths' => ['/'],
+            // 完整业务页在 READY 后异步预热，避免启动渲染占用 Worker 的 IPC READY 通道。
+            // 需要严格启动门禁时再显式设为 true。
+            'dynamic_ready_gate_enabled' => false,
+            // 留空由各店面模块通过 FpcWarmupProviderInterface 发布真实公开路径。
+            'dynamic_ready_gate_paths' => [],
             'dynamic_ready_gate_max_paths' => 1,
+            // 选定业务 Worker READY 后仅在本地 listener 预热一个公开店面路径，
+            // 通过统一 FPC 构建与命中探针填充共享/进程缓存；不会占用 READY 握手。
+            'storefront_deferred_warmup_enabled' => true,
+            'storefront_deferred_warmup_max_paths' => 1,
+            'storefront_deferred_warmup_peer_wait_ms' => 5000,
+            // 只有指定 Worker 执行冷构建，其余 Worker 复用共享 FPC；设为 0 可恢复全 Worker 预热。
+            'storefront_deferred_warmup_owner_worker_id' => 1,
             // READY 前每个业务 Worker 必须完成真实首页动态渲染并建立缓存。
             // dynamic_target_ms 默认是发布性能门禁，不作为进程存活条件；仅诊断时显式开启严格阻断。
-            'dynamic_ready_gate_fail_open' => false,
+            'dynamic_ready_gate_fail_open' => true,
             'dynamic_warmup_block_on_target_ms' => false,
             'dynamic_warmup_attempts' => 3,
             'homepage_warmup_host' => null,
@@ -575,6 +585,8 @@ return [
         'debug' => [
             // 高开销调试开关：记录 Session/Router/URL 等热路径细节，只应短时手动开启。
             'hot_path_logs' => false,
+            // 仅诊断 Worker READY 门禁各阶段，默认关闭；开启后写入 var/log/wls-ready-gate-stage.log。
+            'worker_startup_trace' => false,
         ],
     ],
     
