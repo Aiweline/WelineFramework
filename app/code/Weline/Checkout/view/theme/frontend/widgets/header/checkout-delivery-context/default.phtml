@@ -20,6 +20,7 @@
 
 use Weline\Checkout\Service\CheckoutDeliveryContextService;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\SessionCookieNameResolver;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('checkout-delivery-context');
@@ -40,6 +41,13 @@ try {
     $isEditorMode = (bool)$this->getData('editor_mode');
 }
 
+$hasSessionCookie = false;
+try {
+    $hasSessionCookie = SessionCookieNameResolver::hasRequestCookie();
+} catch (\Throwable) {
+    // Public shell rendering may run with a minimal request context.
+}
+
 $context = [];
 if ($isEditorMode) {
     // Theme editor iframe: skip session/DB country lists and captcha quick-add render cost.
@@ -54,7 +62,7 @@ if ($isEditorMode) {
         'display_text' => (string)__('选择国家/地址'),
         'checkout_address' => [],
     ];
-} else {
+} elseif ($hasSessionCookie) {
     try {
         $context = ObjectManager::getInstance(CheckoutDeliveryContextService::class)->getContext();
     } catch (\Throwable) {
@@ -70,6 +78,20 @@ if ($isEditorMode) {
             'checkout_address' => [],
         ];
     }
+} else {
+    // Do not start a guest Session while assembling the cacheable storefront
+    // shell. The panel refreshes this state through QueryBin on first use.
+    $context = [
+        'country_code' => 'CN',
+        'country_name' => (string)__('China'),
+        'countries' => [],
+        'addresses' => [],
+        'selected' => null,
+        'is_logged_in' => false,
+        'can_auto_detect' => false,
+        'display_text' => (string)__('选择国家/地址'),
+        'checkout_address' => [],
+    ];
 }
 
 $displayText = trim((string)($context['display_text'] ?? '')) ?: (string)__('选择国家/地址');
@@ -505,7 +527,22 @@ $displayText = trim((string)($context['display_text'] ?? '')) ?: (string)__('选
     cursor: pointer;
 }
 .<?= $wc ?> .country-results button:hover { background: var(--weline-theme-surface-muted); }
-.<?= $wc ?> .address-list { display: grid; gap: var(--weline-space-2); margin-bottom: var(--weline-space-3); }
+.<?= $wc ?> .address-list {
+    display: grid;
+    gap: var(--weline-space-2);
+    margin-bottom: var(--weline-space-3);
+    /* 约 5 条地址卡高度；超出后垂直滚动，避免弹层过长 */
+    --address-item-pad-y: calc(var(--weline-space-2) * 2);
+    --address-item-text: calc(
+        (var(--weline-layout-font-size-sm, 0.875rem) * 1.35)
+        + (var(--weline-layout-font-size-xs, 0.75rem) * 1.35)
+    );
+    --address-item-h: calc(var(--address-item-pad-y) + var(--address-item-text));
+    max-height: calc((var(--address-item-h) * 5) + (var(--weline-space-2) * 4));
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
 .<?= $wc ?> .address-item {
     text-align: left;
     border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-border);

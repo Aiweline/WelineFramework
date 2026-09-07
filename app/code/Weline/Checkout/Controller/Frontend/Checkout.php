@@ -55,6 +55,10 @@ class Checkout extends FrontendController
         $this->assign('checkout_items', $cart['items']);
         $this->assign('checkout_currency', $cart['currency']);
         $this->assign('checkout_items_empty_message', __('购物车为空，请先加入商品。'));
+        $this->assign(
+            'checkout_page_subtitle',
+            (string)__('确认收货地址、配送方式和支付信息后即可提交订单。')
+        );
 
         return $this->fetch('Weline_Checkout::frontend/checkout/index.phtml');
     }

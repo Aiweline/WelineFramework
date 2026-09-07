@@ -137,6 +137,7 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 couponCode: $this->resolveFreezeCouponCode($params),
                 paymentMethod: trim((string)($params['payment_method'] ?? '')) ?: null,
                 billingAddress: \is_array($params['billing_address'] ?? null) ? $params['billing_address'] : null,
+                cartType: strtolower(trim((string)($cart['cart_type'] ?? 'toc'))) ?: 'toc',
             );
 
             return [
@@ -568,6 +569,10 @@ class CheckoutQueryProvider implements QueryProviderInterface
                 'currency' => $currency,
                 'is_empty' => (bool)($cart['is_empty'] ?? $items === []),
                 'item_count' => (int)($cart['item_count'] ?? \count($items)),
+                'cart_type' => strtolower(trim((string)($cart['cart_type'] ?? 'toc'))) ?: 'toc',
+                'discount_preview' => \is_array($cart['discount_preview'] ?? null)
+                    ? $cart['discount_preview']
+                    : null,
             ],
             'items' => $items,
             'shipping_methods' => $shippingMethods,
@@ -744,14 +749,24 @@ class CheckoutQueryProvider implements QueryProviderInterface
         $captchaPayload = is_array($params['address'] ?? null)
             ? array_merge($params, (array)$params['address'])
             : $params;
-        if (!$captchaGuard->verify($captchaPayload)) {
+        $identity = $this->resolveCheckoutIdentity($params);
+        $requiresCaptcha = !empty($identity['is_guest_checkout']);
+        if ($requiresCaptcha && !$captchaGuard->verify($captchaPayload)) {
             throw new \InvalidArgumentException((string)__('验证码校验失败，请重试。'));
         }
 
-        return $this->ok(
-            (string)__('配送地址已保存'),
-            $this->deliveryContextForBin($this->deliveryContextService->saveAddress($params))
-        );
+        try {
+            return $this->ok(
+                (string)__('配送地址已保存'),
+                $this->deliveryContextForBin($this->deliveryContextService->saveAddress($params))
+            );
+        } catch (\Weline\Shipping\Service\AddressValidationException $exception) {
+            return [
+                'success' => false,
+                'message' => $exception->getMessage(),
+                'field_errors' => $exception->toFieldErrors(),
+            ];
+        }
     }
 
     private function htmlRenderer(): \Weline\Checkout\Service\CheckoutHtmlRenderer
@@ -897,8 +912,32 @@ class CheckoutQueryProvider implements QueryProviderInterface
      */
     private function loadCartSummary(array $params = []): array
     {
-        return ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutPageViewModel::class)
-            ->currentCart(trim((string)($params['guest_token'] ?? '')));
+        $guestToken = trim((string)($params['guest_token'] ?? ''));
+        $mode = strtolower(trim((string)($params['cart_type'] ?? $params['selling_mode'] ?? '')));
+        if ($mode !== 'toc' && $mode !== 'tob') {
+            $mode = strtolower(trim((string)Cookie::get('weline_selling_mode')));
+        }
+        $queryParams = $guestToken !== '' ? ['guest_token' => $guestToken] : [];
+        if ($mode === 'toc' || $mode === 'tob') {
+            $queryParams['cart_type'] = $mode;
+            $queryParams['selling_mode'] = $mode;
+        }
+        try {
+            $v2Result = w_query('cart', 'getCart', $queryParams);
+        } catch (\Throwable) {
+            $v2Result = null;
+        }
+        $view = ObjectManager::getInstance(\Weline\Checkout\Service\CheckoutPageViewModel::class);
+        $cart = $view->fromQueryResult($v2Result);
+        if ($cart['is_empty']) {
+            $cart = $view->currentCart($guestToken);
+        }
+        if (!isset($cart['cart_type'])) {
+            $payload = \is_array($v2Result['data'] ?? null) ? $v2Result['data'] : (\is_array($v2Result) ? $v2Result : []);
+            $cart['cart_type'] = strtolower(trim((string)($payload['cart_type'] ?? $mode ?: 'toc'))) ?: 'toc';
+        }
+
+        return $cart;
     }
 
     /**

@@ -21,13 +21,93 @@ final class CheckoutHtmlRendererTest extends TestCase
                 'qty' => 2,
                 'price' => 10.5,
                 'row_total' => 21.0,
+                'sku' => 'SKU<script>',
+                'image' => '/media/product.jpg" onerror="alert(1)',
+                'options' => [
+                    [
+                        'code' => 'color',
+                        'label' => '颜色',
+                        'value' => 'red',
+                        'value_label' => '红色<script>',
+                        'swatch_image' => '/media/swatch-red.jpg',
+                    ],
+                ],
             ],
         ], 'CNY');
         self::assertStringContainsString('weline-checkout__item', $html);
+        self::assertStringContainsString('weline-checkout__item-thumb', $html);
+        self::assertStringContainsString('weline-checkout__item-main', $html);
+        self::assertStringContainsString('data-storefront-img="1"', $html);
+        self::assertStringContainsString('/media/product.jpg&quot; onerror=&quot;alert(1)', $html);
+        self::assertStringNotContainsString('onerror="alert', $html);
         self::assertStringContainsString('&lt;script&gt;', $html);
         self::assertStringNotContainsString('<script>alert', $html);
         self::assertStringContainsString('CNY 21.00', $html);
         self::assertStringContainsString('x2', $html);
+        self::assertStringContainsString('weline-checkout__item-sku', $html);
+        self::assertStringContainsString('SKU: SKU&lt;script&gt;', $html);
+        self::assertStringContainsString('weline-checkout__item-options', $html);
+        self::assertStringContainsString('weline-checkout__item-option-swatch', $html);
+        self::assertStringContainsString('data-checkout-swatch-trigger', $html);
+        self::assertStringContainsString('width="16"', $html);
+        self::assertStringContainsString('weline-checkout__item-option-label', $html);
+        self::assertStringContainsString('weline-checkout__item-option-value-wrap', $html);
+        self::assertStringContainsString('weline-checkout__item-option-value', $html);
+        self::assertMatchesRegularExpression(
+            '/item-option-label">颜色<\/span>.*data-checkout-swatch-trigger.*item-option-value">红色&lt;script&gt;<\/span>/s',
+            $html
+        );
+        self::assertStringContainsString('红色&lt;script&gt;', $html);
+        self::assertStringContainsString('src="/media/swatch-red.jpg"', $html);
+    }
+
+    public function testRenderItemsIncludesDealChromeWhenCompareAtPresent(): void
+    {
+        $r = new CheckoutHtmlRenderer();
+        $html = $r->renderItems([
+            [
+                'name' => 'Student Hanfu',
+                'qty' => 1,
+                'price' => 80.10,
+                'row_total' => 80.10,
+                'unit_price_minor' => 8010,
+                'compare_at_minor' => 8900,
+                'original_price' => 89.0,
+                'has_deal' => true,
+                'campaign_label' => "Today's Picks",
+                'campaign_url' => '/promotion/deals',
+            ],
+        ], 'CNY');
+        self::assertStringContainsString('weline-checkout__item-title', $html);
+        self::assertStringContainsString('weline-checkout__item-price-row', $html);
+        self::assertStringContainsString('weline-checkout__item-price-now', $html);
+        self::assertStringContainsString('weline-checkout__item-price-was', $html);
+        self::assertStringContainsString('weline-checkout__item-price-campaign', $html);
+        // Price is floated before the title inside item-main.
+        self::assertLessThan(
+            (int)strpos($html, 'weline-checkout__item-price'),
+            (int)strpos($html, 'weline-checkout__item-title')
+        );
+        self::assertStringContainsString('CNY 80.10', $html);
+        self::assertStringContainsString('CNY 89.00', $html);
+        self::assertStringContainsString('Today&#039;s Picks', $html);
+        self::assertStringContainsString('href="/promotion/deals"', $html);
+    }
+
+    public function testRenderItemsUsesPlaceholderWhenImageMissing(): void
+    {
+        $r = new CheckoutHtmlRenderer();
+        $html = $r->renderItems([
+            [
+                'name' => 'Hanfu',
+                'qty' => 1,
+                'row_total' => 40.0,
+                'product_id' => 42,
+            ],
+        ], 'CNY');
+        self::assertStringContainsString('weline-checkout__item-thumb', $html);
+        self::assertStringContainsString('data-storefront-img="1"', $html);
+        self::assertStringContainsString('storefront-placeholder', $html);
     }
 
     public function testEmptyItemsMessage(): void
@@ -82,8 +162,8 @@ final class CheckoutHtmlRendererTest extends TestCase
         $src = (string)file_get_contents($path);
         self::assertStringContainsString('applyServerHtml', $src);
         self::assertStringContainsString('enhancePaymentMethodIntros', $src);
-        self::assertStringContainsString('data-payment-intro-toggle', $src);
-        self::assertStringContainsString('weline-checkout__option--payment', $src);
+        self::assertStringContainsString('data-checkout-swatch-preview', $src);
+        self::assertStringContainsString('data-checkout-swatch-trigger', $src);
         self::assertStringContainsString('frontend/checkout/partials/items.phtml', $src);
         self::assertStringContainsString('frontend::partials::checkout::cart-items', $src);
         self::assertStringContainsString('data-checkout-items-hook', $src);

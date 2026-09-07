@@ -36,6 +36,35 @@ final class CheckoutPageViewModelTest extends TestCase
         self::assertSame(21.0, $data['grand_total']);
         self::assertSame(1, $data['item_count']);
         self::assertFalse($data['is_empty']);
+        self::assertNull($data['discount_preview']);
+    }
+
+    public function testPreservesDiscountPreviewFromTrustedCartSummary(): void
+    {
+        $preview = [
+            'amount_minor' => 960,
+            'currency_precision' => 2,
+            'currency' => 'CNY',
+            'kind' => 'coupon',
+            'code' => 'DEMO10',
+        ];
+        $data = (new CheckoutPageViewModel())->fromQueryResult([
+            'data' => [
+                'currency' => 'CNY',
+                'subtotal_minor' => 9600,
+                'grand_total_minor' => 9600,
+                'discount_preview' => $preview,
+                'items' => [[
+                    'name' => 'Coupon Item',
+                    'qty' => 1,
+                    'unit_price_minor' => 9600,
+                    'row_total_minor' => 9600,
+                ]],
+            ],
+        ]);
+
+        self::assertSame(96.0, $data['subtotal']);
+        self::assertSame($preview, $data['discount_preview']);
     }
 
     public function testInvalidResultProducesDeterministicEmptyState(): void
@@ -48,6 +77,7 @@ final class CheckoutPageViewModelTest extends TestCase
         self::assertTrue($data['is_empty']);
         self::assertSame(0.0, $data['subtotal']);
         self::assertSame(0.0, $data['grand_total']);
+        self::assertNull($data['discount_preview']);
     }
 
     public function testFallsBackToLegacyCartWhenV2CartIsEmpty(): void

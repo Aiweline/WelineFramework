@@ -28,7 +28,16 @@ $escape = static fn(mixed $value): string => htmlspecialchars(
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
     || (bool)($this->getData('editor_mode') ?? false);
 
-$offer = StorefrontOfferResolver::resolve($this);
+$preassigned = $this->getData('storefront_offer');
+$hasPreassigned = \is_array($preassigned) && $preassigned !== [];
+$cardProductId = max(0, (int)$this->getData('card_product_id'));
+// Theme-editor product layout often has no PDP identity. Skip catalog resolve
+// so a cold publishedOffers / slug fallback cannot stall the iframe.
+if ($isPreviewMode && !$hasPreassigned && $cardProductId <= 0) {
+    $offer = [];
+} else {
+    $offer = StorefrontOfferResolver::resolve($this);
+}
 if ($offer === [] && !$isPreviewMode) {
     return;
 }

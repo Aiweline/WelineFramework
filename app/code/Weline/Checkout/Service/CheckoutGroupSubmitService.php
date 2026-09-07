@@ -128,6 +128,7 @@ final class CheckoutGroupSubmitService
         ?string $couponCode = null,
         ?string $paymentMethod = null,
         ?array $billingAddress = null,
+        string $cartType = 'toc',
     ): array {
         $this->rejectClientAuthority($clientHints);
         if ($lines === []) {
@@ -137,6 +138,8 @@ final class CheckoutGroupSubmitService
             throw new CheckoutV2ConflictException(self::ERROR_CURRENCY, __('结账币种缺失'));
         }
         $currency = strtoupper(trim($currency));
+        $cartType = strtolower(trim($cartType)) ?: 'toc';
+        $discountsBanned = $this->discountsBannedForCartType($cartType);
         $activeConfigVersion = $this->shippingQuotes->activeConfigVersion();
         if ($configVersion !== '' && $configVersion !== $activeConfigVersion) {
             throw new CheckoutV2ConflictException(
@@ -199,7 +202,8 @@ final class CheckoutGroupSubmitService
         }
 
         $discountPayload = null;
-        $discountQuotes = $this->discountQuoteService();
+        $effectiveCoupon = $discountsBanned ? null : $couponCode;
+        $discountQuotes = $discountsBanned ? null : $this->discountQuoteService();
         if ($discountQuotes !== null) {
             $discountRequest = new DiscountQuoteRequest(
                 scope: $scope,
@@ -210,13 +214,24 @@ final class CheckoutGroupSubmitService
                 currencyPrecision: 2,
                 customerId: $customerId,
                 shippingAmountMinor: $quote->amountMinor,
-                couponCode: $couponCode,
+                couponCode: $effectiveCoupon,
                 paymentMethod: $paymentMethod,
                 cartHash: $cartHash,
             );
             $discountQuote = $discountQuotes->quote($discountRequest);
             $discountPayload = $discountQuote->toArray();
         }
+
+        $goodsSubtotal = $this->ordersSubtotalMinor($orders);
+        $taxMinor = (int)($tax['tax_amount_minor'] ?? 0);
+        $goodsSubtotalTaxed = $goodsSubtotal + $taxMinor;
+        $depositRatioBps = 3000;
+        $depositAmountMinor = $discountsBanned
+            ? intdiv($goodsSubtotalTaxed * $depositRatioBps, 10000)
+            : 0;
+        $balanceAmountMinor = $discountsBanned
+            ? max(0, $goodsSubtotalTaxed - $depositAmountMinor) + (int)($alloc['group_shipping_minor'] ?? 0)
+            : 0;
 
         $token = 'qt_' . bin2hex(random_bytes(12));
         $payload = [
@@ -226,6 +241,9 @@ final class CheckoutGroupSubmitService
             'config_version' => $configVersion,
             'cart_hash' => $cartHash,
             'customer_id' => $customerId,
+            'cart_type' => $cartType,
+            'order_type' => $cartType,
+            'discounts_banned' => $discountsBanned,
             'scope' => $scope,
             'address' => $address,
             'billing_address' => $billingAddress !== null && $billingAddress !== [] ? $billingAddress : $address,
@@ -236,8 +254,15 @@ final class CheckoutGroupSubmitService
             'quote' => $quote->toArray(),
             'tax' => $tax,
             'discount' => $discountPayload,
-            'coupon_code' => strtoupper(trim((string)($couponCode ?? ''))),
+            'coupon_code' => $discountsBanned ? '' : strtoupper(trim((string)($couponCode ?? ''))),
             'payment_method' => trim((string)($paymentMethod ?? '')),
+            'deposit' => $discountsBanned ? [
+                'deposit_ratio_bps' => $depositRatioBps,
+                'goods_subtotal_taxed_minor' => $goodsSubtotalTaxed,
+                'deposit_amount_minor' => $depositAmountMinor,
+                'balance_amount_minor' => $balanceAmountMinor,
+                'shipping_in_deposit' => false,
+            ] : null,
         ];
         $payload['request_hash'] = hash(
             'sha256',
@@ -389,9 +414,12 @@ final class CheckoutGroupSubmitService
 
         $websiteId = (int) ($session['scope']['website_id'] ?? 0);
         $storeId = (int) ($session['scope']['store_id'] ?? 0);
+        $cartType = strtolower(trim((string)($session['cart_type'] ?? $session['order_type'] ?? 'toc'))) ?: 'toc';
+        $discountsBanned = (bool)($session['discounts_banned'] ?? $this->discountsBannedForCartType($cartType));
+        $deferInventory = $discountsBanned; // tob: no reserve until deposit paid
         $commandLines = [];
         $reservations = [];
-        $inventory = $this->inventory();
+        $inventory = $deferInventory ? null : $this->inventory();
         foreach ($session['orders'] as $order) {
             $split = (string) $order['split_key'];
             foreach ($order['items'] as $item) {
@@ -490,8 +518,9 @@ final class CheckoutGroupSubmitService
         }
 
         $ownerShip = (int) ($session['allocation']['group_shipping_minor'] ?? 0);
-        $discount = is_array($session['discount'] ?? null) ? $session['discount'] : [];
-        $discountMinor = (int)($discount['amount_minor'] ?? 0);
+        $discount = $discountsBanned ? [] : (is_array($session['discount'] ?? null) ? $session['discount'] : []);
+        $discountMinor = $discountsBanned ? 0 : (int)($discount['amount_minor'] ?? 0);
+        $deposit = is_array($session['deposit'] ?? null) ? $session['deposit'] : [];
         $cmd = new CreateCheckoutGroupCommand(
             idempotencyKey: $idempotencyKey,
             requestHash: (string) $session['request_hash'],
@@ -516,11 +545,16 @@ final class CheckoutGroupSubmitService
                 'billing_address' => is_array($session['billing_address'] ?? null)
                     ? $session['billing_address']
                     : $session['address'],
+                'cart_type' => $cartType,
+                'order_type' => $cartType,
+                'discounts_banned' => $discountsBanned,
+                'deposit' => $deposit,
+                'defer_inventory' => $deferInventory,
             ],
         );
 
         $result = $this->orderFacade->create($cmd);
-        $discountQuotes = $this->discountQuoteService();
+        $discountQuotes = $discountsBanned ? null : $this->discountQuoteService();
         if ($discountQuotes !== null && is_array($session['discount'] ?? null)) {
             $couponCode = (string)($session['coupon_code'] ?? '');
             if ($couponCode !== '') {
@@ -556,12 +590,74 @@ final class CheckoutGroupSubmitService
                 ], $discountQuote);
             }
         }
+        if ($discountsBanned && $cartType === 'tob') {
+            $session['hang_orders'] = $this->createTobHangOrders($result, $session, $customerId, $websiteId);
+        }
         $session['state'] = \Weline\Checkout\Model\CheckoutSession::STATE_SUBMITTED;
         $session['submitted_result'] = $result->toArray();
         $session['reservations'] = $reservations;
         $this->putSession($token, $session);
 
         return $result;
+    }
+
+    /**
+     * Optional B2B hang creation — no hard dependency when module absent.
+     *
+     * @param array<string,mixed> $session
+     * @return list<array<string,mixed>>
+     */
+    private function createTobHangOrders(
+        CreateCheckoutGroupResult $result,
+        array $session,
+        ?int $customerId,
+        int $websiteId,
+    ): array {
+        if (!class_exists(\Weline\B2B\Service\B2BHangOrderService::class)) {
+            return [];
+        }
+        try {
+            $hang = ObjectManager::getInstance(\Weline\B2B\Service\B2BHangOrderService::class);
+            if (!$hang instanceof \Weline\B2B\Service\B2BHangOrderService) {
+                return [];
+            }
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $deposit = is_array($session['deposit'] ?? null) ? $session['deposit'] : [];
+        $created = [];
+        foreach ($result->orders as $orderRow) {
+            $orderUuid = (string)($orderRow['order_uuid'] ?? '');
+            if ($orderUuid === '') {
+                continue;
+            }
+            $money = is_array($orderRow['money'] ?? null) ? $orderRow['money'] : [];
+            $goods = (int)($money['subtotal_minor'] ?? 0) + (int)($money['tax_amount_minor'] ?? 0);
+            if ($goods <= 0 && isset($deposit['goods_subtotal_taxed_minor'])) {
+                $goods = (int)$deposit['goods_subtotal_taxed_minor'];
+            }
+            $shipping = (int)($money['shipping_amount_minor'] ?? 0);
+            $isOwner = (bool)($orderRow['is_shipping_charge_owner'] ?? false);
+            try {
+                $created[] = $hang->createAwaitingDeposit([
+                    'order_ref' => $orderUuid,
+                    'customer_id' => (string)($customerId ?? ''),
+                    'website_id' => $websiteId,
+                    'goods_subtotal_taxed_minor' => $goods,
+                    'shipping_amount_minor' => $shipping,
+                    'is_shipping_owner' => $isOwner,
+                    'deposit_ratio_bps' => (int)($deposit['deposit_ratio_bps'] ?? 3000),
+                    'token_ids' => is_array($session['b2b_token_ids'] ?? null)
+                        ? $session['b2b_token_ids']
+                        : [],
+                ]);
+            } catch (\Throwable) {
+                // fail soft for optional hang path in retail-capable installs
+            }
+        }
+
+        return $created;
     }
 
     /** @return array<string, mixed>|null */
@@ -821,6 +917,21 @@ final class CheckoutGroupSubmitService
      */
     private function assertSessionDiscountQuote(array $session, ?string $paymentMethod): void
     {
+        $cartType = strtolower(trim((string)($session['cart_type'] ?? $session['order_type'] ?? 'toc'))) ?: 'toc';
+        if ((bool)($session['discounts_banned'] ?? false) || $this->discountsBannedForCartType($cartType)) {
+            if ((int)($session['discount']['amount_minor'] ?? 0) > 0
+                || trim((string)($session['coupon_code'] ?? '')) !== ''
+            ) {
+                throw new CheckoutV2ConflictException(
+                    self::ERROR_CLIENT_DISCOUNT,
+                    __('批发结账禁止优惠与券'),
+                    ['cart_type' => $cartType],
+                );
+            }
+
+            return;
+        }
+
         $discountQuotes = $this->discountQuoteService();
         if ($discountQuotes === null || !is_array($session['discount'] ?? null)) {
             return;
@@ -888,5 +999,36 @@ final class CheckoutGroupSubmitService
                 );
             }
         }
+    }
+
+    /** @param list<array<string,mixed>> $orders */
+    private function ordersSubtotalMinor(array $orders): int
+    {
+        $total = 0;
+        foreach ($orders as $order) {
+            $total += (int)($order['subtotal_minor'] ?? 0);
+        }
+
+        return $total;
+    }
+
+    private function discountsBannedForCartType(string $cartType): bool
+    {
+        $code = strtolower(trim($cartType)) ?: 'toc';
+        if ($code === 'tob') {
+            return true;
+        }
+        try {
+            if (class_exists(\Weline\Order\Service\OrderCalculatorGate::class)) {
+                $calcGate = ObjectManager::getInstance(\Weline\Order\Service\OrderCalculatorGate::class);
+                if ($calcGate instanceof \Weline\Order\Service\OrderCalculatorGate) {
+                    return !$calcGate->allowsPriceChangingCalculators($code);
+                }
+            }
+        } catch (\Throwable) {
+            // fall through — toc default
+        }
+
+        return false;
     }
 }
