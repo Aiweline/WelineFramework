@@ -68,6 +68,7 @@ final class ConfigEmbedContractTest extends TestCase
         self::assertStringContainsString('config-embed-undeclared', $field);
         self::assertStringContainsString('config-embed-sensitive-link', $field);
         self::assertStringContainsString('data-w-config-embed-control', $field);
+        self::assertStringContainsString('w:theme:search-select', $field);
         self::assertStringContainsString('data-value-type', $field);
 
         $js = (string)file_get_contents($root . '/view/statics/js/config-embed.js');

@@ -254,6 +254,11 @@ class SystemConfigCenterService
                 continue;
             }
 
+            // Ephemeral import controls are never written to system_config.
+            if ($this->isImportFileField($field)) {
+                continue;
+            }
+
             if (array_key_exists($key, $baseVersions)) {
                 $normalizedBaseVersions[$key] = (int)$baseVersions[$key];
             }
@@ -265,6 +270,11 @@ class SystemConfigCenterService
             }
 
             if (!array_key_exists($key, $values)) {
+                continue;
+            }
+
+            // Masked/empty sensitive posts mean "keep existing", never overwrite with "***".
+            if ($this->isSensitiveField($field) && $this->isSensitiveUnchangedPlaceholder($values[$key])) {
                 continue;
             }
 
@@ -653,8 +663,18 @@ class SystemConfigCenterService
     private function normalizeFieldValue(mixed $value, array $field): mixed
     {
         $valueType = $this->fieldValueType($field);
+        $fieldType = strtolower((string)($field['type'] ?? 'text'));
         if (is_array($value)) {
-            $value = array_values($value);
+            $value = array_values(array_filter(
+                array_map(static fn(mixed $item): string => trim((string)$item), $value),
+                static fn(string $item): bool => $item !== ''
+            ));
+            // Multiselect / ordered chip fields persist as comma-separated strings.
+            if (in_array($fieldType, ['multiselect', 'select_multi', 'tags'], true)
+                && $valueType === SystemConfig::VALUE_TYPE_STRING
+            ) {
+                $value = implode(',', $value);
+            }
         }
 
         return match ($valueType) {
@@ -764,8 +784,35 @@ class SystemConfigCenterService
 
     private function isSensitiveField(array $field): bool
     {
+        $type = strtolower((string)($field['type'] ?? ''));
         return in_array((string)($field['sensitive'] ?? ''), ['1', 'true', 'yes'], true)
-            || in_array($this->fieldValueType($field), ['encrypted', 'secret_ref'], true);
+            || !empty($field['is_sensitive'])
+            || in_array($type, ['password', 'secret', 'encrypted'], true)
+            || in_array($this->fieldValueType($field), ['encrypted', 'secret', 'secret_ref'], true);
+    }
+
+    private function isImportFileField(array $field): bool
+    {
+        return strtolower((string)($field['type'] ?? '')) === 'import_file';
+    }
+
+    /**
+     * Posted mask / blank for sensitive fields must not overwrite the stored secret.
+     */
+    private function isSensitiveUnchangedPlaceholder(mixed $value): bool
+    {
+        if (!\is_scalar($value) && $value !== null) {
+            return false;
+        }
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return true;
+        }
+        if ($raw === '***' || $raw === '********') {
+            return true;
+        }
+
+        return (bool)preg_match('/^\*+$/', $raw);
     }
 
     /**

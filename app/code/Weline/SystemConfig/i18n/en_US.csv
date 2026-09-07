@@ -43,6 +43,9 @@ backend|frontend,backend|frontend
 "显式写目标；禁止依赖 Session","Explicitly write target; disable reliance on Session"
 "Optional value type for serialization (e.g. bool, int, string).","Optional value type for serialization (e.g. bool, int, string)."
 预览/读取时返回的对象授权版本；提交前必须保持一致,"The authorized version of the object returned when previewing/reading; must be consistent before submission"
+配置项,"Config items"
+后台,Backstage
+前台,"front desk"
 统一配置中心,"Unified configuration center"
 跨站请求被拒绝，配置未写入。,"Cross-site request rejected, configuration not written."
 "TargetScope 无效，配置未写入。","TargetScope is invalid, configuration was not written."
@@ -50,12 +53,15 @@ backend|frontend,backend|frontend
 配置回滚预检失败，当前配置未改变。,"The configuration rollback precheck failed and the current configuration has not changed."
 锁操作已完成：%{1},"Lock operation completed: %{1}"
 锁操作失败,"Lock operation failed"
+"Google OAuth JSON 无法识别：%{1}","Google OAuth JSON 无法识别：%{1}"
 配置已保存，版本批次：%{1},"Configuration saved, version batch: %{1}"
+"已从 Google OAuth JSON 导入 Client ID/Secret，并保存配置（版本批次：%{1}）","已从 Google OAuth JSON 导入 Client ID/Secret，并保存配置（版本批次：%{1}）"
 版本冲突，请刷新后重试。,"Version conflict, please refresh and try again."
 配置保存失败，当前配置未改变。,"The configuration failed to save and the current configuration has not changed."
 保存敏感配置需要重新输入登录密码。,"Saving sensitive configuration requires re-entering the login password."
 无法验证当前管理员身份。,"Unable to verify current administrator identity."
-密码验证失败，敏感配置未写入。,"Password verification failed and sensitive configuration was not written."
+"密码验证失败（当前账号：%{1}）。二次校验与后台登录使用同一套 password_verify；请确认输入的就是该账号密码。若登录页用同一密码也无法登录，请重置密码后再保存。","Password verification failed (account: %{1}). Sensitive reauth uses the same password_verify as backend login. If the same password also fails on the login page, reset the password before saving."
+密码验证失败，敏感配置未写入。二次校验与后台登录相同；若登录页也无法用该密码登录，请重置后再试。,"Password verification failed; sensitive configuration was not written. Reauth matches backend login; if login also rejects this password, reset it and retry."
 circle,circle
 查看统一配置中心,"View the unified configuration center"
 保存统一配置,"Save unified configuration"
@@ -71,6 +77,7 @@ warning,warning
 管理,Manage
 没有这个字段,"Field not found"
 前往统一配置中心修改,"Open unified config center"
+请选择或搜索...,请选择或搜索...
 系统管理,系统管理
 系统配置,系统配置
 "按模块、区域与 Scope 管理全站配置项","Manage site-wide configuration by module, area, and scope"
@@ -90,8 +97,6 @@ warning,warning
 返回引导,"Back to guide"
 筛选与搜索,"Filters and search"
 区域,area
-后台,Backstage
-前台,"front desk"
 Website,Website
 Store,Store
 Channel,Channel
@@ -102,7 +107,7 @@ Locale,Locale
 没有找到配置模板,"Configuration template not found"
 没有匹配的配置项,没有匹配的配置项
 显式提交到,"Explicitly commit to"
-"Global 层仅查看继承值，请选择具体 Website / Store / Channel 后再覆盖保存。","Global scope is read-only; select a Website, Store, or Channel to save overrides."
+"Global 为全站基线配置；未在 Website / Store / Channel 覆盖的站点将继承此处保存值。","Global is the site-wide baseline; websites without Website/Store/Channel overrides inherit values saved here."
 复制,复制
 当前范围,当前范围
 保存值,"Save value"
@@ -111,7 +116,15 @@ Locale,Locale
 已锁定,locked
 已压制,Suppressed
 默认值,"default value"
+使用主题国家选择器搜索添加；保存为逗号分隔国家码,使用主题国家选择器搜索添加；保存为逗号分隔国家码
+可搜索多选；保存为逗号分隔值,可搜索多选；保存为逗号分隔值
+删除,删除
+添加覆盖,添加覆盖
+可搜索添加国家（同行多国共享供应商）；或点「添加覆盖」分多行。须国家与供应商齐套后再保存,"Search and add countries (multiple on one row share a provider), or use Add Override for separate rows. Country and provider both required before save"
+"选择后立即解析填入下方 Client ID / Secret；文件内容不落库，仍需点保存","选择后立即解析填入下方 Client ID / Secret；文件内容不落库，仍需点保存"
+敏感配置确认密码,敏感配置确认密码
 保存配置,"Save configuration"
+"修改密码类敏感配置时，须填写当前登录管理员的后台密码再保存（不是 Google API Key / Client Secret）","When changing password-type secrets, enter the current admin backend login password before saving (not a Google API Key / Client Secret)."
 引导定位,"Guide navigation"
 全部模块,"All modules"
 搜索模块名称,"Search module name"
@@ -136,15 +149,19 @@ default,default
 "引导步骤 %{1}","Guide step %{1}"
 配置引导,"Configuration guide"
 配置或字段,"configuration or field"
-"Global 层不可执行此操作，请先选择 Website / Store / Channel。","Global 层不可执行此操作，请先选择 Website / Store / Channel。"
 "OAuth Return URL（须原样登记到第三方 App）","OAuth Return URL（须原样登记到第三方 App）"
 已连接,已连接
+已配置，留空则保持不变,已配置，留空则保持不变
+搜索并多选...,搜索并多选...
+腾讯云验证码,腾讯云验证码
+本地图形验证码,本地图形验证码
+选择或搜索供应商...,选择或搜索供应商...
 选择图片,"Choose image"
 选择文件,"Choose file"
 "图片路径或 URL","Image path or URL"
 "文件路径或 URL","File path or URL"
 保存原因,"Reason for saving"
-敏感配置：重新输入登录密码,"Sensitive configuration: Re-enter login password"
+"修改敏感项必填：当前后台登录密码（不是 API Key）","Required when changing secrets: current backend login password (not an API Key)"
 定位,Locate
 Global（全部网站、店铺和渠道）,"Global (all websites, stores, and channels)"
 网站：%{1},"Website: %{1}"
@@ -172,6 +189,12 @@ Global（全部网站、店铺和渠道）,"Global (all websites, stores, and ch
 字段值不在允许选项内。,"Field value is not among allowed options."
 "用法：scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]","Usage: scope:migrate-p1b preflight|apply|verify|rollback [--database=mig_clone_*]"
 "MIG-P1B 配置 Scope 迁移：preflight/apply/verify/rollback（apply 必须 --database=mig_clone_*）","MIG-P1B configuration Scope migration: preflight/apply/verify/rollback (apply must --database=mig_clone_*)"
+国家用主题地址选择器搜索（每行一国）；供应商用可搜索选择器；须同时选齐后再保存,"Countries use theme address search (one per row); providers use searchable select; both required before save"
+密码验证失败，敏感配置未写入。,"Password verification failed and sensitive configuration was not written."
+"上传/修改 OAuth Secret 后，须在此填写后台登录密码再保存","上传/修改 OAuth Secret 后，须在此填写后台登录密码再保存"
+"改 Secret 必填：后台登录密码","改 Secret 必填：后台登录密码"
+"Global 层不可执行此操作，请先选择 Website / Store / Channel。","Global 层不可执行此操作，请先选择 Website / Store / Channel。"
+敏感配置：重新输入登录密码,"Sensitive configuration: Re-enter login password"
 当前值,"current value"
 Scope,Scope
 所有模块,所有模块
@@ -184,3 +207,6 @@ Scope,Scope
 "写操作只使用表单显式 TargetScope，不信任 Cookie。","Write operations only use form explicit TargetScope and do not trust cookies."
 回落链,"retracement chain"
 重新授权,Re-authorize
+"密码验证失败（当前账号：%{1}）。请确认填写的是该账号的后台登录密码，不是 API Key。","Password verification failed (account: %{1}). Enter that account's backend login password, not an API Key."
+密码验证失败（当前账号：%{1}）。敏感配置二次校验使用与后台登录相同的密码；若你通过「记住我」保持登录，而密码登录已失败，请先退出后台并用正确密码重新登录，或重置该账号密码后再保存。,"Password verification failed (account: %{1}). Sensitive save uses the same password as backend login. If you stayed signed in via Remember me but password login already fails, sign out and log in with the correct password, or reset that account password before saving."
+密码验证失败，敏感配置未写入。若通过「记住我」保持登录，请退出后重新登录或重置密码后再试。,"Password verification failed; sensitive configuration was not written. If you stayed signed in via Remember me, sign out and log in again, or reset the password and retry."

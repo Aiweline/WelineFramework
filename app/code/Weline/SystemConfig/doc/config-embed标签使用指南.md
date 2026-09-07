@@ -135,15 +135,16 @@
 | `type`（小写） | embed 控件 |
 |----------------|------------|
 | `switch` / `checkbox` / `boolean` | `w-switch` + checkbox |
-| `select`（且有 options） | `<select class="w-select">` |
+| `select`（且有 options） | `<w:theme:search-select>` 可搜索单选 |
+| `multiselect` / `select_multi` | `<w:theme:search-select multiple>`（逗号值） |
 | `textarea` | textarea |
 | `number` | `input type=number` |
 | `password` / `secret` | 禁用 password 掩码（只读） |
-| 其他（含 `text`、以及尚未单独映射的 `radio`/`multiselect`/`image`/`file`/`json`/`code`/`color`/`date` 等） | 普通 text input（或敏感则掩码） |
+| 其他（含 `text`、以及尚未单独映射的 `radio`/`image`/`file`/`json`/`code`/`color`/`date` 等） | 普通 text input（或敏感则掩码） |
 
 `value_type`：优先用字段对象的 `value_type`；否则由 type 推断（switch→`bool`，number→`int`，其余→`string`），写入 `data-value-type` 供保存。
 
-与配置中心整页相比：embed **未**接入媒体库选图、多选、JSON 编辑器等完整控件；复杂字段请深链配置中心，或后续扩展 field partial。
+与配置中心整页相比：embed **未**接入媒体库选图、JSON 编辑器等完整控件；复杂字段请深链配置中心，或后续扩展 field partial。
 
 ## 11. 属性绑定方式（编译 vs 运行时）
 
