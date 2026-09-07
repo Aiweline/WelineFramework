@@ -43,10 +43,10 @@ final class ProductReviewsWidgetContractTest extends TestCase
         self::assertStringContainsString('weline-review--layout-', $source);
         self::assertStringContainsString("'stack', 'split'", $source);
         self::assertStringContainsString('Weline_Review::css/widgets/product-reviews.css', $source);
-        self::assertStringContainsString('Weline_Review::js/widgets/product-reviews.js', $source);
-        self::assertStringContainsString('StorefrontCatalogViewService', $source);
-        self::assertStringContainsString('publishedOfferBySlug', $source);
+        self::assertStringContainsString('data-weline-load="productReviews"', $source);
+        self::assertStringContainsString('StorefrontOfferResolver', $source);
         self::assertStringContainsString('global_offer_uuid', $source);
+        self::assertStringContainsString('global_product_uuid', $source);
 
         $css = (string)file_get_contents(dirname(__DIR__, 5) . '/view/statics/css/widgets/product-reviews.css');
         self::assertStringContainsString('--color-bg-primary', $css);
@@ -90,5 +90,34 @@ final class ProductReviewsWidgetContractTest extends TestCase
         self::assertStringContainsString('setAverageText', $js);
         self::assertStringNotContainsString('!average || !count', $js);
         self::assertStringNotContainsString("field.type === 'rating'){input=make('select')", $js);
+    }
+
+    public function testJsDefaultPagerReplacesInfiniteScroll(): void
+    {
+        $js = (string)file_get_contents(dirname(__DIR__, 5) . '/view/statics/js/widgets/product-reviews.js');
+        $css = (string)file_get_contents(dirname(__DIR__, 5) . '/view/statics/css/widgets/product-reviews.css');
+        self::assertStringContainsString('goToPage', $js);
+        self::assertStringContainsString('renderPager', $js);
+        self::assertStringContainsString('data-review-page-prev', $js);
+        self::assertStringContainsString('data-review-page-next', $js);
+        self::assertStringContainsString('data-review-pager', $js);
+        self::assertStringNotContainsString('loadMoreReviews', $js);
+        self::assertStringNotContainsString('bindInfiniteScroll', $js);
+        self::assertStringNotContainsString('data-review-scroll-sentinel', $js);
+        self::assertStringNotContainsString("append: true", $js);
+        self::assertStringContainsString('.weline-review__pager', $css);
+        self::assertStringNotContainsString('.weline-review__items.is-scrollable', $css);
+        self::assertStringNotContainsString('overflow-y: scroll', $css);
+
+        $tpl = (string)file_get_contents(dirname(__DIR__, 5) . '/view/templates/frontend/widgets/product-reviews.phtml');
+        self::assertStringContainsString("'prevPage'", $tpl);
+        self::assertStringContainsString("'nextPage'", $tpl);
+        self::assertStringContainsString("'pageLabelPrefix'", $tpl);
+        self::assertStringContainsString('data-review-pager', $tpl);
+        self::assertStringContainsString('20260904-review-pager2', $tpl);
+        self::assertStringNotContainsString("'scrollForMore'", $tpl);
+
+        $modules = (string)file_get_contents(dirname(__DIR__, 5) . '/view/statics/frontend/weline.modules.js');
+        self::assertStringContainsString('product-reviews.v20260904-pager2.js', $modules);
     }
 }

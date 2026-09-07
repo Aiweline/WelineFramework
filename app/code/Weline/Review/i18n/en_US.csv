@@ -15,6 +15,11 @@
 通过或拒绝评论,"Approve or reject reviews"
 商品评论暂不可用,"Product reviews are unavailable"
 正在加载评论...,"Loading reviews..."
+评论分页,"Review pagination"
+上一页,Previous
+下一页,Next
+第,第
+页,页
 评论加载失败，请稍后重试。,"Reviews could not be loaded. Please try again later."
 暂时还没有已审核的评论，欢迎分享第一条真实体验。,"No approved reviews yet. Be the first to share a real experience."
 条评论,reviews
@@ -66,9 +71,6 @@
 提交时间,"Submitted at"
 操作,Actions
 暂无评论,"No reviews"
-评论分页,"Review pagination"
-上一页,Previous
-下一页,Next
 总体评分,"Overall rating"
 质量评分,"Quality rating"
 交付评分,"Delivery rating"
@@ -119,6 +121,9 @@
 "先由 AI 审核 pending 评论；仅拿不准时转人工","AI reviews pending comments first; humans only when uncertain"
 "评论 AI 预审跳过：Weline_Ai 未启用","Review AI pre-moderation skipped: Weline_Ai is inactive"
 "评论 AI 预审完成：扫描 %{1}，通过 %{2}，拒绝 %{3}，转人工 %{4}，跳过 %{5}，错误 %{6}","Review AI pre-moderation done: scanned %{1}, approved %{2}, rejected %{3}, human %{4}, skipped %{5}, errors %{6}"
+正在加载更多评论...,"Loading more reviews..."
+继续下滑加载更多评论,"Scroll for more reviews"
+已显示全部评论,"All reviews loaded"
 图片,Photo
 展示商品的文字、图片与视频评论，并根据类型定义自动生成评论表单。,"Show product text, photo, and video reviews with a form generated from the type definition."
 商品评论大部件,"Product reviews widget"
@@ -139,3 +144,4 @@
 请填写评论内容。,"Please enter review content."
 预览模式：表单仅供排版查看，请到真实博客页提交。,"Preview only: the form is for layout. Submit on a real blog page."
 "请至少填写 10 个字符，分享您的阅读感受。","Enter at least 10 characters about your reading experience."
+"第 {page} / {pages} 页","Page {page} / {pages}"
