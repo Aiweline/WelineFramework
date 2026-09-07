@@ -85,7 +85,6 @@ Discovery precedence: active `app/design` theme chain -> `Weline_Theme/view/them
   - `minimal`
 
 - `policy`
-  - `ads-preferences`
   - `cookie`
   - `default`
   - `disclaimer`

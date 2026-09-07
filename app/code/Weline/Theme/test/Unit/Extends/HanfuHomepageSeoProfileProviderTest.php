@@ -16,11 +16,14 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
     private const DESCRIPTION_EN = 'Discover Ming, Song, and Tang dynasty Hanfu, mamian skirts, and traditional accessories for everyday wear, festivals, and ceremonies.';
     private const TITLE_AR = 'يونشانغ هانفو · مشغل الهانفو | متجر هانفو بأسلوب الحبر الصيني';
     private const DESCRIPTION_AR = 'اكتشف أزياء هانفو من عصور مينغ وسونغ وتانغ، وتنانير ماميان والإكسسوارات التقليدية للحياة اليومية والمهرجانات والمراسم.';
+    private const SITE_NAME_ZH = '云裳汉服 · Hanfu Atelier';
+    private const SITE_NAME_EN = 'Yunshang Hanfu · Hanfu Atelier';
+    private const SITE_NAME_AR = 'يونشانغ هانفو · مشغل الهانفو';
 
     public function testChineseRootReceivesChineseHomepageDefaults(): void
     {
         self::assertSame(
-            ['title' => self::TITLE_ZH, 'description' => self::DESCRIPTION_ZH],
+            ['site_name' => self::SITE_NAME_ZH, 'title' => self::TITLE_ZH, 'description' => self::DESCRIPTION_ZH],
             $this->provide()
         );
     }
@@ -28,10 +31,10 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
     public function testEnglishLocaleRootReceivesEnglishHomepageDefaults(): void
     {
         self::assertSame(
-            ['title' => self::TITLE_EN, 'description' => self::DESCRIPTION_EN],
+            ['site_name' => self::SITE_NAME_EN, 'title' => self::TITLE_EN, 'description' => self::DESCRIPTION_EN],
             $this->provide([
-                'canonical_url' => 'https://p05113ef3.weline.test:9555/en_US',
-                'url' => 'https://p05113ef3.weline.test:9555/en_US',
+                'canonical_url' => 'https://p05113ef3.test.weline.com:9555/en_US',
+                'url' => 'https://p05113ef3.test.weline.com:9555/en_US',
                 'locale' => 'zh_Hans_CN',
             ])
         );
@@ -40,22 +43,67 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
     public function testArabicLocaleRootUsesArabicCatalogCopy(): void
     {
         self::assertSame(
-            ['title' => self::TITLE_AR, 'description' => self::DESCRIPTION_AR],
+            ['site_name' => self::SITE_NAME_AR, 'title' => self::TITLE_AR, 'description' => self::DESCRIPTION_AR],
             $this->provide([
-                'canonical_url' => 'https://p05113ef3.weline.test:9555/ar_SA/',
-                'url' => 'https://p05113ef3.weline.test:9555/ar_SA/',
+                'canonical_url' => 'https://p05113ef3.test.weline.com:9555/ar_SA/',
+                'url' => 'https://p05113ef3.test.weline.com:9555/ar_SA/',
                 'locale' => 'ar_SA',
             ])
         );
     }
 
-    public function testNonHomepageIsNotChanged(): void
+    public function testNonHomepageReplacesFrameworkBrandInGenericSeoOnly(): void
     {
-        self::assertSame([], $this->provide([
-            'canonical_url' => 'https://p05113ef3.weline.test:9555/categories',
-            'url' => 'https://p05113ef3.weline.test:9555/categories',
-            'page_type' => 'category_list',
-        ]));
+        self::assertSame(
+            [
+                'site_name' => self::SITE_NAME_ZH,
+                'description' => '分类 | 分类页面布局 - ' . self::SITE_NAME_ZH,
+            ],
+            $this->provide([
+                'canonical_url' => 'https://p05113ef3.test.weline.com:9555/categories',
+                'url' => 'https://p05113ef3.test.weline.com:9555/categories',
+                'page_type' => 'category_list',
+                'title' => '分类 | 分类页面布局',
+                'description' => '分类 | 分类页面布局 - Weline Framework',
+            ]),
+        );
+    }
+
+    public function testChineseDefaultWebsitePlaceholderReceivesStorefrontBrand(): void
+    {
+        self::assertSame(
+            [
+                'site_name' => self::SITE_NAME_ZH,
+                'description' => '关于我们 - ' . self::SITE_NAME_ZH,
+            ],
+            $this->provide([
+                'site_name' => '默认网站',
+                'canonical_url' => 'https://p05113ef3.test.weline.com:9555/about',
+                'url' => 'https://p05113ef3.test.weline.com:9555/about',
+                'page_type' => 'page',
+                'title' => '关于我们',
+                'description' => '关于我们 - Weline Framework',
+            ]),
+        );
+    }
+
+    public function testEnglishDefaultWebsitePlaceholderReceivesStorefrontBrand(): void
+    {
+        self::assertSame(
+            [
+                'site_name' => self::SITE_NAME_EN,
+                'description' => 'About us - ' . self::SITE_NAME_EN,
+            ],
+            $this->provide([
+                'site_name' => 'Default Website',
+                'canonical_url' => 'https://p05113ef3.test.weline.com:9555/en_US/about',
+                'url' => 'https://p05113ef3.test.weline.com:9555/en_US/about',
+                'locale' => 'en_US',
+                'page_type' => 'page',
+                'title' => 'About us',
+                'description' => 'About us - Weline Framework',
+            ]),
+        );
     }
 
     public function testBodySlotIsNotChanged(): void
@@ -65,7 +113,19 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
 
     public function testMerchantCustomSeoIsPreserved(): void
     {
+        self::assertSame(
+            ['site_name' => self::SITE_NAME_ZH],
+            $this->provide([
+                'title' => 'Custom campaign title',
+                'description' => 'Custom campaign description',
+            ]),
+        );
+    }
+
+    public function testMerchantSiteNameAndSeoArePreserved(): void
+    {
         self::assertSame([], $this->provide([
+            'site_name' => 'Maison Hanfu',
             'title' => 'Custom campaign title',
             'description' => 'Custom campaign description',
         ]));
@@ -74,10 +134,10 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
     public function testOnlySystemDefaultFieldIsReplaced(): void
     {
         self::assertSame(
-            ['description' => self::DESCRIPTION_EN],
+            ['site_name' => self::SITE_NAME_EN, 'description' => self::DESCRIPTION_EN],
             $this->provide([
-                'canonical_url' => 'https://p05113ef3.weline.test:9555/en_US',
-                'url' => 'https://p05113ef3.weline.test:9555/en_US',
+                'canonical_url' => 'https://p05113ef3.test.weline.com:9555/en_US',
+                'url' => 'https://p05113ef3.test.weline.com:9555/en_US',
                 'locale' => 'en_US',
                 'title' => 'Merchant-authored title',
                 'description' => 'Merchant-authored title - Weline Framework',
@@ -95,8 +155,8 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
             '_slot' => 'head',
             'page_type' => 'homepage',
             'site_name' => 'Weline Framework',
-            'canonical_url' => 'https://p05113ef3.weline.test:9555/',
-            'url' => 'https://p05113ef3.weline.test:9555/',
+            'canonical_url' => 'https://p05113ef3.test.weline.com:9555/',
+            'url' => 'https://p05113ef3.test.weline.com:9555/',
             'locale' => 'zh_Hans_CN',
             'title' => self::TITLE_ZH,
             'description' => self::TITLE_ZH . ' - Weline Framework',
@@ -112,6 +172,7 @@ final class HanfuHomepageSeoProfileProviderTest extends TestCase
                 return match ($source) {
                     self::TITLE_ZH => self::TITLE_AR,
                     self::DESCRIPTION_ZH => self::DESCRIPTION_AR,
+                    self::SITE_NAME_ZH => self::SITE_NAME_AR,
                     default => $source,
                 };
             }

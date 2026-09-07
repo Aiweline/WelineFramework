@@ -299,8 +299,8 @@ final class PreviewNavigationResolver
 
     private function resolveThemePageType(string $path): string
     {
-        $pageType = $this->themePageTypeResolver->resolvePageTypeFromUri($path, ThemeLayout::PAGE_TYPE_HOME);
-        return $pageType !== '' ? $pageType : ThemeLayout::PAGE_TYPE_HOME;
+        $pageType = $this->themePageTypeResolver->resolvePageTypeFromUri($path, ThemeLayout::PAGE_TYPE_CMS);
+        return $pageType !== '' ? $pageType : ThemeLayout::PAGE_TYPE_CMS;
     }
 
     private function buildResponse(

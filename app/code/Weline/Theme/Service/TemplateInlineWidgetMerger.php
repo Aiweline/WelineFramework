@@ -30,45 +30,26 @@ final class TemplateInlineWidgetMerger
 
         $out = [];
         $offset = 0;
-        $length = strlen($slotInnerHtml);
-
-        while ($offset < $length) {
-            if (preg_match(
-                '/<div\b[^>]*\b' . preg_quote(self::ATTR_TEMPLATE_WIDGET, '/') . '\s*=\s*(["\']?)1\1[^>]*>/i',
-                $slotInnerHtml,
-                $match,
-                PREG_OFFSET_CAPTURE,
-                $offset,
-            ) !== 1) {
+        $scanner = new SlotBoundaryScanner();
+        foreach ($scanner->scanTags($slotInnerHtml) as $tag) {
+            if ($tag['start'] < $offset || $tag['closing'] || $tag['name'] !== 'div'
+                || $scanner->attributeValue($tag['html'], self::ATTR_TEMPLATE_WIDGET) !== '1'
+            ) {
+                continue;
+            }
+            $bounds = $scanner->findElementBounds($slotInnerHtml, $tag['start']);
+            if ($bounds === null) {
                 break;
             }
-
-            $openStart = (int) $match[0][1];
-            $openTag = (string) $match[0][0];
-            $openEnd = $openStart + strlen($openTag);
-            $closeEnd = $this->findMatchingDivClose($slotInnerHtml, $openEnd);
-            if ($closeEnd === null) {
-                break;
-            }
-
-            $fullEnd = $closeEnd + 6;
-            $ref = '';
-            if (preg_match(
-                '/\b' . preg_quote(self::ATTR_TEMPLATE_REF, '/') . '\s*=\s*(["\'])([^"\']*)\1/i',
-                $openTag,
-                $refMatch,
-            ) === 1) {
-                $ref = trim((string) ($refMatch[2] ?? ''));
-            }
-
-            if ($ref !== '' && !$this->hasTemplateWidgetAncestor($slotInnerHtml, $openStart)) {
+            $ref = trim($scanner->attributeValue($tag['html'], self::ATTR_TEMPLATE_REF) ?? '');
+            if ($ref !== '') {
                 $out[] = [
                     'ref' => $ref,
-                    'html' => substr($slotInnerHtml, $openStart, $fullEnd - $openStart),
+                    'html' => substr($slotInnerHtml, $tag['start'], $bounds['close_end'] - $tag['start']),
                 ];
             }
-
-            $offset = $fullEnd;
+            // Descendant template widgets belong to this complete outer block.
+            $offset = $bounds['close_end'];
         }
 
         return $out;
@@ -214,6 +195,12 @@ final class TemplateInlineWidgetMerger
                         return true;
                     }
                     $html = (string)($item['html'] ?? '');
+                    // SlotHtmlOpaqueParker parks wrapper inners as HTML comments. Those
+                    // tokens are still live content and must not be treated as empty
+                    // shells, or exclusive fill drops them before restore.
+                    if (str_contains($html, 'WELINE_SLOT_OPAQUE')) {
+                        return true;
+                    }
                     $meaningful = trim(preg_replace('/<!--.*?-->/s', '', $html) ?? $html);
                     $meaningful = trim(strip_tags($meaningful));
 
@@ -267,45 +254,4 @@ final class TemplateInlineWidgetMerger
         return is_array($config) ? $config : [];
     }
 
-    private function hasTemplateWidgetAncestor(string $html, int $position): bool
-    {
-        $prefix = substr($html, 0, $position);
-        if ($prefix === false || $prefix === '') {
-            return false;
-        }
-
-        $opens = preg_match_all(
-            '/<div\b[^>]*\b' . preg_quote(self::ATTR_TEMPLATE_WIDGET, '/') . '\s*=\s*(["\']?)1\1[^>]*>/i',
-            $prefix,
-        ) ?: 0;
-        $closes = preg_match_all('/<\/div>/i', $prefix) ?: 0;
-
-        return $opens > $closes;
-    }
-
-    private function findMatchingDivClose(string $html, int $openEnd): ?int
-    {
-        $length = strlen($html);
-        $depth = 1;
-        $cursor = $openEnd;
-        while ($cursor < $length && $depth > 0) {
-            $nextOpen = stripos($html, '<div', $cursor);
-            $nextClose = stripos($html, '</div>', $cursor);
-            if ($nextClose === false) {
-                return null;
-            }
-            if ($nextOpen !== false && $nextOpen < $nextClose && preg_match('/<div\b/i', substr($html, $nextOpen, 10)) === 1) {
-                $depth++;
-                $cursor = $nextOpen + 4;
-                continue;
-            }
-            $depth--;
-            if ($depth === 0) {
-                return $nextClose;
-            }
-            $cursor = $nextClose + 6;
-        }
-
-        return null;
-    }
 }

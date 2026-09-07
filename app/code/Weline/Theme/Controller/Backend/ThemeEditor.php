@@ -386,6 +386,7 @@ class ThemeEditor extends BackendController
 
         $layout = [];
         $hasDraft = false;
+        $scopedLayoutState = null;
         $layoutIdentity = $this->resolveVersionLayoutIdentity([
             'layout_option' => $layoutOption,
         ]);
@@ -417,13 +418,17 @@ class ThemeEditor extends BackendController
                     /** @var ThemeScopedWorkspaceInterface $scopedWorkspace */
                     $scopedWorkspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
                     // Draft authority is theme_scope_workspace only (parent release merge on load).
-                    $scopedWorkspace->load($typedLayoutContext, true);
+                    $scopedLayoutState = $scopedWorkspace->load($typedLayoutContext, true);
                     $layoutIdentity = $this->layoutIdentityFromEditorContext($typedLayoutContext);
                 } catch (\Throwable) {
                     // Fall through to scoped getFullDraftLayout.
                 }
             }
-            $hasDraft = $this->layoutService->hasDraft($currentThemeId, $pageType, $layoutIdentity);
+            if (\is_array($scopedLayoutState)) {
+                $hasDraft = (int)($scopedLayoutState['revision'] ?? 0) > 0;
+            } else {
+                $hasDraft = $this->layoutService->hasDraft($currentThemeId, $pageType, $layoutIdentity);
+            }
             $layout = $this->layoutService->getFullDraftLayout($currentThemeId, $pageType, $layoutIdentity);
             // 打开/刷新编辑器不得按 default_injections 自动回填空 slot。
             // 默认部件仅在主题初始化、草稿重置、「应用」tab / 显式 slot 初始化、部件首次入库或 Dashboard view ready 时写入。
@@ -437,7 +442,14 @@ class ThemeEditor extends BackendController
             'content' => '',
             'footer' => '',
         ];
+        $productLayoutChromeLocked = $this->isProductLayoutEditorMode($pageType);
         foreach (array_keys($structureWidgetsHtml) as $areaCode) {
+            // Product layout editor hides chrome editing — avoid SSR of header/footer
+            // structure widgets on the shell (placeholders only).
+            if ($productLayoutChromeLocked && ($areaCode === 'header' || $areaCode === 'footer')) {
+                $structureWidgetsHtml[$areaCode] = $this->editorMarkupRenderer->renderStructurePlaceholder($areaCode);
+                continue;
+            }
             $areaWidgets = $layout[$areaCode]['widgets'] ?? [];
             if (!is_array($areaWidgets)) {
                 $areaWidgets = [];
@@ -564,9 +576,65 @@ class ThemeEditor extends BackendController
         return $this->fetchJson($this->scopedWorkspacePayload('publish'));
     }
 
+    /** Publish the complete five-resource scoped Theme snapshot atomically. */
+    #[Acl(
+        'Weline_Theme::theme_visual_editor_scope_publish',
+        '批量发布主题 Scope',
+        'upload-cloud',
+        '以一个事务发布主题 Scope 的完整资源快照',
+        'Weline_Theme::theme_visual_editor',
+        accessMode: Acl::ACCESS_MODE_EDIT,
+    )]
+    public function postPublishScopedReleaseBatch()
+    {
+        return $this->fetchJson($this->scopedWorkspacePayload('publish_batch'));
+    }
+
+    /** Read back one immutable scoped release-batch receipt. */
+    #[Acl(
+        'Weline_Theme::theme_visual_editor_scope_read',
+        '读取主题发布批次',
+        'receipt',
+        '读取当前 Scope 的主题发布批次回执',
+        'Weline_Theme::theme_visual_editor',
+        accessMode: Acl::ACCESS_MODE_READ,
+    )]
+    public function getScopedReleaseBatch()
+    {
+        return $this->fetchJson($this->scopedWorkspacePayload('read_batch'));
+    }
+
+    /** Retry only post-commit cache invalidation for a committed batch. */
+    #[Acl(
+        'Weline_Theme::theme_visual_editor_scope_publish',
+        '重试主题发布缓存',
+        'refresh-cw',
+        '重试已提交主题批次的缓存刷新，不重复发布资源',
+        'Weline_Theme::theme_visual_editor',
+        accessMode: Acl::ACCESS_MODE_EDIT,
+    )]
+    public function postRetryScopedReleaseBatchCache()
+    {
+        return $this->fetchJson($this->scopedWorkspacePayload('retry_batch_cache'));
+    }
+
+    /** Atomically restore all five resources from one historical batch. */
+    #[Acl(
+        'Weline_Theme::theme_visual_editor_scope_publish',
+        '回滚主题发布批次',
+        'history',
+        '以新批次原子恢复历史主题资源全集',
+        'Weline_Theme::theme_visual_editor',
+        accessMode: Acl::ACCESS_MODE_EDIT,
+    )]
+    public function postRollbackScopedReleaseBatch()
+    {
+        return $this->fetchJson($this->scopedWorkspacePayload('rollback_batch'));
+    }
+
     /** Load Website/Store/Channel identity fields for「基础信息」slot. */
     #[Acl(
-        'Weline_Theme::theme_visual_editor',
+        'Weline_Theme::theme_visual_editor_scope_read',
         '读取主题基础信息身份',
         'eye',
         '读取当前 Scope 的网站/店铺/渠道真实身份字段',
@@ -630,6 +698,18 @@ class ThemeEditor extends BackendController
                     'backend-user:' . (string)($this->session->getUserId() ?? 0),
                     (string)($this->session->getUsername() ?? ''),
                 ),
+                'publish_batch' => $service->publishBatch(
+                    $input,
+                    'backend-user:' . (string)($this->session->getUserId() ?? 0),
+                    (string)($this->session->getUsername() ?? ''),
+                ),
+                'read_batch' => $service->readBatch($input),
+                'retry_batch_cache' => $service->retryBatchCache($input),
+                'rollback_batch' => $service->rollbackBatch(
+                    $input,
+                    'backend-user:' . (string)($this->session->getUserId() ?? 0),
+                    (string)($this->session->getUsername() ?? ''),
+                ),
                 default => throw new \InvalidArgumentException('theme_scope_operation_invalid'),
             };
 
@@ -650,7 +730,7 @@ class ThemeEditor extends BackendController
     /**
      * Publish every dirty resource represented by the current typed preview context.
      *
-     * @return array<string,array<string,mixed>>
+     * @return array<string,mixed>
      */
     private function publishPendingScopedResources(ThemeEditorContext $baseContext, string $reason): array
     {
@@ -658,27 +738,35 @@ class ThemeEditor extends BackendController
         $workspace = ObjectManager::getInstance(ThemeScopedWorkspaceInterface::class);
         /** @var ThemeScopedWorkspaceRequestService $requests */
         $requests = ObjectManager::getInstance(ThemeScopedWorkspaceRequestService::class);
-        $results = [];
+        $resources = [];
+        $hasPendingChanges = false;
         foreach (ThemeEditorContext::RESOURCES as $resourceType) {
             $context = $baseContext->withResource($resourceType);
             $state = $workspace->load($context, true);
             $draftRevisionId = (int)($state['draft_revision_id'] ?? 0);
             $publishedRevisionId = (int)($state['published_revision_id'] ?? 0);
-            if ((int)($state['revision'] ?? 0) <= 0
-                || $draftRevisionId <= 0
-                || $draftRevisionId === $publishedRevisionId
-            ) {
-                continue;
-            }
-            $results[$resourceType] = $requests->publish([
-                'editor_context' => $context->toArray(),
+            $resources[$resourceType] = [
                 'expected_revision' => (int)$state['revision'],
                 'expected_parent_release_id' => $state['expected_parent_release_id'] ?? null,
-                'reason' => $reason,
-            ], 'backend-user:' . (string)($this->session->getUserId() ?? 0), (string)($this->session->getUsername() ?? ''));
+            ];
+            if ((int)($state['revision'] ?? 0) > 0
+                && $draftRevisionId > 0
+                && $draftRevisionId !== $publishedRevisionId
+            ) {
+                $hasPendingChanges = true;
+            }
+        }
+        if (!$hasPendingChanges) {
+            return [];
         }
 
-        return $results;
+        return $requests->publishBatch([
+            'editor_context' => $baseContext
+                ->withResource(ThemeEditorContext::RESOURCE_LAYOUT)
+                ->toArray(),
+            'resources' => $resources,
+            'reason' => $reason,
+        ], 'backend-user:' . (string)($this->session->getUserId() ?? 0), (string)($this->session->getUsername() ?? ''));
     }
 
     /** @return array<string,mixed> */
@@ -852,7 +940,20 @@ class ThemeEditor extends BackendController
             'target_id' => max(0, $lockTargetId),
             'source' => (string)$this->request->getParam('lock_source', 'external'),
             'lock_source' => (string)$this->request->getParam('lock_source', 'external'),
+            'product_layout_mode' => $this->isProductLayoutEditorMode($pageType),
+            'hide_chrome_editing' => $this->isProductLayoutEditorMode($pageType),
         ];
+    }
+
+    private function isProductLayoutEditorMode(string $pageType = ''): bool
+    {
+        if ($this->isTruthyParam('product_layout_mode') || $this->isTruthyParam('hide_chrome_editing')) {
+            return true;
+        }
+        $lockSource = strtolower(trim((string)$this->request->getParam('lock_source', '')));
+        $pageType = strtolower(trim($pageType !== '' ? $pageType : (string)$this->request->getParam('page_type', '')));
+
+        return $pageType === 'product' && ($lockSource === 'product' || $this->isTruthyParam('lock_layout'));
     }
 
     private function isTruthyParam(string $key): bool
@@ -2702,6 +2803,13 @@ class ThemeEditor extends BackendController
     {
         try {
             $data = $this->getEditorJsonPayload();
+            if ($this->isProductLayoutEditorMode((string)($data['page_type'] ?? $data['layout_type'] ?? ''))) {
+                return $this->fetchJson([
+                    'success' => false,
+                    'message' => (string)__('产品布局模式不可编辑页头/页脚'),
+                    'status' => 'product_layout_chrome_editing_forbidden',
+                ]);
+            }
             $context = $this->requireLayoutWriteContext($data);
             $areas = isset($data['areas']) && \is_array($data['areas']) ? $data['areas'] : null;
             /** @var SharedChromeService $chrome */
@@ -2796,6 +2904,9 @@ class ThemeEditor extends BackendController
 
             // 清除旧缓存（主题生成缓存）
             $this->cacheGenerator->clearCache($themeId);
+
+            // 按主题版本 bump 静态资源 ?v=，避免发布后浏览器继续用旧 CSS/JS
+            $this->versionService->bumpStaticVersion($themeId);
 
             // 按发布 Scope 失效 Theme 运行时 / FPC 世代，再生成新缓存
             $this->flushFullPageCache($context, $themeId);
@@ -8094,6 +8205,7 @@ HTML;
             );
 
             $this->cacheGenerator->clearCache($themeId);
+            $this->versionService->bumpStaticVersion($themeId);
             $this->cacheGenerator->generate($themeId);
             $this->flushFullPageCache($typedContext, $themeId);
 
@@ -9093,6 +9205,10 @@ HTML;
         $chrome = ObjectManager::getInstance(SharedChromeService::class);
         if (!$chrome->isChromeTarget($area, $slotId)) {
             return $data;
+        }
+
+        if ($this->isProductLayoutEditorMode((string)($data['page_type'] ?? $data['layout_type'] ?? ''))) {
+            throw new \InvalidArgumentException('product_layout_chrome_editing_forbidden');
         }
 
         try {

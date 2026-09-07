@@ -337,6 +337,13 @@ final class MenuTreeNormalizer
             return '';
         }
 
+        // Product catalog trees already resolve names for the active storefront locale.
+        // Re-running WidgetI18n/__ can reverse-translate EN labels (Hanfu→汉服) when
+        // RequestContext/KeyBuilder lang still lags behind the /{locale}/ path.
+        if (($node['tag'] ?? '') === self::TAG_CATEGORY) {
+            return $source;
+        }
+
         try {
             return WidgetI18n::label($source);
         } catch (\Throwable) {

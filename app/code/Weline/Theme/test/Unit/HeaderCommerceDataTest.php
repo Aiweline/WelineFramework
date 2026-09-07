@@ -22,6 +22,20 @@ final class HeaderCommerceDataTest extends TestCase
         self::assertContains('iPhone', $words);
     }
 
+    public function testRepeatedHeaderQueriesUseRequestMemo(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 2) . '/Helper/HeaderCommerceData.php'
+        );
+
+        self::assertStringContainsString('rememberForRequest', $source);
+        self::assertStringContainsString("theme.header.hot_words", $source);
+        self::assertStringContainsString("theme.header.search_types", $source);
+        self::assertStringContainsString('headerSearchTypesPolicy', $source);
+        self::assertStringContainsString('theme.header.search_types.v1', $source);
+        self::assertStringContainsString('RequestLifecycleTrace::measurePhase', $source);
+    }
+
     public function testFormatMoneyUsesCurrencySymbol(): void
     {
         self::assertSame('¥12.50', HeaderCommerceData::formatMoney(12.5, 'CNY'));

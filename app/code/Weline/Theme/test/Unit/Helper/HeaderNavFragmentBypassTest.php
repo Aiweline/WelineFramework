@@ -17,4 +17,15 @@ final class HeaderNavFragmentBypassTest extends TestCase
         self::assertStringContainsString('theme/frontend/theme-preview/content', $source);
         self::assertStringContainsString('if (!$isThemePreviewContent)', $source);
     }
+
+    public function testNavigationFragmentsExposeCacheAndRenderTimingPhases(): void
+    {
+        $source = \file_get_contents(
+            \dirname(__DIR__, 3) . '/Helper/HeaderNavFragment.php'
+        );
+        self::assertIsString($source);
+        self::assertStringContainsString("'theme.header.mega_panel.cache'", $source);
+        self::assertStringContainsString("'theme.header.mega_panel.render'", $source);
+        self::assertStringContainsString("'theme.header.sidebar.cache'", $source);
+    }
 }

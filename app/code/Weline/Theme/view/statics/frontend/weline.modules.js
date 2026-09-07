@@ -7,6 +7,12 @@ window.WelineModulesConfig.modules = window.WelineModulesConfig.modules || {};
 window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAliases || {};
 
 Object.assign(window.WelineModulesConfig.modules, {
+    siteBlocks: {
+        paths: ["Weline_Theme::js/widgets/site-blocks.js"],
+        globalVar: "WelineSiteBlocks",
+        dependencies: [],
+        async: true
+    },
     miniCartExtras: {
         paths: [
             "Weline_Theme::js/widgets/mini-cart-extras-tabs.js"

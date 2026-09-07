@@ -104,7 +104,7 @@ final class ThemePreviewRenderCache
         $targetType = \trim($targetType) !== '' ? \trim($targetType) : 'global';
 
         $parts = [
-            'v2',
+            'v3', // Regenerate HTML produced before the quote/raw-text-safe slot scanner.
             (string)\max(0, $themeId),
             $layoutType,
             $layoutOption,

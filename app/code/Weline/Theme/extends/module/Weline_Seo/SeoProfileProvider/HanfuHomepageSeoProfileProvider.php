@@ -16,6 +16,8 @@ use Weline\Seo\Interface\SeoProfileProviderInterface;
  */
 final class HanfuHomepageSeoProfileProvider implements SeoProfileProviderInterface
 {
+    private const SITE_NAME_ZH = '云裳汉服 · Hanfu Atelier';
+    private const SITE_NAME_EN = 'Yunshang Hanfu · Hanfu Atelier';
     private const TITLE_ZH = '云裳汉服 · Hanfu Atelier | 水墨汉服商城首页';
     private const TITLE_EN = 'Yunshang Hanfu · Hanfu Atelier | Ink-Wash Hanfu Boutique';
     private const DESCRIPTION_ZH = '云裳汉服水墨中国风独立站，精选明制、宋制、唐制汉服、马面裙与传统配饰，服务日常、节庆与礼仪场景。';
@@ -38,16 +40,43 @@ final class HanfuHomepageSeoProfileProvider implements SeoProfileProviderInterfa
             return [];
         }
 
-        $routeLocale = $this->homepageLocaleSegment($context);
-        if ($routeLocale === null) {
-            return [];
-        }
-
+        $homepageLocale = $this->homepageLocaleSegment($context);
+        $routeLocale = $this->routeLocaleSegment($context);
         $locale = $routeLocale !== ''
             ? $routeLocale
             : trim((string)($context['locale'] ?? ''));
         $normalizedLocale = strtolower(str_replace('_', '-', $locale));
         $isChinese = $normalizedLocale === '' || str_starts_with($normalizedLocale, 'zh');
+        $localizedSiteName = $this->localizedDefault(
+            self::SITE_NAME_ZH,
+            self::SITE_NAME_EN,
+            $locale,
+            $isChinese,
+        );
+
+        $profile = [];
+        $siteName = trim((string)($context['site_name'] ?? ''));
+        $usesFrameworkBrand = $this->isSystemDefaultSiteName($siteName);
+        if ($usesFrameworkBrand) {
+            $profile['site_name'] = $localizedSiteName;
+        }
+
+        if ($homepageLocale === null) {
+            $title = trim((string)($context['title'] ?? ''));
+            $description = trim((string)($context['description'] ?? ''));
+            if ($usesFrameworkBrand
+                && $title !== ''
+                && in_array($description, [
+                    $title . ' - ' . $siteName,
+                    $title . ' - Weline Framework',
+                ], true)
+            ) {
+                $profile['description'] = $title . ' - ' . $localizedSiteName;
+            }
+
+            return $profile;
+        }
+
         $localizedTitle = $this->localizedDefault(self::TITLE_ZH, self::TITLE_EN, $locale, $isChinese);
         $localizedDescription = $this->localizedDefault(
             self::DESCRIPTION_ZH,
@@ -56,7 +85,6 @@ final class HanfuHomepageSeoProfileProvider implements SeoProfileProviderInterfa
             $isChinese,
         );
 
-        $profile = [];
         if ($this->isSystemDefaultTitle((string)($context['title'] ?? ''), $localizedTitle)) {
             $profile['title'] = $localizedTitle;
         }
@@ -69,6 +97,37 @@ final class HanfuHomepageSeoProfileProvider implements SeoProfileProviderInterfa
         }
 
         return $profile;
+    }
+
+    /** @param array<string, mixed> $context */
+    private function routeLocaleSegment(array $context): string
+    {
+        $url = trim((string)($context['canonical_url'] ?? ''));
+        if ($url === '') {
+            $url = trim((string)($context['url'] ?? ''));
+        }
+        $path = $url !== '' ? parse_url($url, PHP_URL_PATH) : null;
+        if (!is_string($path)) {
+            return '';
+        }
+        $first = explode('/', trim(rawurldecode($path), '/'))[0] ?? '';
+
+        return preg_match('/^[a-z]{2}(?:[-_][a-z]{2,4}){1,2}$/i', $first) === 1
+            ? $first
+            : '';
+    }
+
+    private function isSystemDefaultSiteName(string $siteName): bool
+    {
+        return in_array(trim($siteName), [
+            '',
+            'Weline',
+            'Weline Framework',
+            '韦林',
+            '微线框架',
+            '默认网站',
+            'Default Website',
+        ], true);
     }
 
     private function localizedDefault(

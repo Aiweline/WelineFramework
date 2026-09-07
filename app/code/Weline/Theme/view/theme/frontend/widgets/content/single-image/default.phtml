@@ -1,0 +1,45 @@
+<?php
+/**
+ * @widget.code {single-image}
+ * @widget.name {图片与说明}
+ * @widget.description {真实图片展示，支持宽高比例、完整显示与跳转链接}
+ * @widget.type {content}
+ * @widget.area {frontend}
+ * @widget.position {["content","sidebar","footer"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * @param image {default="",type="media_image",label="图片"}
+ * @param alt_text {default="",type="string",label="替代文字"}
+ * @param caption {default="",type="textarea",label="图片说明"}
+ * @param link {default="",type="url",label="链接"}
+ * @param ratio {default="natural",type="select",label="图片比例",options={natural:"原始比例",wide:"16:9",landscape:"4:3",square:"1:1"}}
+ * @param fit {default="cover",type="select",label="图片适配",options={cover:"裁切填满",contain:"完整显示"}}
+ */
+
+use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Helper\WidgetI18n;
+
+$scope = WidgetUiScope::forWidget('single-image');
+$esc = [Block::class, 'escape'];
+$t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::text($value)));
+$image = \Weline\Theme\Helper\LegacyMediaUrl::sanitize($this->getData('image'));
+$mediaHtml = Block::mediaHtml($this->getData('image_file_html'), $this->getData('alt_text'));
+$caption = Block::text($this->getData('caption'));
+$link = Block::link($this->getData('link'));
+$ratio = Block::choice($this->getData('ratio'), ['natural','wide','landscape','square'], 'natural');
+$ratios = ['natural'=>'auto','wide'=>'16 / 9','landscape'=>'4 / 3','square'=>'1 / 1'];
+$fit = Block::choice($this->getData('fit'), ['cover','contain'], 'cover');
+?>
+
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<figure class="<?= $esc($scope->cssClass) ?> weline-site-block" weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>" style="--sb-ratio:<?= $esc($ratios[$ratio]) ?>;--sb-fit:<?= $esc($fit) ?>">
+    <?php if ($mediaHtml !== '' || $image !== ''): ?>
+        <?php if ($link !== ''): ?><a href="<?= $esc($link) ?>"><?php endif; ?>
+        <div class="sb-media<?= $ratio === 'natural' ? ' is-natural' : '' ?>">
+            <?php if ($mediaHtml !== ''): ?><?= $mediaHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($this->getData('alt_text')) ?>" loading="lazy" decoding="async"><?php endif; ?>
+        </div>
+        <?php if ($link !== ''): ?></a><?php endif; ?>
+    <?php else: ?><p class="sb-empty"><lang>请选择真实图片</lang></p><?php endif; ?>
+    <?php if ($caption !== ''): ?><figcaption class="sb-copy sb-muted"><?= $t($caption) ?></figcaption><?php endif; ?>
+</figure>

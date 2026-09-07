@@ -45,14 +45,14 @@ final class ThemePreviewBatchTaskHandlerTest extends TestCase
                 'theme_id' => 1,
                 'area' => 'frontend',
                 'force' => true,
-                'capture_base_url' => 'https://p05113ef3.weline.test:9555',
+                'capture_base_url' => 'https://p05113ef3.test.weline.com:9555',
             ]],
         ], null);
 
         self::assertSame('completed', $result->status->value);
         self::assertCount(1, $processor->receivedTargets);
         self::assertSame(
-            'https://p05113ef3.weline.test:9555',
+            'https://p05113ef3.test.weline.com:9555',
             $processor->receivedTargets[0]['capture_base_url'] ?? null,
         );
     }

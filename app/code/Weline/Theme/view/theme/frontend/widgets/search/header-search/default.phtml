@@ -40,9 +40,9 @@ $searchCategoryId = (int)($this->request->getParam('category_id') ?? 0);
 ?>
 
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)?v=20260826-search-submenu-hover1">
+      href="@static(Weline_Theme::css/widgets/header-chrome-amazon.css)">
 <link rel="stylesheet"
-      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)?v=20260826-search-submenu-hover1">
+      href="@static(Weline_Theme::css/widgets/header-search-amazon.css)">
 
 <section class="<?= $esc($wc) ?><?= $isPreviewMode ? ' is-preview' : '' ?>"
          weline-code="<?= $esc($scope->code) ?>"

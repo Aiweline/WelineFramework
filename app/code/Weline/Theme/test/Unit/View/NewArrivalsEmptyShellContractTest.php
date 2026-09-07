@@ -33,4 +33,14 @@ final class NewArrivalsEmptyShellContractTest extends TestCase
         );
         self::assertStringContainsString('display: none', $source);
     }
+
+    public function testViewAllLinkUsesTheCanonicalNewArrivalsRoute(): void
+    {
+        $path = dirname(__DIR__, 3) . '/view/theme/frontend/widgets/product/new-arrivals/default.phtml';
+        self::assertFileExists($path);
+        $source = (string)file_get_contents($path);
+
+        self::assertStringContainsString('href="@url{\'new-arrivals\'}"', $source);
+        self::assertStringNotContainsString('href="@url{\'products/new\'}"', $source);
+    }
 }

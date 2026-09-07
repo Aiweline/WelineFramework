@@ -16,6 +16,7 @@
 }
 
 .product-card-purchase-actions > .weline-cart-product-card-add-to-cart button,
+.product-card-purchase-actions > .weline-cart-product-card-add-to-cart a,
 .product-card-purchase-actions > .weline-checkout-product-card-buy-now button {
     display: flex;
     width: 100%;
@@ -28,6 +29,7 @@
     font-size: var(--font-size-sm);
     font-weight: var(--font-weight-semibold);
     line-height: var(--line-height-tight);
+    text-decoration: none;
     cursor: pointer;
     appearance: none;
     -webkit-appearance: none;
@@ -41,6 +43,7 @@
 }
 
 .product-card-purchase-actions > .weline-cart-product-card-add-to-cart button:focus-visible,
+.product-card-purchase-actions > .weline-cart-product-card-add-to-cart a:focus-visible,
 .product-card-purchase-actions > .weline-checkout-product-card-buy-now button:focus-visible {
     outline: var(--weline-theme-border-width-2) var(--weline-theme-border-style) var(--weline-theme-focus-outline);
     outline-offset: var(--weline-space-1);
@@ -55,9 +58,9 @@
     color: var(--weline-theme-primary-text-emphasis);
 }
 
-.product-card-purchase-actions--amz-card .amz-card__add:hover:not(:disabled),
-.product-card-purchase-actions--storefront .product-storefront__add:hover:not(:disabled),
-.product-card-purchase-actions--cta .btn-add-to-cart:hover:not(:disabled) {
+.product-card-purchase-actions--amz-card .amz-card__add:hover:not(:disabled):not([aria-disabled="true"]),
+.product-card-purchase-actions--storefront .product-storefront__add:hover:not(:disabled):not([aria-disabled="true"]),
+.product-card-purchase-actions--cta .btn-add-to-cart:hover:not(:disabled):not([aria-disabled="true"]) {
     border-color: var(--weline-theme-primary-hover);
     background: var(--weline-theme-primary-surface);
     color: var(--weline-theme-primary-hover);
@@ -80,6 +83,28 @@
     color: var(--weline-theme-on-primary);
 }
 
+/* Quote-only inquiry CTA: raised surface + primary text (no solid red fill). */
+.product-card-purchase-actions--amz-card .amz-card__quote,
+.product-card-purchase-actions--storefront .product-storefront__quote,
+.product-card-purchase-actions--cta .btn-quote {
+    border: var(--weline-theme-border-width) var(--weline-theme-border-style) var(--weline-theme-primary);
+    background: var(--weline-theme-surface-raised);
+    color: var(--weline-theme-primary-text-emphasis);
+}
+
+.product-card-purchase-actions--amz-card .amz-card__quote:hover:not([aria-disabled="true"]),
+.product-card-purchase-actions--storefront .product-storefront__quote:hover:not([aria-disabled="true"]),
+.product-card-purchase-actions--cta .btn-quote:hover:not([aria-disabled="true"]) {
+    border-color: var(--weline-theme-primary-hover);
+    background: var(--weline-theme-primary-surface);
+    color: var(--weline-theme-primary-hover);
+}
+
+.product-card-purchase-actions a[data-quote-only="1"],
+.product-card-purchase-actions a[data-quote-only="1"] span {
+    color: inherit;
+}
+
 .product-card-purchase-actions--amz-card .amz-card__add.is-added {
     border-color: var(--weline-theme-success);
     background: var(--weline-theme-success-surface);
@@ -88,16 +113,23 @@
 }
 
 .product-card-purchase-actions--amz-card .amz-card__add:disabled,
+.product-card-purchase-actions--amz-card .amz-card__add[aria-disabled="true"],
 .product-card-purchase-actions--amz-card .amz-card__buy-now:disabled,
+.product-card-purchase-actions--amz-card .amz-card__quote[aria-disabled="true"],
 .product-card-purchase-actions--storefront .product-storefront__add:disabled,
+.product-card-purchase-actions--storefront .product-storefront__add[aria-disabled="true"],
 .product-card-purchase-actions--storefront .product-storefront__buy-now:disabled,
+.product-card-purchase-actions--storefront .product-storefront__quote[aria-disabled="true"],
 .product-card-purchase-actions--cta .btn-add-to-cart:disabled,
-.product-card-purchase-actions--cta .btn-buy-now:disabled {
+.product-card-purchase-actions--cta .btn-add-to-cart[aria-disabled="true"],
+.product-card-purchase-actions--cta .btn-buy-now:disabled,
+.product-card-purchase-actions--cta .btn-quote[aria-disabled="true"] {
     border-color: var(--weline-theme-border-color-subtle);
     background: var(--weline-theme-surface-muted);
     color: var(--weline-theme-text-muted);
     cursor: not-allowed;
     box-shadow: none;
+    pointer-events: none;
 }
 
 .product-card-purchase-actions--storefront {

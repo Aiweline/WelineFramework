@@ -33,4 +33,16 @@ final class ProductLayoutReviewsSlotContractTest extends TestCase
         self::assertStringNotContainsString('$contentTemplate', $source);
         self::assertDoesNotMatchRegularExpression('/<w:widget[^>]*(product-info|name="product-info")/i', $source);
     }
+
+    public function testProductLayoutRelatedRecommendationsDefaultOffWithoutBestsellersFallback(): void
+    {
+        $path = dirname(__DIR__, 4) . '/view/theme/frontend/layouts/product/default.phtml';
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('showRelatedProducts {default=false', $source);
+        self::assertStringContainsString('$showRelatedProducts = $coerceBool($meta[\'showRelatedProducts\']', $source);
+        self::assertMatchesRegularExpression('/\$showRelatedProducts = \$coerceBool\([^\n]+, false\);/', $source);
+        self::assertStringContainsString('id="product-related-products"', $source);
+        self::assertStringContainsString('condition="meta.showRelatedProducts"', $source);
+        self::assertDoesNotMatchRegularExpression('/bestsellers<else\/>[\s\S]*name="bestsellers"/', $source);
+    }
 }

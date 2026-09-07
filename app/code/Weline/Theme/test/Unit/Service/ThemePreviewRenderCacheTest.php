@@ -50,7 +50,7 @@ final class ThemePreviewRenderCacheTest extends TestCase
         $path = dirname(__DIR__, 3) . '/Service/ThemePreviewRenderCache.php';
         self::assertFileExists($path);
         $source = (string)file_get_contents($path);
-        self::assertStringContainsString("'v2'", $source);
+        self::assertStringContainsString("'v3'", $source);
         self::assertStringContainsString('resolvePublicRouteFingerprint', $source);
         self::assertStringContainsString('theme_public_route', $source);
 

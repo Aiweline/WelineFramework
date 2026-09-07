@@ -104,7 +104,6 @@ class Policy extends FrontendController
         // 设置页面标题（可以根据布局类型设置不同的标题）
         $titles = [
             'cookie' => 'Cookie 政策',
-            'ads-preferences' => '广告偏好',
             'privacy' => '隐私政策',
             'term-condition' => '服务条款',
             'refund' => '退款政策',
@@ -154,7 +153,6 @@ class Policy extends FrontendController
         $allowedLayouts = [
             'default',
             'cookie',
-            'ads-preferences',
             'privacy',
             'term-condition',
             'refund',
@@ -181,6 +179,7 @@ class Policy extends FrontendController
             'cart' => ['default', 'empty'],
             'category' => ['default', 'list'],
             'checkout' => ['default', 'one-page'],
+            'checkout_failure' => ['default'],
             'checkout_failer' => ['default'],
             'checkout_success' => ['default'],
             'cms_page' => ['default'],
@@ -188,9 +187,13 @@ class Policy extends FrontendController
             'about' => ['default'],
             'help' => ['default'],
             'guide' => ['default'],
+            'payment_guide' => ['default'],
+            'not_found' => ['default'],
+            'promotion' => ['default'],
+            'qa' => ['default'],
             'terms' => ['default'],
             'default' => ['default'],
-            'policy' => ['default', 'cookie', 'ads-preferences', 'privacy', 'term-condition', 'refund', 'disclaimer'],
+            'policy' => ['default', 'cookie', 'privacy', 'term-condition', 'refund', 'disclaimer'],
             'product' => ['default'],
             'product_list' => ['default'],
             'review' => ['default'],

@@ -55,20 +55,23 @@ final class SlotHtmlOpaqueParker
 
     private function parkOpaqueBlocks(string $html): string
     {
-        if (!str_contains($html, '<script') && !str_contains($html, '<style')) {
-            return $html;
+        $scanner = new SlotBoundaryScanner();
+        $offset = 0;
+        $out = '';
+        foreach ($scanner->scanTags($html) as $tag) {
+            if ($tag['closing'] || !in_array($tag['name'], ['script', 'style'], true)) {
+                continue;
+            }
+            $bounds = $scanner->findElementBounds($html, $tag['start']);
+            if ($bounds === null) {
+                continue;
+            }
+            $token = '<!--WELINE_SLOT_OPAQUE_' . count($this->tokens) . '_' . bin2hex(random_bytes(4)) . '-->';
+            $this->tokens[$token] = substr($html, $tag['start'], $bounds['close_end'] - $tag['start']);
+            $out .= substr($html, $offset, $tag['start'] - $offset) . $token;
+            $offset = $bounds['close_end'];
         }
-
-        return (string) preg_replace_callback(
-            '/<(script|style)\b([^>]*)>(.*?)<\/\1>/is',
-            function (array $match): string {
-                $token = '<!--WELINE_SLOT_OPAQUE_' . count($this->tokens) . '_' . bin2hex(random_bytes(4)) . '-->';
-                $this->tokens[$token] = '<' . $match[1] . $match[2] . '>' . $match[3] . '</' . $match[1] . '>';
-
-                return $token;
-            },
-            $html,
-        );
+        return $out . substr($html, $offset);
     }
 
     private function parkWidgetWrapperInners(string $html): string
@@ -77,112 +80,25 @@ final class SlotHtmlOpaqueParker
             return $html;
         }
 
-        $length = strlen($html);
+        $scanner = new SlotBoundaryScanner();
         $offset = 0;
         $out = '';
-
-        while ($offset < $length) {
-            $open = $this->findNextWidgetWrapperOpen($html, $offset);
-            if ($open === null) {
-                $out .= substr($html, $offset);
-                break;
-            }
-
-            $openStart = $open['start'];
-            $openTag = $open['tag'];
-            $openEnd = $open['end'];
-            $out .= substr($html, $offset, $openStart - $offset);
-
-            $innerEnd = $this->findMatchingDivClose($html, $openEnd);
-            if ($innerEnd === null) {
-                $out .= $openTag;
-                $offset = $openEnd;
+        foreach ($scanner->scanTags($html) as $tag) {
+            if ($tag['start'] < $offset || $tag['closing'] || $tag['name'] !== 'div'
+                || preg_match('/(?:^|\s)widget-wrapper(?:\s|$)/', $scanner->attributeValue($tag['html'], 'class') ?? '') !== 1
+            ) {
                 continue;
             }
-
-            $inner = substr($html, $openEnd, $innerEnd - $openEnd);
+            $bounds = $scanner->findElementBounds($html, $tag['start']);
+            if ($bounds === null) {
+                continue;
+            }
             $token = '<!--WELINE_SLOT_OPAQUE_WIDGET_' . count($this->tokens) . '_' . bin2hex(random_bytes(4)) . '-->';
-            $this->tokens[$token] = $inner;
-            $out .= $openTag . $token . '</div>';
-            $offset = $innerEnd + 6;
+            $this->tokens[$token] = substr($html, $bounds['open_end'], $bounds['close_start'] - $bounds['open_end']);
+            $out .= substr($html, $offset, $bounds['open_end'] - $offset) . $token
+                . substr($html, $bounds['close_start'], $bounds['close_end'] - $bounds['close_start']);
+            $offset = $bounds['close_end'];
         }
-
-        return $out;
-    }
-
-    /**
-     * @return array{start:int,end:int,tag:string}|null
-     */
-    private function findNextWidgetWrapperOpen(string $html, int $offset): ?array
-    {
-        $length = strlen($html);
-        $pos = max(0, $offset);
-        while ($pos < $length) {
-            if (preg_match('/<div\b/i', $html, $match, PREG_OFFSET_CAPTURE, $pos) !== 1) {
-                return null;
-            }
-            $start = (int) $match[0][1];
-            $end = $this->findHtmlTagClose($html, $start + 4);
-            if ($end === null) {
-                return null;
-            }
-            $tag = substr($html, $start, $end - $start);
-            if (preg_match('/\bwidget-wrapper\b/i', $tag) === 1) {
-                return ['start' => $start, 'end' => $end, 'tag' => $tag];
-            }
-            $pos = $end;
-        }
-
-        return null;
-    }
-
-    private function findHtmlTagClose(string $html, int $from): ?int
-    {
-        $length = strlen($html);
-        $quote = null;
-        for ($i = max(0, $from); $i < $length; $i++) {
-            $ch = $html[$i];
-            if ($quote !== null) {
-                if ($ch === $quote) {
-                    $quote = null;
-                }
-                continue;
-            }
-            if ($ch === '"' || $ch === "'") {
-                $quote = $ch;
-                continue;
-            }
-            if ($ch === '>') {
-                return $i + 1;
-            }
-        }
-
-        return null;
-    }
-
-    private function findMatchingDivClose(string $html, int $openEnd): ?int
-    {
-        $length = strlen($html);
-        $depth = 1;
-        $cursor = $openEnd;
-        while ($cursor < $length && $depth > 0) {
-            $nextOpen = stripos($html, '<div', $cursor);
-            $nextClose = stripos($html, '</div>', $cursor);
-            if ($nextClose === false) {
-                return null;
-            }
-            if ($nextOpen !== false && $nextOpen < $nextClose && preg_match('/<div\b/i', substr($html, $nextOpen, 10)) === 1) {
-                $depth++;
-                $cursor = $nextOpen + 4;
-                continue;
-            }
-            $depth--;
-            if ($depth === 0) {
-                return $nextClose;
-            }
-            $cursor = $nextClose + 6;
-        }
-
-        return null;
+        return $out . substr($html, $offset);
     }
 }

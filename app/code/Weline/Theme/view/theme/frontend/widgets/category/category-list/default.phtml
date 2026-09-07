@@ -16,7 +16,7 @@
  * @param title {default="商品分类",type="string",label="标题"}
  * @param parent_id {default=0,type="number",label="父分类ID",description="0表示显示所有顶级分类"}
  * @param max_depth {default=2,type="number",label="最大层级"}
- * @param show_count {default=true,type="bool",label="显示产品数量"}
+ * @param show_count {default=false,type="bool",label="显示产品数量"}
  * @param show_image {default=false,type="bool",label="显示分类图片"}
  */
 
@@ -30,59 +30,61 @@ $isPreviewMode = (bool)($this->getData('preview_mode') ?? false);
 $title = (string)($this->getData('title') ?? __('商品分类'));
 $parentId = (int)($this->getData('parent_id') ?? 0);
 $maxDepth = max(1, min(5, (int)($this->getData('max_depth') ?? 2)));
-$showCount = (bool)($this->getData('show_count') ?? true);
+$showCount = (bool)($this->getData('show_count') ?? false);
 $showImage = (bool)($this->getData('show_image') ?? false);
 $collapsed = (bool)($this->getData('collapsed') ?? false);
-$placeholder = $this->getStaticUrl('Weline_Theme::theme/frontend/assets/images/theme/placeholder.png') ?? '';
+$searchHref = static fn (string $query): string => '/search?q=' . rawurlencode($query);
 
 $categories = [
     [
         'id' => 1,
-        'name' => __('电子产品'),
-        'url' => '/category/electronics',
-        'image' => $placeholder,
-        'count' => 156,
+        'name' => __('女士汉服'),
+        'url' => $searchHref('女士汉服'),
         'children' => [
-            ['id' => 11, 'name' => __('手机'), 'url' => '/category/phones', 'count' => 45],
-            ['id' => 12, 'name' => __('电脑'), 'url' => '/category/computers', 'count' => 38],
-            ['id' => 13, 'name' => __('平板'), 'url' => '/category/tablets', 'count' => 22],
+            ['id' => 11, 'name' => __('明制汉服'), 'url' => $searchHref('明制汉服')],
+            ['id' => 12, 'name' => __('宋制汉服'), 'url' => $searchHref('宋制汉服')],
+            ['id' => 13, 'name' => __('唐制汉服'), 'url' => $searchHref('唐制汉服')],
         ],
     ],
     [
         'id' => 2,
-        'name' => __('服装鞋帽'),
-        'url' => '/category/fashion',
-        'image' => $placeholder,
-        'count' => 243,
+        'name' => __('男士汉服'),
+        'url' => $searchHref('男士汉服'),
         'children' => [
-            ['id' => 21, 'name' => __('男装'), 'url' => '/category/mens', 'count' => 89],
-            ['id' => 22, 'name' => __('女装'), 'url' => '/category/womens', 'count' => 112],
-            ['id' => 23, 'name' => __('童装'), 'url' => '/category/kids', 'count' => 42],
+            ['id' => 21, 'name' => __('道袍与直裰'), 'url' => $searchHref('道袍 直裰')],
+            ['id' => 22, 'name' => __('曳撒与贴里'), 'url' => $searchHref('曳撒 贴里')],
+            ['id' => 23, 'name' => __('圆领袍'), 'url' => $searchHref('圆领袍')],
         ],
     ],
     [
         'id' => 3,
-        'name' => __('家居生活'),
-        'url' => '/category/home',
-        'image' => $placeholder,
-        'count' => 178,
+        'name' => __('儿童汉服'),
+        'url' => $searchHref('儿童汉服'),
         'children' => [
-            ['id' => 31, 'name' => __('家具'), 'url' => '/category/furniture', 'count' => 56],
-            ['id' => 32, 'name' => __('家纺'), 'url' => '/category/textiles', 'count' => 67],
-            ['id' => 33, 'name' => __('收纳'), 'url' => '/category/storage', 'count' => 55],
+            ['id' => 31, 'name' => __('女童汉服'), 'url' => $searchHref('女童汉服')],
+            ['id' => 32, 'name' => __('男童汉服'), 'url' => $searchHref('男童汉服')],
+            ['id' => 33, 'name' => __('亲子系列'), 'url' => $searchHref('亲子汉服')],
         ],
     ],
     [
         'id' => 4,
-        'name' => __('美妆个护'),
-        'url' => '/category/beauty',
-        'count' => 134,
+        'name' => __('汉服配饰'),
+        'url' => $searchHref('汉服配饰'),
+        'children' => [
+            ['id' => 41, 'name' => __('发簪与发冠'), 'url' => $searchHref('发簪 发冠')],
+            ['id' => 42, 'name' => __('腰带与禁步'), 'url' => $searchHref('腰带 禁步')],
+            ['id' => 43, 'name' => __('绣花鞋履'), 'url' => $searchHref('绣花鞋')],
+        ],
     ],
     [
         'id' => 5,
-        'name' => __('食品生鲜'),
-        'url' => '/category/food',
-        'count' => 89,
+        'name' => __('按场景选购'),
+        'url' => '/categories',
+        'children' => [
+            ['id' => 51, 'name' => __('婚礼与礼服'), 'url' => $searchHref('婚礼 礼服')],
+            ['id' => 52, 'name' => __('节庆与雅集'), 'url' => $searchHref('节庆 雅集')],
+            ['id' => 53, 'name' => __('日常通勤'), 'url' => $searchHref('日常 通勤')],
+        ],
     ],
 ];
 

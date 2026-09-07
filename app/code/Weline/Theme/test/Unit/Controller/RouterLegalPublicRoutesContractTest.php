@@ -32,12 +32,12 @@ final class RouterLegalPublicRoutesContractTest extends TestCase
             "'cookies' => ['layout_type' => 'policy', 'layout_option' => 'cookie'",
             $source
         );
-        self::assertStringContainsString(
-            "'ads-preferences' => ['layout_type' => 'policy', 'layout_option' => 'ads-preferences'",
+        self::assertStringNotContainsString(
+            "'ads-preferences' =>",
             $source
         );
-        self::assertStringContainsString(
-            "'policy/ads-preferences' => ['layout_type' => 'policy', 'layout_option' => 'ads-preferences'",
+        self::assertStringNotContainsString(
+            "'policy/ads-preferences' =>",
             $source
         );
     }

@@ -6,6 +6,7 @@ namespace Weline\Theme\Service\Disk;
 
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Theme\Helper\ThemeData;
 use Weline\Theme\Model\WelineTheme;
 
@@ -33,19 +34,35 @@ class ThemeDiskHeadService
 
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($area);
-        // ThemeData::set() clears request/process caches via clearCache(); workers may still
-        // hold a stale empty disk_bundle entry in process performanceCache across requests.
-        ThemeData::clearCache();
+        // Only drop process L1 — never clearNamespace(weline_site_runtime) on the
+        // storefront head hot path (each SharedState IPC ≈200ms under pool pressure).
+        if ($this->shouldRefreshProcessCache($area)) {
+            RequestLifecycleTrace::measurePhase(
+                'theme.head.disk_override.reset',
+                static function (): void {
+                    ThemeData::clearProcessMemoryCache();
+                },
+                ['area' => $area, 'scope' => $scope],
+            );
+        }
         ThemeData::setCurrentTheme($theme);
         ThemeData::setCurrentArea($area);
 
-        $bundleMap = ThemeData::getConfigList($area, 'disk_bundle', $scope);
+        $bundleMap = RequestLifecycleTrace::measurePhase(
+            'theme.head.disk_override.config',
+            static fn(): array => ThemeData::getConfigList($area, 'disk_bundle', $scope),
+            ['area' => $area, 'scope' => $scope],
+        );
         $hash = (string)($bundleMap[$scope] ?? $bundleMap['default'] ?? '');
         if ($hash === '') {
             return '';
         }
 
-        $filePath = $this->compileService->resolveBundlePath((int)$theme->getId(), $area, $scope, $hash);
+        $filePath = RequestLifecycleTrace::measurePhase(
+            'theme.head.disk_override.resolve',
+            fn(): string => $this->compileService->resolveBundlePath((int)$theme->getId(), $area, $scope, $hash),
+            ['area' => $area, 'scope' => $scope],
+        );
         if ($filePath === '') {
             return '';
         }
@@ -63,6 +80,38 @@ class ThemeDiskHeadService
             : '/theme/frontend/disk/override';
 
         return $urlPath . '?' . http_build_query($params);
+    }
+
+    /**
+     * Frontend workers retain ThemeData's process L1 between requests. An
+     * explicit preview/editor request still opts into a refresh so draft disk
+     * changes remain visible without making every storefront request cold.
+     */
+    private function shouldRefreshProcessCache(string $area): bool
+    {
+        if ($area === 'backend') {
+            return true;
+        }
+
+        $query = (string)($_SERVER['QUERY_STRING'] ?? '');
+        if ($query === '' && function_exists('w_env_request_uri')) {
+            $requestUri = (string)w_env_request_uri();
+            $query = (string)(parse_url($requestUri, PHP_URL_QUERY) ?: '');
+        }
+        if ($query === '') {
+            return false;
+        }
+
+        $params = [];
+        parse_str($query, $params);
+        foreach (['editor_mode', 'preview', 'visual_editor', 'theme_disk_refresh'] as $key) {
+            $value = strtolower(trim((string)($params[$key] ?? '')));
+            if ($value === '1' || $value === 'true') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public function buildOverrideLinkHtml(string $area, ?WelineTheme $theme = null, string $scope = 'default'): string

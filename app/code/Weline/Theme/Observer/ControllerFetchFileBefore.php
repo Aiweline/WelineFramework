@@ -234,7 +234,7 @@ class ControllerFetchFileBefore implements ObserverInterface
         $allowPreviewTheme = !$isBackendRequest
             || $editorArea === 'frontend'
             || ($editorArea === 'backend' && $isThemeEditorPreviewRoute);
-        $theme = $this->resolveThemeForLayout($area, $allowPreviewTheme);
+        $theme = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.context', fn() => $this->resolveThemeForLayout($area, $allowPreviewTheme));
 
         // 如果没有指定 layoutType，使用默认值（确保布局信息始终存在）
         $originalLayoutType = $layoutType;
@@ -283,7 +283,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             } else {
                 ThemeData::setCurrentTheme($theme);
                 ThemeData::setCurrentArea($area);
-                ThemeData::performanceLoad(scope: $scope);
+                \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.performance_load', fn() => ThemeData::performanceLoad(scope: $scope));
                 $didPerformanceLoad = true;
                 $layoutConfig = ThemeData::getLayoutConfig($area, $scope);
                 $requestCache->layoutConfigCache[$configCacheKey] = $layoutConfig;
@@ -338,7 +338,7 @@ class ControllerFetchFileBefore implements ObserverInterface
             }
             $template->setData('colors', $colors);
 
-            $virtualLayout = $this->resolveVirtualLayoutForRequest($request, $themeId, $area, $scope, (string)$layoutType, (string)$layoutOption);
+            $virtualLayout = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.virtual', fn() => $this->resolveVirtualLayoutForRequest($request, $themeId, $area, $scope, (string)$layoutType, (string)$layoutOption));
             $virtualLayoutFilePath = null;
             if (is_array($virtualLayout)) {
                 $resolvedLayoutPath = (string)$virtualLayout['module_path'];
@@ -372,7 +372,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // 优化：编译文件存在且源文件未修改则不再做重负载（不重复 performanceLoad/colors/meta）
                 $sourcePath = $virtualLayoutFilePath ?: LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
                 $lang = class_exists(Cookie::class) ? State::getLang() : 'zh_Hans_CN';
-                $compiledPath = LayoutPathResolver::getCompiledLayoutPath($resolvedLayoutPath, $lang);
+                $compiledPath = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.compiled_path', fn() => LayoutPathResolver::getCompiledLayoutPath($resolvedLayoutPath, $lang));
                 $compiledLayoutFresh = $sourcePath && $compiledPath && is_file($sourcePath) && is_file($compiledPath)
                     && filemtime($sourcePath) <= filemtime($compiledPath);
                 $runtimeParamsCacheKey = null;
@@ -430,7 +430,7 @@ class ControllerFetchFileBefore implements ObserverInterface
                 ThemeData::setCurrentTheme($theme);
                 ThemeData::setCurrentArea($area);
                 if (!$didPerformanceLoad) {
-                    ThemeData::performanceLoad(scope: $scope);
+                    \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.performance_load', fn() => ThemeData::performanceLoad(scope: $scope));
                 }
 
                 // 将原模板路径保存为变量，供布局模板使用
@@ -463,8 +463,8 @@ class ControllerFetchFileBefore implements ObserverInterface
                 // 注意：getFileParams 内部会处理 identify 格式，但需要确保 ThemeData 已正确初始化
                 $layoutFilePath = $virtualLayoutFilePath ?: LayoutPathResolver::getLayoutFilePath($resolvedLayoutPath, $theme, $area);
                 $layoutMetaIdentity = $this->extractLayoutMetaIdentity($layoutFilePath, $resolvedLayoutPath, $area);
-                $layoutDefinitions = ThemeData::getParamDefinitions($metaIdentify);
-                $layoutParams = ThemeData::getFileParams($metaIdentify, $scope);
+                $layoutDefinitions = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.definitions', fn() => ThemeData::getParamDefinitions($metaIdentify));
+                $layoutParams = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('theme.layout.params', fn() => ThemeData::getFileParams($metaIdentify, $scope));
                 
                 // 如果从 Meta 表中没有读取到参数，尝试从文件直接解析
                 if (empty($layoutParams)) {

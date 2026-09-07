@@ -6,7 +6,7 @@
  *
  * @widget.code {brand-logos}
  * @widget.name {品牌Logo}
- * @widget.description {展示合作品牌 Logo；首页织艺谱系改由 Product textile-heritage 默认注入}
+ * @widget.description {展示合作品牌 Logo；首页织艺谱系由 Theme textile-heritage 默认注入}
  * @widget.type {content}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -65,9 +65,9 @@ if (!in_array($layout, ['grid', 'carousel'], true)) {
     $layout = 'grid';
 }
 
-// 兼容已发布布局中仍挂着空 brands 的 brand-logos：数据权威在 Product TextileHeritageCatalog。
-if ($usesCraftDirectory && class_exists(\Weline\Product\Service\TextileHeritageCatalog::class)) {
-    foreach (\Weline\Product\Service\TextileHeritageCatalog::items() as $item) {
+// 兼容已发布布局中仍挂着空 brands 的 brand-logos：数据权威在 Theme TextileHeritageCatalog。
+if ($usesCraftDirectory && class_exists(\Weline\Theme\Service\TextileHeritageCatalog::class)) {
+    foreach (\Weline\Theme\Service\TextileHeritageCatalog::items() as $item) {
         $brands[] = [
             'name' => $item['name'],
             'caption' => $translateDefaultCopy($item['caption'], $item['caption_en']),

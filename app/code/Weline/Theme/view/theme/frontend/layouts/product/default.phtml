@@ -15,7 +15,7 @@
  * @param showFooter {default=true,name="是否显示footer",description="是否显示footer，用于控制footer的显示"}
  * @param showBreadcrumb {default=true,name="是否显示面包屑",description="是否显示面包屑导航"}
  * @param showSidebar {default=false,name="是否显示侧边栏",description="是否显示右侧边栏（相关产品推荐等）"}
- * @param showRelatedProducts {default=true,name="是否显示相关产品",description="是否显示相关产品推荐区域"}
+ * @param showRelatedProducts {default=false,name="是否显示相关产品",description="是否显示相关产品推荐区域（相关/热销/最近浏览/搭配）；默认关闭"}
  * @param showReviews {default=true,name="是否显示评论容器",description="是否显示商品评论容器槽（由评论模块 default_injections 注入，布局不直接加载部件）"}
  * @param showTabs {default=false,name="是否显示详情标签",description="是否显示产品详情标签区域"}
  * @param class {default="",name="额外CSS类",description="额外CSS类，用于设置页面额外CSS类"}
@@ -56,7 +56,7 @@ $coerceBool = static function (mixed $value, bool $default): bool {
     return $default;
 };
 $showSidebar = $coerceBool($meta['showSidebar'] ?? $this->getData('showSidebar'), false);
-$showRelatedProducts = $coerceBool($meta['showRelatedProducts'] ?? $this->getData('showRelatedProducts'), true);
+$showRelatedProducts = $coerceBool($meta['showRelatedProducts'] ?? $this->getData('showRelatedProducts'), false);
 $showReviews = $coerceBool($meta['showReviews'] ?? $this->getData('showReviews'), true);
 // Product main info + description/specs live in the product-info widget; tabs stay off by default.
 $showTabs = $coerceBool($meta['showTabs'] ?? $this->getData('showTabs'), false);
@@ -244,9 +244,7 @@ $this->assign('meta', $meta);
                                         position="content"
                                         wrapper="div"
                                         class="product-detail-layout__related-slot product-detail-layout__related-slot--bestsellers">
-                                    <w:hook>Weline_Theme::frontend::layouts::product::bestsellers<else/>
-                                        <w:widget type="product" name="bestsellers" />
-                                    </w:hook>
+                                    <w:hook>Weline_Theme::frontend::layouts::product::bestsellers</w:hook>
                                 </w:slot>
                                 <w:slot id="product-recently-viewed"
                                         name="最近浏览"

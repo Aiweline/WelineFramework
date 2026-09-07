@@ -112,6 +112,7 @@
 | `video-player` | `*` | 视频播放器 |
 | `countdown` | `*` | 倒计时 |
 | `brand-logos` | `homepage`, `cms_page` | 品牌 Logo |
+| `textile-heritage` | `homepage`, `cms_page` | Theme 原生织艺谱系；支持真实素材、来源许可、网格/横向滚动与 4/5/6/8 列配置 |
 | `trust-badges` | `*` | 信任徽章 |
 | `faq-accordion` | `cms_page`, `product` | FAQ 折叠 |
 | `testimonials` | `homepage`, `cms_page` | 客户评价 |

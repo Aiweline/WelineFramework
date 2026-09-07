@@ -190,9 +190,10 @@ class SlotRendererService
                         $processed = $this->repairUnhealthyWidgetWrappers($processed);
                     }
 
-                    return $this->appendWidgetHealthToastBridge(
+                    $stamped = $this->appendWidgetHealthToastBridge(
                         $this->stampFinalWidgetHtmlHealth($processed)
                     );
+                    return $stamped;
                 } finally {
                     $this->pageRenderContext = [];
                 }
@@ -314,6 +315,7 @@ class SlotRendererService
             return $html;
         }
 
+
         $html = $this->stripEmptyTemplateWidgetShells($html);
         if (!$this->shouldInspectWidgetHtml()) {
             return $html;
@@ -323,7 +325,8 @@ class SlotRendererService
         // Repair resets purchase-actions emit flag so the component re-brings its own CSS.
         $html = $this->repairUnhealthyWidgetWrappers($html);
 
-        return $this->appendWidgetHealthToastBridge($this->stampFinalWidgetHtmlHealth($html));
+        $html = $this->appendWidgetHealthToastBridge($this->stampFinalWidgetHtmlHealth($html));
+        return $html;
     }
 
     /**
@@ -555,8 +558,16 @@ class SlotRendererService
             return [];
         }
 
-        $slotIds = $this->extractSlotIdsFromHtml($html);
-        $slotIds = $this->expandSlotIdsWithContainerChildSlots($slotWidgets, $slotIds);
+        $slotIds = RequestLifecycleTrace::measurePhase(
+            'theme.slots.html_slot_ids',
+            fn(): array => $this->extractSlotIdsFromHtml($html),
+            ['bytes' => \strlen($html)],
+        );
+        $slotIds = RequestLifecycleTrace::measurePhase(
+            'theme.slots.expand_child_ids',
+            fn(): array => $this->expandSlotIdsWithContainerChildSlots($slotWidgets, $slotIds),
+            ['slots' => \count($slotIds), 'widget_slots' => \count($slotWidgets)],
+        );
         if ($slotIds === []) {
             return [];
         }
@@ -623,17 +634,11 @@ class SlotRendererService
     {
         $slotIds = [];
 
-        if (\preg_match_all('/\bdata-wslot\s*=\s*(["\'])(.*?)\1/is', $html, $matches)) {
-            foreach ($matches[2] as $slotId) {
-                $slotId = \trim((string)$slotId);
-                if ($slotId !== '') {
-                    $slotIds[$slotId] = true;
-                }
-            }
-        }
-
-        if (\preg_match_all('/\bdata-slot-id\s*=\s*(["\'])(.*?)\1/is', $html, $matches)) {
-            foreach ($matches[2] as $slotId) {
+        // Both attribute spellings are read in one pass. This runs for every
+        // published page before the boundary renderer and used to scan the
+        // complete response twice (which is noticeable on 1MB+ storefront HTML).
+        if (\preg_match_all('/\b(data-wslot|data-slot-id)\s*=\s*(["\'])(.*?)\2/is', $html, $matches)) {
+            foreach ($matches[3] as $slotId) {
                 $slotId = \trim((string)$slotId);
                 if ($slotId !== '') {
                     $slotIds[$slotId] = true;
@@ -834,12 +839,20 @@ class SlotRendererService
 
         $parker = $this->boundaryParker();
         $scanner = $this->boundaryScanner();
-        $html = $parker->park($html);
+        $html = RequestLifecycleTrace::measurePhase(
+            'theme.slots.opaque_park',
+            fn(): string => $parker->park($html),
+            ['bytes' => \strlen($html)],
+        );
 
         $existingSlotIds = [];
         $maxIterations = 50;
         for ($iteration = 0; $iteration < $maxIterations; $iteration++) {
-            $regions = $scanner->enumerateRegions($html);
+            $regions = RequestLifecycleTrace::measurePhase(
+                'theme.slots.boundary_scan',
+                static fn() => $scanner->enumerateRegions($html),
+                ['iteration' => $iteration],
+            );
             if ($regions === []) {
                 break;
             }
@@ -849,24 +862,52 @@ class SlotRendererService
             }
 
             $filled = false;
-            foreach ($regions as $region) {
-                $slotId = $region['id'];
-                if (isset($this->filledSlotIdsThisRun[$slotId])) {
-                    continue;
-                }
-                if (!isset($slotWidgets[$slotId]) || $slotWidgets[$slotId] === []) {
-                    continue;
+            foreach ($this->selectBoundaryBatches($regions, $slotWidgets) as $batch) {
+                $batchReplacements = [];
+                $batchSlotIds = [];
+                foreach ($batch as $region) {
+                    $slotId = $region['id'];
+                    if (isset($this->filledSlotIdsThisRun[$slotId])) {
+                        continue;
+                    }
+
+                    $replacement = RequestLifecycleTrace::measurePhase(
+                        'theme.slots.region_fill',
+                        fn(): ?array => $this->buildSlotRegionReplacement($html, $region, $slotWidgets[$slotId]),
+                        [
+                            'slot_id' => $slotId,
+                            'depth' => (int)($region['depth'] ?? 0),
+                            'widgets' => \count($slotWidgets[$slotId]),
+                        ],
+                    );
+                    if (!\is_array($replacement)) {
+                        continue;
+                    }
+
+                    $batchReplacements[] = $replacement;
+                    $batchSlotIds[] = $slotId;
                 }
 
-                $nextHtml = $this->fillSlotRegionString($html, $region, $slotWidgets[$slotId]);
-                if ($nextHtml === $html) {
-                    continue;
+                if ($batchReplacements !== []) {
+                    $html = \count($batchReplacements) === 1
+                        ? $this->boundaryScanner()->replaceWrapperInner($html, $batchReplacements[0], $batchReplacements[0]['new_inner'])
+                        : RequestLifecycleTrace::measurePhase(
+                            'theme.slots.region_batch_replace',
+                            fn(): string => $this->boundaryScanner()->replaceWrapperInners($html, $batchReplacements),
+                            [
+                                'regions' => \count($batchReplacements),
+                                'bytes' => \strlen($html),
+                            ],
+                        );
+                    foreach ($batchSlotIds as $slotId) {
+                        $this->filledSlotIdsThisRun[$slotId] = true;
+                    }
+                    $filled = true;
                 }
 
-                $html = $nextHtml;
-                $this->filledSlotIdsThisRun[$slotId] = true;
-                $filled = true;
-                break;
+                if ($filled) {
+                    break;
+                }
             }
 
             if (!$filled) {
@@ -877,19 +918,97 @@ class SlotRendererService
         // Template widget-wrappers (e.g. mini-cart-icon) are opaque-parked for the
         // boundary pass, which also hides nested layout-scoped slots such as
         // footer-extras. Restore first so fillRemaining can see those markers.
-        $html = $parker->restore($html);
-        $html = $this->fillRemainingUnmarkedSlotWidgets($html, $slotWidgets);
+        $html = RequestLifecycleTrace::measurePhase(
+            'theme.slots.opaque_restore',
+            fn(): string => $parker->restore($html),
+            ['bytes' => \strlen($html)],
+        );
+        $html = RequestLifecycleTrace::measurePhase(
+            'theme.slots.fill_unmarked',
+            fn(): string => $this->fillRemainingUnmarkedSlotWidgets($html, $slotWidgets),
+            ['slots' => \count($slotWidgets)],
+        );
 
-        $this->detectOrphanWidgets(
-            $slotWidgets,
-            $this->expandSlotIdsWithContainerChildSlots(
-                $slotWidgets,
-                $existingSlotIds + $this->extractSlotIdsFromHtml($html)
-            ),
-            $pageType
+        RequestLifecycleTrace::measurePhase(
+            'theme.slots.orphan_scan',
+            function () use ($slotWidgets, $existingSlotIds, $html, $pageType): void {
+                $this->detectOrphanWidgets(
+                    $slotWidgets,
+                    $this->expandSlotIdsWithContainerChildSlots(
+                        $slotWidgets,
+                        $existingSlotIds + $this->extractSlotIdsFromHtml($html)
+                    ),
+                    $pageType
+                );
+            },
+            ['slots' => \count($slotWidgets)],
         );
 
         return $html;
+    }
+
+    /**
+     * Select fill batches from one boundary scan. Distinct sibling regions at the
+     * same depth can be replaced from right to left so earlier byte offsets stay
+     * valid; nested regions are deferred until the next scan because their parent
+     * offsets change when an inner region is replaced. Duplicate slot IDs retain
+     * the historical first-occurrence behavior and therefore use a single region.
+     *
+     * @param list<array<string, mixed>> $regions
+     * @param array<string, list<array<string, mixed>>> $slotWidgets
+     * @return list<list<array<string, mixed>>>
+     */
+    private function selectBoundaryBatches(array $regions, array $slotWidgets): array
+    {
+        $counts = [];
+        foreach ($regions as $region) {
+            $id = trim((string)($region['id'] ?? ''));
+            if ($id !== '') {
+                $counts[$id] = ($counts[$id] ?? 0) + 1;
+            }
+        }
+        $hasDuplicate = false;
+        foreach ($counts as $count) {
+            if ($count > 1) {
+                $hasDuplicate = true;
+                break;
+            }
+        }
+
+        $byDepth = [];
+        foreach ($regions as $region) {
+            $slotId = trim((string)($region['id'] ?? ''));
+            if ($slotId === ''
+                || isset($this->filledSlotIdsThisRun[$slotId])
+                || !isset($slotWidgets[$slotId])
+                || $slotWidgets[$slotId] === []
+            ) {
+                continue;
+            }
+            $depth = (int)($region['depth'] ?? 0);
+            $byDepth[$depth][] = $region;
+        }
+
+        if ($byDepth === []) {
+            return [];
+        }
+
+        krsort($byDepth, SORT_NUMERIC);
+        $batches = [];
+        foreach ($byDepth as $batch) {
+            if ($hasDuplicate) {
+                $batches[] = [$batch[0]];
+                break;
+            }
+            usort(
+                $batch,
+                static fn(array $a, array $b): int => ((int)($b['region_start'] ?? 0))
+                    <=> ((int)($a['region_start'] ?? 0)),
+            );
+            $batches[] = $batch;
+        }
+
+        return $batches;
     }
 
     /**
@@ -914,30 +1033,29 @@ class SlotRendererService
                 continue;
             }
 
-            $bounds = $scanner->findSlotElementBounds($html, $slotId);
+            $bounds = $scanner->findSlotWrapperBounds($html, $slotId);
             if ($bounds === null) {
                 continue;
             }
 
-            [$innerStart, $innerEnd] = $bounds;
-            $quotedSlotId = preg_quote($slotId, '/');
-            $pattern = '/<([a-z][a-z0-9:-]*)(?=[^>]*\bdata-wslot\s*=\s*(["\'])'
-                . $quotedSlotId . '\2)[^>]*>/i';
-            if (!preg_match($pattern, $html, $matches, PREG_OFFSET_CAPTURE)) {
-                continue;
-            }
-
-            $wrapperOpenStart = (int)$matches[0][1];
-            $wrapperOpenEnd = $wrapperOpenStart + \strlen($matches[0][0]);
             $region = [
                 'id' => $slotId,
-                'inner_start' => $innerStart,
-                'inner_end' => $innerEnd,
-                'wrapper_open_start' => $wrapperOpenStart,
-                'wrapper_open_end' => $wrapperOpenEnd,
+                'inner_start' => $bounds['inner_start'],
+                'inner_end' => $bounds['inner_end'],
+                'wrapper_open_start' => $bounds['open_start'],
+                'wrapper_open_end' => $bounds['open_end'],
             ];
 
-            $nextHtml = $this->fillSlotRegionString($html, $region, $widgets);
+            $nextHtml = RequestLifecycleTrace::measurePhase(
+                'theme.slots.region_fill',
+                fn(): string => $this->fillSlotRegionString($html, $region, $widgets),
+                [
+                    'slot_id' => $slotId,
+                    'depth' => (int)($region['depth'] ?? 0),
+                    'widgets' => \count($widgets),
+                    'source' => 'unmarked',
+                ],
+            );
             if ($nextHtml === $html) {
                 continue;
             }
@@ -954,9 +1072,27 @@ class SlotRendererService
      */
     private function fillSlotRegionString(string $html, array $region, array $layoutWidgets): string
     {
+        $replacement = $this->buildSlotRegionReplacement($html, $region, $layoutWidgets);
+        if ($replacement === null) {
+            return $html;
+        }
+
+        return $this->boundaryScanner()->replaceWrapperInner($html, $region, $replacement['new_inner']);
+    }
+
+    /**
+     * Render a slot against the current source HTML and return only its source
+     * offsets plus replacement body. Callers that have several disjoint sibling
+     * regions can apply all returned bodies in one source pass.
+     *
+     * @param list<array<string, mixed>> $layoutWidgets
+     * @return array{inner_start:int,inner_end:int,new_inner:string}|null
+     */
+    private function buildSlotRegionReplacement(string $html, array $region, array $layoutWidgets): ?array
+    {
         $slotId = (string) ($region['id'] ?? '');
         if ($slotId === '') {
-            return $html;
+            return null;
         }
 
         $wrapperOpenTag = \substr(
@@ -979,17 +1115,29 @@ class SlotRendererService
         if ($templateWidgets !== []) {
             $plan = $merger->plan($templateWidgets, $layoutWidgets);
             if ($this->isMultipleSlotWrapperTag($wrapperOpenTag)) {
-                $newInner = $this->spliceCowMergedMultipleSlotInner($inner, $templateWidgets, $plan, $layoutWidgets);
+                $newInner = RequestLifecycleTrace::measurePhase(
+                    'theme.slots.widgets.cow',
+                    fn() => $this->spliceCowMergedMultipleSlotInner($inner, $templateWidgets, $plan, $layoutWidgets),
+                    ['branch' => 'multiple', 'widgets' => \count($layoutWidgets)],
+                );
                 if ($newInner === $inner) {
-                    return $html;
+                    return null;
                 }
 
-                return $this->boundaryScanner()->replaceWrapperInner($html, $region, $newInner);
+                return [
+                    'inner_start' => (int)$region['inner_start'],
+                    'inner_end' => (int)$region['inner_end'],
+                    'new_inner' => $newInner,
+                ];
             }
 
             $widgetsHtml = $this->traceCall(
                 'slot_renderer::renderCowMergedSlot::' . \substr($slotId, 0, 80),
-                fn() => $this->renderCowMergedSlotHtml($plan),
+                fn() => RequestLifecycleTrace::measurePhase(
+                    'theme.slots.widgets.cow',
+                    fn() => $this->renderCowMergedSlotHtml($plan),
+                    ['branch' => 'single', 'widgets' => \count($layoutWidgets)],
+                ),
                 [
                     'slot_id' => $slotId,
                     'templates' => \count($templateWidgets),
@@ -997,7 +1145,7 @@ class SlotRendererService
                 ]
             );
             if ($widgetsHtml === '') {
-                return $html;
+                return null;
             }
             $isExclusive = true;
             $isAppend = false;
@@ -1012,7 +1160,7 @@ class SlotRendererService
                 ]
             );
             if ($widgetsHtml === '') {
-                return $html;
+                return null;
             }
         }
 
@@ -1027,7 +1175,11 @@ class SlotRendererService
             $newInner = $widgetsHtml;
         }
 
-        return $this->boundaryScanner()->replaceWrapperInner($html, $region, $newInner);
+        return [
+            'inner_start' => (int)$region['inner_start'],
+            'inner_end' => (int)$region['inner_end'],
+            'new_inner' => $newInner,
+        ];
     }
 
     private function stripPlaceholderContentFromInner(string $inner): string
@@ -1155,6 +1307,10 @@ class SlotRendererService
 
     private function templateWidgetBlockHasMeaningfulBody(string $block): bool
     {
+        // Parked opaque tokens are restorable content, not hollow shells.
+        if (\str_contains($block, 'WELINE_SLOT_OPAQUE')) {
+            return true;
+        }
         $withoutComments = \trim(\preg_replace('/<!--.*?-->/s', '', $block) ?? $block);
         $meaningful = \trim(\strip_tags($withoutComments));
 
@@ -1260,24 +1416,26 @@ class SlotRendererService
             return null;
         }
 
-        if ($widgetCode === 'wishlist-icon') {
-            $replaced = \preg_replace(
-                '/<section\b[^>]*\bheader-wishlist\b[^>]*>.*?<\/section>/is',
-                $renderedHtml,
-                $inner,
-                1,
-            );
-            if (\is_string($replaced) && $replaced !== $inner) {
-                return $replaced;
+        $scanner = $this->boundaryScanner();
+        $candidates = $widgetCode === 'wishlist-icon'
+            ? [['section', 'header-wishlist'], ['div', 'widget-wrapper']]
+            : [['div', 'widget-wrapper']];
+        foreach ($candidates as [$tagName, $className]) {
+            foreach ($scanner->scanTags($inner) as $tag) {
+                if ($tag['closing'] || $tag['name'] !== $tagName
+                    || \preg_match('/(?:^|\s)' . \preg_quote($className, '/') . '(?:\s|$)/', $scanner->attributeValue($tag['html'], 'class') ?? '') !== 1
+                    || ($tagName === 'div' && $scanner->attributeValue($tag['html'], 'data-widget-code') !== $widgetCode)
+                ) {
+                    continue;
+                }
+                $bounds = $scanner->findElementBounds($inner, $tag['start']);
+                if ($bounds !== null) {
+                    // HTML is literal data: replacement backreferences must not
+                    // reinterpret prices, JavaScript or backslashes.
+                    return \substr($inner, 0, $bounds['open_start']) . $renderedHtml
+                        . \substr($inner, $bounds['close_end']);
+                }
             }
-        }
-
-        $pattern = '/<div\b[^>]*\bwidget-wrapper\b[^>]*\bdata-widget-code\s*=\s*(["\'])'
-            . \preg_quote($widgetCode, '/')
-            . '\1[^>]*>.*?<\/div>/is';
-        $replaced = \preg_replace($pattern, $renderedHtml, $inner, 1);
-        if (\is_string($replaced) && $replaced !== $inner) {
-            return $replaced;
         }
 
         return null;
@@ -2124,16 +2282,22 @@ class SlotRendererService
      */
     private function renderSlotWidgets(array $widgets): string
     {
-        $html = '';
+        return RequestLifecycleTrace::measurePhase(
+            'theme.slots.widgets.regular',
+            function () use ($widgets): string {
+                $html = '';
 
-        foreach ($widgets as $widget) {
-            $widgetHtml = $this->renderWidget($widget);
-            if ($widgetHtml) {
-                $html .= $widgetHtml;
-            }
-        }
+                foreach ($widgets as $widget) {
+                    $widgetHtml = $this->renderWidget($widget);
+                    if ($widgetHtml) {
+                        $html .= $widgetHtml;
+                    }
+                }
 
-        return $html;
+                return $html;
+            },
+            ['widgets' => \count($widgets)],
+        );
     }
 
     /**
@@ -2170,7 +2334,9 @@ class SlotRendererService
 
         return $this->traceCall(
             'slot_renderer::renderWidget::' . substr($widgetModule . '::' . $widgetCode, 0, 120),
-            fn() => $this->doRenderWidget($widget),
+            function () use ($widget): string {
+                return $this->doRenderWidget($widget);
+            },
             [
                 'module' => $widgetModule,
                 'code' => $widgetCode,
@@ -2226,18 +2392,31 @@ class SlotRendererService
             try {
                 $renderConfig = $this->appendWidgetRenderContext($config, $widget);
                 $renderConfig['_widget_instance_key'] = $this->widgetInstanceKey($widget, $renderConfig);
-                $html = $this->componentRenderer->render($definition, $renderConfig, $this->renderTheme, [
-                    'area' => $renderArea,
-                    // Editor / live preview must keep PDP widgets visible even without a
-                    // storefront product identity (reviews shell, placeholders, …).
-                    'preview_mode' => !empty($renderConfig['editor_mode']) || $this->isEditorPreviewRequest(),
-                    'editor_mode' => $renderConfig['editor_mode'] ?? false,
-                ]);
-                $html = $this->maybeWrapWidgetHtml(
-                    is_string($html) ? $html : '',
-                    $widget,
-                    $renderConfig,
-                    (string)($definition->name ?: $widgetCode)
+                $widgetTimingMeta = [
+                    'module' => (string)$widgetModule,
+                    'code' => (string)$widgetCode,
+                    'type' => (string)$widgetType,
+                ];
+                $html = RequestLifecycleTrace::measurePhase(
+                    'theme.slots.widget.component_render',
+                    fn(): string => (string)$this->componentRenderer->render($definition, $renderConfig, $this->renderTheme, [
+                        'area' => $renderArea,
+                        // Editor / live preview must keep PDP widgets visible even without a
+                        // storefront product identity (reviews shell, placeholders, …).
+                        'preview_mode' => !empty($renderConfig['editor_mode']) || $this->isEditorPreviewRequest(),
+                        'editor_mode' => $renderConfig['editor_mode'] ?? false,
+                    ]),
+                    $widgetTimingMeta,
+                );
+                $html = RequestLifecycleTrace::measurePhase(
+                    'theme.slots.widget.wrapper',
+                    fn(): string => $this->maybeWrapWidgetHtml(
+                        $html,
+                        $widget,
+                        $renderConfig,
+                        (string)($definition->name ?: $widgetCode)
+                    ),
+                    $widgetTimingMeta,
                 );
 
                 return $this->rememberWidgetOutput($widgetOutputCacheKey, $html);
@@ -3396,35 +3575,27 @@ HTML;
         }
     }
 
+    /**
+     * Published layout / widget output stay process-local (L1).
+     *
+     * Historical theme_runtime SharedState get/set burns ~200ms each under pool
+     * pressure — the same regression Partials already escaped. Hot-path reads
+     * therefore never call wls.memory; publish still purges the shared namespace
+     * via {@see purgeRuntimeCacheNamespace()}.
+     */
     private function runtimeCacheGet(string $key): mixed
     {
-        $cache = self::runtimeCache();
-        if ($cache === null) {
-            return null;
-        }
+        unset($key);
 
-        try {
-            return $cache->get('theme_runtime', $key);
-        } catch (\Throwable) {
-            self::$runtimeCache = null;
-            self::$runtimeCacheResolved = true;
-            return null;
-        }
+        return null;
     }
 
+    /**
+     * @see runtimeCacheGet() — request hot path must not pay theme_runtime IPC.
+     */
     private function runtimeCacheSet(string $key, mixed $value, int $ttl): void
     {
-        $cache = self::runtimeCache();
-        if ($cache === null) {
-            return;
-        }
-
-        try {
-            $cache->set('theme_runtime', $key, $value, \max(1, $ttl));
-        } catch (\Throwable) {
-            self::$runtimeCache = null;
-            self::$runtimeCacheResolved = true;
-        }
+        unset($key, $value, $ttl);
     }
 
     private static function runtimeCache(): ?SharedCacheStateInterface
@@ -3510,7 +3681,10 @@ HTML;
         }
 
         self::$fiberRenderYieldAt[$fiber] = $now;
-        SchedulerSystem::yield();
+        RequestLifecycleTrace::measurePhase(
+            'theme.slots.cooperative_yield',
+            static fn() => SchedulerSystem::yield()
+        );
     }
     
     /**

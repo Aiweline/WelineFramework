@@ -38,6 +38,13 @@
 列出产品/分类布局选择版本,"List products/category layout select version"
 预检产品/分类布局选择版本是否可回滚,"Pre-check whether the product/category layout selection version can be rolled back"
 回滚产品/分类布局选择版本,"Rollback product/category layout selection version"
+"列出产品布局 layout_option（文件壳）","列出产品布局 layout_option（文件壳）"
+"新建产品布局 layout_option（克隆文件壳）","新建产品布局 layout_option（克隆文件壳）"
+"解析产品详情有效 layout_option（含定时）","解析产品详情有效 layout_option（含定时）"
+列出产品/分类默认产品布局定时计划,列出产品/分类默认产品布局定时计划
+保存产品布局定时计划,保存产品布局定时计划
+删除产品布局定时计划,删除产品布局定时计划
+扫描并处理临近边界的产品布局定时计划缓存清理,扫描并处理临近边界的产品布局定时计划缓存清理
 "生成 Theme 前台预览 token","Generate Theme front-end preview token"
 "校验 Theme 前台预览 token","Verify Theme front-end preview token"
 "Theme editor signed backend request bridge","Theme editor signed backend request bridge"
@@ -156,8 +163,8 @@
 没有匹配的图标,"No matching icon"
 预设颜色,"Preset Colors"
 请选择或搜索...,"Select or search..."
-没有找到匹配的结果,"No matching results found"
 搜索中...,Searching...
+没有找到匹配的结果,"No matching results found"
 加载失败,"Loading failed"
 输入关键词搜索,"Enter keywords to search"
 复制失败,"Copy failed"
@@ -556,6 +563,8 @@
 在帮助中心主内容扩展槽注入额外说明、活动或业务模块内容。,"Inject additional explanations, activities, or business module content into the main content area of the help center."
 "后台 Topbar Logo","Background Topbar Logo"
 "覆盖后台顶部栏的 Logo 区域，可由 Weline_Backend 等模块实现，从自身配置读取 logo_dark/logo_light/logo_sm 等。未实现时使用 Admin 默认静态 Logo。","Override the Logo area in the backend top bar, which can be implemented by modules such as Weline_Backend to read logo_dark/logo_light/logo_sm from their own configuration. If not implemented, the Admin default static Logo will be used."
+"主题编辑器基础信息 · 身份槽","主题编辑器基础信息 · 身份槽"
+"主题编辑器「基础信息」Drawer 的身份字段扩展槽。Website / Store / Channel 等模块应通过 BrandBasicsIdentityProviderInterface 挂载真实名称与简介，并由本 Hook 可选注入自定义 UI；权威读写走 identity API，不写入 appearance.brand。","主题编辑器「基础信息」Drawer 的身份字段扩展槽。Website / Store / Channel 等模块应通过 BrandBasicsIdentityProviderInterface 挂载真实名称与简介，并由本 Hook 可选注入自定义 UI；权威读写走 identity API，不写入 appearance.brand。"
 站点,site
 "Weline UI 2.0 语义图标迁移失败：%{1}","Weline UI 2.0 semantic icon migration failed: %{1}"
 "Theme 旧布局数据无效，升级已停止。","Legacy Theme layout data is invalid; the upgrade was stopped."
@@ -655,6 +664,7 @@ Default,Default
 位置已交换,"Position Swapped"
 布局已保存,"Layout saved"
 保存失败,"Save failed"
+产品布局模式不可编辑页头/页脚,产品布局模式不可编辑页头/页脚
 已改为本布局独立页头/页脚,已改为本布局独立页头/页脚
 已恢复全部布局跟随全局页头/页脚,已恢复全部布局跟随全局页头/页脚
 已恢复跟随全局页头/页脚,已恢复跟随全局页头/页脚
@@ -788,6 +798,22 @@ edit,edit
 "发布主题 Scope","Publish theme scopes"
 upload,upload
 "发布主题 Scope 并重算后代有效版本","Publish a theme scope and recompute effective descendant versions"
+"批量发布主题 Scope","批量发布主题 Scope"
+upload-cloud,upload-cloud
+"以一个事务发布主题 Scope 的完整资源快照","以一个事务发布主题 Scope 的完整资源快照"
+读取主题发布批次,读取主题发布批次
+receipt,receipt
+"读取当前 Scope 的主题发布批次回执","读取当前 Scope 的主题发布批次回执"
+重试主题发布缓存,重试主题发布缓存
+refresh-cw,refresh-cw
+重试已提交主题批次的缓存刷新，不重复发布资源,重试已提交主题批次的缓存刷新，不重复发布资源
+回滚主题发布批次,回滚主题发布批次
+history,history
+以新批次原子恢复历史主题资源全集,以新批次原子恢复历史主题资源全集
+读取主题基础信息身份,读取主题基础信息身份
+"读取当前 Scope 的网站/店铺/渠道真实身份字段","读取当前 Scope 的网站/店铺/渠道真实身份字段"
+保存主题基础信息身份,保存主题基础信息身份
+"写回当前 Scope 的网站/店铺/渠道真实身份字段","写回当前 Scope 的网站/店铺/渠道真实身份字段"
 主题管理,"Theme management"
 主题不存在,"Theme does not exist"
 主题激活成功,"Theme activated successfully"
@@ -928,6 +954,18 @@ CMS页面,"CMS Page"
 Dashboard,Dashboard
 搜索页,"Search Page"
 博客详情,博客详情
+促销页,促销页
+活动页,"Event Page"
+结算成功页,"Payment Success Page"
+结算失败页,"Payment failure page"
+帮助中心,"Help center"
+支付指南,支付指南
+指南页,指南页
+评价页,评价页
+问答页,问答页
+退换货页,退换货页
+政策页,政策页
+"404 页面","404 页面"
 默认布局,"Default Layout"
 头部区域,"Header Area"
 横幅区域,"Banner Area"
@@ -948,42 +986,6 @@ Dashboard,Dashboard
 参数配置,"Parameter configuration"
 参数保存成功,"Parameters saved successfully"
 参数保存失败,"Failed to save parameters"
-SALE,SALE
-DEMO,DEMO
-NEW,NEW
-加入收藏,"Add to Favorites"
-加入对比,"Add to Compare"
-快速查看,"Quick View"
-件商品,"items of goods"
-安全支付,"Secure payment"
-SSL加密保护,"SSL encryption protection"
-无忧退款,"Worry-Free Refund"
-30天无理由退货,"30 days no reason to return"
-免费配送,"Free Shipping"
-满额包邮,"Free shipping for orders over the threshold"
-全天候客服,"24/7 Customer Support"
-7×24小时在线,"7×24 hours online"
-SSL安全,"SSL security"
-数据加密传输,"Encrypted Data Transmission"
-认证商家,"Certified Merchant"
-正品保证,"Genuine product guarantee"
-新品上架,"New Product Listing"
-发现最新商品,"Found the latest product"
-上架,"On the shelves"
-查看全部新品,"View all new products"
-排名,Ranking
-已售,Sold
-回到顶部,"Back to top"
-站点偏好,"Site preferences"
-法律与政策,"Law and Policy"
-上一张,"Previous picture"
-下一张,Next
-第%d张,"Slide %d"
-剩余,Remaining
-天,Day(s)
-时,Hour
-分,Minute
-秒,Second
 "近 7 日访问量 +18%","Number of visits in the past 7 days +18%"
 卡片内容,"Card content"
 拖入表单、表格、文本或按钮,"Drag in a form, table, text or button"
@@ -1000,6 +1002,9 @@ SSL安全,"SSL security"
 拖入弹窗内容,"Drag into the pop-up window content"
 弹窗底部,"Bottom of pop-up window"
 拖入按钮,"drag button"
+SALE,SALE
+DEMO,DEMO
+NEW,NEW
 "您的订单已支付成功，预计 2 个工作日内发货。","Your order has been paid successfully and is expected to be shipped within 2 business days."
 订单已确认,"Order Confirmed"
 清晰表达你的页面主张,"Clearly express what your page stands for"
@@ -1017,6 +1022,12 @@ SSL安全,"SSL security"
 表单操作,"Form operations"
 栅格内容,"Raster content"
 末页,"Last page"
+促销活动,promotions
+时令新章,时令新章
+新的活动正在筹备,新的活动正在筹备
+当前没有可展示的限时活动。您仍可浏览在售汉服、配饰与本季新作；活动上线后会在此处集中呈现。,当前没有可展示的限时活动。您仍可浏览在售汉服、配饰与本季新作；活动上线后会在此处集中呈现。
+浏览全部商品,"Shop All Hanfu"
+查看购物帮助,查看购物帮助
 指南,指南
 个人资料,"Personal information"
 这里是个人资料默认占位。会员模块接入后，会替换为真实资料表单、账户安全和地址入口。,"This is the default placeholder for personal information. After the membership module is accessed, it will be replaced with the real information form, account security and address entry."
@@ -1089,6 +1100,7 @@ Next,Next
 在这里展示活动的核心卖点，比如满减、折扣、限时抢购、会员专享等信息。,"Display the core selling points of the promotion here, such as spend-and-save, discounts, flash sales, member exclusives, etc."
 活动商品示例,"Event Product Example"
 在这里展示参与活动的商品列表或商品推荐组件，为用户提供快速选购入口。,"Display the product list or product recommendation component participating in the promotion here, providing users with a quick purchase entry."
+目录,Contents
 为全球购物者提供可靠、便捷的在线购物体验。,"Providing a reliable and convenient online shopping experience for customers worldwide."
 "周一至周五 9:00 - 18:00（法定节假日除外）","Monday to Friday 9:00 AM - 6:00 PM (excluding statutory holidays)"
 欢迎使用本网站服务。在使用本网站提供的服务前，请您仔细阅读本服务条款。使用本网站即表示您已充分理解并同意接受本条款的全部内容。,"Welcome to use this website's services. Before using the services provided by this website, please read these terms of service carefully. Using this website indicates that you fully understand and agree to all the terms."
@@ -1101,10 +1113,8 @@ Next,Next
 七、争议解决,"7. Dispute Resolution"
 八、其他,"8. Miscellaneous"
 最后更新：,最后更新：
-帮助中心,"Help center"
-条款目录,条款目录
-目录,目录
-服务条款正文,服务条款正文
+条款目录,"Terms contents"
+服务条款正文,"Terms of service body"
 本服务条款构成您与本网站之间关于使用网站服务的协议。请完整阅读各章节；如有疑问，可通过帮助中心或联系方式与我们沟通。,本服务条款构成您与本网站之间关于使用网站服务的协议。请完整阅读各章节；如有疑问，可通过帮助中心或联系方式与我们沟通。
 "1.1 本网站提供的服务包括但不限于：商品展示、在线交易、订单管理、客户服务、信息发布等。","1.1 The services provided by this website include but are not limited to: product display, online transactions, order management, customer service, information release, etc."
 "1.2 我们有权根据业务发展需要，调整、变更或终止部分或全部服务，无需事先通知您。","1.2 We have the right to adjust, change or terminate some or all of our services based on business development needs without prior notice to you."
@@ -1146,45 +1156,59 @@ SORRY,SORRY
 "Weline 默认页面","Weline default page"
 该页面尚未提供内容。,"Content is not yet available for this page."
 返回首页,"Return to home page"
-我们致力于把选品、履约与售后做得更简单可靠，让每一次下单都安心。,"We make selection, fulfillment, and after-sales simpler and more reliable so every order feels confident."
-百万+,1M+
-服务顾客,"Customers served"
-100+,100+
-品类覆盖,Categories
+问答,问答
+选购答疑,选购答疑
+商品问答,商品问答
+关于形制、尺码、面料或穿着场景的问题，请进入对应商品详情页查看已公开的回答；需要订单协助时，可直接联系客户服务。,关于形制、尺码、面料或穿着场景的问题，请进入对应商品详情页查看已公开的回答；需要订单协助时，可直接联系客户服务。
+按分类选购,按分类选购
+联系客户服务,联系客户服务
+问答使用说明,问答使用说明
+商品问题,商品问题
+在商品详情页提问，问题会与具体款式关联，便于获得准确回复。,在商品详情页提问，问题会与具体款式关联，便于获得准确回复。
+订单与售后,订单与售后
+订单状态、退换与配送问题请通过帮助中心或账户订单页处理。,订单状态、退换与配送问题请通过帮助中心或账户订单页处理。
+公开信息提示,公开信息提示
+请勿在公开问题中填写电话、地址、订单号或其他个人信息。,请勿在公开问题中填写电话、地址、订单号或其他个人信息。
+精选明制、宋制、唐制汉服与马面裙，服务日常、节庆与礼仪场景。,"Curated Ming, Song, and Tang Hanfu with mamian skirts for everyday, festival, and ceremonial wear."
+官方商城帮助与客户服务,"Official mall help and customer service"
+我们以形制为准绳、以织造为根基，把可穿的传统美学带给全球穿搭者。,"Guided by silhouette and craft, we bring wearable traditional aesthetics to dressers worldwide."
+明·宋·唐,"Ming · Song · Tang"
+形制谱系,"Silhouette lineages"
+马面裙,"Mamian Skirts"
+高频爆款,"Signature bestsellers"
 7×24,24/7
 全球,全球
-配送网络,"Delivery network"
-以顾客为中心,"Customer obsession"
-从浏览到售后，优先解决真实购买痛点，而不是堆砌功能。,"From browse to after-sales, we prioritize real shopping pain points over feature clutter."
-发明并简化,"Invent and simplify"
-持续打磨选品、履约与支付流程，让复杂的购物决策变得清晰。,"We continually refine assortment, fulfillment, and checkout so complex decisions stay clear."
-可靠履约,"Reliable fulfillment"
-把发货时效、物流透明与售后响应当作品牌承诺来运营。,"We treat shipping speed, tracking clarity, and support responsiveness as brand promises."
-长期主义,"Long-term thinking"
-用可持续的供应链与合规运营，服务更长远的客户关系。,"Sustainable supply chains and compliant operations for longer customer relationships."
-启动在线零售业务，确立顾客优先的服务标准。,"Launched online retail with customer-first service standards."
-扩展品类与履约网络，覆盖更多地区的当日/次日达能力。,"Expanded categories and fulfillment coverage for same/next-day delivery in more regions."
-完善售后与退换货体验，建立统一的客户支持中心。,"Improved returns and after-sales with a unified customer support center."
-持续升级商城主题与购物体验，让全球站点保持一致体验。,"Continuously upgrading storefront themes for a consistent global shopping experience."
-开始购物,"Start shopping"
+国际直邮,"Worldwide shipping"
+形制为本,"Silhouette first"
+先辨明制、宋制、唐制与穿法，再谈款式与场景，让选购有据可依。,"Start with Ming, Song, or Tang silhouettes and wear methods before style and occasion."
+织艺可感,"Craft you can feel"
+云锦、宋锦、妆花与苏绣不是标签堆砌，而是可看见、可触碰的材质表达。,"Yunjin, Songjin, zhuanghua, and Suzhou embroidery are tangible materials, not empty labels."
+可穿日常,"Wearable every day"
+礼仪与出游兼顾：从入门襦裙到成套明制，覆盖通勤到节庆。,"From starter ruqun to full Ming sets for commute through ceremony."
+全球履约,"Global fulfillment"
+独立站多语言与跨境履约并行，让海外穿搭者也能安心下单。,"Multilingual storefronts and cross-border fulfillment for overseas dressers."
+从形制科普起步，建立汉服入门选购标准。,"Began with silhouette education and clear Hanfu buying standards."
+扩展马面裙、袄裙与配饰矩阵，覆盖更多日常场景。,"Expanded mamian, aoqun, and accessory ranges for daily wear."
+完善尺码、养护与退换指引，服务海外独立站顾客。,"Refined sizing, care, and returns guidance for overseas shoppers."
+上线水墨中国风主题与国际化店面，打磨可上线的汉服商城体验。,"Launched an ink-wash theme and international storefront for a launch-ready Hanfu shop."
+浏览汉服,"Browse Hanfu"
 我们的承诺,"Our promise"
-透明选品、可靠配送、可预期的售后——让购物像在熟悉的大店一样省心。,"Transparent assortment, dependable delivery, and predictable support—shopping as easy as a trusted store."
+形制清晰、尺码可依、养护有指引——让每一次穿汉服都踏实从容。,"Clear silhouettes, reliable sizing, and care guides for every Hanfu wear."
 品牌概览,"Brand snapshot"
 我们的故事,"Our story"
-从一家线上商店起步，我们不断把顾客反馈转化为更清晰的浏览、更稳定的履约与更友好的售后。,"Starting as an online store, we turn customer feedback into clearer browsing, steadier fulfillment, and friendlier support."
-为什么选择我们,"Why shop with us"
-我们相信好的购物体验不该依赖运气：价格清晰、库存可信、物流可追踪、问题有回音。,"Great shopping should not rely on luck: clear pricing, trustworthy stock, trackable shipping, and responsive support."
-团队围绕「顾客成功」打磨每一个关键路径——从首页发现到订单完成。,"Our team crafts every key path around customer success—from discovery to order completion."
+从形制科普到可穿日常，我们把顾客对汉服的疑问，沉淀成更清晰的选购路径与更可靠的履约体验。,"From silhouette literacy to wearable daily looks, we turn Hanfu questions into clearer buying paths."
+为什么选择云裳,"Why Yunshang"
+好的汉服体验不靠运气：形制标注清楚、面料说明可信、尺码有据、物流可追踪。,"Great Hanfu shopping is not luck: clear silhouettes, honest fabrics, sized fits, trackable shipping."
+团队围绕「可穿的传统美学」打磨每一个关键路径——从首页发现到订单完成。,"Our team crafts every journey around wearable tradition—from discovery to order complete."
 快捷入口,"Quick link"
 订单跟踪,"Order Tracking"
 加入我们,"Join Us"
 我们的价值观,"Our values"
-这些原则指导我们如何做产品决策、如何对待顾客，以及如何持续改进。,"These principles guide product decisions, how we treat customers, and how we improve."
+这些原则指导我们如何做形制选品、如何服务穿搭者，以及如何持续打磨独立站体验。,"These principles guide silhouette selection, dresser care, and storefront craft."
 发展历程,"Our journey"
-关键节点记录我们如何一步步把商店做成顾客信赖的购物目的地。,"Milestones that show how we became a shopping destination customers trust."
-准备好体验更好的购物了吗？,"Ready for a better shopping experience?"
-浏览精选商品，或联系支持团队了解更多合作与服务。,"Browse featured products, or contact support to learn about services and partnerships."
-浏览商品,"Browse products"
+关键节点记录我们如何把汉服从兴趣走进可上线的国际化商城。,"Milestones show how Hanfu moved from interest to a launch-ready international shop."
+准备好穿上第一套汉服了吗？,"Ready for your first Hanfu set?"
+从明制马面裙到唐风襦裙，挑选适合你的形制，或联系我们了解尺码与养护。,"From Ming mamian skirts to Tang-inspired ruqun—pick your silhouette or ask about sizing and care."
 前往帮助中心,"Go to help center"
 Product,Product
 "Custom product layout","Custom product layout"
@@ -1217,6 +1241,10 @@ Product,Product
 请确认您的支付信息是否正确,"Please confirm that your payment information is correct"
 如问题持续存在，请联系客服寻求帮助,"If the issue persists, please contact customer support for assistance."
 搜索筛选,"Search and filter"
+结算结果,结算结果
+订单尚未完成,订单尚未完成
+本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。,本次结算没有生成有效订单，也不会在此页面重复扣款。您可以返回购物车核对商品，或前往帮助中心排查支付与配送问题。
+查看帮助中心,查看帮助中心
 "筛选器区域 - 由 Filters 部件默认注入","筛选器区域 - 由 Filters 部件默认注入"
 "工具栏区域 - 拖拽排序/视图部件到此处","Toolbar area - Drag and drop/view widgets here"
 "产品网格区域 - 控制器渲染产品列表","Product Grid Area - Controller Renders Product List"
@@ -1283,32 +1311,8 @@ Product,Product
 十、联系我们,十、联系我们
 如您对本隐私政策有任何疑问、意见或建议，或需要行使您的权利，请通过本网站「帮助中心」「联系我们」或账户内支持入口与我们联系。我们将在合理期限内回复您的请求。,如您对本隐私政策有任何疑问、意见或建议，或需要行使您的权利，请通过本网站「帮助中心」「联系我们」或账户内支持入口与我们联系。我们将在合理期限内回复您的请求。
 如对本隐私政策有疑问，或需行使查阅、更正、删除等权利，请通过帮助中心或联系我们与支持团队沟通。,如对本隐私政策有疑问，或需行使查阅、更正、删除等权利，请通过帮助中心或联系我们与支持团队沟通。
-隐私政策目录,隐私政策目录
-隐私政策正文,隐私政策正文
-广告偏好,"Advertising Preferences"
-本页面向您说明我们如何基于兴趣偏好展示广告或推荐内容，以及您可用于管理这些偏好的选择。,"This page explains how we may show ads or recommendations based on interest preferences, and the choices available to manage them."
-"兴趣广告有助于展示更相关内容，您仍可随时通过浏览器、系统或账户入口管理偏好。完整个人信息处理见隐私政策与 Cookie 政策。","兴趣广告有助于展示更相关内容，您仍可随时通过浏览器、系统或账户入口管理偏好。完整个人信息处理见隐私政策与 Cookie 政策。"
-一、什么是广告偏好？,"1. What are advertising preferences?"
-广告偏好是指我们或合作伙伴基于您的浏览、兴趣或设备信息，用于提升广告或推荐相关性的选择设置。它不改变您对本站核心购物功能的使用。,广告偏好是指我们或合作伙伴基于您的浏览、兴趣或设备信息，用于提升广告或推荐相关性的选择设置。它不改变您对本站核心购物功能的使用。
-二、我们如何使用偏好信息？,二、我们如何使用偏好信息？
-在您同意或法律法规允许的范围内，我们可能将偏好信息用于：,在您同意或法律法规允许的范围内，我们可能将偏好信息用于：
-（1）展示更匹配您兴趣的广告或内容推荐；,（1）展示更匹配您兴趣的广告或内容推荐；
-（2）衡量广告效果与到达情况；,（2）衡量广告效果与到达情况；
-（3）防止欺诈、提升安全性与服务质量。,（3）防止欺诈、提升安全性与服务质量。
-三、如何管理广告偏好？,三、如何管理广告偏好？
-您可以通过以下方式管理广告相关选择：,"You can manage advertising-related choices in the following ways:"
-"（1）浏览器设置：禁用部分 Cookie 或限制跟踪功能；","(1) Browser settings: disable some cookies or limit tracking features;"
-（2）设备/系统广告设置：在操作系统或浏览器提供的广告隐私选项中调整兴趣广告；,"(2) Device/system ad settings: adjust interest-based ads in OS or browser privacy options;"
-（3）账户相关设置：如您已登录，可在账户隐私或通知相关入口中管理可配置项（以实际提供的功能为准）；,"(3) Account settings: if signed in, manage available options in account privacy or notification entries (as offered);"
-（4）第三方退出机制：部分广告网络提供兴趣广告退出入口，具体以第三方说明为准。,"(4) Third-party opt-outs: some ad networks provide interest-based ad opt-out pages; follow their instructions."
-请注意，关闭兴趣广告后，您仍可能看到广告，但广告相关性可能下降；部分必要功能（如登录态、购物车）不受影响。,"Note that after turning off interest-based ads, you may still see ads with lower relevance; essential features such as sign-in and cart remain unaffected."
-"四、与隐私政策、Cookie 政策的关系","4. Relationship to Privacy Notice and Cookie Policy"
-"广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅相关页面。","广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅相关页面。"
-五、政策更新,"5. Policy updates"
-我们可能因法律法规变化或业务需要更新本广告偏好说明。更新后的内容将发布在本页面，并自公布之日起生效。,"We may update this Advertising Preferences notice due to legal or business changes. Updates are published on this page and take effect when posted."
-关闭兴趣广告后您仍可能看到广告，但相关性可能下降。如需进一步帮助，请联系客服。,关闭兴趣广告后您仍可能看到广告，但相关性可能下降。如需进一步帮助，请联系客服。
-广告偏好目录,广告偏好目录
-广告偏好正文,广告偏好正文
+隐私政策目录,"Privacy policy contents"
+隐私政策正文,"Privacy policy body"
 网站政策说明,"Site Policy Description"
 本页面用于展示网站的隐私政策、服务条款、退款政策等重要法律文本，请在使用本网站前仔细阅读。,"This page is used to display important legal texts such as the website's privacy policy, terms of service, and refund policy. Please read them carefully before using this website."
 一、总则,"1. General principles"
@@ -1379,7 +1383,7 @@ Product,Product
 "9.3 我们保留对本政策的最终解释权，并有权根据法律法规和业务发展需要对本政策进行修订。","9.3 We reserve the right of final interpretation of this policy and the right to revise this policy in accordance with laws, regulations and business development needs."
 "9.4 如您对本政策有任何疑问，可通过本网站提供的联系方式与我们联系。","9.4 If you have any questions about this policy, you can contact us through the contact information provided on this website."
 最后更新时间：,"Last update time:"
-服务条款目录,服务条款目录
+服务条款目录,"Terms of service contents"
 免责声明,Disclaimer
 本免责声明说明本网站在提供服务过程中的责任限制与免责情形。请在使用本网站服务前仔细阅读。,本免责声明说明本网站在提供服务过程中的责任限制与免责情形。请在使用本网站服务前仔细阅读。
 本声明构成服务条款的重要补充。请结合目录了解服务中断、信息内容、交易风险与责任限制等条款。,本声明构成服务条款的重要补充。请结合目录了解服务中断、信息内容、交易风险与责任限制等条款。
@@ -1413,8 +1417,8 @@ Product,Product
 "7.2 我们保留对本免责声明的最终解释权，并有权根据法律法规和业务发展需要对本声明进行修订。","7.2 We reserve the right of final interpretation of this disclaimer and have the right to revise this statement in accordance with laws, regulations and business development needs."
 "7.3 如本免责声明的任何条款被认定为无效或不可执行，不影响其他条款的效力。","7.3 If any provision of this disclaimer is determined to be invalid or unenforceable, the validity of the other provisions will not be affected."
 如对本免责声明有疑问，请先阅读服务条款，或通过帮助中心联系我们。,如对本免责声明有疑问，请先阅读服务条款，或通过帮助中心联系我们。
-免责声明目录,免责声明目录
-免责声明正文,免责声明正文
+免责声明目录,"Disclaimer contents"
+免责声明正文,"Disclaimer body"
 为保障您的购物权益，我们制定了退款、退货与换货规则。请仔细阅读条件、流程与到账说明，再提交申请。,为保障您的购物权益，我们制定了退款、退货与换货规则。请仔细阅读条件、流程与到账说明，再提交申请。
 退换政策,"Returns Policy"
 本退款政策说明可申请情形、不予退款情形、办理流程与退款到账规则。退换细节也可参考配送/退换指南。,本退款政策说明可申请情形、不予退款情形、办理流程与退款到账规则。退换细节也可参考配送/退换指南。
@@ -1449,8 +1453,8 @@ Product,Product
 如需协助办理退款或查询进度，请通过订单详情、帮助中心或「联系我们」入口提交工单，并提供订单号与问题说明。,如需协助办理退款或查询进度，请通过订单详情、帮助中心或「联系我们」入口提交工单，并提供订单号与问题说明。
 如对退款进度或条件有疑问，请通过帮助中心、订单详情或联系我们与客服沟通。,如对退款进度或条件有疑问，请通过帮助中心、订单详情或联系我们与客服沟通。
 配送说明,"Shipping Information"
-退款政策目录,退款政策目录
-退款政策正文,退款政策正文
+退款政策目录,"Refund policy contents"
+退款政策正文,"Refund policy body"
 "本页面向您说明我们如何在本网站中使用 Cookie 及相关技术，以及您对 Cookie 的管理选择。","This page explains how we use cookies and related technologies on this website, as well as your choices for managing cookies."
 "Cookie 是提升网站可用性与安全的重要技术。请结合目录了解用途、类型与管理方式；完整个人信息说明请参阅隐私政策。","Cookie 是提升网站可用性与安全的重要技术。请结合目录了解用途、类型与管理方式；完整个人信息说明请参阅隐私政策。"
 "一、什么是 Cookie？","1. What are Cookies?"
@@ -1485,11 +1489,10 @@ Product,Product
 七、与隐私政策的关系,七、与隐私政策的关系
 "Cookie 及相关技术属于个人信息处理的一部分，补充说明见「隐私政策」。若本页与隐私政策就同一事项表述不一致，以对您权益保护更有利且符合现行法律的解释为准。","Cookie 及相关技术属于个人信息处理的一部分，补充说明见「隐私政策」。若本页与隐私政策就同一事项表述不一致，以对您权益保护更有利且符合现行法律的解释为准。"
 "如对 Cookie 使用有疑问，请先查阅隐私政策，或通过帮助中心联系支持团队。","如对 Cookie 使用有疑问，请先查阅隐私政策，或通过帮助中心联系支持团队。"
-"Cookie 政策目录","Cookie 政策目录"
+"Cookie 政策目录","Cookie policy contents"
 "Cookie 政策正文","Cookie 政策正文"
 搜索,search
-热门帮助主题,热门帮助主题
-官方商城帮助与客户服务,"Official mall help and customer service"
+热门帮助主题,"Popular help topics"
 查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。,查找订单、配送、退换、支付与账户问题的自助指南。也可搜索关键词，或从下方主题快速进入。
 物流配送,"Logistics delivery"
 发货时效、运费与配送范围,"Shipping time, shipping costs, and delivery range"
@@ -1531,6 +1534,9 @@ Product,Product
 无法连接到服务器，请检查网络连接。,"Unable to connect to the server, please check your network connection."
 分页导航,"Pagination navigation"
 缺货,"Out of Stock"
+加入收藏,"Add to Favorites"
+加入对比,"Add to Compare"
+快速查看,"Quick View"
 面包屑,"bread crumbs"
 跳转到主要内容,"Skip to main content"
 展开搜索,"Expand search"
@@ -1541,16 +1547,7 @@ Product,Product
 账户设置,"Account settings"
 退出登录,"Log out"
 语言,language
-简体中文,"Simplified Chinese"
-繁體中文,"Traditional Chinese"
 货币,currency
-切换语言,"Switch Language"
-ZH,ZH
-语言选项,"Language options"
-English,English
-切换货币,"Switch Currency"
-CNY,CNY
-货币选项,"Currency options"
 退货,"Return the goods"
 与我的订单,"With my order"
 关闭菜单,"Close menu"
@@ -1558,6 +1555,8 @@ CNY,CNY
 Weline,Weline
 网站Logo,"Site Logo"
 搜索商品...,"Search products..."
+切换语言,"Switch Language"
+切换货币,"Switch Currency"
 "浏览 %{1} 相关商品与配件","Browse %{1} products and accessories"
 查看全部,"View all"
 导航菜单,"Navigation menu"
@@ -1592,7 +1591,7 @@ Weline,Weline
 鼠标,Mice
 显示器,Monitors
 路由器,Router
-夏季促销,"Summer promotion"
+限时优惠,"Limited-Time Offers"
 新品上市,"New Product Launch"
 广告,Advertisement
 订阅我们,"Subscribe to Us"
@@ -1617,60 +1616,77 @@ Weline,Weline
 "安全注册 · 隐私受保护","Secure registration · Privacy protected"
 注册品牌文案,"Registration brand copy"
 商品分类,"Product classification"
-电子产品,Electronics
-服装鞋帽,"Clothing, Shoes & Hats"
-男装,"Men's clothing"
-女装,"Women's Clothing"
-童装,"Children's Clothing"
-家居生活,"Home & Living"
-家具,Furniture
-家纺,"Home Textiles"
-收纳,Organize
-美妆个护,"Beauty & Personal Care"
-食品生鲜,"Food & Fresh Produce"
-如何下单购买？,"How do I place an order?"
-您可以浏览商品，选择心仪的产品加入购物车，然后前往结算页面完成支付即可。,"You can browse products, select your desired items to add to the cart, then go to the checkout page to complete payment."
-我们支持支付宝、微信支付、银联卡、信用卡等多种支付方式。,"We support various payment methods such as Alipay, WeChat Pay, UnionPay, and credit cards."
-多久可以收到商品？,"How long until I receive the product?"
-一般情况下，付款后1-3个工作日发货，根据您的地址不同，快递时间为1-5天。,"Generally, it will be shipped within 1-3 working days after payment, and the express delivery time will be 1-5 days depending on your address."
-收到商品7天内，如有质量问题或其他原因需要退换，请联系客服申请退换货。,"If there are quality issues or other reasons for return or exchange within 7 days of receiving the product, please contact customer service to apply."
-如何联系客服？,"How do I contact customer service?"
-您可以通过在线客服、客服电话或邮件联系我们，客服工作时间为每天9:00-21:00。,"You can contact us via online customer service, customer service phone, or email; our service hours are 9:00-21:00 daily."
-搜索问题...,"Search issues..."
+女士汉服,"Women's Hanfu"
+明制汉服,"Ming Dynasty Hanfu"
+宋制汉服,"Song Dynasty Hanfu"
+唐制汉服,"Tang Dynasty Hanfu"
+男士汉服,"Men's Hanfu"
+道袍与直裰,"Daopao & Zhiduo Robes"
+曳撒与贴里,"Yesa & Tieli Robes"
+圆领袍,"Round-Collar Robes"
+儿童汉服,"Children's Hanfu"
+女童汉服,"Girls' Hanfu"
+男童汉服,"Boys' Hanfu"
+亲子系列,"Family Matching"
+汉服配饰,"Hanfu Accessories"
+发簪与发冠,"Hairpins & Crowns"
+腰带与禁步,"Belts & Jinbu Charms"
+绣花鞋履,"Embroidered Shoes"
+按场景选购,"Shop by Occasion"
+婚礼与礼服,"Wedding & Ceremonial"
+节庆与雅集,"Festivals & Gatherings"
+日常通勤,"Everyday & Work"
+件商品,"items of goods"
+暂无匹配的问题,"No matching questions"
+搜索问题,"Search questions"
 今日特价,"Today's Deals"
-手机通讯,"Phones & communication"
-电脑办公,"computer office"
-智能设备,"smart device"
 主导航,"Main navigation"
 分类菜单,"Category menu"
 快捷导航,"Quick navigation"
+请在部件配置中添加真实内容,"Add your verified content in the block settings"
 限时活动,"Limited-Time Event"
 活动已结束,"Event Ended"
-品牌故事,"Our Story"
-我们专注提供高品质日常好物，从选材到交付都经过严格质检。,"We focus on providing high-quality everyday essentials, with strict quality control from material selection to delivery."
-"默认内容可直接预览排版效果，接入 CMS 后可替换为正式文案。","The default content can be previewed directly to see the layout effect; after connecting to the CMS, it can be replaced with official content."
-春季系列上新,"Spring collection is now available"
-采用轻盈面料与极简剪裁，适合通勤与周末出行。现在下单可享限时包邮。,"Made with lightweight fabrics and minimalist designs, suitable for commuting and weekend outings. Place your order now and enjoy limited-time free shipping."
-立即选购,"Buy Now"
+天,Day(s)
+时,Hour
+分,Minute
+秒,Second
+内容标题,"Section title"
+请选择真实图片,"Choose an authentic image"
+安全支付,"Secure payment"
+SSL加密保护,"SSL encryption protection"
+无忧退款,"Worry-Free Refund"
+30天无理由退货,"30 days no reason to return"
+免费配送,"Free Shipping"
+满额包邮,"Free shipping for orders over the threshold"
+全天候客服,"24/7 Customer Support"
+7×24小时在线,"7×24 hours online"
+SSL安全,"SSL security"
+数据加密传输,"Encrypted Data Transmission"
+认证商家,"Certified Merchant"
+正品保证,"Genuine product guarantee"
+图文标题,"Image and text"
+在这里介绍内容、服务或品牌故事。,"Introduce your content, services or brand story here."
+查看地图,"View map"
 合作品牌,"Partner brands"
 上一组,"Previous group"
 下一组,"Next group"
 您可能还喜欢,"You may also like"
 更大容量,"Larger capacity"
 更多功能,"More features"
-升级版,"Upgrade Version"
 猜你喜欢,"Recommended for You"
 根据您的浏览记录推荐,"Recommended based on your browsing history"
-匹配,Matches
 经常一起购买,"Frequently bought together"
 总价,"Total Price"
 全部加入购物车,"Add All to Cart"
 请至少选择一个商品,"Please select at least one product"
 已添加,Added
+查看全部新品,"View all new products"
 限时抢购，错过不再,"Flash Sale, Don't Miss Out"
 距离结束,"Ends in"
-立即抢购,"Buy Now"
 精选轮播,"Featured Carousel"
+回到顶部,"Back to top"
+站点偏好,"Site preferences"
+法律与政策,"Law and Policy"
 "Hero 轮播区域","Hero Carousel Area"
 拖放轮播图或促销横幅到此处,"Drag and drop carousel or promotion banner here"
 推荐区域,"Recommended Area"
@@ -1688,21 +1704,13 @@ Logo,Logo
 邮件,Mail
 复制链接,"Copy link"
 请使用微信扫描二维码分享,"Please scan the QR code with WeChat to share"
-客户评价,"Customer Reviews"
-看看客户怎么说,"See what customers say"
-产品质量非常好，物流速度也很快，下次还会继续购买！,"The product quality is excellent, and the shipping was very fast. I will definitely buy again!"
-企业客户,"Enterprise customers"
-客服态度很好，有问题都能及时解决，购物体验非常满意。,"The customer service attitude is very good, issues are resolved promptly, and the shopping experience is very satisfying."
-普通用户,"Normal user"
-价格实惠，性价比很高，已经推荐给身边的朋友了。,"Affordable price, great value for money, already recommended to friends."
-VIP会员,"VIP Member"
 上一条,Previous
-"评分 %d","Rating %d"
 下一条,Next
-第%d条,"Item %d"
+全部商品,"Shop All Hanfu"
 面包屑导航,Breadcrumbs
 请输入您的邮箱,"Enter your email"
 我们不会向您发送垃圾邮件,"We will not send you spam"
+零售,零售
 减少数量,"Decrease quantity"
 数量,Quantity
 增加数量,"Increase quantity"
@@ -1714,17 +1722,22 @@ VIP会员,"VIP Member"
 优惠券,Coupon
 叠加优惠,"Stacked discount"
 自动优惠,"Automatic discount"
+批发,批发
 关闭通知,"Close notification"
-欢迎光临！免费配送满,"Welcome! Free shipping on orders over"
+东方衣冠，全球配送,"Traditional elegance, delivered worldwide"
 收藏,Favorite
-热门分类,"Popular Categories"
-美妆护肤,"Skincare & Cosmetics"
+热门形制,"Popular Hanfu Styles"
 特色推荐,"Featured Recommendations"
 限时特惠,"Limited-Time Offer"
-品牌精选,"Brand selection"
+汉服文化,"Hanfu Culture"
 热卖,"Hot selling."
 新品,"New Product"
-促销活动,promotions
+暂停轮播,"Pause slideshow"
+播放轮播,"Play slideshow"
+上一张,"Previous picture"
+下一张,Next
+第%d张,"Slide %d"
+剩余,Remaining
 打印,Print
 仪表盘部件区域,"Dashboard widget area"
 指标区,"indicator area"
@@ -1983,6 +1996,7 @@ JSON格式数组,"JSON format array"
 保存版本,"Save version"
 主题级颜色与变量盘,"Theme-level colors and variable disks"
 全局外观,"global appearance"
+重试缓存,重试缓存
 固定顶栏展开,"Keep toolbar expanded"
 固定顶栏,"Pin toolbar"
 固定,Pin
@@ -2062,6 +2076,7 @@ AI生成,AI生成
 宽度,Width
 加载预览...,"Loading preview..."
 继承自主题包默认值,"Inherited from theme package defaults"
+身份信息,身份信息
 Favicon,Favicon
 "上传 Favicon","上传 Favicon"
 上传图片,"Upload image"
@@ -2077,7 +2092,7 @@ Favicon,Favicon
 "支持 png / svg","支持 png / svg"
 "Logo 深色","Logo (dark)"
 "上传 Logo 深色","上传 Logo 深色"
-"保存到当前 Scope","Save to current Scope"
+恢复品牌图片继承,恢复品牌图片继承
 面板,panel
 "原生盘只读选用；修改先进入 Scope 草稿，发布后写入兼容投影并合编 CSS","Native disks are read-only; changes first enter a scope draft, then publish to the compatibility projection and compiled CSS."
 盘子列表,"plate list"
@@ -2179,13 +2194,9 @@ AI目录加载失败,"AI directory loading failed"
 "Theme 布局节点不存在。","The Theme layout node does not exist."
 "Theme 布局节点不属于当前编辑上下文。","The Theme layout node does not belong to the current editor context."
 "Theme 布局写入必须位于写意图事务内。","Theme layout writes must run inside a write-intent transaction."
-结算成功页,"Payment Success Page"
-结算失败页,"Payment failure page"
-"404 页面","404 页面"
 账户认证,"Account Authentication"
 订单列表,"order list"
 政策页面,"Policy Page"
-活动页,"Event Page"
 测试页,"Test Page"
 "-- 选择主题 --","-- Select Theme --"
 （已启用）,(enabled)
@@ -2230,6 +2241,11 @@ AI目录加载失败,"AI directory loading failed"
 主题布局图片内容超过校验上限。,"Theme layout image content exceeds the validation limit."
 模板文件不存在：%{1},"Template file does not exist: %{1}"
 读取模板文件失败：%{1},"Failed to read the template file: %{1}"
+定时计划参数不完整,定时计划参数不完整
+仅支持产品或分类默认产品布局定时,仅支持产品或分类默认产品布局定时
+布局选项不存在,布局选项不存在
+结束时间必须晚于开始时间,结束时间必须晚于开始时间
+计划不存在,计划不存在
 只能发布草稿或已发布版本,"Only draft or published versions can be published"
 部件不存在：%{1},"Component does not exist: %{1}"
 版本不存在：%{1},"Version does not exist: %{1}"
@@ -2311,6 +2327,13 @@ AI目录加载失败,"AI directory loading failed"
 表格部件,"table widget"
 "基础组件 / HTML 搭建","Basic components/HTML construction"
 主题旧部件,"Theme old parts"
+布局代码须为小写字母开头的字母数字下划线短横线,布局代码须为小写字母开头的字母数字下划线短横线
+"不能覆盖保留的 default 布局","不能覆盖保留的 default 布局"
+布局选项已存在,布局选项已存在
+找不到可克隆的产品布局模板,找不到可克隆的产品布局模板
+无法创建布局目录,无法创建布局目录
+布局文件已存在,布局文件已存在
+写入布局文件失败,写入布局文件失败
 布局选项不存在或不允许用于当前对象,"Layout option does not exist or is not allowed for the current object"
 保存布局选择,"Save layout selection"
 删除布局选择并恢复继承,"Remove layout selection and restore inheritance"
@@ -2400,6 +2423,10 @@ AI目录加载失败,"AI directory loading failed"
 "严重错误：编译后的%{1}文件中检测到PHP代码，这是不允许的\n\n位置信息：\n  源文件: %{2}\n  来源标识: %{3}\n  %{1}内容中的行号: 第 %{4} 行\n  PHP代码位置: 字符位置 %{5}\n\n问题代码片段：\n%{6}\n\n错误说明：\n  主题布局内不允许存在编译后还有PHP代码。\n  编译后的%{1}文件必须是纯%{1}，不能包含任何PHP代码。\n\n正确的做法：\n  1. 使用CSS变量：在模板中定义CSS变量，然后在CSS中使用 var()\n  2. 使用data属性：在HTML元素上设置data属性，然后在JS中读取\n  3. 使用window对象：在模板中设置 window.config = {...}，然后在JS中使用\n  4. 使用标签系统：使用框架提供的标签系统传递数据\n  5. 如果确实需要PHP代码，请添加 data-no-extract=""true"" 属性，不提取该标签","Fatal error: PHP code was detected in the compiled %{1} file, which is not allowed\n\nLocation information:\n Source file: %{2}\n Source identifier: %{3}\n %{1} Line number in content: Line %{4}\n PHP code position: Character position %{5}\n\nProblem code snippet:\n%{6}\n\nError description:\n Compiled PHP code is not allowed in the theme layout. \n The compiled %{1} file must be pure %{1} and cannot contain any PHP code. \n\nCorrect approach:\n 1. Use CSS variables: define CSS variables in the template, and then use var() in CSS\n 2. Use data attributes: set the data attribute on the HTML element, and then read it in JS\n 3. Use window objects: set window.config = {...} in the template, and then use it in JS\n 4. Use the tag system: use the tag system provided by the framework to pass data\n 5. If you really need PHP code, add the data-no-extract=""true"" attribute to not extract the tag"
 "Theme 配置读取缺少冻结的 locale。","Theme configuration reads require a frozen locale."
 "Theme 配置语言代码无效：%{1}","Invalid Theme configuration locale code: %{1}"
+产品布局定时边界缓存清理,产品布局定时边界缓存清理
+"扫描产品/分类默认布局定时的生效与失效边界，按目标清理详情/FPC 缓存（不写回永久选择）","扫描产品/分类默认布局定时的生效与失效边界，按目标清理详情/FPC 缓存（不写回永久选择）"
+"产品布局定时边界处理完成：%{1} 条","产品布局定时边界处理完成：%{1} 条"
+产品布局定时边界处理失败：%{1},产品布局定时边界处理失败：%{1}
 模板编译文件生成失败：%{1},"Template compilation file generation failed: %{1}"
 "Weline UI 审计：扫描 %{1} 个文件","Weline UI Audit: Scan %{1} files"
 "Weline UI 审计通过","Weline UI audit passed"
@@ -2774,6 +2801,126 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 静态文件：weline.modules.js编译文件！,"Static Files: weline.modules.js compiled file!"
 "编译 Weline UI 2.0 静态资源包！","Compile Weline UI 2.0 static resource package!"
 编译主题资源（less、weline.modules.js等）,"Compile Theme Resources (less, weline.modules.js, etc.)"
+广告偏好,"Advertising Preferences"
+本页面向您说明我们如何基于兴趣偏好展示广告或推荐内容，以及您可用于管理这些偏好的选择。,"This page explains how we may show ads or recommendations based on interest preferences, and the choices available to manage them."
+"兴趣广告有助于展示更相关内容，您仍可随时通过浏览器、系统或账户入口管理偏好。完整个人信息处理见隐私政策与 Cookie 政策。","兴趣广告有助于展示更相关内容，您仍可随时通过浏览器、系统或账户入口管理偏好。完整个人信息处理见隐私政策与 Cookie 政策。"
+一、什么是广告偏好？,"1. What are advertising preferences?"
+广告偏好是指我们或合作伙伴基于您的浏览、兴趣或设备信息，用于提升广告或推荐相关性的选择设置。它不改变您对本站核心购物功能的使用。,广告偏好是指我们或合作伙伴基于您的浏览、兴趣或设备信息，用于提升广告或推荐相关性的选择设置。它不改变您对本站核心购物功能的使用。
+二、我们如何使用偏好信息？,二、我们如何使用偏好信息？
+在您同意或法律法规允许的范围内，我们可能将偏好信息用于：,在您同意或法律法规允许的范围内，我们可能将偏好信息用于：
+（1）展示更匹配您兴趣的广告或内容推荐；,（1）展示更匹配您兴趣的广告或内容推荐；
+（2）衡量广告效果与到达情况；,（2）衡量广告效果与到达情况；
+（3）防止欺诈、提升安全性与服务质量。,（3）防止欺诈、提升安全性与服务质量。
+三、如何管理广告偏好？,三、如何管理广告偏好？
+您可以通过以下方式管理广告相关选择：,"You can manage advertising-related choices in the following ways:"
+"（1）浏览器设置：禁用部分 Cookie 或限制跟踪功能；","(1) Browser settings: disable some cookies or limit tracking features;"
+（2）设备/系统广告设置：在操作系统或浏览器提供的广告隐私选项中调整兴趣广告；,"(2) Device/system ad settings: adjust interest-based ads in OS or browser privacy options;"
+（3）账户相关设置：如您已登录，可在账户隐私或通知相关入口中管理可配置项（以实际提供的功能为准）；,"(3) Account settings: if signed in, manage available options in account privacy or notification entries (as offered);"
+（4）第三方退出机制：部分广告网络提供兴趣广告退出入口，具体以第三方说明为准。,"(4) Third-party opt-outs: some ad networks provide interest-based ad opt-out pages; follow their instructions."
+请注意，关闭兴趣广告后，您仍可能看到广告，但广告相关性可能下降；部分必要功能（如登录态、购物车）不受影响。,"Note that after turning off interest-based ads, you may still see ads with lower relevance; essential features such as sign-in and cart remain unaffected."
+"四、与隐私政策、Cookie 政策的关系","4. Relationship to Privacy Notice and Cookie Policy"
+"广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅相关页面。","广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅相关页面。"
+五、政策更新,"5. Policy updates"
+我们可能因法律法规变化或业务需要更新本广告偏好说明。更新后的内容将发布在本页面，并自公布之日起生效。,"We may update this Advertising Preferences notice due to legal or business changes. Updates are published on this page and take effect when posted."
+关闭兴趣广告后您仍可能看到广告，但相关性可能下降。如需进一步帮助，请联系客服。,关闭兴趣广告后您仍可能看到广告，但相关性可能下降。如需进一步帮助，请联系客服。
+广告偏好目录,"Advertising preferences contents"
+广告偏好正文,"Advertising preferences body"
+升级版,"Upgrade Version"
+匹配,Matches
+上架,"On the shelves"
+排名,Ranking
+已售,Sold
+立即抢购,"Buy Now"
+我们致力于把选品、履约与售后做得更简单可靠，让每一次下单都安心。,"We make selection, fulfillment, and after-sales simpler and more reliable so every order feels confident."
+百万+,1M+
+服务顾客,"Customers served"
+100+,100+
+品类覆盖,Categories
+配送网络,"Delivery network"
+以顾客为中心,"Customer obsession"
+从浏览到售后，优先解决真实购买痛点，而不是堆砌功能。,"From browse to after-sales, we prioritize real shopping pain points over feature clutter."
+发明并简化,"Invent and simplify"
+持续打磨选品、履约与支付流程，让复杂的购物决策变得清晰。,"We continually refine assortment, fulfillment, and checkout so complex decisions stay clear."
+可靠履约,"Reliable fulfillment"
+把发货时效、物流透明与售后响应当作品牌承诺来运营。,"We treat shipping speed, tracking clarity, and support responsiveness as brand promises."
+长期主义,"Long-term thinking"
+用可持续的供应链与合规运营，服务更长远的客户关系。,"Sustainable supply chains and compliant operations for longer customer relationships."
+启动在线零售业务，确立顾客优先的服务标准。,"Launched online retail with customer-first service standards."
+扩展品类与履约网络，覆盖更多地区的当日/次日达能力。,"Expanded categories and fulfillment coverage for same/next-day delivery in more regions."
+完善售后与退换货体验，建立统一的客户支持中心。,"Improved returns and after-sales with a unified customer support center."
+持续升级商城主题与购物体验，让全球站点保持一致体验。,"Continuously upgrading storefront themes for a consistent global shopping experience."
+开始购物,"Start shopping"
+透明选品、可靠配送、可预期的售后——让购物像在熟悉的大店一样省心。,"Transparent assortment, dependable delivery, and predictable support—shopping as easy as a trusted store."
+从一家线上商店起步，我们不断把顾客反馈转化为更清晰的浏览、更稳定的履约与更友好的售后。,"Starting as an online store, we turn customer feedback into clearer browsing, steadier fulfillment, and friendlier support."
+为什么选择我们,"Why shop with us"
+我们相信好的购物体验不该依赖运气：价格清晰、库存可信、物流可追踪、问题有回音。,"Great shopping should not rely on luck: clear pricing, trustworthy stock, trackable shipping, and responsive support."
+团队围绕「顾客成功」打磨每一个关键路径——从首页发现到订单完成。,"Our team crafts every key path around customer success—from discovery to order completion."
+这些原则指导我们如何做产品决策、如何对待顾客，以及如何持续改进。,"These principles guide product decisions, how we treat customers, and how we improve."
+关键节点记录我们如何一步步把商店做成顾客信赖的购物目的地。,"Milestones that show how we became a shopping destination customers trust."
+准备好体验更好的购物了吗？,"Ready for a better shopping experience?"
+浏览精选商品，或联系支持团队了解更多合作与服务。,"Browse featured products, or contact support to learn about services and partnerships."
+浏览商品,"Browse products"
+"云裳汉服 · 满 ¥299 包邮 · 形制精选上新","Yunshang Hanfu · Free shipping over ¥299 · New curated styles"
+博客分类页布局,"Blog Category Page"
+指南文档布局,"Guide Page"
+支付方式指南布局,"Payment Guide Page"
+新品上架,"New Arrivals"
+发现最新商品,"Discover our latest arrivals"
+选择作用范围,"Select scope."
+搜索作用范围,"Search scope."
+未找到匹配作用范围,"No matching scope found."
+品牌故事,"Our Story"
+我们专注提供高品质日常好物，从选材到交付都经过严格质检。,"We focus on providing high-quality everyday essentials, with strict quality control from material selection to delivery."
+"默认内容可直接预览排版效果，接入 CMS 后可替换为正式文案。","The default content can be previewed directly to see the layout effect; after connecting to the CMS, it can be replaced with official content."
+如何下单购买？,"How do I place an order?"
+您可以浏览商品，选择心仪的产品加入购物车，然后前往结算页面完成支付即可。,"You can browse products, select your desired items to add to the cart, then go to the checkout page to complete payment."
+我们支持支付宝、微信支付、银联卡、信用卡等多种支付方式。,"We support various payment methods such as Alipay, WeChat Pay, UnionPay, and credit cards."
+多久可以收到商品？,"How long until I receive the product?"
+一般情况下，付款后1-3个工作日发货，根据您的地址不同，快递时间为1-5天。,"Generally, it will be shipped within 1-3 working days after payment, and the express delivery time will be 1-5 days depending on your address."
+收到商品7天内，如有质量问题或其他原因需要退换，请联系客服申请退换货。,"If there are quality issues or other reasons for return or exchange within 7 days of receiving the product, please contact customer service to apply."
+如何联系客服？,"How do I contact customer service?"
+您可以通过在线客服、客服电话或邮件联系我们，客服工作时间为每天9:00-21:00。,"You can contact us via online customer service, customer service phone, or email; our service hours are 9:00-21:00 daily."
+搜索问题...,"Search issues..."
+春季系列上新,"Spring collection is now available"
+采用轻盈面料与极简剪裁，适合通勤与周末出行。现在下单可享限时包邮。,"Made with lightweight fabrics and minimalist designs, suitable for commuting and weekend outings. Place your order now and enjoy limited-time free shipping."
+立即选购,"Buy Now"
+客户评价,"Customer Reviews"
+看看客户怎么说,"See what customers say"
+产品质量非常好，物流速度也很快，下次还会继续购买！,"The product quality is excellent, and the shipping was very fast. I will definitely buy again!"
+企业客户,"Enterprise customers"
+客服态度很好，有问题都能及时解决，购物体验非常满意。,"The customer service attitude is very good, issues are resolved promptly, and the shopping experience is very satisfying."
+普通用户,"Normal user"
+价格实惠，性价比很高，已经推荐给身边的朋友了。,"Affordable price, great value for money, already recommended to friends."
+VIP会员,"VIP Member"
+"评分 %d","Rating %d"
+第%d条,"Item %d"
+简体中文,"Simplified Chinese"
+繁體中文,"Traditional Chinese"
+ZH,ZH
+语言选项,"Language options"
+English,English
+CNY,CNY
+货币选项,"Currency options"
+夏季促销,"Summer promotion"
+电子产品,Electronics
+服装鞋帽,"Clothing, Shoes & Hats"
+男装,"Men's clothing"
+女装,"Women's Clothing"
+童装,"Children's Clothing"
+家居生活,"Home & Living"
+家具,Furniture
+家纺,"Home Textiles"
+收纳,Organize
+美妆个护,"Beauty & Personal Care"
+食品生鲜,"Food & Fresh Produce"
+手机通讯,"Phones & communication"
+电脑办公,"computer office"
+智能设备,"smart device"
+欢迎光临！免费配送满,"Welcome! Free shipping on orders over"
+热门分类,"Popular Categories"
+美妆护肤,"Skincare & Cosmetics"
+品牌精选,"Brand selection"
+"保存到当前 Scope","Save to current Scope"
 为您精选的优质商品,"High-quality products selected for you"
 限时特惠！全场满300减50,"Limited Time Offer! Spend $300 and save $50 on your entire order"
 搜索类型,"Search type"
@@ -2794,6 +2941,12 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 （4）与经授权的广告合作伙伴协同完成必要的投放与计量（如适用）。,"(4) Coordinate necessary delivery and measurement with authorized advertising partners (if applicable)."
 三、您如何管理广告偏好？,"3. How can you manage advertising preferences?"
 "广告偏好管理不替代隐私政策或 Cookie 政策。关于个人信息处理与 Cookie 使用的完整说明，请参阅：","Advertising preference controls do not replace the Privacy Notice or Cookie Policy. For full details on personal data and cookies, see:"
+促销活动默认布局,"Promotions Page"
+"Weline UI 2.0 前台默认布局","Default Storefront Layout"
+服务条款页面布局,"Terms of Service Page"
+隐私政策页面,"Privacy Policy Page"
+"Cookie 政策页面","Cookie Policy Page"
+广告偏好页面,"Advertising Preferences Page"
 隐私声明,"Privacy Notice"
 使用条件,"Terms of Use"
 本免责声明说明了本网站在提供服务过程中的责任限制和免责情形。请您在使用本网站服务前仔细阅读本声明。,"This disclaimer explains the limitations of liability and disclaimers in the process of providing services on this website. Please read this disclaimer carefully before using our website services."
@@ -2823,9 +2976,6 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 "我们可能会根据法律法规变化或业务需要对本 Cookie 政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。重大变更将通过网站显著位置提示。","我们可能会根据法律法规变化或业务需要对本 Cookie 政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。重大变更将通过网站显著位置提示。"
 九、联系我们,九、联系我们
 "如您对本 Cookie 政策有疑问，可通过「帮助中心」或「联系我们」与我们沟通。广告偏好相关选项可在「广告偏好」页面查看（如已启用）。","如您对本 Cookie 政策有疑问，可通过「帮助中心」或「联系我们」与我们沟通。广告偏好相关选项可在「广告偏好」页面查看（如已启用）。"
-选择作用范围,"Select scope."
-搜索作用范围,"Search scope."
-未找到匹配作用范围,"No matching scope found."
 七、政策更新,"7. Policy updates"
 "7.1 我们可能会根据法律法规变化或业务需要对本隐私政策进行更新。更新后的内容将发布在本页面，并自公布之日起生效。","7.1 We may update this Privacy Policy based on changes in laws and regulations or business needs. The updated content will be posted on this page and will be effective from the date of publication."
 "7.2 如发生重大变更，我们可能会通过显著方式（如网站公告、邮件通知等）向您告知。","7.2 If major changes occur, we may notify you through prominent means (such as website announcements, email notifications, etc.)."
@@ -2859,54 +3009,33 @@ AI翻译服务调用失败：%{1},"AI translation service call failed: %{1}"
 云裳汉服水墨中国风独立站，精选明制、宋制、唐制汉服、马面裙与传统配饰，服务日常、节庆与礼仪场景。,"Discover Ming, Song, and Tang dynasty Hanfu, mamian skirts, and traditional accessories for everyday wear, festivals, and ceremonies."
 暂无浏览记录,"No recently viewed items"
 用户名,用户名
-女士汉服,"Women's Hanfu"
 按形制探索适合日常、节庆与礼仪场景的女士汉服,"Explore women's Hanfu by historical style for everyday wear, festivals, and ceremonies."
-明制汉服,"Ming Dynasty Hanfu"
 端庄利落的立领、马面裙与披风层次,"Structured stand collars, mamian skirts, and elegant outer layers."
-马面裙,"Mamian Skirts"
 立领长衫,"Stand-Collar Long Robes"
 披风与比甲,"Pifeng & Bijia Layers"
-宋制汉服,"Song Dynasty Hanfu"
 清雅轻盈的褙子、百迭裙与宋裤搭配,"Graceful beizi jackets, baidie skirts, and Song-style trousers."
 褙子,"Beizi Jackets"
 百迭裙,"Baidie Skirts"
 宋裤,"Song-Style Trousers"
-唐制汉服,"Tang Dynasty Hanfu"
 明快华丽的齐胸襦裙、坦领与圆领款式,"Vibrant qixiong ruqun, tanling necklines, and round-collar robes."
 齐胸襦裙,"Qixiong Ruqun"
 坦领,"Tanling Hanfu"
-圆领袍,"Round-Collar Robes"
 晋制汉服,"Jin Dynasty Hanfu"
 飘逸交领、大袖衫与裙装组合,"Flowing cross-collar ruqun, wide-sleeved jackets, and layered skirts."
 交领襦裙,"Cross-Collar Ruqun"
 大袖衫,"Wide-Sleeved Jackets"
 杂裾,"Zaju Robes"
-男士汉服,"Men's Hanfu"
 传统形制与现代日常穿着兼顾的男士系列,"Traditional silhouettes refined for contemporary everyday wear."
 节庆、礼仪与出行皆宜,"Made for festivals, ceremonies, and travel."
-道袍与直裰,"Daopao & Zhiduo Robes"
 从容雅正的传统衣冠,"Effortless, dignified traditional dress."
-曳撒与贴里,"Yesa & Tieli Robes"
 明制风格与利落剪裁,"Clean tailoring with a distinct Ming character."
 日常汉元素,"Everyday Han-Inspired Wear"
 适合通勤与日常搭配,"Easy pieces for workdays and daily styling."
-儿童汉服,"Children's Hanfu"
 舒适、安全并适合成长活动的儿童传统服饰,"Comfortable, child-safe traditional clothing made for movement and growth."
-女童汉服,"Girls' Hanfu"
-男童汉服,"Boys' Hanfu"
-亲子系列,"Family Matching"
 节庆礼服,"Festival Attire"
-汉服配饰,"Hanfu Accessories"
 以发饰、鞋履与随身雅物完成整套造型,"Complete the look with hair ornaments, footwear, and elegant carry pieces."
-发簪与发冠,"Hairpins & Crowns"
-腰带与禁步,"Belts & Jinbu Charms"
-绣花鞋履,"Embroidered Shoes"
 团扇与包袋,"Round Fans & Bags"
-按场景选购,"Shop by Occasion"
 按重要时刻与穿着需求快速找到合适的一套,"Find the right ensemble for each moment and dress code."
-婚礼与礼服,"Wedding & Ceremonial"
-节庆与雅集,"Festivals & Gatherings"
-日常通勤,"Everyday & Work"
 旅拍与演出,"Travel Shoots & Performance"
 品牌与文化,"Our Brand & Culture"
 认识云裳的审美、工艺与汉服穿着知识,"Discover Yunshang's aesthetic, craftsmanship, and guides to wearing Hanfu."
@@ -3336,6 +3465,7 @@ all,All
 自行出版,Self-publish
 支付与账户,"Payment & Account"
 账户充值,"Account top-up"
+社媒登录,"Social Login"
 货币与汇率,"Currency & exchange rates"
 职业机会,"career opportunities"
 投资者关系,"investor relations"
@@ -3517,10 +3647,9 @@ Cart,Cart
 宋锦,"Suzhou Song Brocade"
 蜀锦,"Chengdu Shu Brocade"
 苏绣,"Suzhou Embroidery"
-妆花,"Brocaded Weave"
+妆花,"Zhuanghua Brocade"
 花罗,"Patterned Gauze"
-全部商品,"Shop All Hanfu"
-浏览全部商品,"Shop All Hanfu"
+藏品来源,Source
 热销榜,"Best Sellers"
 热门入口,"Popular Links"
 账户与服务,"Account & Services"
@@ -3572,3 +3701,58 @@ Chiffon,Chiffon
 "Browse silk products and accessories","Browse silk products and accessories"
 "Browse zhijin products and accessories","Browse gold-brocade products and accessories"
 "Browse chiffon products and accessories","Browse chiffon products and accessories"
+汉服,Hanfu
+主视觉标题,"Hero title"
+内容卡片,"Content cards"
+图片相册,"Image gallery"
+功能与服务,"Features and services"
+数据展示,Statistics
+团队介绍,Team
+步骤与流程,Steps
+价格与方案,"Plans and pricing"
+公告内容,Announcement
+评价与引言,"Testimonials and quotes"
+评分：%{1}/5,"Rating: %{1}/5"
+标题与简介,"Heading and introduction"
+按钮与行动号召,"Buttons and call to action"
+间距与分隔线,"Spacing and divider"
+图片与说明,"Image and caption"
+联系信息,"Contact information"
+通用分栏容器,Columns
+"通用主视觉 Banner","Hero banner"
+眉题,Eyebrow
+标题层级,"Heading level"
+垂直留白,"Vertical spacing"
+显示分隔线,"Show divider"
+原始比例,"Natural ratio"
+完整显示,Contain
+裁切填满,Cover
+展示项目,Items
+人物照片,Portrait
+数据值,Value
+数据名称,Metric
+标记文字,Marker
+计费说明,"Billing description"
+功能清单,"Feature list"
+重点推荐,Featured
+添加项目,"Add item"
+描边按钮,"Outline button"
+主按钮,"Primary button"
+文字链接,"Text link"
+左宽右窄,"Wide left"
+左窄右宽,"Wide right"
+等宽,"Equal width"
+内容对齐,"Content alignment"
+显示搜索,"Show search"
+显示评分,"Show rating"
+显示头像,"Show avatar"
+联系地址,Address
+营业时间,"Opening hours"
+地图链接,"Map link"
+方案名称,"Plan name"
+价格文字,"Price text"
+每行一项,"One item per line"
+固定插槽标识,"Stable slot key"
+"手写模板重复放置时填写不同标识；可视化编辑器自动使用实例 ID","Use a unique key for each hand-written placement; the visual editor uses the instance ID automatically"
+左栏,"Left column"
+右栏,"Right column"

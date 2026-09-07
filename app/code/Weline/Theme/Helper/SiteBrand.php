@@ -6,6 +6,7 @@ namespace Weline\Theme\Helper;
 
 use Weline\Backend\Api\Config\BackendConfigStore;
 use Weline\FileManager\Api\Image as ImageHelper;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\View\Template;
 use Weline\Theme\Service\ThemeBrandResolver;
@@ -30,6 +31,7 @@ class SiteBrand
 
     public function __construct(
         private readonly BackendConfigStore $backendConfig,
+        private readonly ?StorefrontScopeHotCache $hotCache = null,
     ) {
     }
 
@@ -40,7 +42,11 @@ class SiteBrand
 
     public function getRawConfig(string $key): string
     {
-        $value = trim((string)($this->backendConfig->getConfig($key, self::CONFIG_MODULE) ?? ''));
+        $value = $this->rememberRequest(
+            'theme.site_brand.config',
+            $key,
+            fn (): string => trim((string)($this->backendConfig->getConfig($key, self::CONFIG_MODULE) ?? '')),
+        );
         if ($value === '' || $this->isLegacyPlaceholder($value)) {
             return '';
         }
@@ -201,15 +207,17 @@ class SiteBrand
 
     private function resolveWebsiteDisplayName(): string
     {
-        try {
-            if (!class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+        return $this->rememberRequest('theme.site_brand.website_name', 'current', static function (): string {
+            try {
+                if (!class_exists(\Weline\Websites\Data\WebsiteData::class)) {
+                    return '';
+                }
+
+                return trim((string)(\Weline\Websites\Data\WebsiteData::getName() ?? ''));
+            } catch (\Throwable) {
                 return '';
             }
-
-            return trim((string)(\Weline\Websites\Data\WebsiteData::getName() ?? ''));
-        } catch (\Throwable) {
-            return '';
-        }
+        });
     }
 
     public function resolveBackendLogoUrl(Template $template, string $configKey, int $width, int $height): string
@@ -224,14 +232,39 @@ class SiteBrand
 
     private function resolveThemeBrandUrl(string $brandKey, int $width, int $height): string
     {
-        try {
-            /** @var ThemeBrandResolver $resolver */
-            $resolver = ObjectManager::getInstance(ThemeBrandResolver::class);
-            $path = $resolver->resolveBrandPath($brandKey, 'frontend');
+        $path = $this->rememberRequest(
+            'theme.site_brand.theme_path',
+            'frontend:' . $brandKey,
+            static function () use ($brandKey): string {
+                try {
+                    /** @var ThemeBrandResolver $resolver */
+                    $resolver = ObjectManager::getInstance(ThemeBrandResolver::class);
 
-            return $this->resolvePathToUrl($path, $width, $height);
-        } catch (\Throwable) {
-            return '';
+                    return (string)$resolver->resolveBrandPath($brandKey, 'frontend');
+                } catch (\Throwable) {
+                    return '';
+                }
+            },
+        );
+
+        return $this->resolvePathToUrl($path, $width, $height);
+    }
+
+    private function rememberRequest(string $resource, string $logicalKey, callable $builder): mixed
+    {
+        $cache = $this->hotCache;
+        if (!$cache instanceof StorefrontScopeHotCache) {
+            try {
+                $cache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+            } catch (\Throwable) {
+                $cache = null;
+            }
         }
+
+        if ($cache instanceof StorefrontScopeHotCache) {
+            return $cache->rememberForRequest($resource, $logicalKey, $builder);
+        }
+
+        return $builder();
     }
 }

@@ -13,22 +13,14 @@ try {
 } catch (\Throwable $e) {
     $diskOverrideHtml = '';
 }
-$uiAssetVersion = static function (string $relative): string {
-    $path = BP . 'app/code/Weline/Theme/view/statics/ui/' . \ltrim($relative, '/');
-    return \is_file($path) ? (string)\filemtime($path) : '0';
-};
-$foundationV = $uiAssetVersion('weline-foundation.css');
-$frontendV = $uiAssetVersion('weline-frontend.css');
-$uiJsV = $uiAssetVersion('weline-ui.js');
-$prepaintV = $uiAssetVersion('weline-theme-prepaint.js');
 ?>
-<script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)?v=<?= $prepaintV ?>"></script>
+<script src="@static(Weline_Theme::ui/weline-theme-prepaint.js)"></script>
 <w:template>Weline_Frontend::templates/public/head.phtml</w:template>
 <theme:css>Weline_Theme::theme/frontend/colors/_light.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_ink.css</theme:css>
 <theme:css>Weline_Theme::theme/frontend/colors/_dark.css</theme:css>
 <?php echo $diskOverrideHtml; ?>
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)?v=<?= $foundationV ?>">
-<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)?v=<?= $frontendV ?>">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-foundation.css)">
+<link rel="stylesheet" href="@static(Weline_Theme::ui/weline-frontend.css)">
 <theme:css>Weline_Theme::theme/frontend/assets/css/theme.css</theme:css>
-<script type="module" src="@static(Weline_Theme::ui/weline-ui.js)?v=<?= $uiJsV ?>"></script>
+<script type="module" src="@static(Weline_Theme::ui/weline-ui.js)"></script>

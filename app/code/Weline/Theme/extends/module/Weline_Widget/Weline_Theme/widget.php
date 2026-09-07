@@ -2,6 +2,12 @@
 
 declare(strict_types=1);
 
+require_once dirname(__DIR__, 4) . '/Service/TextileHeritageCatalog.php';
+
+use Weline\Theme\Service\TextileHeritageCatalog;
+
+$textileHeritageConfig = TextileHeritageCatalog::widgetConfig();
+
 /**
  * 部件规约文件：Weline_Theme 模块的部件定义（精简模式）
  *
@@ -38,6 +44,7 @@ return [
     'Weline_Theme::theme/frontend/widgets/header/top-bar/default.phtml',
 
     // --- 横幅 (banner) ---
+    'Weline_Theme::theme/frontend/widgets/banner/hero-banner/default.phtml',
     [
         'template' => 'Weline_Theme::theme/frontend/widgets/banner/hero-slider/default.phtml',
         'params' => [
@@ -86,12 +93,93 @@ return [
     'Weline_Theme::theme/frontend/widgets/sidebar/tags-cloud/default.phtml',
     'Weline_Theme::theme/frontend/widgets/sidebar/sidebar-social/default.phtml',
 
+    // --- 通用建站区块（所有页面；配置与样式由 Theme 统一提供） ---
+    'Weline_Theme::theme/frontend/widgets/content/section-heading/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/button-group/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/spacer-divider/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/single-image/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/card-grid/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/image-gallery/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/feature-list/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/stat-grid/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/team-grid/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/step-list/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/pricing-table/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/content/contact-info/default.phtml',
+    'Weline_Theme::theme/frontend/widgets/container/columns/default.phtml',
+
     // --- 内容块 (content) ---
     'Weline_Theme::theme/frontend/widgets/content/text-block/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/image-text/default.phtml',
     'Weline_Theme::theme/frontend/widgets/video/video-player/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/countdown/default.phtml',
     'Weline_Theme::theme/frontend/widgets/content/brand-logos/default.phtml',
+    'textile-heritage' => [
+        'name' => '织艺谱系',
+        'description' => '可复用的真实织绣馆藏目录；默认六项注入首页品牌槽。',
+        'type' => 'content',
+        'code' => 'textile-heritage',
+        'area' => 'frontend',
+        'template' => 'Weline_Theme::theme/frontend/widgets/content/textile-heritage/default.phtml',
+        'page_layouts' => ['homepage', 'cms_page'],
+        'position' => ['content'],
+        'supports' => [
+            'layout-homepage-brands',
+            'layout-cms-content',
+            'layout-default-content',
+            'brand-list',
+            'brands',
+            'textile-heritage',
+        ],
+        'default_injections' => [[
+            'layout_type' => 'homepage',
+            'layout_option' => 'default',
+            'slot' => 'homepage-brands',
+            'area' => 'content',
+            'sort_order' => 0,
+            'required' => true,
+            'reason' => '汉服首页默认展示 Theme 真实织艺谱系',
+            'config' => $textileHeritageConfig,
+        ]],
+        'params' => [
+            'title' => [
+                'default' => TextileHeritageCatalog::TITLE,
+                'type' => 'string',
+                'label' => '标题',
+            ],
+            'brands' => [
+                'default' => $textileHeritageConfig['brands'],
+                'type' => 'brand_logo_items',
+                'label' => '谱系项',
+                'description' => '每项包含名称、说明、真实图片、搜索链接与素材来源',
+            ],
+            'columns' => [
+                'default' => '6',
+                'type' => 'select',
+                'label' => '每行列数',
+                'options' => [
+                    '4' => '4列',
+                    '5' => '5列',
+                    '6' => '6列',
+                    '8' => '8列',
+                ],
+            ],
+            'layout' => [
+                'default' => 'grid',
+                'type' => 'select',
+                'label' => '布局',
+                'options' => [
+                    'grid' => '网格',
+                    'carousel' => '横向滚动',
+                ],
+            ],
+            'grayscale' => [
+                'default' => false,
+                'type' => 'bool',
+                'label' => '灰度效果',
+            ],
+        ],
+    ],
 
     // --- 表单 (form)：账号认证布局内嵌，全宽背景 + 悬浮登录/注册 ---
     [

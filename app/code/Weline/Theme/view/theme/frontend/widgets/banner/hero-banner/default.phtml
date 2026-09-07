@@ -1,0 +1,53 @@
+<?php
+/**
+ * @widget.code {hero-banner}
+ * @widget.name {通用主视觉 Banner}
+ * @widget.description {用于任意网站的主视觉横幅，真实图片、标题与行动按钮均可配置}
+ * @widget.type {banner}
+ * @widget.area {frontend}
+ * @widget.position {["content"]}
+ * @widget.page_layouts {["*"]}
+ * @widget.compatible {true}
+ * @param title {default="主视觉标题",type="string",label="标题"}
+ * @param subtitle {default="",type="textarea",label="说明"}
+ * @param image {default="",type="media_image",label="背景图片"}
+ * @param alt_text {default="",type="string",label="替代文字"}
+ * @param button_text {default="",type="string",label="按钮文字"}
+ * @param button_link {default="",type="url",label="按钮链接"}
+ * @param alignment {default="left",type="select",label="内容对齐",options={left:"左对齐",center:"居中",right:"右对齐"}}
+ * @param height {default="var(--size-hero-height)",type="string",label="横幅高度"}
+ */
+use Weline\Theme\Helper\SiteBlockConfig as Block;
+use Weline\Theme\Helper\LegacyMediaUrl;
+use Weline\Theme\Helper\WidgetUiScope;
+use Weline\Theme\Helper\WidgetI18n;
+
+$scope = WidgetUiScope::forWidget('hero-banner');
+$esc = [Block::class, 'escape'];
+$t = static fn (mixed $value): string => Block::escape(WidgetI18n::label(Block::text($value)));
+$image = LegacyMediaUrl::sanitize($this->getData('image'));
+$imageHtml = Block::mediaHtml($this->getData('image_file_html'), $this->getData('alt_text'));
+$title = Block::text($this->getData('title') ?? '主视觉标题');
+$subtitle = Block::text($this->getData('subtitle'));
+$alignment = Block::choice($this->getData('alignment'), ['left','center','right'], 'left');
+$height = Block::length($this->getData('height'), 'var(--size-hero-height)');
+$buttonText = Block::text($this->getData('button_text'));
+$buttonLink = Block::link($this->getData('button_link'));
+?>
+<link rel="stylesheet" href="@static(Weline_Theme::css/widgets/site-blocks.css)">
+<section class="<?= $esc($scope->cssClass) ?> weline-site-block sb-hero align-<?= $esc($alignment) ?>"
+         weline-code="<?= $esc($scope->code) ?>" data-uid="<?= $esc($scope->uid) ?>" data-js-ns="<?= $esc($scope->jsNs) ?>"
+         style="--sb-hero-height:<?= $esc($height) ?>">
+    <?php if ($imageHtml !== '' || $image !== ''): ?>
+        <div class="sb-hero-media">
+            <?php if ($imageHtml !== ''): ?><?= $imageHtml ?><?php else: ?><img src="<?= $esc($image) ?>" alt="<?= $t($this->getData('alt_text')) ?>" decoding="async"><?php endif; ?>
+        </div>
+    <?php endif; ?>
+    <div class="sb-hero-content">
+        <div class="w-card sb-card sb-body sb-hero-panel">
+            <h2 class="sb-title"><?= $t($title) ?></h2>
+            <?php if ($subtitle !== ''): ?><p class="sb-lead"><?= $t($subtitle) ?></p><?php endif; ?>
+            <?php if ($buttonText !== '' && $buttonLink !== ''): ?><div class="sb-actions"><a class="w-button w-button-primary" data-tone="primary" href="<?= $esc($buttonLink) ?>"><?= $t($buttonText) ?></a></div><?php endif; ?>
+        </div>
+    </div>
+</section>

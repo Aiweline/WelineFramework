@@ -29,7 +29,20 @@ final class StorefrontFpcWarmerTest extends TestCase
         self::assertContains('/', $paths);
         self::assertContains('/en_US/', $paths);
         self::assertContains('/zh_Hans_CN/', $paths);
+        self::assertContains('/en_US/products', $paths);
+        self::assertContains('/zh_Hans_CN/products', $paths);
         self::assertContains('/products/', $paths);
         self::assertLessThanOrEqual(8, \count($paths));
+    }
+
+    public function testRequestHostIncludesNonStandardPortUsedByTheFpcKey(): void
+    {
+        $warmer = new StorefrontFpcWarmer();
+        $method = new \ReflectionMethod(StorefrontFpcWarmer::class, 'requestHostWithPort');
+        $method->setAccessible(true);
+
+        self::assertSame('shop.test:9555', $method->invoke($warmer, 'shop.test', 9555));
+        self::assertSame('shop.test', $method->invoke($warmer, 'shop.test', 443));
+        self::assertSame('[::1]:9555', $method->invoke($warmer, '::1', 9555));
     }
 }

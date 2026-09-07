@@ -111,8 +111,9 @@
         panels.className = 'mini-cart-drawer__extras-panels';
         panels.setAttribute('data-mini-cart-extras-panels', '1');
 
+        var shellUid = 'extras-' + String(Date.now()) + '-' + String(Math.floor(Math.random() * 100000));
         widgets.forEach(function (widget, index) {
-            var id = 'mini-cart-extra-tab-' + String(index);
+            var id = shellUid + '-tab-' + String(index);
             var button = document.createElement('button');
             button.type = 'button';
             button.className = 'mini-cart-drawer__extras-tab' + (index === 0 ? ' is-active' : '');
