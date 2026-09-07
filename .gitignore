@@ -13,6 +13,13 @@
 !/pub/media/
 !/pub/media/.gitkeep
 
+# Theme preview screenshots (ThemePreviewGenerator) — runtime cache, never commit
+/pub/theme_previews/**
+
+# Accidental cwd-relative writes when HOME was polluted to a site URL
+/http:
+/https:
+
 # IDE / editor local config (do not commit)
 .idea
 .vscode
