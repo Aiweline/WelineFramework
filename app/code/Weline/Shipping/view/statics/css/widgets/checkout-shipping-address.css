@@ -1,4 +1,4 @@
-/* Shopify 分段 + Amazon 结账卡：沿用 checkout Amazon 色板变量，部件内提供回退 */
+/* 结账地址分段 + Amazon 结账卡：沿用 checkout Amazon 色板变量，部件内提供回退 */
 .w-shipping-checkout-address {
   --sca-text: var(--checkout-text, #0f1111);
   --sca-muted: var(--checkout-text-secondary, #565959);
@@ -16,7 +16,7 @@
 
 .w-shipping-checkout-address__section {
   display: grid;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .w-shipping-checkout-address__heading {
@@ -25,6 +25,17 @@
   font-weight: 700;
   line-height: 1.3;
   color: var(--sca-text);
+}
+
+.w-shipping-checkout-address__saved[hidden] {
+  display: none !important;
+}
+
+.w-shipping-checkout-address__saved-toolbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
 }
 
 .w-shipping-checkout-address__saved-label {
@@ -44,6 +55,7 @@
   gap: 0.75rem;
   align-items: start;
   margin: 0;
+  min-height: 3.5rem;
   padding: 0.875rem 1rem;
   border: 1px solid var(--sca-border);
   border-radius: var(--sca-radius);
@@ -113,8 +125,8 @@
 
 .w-shipping-checkout-address__editor {
   display: grid;
-  gap: 0.75rem;
-  padding: 1rem;
+  gap: 1rem;
+  padding: 1.25rem;
   border: 1px solid var(--sca-border);
   border-radius: var(--sca-radius);
   background: var(--sca-bg-soft);
@@ -161,10 +173,63 @@
 }
 
 .w-shipping-checkout-address__editor-actions {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: stretch;
+}
+
+.w-shipping-checkout-address__editor-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 0.75rem;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.w-shipping-checkout-address__editor-action-buttons {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  justify-content: flex-end;
+  margin-left: auto;
+}
+
+.w-shipping-checkout-address__message {
+  flex: 1 1 12rem;
+  margin: 0;
+  min-width: 0;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  color: var(--sca-muted);
+}
+
+.w-shipping-checkout-address__message.is-error {
+  color: #b12704;
+}
+
+.w-shipping-checkout-address__message[hidden] {
+  display: none;
+}
+
+.w-shipping-checkout-address__field-error {
+  display: block;
+  margin-top: 0.35rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  color: #b12704;
+}
+
+.w-shipping-checkout-address__field-error[hidden] {
+  display: none;
+}
+
+.w-shipping-checkout-address__field .w-form-control.is-invalid,
+.w-shipping-checkout-address__field .w-input.is-invalid {
+  border-color: #b12704;
+  box-shadow: 0 0 0 1px #b12704;
+}
+
+.w-shipping-checkout-address__captcha:empty {
+  display: none;
 }
 
 .w-shipping-checkout-address__primary-btn,
@@ -220,7 +285,8 @@
 }
 
 /* 收起态：已存地址选中后隐藏编辑器，字段仍保留在 DOM 供 FormData */
-.w-shipping-checkout-address[data-mode="collapsed"] [data-shipping-editor] {
+.w-shipping-checkout-address[data-mode="collapsed"] [data-shipping-editor],
+.w-shipping-checkout-address[data-mode="picking"] [data-shipping-editor] {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -230,4 +296,21 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* 默认收起：只保留已选地址卡；完整列表在 picking 时展示 */
+.w-shipping-checkout-address[data-mode="collapsed"] [data-address-card]:not(.is-selected) {
+  display: none;
+}
+
+.w-shipping-checkout-address[data-mode="collapsed"] [data-add-address] {
+  display: none;
+}
+
+.w-shipping-checkout-address[data-mode="collapsed"] [data-address-radio] {
+  pointer-events: none;
+}
+
+.w-shipping-checkout-address[data-mode="picking"] [data-change-address] {
+  font-weight: 600;
 }

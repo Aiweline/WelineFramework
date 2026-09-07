@@ -50,7 +50,9 @@ class ShippingAddress extends AbstractModel
     public const schema_fields_DISTRICT_CODE = 'district_code';
     #[Col('int', null, nullable: true, comment: 'District region id')]
     public const schema_fields_DISTRICT_REGION_ID = 'district_region_id';
-    #[Col('varchar', 200, nullable: false, comment: '街道地址')]
+    #[Col('int', null, nullable: true, comment: '街道ID，FK→w_shipping_streets.street_id')]
+    public const schema_fields_STREET_ID = 'street_id';
+    #[Col('varchar', 512, nullable: false, comment: '街道地址文案快照')]
     public const schema_fields_STREET = 'street';
     #[Col('varchar', 20, comment: '邮政编码')]
     public const schema_fields_POSTAL_CODE = 'postal_code';

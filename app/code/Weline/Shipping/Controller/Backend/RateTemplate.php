@@ -20,6 +20,8 @@ use Weline\Shipping\Service\ShippingConfigurationAdminService;
 #[Acl('Weline_Shipping::rate_template', '费用模板管理', 'circle', '费用模板管理', 'Weline_Backend::shipping_group')]
 class RateTemplate extends BackendController
 {
+    use ShippingBackendEmbedTrait;
+
     private RateTemplateModel $rateTemplate;
     private ShippingConfigurationAdminService $adminService;
 
@@ -42,7 +44,7 @@ class RateTemplate extends BackendController
             ->getItems();
 
         $this->assign('templates', $templates);
-        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
+        $this->assignShippingEmbedLayout();
 
         return $this->fetch();
     }

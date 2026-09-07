@@ -2260,7 +2260,7 @@
             "pack_version": "geonames-admin1-admin2-v1"
         }
     },
-    "imported_at": "2026-09-07T04:28:00+00:00",
+    "imported_at": "2026-09-07T06:29:17+00:00",
     "postal_built_at": "2026-09-06T06:38:07+00:00",
     "postal_sources": {
         "CN": "tombcato/china-zipcode-data (adcode↔zip)",
