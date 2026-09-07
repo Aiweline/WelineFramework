@@ -83,10 +83,9 @@ $originToken = (string)($this->getData('originToken') ?? '');
                                     <w:icon name="info" size="sm"></w:icon>
                                     <strong><?= __('Cloudflare API Token 权限要求：') ?></strong>
                                     <ul style="--w-mb:0;--w-mt:var(--weline-space-2);">
-                                        <li><code>Zone:Read</code> - <?= __('读取Zone信息') ?></li>
-                                        <li><code>Zone:Cache Purge:Edit</code> - <?= __('清理缓存') ?></li>
-                                        <li><code>Zone:Cache Rules:Read</code> - <?= __('读取缓存规则') ?></li>
-                                        <li><code>Zone:Cache Rules:Edit</code> - <?= __('编辑缓存规则') ?></li>
+                                        <li><code>Zone:Cache Purge:Edit</code> - <?= __('清理缓存；资源范围选择目标 Zone') ?></li>
+                                        <li><code>Zone:Read</code> - <?= __('自动查找 Zone ID 时需要') ?></li>
+                                        <li><code>Zone:Cache Rules:Read / Edit</code> - <?= __('仅管理缓存规则时需要') ?></li>
                                     </ul>
                                     <a href="https://dash.cloudflare.com/profile/api-tokens" target="_blank" class="w-button" data-tone="primary" data-variant="outline" data-size="sm" style="--w-mt:var(--weline-space-2);">
                                         <w:icon name="circle" size="sm"></w:icon> <?= __('前往Cloudflare创建Token') ?>
@@ -96,14 +95,23 @@ $originToken = (string)($this->getData('originToken') ?? '');
                             <div id="credentialsConfig">
                                 <div style="--w-mb:var(--weline-space-4);">
                                     <label class="w-field__label"><?= __('API Token') ?></label>
-                                    <input type="text" name="credentials[api_token]" id="apiTokenInput" class="w-input" value="<?= htmlspecialchars($credentials['api_token'] ?? '') ?>" placeholder="<?= __('请输入API Token') ?>">
+                                    <input type="password" name="credentials[api_token]" id="apiTokenInput" class="w-input" value="" autocomplete="new-password" placeholder="<?= $isEdit ? __('留空保留已保存的 Token') : __('请输入API Token') ?>">
+                                    <?php if ($isEdit): ?><small class="w-field__hint"><?= __('留空保留已保存的 Token') ?></small><?php endif; ?>
                                 </div>
                                 <div style="--w-mb:var(--weline-space-4);">
                                     <label class="w-field__label"><?= __('Account ID') ?></label>
                                     <input type="text" name="credentials[account_id]" class="w-input" value="<?= htmlspecialchars($credentials['account_id'] ?? '') ?>" placeholder="<?= __('请输入Account ID（Cloudflare）') ?>">
-                                    <small class="w-field__hint w-text" data-tone="muted"><?= __('Cloudflare Zone 创建需要 Account ID') ?></small>
+                                    <small class="w-field__hint w-text" data-tone="muted"><?= __('Account ID 可选；缓存清理使用域名配置中的 Zone ID') ?></small>
                                 </div>
                             </div>
+                            <?php if ($isEdit): ?>
+                            <div style="--w-mb:var(--weline-space-4);">
+                                <label class="w-field__label" for="connectionZoneId"><?= __('验证 Zone ID（可选）') ?></label>
+                                <input type="text" id="connectionZoneId" class="w-input" autocomplete="off">
+                                <button type="button" id="testConnectionButton" class="w-button" data-tone="neutral" data-account-id="<?= (int)$account->getData('account_id') ?>"><?= __('测试已保存账户连接') ?></button>
+                                <p id="connectionResult" role="status" aria-live="polite"></p>
+                            </div>
+                            <?php endif; ?>
                             <div style="--w-mb:var(--weline-space-4);">
                                 <label class="w-field__label"><?= __('回源 Origin Token（只读）') ?></label>
                                 <input type="text" class="w-input" readonly value="<?= htmlspecialchars($originToken) ?>" placeholder="<?= __('请在 app/etc/env.php 的 server.origin_token 中配置') ?>">
@@ -147,6 +155,19 @@ $originToken = (string)($this->getData('originToken') ?? '');
     var adapterSelect = document.getElementById('adapterSelect');
     var accountNameInput = document.getElementById('accountNameInput');
     var permissionsInfo = document.getElementById('adapterPermissionsInfo');
+    var testButton = document.getElementById('testConnectionButton');
+    if (testButton) {
+        testButton.addEventListener('click', function() {
+            var output = document.getElementById('connectionResult');
+            testButton.disabled = true;
+            output.textContent = <?= json_encode(__('正在验证连接'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+            Promise.resolve(window.Weline.load ? window.Weline.load('api') : window.Weline.Api)
+                .then(function(api) { return api.resource('cdn').testConnection({account_id: Number(testButton.dataset.accountId), zone_id: document.getElementById('connectionZoneId').value.trim()}); })
+                .then(function(result) { output.textContent = result.message || ''; output.dataset.state = result.success ? 'success' : 'error'; })
+                .catch(function(error) { output.textContent = error.message || String(error); output.dataset.state = 'error'; })
+                .finally(function() { testButton.disabled = false; });
+        });
+    }
     
     function updatePermissionsInfo() {
         if (!adapterSelect || !permissionsInfo) return;

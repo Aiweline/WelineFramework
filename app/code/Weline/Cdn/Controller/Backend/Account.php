@@ -32,7 +32,7 @@ class Account extends BackendController
      */
     private function getAccountModel(): AccountModel
     {
-        return ObjectManager::getInstance(AccountModel::class);
+        return clone ObjectManager::getInstance(AccountModel::class);
     }
 
     /**
@@ -235,6 +235,11 @@ class Account extends BackendController
                 ]);
             }
 
+            $credentials = AccountManager::mergeCredentials(
+                $account->getData(AccountModel::schema_fields_ADAPTER) === $data['adapter'] ? $account->getCredentialsArray() : [],
+                $data['credentials'] ?? null
+            );
+
             // 设置数据
             $account->setData(AccountModel::schema_fields_NAME, $data['name']);
             $account->setData(AccountModel::schema_fields_ADAPTER, $data['adapter']);
@@ -242,14 +247,6 @@ class Account extends BackendController
             $account->setData(AccountModel::schema_fields_STATUS, $data['status'] ?? AccountModel::STATUS_ACTIVE);
 
             // 处理凭据
-            $credentials = [];
-            if (isset($data['credentials'])) {
-                if (is_array($data['credentials'])) {
-                    $credentials = $data['credentials'];
-                } else {
-                    $credentials = json_decode($data['credentials'], true) ?: [];
-                }
-            }
             $account->setCredentialsArray($credentials);
 
             // 处理默认账户标记

@@ -69,7 +69,7 @@ Access Token 直接出现在浏览器 URL，不安全，且与「后台用 code 
 示例（把域名和后台 key 换成你的）：
 
 ```text
-https://p05113ef3.weline.test:11720/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/cdn/backend/oauth/callback
+https://p05113ef3.test.weline.com:11720/jRaxfEJaRUyO6ZBOA3wJX8bituje6oqH/cdn/backend/oauth/callback
 ```
 
 注意：
