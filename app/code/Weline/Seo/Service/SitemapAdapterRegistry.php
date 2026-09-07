@@ -65,6 +65,11 @@ class SitemapAdapterRegistry
      * 官方 IndexNow 参与方中未单独建类的平台。
      */
     private const BUILTIN_INDEXNOW_PLATFORMS = [
+        'indexnow' => [
+            'name' => 'IndexNow',
+            'color' => '#0078D4',
+            'endpoint' => 'https://api.indexnow.org/indexnow',
+        ],
         'internetarchive' => [
             'name' => 'Internet Archive',
             'color' => '#333333',
@@ -158,7 +163,7 @@ class SitemapAdapterRegistry
      */
     public function getPlatformCodes(): array
     {
-        return array_keys($this->getAdapters());
+        return array_map('strval', array_keys($this->getAdapters()));
     }
 
     /**

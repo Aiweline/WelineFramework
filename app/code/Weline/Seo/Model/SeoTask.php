@@ -64,6 +64,7 @@ class SeoTask extends Model
     // 任务类型常量
     public const TASK_TYPE_FEED_GENERATE = 'feed_generate';
     public const TASK_TYPE_PUSH_URLS = 'push_urls';
+    public const TASK_TYPE_SITEMAP_REFRESH = 'sitemap_refresh';
     public const TASK_TYPE_KEYWORD_EXTRACT = 'keyword_extract';
 
     // 状态常量
@@ -317,5 +318,4 @@ class SeoTask extends Model
         return $this->getStatus() === self::STATUS_ERROR;
     }
 }
-
 

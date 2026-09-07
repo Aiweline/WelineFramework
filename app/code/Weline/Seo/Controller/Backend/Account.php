@@ -19,6 +19,7 @@ use Weline\Seo\Model\SeoAccount;
 use Weline\Seo\Model\SeoWebsiteAccount;
 use Weline\Seo\Model\SeoWebsiteStats;
 use Weline\Seo\Service\SeoPlatformCapabilityService;
+use Weline\Seo\Service\SeoAccountConfig;
 use Weline\Seo\Service\SeoWebsiteDirectory;
 use Weline\Seo\Service\SitemapAdapterRegistry;
 
@@ -284,25 +285,16 @@ class Account extends BackendController
                 }
             }
 
-            foreach ($configFields as $field) {
-                if (!is_array($field) || empty($field['required'])) {
-                    continue;
-                }
-                $key = trim((string)($field['key'] ?? ''));
-                if ($key === '') {
-                    continue;
-                }
-                $type = strtolower((string)($field['type'] ?? 'text'));
-                $value = $config[$key] ?? null;
-                $missing = $type === 'checkbox'
-                    ? false
-                    : ($value === null || $value === '' || $value === []);
-                if ($missing) {
-                    return $this->jsonResponse([
-                        'success' => false,
-                        'message' => __('请填写：%{1}', (string)($field['label'] ?? $key)),
-                    ]);
-                }
+            $configBoundary = new SeoAccountConfig();
+            $existingConfig = $id && $account->getPlatform() === $platform ? $account->getConfigArray() : [];
+            $config = $configBoundary->merge($existingConfig, $config, $configFields);
+            $configErrors = $configBoundary->validate($platform, $config, $configFields);
+            if ($configErrors !== []) {
+                return $this->jsonResponse(['success' => false, 'message' => implode('；', $configErrors)]);
+            }
+
+            if (($data['config_action'] ?? '') === 'verify') {
+                return $this->jsonResponse((new \Weline\Seo\Service\SeoAccountVerifier())->verify($platform, $config));
             }
 
             $account->setData(SeoAccount::schema_fields_NAME, $name)
@@ -310,7 +302,7 @@ class Account extends BackendController
                 ->setData(SeoAccount::schema_fields_PROVIDER, $platform) // 向后兼容
                 ->setData(SeoAccount::schema_fields_SCOPE, '')
                 ->setData(SeoAccount::schema_fields_DESCRIPTION, (string)($data['description'] ?? ''))
-                ->setData(SeoAccount::schema_fields_IS_ACTIVE, (int)($data['is_active'] ?? SeoAccount::STATUS_ACTIVE))
+                ->setData(SeoAccount::schema_fields_IS_ACTIVE, (int)($data['is_active'] ?? SeoAccount::STATUS_INACTIVE))
                 ->setData(SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS, $enableCronPushUrls)
                 ->setData(SeoAccount::schema_fields_ENABLE_CRON_SITEMAP, $enableCronSitemap);
 
@@ -327,7 +319,7 @@ class Account extends BackendController
         } catch (\Throwable $e) {
             return $this->jsonResponse([
                 'success' => false,
-                'message' => __('账户保存失败：%{1}', $e->getMessage()),
+                'message' => __('账户保存失败，请检查配置后重试'),
             ]);
         }
     }
@@ -377,7 +369,7 @@ class Account extends BackendController
             $configs = [];
             foreach ($bindings as $binding) {
                 $websiteId = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
-                if ($websiteId > 0) {
+                if ($websiteId >= 0) {
                     $configs[$websiteId] = [
                         'sitemap_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_SITEMAP_FREQUENCY] ?? 'daily',
                         'crawl_frequency' => $binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_CRAWL_FREQUENCY] ?? 'weekly',
@@ -447,7 +439,7 @@ class Account extends BackendController
                 $websiteIds = [];
             }
             $websiteIds = array_map('intval', $websiteIds);
-            $websiteIds = array_filter($websiteIds, fn($id) => $id > 0);
+            $websiteIds = array_filter($websiteIds, fn($id) => $id >= 0);
             
             /** @var \Weline\Seo\Model\SeoWebsiteAccount $websiteAccountModel */
             $websiteAccountModel = ObjectManager::getInstance(\Weline\Seo\Model\SeoWebsiteAccount::class);
@@ -540,10 +532,10 @@ class Account extends BackendController
             }
             
             $accountId = (int)($data['account_id'] ?? 0);
-            $websiteId = (int)($data['website_id'] ?? 0);
+            $websiteId = (int)($data['website_id'] ?? -1);
             $config = $data['config'] ?? [];
             
-            if ($accountId <= 0 || $websiteId <= 0) {
+            if ($accountId <= 0 || $websiteId < 0) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('账户ID或站点ID无效'),
@@ -622,9 +614,9 @@ class Account extends BackendController
             }
             
             $accountId = (int)($data['account_id'] ?? 0);
-            $websiteId = (int)($data['website_id'] ?? 0);
+            $websiteId = (int)($data['website_id'] ?? -1);
             
-            if ($accountId <= 0 || $websiteId <= 0) {
+            if ($accountId <= 0 || $websiteId < 0) {
                 return $this->jsonResponse([
                     'success' => false,
                     'message' => __('账户ID或站点ID无效'),
@@ -747,7 +739,7 @@ class Account extends BackendController
             
             foreach ($bindings as $binding) {
                 $websiteId = (int)($binding[\Weline\Seo\Model\SeoWebsiteAccount::schema_fields_WEBSITE_ID] ?? 0);
-                if ($websiteId <= 0) {
+                if ($websiteId < 0) {
                     continue;
                 }
                 

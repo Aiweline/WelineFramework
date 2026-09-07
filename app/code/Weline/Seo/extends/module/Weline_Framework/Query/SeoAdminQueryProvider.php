@@ -109,6 +109,7 @@ final class SeoAdminQueryProvider implements QueryProviderInterface
                 'enable_cron_sitemap' => ['type' => 'bool'],
                 'config' => ['type' => 'map', 'max_items' => 100],
                 'config_json' => ['type' => 'string', 'max_length' => 50000],
+                'config_action' => ['type' => 'string', 'max_length' => 10],
             ]),
             $this->operation('syncAccountStats', __('同步一个 SEO 账户所绑定站点的统计数据。'), [
                 'account_id' => ['type' => 'int', 'required' => true, 'min' => 1],

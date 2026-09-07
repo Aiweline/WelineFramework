@@ -33,7 +33,11 @@ $isActive = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::sche
 $enableCronPush = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::schema_fields_ENABLE_CRON_PUSH_URLS) : 1;
 $enableCronSitemap = $account ? (int)$account->getData(\Weline\Seo\Model\SeoAccount::schema_fields_ENABLE_CRON_SITEMAP) : 0;
 
-$configArray = $account ? $account->getConfigArray() : [];
+$configBoundary = new \Weline\Seo\Service\SeoAccountConfig();
+$accountConfig = $account ? $account->getConfigArray() : [];
+$configFields = (array)($platforms[$platform]['config_fields'] ?? []);
+$configuredSecretKeys = $configBoundary->configuredSecrets($accountConfig, $configFields);
+$configArray = $configBoundary->forDisplay($accountConfig, $configFields);
 $configJson = $configArray ? json_encode($configArray, JSON_PRETTY_PRINT | $jsonForScriptFlags) : '';
 
 $seoAccountWebsiteSelectOptions = [];
@@ -75,24 +79,22 @@ $platformFeatures = [
         'name' => 'Google',
         'features' => [
             'Search Console Sitemap API (Sitemap提交)',
-            'Indexing API (URL推送，适用范围受 Google 限制)',
+            '普通商品、分类和 CMS 页面通过 Sitemap 发现',
             'URL检查工具',
             '性能监控'
         ],
-        'config_hint' => '需要配置 Google Service Account JSON',
-        'guide_title' => 'Google Service Account 获取步骤',
+        'config_hint' => '先在 Google Search Console 验证域名/网址属性，再把 Service Account 的 client_email 加成所有者；本处属性 URL 须与 GSC 完全一致后再点验证',
+        'outbound_hint' => '验证与提交依赖服务器访问 Google（oauth2.googleapis.com）。若运行环境无法出网或未配置代理，验证会超时失败；凭证已读到时请检查网络/代理，勿重复上传 JSON。',
+        'guide_title' => 'Google Search Console 配置顺序（先 GSC，再本系统）',
         'guide_steps' => [
-            '1. 访问 Google Cloud Console: <a href="https://console.cloud.google.com" target="_blank">https://console.cloud.google.com</a>',
-            '2. 创建新项目或选择现有项目',
-            '3. 启用 Search Console API；如需 URL 推送，再按 Google 规则启用 Indexing API',
-            '4. 创建服务账号: 导航到 API 和服务 → 凭证',
-            '5. 点击右上角 "创建凭证" 按钮 → 选择 "服务账号"',
-            '6. 填写服务账号名称（如：seo-indexing），点击创建',
-            '7. 授予角色: 选择 "Owner" 或 "Editor" 权限（可选，可跳过）',
-            '8. 创建密钥: 在服务账号列表中点击刚创建的账号 → 密钥 → 添加密钥 → 创建新密钥',
-            '9. 选择 JSON 格式，下载密钥文件',
-            '10. 复制整个 JSON 文件内容到下方配置框的 service_account 字段',
-            '11. 在 Google Search Console 中添加此服务账号邮箱（client_email）为网站所有者'
+            '1. 打开 <a href="https://search.google.com/search-console" target="_blank" rel="noopener">Google Search Console</a>，添加并<strong>验证</strong>站点属性（域名属性如 sc-domain:example.com，或网址前缀如 https://www.example.com/）',
+            '2. 访问 Google Cloud Console: <a href="https://console.cloud.google.com" target="_blank" rel="noopener">https://console.cloud.google.com</a>，创建/选择项目',
+            '3. 启用 <strong>Search Console API</strong>（普通页面走 Sitemap，不使用 Indexing API）',
+            '4. 创建服务账号：API 和服务 → 凭证 → 创建凭证 → 服务账号（如 seo-indexing）',
+            '5. 为服务账号创建 JSON 密钥并下载；记下 JSON 里的 <code>client_email</code>（形如 xxx@xxx.iam.gserviceaccount.com）',
+            '6. 回到 Search Console → 该属性 → 设置 → 用户和权限 → 添加用户：粘贴 <code>client_email</code>，权限选 <strong>所有者</strong>（仅「完整」可能不够）',
+            '7. 在本页粘贴/上传 Service Account JSON，并填写 <strong>与 GSC 属性字符串完全一致</strong> 的站点属性 URL（GSC 里是 sc-domain: 就必须填 sc-domain:，不要自作主张改成 https://www…）',
+            '8. 确认服务器能访问 Google（出网/代理）后，再点「验证配置与连接」；通过后再绑定网站并开启 Sitemap 定时提交'
         ],
         'config_template' => [
             'service_account' => [
@@ -135,8 +137,8 @@ $platformFeatures = [
         'name' => '百度',
         'features' => [
             'LinkSubmit (链接提交)',
-            'Sitemap提交',
-            'MIP/AMP推送'
+            'Sitemap 在资源平台手动提交',
+            '普通/快速链接提交（受配额限制）'
         ],
         'config_hint' => '需要配置百度站点Token',
         'guide_title' => '百度站长平台 Token 获取步骤',
@@ -173,24 +175,24 @@ foreach ($platforms as $code => $info) {
             'features' => [
                 (string)__('标准 XML Sitemap 生成'),
                 (string)__('站点绑定后生成独立平台目录'),
-                $supportsSubmit ? (string)__('IndexNow 自动通知') : (string)__('站长平台手动 Sitemap 提交'),
+                $supportsIndexNow ? (string)__('IndexNow 自动通知') : (string)__('站长平台手动 Sitemap 提交'),
             ],
-            'config_hint' => $supportsSubmit
+            'config_hint' => $supportsIndexNow
                 ? (string)__('需要配置 IndexNow Key 和可公开访问的 Key 文件')
                 : (string)__('无需 API 配置；生成 sitemap 后到对应站长平台手动提交'),
             'guide_title' => (string)__('%{1} 配置步骤', $platformName),
-            'guide_steps' => $supportsSubmit ? [
+            'guide_steps' => $supportsIndexNow ? [
                 (string)__('1. 生成 8-128 位 IndexNow Key'),
                 (string)__('2. 在网站根目录放置 Key 文件，文件内容只包含该 Key'),
                 (string)__('3. 在下方配置中填写 indexnow_key 和 key_location'),
-                (string)__('4. 保存账户、绑定站点，并启用 URL/Sitemap 自动提交'),
+                (string)__('4. 保存账户、绑定站点，并启用 URL 自动推送；Sitemap 通过 robots.txt 声明'),
             ] : [
                 (string)__('1. 保存账户并绑定站点'),
                 (string)__('2. 运行 Sitemap 生成或等待定时任务生成平台目录'),
                 (string)__('3. 将 %{1} 提交到对应站长平台', '/sitemaps/{website_code}/' . $code . '/sitemap.xml'),
                 (string)__('4. 保持 robots.txt 中的 Sitemap 入口可访问'),
             ],
-            'config_template' => $supportsSubmit ? [
+            'config_template' => $supportsIndexNow ? [
                 'indexnow_key' => 'your-indexnow-key',
                 'key_location' => 'https://example.com/your-indexnow-key.txt',
                 'indexnow_endpoint' => 'https://api.indexnow.org/indexnow',
@@ -212,6 +214,20 @@ foreach ($platforms as $code => $info) {
 
 ?>
 <css>Weline_Seo::css/seo-admin.css</css>
+<js>Weline_Seo::js/seo-admin.js</js>
+<div data-seo-admin-page="account-form"
+     data-return-url="@backend-url{'seo/backend/account/index'}"
+     data-api-unavailable="<?= htmlspecialchars((string)__('Weline API 不可用'), ENT_QUOTES, 'UTF-8') ?>"
+     data-resource-unavailable="<?= htmlspecialchars((string)__('SEO 后台 API 不可用'), ENT_QUOTES, 'UTF-8') ?>"
+     data-save-failed="<?= htmlspecialchars((string)__('账户保存失败，请检查配置后重试'), ENT_QUOTES, 'UTF-8') ?>"
+     data-saving="<?= htmlspecialchars((string)__('保存中…'), ENT_QUOTES, 'UTF-8') ?>"
+     data-verifying="<?= htmlspecialchars((string)__('验证中…'), ENT_QUOTES, 'UTF-8') ?>"
+     data-save-completed="<?= htmlspecialchars((string)__('账户保存成功'), ENT_QUOTES, 'UTF-8') ?>"
+     data-verify-completed="<?= htmlspecialchars((string)__('配置验证通过'), ENT_QUOTES, 'UTF-8') ?>"
+     data-verify-failed-title="<?= htmlspecialchars((string)__('验证失败'), ENT_QUOTES, 'UTF-8') ?>"
+     data-open-gsc="<?= htmlspecialchars((string)__('去 Google Search Console'), ENT_QUOTES, 'UTF-8') ?>"
+     data-close="<?= htmlspecialchars((string)__('关闭'), ENT_QUOTES, 'UTF-8') ?>">
+
 <!-- 消息提示 -->
                 <div class="w-grid">
                     <div style="--w-span:12;">
@@ -256,6 +272,8 @@ foreach ($platforms as $code => $info) {
                 <script>
                 // ==================== 平台配置数据 ====================
                 const PLATFORM_DATA = <?= json_encode($platformFeatures, $jsonForScriptFlags) ?>;
+                const ACCOUNT_SECRET_KEYS = <?= json_encode($configuredSecretKeys, $jsonForScriptFlags) ?>;
+                const ACCOUNT_SAVED_PLATFORM = <?= json_encode($platform, $jsonForScriptFlags) ?>;
                 const ACCOUNT_CONFIG_VALUES = <?= json_encode($configArray, $jsonForScriptFlags) ?> || {};
                 const SEO_ACCOUNT_WEBSITE_OPTIONS = <?= json_encode($seoAccountWebsiteSelectOptions, $jsonForScriptFlags) ?> || [];
                 let currentSelectedPlatform = <?= json_encode($platform, $jsonForScriptFlags) ?>;
@@ -426,30 +444,66 @@ foreach ($platforms as $code => $info) {
                 function hideAllPlatformInfo() {
                     document.getElementById('platformFeaturesInfo').style.display = 'none';
                     document.getElementById('platformGuideInfo').style.display = 'none';
+                    const outboundHint = document.getElementById('seoPlatformOutboundHint');
+                    if (outboundHint) {
+                        outboundHint.hidden = true;
+                    }
                     renderProviderConfigFields(null);
                 }
 
                 /**
                  * 根据平台能力控制自动提交开关
+                 * 不支持的能力：保持可点击，拦截后 toast 说明（避免 disabled 看起来像坏了）。
                  */
+                function applyCapabilitySwitch(input, supported, unsupportedMessage, hint) {
+                    if (!input) {
+                        return;
+                    }
+                    const wrap = input.closest('[data-seo-capability-switch]');
+                    input.disabled = false;
+                    if (!supported) {
+                        input.checked = false;
+                        input.setAttribute('data-seo-unsupported', '1');
+                        input.setAttribute('aria-disabled', 'true');
+                        input.setAttribute('title', unsupportedMessage);
+                        if (wrap) {
+                            wrap.setAttribute('data-unsupported', 'true');
+                            wrap.style.opacity = '0.65';
+                            wrap.style.cursor = 'not-allowed';
+                        }
+                    } else {
+                        input.removeAttribute('data-seo-unsupported');
+                        input.removeAttribute('aria-disabled');
+                        input.removeAttribute('title');
+                        if (wrap) {
+                            wrap.removeAttribute('data-unsupported');
+                            wrap.style.opacity = '';
+                            wrap.style.cursor = '';
+                        }
+                    }
+                    if (hint) {
+                        hint.hidden = supported;
+                        hint.textContent = unsupportedMessage;
+                    }
+                }
+
                 function syncSubmitToggles(platform) {
                     const supportsUrlPush = !!(platform && platform.supports_url_push);
                     const supportsSitemapSubmit = !!(platform && platform.supports_sitemap_submit);
-                    const pushToggle = document.getElementById('enable_cron_push_urls');
-                    const sitemapToggle = document.getElementById('enable_cron_sitemap');
-
-                    if (pushToggle) {
-                        pushToggle.disabled = !supportsUrlPush;
-                        if (!supportsUrlPush) {
-                            pushToggle.checked = false;
-                        }
-                    }
-                    if (sitemapToggle) {
-                        sitemapToggle.disabled = !supportsSitemapSubmit;
-                        if (!supportsSitemapSubmit) {
-                            sitemapToggle.checked = false;
-                        }
-                    }
+                    const pushUnsupported = <?= json_encode((string)__('当前平台不支持 URL 定时推送；Google 普通页面请改用 Sitemap 定时提交'), $jsonForScriptFlags) ?>;
+                    const sitemapUnsupported = <?= json_encode((string)__('当前平台不支持 Sitemap 定时提交'), $jsonForScriptFlags) ?>;
+                    applyCapabilitySwitch(
+                        document.getElementById('enable_cron_push_urls'),
+                        supportsUrlPush,
+                        pushUnsupported,
+                        document.getElementById('seoCronPushHint')
+                    );
+                    applyCapabilitySwitch(
+                        document.getElementById('enable_cron_sitemap'),
+                        supportsSitemapSubmit,
+                        sitemapUnsupported,
+                        document.getElementById('seoCronSitemapHint')
+                    );
                 }
 
                 /**
@@ -538,6 +592,17 @@ foreach ($platforms as $code => $info) {
                     });
                     
                     document.getElementById('platformConfigHint').textContent = platform.config_hint;
+
+                    const outboundHint = document.getElementById('seoPlatformOutboundHint');
+                    const outboundText = document.getElementById('seoPlatformOutboundHintText');
+                    if (outboundHint && outboundText) {
+                        if (platform.outbound_hint) {
+                            outboundText.textContent = platform.outbound_hint;
+                            outboundHint.hidden = false;
+                        } else {
+                            outboundHint.hidden = true;
+                        }
+                    }
                     
                     // 显示配置指南（默认展开）
                     document.getElementById('platformGuideInfo').style.display = 'block';
@@ -852,10 +917,15 @@ foreach ($platforms as $code => $info) {
                         control.name = 'config[' + key + ']';
                         control.setAttribute('data-seo-config-key', key);
                         control.setAttribute('data-seo-config-type', type);
-                        if (field.required && type !== 'checkbox') {
+                        const hasSavedSecret = ACCOUNT_SAVED_PLATFORM === (document.getElementById('platformSelect') || {}).value && ACCOUNT_SECRET_KEYS.includes(key);
+                        if (hasSavedSecret) {
+                            control.placeholder = <?= json_encode((string)__('已配置，留空保留原凭证'), $jsonForScriptFlags) ?>;
+                            control.autocomplete = 'new-password';
+                        }
+                        if (field.required && type !== 'checkbox' && !hasSavedSecret) {
                             control.required = true;
                         }
-                        if (field.placeholder) {
+                        if (field.placeholder && !hasSavedSecret) {
                             control.placeholder = String(field.placeholder);
                         }
                         control.addEventListener('input', syncConfigJsonFromFields);
@@ -967,11 +1037,9 @@ foreach ($platforms as $code => $info) {
                             }
                             nameInput.value = prefix + suffix;
                         }
+                        document.getElementById('seoAccountConfigAction').value = event.submitter && event.submitter.hasAttribute('data-seo-account-verify') ? 'verify' : 'save';
                         syncConfigJsonFromFields();
-                        if (typeof window.saveSeoAccount === 'function') {
-                            window.saveSeoAccount(event);
-                        }
-                    });
+                    }, true);
 
                     document.addEventListener('change', function(event) {
                         if (!event.target) {
@@ -983,6 +1051,16 @@ foreach ($platforms as $code => $info) {
                         }
                         if (event.target.matches('[data-seo-json-file-for]')) {
                             handleJsonFileUpload(event.target);
+                            return;
+                        }
+                        if (event.target.matches('[data-seo-capability-switch] input[type="checkbox"]')
+                            && event.target.getAttribute('data-seo-unsupported') === '1') {
+                            event.target.checked = false;
+                            const tip = event.target.getAttribute('title')
+                                || (event.target.id === 'enable_cron_push_urls'
+                                    ? <?= json_encode((string)__('当前平台不支持 URL 定时推送；Google 普通页面请改用 Sitemap 定时提交'), $jsonForScriptFlags) ?>
+                                    : <?= json_encode((string)__('当前平台不支持 Sitemap 定时提交'), $jsonForScriptFlags) ?>);
+                            showMessage('warning', tip);
                         }
                     });
 
@@ -1040,8 +1118,9 @@ foreach ($platforms as $code => $info) {
 
                 <div class="w-card">
                     <div class="w-card__body">
-                        <w:form id="seoAccountForm">
+                        <w:form id="seoAccountForm" data-seo-account-form>
                             <input type="hidden" name="id" value="<?= $id ?>">
+                            <input type="hidden" name="config_action" id="seoAccountConfigAction" value="save">
 
                             <div style="--w-mb:var(--weline-space-4);">
                                 <label class="w-field__label"><lang>平台(Platform)</lang> <span class="w-text" data-tone="danger">*</span></label>
@@ -1157,6 +1236,18 @@ foreach ($platforms as $code => $info) {
                                 </div>
                             </div>
 
+                            <div id="seoPlatformOutboundHint" hidden style="--w-mb:var(--weline-space-4);">
+                                <div class="w-alert" data-tone="warning" style="--w-mb:0;">
+                                    <div class="w-cluster" data-align="start">
+                                        <w:icon name="warning" size="sm"></w:icon>
+                                        <div data-grow="true">
+                                            <strong><lang>出网依赖</lang>：</strong>
+                                            <span id="seoPlatformOutboundHintText"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
                             <!-- 配置获取指南 -->
                             <div id="platformGuideInfo" style="display: none;">
                                 <div class="w-card border-primary">
@@ -1231,27 +1322,33 @@ foreach ($platforms as $code => $info) {
                                     </div>
                                 </div>
                                 <div style="--w-span-md:4;">
-                                    <div class="w-switch">
+                                    <div class="w-switch" data-seo-capability-switch="url_push">
                                         <input type="checkbox" name="enable_cron_push_urls" value="1" id="enable_cron_push_urls" <?= $enableCronPush === 1 ? 'checked' : '' ?>>
                                         <label for="enable_cron_push_urls">
                                             <lang>启用URL定时推送</lang>
                                         </label>
                                     </div>
+                                    <div class="w-field__hint" id="seoCronPushHint" hidden style="--w-mt:var(--weline-space-1);"></div>
                                 </div>
                                 <div style="--w-span-md:4;">
-                                    <div class="w-switch">
+                                    <div class="w-switch" data-seo-capability-switch="sitemap">
                                         <input type="checkbox" name="enable_cron_sitemap" value="1" id="enable_cron_sitemap" <?= $enableCronSitemap === 1 ? 'checked' : '' ?>>
                                         <label for="enable_cron_sitemap">
                                             <lang>启用Sitemap定时提交</lang>
                                         </label>
                                     </div>
+                                    <div class="w-field__hint" id="seoCronSitemapHint" hidden style="--w-mt:var(--weline-space-1);"></div>
                                 </div>
                             </div>
 
                             <div style="--w-mt:var(--weline-space-6);">
-                                <button type="submit" class="w-button" data-tone="primary">
+                                <div class="w-alert" data-seo-account-feedback hidden style="--w-mb:var(--weline-space-3);" role="status"></div>
+                                <button type="submit" class="w-button" data-tone="primary" data-loading-label="<?= htmlspecialchars((string)__('保存中…'), ENT_QUOTES, 'UTF-8') ?>">
                                     <w:icon name="save" size="sm"></w:icon>
                                     <lang>保存</lang>
+                                </button>
+                                <button type="submit" class="w-button" data-tone="neutral" data-seo-account-verify data-loading-label="<?= htmlspecialchars((string)__('验证中…'), ENT_QUOTES, 'UTF-8') ?>">
+                                    <lang>验证配置与连接</lang>
                                 </button>
                                 <?php if (!$isAjax): ?>
                                 <a href="@backend-url{'seo/backend/account/index'|['scope' => $scope]}" class="w-button ms-2" data-tone="neutral">
@@ -1269,3 +1366,5 @@ foreach ($platforms as $code => $info) {
                     </div>
                 </div>
 <?php endif; ?>
+
+</div>

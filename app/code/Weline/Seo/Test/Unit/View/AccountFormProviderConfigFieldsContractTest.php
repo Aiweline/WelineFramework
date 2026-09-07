@@ -53,5 +53,45 @@ final class AccountFormProviderConfigFieldsContractTest extends TestCase
         self::assertStringNotContainsString('data-tone="success"', $templateSrc);
         self::assertStringNotContainsString('background: #f8f9fa', $templateSrc);
         self::assertStringContainsString('Weline_Seo::css/seo-admin.css', $templateSrc);
+
+        $jsSrc = (string) file_get_contents($root . '/view/statics/js/seo-admin.js');
+        self::assertStringContainsString("setAttribute('aria-busy', 'true')", $jsSrc);
+        self::assertStringContainsString('data-seo-account-feedback', $jsSrc);
+        self::assertStringContainsString('showAccountFeedback', $jsSrc);
+        self::assertStringContainsString('keepBusinessResult', $jsSrc);
+        self::assertStringContainsString('dialogApi.request', $jsSrc);
+        self::assertStringNotContainsString('spinner-border', $jsSrc);
+
+        self::assertStringContainsString('data-seo-account-feedback', $templateSrc);
+        self::assertStringContainsString('data-seo-account-verify', $templateSrc);
+        self::assertStringContainsString('data-loading-label', $templateSrc);
+        self::assertStringContainsString('data-verifying', $templateSrc);
+        self::assertStringContainsString('data-seo-capability-switch', $templateSrc);
+        self::assertStringContainsString('seoCronPushHint', $templateSrc);
+        self::assertStringContainsString('当前平台不支持 URL 定时推送', $templateSrc);
+        self::assertStringContainsString('function syncSubmitToggles', $templateSrc);
+        self::assertStringContainsString('seoPlatformOutboundHint', $templateSrc);
+        self::assertStringContainsString('outbound_hint', $templateSrc);
+        self::assertStringContainsString('oauth2.googleapis.com', $templateSrc);
+        self::assertStringContainsString('data-open-gsc', $templateSrc);
+        self::assertStringContainsString('data-verify-failed-title', $templateSrc);
+
+        $adapterSrc = (string) file_get_contents($root . '/Adapter/GoogleSitemapAdapter.php');
+        self::assertStringContainsString('buildSearchConsoleVerifyFailureMessage', $adapterSrc);
+        self::assertStringContainsString('gsc_site_not_found', $adapterSrc);
+        self::assertStringContainsString('search.google.com/search-console', $adapterSrc);
+
+        self::assertStringContainsString('helpUrl', $jsSrc);
+        self::assertStringContainsString('openGsc', $jsSrc);
+        self::assertStringContainsString('dialogApi.request', $jsSrc);
+
+        self::assertStringContainsString('先在 Google Search Console 验证', $templateSrc);
+        self::assertStringContainsString('Google Search Console 配置顺序', $templateSrc);
+        self::assertStringContainsString('与 GSC 属性字符串完全一致', $templateSrc);
+
+        $gscAdapterSrc = (string) file_get_contents($root . '/Service/Adapter/GoogleSearchConsoleAdapter.php');
+        self::assertStringContainsString('须与 GSC 左侧属性名完全一致', $gscAdapterSrc);
+        self::assertStringContainsString('加成所有者后，再粘贴到此处', $gscAdapterSrc);
+        self::assertStringContainsString('属性 URL 不一致', $adapterSrc);
     }
 }

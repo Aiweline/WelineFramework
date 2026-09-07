@@ -66,6 +66,9 @@ class TaskProcessor
                 case SeoTask::TASK_TYPE_FEED_GENERATE:
                     return $this->processFeedGenerate($task);
                     
+                case SeoTask::TASK_TYPE_SITEMAP_REFRESH:
+                    return $this->objectManager->getInstance(SitemapRefreshService::class)->process($task);
+
                 case SeoTask::TASK_TYPE_PUSH_URLS:
                     return $this->processPushUrls($task);
                     
@@ -216,6 +219,12 @@ class TaskProcessor
     private function processPushUrls(SeoTask $task): bool
     {
         $payload = $task->getPayloadArray();
+        $hardGate = $this->objectManager->getInstance(StoreModeSeoHardGate::class);
+        $storeMode = $payload['extra']['store_mode'] ?? null;
+        if ($hardGate->isHardNoIndexMode() || ($storeMode !== null && $hardGate->isHardNoIndexMode((string)$storeMode))) {
+            $task->markDone('skipped: dev/test 环境不向搜索引擎提交 URL');
+            return true;
+        }
         $urls = $payload['urls'] ?? [];
         $provider = (string)($payload['provider'] ?? '');
         $accountId = (int)($payload['account_id'] ?? 0);
@@ -248,6 +257,9 @@ class TaskProcessor
         }
 
         $options = [
+            'action' => (string)($payload['action'] ?? 'upsert'),
+            'website_id' => (int)($payload['website_id'] ?? -1),
+            'extra' => (array)($payload['extra'] ?? []),
             'scope' => $scope,
             'module' => $module,
             'account' => [
@@ -262,15 +274,33 @@ class TaskProcessor
 
         $result = $adapter->pushUrls($urls, $options);
 
-        if (!($result['success'] ?? false)) {
-            $message = (string)($result['message'] ?? 'URL推送失败');
-            $task->markError($message);
+        $message = (string)($result['message'] ?? 'URL 推送失败');
+        $payload['submission_result'] = $result;
+        $task->setPayloadArray($payload);
+        if (($result['success'] ?? false) || ($result['status'] ?? '') === 'pending_verification') {
+            $task->markDone($message);
+            return true;
+        }
+        if (($result['status'] ?? '') === 'unsupported') {
+            $task->markDone($message);
             return false;
         }
-
-        $message = (string)($result['message'] ?? 'URL推送成功');
-        $task->markDone($message);
-        return true;
+        if (!empty($result['data']['acceptance_unknown'])) {
+            // Baidu can acknowledge a count without identifying URLs. Replaying the batch wastes quota.
+            $task->markDone($message);
+            return false;
+        }
+        $acceptedUrls = (array)($result['data']['accepted_url_list'] ?? []);
+        if ($acceptedUrls !== []) {
+            $remainingIndexes = array_keys(array_diff($urls, $acceptedUrls));
+            $payload['urls'] = array_values(array_diff($urls, $acceptedUrls));
+            foreach (['submit_fingerprints', 'url_fingerprints'] as $key) {
+                if (isset($payload[$key])) { $payload[$key] = array_values(array_intersect_key($payload[$key], array_flip($remainingIndexes))); }
+            }
+            $task->setPayloadArray($payload);
+        }
+        $task->markError($message);
+        return false;
     }
 
     /**
