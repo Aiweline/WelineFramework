@@ -1,0 +1,49 @@
+<?php
+/** @var array $entity @var string $error @var int $website_id */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$channelId = (int)($entity['channel_id'] ?? 0);
+?>
+<div class="w-container" data-testid="sales-channel-management-edit" data-channel-id="<?= $channelId ?>">
+    <div class="w-cluster" data-align="center" data-justify="between" style="--w-mb:var(--weline-space-4);">
+        <div>
+            <h4 style="--w-mb:var(--weline-space-1);"><lang>编辑渠道</lang></h4>
+            <div class="w-text" data-tone="muted">channel_id=<?= $channelId ?> · website_id=<?= (int)$website_id ?></div>
+        </div>
+        <a class="w-button" href="@backend-url('*/backend/scope-management/channels')?website_id=<?= (int)$website_id ?>"><lang>返回列表</lang></a>
+    </div>
+
+    <?php if ($error !== ''): ?>
+        <div class="w-alert" role="alert" data-tone="danger"><?= $escape($error) ?></div>
+    <?php elseif (!\array_key_exists('code', $entity)): ?>
+        <div class="w-alert" role="alert" data-tone="danger"><lang>渠道不存在</lang></div>
+    <?php else: ?>
+        <div class="w-card" style="--w-mb:var(--weline-space-4);"><div class="w-card__body">
+            <w:form method="post" action="@backend-url('*/backend/scope-management/update-channel')" csrf="auto" class="w-grid" data-testid="sales-channel-management-edit-form" style="--w-gap:var(--weline-space-4);">
+                <input type="hidden" name="channel_id" value="<?= $channelId ?>">
+                <div style="--w-span-md:3;">
+                    <label class="w-field__label"><lang>渠道代码</lang></label>
+                    <input class="w-input" value="<?= $escape($entity['code'] ?? '') ?>" disabled>
+                </div>
+                <div style="--w-span-md:3;">
+                    <label class="w-field__label"><lang>所属商店 ID</lang></label>
+                    <input class="w-input" value="<?= (int)($entity['store_id'] ?? 0) ?>" disabled>
+                </div>
+                <div style="--w-span-md:4;">
+                    <label class="w-field__label"><lang>渠道名称</lang></label>
+                    <input class="w-input" name="name" maxlength="128" required value="<?= $escape($entity['name'] ?? '') ?>">
+                </div>
+                <div class="w-cluster" data-align="end" style="--w-span-md:12;">
+                    <button class="w-button" type="submit" data-tone="primary"><lang>保存渠道</lang></button>
+                </div>
+                <?php
+                $this->assign('id', 'channel_edit_' . $channelId);
+                $this->assign('channel', $entity);
+                $this->assign('channel_id', $channelId);
+                $this->assign('store_id', (int)($entity['store_id'] ?? 0));
+                $this->assign('website_id', (int)$website_id);
+                echo $this->getHook('Weline_Websites::backend::channel::form::sections-after');
+                ?>
+            </w:form>
+        </div></div>
+    <?php endif; ?>
+</div>

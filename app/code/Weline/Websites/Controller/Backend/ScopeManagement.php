@@ -6,6 +6,8 @@ namespace Weline\Websites\Controller\Backend;
 
 use Weline\Framework\Acl\Acl;
 use Weline\Framework\App\Controller\BackendController;
+use Weline\Framework\Event\EventsManager;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Service\StoreChannelAdminService;
 use Weline\Websites\Service\WebsiteSelectOptions;
 
@@ -25,6 +27,50 @@ final class ScopeManagement extends BackendController
     public function channels(): string
     {
         return $this->renderSection('channels');
+    }
+
+    #[Acl('Weline_Websites::store_management', '编辑商店', 'edit', '编辑 Store')]
+    public function editStore(): string
+    {
+        $storeId = max(0, (int)$this->request->getGet('store_id', 0));
+        $row = null;
+        $error = '';
+        try {
+            $row = $this->admin->getStore($storeId);
+            if ($row === null) {
+                throw new \InvalidArgumentException(__('商店不存在'));
+            }
+        } catch (\Throwable $exception) {
+            $this->request->getResponse()->setCode(404);
+            $error = (string)$exception->getMessage();
+        }
+        $this->assign('section', 'stores');
+        $this->assign('entity', $row ?? []);
+        $this->assign('error', $error);
+        $this->assign('website_id', (int)($row['website_id'] ?? 0));
+        return (string)$this->fetch('edit-store');
+    }
+
+    #[Acl('Weline_Websites::sales_channel_management', '编辑渠道', 'edit', '编辑 Sales Channel')]
+    public function editChannel(): string
+    {
+        $channelId = max(0, (int)$this->request->getGet('channel_id', 0));
+        $row = null;
+        $error = '';
+        try {
+            $row = $this->admin->getChannel($channelId);
+            if ($row === null) {
+                throw new \InvalidArgumentException(__('渠道不存在'));
+            }
+        } catch (\Throwable $exception) {
+            $this->request->getResponse()->setCode(404);
+            $error = (string)$exception->getMessage();
+        }
+        $this->assign('section', 'channels');
+        $this->assign('entity', $row ?? []);
+        $this->assign('error', $error);
+        $this->assign('website_id', (int)($row['website_id'] ?? 0));
+        return (string)$this->fetch('edit-channel');
     }
 
     #[Acl('Weline_Websites::store_management', '创建商店', 'plus', '创建 Store')]
@@ -72,6 +118,97 @@ final class ScopeManagement extends BackendController
         );
     }
 
+    #[Acl('Weline_Websites::store_management', '保存商店', 'save', '保存 Store')]
+    public function postUpdateStore(): string
+    {
+        $storeId = 0;
+        $websiteId = 0;
+        try {
+            $storeId = $this->postNonNegativeInt('store_id', 0);
+            $before = $this->admin->getStore($storeId);
+            if ($before === null) {
+                throw new \InvalidArgumentException(__('商店不存在'));
+            }
+            $websiteId = (int)$before['website_id'];
+            $postData = $this->request->getPost();
+            if (!is_array($postData)) {
+                $postData = [];
+            }
+            $updated = $this->admin->updateStore(
+                $storeId,
+                $this->postString('name', 128),
+                $this->postString('store_mode', 16),
+                trim((string)$this->request->getPost('url', '')) ?: null,
+            );
+            $this->dispatchScopeSaveAfter('store', [
+                'store_id' => $storeId,
+                'website_id' => $websiteId,
+                'store' => $updated->toArray(),
+                'before' => $before,
+                'post_data' => $postData,
+                'action' => 'edit',
+            ]);
+            $this->getMessageManager()->addSuccess(__('商店已保存'));
+        } catch (\Throwable $exception) {
+            $this->getMessageManager()->addError(__('保存商店失败：%{1}', [$exception->getMessage()]));
+        }
+        if ($storeId > 0) {
+            return (string)$this->redirect(
+                'websites/backend/scope-management/edit-store',
+                ['store_id' => $storeId],
+            );
+        }
+        return (string)$this->redirect(
+            'websites/backend/scope-management/stores',
+            ['website_id' => $websiteId],
+        );
+    }
+
+    #[Acl('Weline_Websites::sales_channel_management', '保存渠道', 'save', '保存 Sales Channel')]
+    public function postUpdateChannel(): string
+    {
+        $channelId = 0;
+        $websiteId = 0;
+        try {
+            $channelId = $this->postNonNegativeInt('channel_id', 0);
+            $before = $this->admin->getChannel($channelId);
+            if ($before === null) {
+                throw new \InvalidArgumentException(__('渠道不存在'));
+            }
+            $websiteId = (int)$before['website_id'];
+            $postData = $this->request->getPost();
+            if (!is_array($postData)) {
+                $postData = [];
+            }
+            $updated = $this->admin->updateChannel(
+                $channelId,
+                $this->postString('name', 128),
+            );
+            $this->dispatchScopeSaveAfter('channel', [
+                'channel_id' => $channelId,
+                'store_id' => (int)$updated->storeId,
+                'website_id' => $websiteId,
+                'channel' => $updated->toArray(),
+                'before' => $before,
+                'post_data' => $postData,
+                'action' => 'edit',
+            ]);
+            $this->getMessageManager()->addSuccess(__('渠道已保存'));
+        } catch (\Throwable $exception) {
+            $this->getMessageManager()->addError(__('保存渠道失败：%{1}', [$exception->getMessage()]));
+        }
+        if ($channelId > 0) {
+            return (string)$this->redirect(
+                'websites/backend/scope-management/edit-channel',
+                ['channel_id' => $channelId],
+            );
+        }
+        return (string)$this->redirect(
+            'websites/backend/scope-management/channels',
+            ['website_id' => $websiteId],
+        );
+    }
+
     private function renderSection(string $section): string
     {
         $websiteId = max(0, (int)$this->request->getGet('website_id', 0));
@@ -95,6 +232,17 @@ final class ScopeManagement extends BackendController
         $this->assign('websiteSelectDisplay', $pack['display']);
         $this->assign('websiteSelectOptionsJson', $pack['options_json']);
         return (string)$this->fetch('index');
+    }
+
+    /**
+     * @param array<string, mixed> $eventData
+     */
+    private function dispatchScopeSaveAfter(string $scope, array $eventData): void
+    {
+        $eventName = $scope === 'channel'
+            ? 'Weline_Websites::channel_save_after'
+            : 'Weline_Websites::store_save_after';
+        ObjectManager::getInstance(EventsManager::class)->dispatch($eventName, $eventData);
     }
 
     private function postString(string $key, int $maxLength): string

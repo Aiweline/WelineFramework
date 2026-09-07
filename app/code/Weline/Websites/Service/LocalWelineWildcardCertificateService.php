@@ -7,7 +7,7 @@ use Weline\Server\Api\Domain\LocalDomainPolicy;
 
 class LocalWelineWildcardCertificateService
 {
-    public const WILDCARD_DOMAIN = '*.weline.test';
+    public const WILDCARD_DOMAIN = '*.test.weline.com';
 
     /**
      * @var null|\Closure(string, string, array<string, mixed>): mixed

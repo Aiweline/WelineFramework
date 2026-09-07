@@ -318,7 +318,7 @@ class PlanGenerationService
             'references_summary' => $references === []
                 ? (string)__('No reference URLs provided.')
                 : (string)__('References: %{list}', ['list' => \implode(', ', \array_slice($references, 0, 5))]),
-            'domain_strategy' => (string)__('Prefer a short brandable domain; local .weline.test is fine for demo.'),
+            'domain_strategy' => (string)__('Prefer a short brandable domain; local .test.weline.com is fine for demo.'),
             'site_title' => $title,
             'site_tagline' => (string)__('Demo plan generated in local fake mode'),
             'brief_description' => $shortBrief,

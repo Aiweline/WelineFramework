@@ -83,8 +83,19 @@ $isStores = $section === 'stores';
         <div class="w-card"><div class="w-card__body w-text" data-align="center" style="--w-pt:var(--weline-space-12);--w-pb:var(--weline-space-12);"><lang>暂无数据</lang></div></div>
     <?php else: ?>
         <div class="w-card"><div class="w-table-wrap"><table class="w-table" style="--w-mb:0;">
-            <thead><tr><?php foreach (array_keys($rows[0]) as $column): ?><th><?= $escape($column) ?></th><?php endforeach; ?></tr></thead>
-            <tbody><?php foreach ($rows as $row): ?><tr data-testid="<?= $isStores ? 'store-management-row' : 'sales-channel-management-row' ?>"><?php foreach (array_keys($rows[0]) as $column): ?><td><?= $escape($row[$column] ?? '') ?></td><?php endforeach; ?></tr><?php endforeach; ?></tbody>
+            <thead><tr><?php foreach (array_keys($rows[0]) as $column): ?><th><?= $escape($column) ?></th><?php endforeach; ?><th><lang>操作</lang></th></tr></thead>
+            <tbody><?php foreach ($rows as $row): ?>
+                <tr data-testid="<?= $isStores ? 'store-management-row' : 'sales-channel-management-row' ?>">
+                    <?php foreach (array_keys($rows[0]) as $column): ?><td><?= $escape($row[$column] ?? '') ?></td><?php endforeach; ?>
+                    <td>
+                        <?php if ($isStores): ?>
+                            <a class="w-button" data-testid="store-management-edit-link" href="@backend-url('*/backend/scope-management/edit-store')?store_id=<?= (int)($row['store_id'] ?? 0) ?>"><lang>编辑</lang></a>
+                        <?php else: ?>
+                            <a class="w-button" data-testid="sales-channel-management-edit-link" href="@backend-url('*/backend/scope-management/edit-channel')?channel_id=<?= (int)($row['channel_id'] ?? 0) ?>"><lang>编辑</lang></a>
+                        <?php endif; ?>
+                    </td>
+                </tr>
+            <?php endforeach; ?></tbody>
         </table></div></div>
     <?php endif; ?>
 </div>

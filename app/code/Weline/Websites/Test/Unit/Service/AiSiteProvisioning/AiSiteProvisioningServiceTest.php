@@ -22,7 +22,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
         $readiness = $this->createMock(AiSiteLocalDomainReadinessService::class);
         $readiness->expects(self::once())
             ->method('prepare')
-            ->with('demo-site.weline.test', true)
+            ->with('demo-site.test.weline.com', true)
             ->willReturn([
                 'can_start' => false,
                 'authorization_pending' => true,
@@ -41,7 +41,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
                     $data[AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE]
                 );
                 self::assertSame(
-                    'demo-site.weline.test',
+                    'demo-site.test.weline.com',
                     $data[AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN]
                 );
                 self::assertNull($data[AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID]);
@@ -84,7 +84,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
         self::assertTrue($result['success']);
         self::assertSame(AiSiteProvisioningRequest::STATUS_PENDING, $result['status']);
         self::assertSame(AiSiteProvisioningRequest::DOMAIN_MODE_TEST, $result['domain_mode']);
-        self::assertSame('demo-site.weline.test', $result['target_domain']);
+        self::assertSame('demo-site.test.weline.com', $result['target_domain']);
         self::assertSame(0, $result['purchase_order_id']);
         self::assertSame(0, $result['website_bound']);
         self::assertSame(0, $result['website_id']);
@@ -180,7 +180,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
             'client_request_id' => 'cmd-1',
             'source_public_id' => 'pagebuilder-session-1',
             'domain_mode' => 'test',
-            'target_domain' => 'demo-site.weline.test',
+            'target_domain' => 'demo-site.test.weline.com',
         ]);
 
         self::assertSame(AiSiteProvisioningRequest::STATUS_PENDING, $result['status']);
@@ -202,7 +202,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
         $readiness = $this->createMock(AiSiteLocalDomainReadinessService::class);
         $readiness->expects(self::once())
             ->method('prepare')
-            ->with('demo-site.weline.test', true)
+            ->with('demo-site.test.weline.com', true)
             ->willReturn([
                 'can_start' => false,
                 'authorization_pending' => true,
@@ -233,7 +233,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
             'client_request_id' => 'cmd-1',
             'source_public_id' => 'pagebuilder-session-1',
             'domain_mode' => 'test',
-            'target_domain' => 'demo-site.weline.test',
+            'target_domain' => 'demo-site.test.weline.com',
             'rearm_failed' => true,
         ]);
 
@@ -274,7 +274,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
             'client_request_id' => 'cmd-1',
             'source_public_id' => 'pagebuilder-session-1',
             'domain_mode' => 'test',
-            'target_domain' => 'demo-site.weline.test',
+            'target_domain' => 'demo-site.test.weline.com',
         ]);
 
         self::assertSame(AiSiteProvisioningRequest::STATUS_ERROR, $result['status']);
@@ -379,9 +379,9 @@ final class AiSiteProvisioningServiceTest extends TestCase
                 'client_request_id' => 'cmd-invalid-domain',
                 'source_public_id' => 'pagebuilder-session-1',
                 'domain_mode' => 'test',
-                'target_domain' => 'foo.bar.weline.test',
+                'target_domain' => 'foo.bar.test.weline.com',
             ]);
-            self::fail('Nested *.weline.test domains must not be accepted.');
+            self::fail('Nested *.test.weline.com domains must not be accepted.');
         } catch (AiSiteProvisioningException $exception) {
             self::assertSame('TEST_DOMAIN_REQUIRED', $exception->getErrorCode());
         }
@@ -394,7 +394,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
         $readiness = $this->createMock(AiSiteLocalDomainReadinessService::class);
         $readiness->expects(self::once())
             ->method('prepare')
-            ->with('not-ready.weline.test', true)
+            ->with('not-ready.test.weline.com', true)
             ->willThrowException(new \RuntimeException('desktop authorization unavailable'));
 
         $createdRequest = null;
@@ -433,7 +433,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
             'client_request_id' => 'cmd-not-ready',
             'source_public_id' => 'pagebuilder-session-1',
             'domain_mode' => 'test',
-            'target_domain' => 'not-ready.weline.test',
+            'target_domain' => 'not-ready.test.weline.com',
         ];
         $service = new AiSiteProvisioningService($repository, $gateway, $readiness);
         $first = $service->requestBinding($command);
@@ -467,10 +467,10 @@ final class AiSiteProvisioningServiceTest extends TestCase
             ->willReturn(['queue_id' => 52, 'status' => 'done']);
         $startPage->expects(self::once())
             ->method('configure')
-            ->with(0, 'demo-site.weline.test', 44)
+            ->with(0, 'demo-site.test.weline.com', 44)
             ->willReturn([
                 'website_id' => 0,
-                'target_domain' => 'demo-site.weline.test',
+                'target_domain' => 'demo-site.test.weline.com',
                 'page_id' => 44,
                 'start_page_path' => 'pagebuilder/frontend/page/view?page_id=44',
                 'cache_broadcast' => ['success' => true],
@@ -486,7 +486,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
             'client_request_id' => 'cmd-1',
             'source_public_id' => 'pagebuilder-session-1',
             'domain_mode' => 'test',
-            'target_domain' => 'demo-site.weline.test',
+            'target_domain' => 'demo-site.test.weline.com',
             'page_id' => 44,
         ]);
 
@@ -505,7 +505,7 @@ final class AiSiteProvisioningServiceTest extends TestCase
             AiSiteProvisioningRequest::schema_fields_SOURCE_PUBLIC_ID => 'pagebuilder-session-1',
             AiSiteProvisioningRequest::schema_fields_CLIENT_REQUEST_ID => 'cmd-1',
             AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE => AiSiteProvisioningRequest::DOMAIN_MODE_TEST,
-            AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN => 'demo-site.weline.test',
+            AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN => 'demo-site.test.weline.com',
             AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID => null,
             AiSiteProvisioningRequest::schema_fields_YEARS => 1,
             AiSiteProvisioningRequest::schema_fields_PURCHASE_CONFIRMED => 0,

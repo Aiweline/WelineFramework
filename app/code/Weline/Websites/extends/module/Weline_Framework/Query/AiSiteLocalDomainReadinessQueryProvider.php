@@ -51,7 +51,7 @@ class AiSiteLocalDomainReadinessQueryProvider implements QueryProviderInterface
             'module' => 'Weline_Websites',
             'operations' => [[
                 'name' => 'inspect',
-                'description' => __('检查一个 *.weline.test 域名是否可以启动 AI 建站'),
+                'description' => __('检查一个 *.test.weline.com 域名是否可以启动 AI 建站'),
                 'frontend' => true,
                 'mode' => 'read',
                 'graph' => false,

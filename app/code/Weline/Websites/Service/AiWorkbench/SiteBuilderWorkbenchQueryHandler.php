@@ -334,7 +334,7 @@ final class SiteBuilderWorkbenchQueryHandler
         if ($this->boolValue($input['fake_mode'] ?? false)) {
             $seed = strtolower((string)preg_replace('/[^a-z0-9]+/i', '-', $description ?: $preferred));
             $seed = trim($seed, '-') ?: 'demo-site';
-            $domains = [substr($seed, 0, 40) . '.weline.test', substr($seed, 0, 36) . '-shop.weline.test'];
+            $domains = [substr($seed, 0, 40) . '.test.weline.com', substr($seed, 0, 36) . '-shop.test.weline.com'];
             return ['success' => true, 'domain' => $domains[0], 'candidate_domains' => $domains, 'message' => (string)__('已生成本地域名建议')];
         }
         return $this->websiteAgent->recommendAvailableDomain(
@@ -352,7 +352,7 @@ final class SiteBuilderWorkbenchQueryHandler
         if ($domain === '') {
             return $this->failure((string)__('请填写域名')) + ['available' => false];
         }
-        if (str_ends_with($domain, '.weline.test') || $this->boolValue($input['fake_mode'] ?? false)) {
+        if (str_ends_with($domain, '.test.weline.com') || $this->boolValue($input['fake_mode'] ?? false)) {
             return ['success' => true, 'available' => true, 'domain' => $domain, 'message' => (string)__('测试域名可用')];
         }
         $results = $this->websiteAgent->checkCandidateAvailability((int)($input['account_id'] ?? 0), [$domain]);

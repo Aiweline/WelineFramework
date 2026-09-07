@@ -61,7 +61,7 @@ final class AiSiteProvisioningQueueTest extends TestCase
             ->with('request-1', 'token-1', false)
             ->willReturn([
                 'status' => 'pending',
-                'target_domain' => 'demo-site.weline.test',
+                'target_domain' => 'demo-site.test.weline.com',
                 'authorization_pending' => true,
                 'authorization_already_started' => false,
             ]);
@@ -87,7 +87,7 @@ final class AiSiteProvisioningQueueTest extends TestCase
         self::assertStringContainsString('Scheduler', $deferred->processMessage());
         self::assertSame(
             [
-                'domain' => 'demo-site.weline.test',
+                'domain' => 'demo-site.test.weline.com',
                 'started_at' => 100,
                 'deadline_at' => 520,
                 'checks' => 1,
@@ -113,7 +113,7 @@ final class AiSiteProvisioningQueueTest extends TestCase
 
         $decodedContent = \json_decode($deferred->queueContent(), true, 512, \JSON_THROW_ON_ERROR);
         self::assertSame(2, $decodedContent['_hosts_authorization_wait_v1']['checks']);
-        self::assertSame('demo-site.weline.test', $decodedContent['_hosts_authorization_wait_v1']['domain']);
+        self::assertSame('demo-site.test.weline.com', $decodedContent['_hosts_authorization_wait_v1']['domain']);
         self::assertSame(520, $decodedContent['_hosts_authorization_wait_v1']['deadline_at']);
         self::assertSame('1970-01-01 00:02:50', $deferred->notBefore());
     }
@@ -126,7 +126,7 @@ final class AiSiteProvisioningQueueTest extends TestCase
             ->with('request-1', 'token-1', false)
             ->willReturn([
                 'status' => 'done',
-                'target_domain' => 'demo-site.weline.test',
+                'target_domain' => 'demo-site.test.weline.com',
                 'website_bound' => 1,
                 'website_id' => 0,
             ]);
@@ -149,7 +149,7 @@ final class AiSiteProvisioningQueueTest extends TestCase
             ->with('request-1', 'token-1', false)
             ->willReturn([
                 'status' => 'pending',
-                'target_domain' => 'demo-site.weline.test',
+                'target_domain' => 'demo-site.test.weline.com',
                 'authorization_pending' => true,
             ]);
         $queueModel = $this->queueModel($this->waitingContent(100));
@@ -204,7 +204,7 @@ final class AiSiteProvisioningQueueTest extends TestCase
             ->with('request-1', 'token-1', false)
             ->willReturn([
                 'status' => 'pending',
-                'target_domain' => 'demo-site.weline.test',
+                'target_domain' => 'demo-site.test.weline.com',
                 'authorization_pending' => true,
             ]);
         $content = $this->waitingContent(100);
@@ -279,7 +279,7 @@ final class AiSiteProvisioningQueueTest extends TestCase
             'request_id' => 'request-1',
             'execution_token' => 'token-1',
             '_hosts_authorization_wait_v1' => [
-                'domain' => 'demo-site.weline.test',
+                'domain' => 'demo-site.test.weline.com',
                 'started_at' => $startedAt,
                 'deadline_at' => $startedAt + 420,
                 'checks' => 1,
