@@ -519,10 +519,65 @@
 
     .w-system-config__form-actions {
         display: grid;
-        grid-template-columns: minmax(13.75rem, 22.5rem) auto;
-        gap: var(--weline-space-3);
-        justify-content: end;
+        gap: var(--weline-space-2);
+        justify-content: stretch;
         align-items: center;
+    }
+
+    .w-system-config__form-actions-main {
+        display: grid;
+        grid-template-columns: minmax(10rem, 1fr) minmax(12rem, 1.2fr) auto;
+        gap: var(--weline-space-3);
+        align-items: center;
+    }
+
+    .w-system-config__form-actions-main:not(:has(.w-system-config__reauth-field:not([hidden]))) {
+        grid-template-columns: minmax(12rem, 1fr) auto;
+    }
+
+    .w-system-config__form-actions--dock {
+        position: fixed;
+        inset-inline-start: var(--backend-theme-sidebar-width, 16.5rem);
+        inset-inline-end: 0;
+        inset-block-end: 0;
+        z-index: 1050;
+        margin: 0;
+        padding: var(--weline-space-3) var(--weline-space-4);
+        border-block-start: 1px solid var(--weline-theme-border);
+        background: color-mix(in srgb, var(--weline-theme-surface) 94%, transparent);
+        box-shadow: 0 -8px 24px color-mix(in srgb, var(--weline-theme-text) 12%, transparent);
+        backdrop-filter: blur(10px);
+    }
+
+    html[data-backend-sidebar-collapsed="true"] .w-system-config__form-actions--dock,
+    .w-backend-shell[data-sidebar-collapsed="true"] .w-system-config__form-actions--dock {
+        inset-inline-start: var(--backend-theme-sidebar-collapsed-width, 4.375rem);
+    }
+
+    @media (max-width: 63.99rem) {
+        .w-system-config__form-actions--dock {
+            inset-inline-start: 0;
+        }
+    }
+
+    .w-system-config__form-actions--dock .w-system-config__form-actions-main {
+        max-inline-size: 72rem;
+        margin-inline: auto;
+        width: 100%;
+    }
+
+    .w-system-config__form-actions--dock .w-system-config__form-actions-hint {
+        max-inline-size: 72rem;
+        margin-inline: auto;
+    }
+
+    .w-system-config__form-actions-spacer {
+        block-size: 5.5rem;
+    }
+
+    .w-system-config__reauth-field.is-required-flash .w-input {
+        border-color: var(--weline-theme-danger);
+        box-shadow: 0 0 0 2px color-mix(in srgb, var(--weline-theme-danger) 28%, transparent);
     }
 
     .w-system-config__guide-step {
@@ -802,8 +857,12 @@
         }
 
         .w-system-config__template-header,
-        .w-system-config__form-actions {
+        .w-system-config__form-actions-main {
             grid-template-columns: minmax(0, 1fr);
+        }
+
+        .w-system-config__form-actions-spacer {
+            block-size: 9.5rem;
         }
 
         .w-system-config__template-code {
@@ -823,6 +882,51 @@
             inset-inline-start: auto;
             inline-size: auto;
             max-block-size: none;
+        }
+    }
+
+    /* 国家覆盖：国家 | 供应商 | 删除 同一行，避免删除掉到下一行 */
+    .w-system-config__map-rows {
+        display: grid;
+        gap: var(--weline-space-2);
+        min-inline-size: 0;
+    }
+
+    .w-system-config__map-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto;
+        align-items: end;
+        gap: var(--weline-space-2);
+        min-inline-size: 0;
+    }
+
+    .w-system-config__map-country,
+    .w-system-config__map-provider {
+        display: grid;
+        gap: var(--weline-space-1);
+        min-inline-size: 0;
+    }
+
+    .w-system-config__map-remove {
+        flex: 0 0 auto;
+        white-space: nowrap;
+    }
+
+    .w-system-config__map-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: var(--weline-space-2);
+        justify-content: flex-start;
+    }
+
+    @media (max-width: 720px) {
+        .w-system-config__map-row {
+            grid-template-columns: minmax(0, 1fr);
+            align-items: stretch;
+        }
+
+        .w-system-config__map-remove {
+            justify-self: start;
         }
     }
 }
