@@ -29,5 +29,8 @@ final class CheckoutCouponScriptContractTest extends TestCase
         self::assertStringContainsString('buildQuotePayload', $source);
         self::assertStringContainsString('amount_minor', $source);
         self::assertStringContainsString("applyCoupon({ coupon_code: normalized }", $source);
+        self::assertStringContainsString("function i18n(attr, fallback)", $source);
+        self::assertStringContainsString("i18n('data-i18n-invalid-limit'", $source);
+        self::assertStringContainsString("i18n('data-i18n-enter-code'", $source);
     }
 }

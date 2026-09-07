@@ -211,12 +211,18 @@ VIP等级,"VIP Level"
 包含任一标签,"Contains Any Tag"
 不包含任一标签,"Not Contains Any Tag"
 标签,Tag
-优惠券,Coupon
-输入优惠券代码,"Enter coupon code"
-应用中...,Applying...
 当前暂无进行中的活动，请稍后再来看看。,"There are no active campaigns right now. Please check back later."
 优惠券代码,"Coupon Code"
 应用,Apply
+优惠券,Coupon
+请输入优惠券代码,"Please enter a coupon code"
+该优惠券已应用,"This coupon is already applied"
+优惠券不可用,"Coupon unavailable"
+优惠券无效、不可用或已达使用上限,"Coupon is invalid, unavailable, or has reached its usage limit"
+营销服务暂时不可用,"Marketing service temporarily unavailable"
+已移除优惠券,"Coupon removed"
+输入优惠券代码,"Enter coupon code"
+应用中...,Applying...
 优惠券列表,"Coupon List"
 添加优惠券,"Add Coupon"
 暂无数据,"No data"
@@ -275,25 +281,23 @@ ID,ID
 优惠券类型无效,"Invalid coupon type"
 优惠券状态无效,"Coupon status is invalid"
 优惠券代码已存在,"Coupon code already exists"
-"优惠券 ID 无效","优惠券 ID 无效"
-请输入优惠券代码,请输入优惠券代码
-优惠券已保存，将在结账报价时生效,优惠券已保存，将在结账报价时生效
-已移除优惠券,已移除优惠券
-优惠券无效或不可用,优惠券无效或不可用
+"优惠券 ID 无效","Invalid coupon ID"
+优惠券已保存，将在结账报价时生效,"Coupon saved and will apply at checkout quote"
 此折扣由「%{1}」活动自动同步，请到该模块管理活动以禁用或调整；折扣模块不可删除。,"This discount is synced from \"%{1}\". Manage/disable the activity there; it cannot be deleted in Marketing."
 无法保存该规则,"Unable to save this rule"
 无法删除该规则,"Unable to delete this rule"
 系统同步折扣不可在折扣模块修改。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be edited in Marketing. Manage/disable the activity in \"%{1}\"."
 系统同步折扣不可在折扣模块删除。请到「%{1}」管理对应活动以禁用或调整。,"System-synced discounts cannot be deleted in Marketing. Manage/disable the activity in \"%{1}\"."
 来源业务模块,"Source business module"
+优惠券无效或不可用,"Coupon is invalid or unavailable"
 后台,Background
 营销,Marketing
 规则管理,"Rule Management"
 优惠券管理,"Coupon Management"
-编辑优惠券,编辑优惠券
+编辑优惠券,"Edit coupon"
 新建优惠券,"Create new coupon"
-清除优惠券,清除优惠券
-移除优惠券,移除优惠券
+清除优惠券,"Clear coupon"
+移除优惠券,"Remove coupon"
 促销活动管理,"Promotional event management"
 活动列表,"Activity list"
 查看促销活动列表,"View a list of promotions"
