@@ -277,7 +277,7 @@ class ModuleInstallerServiceTest extends TestCase
             $request = new class {
                 public function getServer(string $key = ''): string|array
                 {
-                    return $key === 'HTTP_HOST' ? 'p11005ce4.weline.test' : '';
+                    return $key === 'HTTP_HOST' ? 'p11005ce4.test.weline.com' : '';
                 }
             };
             ObjectManager::setInstance(\Weline\Framework\Http\Request::class, $request);
@@ -286,7 +286,7 @@ class ModuleInstallerServiceTest extends TestCase
             $method = new \ReflectionMethod(ModuleInstallerService::class, 'getCurrentDomain');
             $method->setAccessible(true);
 
-            $this->assertSame('p11005ce4.weline.test', $method->invoke($service));
+            $this->assertSame('p11005ce4.test.weline.com', $method->invoke($service));
         } finally {
             if ($previousServerHost === null) {
                 unset($_SERVER['HTTP_HOST']);
@@ -304,8 +304,8 @@ class ModuleInstallerServiceTest extends TestCase
         $method->setAccessible(true);
 
         $this->assertSame(
-            'p11005ce4.weline.test',
-            $method->invoke($service, 'https://p11005ce4.weline.test/backend')
+            'p11005ce4.test.weline.com',
+            $method->invoke($service, 'https://p11005ce4.test.weline.com/backend')
         );
     }
 
