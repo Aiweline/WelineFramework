@@ -55,6 +55,8 @@ class AccountQueryProvider implements QueryProviderInterface
             'login' => $this->login($params),
             'register' => $this->register($params),
             'current' => $this->current(),
+            'menuSignals' => $this->menuSignals(),
+            'socialQuickPrompt' => $this->socialQuickPrompt($params),
             'logout' => $this->logout(),
             'updateProfile' => $this->updateProfile($params),
             'updatePassword' => $this->updatePassword($params),
@@ -196,6 +198,74 @@ class AccountQueryProvider implements QueryProviderInterface
             'isLogin' => true,
             'logged_in' => true,
             'user' => $this->customerPayload($user),
+        ]);
+    }
+
+    /**
+     * Guest-only Google One Tap / Facebook FedCM bootstrap for account JS.
+     * Theme must not SSR this — FPC and layout variance break delivery.
+     *
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function socialQuickPrompt(array $params = []): array
+    {
+        $session = $this->sessionFactory->createFrontendSession();
+        $loggedIn = $session->isLoggedIn();
+        $returnUrl = trim((string) ($params['return_url'] ?? $params['redirect_url'] ?? ''));
+        if ($returnUrl !== '') {
+            $returnUrl = $this->authReturnUrlService->normalizeTarget($returnUrl);
+        }
+
+        /** @var \Weline\Customer\Service\SocialLogin\SocialLoginPresentationService $presentation */
+        $presentation = ObjectManager::getInstance(
+            \Weline\Customer\Service\SocialLogin\SocialLoginPresentationService::class
+        );
+        $bootstrap = $presentation->quickPromptBootstrap([
+            'enable_google' => true,
+            'enable_facebook' => true,
+            'enable_instagram' => true,
+        ], $returnUrl, $loggedIn);
+        $bootstrap['logged_in'] = $loggedIn;
+        $enabled = !$loggedIn
+            && (($bootstrap['google'] ?? null) !== null || ($bootstrap['facebook'] ?? null) !== null);
+
+        return $this->success('Social quick prompt bootstrap.', [
+            'enabled' => $enabled,
+            'isLogin' => $loggedIn,
+            'logged_in' => $loggedIn,
+            'bootstrap' => $bootstrap,
+        ]);
+    }
+
+    /**
+     * Unread menu signal counts for JS badge painting (never SSR into FPC HTML).
+     *
+     * @return array<string, mixed>
+     */
+    private function menuSignals(): array
+    {
+        $session = $this->sessionFactory->createFrontendSession();
+        $user = $session->getUser();
+        if (!$session->isLoggedIn() || !$user instanceof Customer || !(int)$user->getId()) {
+            return $this->success('Guest menu signals.', [
+                'isLogin' => false,
+                'logged_in' => false,
+                'total' => 0,
+                'by_code' => (object)[],
+            ]);
+        }
+
+        $websiteId = max(0, (int)\Weline\Framework\Runtime\RequestContext::getWelineWebsiteId());
+        /** @var \Weline\Customer\Service\AccountMenuSignalAggregator $aggregator */
+        $aggregator = ObjectManager::getInstance(\Weline\Customer\Service\AccountMenuSignalAggregator::class);
+        $signals = $aggregator->aggregate((int)$user->getId(), $websiteId);
+
+        return $this->success('Menu signals loaded.', [
+            'isLogin' => true,
+            'logged_in' => true,
+            'total' => (int)($signals['total'] ?? 0),
+            'by_code' => (object)($signals['by_code'] ?? []),
         ]);
     }
 
@@ -604,6 +674,33 @@ class AccountQueryProvider implements QueryProviderInterface
                     'params' => [],
                     'returns' => ['type' => 'array'],
                     'summary' => 'Read current storefront customer session',
+                ],
+                [
+                    'name' => 'menuSignals',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 2,
+                    'cache_ttl' => 0,
+                    'auth' => 'any',
+                    'params' => [],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Unread account menu signal counts for JS badges (empty when guest)',
+                ],
+                [
+                    'name' => 'socialQuickPrompt',
+                    'frontend' => true,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 1,
+                    'cache_ttl' => 0,
+                    'auth' => 'any',
+                    'params' => [
+                        'return_url' => ['type' => 'string', 'max_length' => 2048],
+                        'redirect_url' => ['type' => 'string', 'max_length' => 2048],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Dynamic Google One Tap / Facebook FedCM bootstrap for account JS (not Theme SSR)',
                 ],
                 [
                     'name' => 'login',

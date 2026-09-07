@@ -127,6 +127,15 @@ final class CustomerAuthReturnUrlServiceTest extends TestCase
         );
     }
 
+    public function testNormalizeTargetBlocksSocialLoginRoutes(): void
+    {
+        $service = $this->serviceForCurrentUrl('http://127.0.0.1:9514/products/demo');
+
+        self::assertSame('', $service->normalizeTarget('/customer/account/social-login/callback'));
+        self::assertSame('', $service->normalizeTarget('/customer/account/social-login/choose'));
+        self::assertSame('products/demo', $service->normalizeTarget('/products/demo'));
+    }
+
     private function serviceForCurrentUrl(string $currentUrl): CustomerAuthReturnUrlService
     {
         $url = $this->createMock(Url::class);

@@ -132,31 +132,11 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         }
 
         try {
-            $user = $this->findLocalCustomerByLogin($username);
-
-            if (!$user) {
-                return $this->respondFailure(
-                    (string) __('用户不存在.'),
-                    $redirectUrl
-                );
-            }
-
-            if ($user->getAttemptTimes() > 5) {
-                return $this->respondFailure(
-                    (string) __('登录尝试次数过多，请稍后再试.'),
-                    $redirectUrl
-                );
-            }
-
-            if (!password_verify($password, $user->getPassword())) {
-                $user->addAttemptTimes()
-                    ->setAttemptIp($this->request->clientIP())
-                    ->save();
-
-                return $this->respondFailure(
-                    (string) __('密码错误.'),
-                    $redirectUrl
-                );
+            $credentials = ObjectManager::getInstance(\Weline\Customer\Service\CustomerLocalCredentialService::class);
+            try {
+                $user = $credentials->authenticate($username, $password);
+            } catch (\InvalidArgumentException|\RuntimeException $authError) {
+                return $this->respondFailure($authError->getMessage(), $redirectUrl);
             }
 
             /** @var CustomerLoginChallengeHandlerInterface $challengeHandler */
@@ -264,30 +244,6 @@ class Login extends \Weline\Framework\App\Controller\FrontendController
         $hostname = $host === '' ? '' : \parse_url('http://' . \ltrim($host, '/'), PHP_URL_HOST);
 
         return \is_string($hostname) ? \strtolower(\rtrim($hostname, '.')) : '';
-    }
-
-    private function findLocalCustomerByLogin(string $login): ?Customer
-    {
-        $login = trim($login);
-        if ($login === '') {
-            return null;
-        }
-
-        /** @var Customer $user */
-        $user = ObjectManager::getInstance(Customer::class);
-
-        $email = strtolower($login);
-        if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
-            $user->where(Customer::schema_fields_email, $email)->find()->fetch();
-            if ($user->getId()) {
-                return $user;
-            }
-        }
-
-        $user->reset();
-        $user->where(Customer::schema_fields_username, $login)->find()->fetch();
-
-        return $user->getId() ? $user : null;
     }
 
     private function syncSandboxCookie(bool $enabled): void

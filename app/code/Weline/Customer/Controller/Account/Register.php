@@ -53,6 +53,10 @@ class Register extends \Weline\Framework\App\Controller\FrontendController
             $this->authReturnUrlService->buildAuthPageUrl('customer/account/register', $redirectUrl)
         );
         $this->assign('title', __('创建账户'));
+        $this->assign('meta', [
+            'showHeader' => true,
+            'showFooter' => true,
+        ]);
 
         $referralCode = $this->readReferralCode();
         if ($referralCode !== '') {

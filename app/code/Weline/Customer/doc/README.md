@@ -87,6 +87,8 @@ final readonly `AccountSidebarProjection`，其中只包含请求 section、合�
 ## 本模块文档资产
 
 - `app/code/Weline/Customer/doc/storefront-auth-return.md`
+- `app/code/Weline/Customer/doc/extends.md`
+- `app/code/Weline/Customer/doc/social-login-provider.md`
 - `app/code/Weline/Customer/doc/hook/frontend/account/index/orders.md`
 - `app/code/Weline/Customer/doc/hook/frontend/account/index/subscriptions.md`
 - `app/code/Weline/Customer/doc/hook/frontend/account/login/providers.md`

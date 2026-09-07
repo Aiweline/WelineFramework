@@ -7,4 +7,19 @@
         <observer name="Weline_Customer::auto_login" instance="Weline\Customer\Observer\AutoLogin" disabled="false" shared="true" sort="0"/>
         <observer name="Weline_Customer::must_set_password_gate" instance="Weline\Customer\Observer\MustSetPasswordGate" disabled="false" shared="true" sort="20"/>
     </event>
+
+    <event name="Weline_Framework::resource_changed"
+           schema_version="1"
+           async_mapper="Weline\Framework\Event\ResourceChange\ResourceChangePayloadMapper"
+           data_contract="resource_change.v1">
+        <observer name="Weline_Customer::social_login_config_resource_changed"
+                  instance="Weline\Customer\Observer\SocialLoginConfigResourceChanged"
+                  delivery="async"
+                  retry="standard"
+                  coalesce="latest"
+                  timeout="60"
+                  disabled="false"
+                  shared="true"
+                  sort="110"/>
+    </event>
 </config>

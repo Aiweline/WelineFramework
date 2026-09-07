@@ -21,9 +21,13 @@ final class AccountLoginWidgetContractTest extends TestCase
 
         self::assertFileExists($shell);
         self::assertFileExists($loginForm);
-        self::assertFileDoesNotExist($customerWidgetPhp);
+        self::assertFileExists($customerWidgetPhp);
         self::assertFileExists($themeWidget);
         self::assertFileExists($authLayout);
+
+        $customerWidgetSource = (string)\file_get_contents($customerWidgetPhp);
+        self::assertStringContainsString("'account-social-login'", $customerWidgetSource);
+        self::assertStringContainsString('account-login-social-providers', $customerWidgetSource);
 
         $themeSource = (string)\file_get_contents($themeWidget);
         self::assertStringContainsString('@widget.code {account-login}', $themeSource);

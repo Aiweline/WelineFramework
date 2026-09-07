@@ -17,13 +17,14 @@
 - 只接受站内相对路径或与当前请求完全同源的 `http` / `https` URL；绝对 URL 最终也要收敛为站内路径。
 - 首页 `/` 也是合法目标，并保留其 query 和 fragment。
 - 拒绝协议相对 URL、站外 URL、用户信息 URL、反斜杠、控制字符、`.` / `..` 路径段和 backend/API area 路径。
-- 为防止登录循环，登录、注册、忘记密码、两步验证和退出路由不能成为最终回跳目标。
+- 为防止登录循环，登录、注册、忘记密码、两步验证、社媒 OAuth（`customer/account/social-login/*`）和退出路由不能成为最终回跳目标。
+- 社媒登录（OAuth start/callback、绑定选择、Google/Facebook 快捷 One Tap）与密码登录共用同一 Session 目标与 `formatAuthSuccessRedirect()`；登录页部件须把 `redirect_url` 传给 `account-social-login`，快捷引导须带当前页或已捕获的 `return_url`。
 - 认证路由检查必须使用 `State::resolveLocalizationFromPathSegments()` 的本地化前缀规则，覆盖单货币、单语言和任意顺序的双前缀；返回目标本身保留原货币/语言前缀、query 和 fragment。
 - `w_auth` 仅作前端一次性刷新信号，不得参与权限判定或 Session 写入。取值：`1`=认证成功，`0`=登出/失效。
 
 ## 扩展要求
 
-新增第三方登录、验证挑战或其他认证中间页时，必须继续传递已校验的目标，并在最终认证成功后由 `CustomerAuthReturnUrlService` 消费。不得在 Controller、QueryProvider 或模板中再实现一套手写的同源/路由校验。认证成功响应里的 `redirect` 必须带 `w_auth=1`；登出 / 失效响应里的 `redirect` 必须带 `w_auth=0`。
+新增第三方登录、验证挑战或其他认证中间页时，必须继续传递已校验的目标，并在最终认证成功后由 `CustomerAuthReturnUrlService` 消费（禁止成功后硬编码 `/customer/account`）。不得在 Controller、QueryProvider 或模板中再实现一套手写的同源/路由校验。认证成功响应里的 `redirect` 必须带 `w_auth=1`；登出 / 失效响应里的 `redirect` 必须带 `w_auth=0`。
 
 ## 两步验证可选性
 
@@ -37,6 +38,7 @@
 - 登录：`/customer/account/login?redirect_url=<encoded-storefront-path>`
 - 注册：`/customer/account/register?redirect_url=<encoded-storefront-path>`
 - 必测链路：业务页 → 登录 → 注册 → 登录，以及业务页 → 注册成功；每一步的 `redirect_url` 都应保持同一个站内目标。
+- 社媒链路：业务页 → 登录（或全站 One Tap）→ Google/Facebook/Instagram OAuth 或快捷登录成功，应回到同一业务页（含 `w_auth=1`），不得落在个人中心。
 - 成功后跳回目标应含 `w_auth=1`；页头在去掉标记前应切到登录态文案（不再显示「登录 / 注册」游客壳）。
 - 退出后跳转应含 `w_auth=0`；若落地页带主题页头，应切回游客壳。
 - 安全链路：站外 URL 和带货币/语言前缀的认证页均应被丢弃，页面不得出现循环跳转。

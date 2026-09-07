@@ -155,34 +155,38 @@
 
     /* Compact spacing inside docked card — keep fields, reduce vertical waste */
     .account-login-widget .w-auth-login--amazon .w-auth-login__header {
-        gap: 0.35rem;
-        padding: 1.25rem 1.25rem 0.5rem;
+        gap: 0.25rem;
+        padding: 1.1rem 1.2rem 0.35rem;
     }
 
     .account-login-widget .w-auth-login--amazon .w-auth-login__title {
-        font-size: 1.5rem;
+        font-size: 1.45rem;
     }
 
     .account-login-widget .w-auth-login--amazon .w-auth-login__messages,
     .account-login-widget .w-auth-login--amazon .w-auth-login__form {
-        gap: 0.75rem;
-        padding-inline: 1.25rem;
+        gap: 0.65rem;
+        padding-inline: 1.2rem;
     }
 
     .account-login-widget .w-auth-login--amazon .w-auth-login__messages {
-        padding-block-start: 0.25rem;
+        padding-block-start: 0.1rem;
     }
 
     .account-login-widget .w-auth-login--amazon .w-auth-login__social {
-        gap: 0.55rem;
-        margin-block-start: 0.35rem;
-        padding: 0.75rem 1.25rem 0;
+        gap: 0.4rem;
+        margin: 0;
+        padding: 0.1rem 1.2rem 0.1rem;
+    }
+
+    .account-login-widget .w-auth-login--amazon .w-auth-login__social-divider {
+        margin-inline: 0;
     }
 
     .account-login-widget .w-auth-login--amazon .w-auth-login__footer {
-        gap: 0.55rem;
-        margin-block-start: 0.65rem;
-        padding: 0.15rem 1.25rem 1.1rem;
+        gap: 0.45rem;
+        margin-block-start: 0.25rem;
+        padding: 0.1rem 1.2rem 1rem;
     }
 
     .account-login-widget.is-preview {
@@ -228,13 +232,13 @@
     .w-auth-login--amazon {
         --amz-text: #0f1111;
         --amz-text-muted: #565959;
-        --amz-link: #007185;
-        --amz-link-hover: #c45500;
+        --amz-link: var(--color-link);
+        --amz-link-hover: var(--color-link-hover);
         --amz-border: #d5d9d9;
         --amz-border-input: #888c8c;
         --amz-surface: #ffffff;
         --amz-surface-muted: #f0f2f2;
-        --amz-cta-bg: linear-gradient(180deg, #ffe08a 0%, #ffd814 100%);
+        --amz-cta-bg: var(--color-primary);
         --amz-cta-bg-hover: linear-gradient(180deg, #f7ca00 0%, #f0b800 100%);
         --amz-cta-border: #fcd200;
         --amz-secondary-bg: linear-gradient(180deg, #f7f8f8 0%, #e3e6e6 100%);
@@ -246,7 +250,7 @@
         padding: 0;
         overflow: hidden;
         border: 1px solid var(--amz-border);
-        border-radius: 8px;
+        border-radius: var(--weline-theme-radius-lg);
         background: var(--amz-surface);
         color: var(--amz-text);
         box-shadow: none;
@@ -256,8 +260,8 @@
     .w-auth-login--amazon .w-auth-login__header {
         display: grid;
         justify-items: start;
-        gap: var(--weline-layout-spacing-sm, 0.5rem);
-        padding: var(--weline-layout-spacing-xl, 2rem) var(--weline-layout-spacing-lg, 1.5rem) var(--weline-layout-spacing-md, 1rem);
+        gap: 0.25rem;
+        padding: 1.15rem 1.25rem 0.35rem;
         text-align: start;
     }
 
@@ -267,7 +271,7 @@
 
     .w-auth-login--amazon .w-auth-login__title {
         margin: 0;
-        font-size: 1.75rem;
+        font-size: 1.5rem;
         font-weight: 400;
         line-height: 1.2;
         color: var(--amz-text);
@@ -282,12 +286,17 @@
     .w-auth-login--amazon .w-auth-login__messages,
     .w-auth-login--amazon .w-auth-login__form {
         display: grid;
-        gap: var(--weline-layout-spacing-md, 1rem);
-        padding-inline: var(--weline-layout-spacing-lg, 1.5rem);
+        gap: 0.7rem;
+        padding-inline: 1.25rem;
     }
 
     .w-auth-login--amazon .w-auth-login__messages {
-        padding-block-start: var(--weline-layout-spacing-sm, 0.5rem);
+        padding-block-start: 0.15rem;
+        padding-block-end: 0;
+    }
+
+    .w-auth-login--amazon .w-field {
+        gap: 0.3rem;
     }
 
     .w-auth-login--amazon .w-field__label {
@@ -338,18 +347,32 @@
         padding-inline-end: 2.75rem;
     }
 
+    /* Password visibility: icon-only, no filled CTA chrome */
     .w-auth-login--amazon .w-auth-login__password > .w-button {
         position: absolute;
         inset-block-start: 50%;
-        inset-inline-end: 0.15rem;
+        inset-inline-end: 0.1rem;
         translate: 0 -50%;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        width: 2rem;
-        height: 2rem;
+        width: 1.85rem;
+        height: 1.85rem;
+        min-width: 1.85rem;
         padding: 0;
+        border: 0;
+        border-radius: 3px;
+        background: transparent;
+        box-shadow: none;
         color: var(--amz-link);
+    }
+
+    .w-auth-login--amazon .w-auth-login__password > .w-button:hover,
+    .w-auth-login--amazon .w-auth-login__password > .w-button:focus-visible {
+        background: rgba(15, 17, 17, 0.04);
+        color: var(--amz-link-hover);
+        outline: none;
+        box-shadow: none;
     }
 
     /* Password toggle: keep data-* on wrappers (icon taglib strips attrs on svg) */
@@ -373,50 +396,92 @@
         min-height: 1.125rem;
     }
 
-    .w-auth-login--amazon .w-auth-login__remember {
-        display: grid;
-        grid-template-columns: minmax(0, 1fr) minmax(4.5rem, 5.75rem);
+    .w-auth-login--amazon .w-auth-login__meta {
+        display: flex;
+        flex-wrap: nowrap;
         align-items: center;
-        column-gap: 0.5rem;
-        box-sizing: border-box;
-        width: 100%;
-        max-width: 100%;
+        justify-content: space-between;
+        gap: 0.65rem;
         min-width: 0;
-        padding: 0.5rem;
-        border: 1px solid var(--amz-border);
-        border-radius: 4px;
-        background: var(--amz-surface-muted);
-        overflow: hidden;
+    }
+
+    .w-auth-login--amazon .w-auth-login__remember {
+        display: inline-flex;
+        align-items: center;
+        flex-wrap: nowrap;
+        gap: 0.35rem;
+        box-sizing: border-box;
+        flex: 0 1 auto;
+        min-width: 0;
+        max-width: calc(100% - 5.5rem);
+        width: max-content;
+        padding: 0;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        overflow: visible;
     }
 
     .w-auth-login--amazon .w-auth-login__remember-label {
         display: inline-flex;
         align-items: center;
-        gap: 0.375rem;
+        flex: 0 0 auto;
+        gap: 0.3rem;
         min-width: 0;
-        max-width: 100%;
-        overflow: hidden;
-        color: var(--amz-text);
+        overflow: visible;
+        color: var(--amz-muted, #565959);
         font-size: 0.8125rem;
-        font-weight: 650;
+        font-weight: 400;
         line-height: 1.3;
+        white-space: nowrap;
     }
 
     .w-auth-login--amazon .w-auth-login__remember .w-select {
         box-sizing: border-box;
-        width: 100% !important;
-        min-width: 0 !important;
-        max-width: 100% !important;
+        flex: 0 0 auto !important;
+        width: max-content !important;
+        min-width: 4.5rem !important;
+        max-width: 7rem !important;
         min-inline-size: 0 !important;
-        max-inline-size: 100% !important;
-        min-height: 1.875rem;
-        padding-inline: 0.35rem;
+        max-inline-size: 7rem !important;
+        min-height: 1.5rem;
+        padding-inline: 0.15rem 1.1rem;
+        border: 0;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
         font-size: 0.8125rem;
+        color: var(--amz-text);
+    }
+
+    .w-auth-login--amazon .w-auth-login__remember .w-select:focus {
+        border-color: transparent;
+        box-shadow: none;
+        outline: 2px solid rgba(228, 121, 17, 0.35);
+        outline-offset: 1px;
     }
 
     .w-auth-login--amazon .w-auth-login__forgot {
         display: flex;
-        justify-content: flex-start;
+        flex: 0 0 auto;
+        justify-content: flex-end;
+        margin-inline-start: auto;
+    }
+
+    .w-auth-login--amazon .w-auth-login__forgot-link {
+        color: var(--amz-link);
+        font-size: 0.8125rem;
+        font-weight: 650;
+        line-height: 1.3;
+        text-decoration: none;
+        white-space: nowrap;
+    }
+
+    .w-auth-login--amazon .w-auth-login__forgot-link:hover,
+    .w-auth-login--amazon .w-auth-login__forgot-link:focus-visible {
+        color: var(--amz-link-hover);
+        text-decoration: underline;
+        outline: none;
     }
 
     .w-auth-login--amazon .w-auth-login__forgot .w-button {
@@ -498,7 +563,7 @@
         max-width: 100%;
         padding: 0.5rem 0.65rem;
         border: 1px solid var(--amz-border);
-        border-radius: 4px;
+        border-radius: var(--weline-theme-radius-md);
         background: var(--amz-surface-muted);
     }
 
@@ -586,10 +651,14 @@
 
     .w-auth-login--amazon .w-auth-login__social {
         display: grid;
-        gap: 0.75rem;
-        margin-block-start: 0.5rem;
-        padding: 1rem 1.125rem 0;
-        border-block-start: 1px solid var(--amz-border);
+        gap: 0.45rem;
+        margin: 0;
+        padding: 0.15rem 1.25rem 0.15rem;
+        border-block-start: none;
+    }
+
+    .w-auth-login--amazon .w-auth-login__social--quick {
+        padding-block-start: 0.15rem;
     }
 
     .w-auth-login--amazon .w-auth-login__social-title {
@@ -599,26 +668,47 @@
         text-align: center;
     }
 
+    .w-auth-login--amazon .w-auth-login__social-divider {
+        display: grid;
+        align-items: center;
+        grid-template-columns: 1fr auto 1fr;
+        gap: 0.65rem;
+        margin: 0.15rem 0 0.1rem;
+        color: var(--amz-text-muted);
+        font-size: 0.75rem;
+        text-align: center;
+    }
+
+    .w-auth-login--amazon .w-auth-login__social-divider::before,
+    .w-auth-login--amazon .w-auth-login__social-divider::after {
+        content: "";
+        height: 1px;
+        background: var(--amz-border);
+    }
+
     .w-auth-login--amazon .w-auth-login__social .auth-form__provider {
-        width: 100%;
+        width: auto;
         margin: 0;
+        list-style: none;
     }
 
     .w-auth-login--amazon .w-auth-login__social .auth-form__provider + .auth-form__provider {
-        margin-top: 0.75rem;
+        margin-top: 0;
     }
 
     .w-auth-login--amazon .w-auth-login__social .auth-form__submit--provider {
-        width: 100%;
+        width: 2.5rem;
+        height: 2.5rem;
+        min-width: 2.5rem;
+        min-height: 2.5rem;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        gap: 0.375rem;
-        min-height: 2rem;
-        padding: 0 1rem;
+        gap: 0;
+        padding: 0;
         border: 1px solid var(--amz-secondary-border);
-        border-radius: 20px;
-        background: var(--amz-secondary-bg);
+        border-radius: 999px;
+        background: #fff;
         color: var(--amz-text);
         font-weight: 650;
         text-decoration: none;
@@ -628,15 +718,81 @@
 
     .w-auth-login--amazon .w-auth-login__social .auth-form__submit--provider:hover,
     .w-auth-login--amazon .w-auth-login__social .auth-form__submit--provider:focus-visible {
-        background: linear-gradient(180deg, #e7e9e9 0%, #d9dcdc 100%);
+        background: #f7f8f8;
         outline: none;
+        box-shadow: 0 0 0 3px rgba(15, 17, 17, 0.08);
+    }
+
+    .w-auth-login--amazon .w-auth-login__social:not(:has(.auth-form__provider)):not(:has(.account-social-login__item)):not(:has(.account-social-login__btn--logo)) {
+        display: none;
+    }
+
+    .w-auth-login--amazon .w-auth-login__social-slot {
+        display: block;
+        width: 100%;
+    }
+
+    .account-social-login__list,
+    .account-social-login__list--logos {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 0.65rem;
+    }
+
+    .account-social-login__item {
+        display: block;
+        margin: 0;
+        padding: 0;
+        width: auto;
+        list-style: none;
+    }
+
+    .account-social-login__btn--logo {
+        width: 2.5rem;
+        height: 2.5rem;
+        min-width: 2.5rem;
+        min-height: 2.5rem;
+        padding: 0;
+        border-radius: 999px;
+    }
+
+    .account-social-login__logo {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 1.375rem;
+        height: 1.375rem;
+        line-height: 0;
+    }
+
+    .account-social-login__mark {
+        display: block;
+        width: 1.375rem;
+        height: 1.375rem;
+    }
+
+    .account-social-login__btn--google {
+        border-color: #dadce0;
+    }
+
+    .account-social-login__btn--facebook {
+        border-color: #1877f2;
+    }
+
+    .account-social-login__btn--instagram {
+        border-color: #e1306c;
     }
 
     .w-auth-login--amazon .w-auth-login__footer {
         display: grid;
-        gap: 0.75rem;
-        margin-block-start: 1rem;
-        padding: 0.25rem 1.125rem 1.25rem;
+        gap: 0.55rem;
+        margin-block-start: 0.35rem;
+        padding: 0.1rem 1.25rem 1.1rem;
         border-block-start: none;
     }
 
@@ -742,14 +898,23 @@
             padding-inline: 1rem;
         }
 
+        .w-auth-login--amazon .w-auth-login__meta {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
         .w-auth-login--amazon .w-auth-login__remember {
-            grid-template-columns: 1fr;
-            row-gap: 0.5rem;
+            max-width: none;
+        }
+
+        .w-auth-login--amazon .w-auth-login__forgot {
+            justify-content: flex-start;
+            margin-inline-start: 0;
         }
 
         .w-auth-login--amazon .w-auth-login__remember .w-select {
-            width: 100%;
-            max-width: none;
+            width: auto;
+            max-width: 7rem;
         }
 
         .w-auth-login--amazon .w-auth-login__row {
@@ -766,6 +931,86 @@
 }
 
 /* icon-overflow-fix-20260829 */
+
+/* Unlayered: login meta row must win over theme form grid / layered page CSS */
+.w-auth-login--amazon .w-auth-login__meta {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.65rem;
+    min-width: 0;
+    width: 100%;
+}
+.w-auth-login--amazon .w-auth-login__remember {
+    display: inline-flex !important;
+    align-items: center;
+    flex-wrap: nowrap;
+    gap: 0.35rem;
+    flex: 0 1 auto !important;
+    min-width: 0 !important;
+    max-width: calc(100% - 5.75rem) !important;
+    width: max-content !important;
+    padding: 0 !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    background: transparent !important;
+    overflow: visible !important;
+}
+.w-auth-login--amazon .w-auth-login__remember-label {
+    flex: 0 0 auto !important;
+    overflow: visible !important;
+    color: #565959;
+    font-size: 0.8125rem;
+    font-weight: 400;
+}
+.w-auth-login--amazon .w-auth-login__remember .w-select {
+    flex: 0 0 auto !important;
+    width: max-content !important;
+    min-width: 4.5rem !important;
+    max-width: 7rem !important;
+    min-height: 1.5rem;
+    padding-inline: 0.15rem 1.1rem;
+    border: 0 !important;
+    border-radius: 0;
+    background: transparent !important;
+    box-shadow: none !important;
+    font-size: 0.8125rem;
+}
+.w-auth-login--amazon .w-auth-login__forgot {
+    display: flex !important;
+    flex: 0 0 auto !important;
+    width: auto !important;
+    max-width: none !important;
+    margin-inline-start: 0 !important;
+    justify-content: flex-end;
+}
+.w-auth-login--amazon .w-auth-login__forgot-link {
+    color: var(--color-link);
+    font-size: 0.8125rem;
+    font-weight: 650;
+    line-height: 1.3;
+    text-decoration: none;
+    white-space: nowrap;
+}
+.w-auth-login--amazon .w-auth-login__forgot-link:hover,
+.w-auth-login--amazon .w-auth-login__forgot-link:focus-visible {
+    color: var(--color-link-hover);
+    text-decoration: underline;
+    outline: none;
+}
+.w-auth-login--amazon .w-auth-login__password > .w-button {
+    border: 0 !important;
+    background: transparent !important;
+    box-shadow: none !important;
+    color: var(--color-link) !important;
+}
+.w-auth-login--amazon .w-auth-login__password > .w-button:hover,
+.w-auth-login--amazon .w-auth-login__password > .w-button:focus-visible {
+    background: rgba(15, 17, 17, 0.04) !important;
+    color: var(--color-link-hover) !important;
+}
 
 /* Unlayered: beat theme.css unlayered .w-button on-primary white text on gray secondary CTA */
 .w-auth-login--amazon .w-button.w-auth-login__register {
@@ -784,3 +1029,86 @@
     box-shadow: none;
     transform: none;
 }
+
+/* Unlayered: beat theme ul/disc + full-width link styles for social logos */
+.w-auth-login--amazon .w-auth-login__social {
+    margin: 0;
+    padding: 0.15rem 1.25rem 0.2rem;
+    border-block-start: none;
+}
+.w-auth-login--amazon .w-auth-login__social-divider {
+    display: grid;
+    align-items: center;
+    grid-template-columns: 1fr auto 1fr;
+    gap: 0.65rem;
+    margin: 0.15rem 0 0.1rem;
+    color: #565959;
+    font-size: 0.75rem;
+    text-align: center;
+}
+.w-auth-login--amazon .w-auth-login__social-divider::before,
+.w-auth-login--amazon .w-auth-login__social-divider::after {
+    content: "";
+    height: 1px;
+    background: #d5d9d9;
+}
+.w-auth-login--amazon .w-auth-login__social:not(:has(.auth-form__provider)):not(:has(.account-social-login__item)):not(:has(.account-social-login__btn--logo)) {
+    display: none;
+}
+.w-auth-login--amazon .account-social-login__list,
+.w-auth-login--amazon .account-social-login__list--logos,
+.w-auth-login--amazon ul.account-social-login__list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: center;
+    gap: 0.65rem;
+}
+.w-auth-login--amazon .account-social-login__item,
+.w-auth-login--amazon .account-social-login__list > li {
+    display: block;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    width: auto;
+    flex: 0 0 auto;
+}
+.w-auth-login--amazon .account-social-login__item::marker,
+.w-auth-login--amazon .account-social-login__list > li::marker {
+    content: "";
+}
+.w-auth-login--amazon a.account-social-login__btn--logo,
+.w-auth-login--amazon .account-social-login__btn.account-social-login__btn--logo {
+    box-sizing: border-box;
+    width: 2.5rem;
+    height: 2.5rem;
+    min-width: 2.5rem;
+    max-width: 2.5rem;
+    min-height: 2.5rem;
+    padding: 0;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+.w-auth-login--amazon .account-social-login__logo {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.375rem;
+    height: 1.375rem;
+    line-height: 0;
+}
+.w-auth-login--amazon .account-social-login__mark {
+    display: block;
+    width: 1.375rem;
+    height: 1.375rem;
+}
+.w-auth-login--amazon .account-social-login__btn--google { border-color: #dadce0; }
+.w-auth-login--amazon .account-social-login__btn--facebook { border-color: #1877f2; }
+.w-auth-login--amazon .account-social-login__btn--instagram { border-color: #e1306c; }
+
+/* login-layout-20260906-v67 */
