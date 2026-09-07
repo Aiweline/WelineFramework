@@ -28,9 +28,9 @@ final class ProductSearchHitTemplateContractTest extends TestCase
         );
         self::assertStringContainsString('ProductSearchHitPresenter', $provider);
         self::assertStringContainsString('storefront-offer-card.phtml', $hitTemplate);
-        self::assertStringContainsString('product-storefront__card', $offerCard);
-        self::assertStringContainsString('data-testid="storefront-product-card"', $offerCard);
-        self::assertStringContainsString('StorefrontOfferDetailQuery::params', $offerCard);
-        self::assertStringContainsString('href="@url{$productUrl|$productUrlParams}"', $offerCard);
+        self::assertStringContainsString('<w:product:card', $offerCard);
+        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $offerCard);
+        self::assertStringContainsString('show-sku="true"', $offerCard);
+        self::assertStringNotContainsString('product-storefront__card product-card', $offerCard);
     }
 }

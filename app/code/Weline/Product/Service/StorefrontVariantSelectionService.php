@@ -40,6 +40,11 @@ final class StorefrontVariantSelectionService
     }
 
     /**
+     * Axis codes that participate in offer SKU combinations.
+     *
+     * Product-level multiselect metadata on offer.variant_axes may retain orphan
+     * axes that no combination_key uses; those must not become selectable PDP axes.
+     *
      * @param list<array<string, mixed>> $offers
      * @return list<string>
      */
@@ -49,15 +54,6 @@ final class StorefrontVariantSelectionService
         foreach ($offers as $offer) {
             foreach ($this->offerCombination($offer) as $axis => $_value) {
                 $codes[$axis] = true;
-            }
-            foreach ((array)($offer['variant_axes'] ?? []) as $axisRow) {
-                if (!is_array($axisRow)) {
-                    continue;
-                }
-                $code = strtolower(trim((string)($axisRow['code'] ?? '')));
-                if ($code !== '') {
-                    $codes[$code] = true;
-                }
             }
         }
 
@@ -167,6 +163,11 @@ final class StorefrontVariantSelectionService
      */
     public function buildCatalog(array $offers, ?array $selectedOffer = null): array
     {
+        $offerAxisCodes = [];
+        foreach ($this->collectAxisCodes($offers) as $code) {
+            $offerAxisCodes[$code] = true;
+        }
+
         $axes = [];
         $axisOrder = [];
         if ($selectedOffer !== null) {
@@ -175,7 +176,9 @@ final class StorefrontVariantSelectionService
                     continue;
                 }
                 $code = strtolower(trim((string)($axisRow['code'] ?? '')));
-                if ($code === '') {
+                // Product-level multiselect can retain orphan axes that no live offer
+                // combination uses. collectAxisCodes is combination-only; drop the rest.
+                if ($code === '' || !isset($offerAxisCodes[$code])) {
                     continue;
                 }
                 $axisOrder[] = $code;
@@ -261,6 +264,9 @@ final class StorefrontVariantSelectionService
                 $images = [$primaryImage];
             }
 
+            $unitPriceMinor = max(0, (int)($offer['unit_price_minor'] ?? 0));
+            $catalogPriceMinor = max(0, (int)($offer['catalog_price_minor'] ?? $unitPriceMinor));
+            $compareAtMinor = max(0, (int)($offer['compare_at_minor'] ?? $catalogPriceMinor));
             $catalogOffers[] = [
                 'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
                 'sku' => trim((string)($offer['sku'] ?? '')),
@@ -268,7 +274,12 @@ final class StorefrontVariantSelectionService
                 'image' => $primaryImage,
                 'images' => $images,
                 'currency' => strtoupper(trim((string)($offer['currency'] ?? 'CNY'))),
-                'unit_price_minor' => max(0, (int)($offer['unit_price_minor'] ?? 0)),
+                // catalog_price_minor = raw list; unit_price_minor = Assembler final.
+                // PDP JS must not treat unit as catalog or deals stack on variant switch.
+                'catalog_price_minor' => $catalogPriceMinor,
+                'compare_at_minor' => $compareAtMinor,
+                'unit_price_minor' => $unitPriceMinor,
+                'has_deal' => !empty($offer['has_deal']) || ($catalogPriceMinor > 0 && $unitPriceMinor > 0 && $unitPriceMinor < $catalogPriceMinor),
                 'stock' => max(0, (int)($offer['stock'] ?? 0)),
                 'sellable' => !empty($offer['sellable']),
                 'quote_only' => !empty($offer['quote_only']),
@@ -301,6 +312,74 @@ final class StorefrontVariantSelectionService
             'offers' => $catalogOffers,
             'selected' => $selected,
         ];
+    }
+
+    /**
+     * Move gallery images shared by every offer to one top-level list.
+     *
+     * Variant-specific secondary images stay on the offer. Primary images
+     * remain authoritative in the offer's `image` field and are excluded from
+     * the shared base gallery, so the browser can always put the selected EAV
+     * combination first without serializing the same gallery hundreds of times.
+     *
+     * @param array<string, mixed> $catalog
+     * @return array<string, mixed>
+     */
+    public function compactCatalogMedia(array $catalog): array
+    {
+        $offers = array_values(array_filter((array)($catalog['offers'] ?? []), 'is_array'));
+        if (count($offers) < 2) {
+            return $catalog;
+        }
+
+        $imagesByOffer = [];
+        $commonImages = null;
+        $primaryImages = [];
+        foreach ($offers as $index => $offer) {
+            $images = array_values(array_unique(array_filter(
+                array_map(
+                    static fn(mixed $value): string => trim((string)$value),
+                    (array)($offer['images'] ?? []),
+                ),
+                static fn(string $value): bool => $value !== '',
+            )));
+            $primaryImage = trim((string)($offer['image'] ?? ''));
+            if ($primaryImage !== '' && !in_array($primaryImage, $images, true)) {
+                array_unshift($images, $primaryImage);
+            }
+            if ($primaryImage !== '') {
+                $primaryImages[$primaryImage] = true;
+            }
+            $imagesByOffer[$index] = $images;
+            $imageSet = array_fill_keys($images, true);
+            $commonImages = $commonImages === null
+                ? $imageSet
+                : array_intersect_key($commonImages, $imageSet);
+        }
+
+        if ($commonImages === null || $commonImages === []) {
+            return $catalog;
+        }
+
+        $baseImages = array_values(array_filter(
+            $imagesByOffer[0] ?? [],
+            static fn(string $image): bool => isset($commonImages[$image])
+                && !isset($primaryImages[$image]),
+        ));
+
+        foreach ($offers as $index => $offer) {
+            $primaryImage = trim((string)($offer['image'] ?? ''));
+            $offer['images'] = array_values(array_filter(
+                $imagesByOffer[$index] ?? [],
+                static fn(string $image): bool => !isset($commonImages[$image])
+                    && $image !== $primaryImage,
+            ));
+            $offers[$index] = $offer;
+        }
+        $catalog['offers'] = $offers;
+        $catalog['base_images'] = $baseImages;
+
+        return $catalog;
     }
 
     /**

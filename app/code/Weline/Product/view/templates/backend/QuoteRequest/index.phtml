@@ -1,0 +1,177 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var list<array<string,mixed>> $items
+ * @var string $status_filter
+ * @var list<string> $statuses
+ * @var array<string,string> $status_labels
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$items = is_array($items ?? null) ? $items : [];
+$statusFilter = (string)($status_filter ?? '');
+$statuses = is_array($statuses ?? null) ? $statuses : [];
+$statusLabels = is_array($status_labels ?? null) ? $status_labels : [];
+$labelOf = static function (string $status) use ($statusLabels): string {
+    return (string)($statusLabels[$status] ?? $status);
+};
+?>
+<w:mail-composer area="backend"/>
+<div class="w-card" weline-code="product.backend.quote_request.index">
+    <div class="w-card__header" style="display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+        <h1 class="w-card__title" style="margin:0;"><?= $escape(__('商品询价')) ?></h1>
+        <form method="get" action="@backend-url{'*/backend/quote-request/index'}" class="w-cluster" style="gap:.5rem;">
+            <select class="w-select" name="status">
+                <option value=""><?= $escape(__('全部状态')) ?></option>
+                <?php foreach ($statuses as $statusCode): ?>
+                    <option value="<?= $escape((string)$statusCode) ?>" <?= $statusFilter === $statusCode ? 'selected' : '' ?>>
+                        <?= $escape($labelOf((string)$statusCode)) ?>
+                    </option>
+                <?php endforeach; ?>
+            </select>
+            <button class="w-button" type="submit"><?= $escape(__('筛选')) ?></button>
+        </form>
+    </div>
+    <div class="w-card__body" style="overflow:auto;">
+        <?php if ($items === []): ?>
+            <p class="w-text" data-tone="muted"><?= $escape(__('暂无询价单')) ?></p>
+        <?php else: ?>
+            <table class="w-table" style="width:100%;border-collapse:collapse;">
+                <thead>
+                <tr>
+                    <th><?= $escape(__('时间')) ?></th>
+                    <th><?= $escape(__('SKU')) ?></th>
+                    <th><?= $escape(__('联系人')) ?></th>
+                    <th><?= $escape(__('联系方式')) ?></th>
+                    <th><?= $escape(__('数量')) ?></th>
+                    <th><?= $escape(__('参考价')) ?></th>
+                    <th><?= $escape(__('状态')) ?></th>
+                    <th><?= $escape(__('操作')) ?></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($items as $item): ?>
+                    <?php
+                    $id = (int)($item['quote_request_id'] ?? 0);
+                    $status = (string)($item['status'] ?? 'new');
+                    $currency = (string)($item['currency'] ?? 'CNY');
+                    $minor = (int)($item['reference_price_minor'] ?? 0);
+                    $price = number_format($minor / 100, 2);
+                    $contact = trim((string)($item['email'] ?? ''));
+                    if ($contact === '') {
+                        $contact = trim((string)($item['phone'] ?? ''));
+                    } elseif (trim((string)($item['phone'] ?? '')) !== '') {
+                        $contact .= ' / ' . trim((string)$item['phone']);
+                    }
+                    $message = trim((string)($item['message'] ?? ''));
+                    $campaign = trim((string)($item['campaign_label'] ?? ''));
+                    $url = trim((string)($item['product_url'] ?? ''));
+                    $next = is_array($item['available_transitions'] ?? null) ? $item['available_transitions'] : [];
+                    ?>
+                    <tr>
+                        <td><?= $escape((string)($item['created_at'] ?? '')) ?></td>
+                        <td>
+                            <code><?= $escape((string)($item['sku'] ?? '')) ?></code>
+                            <?php if ($url !== ''): ?>
+                                <div><a href="<?= $escape($url) ?>" target="_blank" rel="noopener"><?= $escape(__('查看商品')) ?></a></div>
+                            <?php endif; ?>
+                            <?php if ($campaign !== ''): ?>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= $escape($campaign) ?></div>
+                            <?php endif; ?>
+                            <?php if ($message !== ''): ?>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= $escape($message) ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= $escape((string)($item['contact_name'] ?? '')) ?></td>
+                        <td><?= $escape($contact) ?></td>
+                        <td><?= (int)($item['quantity'] ?? 1) ?></td>
+                        <td><?= $escape($currency . ' ' . $price) ?></td>
+                        <td><?= $escape($labelOf($status)) ?></td>
+                        <td>
+                            <?php
+                            $mailReply = is_array($item['mail_reply'] ?? null) ? $item['mail_reply'] : [];
+                            $mailMode = (string)($mailReply['mode'] ?? 'hidden');
+                            $mailMsg = (string)($mailReply['message'] ?? '');
+                            $mailComposer = is_array($mailReply['composer'] ?? null) ? $mailReply['composer'] : [];
+                            $mailMailto = (string)($mailReply['mailto_url'] ?? '');
+                            $mailboxes = is_array($mailReply['mailboxes'] ?? null) ? $mailReply['mailboxes'] : [];
+                            $defaultAccountId = (int)($mailReply['default_account_id'] ?? 0);
+                            $composerJson = $mailComposer !== []
+                                ? $escape(json_encode($mailComposer, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}')
+                                : '';
+                            ?>
+                            <?php if (($mailMode === 'own' || $mailMode === 'pick') && $composerJson !== ''): ?>
+                                <div class="w-cluster" style="gap:.35rem;margin-bottom:.35rem;flex-wrap:wrap;" data-quote-mail-pick="<?= $id ?>">
+                                    <?php if ($mailMode === 'pick'): ?>
+                                        <select class="w-select" data-size="sm" data-quote-mail-account style="max-width:12rem;">
+                                            <?php foreach ($mailboxes as $mailbox): ?>
+                                                <?php
+                                                $mbId = (int)($mailbox['account_id'] ?? 0);
+                                                $mbEmail = (string)($mailbox['email'] ?? '');
+                                                $mbFake = !empty($mailbox['is_fake']);
+                                                ?>
+                                                <option value="<?= $mbId ?>" <?= $mbId === $defaultAccountId ? 'selected' : '' ?>>
+                                                    <?= $escape($mbEmail . ($mbFake ? ' · fake' : '')) ?>
+                                                </option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    <?php endif; ?>
+                                    <button type="button" class="w-button" data-size="sm" data-tone="primary"
+                                            data-quote-mail-open
+                                            data-composer="<?= $composerJson ?>">
+                                        <?= $escape(__('企业邮箱回复')) ?>
+                                    </button>
+                                </div>
+                            <?php elseif ($mailMode === 'external'): ?>
+                                <div class="w-text" data-tone="muted" data-size="sm" style="margin-bottom:.35rem;">
+                                    <?= $escape($mailMsg !== '' ? $mailMsg : __('当前账号邮箱不是本机企业邮箱，需外部发送')) ?>
+                                    <?php if ($mailMailto !== ''): ?>
+                                        · <a href="<?= $escape($mailMailto) ?>"><?= $escape(__('外部邮件客户端')) ?></a>
+                                    <?php endif; ?>
+                                </div>
+                            <?php elseif ($mailMode === 'unavailable'): ?>
+                                <div class="w-text" data-tone="muted" data-size="sm" style="margin-bottom:.35rem;">
+                                    <?= $escape($mailMsg) ?>
+                                </div>
+                            <?php endif; ?>
+                            <?php if ($next === []): ?>
+                                <span class="w-text" data-tone="muted">—</span>
+                            <?php else: ?>
+                                <div class="w-cluster" style="gap:.35rem;flex-wrap:wrap;">
+                                    <?php foreach ($next as $toStatus): ?>
+                                        <w:form method="post" action="@backend-url{'*/backend/quote-request/transition'}" csrf="auto" style="display:inline;">
+                                            <input type="hidden" name="quote_request_id" value="<?= $id ?>">
+                                            <input type="hidden" name="to_status" value="<?= $escape((string)$toStatus) ?>">
+                                            <button class="w-button" type="submit" data-size="sm">
+                                                <?= $escape($labelOf((string)$toStatus)) ?>
+                                            </button>
+                                        </w:form>
+                                    <?php endforeach; ?>
+                                </div>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
+</div>
+<script>
+(function () {
+  document.querySelectorAll('[data-quote-mail-open]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var raw = btn.getAttribute('data-composer') || '{}';
+      var payload = {};
+      try { payload = JSON.parse(raw); } catch (e) { payload = {}; }
+      var wrap = btn.closest('[data-quote-mail-pick]');
+      var select = wrap ? wrap.querySelector('[data-quote-mail-account]') : null;
+      if (select) {
+        payload.account_id = parseInt(select.value || '0', 10) || payload.account_id || 0;
+      }
+      if (window.WelineMailComposer && typeof window.WelineMailComposer.open === 'function') {
+        window.WelineMailComposer.open(payload);
+      }
+    });
+  });
+})();
+</script>

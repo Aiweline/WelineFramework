@@ -15,8 +15,6 @@ use Weline\Product\Service\ProductShardProvisioner;
 final class StorefrontCategoryLinkIndex
 {
     private const CACHE_POOL = 'weline_product_storefront_category_tree';
-    private const FRESH_TTL_SECONDS = 3600;
-    private const STALE_TTL_SECONDS = 86400;
 
     public function __construct(
         private readonly StorefrontScopeHotCache $hotCache,
@@ -73,11 +71,9 @@ final class StorefrontCategoryLinkIndex
     public function invalidate(int $websiteId): void
     {
         $websiteId = max(0, $websiteId);
-        $this->hotCache->purgeProcessCacheForLogicalKey(self::logicalCacheKey($websiteId));
-        $this->hotCache->forget(
-            self::CACHE_POOL,
+        $this->hotCache->forgetPolicy(
+            StorefrontCatalogCacheCoordinator::categoryLinksPolicy(),
             self::logicalCacheKey($websiteId),
-            ['website' => true],
         );
     }
 
@@ -89,13 +85,10 @@ final class StorefrontCategoryLinkIndex
         $websiteId = max(0, $websiteId);
 
         /** @var list<array<string, mixed>> $rows */
-        $rows = $this->hotCache->remember(
-            self::CACHE_POOL,
+        $rows = $this->hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::categoryLinksPolicy(),
             self::logicalCacheKey($websiteId),
-            self::FRESH_TTL_SECONDS,
             fn(): array => $this->build($websiteId),
-            ['website' => true],
-            self::STALE_TTL_SECONDS,
         );
 
         return $rows;

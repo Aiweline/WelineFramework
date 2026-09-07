@@ -16,11 +16,13 @@ final class StorefrontCategoryTreeIndexLocalizedNameContractTest extends TestCas
 
         self::assertStringContainsString('ProductCategoryAttributeService', $source);
         self::assertStringContainsString('applyLocalizedNames', $source);
-        self::assertStringContainsString('readNameMap', $source);
         self::assertStringContainsString('State::getLangLocal()', $source);
+        self::assertStringContainsString('rememberForRequest', $source);
         self::assertStringContainsString(
-            'return $this->applyLocalizedNames($websiteId, $index, $locale);',
+            'fn(): array => $this->applyLocalizedNames($websiteId, $index, $locale)',
             $source,
         );
+        self::assertStringContainsString("'storefront.category_tree.urls'", $source);
+        self::assertStringContainsString("['categories' => \\count(\$index['by_id'])]", $source);
     }
 }

@@ -26,9 +26,7 @@
 use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Service\StorefrontProductWidgetCatalog;
-use Weline\Theme\Helper\ProductCardAddToCartParams;
 use Weline\Theme\Helper\ProductCardShopperActionParams;
-use Weline\Theme\Helper\StorefrontImagePlaceholder;
 use Weline\Theme\Helper\WidgetI18n;
 use Weline\Theme\Helper\WidgetUiScope;
 
@@ -76,10 +74,23 @@ if ($excludeProductId <= 0) {
 
 $products = [];
 try {
-    $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
-        ->relatedCards($excludeProductId, $limit);
+    // Theme-editor product layout preview often has no PDP identity
+    // (no theme_public_route / storefront_offer). Hitting the real catalog
+    // cold-builds every published offer and can stall the iframe for minutes.
+    // Match bestsellers: demo cards only for preview shells without a product.
+    $editorPreview = $isPreviewMode || (bool)($this->getData('editor_mode') ?? false);
+    if ($editorPreview && $excludeProductId <= 0) {
+        $products = \Weline\Theme\Helper\ThemeDemoCatalog::products($limit, 21);
+    } else {
+        $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
+            ->relatedCards($excludeProductId, $limit);
+    }
 } catch (\Throwable) {
     $products = [];
+}
+
+if ($products === [] && ($isPreviewMode || (bool)($this->getData('editor_mode') ?? false))) {
+    $products = \Weline\Theme\Helper\ThemeDemoCatalog::products($limit, 21);
 }
 
 foreach ($products as &$product) {
@@ -100,6 +111,10 @@ foreach ($products as &$product) {
 }
 unset($product);
 
+$cardShowWishlist = !empty($shopperActions['show_wishlist']);
+$cardShowCompare = !empty($shopperActions['show_compare']);
+$cardShowQuickview = !empty($shopperActions['show_quickview']);
+
 if ($products === []) {
     // Never return a blank string: DEV WidgetHtmlHealthInspector treats empty
     // HTML as a warning toast. Keep visually hidden so storefront still "hides".
@@ -116,7 +131,7 @@ if ($products === []) {
 }
 ?>
 <link rel="stylesheet"
-      href="@static(Weline_Product::css/widgets/related-products.css)?v=20260826-shopper1"
+      href="@static(Weline_Product::css/widgets/related-products.css)?v=20260906-product-card1"
       data-no-extract="true">
 
 <section class="<?= $esc($wc) ?> weline-product-related<?= $isPreviewMode ? ' is-preview' : '' ?>"
@@ -142,62 +157,7 @@ if ($products === []) {
         <div class="wpr-viewport" data-wpr-viewport>
             <div class="wpr-track columns-<?= $esc($columns) ?> layout-<?= $esc($layout) ?>" data-wpr-track>
                 <?php foreach ($products as $product): ?>
-                    <?php
-                    $productId = (int)($product['id'] ?? 0);
-                    $productUrl = (string)($product['url'] ?? '#');
-                    $productName = (string)($product['name'] ?? '');
-                    $imageResolved = StorefrontImagePlaceholder::resolve((string)($product['image'] ?? ''), $productId);
-                    $productImage = $imageResolved['src'];
-                    $imageFallback = $imageResolved['fallback'];
-                    $price = (float)($product['price'] ?? 0);
-                    $originalPrice = (float)($product['original_price'] ?? 0);
-                    $rating = (float)($product['rating'] ?? 0);
-                    $reviewCount = (int)($product['review_count'] ?? 0);
-                    $offerUuid = trim((string)($product['global_offer_uuid'] ?? ''));
-                    $sellable = !empty($product['sellable']);
-                    ?>
-                    <article class="wpr-card product-card" data-product-id="<?= $productId ?>">
-                        <div class="wpr-media-wrap">
-                            <a class="wpr-media" href="<?= $esc($productUrl) ?>" aria-label="<?= $esc($productName) ?>">
-                                <img src="<?= $esc($productImage) ?>"
-                                     alt=""
-                                     data-storefront-img="1"
-                                     data-fallback="<?= $esc($imageFallback) ?>"
-                                     loading="lazy"
-                                     decoding="async">
-                            </a>
-                            <?= $this->fetch(
-                                'Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml',
-                                ProductCardShopperActionParams::fetchDictionary($productId, $shopperActions, true)
-                            ) ?>
-                        </div>
-                        <div class="wpr-body">
-                            <h3 class="wpr-name">
-                                <a href="<?= $esc($productUrl) ?>"><?= $esc($productName) ?></a>
-                            </h3>
-                            <div class="wpr-rating" aria-label="<?= $esc(number_format($rating, 1)) ?>">
-                                <span class="wpr-stars" style="--rating: <?= $esc(number_format(min(5, max(0, $rating)), 2)) ?>"></span>
-                                <span class="wpr-reviews">(<?= $reviewCount ?>)</span>
-                            </div>
-                            <div class="wpr-price">
-                                <?php if ($originalPrice > $price && $price > 0): ?>
-                                    <span class="wpr-price-was">¥<?= number_format($originalPrice, 2) ?></span>
-                                <?php endif; ?>
-                                <span class="wpr-price-now">¥<?= number_format($price, 2) ?></span>
-                            </div>
-                            <?php if ($sellable && $offerUuid !== ''): ?>
-                                <?= $this->fetch(
-                                    'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
-                                    ProductCardAddToCartParams::fetchDictionary($product, [
-                                    'wrapper_class' => 'wpr-cta-wrap',
-                                    'button_class' => 'wpr-cta',
-                                ])
-                                ) ?>
-                            <?php else: ?>
-                                <a class="wpr-cta wpr-cta--link" href="<?= $esc($productUrl) ?>"><?= $esc((string)__('查看详情')) ?></a>
-                            <?php endif; ?>
-                        </div>
-                    </article>
+                    <w:product:card product="product" show-price="true" show-rating="true" show-add-to-cart="true" show-wishlist="cardShowWishlist" show-compare="cardShowCompare" show-quickview="cardShowQuickview" show-labels="true" density="standard" class="wpr-card" wishlist-pixel="true" />
                 <?php endforeach; ?>
             </div>
         </div>

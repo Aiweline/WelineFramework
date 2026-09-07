@@ -1,8 +1,6 @@
 <?php
 
-use Weline\Product\Helper\StorefrontOfferDetailQuery;
-use Weline\Theme\Helper\ProductCardAddToCartParams;
-use Weline\Theme\Helper\StorefrontImagePlaceholder;
+use Weline\Product\Service\ProductCardRenderer;
 
 /**
  * Single storefront offer card (catalog / search shared markup).
@@ -11,62 +9,9 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
  */
 $offer = $this->getData('offer') ?? [];
 $offer = is_array($offer) ? $offer : [];
-$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
-$minor = max(0, (int)($offer['unit_price_minor'] ?? 0));
-$sellable = !empty($offer['sellable']);
-$quoteOnly = !empty($offer['quote_only']);
-$uuid = trim((string)($offer['global_offer_uuid'] ?? ''));
-$productId = max(0, (int)($offer['product_id'] ?? 0));
-$productName = trim((string)($offer['name'] ?? ''));
-$productSlug = trim((string)($offer['slug'] ?? ''));
-$productUrl = '';
-if ($productSlug !== '') {
-    $productPath = 'product/' . $productSlug;
-$productUrl = $productPath; // route path; render with @url
-} elseif ($productId > 0) {
-    $productPath = 'product/' . $productId;
-$productUrl = $productPath; // route path; render with @url
+$product = ProductCardRenderer::fromStorefrontOffer($offer);
+if ((int)($product['id'] ?? 0) <= 0) {
+    return;
 }
-$productUrlParams = StorefrontOfferDetailQuery::params($offer);
-$imageResolved = StorefrontImagePlaceholder::resolve((string)($offer['image'] ?? ''), $productId);
 ?>
-<article class="product-storefront__card product-card<?= $productUrl !== '' ? ' is-clickable' : '' ?>"
-         data-testid="storefront-product-card"
-         data-product-id="<?= $productId ?>"
-         data-global-offer-uuid="<?= $escape($uuid) ?>">
-    <?php if ($productUrl !== ''): ?>
-        <a class="product-storefront__card-hit"
-           href="@url{$productUrl|$productUrlParams}"
-           aria-label="<?= $escape($productName) ?>"
-           data-testid="storefront-product-card-link"></a>
-    <?php endif; ?>
-    <div class="product-storefront__media"<?= $productUrl === '' ? ' aria-hidden="true"' : '' ?>>
-        <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml', [
-            'product_id' => $productId,
-            'show_wishlist' => true,
-            'show_compare' => true,
-            'show_quickview' => true,
-        ]) ?>
-        <img src="<?= $escape($imageResolved['src']) ?>"
-             alt=""
-             data-storefront-img="1"
-             data-fallback="<?= $escape($imageResolved['fallback']) ?>"
-             loading="lazy"
-             decoding="async">
-    </div>
-    <div class="product-storefront__body">
-        <h2><?= $escape($productName) ?></h2>
-        <p class="product-storefront__sku">SKU: <?= $escape($offer['sku'] ?? '') ?></p>
-        <p class="product-storefront__price">
-            <?php if ($quoteOnly): ?>
-                <?= __('联系询价') ?>
-            <?php else: ?>
-                <?= $escape($offer['currency'] ?? 'CNY') ?> <?= number_format($minor / 100, 2) ?>
-            <?php endif; ?>
-        </p>
-        <?= $this->fetch(
-            'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
-            ProductCardAddToCartParams::fetchDictionaryFromOffer($offer, ['variant' => 'storefront'])
-        ) ?>
-    </div>
-</article>
+<w:product:card product="product" show-price="true" show-rating="false" show-add-to-cart="true" show-wishlist="true" show-compare="true" show-quickview="true" show-labels="true" show-sku="true" density="standard" class="wpc-listing-card" wishlist-pixel="true" />

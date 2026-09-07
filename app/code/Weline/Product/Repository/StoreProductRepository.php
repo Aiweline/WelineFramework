@@ -110,6 +110,42 @@ final class StoreProductRepository extends AbstractWebsiteShardRepository
         return (int)$row->getData(StoreProduct::schema_fields_SELECTED) === 1;
     }
 
+    /**
+     * Resolve Store product selection overlays in one read; missing rows inherit selected=true.
+     *
+     * @param list<int> $productIds
+     * @return array<int, bool>
+     */
+    public function selectionMap(int $websiteId, int $storeId, array $productIds): array
+    {
+        $this->assertWebsite($websiteId);
+        $this->assertStoreOverlayId($storeId, 'store_product');
+        $productIds = array_values(array_unique(array_filter(
+            array_map('intval', $productIds),
+            static fn(int $productId): bool => $productId > 0,
+        )));
+        sort($productIds, SORT_NUMERIC);
+        if ($productIds === []) {
+            return [];
+        }
+
+        $selection = array_fill_keys($productIds, true);
+        $rows = $this->newModel($websiteId)
+            ->clear()
+            ->where(StoreProduct::schema_fields_STORE_ID, $storeId)
+            ->where(StoreProduct::schema_fields_PRODUCT_ID, $productIds, 'IN')
+            ->select()
+            ->fetchArray();
+        foreach (is_array($rows) ? $rows : [] as $row) {
+            $productId = (int)($row[StoreProduct::schema_fields_PRODUCT_ID] ?? 0);
+            if (isset($selection[$productId])) {
+                $selection[$productId] = (int)($row[StoreProduct::schema_fields_SELECTED] ?? 0) === 1;
+            }
+        }
+
+        return $selection;
+    }
+
     /** @param list<int> $productIds */
     public function purgeProductIds(int $websiteId, array $productIds): int
     {

@@ -114,11 +114,20 @@ final class ProductAdminSurfaceContractTest extends TestCase
             'product-edit-form',
             'product-edit-offers',
             'product-edit-media',
+            'product-edit-video',
             'product-publish-diagnostics',
             'product-edit-audit',
         ] as $testId) {
             self::assertStringContainsString('data-testid="' . $testId . '"', $edit);
         }
+        self::assertStringContainsString('data-product-video-panel', $edit);
+        self::assertStringContainsString('data-product-video-url-input', $edit);
+        self::assertStringContainsString('data-product-video-picker-open', $edit);
+        self::assertStringContainsString('target=product-video-picker', $edit);
+        self::assertStringContainsString('appendProductVideoRow', $script);
+        self::assertStringContainsString("role: 'video'", $script);
+        self::assertStringContainsString('ProductVideoUrlNormalizer', $commandService);
+        self::assertStringContainsString("'video'", $commandService);
         self::assertStringContainsString('class="w-breadcrumb"', $edit);
         self::assertStringContainsString('w-product-editor__heading', $edit);
         self::assertStringNotContainsString('w-product-editor__back', $edit);
@@ -208,6 +217,11 @@ final class ProductAdminSurfaceContractTest extends TestCase
             'data-can-edit-structure',
             'data-variant-axis-option',
             'data-variant-axis-option-grid',
+            'data-variant-axis-option-clamp',
+            'data-variant-axis-option-more',
+            'data-label-axis-more',
+            'data-label-axis-less',
+            'w-product-variant__axis-clamp',
             'w-product-variant__combo-chips',
             'w-product-create__axis-chip',
             'w-product-variant__axis-attr',
@@ -215,9 +229,33 @@ final class ProductAdminSurfaceContractTest extends TestCase
         ] as $marker) {
             self::assertStringContainsString($marker, $edit);
         }
+        self::assertStringContainsString("__('展示更多')", $edit);
+        self::assertStringContainsString("__('收起')", $edit);
         self::assertStringContainsString('data-variant-axis-option', $script);
         self::assertStringContainsString('buildVariantCombinationChips', $script);
         self::assertStringContainsString('renderVariantAxisOptionGrid', $script);
+        self::assertStringContainsString('bindVariantAxisOptionClamp', $script);
+        self::assertStringContainsString('refreshVariantAxisOptionClamp', $script);
+        self::assertStringContainsString('openVariantAxisOptionDialog', $script);
+        self::assertStringContainsString('initializeVariantAxisOptionDialog', $script);
+        self::assertStringContainsString('attributeSwatchCapabilities', $script);
+        self::assertStringContainsString('data-product-variant-option-dialog', $edit);
+        self::assertStringContainsString('data-product-variant-option-color-field', $edit);
+        self::assertStringContainsString('data-product-variant-option-image-field', $edit);
+        self::assertStringContainsString('data-product-variant-option-image-dialog', $edit);
+        self::assertStringContainsString('自定义规格值，回车填写属性项', $edit);
+        // Dialogs must sit outside hidden panels (after savebar) so showModal is visible.
+        $savebarPos = strpos($edit, 'w-product-editor__savebar');
+        $optionDialogPos = strpos($edit, 'data-product-variant-option-dialog');
+        self::assertNotFalse($savebarPos);
+        self::assertNotFalse($optionDialogPos);
+        self::assertGreaterThan($savebarPos, $optionDialogPos);
+        self::assertStringNotContainsString("selected.push({value: value, label: value, swatch_color: '', swatch_image: ''});", $script);
+        self::assertStringContainsString("selected === 'offers'", $script);
+        self::assertStringContainsString('refreshVariantAxisOptionClampForRow', $script);
+        $style = $this->read('app/code/Weline/Product/view/statics/css/backend/product-admin.css');
+        self::assertStringContainsString('.w-product-variant__axis-clamp', $style);
+        self::assertStringContainsString('--product-axis-clamp-max', $style);
         self::assertStringContainsString('listCatalogVariantAxisChoices', $script);
         self::assertStringNotContainsString('规格值，以逗号分隔', $edit);
         self::assertStringNotContainsString('规格轴代码，例如 color', $edit);
@@ -421,10 +459,14 @@ final class ProductAdminSurfaceContractTest extends TestCase
             'product_media_asset_not_found',
             'product_media_asset_not_ready',
             'product_media_image_required',
+            'product_media_video_required',
+            'product_media_video_source_required',
             'product_download_asset_must_be_private',
         ] as $errorCode) {
             self::assertStringContainsString($errorCode, $commandService);
         }
+        self::assertStringContainsString("'video'", $commandService);
+        self::assertStringContainsString('videoMediaRow', $commandService);
         self::assertStringContainsString('FileAssetManagerInterface', $commandService);
         self::assertStringContainsString("array_key_exists('path', \$row)", $commandService);
         self::assertStringContainsString("array_key_exists('blob_key', \$row)", $commandService);

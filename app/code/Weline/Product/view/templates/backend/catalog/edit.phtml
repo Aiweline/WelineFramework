@@ -310,7 +310,7 @@ $statusLabelMap = [
 ];
 $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
 ?>
-<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260903-media-asset-open">
+<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-admin.css)?v=20260905-layout-dialog-pad">
 <div class="w-backend-page w-product-admin w-product-editor"
      data-product-admin="editor"
      data-edit-business="<?= $canEditBusiness ? '1' : '0' ?>"
@@ -392,6 +392,7 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
             'attributes' => '动态属性',
             'offers' => '规格与价格',
             'taxonomy' => '分类与媒体',
+            'layout' => '布局',
             'stores' => 'Store',
             'fulfillment' => '库存与配送',
             'type' => '类型配置',
@@ -671,7 +672,9 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                 <div class="w-card w-product-variant"
                      data-product-offer-matrix
                      data-variant-image-placeholder="<?= $escape($variantImagePlaceholderUrl) ?>"
-                     data-can-edit-structure="<?= $canEditStructure ? '1' : '0' ?>">
+                     data-can-edit-structure="<?= $canEditStructure ? '1' : '0' ?>"
+                     data-label-axis-more="<?= $escape(__('展示更多')) ?>"
+                     data-label-axis-less="<?= $escape(__('收起')) ?>">
                     <div class="w-card__header">
                         <div>
                             <h2><lang>多规格 Offer 矩阵</lang></h2>
@@ -808,43 +811,60 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                                         <?php endif; ?>
                                     </div>
                                     <div class="w-product-variant__axis-options">
-                                        <div class="w-product-create__axis-chip-grid"
-                                             data-variant-axis-option-grid>
-                                            <?php foreach ($chipOptions as $chipIndex => $chip): ?>
-                                                <?php
-                                                $chipId = 'product-edit-axis-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $axisCode . '-' . $chipIndex);
-                                                $swatchColor = (string)($chip['swatch_color'] ?? '');
-                                                $swatchImage = (string)($chip['swatch_image'] ?? '');
-                                                ?>
-                                                <label class="w-product-create__axis-chip" for="<?= $escape($chipId) ?>">
-                                                    <input type="checkbox"
-                                                           id="<?= $escape($chipId) ?>"
-                                                           data-variant-axis-option
-                                                           value="<?= $escape($chip['value'] ?? '') ?>"
-                                                           data-option-label="<?= $escape($chip['label'] ?? '') ?>"
-                                                           data-option-code="<?= $escape($chip['value'] ?? '') ?>"
-                                                           <?= $swatchColor !== '' ? 'data-option-swatch-color="' . $escape($swatchColor) . '"' : '' ?>
-                                                           <?= $swatchImage !== '' ? 'data-option-swatch-image="' . $escape($swatchImage) . '"' : '' ?>
-                                                           <?= !empty($chip['selected']) ? 'checked' : '' ?>
-                                                           <?= $canEditStructure ? '' : 'disabled' ?>>
-                                                    <?php if ($swatchImage !== ''): ?>
-                                                        <img class="w-product-create__axis-chip-image"
-                                                             src="<?= $escape($swatchImage) ?>"
-                                                             alt="">
-                                                    <?php elseif ($swatchColor !== ''): ?>
-                                                        <span class="w-product-create__axis-chip-swatch"
-                                                              style="background:<?= $escape($swatchColor) ?>"></span>
-                                                    <?php endif; ?>
-                                                    <span><?= $escape($chip['label'] ?? $chip['value'] ?? '') ?></span>
-                                                </label>
-                                            <?php endforeach; ?>
+                                        <div class="w-product-variant__axis-clamp"
+                                             data-variant-axis-option-clamp
+                                             data-collapsed="1"
+                                             data-testid="product-variant-axis-clamp">
+                                            <div class="w-product-variant__axis-clamp-body">
+                                                <div class="w-product-create__axis-chip-grid"
+                                                     data-variant-axis-option-grid>
+                                                    <?php foreach ($chipOptions as $chipIndex => $chip): ?>
+                                                        <?php
+                                                        $chipId = 'product-edit-axis-' . preg_replace('/[^a-zA-Z0-9_-]+/', '-', $axisCode . '-' . $chipIndex);
+                                                        $swatchColor = (string)($chip['swatch_color'] ?? '');
+                                                        $swatchImage = (string)($chip['swatch_image'] ?? '');
+                                                        ?>
+                                                        <label class="w-product-create__axis-chip" for="<?= $escape($chipId) ?>">
+                                                            <input type="checkbox"
+                                                                   id="<?= $escape($chipId) ?>"
+                                                                   data-variant-axis-option
+                                                                   value="<?= $escape($chip['value'] ?? '') ?>"
+                                                                   data-option-label="<?= $escape($chip['label'] ?? '') ?>"
+                                                                   data-option-code="<?= $escape($chip['value'] ?? '') ?>"
+                                                                   <?= $swatchColor !== '' ? 'data-option-swatch-color="' . $escape($swatchColor) . '"' : '' ?>
+                                                                   <?= $swatchImage !== '' ? 'data-option-swatch-image="' . $escape($swatchImage) . '"' : '' ?>
+                                                                   <?= !empty($chip['selected']) ? 'checked' : '' ?>
+                                                                   <?= $canEditStructure ? '' : 'disabled' ?>>
+                                                            <?php if ($swatchImage !== ''): ?>
+                                                                <img class="w-product-create__axis-chip-image"
+                                                                     src="<?= $escape($swatchImage) ?>"
+                                                                     alt="">
+                                                            <?php elseif ($swatchColor !== ''): ?>
+                                                                <span class="w-product-create__axis-chip-swatch"
+                                                                      style="background:<?= $escape($swatchColor) ?>"></span>
+                                                            <?php endif; ?>
+                                                            <span><?= $escape($chip['label'] ?? $chip['value'] ?? '') ?></span>
+                                                        </label>
+                                                    <?php endforeach; ?>
+                                                </div>
+                                            </div>
+                                            <button type="button"
+                                                    class="w-product-variant__axis-more"
+                                                    data-variant-axis-option-more
+                                                    data-testid="product-variant-axis-more"
+                                                    data-label-more="<?= $escape(__('展示更多')) ?>"
+                                                    data-label-less="<?= $escape(__('收起')) ?>"
+                                                    hidden
+                                                    aria-expanded="false">
+                                                <?= __('展示更多') ?>
+                                            </button>
                                         </div>
                                         <?php if ($canEditStructure): ?>
                                             <input class="w-input"
                                                    data-variant-axis-option-custom
-                                                   placeholder="@lang(自定义规格值，回车添加)">
+                                                   placeholder="@lang(自定义规格值，回车填写属性项)">
                                         <?php endif; ?>
-                                        <span class="w-field__help"><lang>勾选规格值生成矩阵；有色块时显示颜色胶囊。</lang></span>
+                                        <span class="w-field__help"><lang>回车填写属性项（颜色/图片等随属性能力显示）；勾选规格值生成矩阵。</lang></span>
                                     </div>
                                     <button class="w-button" type="button"
                                             data-product-variant-axis-remove
@@ -1133,6 +1153,96 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                         </button>
                     </div>
                     <div class="w-card__body">
+                        <div class="w-product-video-panel" data-testid="product-edit-video" data-product-video-panel>
+                            <div class="w-product-section-heading">
+                                <div>
+                                    <h3><lang>商品视频</lang></h3>
+                                    <p class="w-text" data-tone="muted">
+                                        <lang>在主图旁配置本地视频或粘贴 YouTube / Vimeo 链接、iframe 嵌入代码。</lang>
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="w-product-video-compose">
+                                <input class="w-input"
+                                       type="url"
+                                       data-product-video-url-input
+                                       placeholder="@lang(粘贴 YouTube / Vimeo 链接或 iframe 代码)"
+                                       aria-label="@lang(视频链接)">
+                                <button class="w-button" type="button" data-product-video-url-add>
+                                    <lang>添加链接</lang>
+                                </button>
+                                <button class="w-button" type="button" data-product-video-picker-open>
+                                    <lang>选择本地视频</lang>
+                                </button>
+                            </div>
+                            <div class="w-table-wrap">
+                                <table class="w-table w-product-media-table" data-product-video-assignments>
+                                    <thead>
+                                    <tr>
+                                        <th><lang>预览</lang></th>
+                                        <th><lang>来源</lang></th>
+                                        <th><lang>排序</lang></th>
+                                        <th><lang>操作</lang></th>
+                                    </tr>
+                                    </thead>
+                                    <tbody data-product-video-rows>
+                                    <?php foreach ($media as $item): ?>
+                                        <?php
+                                        $assetId = (string)($item['asset_id'] ?? '');
+                                        $mediaRole = strtolower(trim((string)($item['role'] ?? 'gallery')));
+                                        if ($mediaRole !== 'video') {
+                                            continue;
+                                        }
+                                        $previewUrl = trim((string)($item['preview_url'] ?? $item['display_url'] ?? ''));
+                                        $externalUrl = trim((string)($item['external_url'] ?? ''));
+                                        $provider = trim((string)($item['video_provider'] ?? ''));
+                                        $path = trim((string)($item['path'] ?? ''));
+                                        ?>
+                                        <tr data-product-video-row
+                                            data-asset-id="<?= $escape($assetId) ?>"
+                                            data-external-url="<?= $escape($externalUrl) ?>"
+                                            data-path="<?= $escape($path) ?>"
+                                            data-mime-type="<?= $escape($item['mime_type'] ?? '') ?>"
+                                            data-provider="<?= $escape($provider) ?>"
+                                            data-preview-url="<?= $escape($previewUrl) ?>">
+                                            <td class="w-product-media-asset">
+                                                <?php if ($previewUrl !== ''): ?>
+                                                    <img class="w-product-media-thumb"
+                                                         src="<?= $escape($previewUrl) ?>"
+                                                         alt=""
+                                                         loading="lazy"
+                                                         decoding="async">
+                                                <?php else: ?>
+                                                    <span class="w-product-video-badge"><lang>视频</lang></span>
+                                                <?php endif; ?>
+                                            </td>
+                                            <td>
+                                                <strong><?= $escape($provider !== '' ? $provider : ($assetId !== '' ? 'file' : 'link')) ?></strong>
+                                                <small class="w-product-video-source">
+                                                    <?= $escape($externalUrl !== '' ? $externalUrl : ($assetId !== '' ? $assetId : $path)) ?>
+                                                </small>
+                                            </td>
+                                            <td>
+                                                <input class="w-input" type="number" min="0" step="1"
+                                                       data-product-video-position
+                                                       value="<?= $escape($item['position'] ?? 0) ?>"
+                                                       aria-label="@lang(视频排序)">
+                                            </td>
+                                            <td>
+                                                <button class="w-button" type="button" data-tone="danger" data-product-video-remove>
+                                                    <lang>移除</lang>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    <?php endforeach; ?>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <p class="w-text" data-tone="muted" data-product-video-empty<?= count(array_filter($media, static fn(array $row): bool => strtolower(trim((string)($row['role'] ?? ''))) === 'video')) > 0 ? ' hidden' : '' ?>>
+                                <lang>尚未配置商品视频。</lang>
+                            </p>
+                        </div>
+
                         <div class="w-table-wrap">
                             <table class="w-table w-product-media-table" data-product-media-assignments>
                                 <thead>
@@ -1148,7 +1258,7 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                                     <?php
                                     $assetId = (string)($item['asset_id'] ?? '');
                                     $mediaRole = strtolower(trim((string)($item['role'] ?? 'gallery')));
-                                    if ($assetId === '' || $mediaRole === 'variant') {
+                                    if ($assetId === '' || $mediaRole === 'variant' || $mediaRole === 'video') {
                                         continue;
                                     }
                                     $previewUrl = trim((string)($item['preview_url'] ?? $item['display_url'] ?? ''));
@@ -1226,7 +1336,7 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                         ) ?: '[]';
                         ?>
                         <script type="application/json" data-product-variant-media-preserve><?= $variantMediaPreserveJson ?></script>
-                        <p class="w-text" data-tone="muted" data-product-media-empty<?= count(array_filter($media, static fn(array $row): bool => (string)($row['asset_id'] ?? '') !== '' && strtolower(trim((string)($row['role'] ?? ''))) !== 'variant')) > 0 ? ' hidden' : '' ?>>
+                        <p class="w-text" data-tone="muted" data-product-media-empty<?= count(array_filter($media, static fn(array $row): bool => (string)($row['asset_id'] ?? '') !== '' && !in_array(strtolower(trim((string)($row['role'] ?? ''))), ['variant', 'video'], true))) > 0 ? ' hidden' : '' ?>>
                             <lang>暂无 FileAsset 图片。可先保存没有图片的草稿。</lang>
                         </p>
                         <?php if (array_filter($media, static fn(array $row): bool => !empty($row['legacy'])) !== []): ?>
@@ -1313,6 +1423,137 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                             src="about:blank"
                             data-product-media-picker-frame
                             data-src="@backend-url('media/backend/manager/iframe')?target=product-media-picker&multi=1&usage=1&ext=jpg,png,gif,webp"></iframe>
+                </div>
+            </dialog>
+
+            <dialog class="w-product-media-picker" data-w-component="dialog" data-product-video-picker-dialog aria-labelledby="product-video-picker-title">
+                <div class="w-product-media-picker__surface">
+                    <header>
+                        <div>
+                            <h2 id="product-video-picker-title"><lang>选择商品视频</lang></h2>
+                            <p><lang>选择 mp4 / webm 等本地视频 FileAsset。</lang></p>
+                        </div>
+                        <button class="w-button" type="button" data-product-video-picker-close aria-label="@lang(关闭)">
+                            <lang>关闭</lang>
+                        </button>
+                    </header>
+                    <iframe title="@lang(视频媒体库)"
+                            src="about:blank"
+                            data-product-video-picker-frame
+                            data-src="@backend-url('media/backend/manager/iframe')?target=product-video-picker&multi=1&usage=1&ext=mp4,webm,ogg,ogv,m4v"></iframe>
+                </div>
+            </dialog>
+        </div>
+
+        <div class="w-product-editor__panel" data-product-panel="layout" hidden
+             data-testid="product-edit-layout-panel"
+             data-product-layout-panel
+             data-product-id="<?= $escape($productEntityId) ?>"
+             data-website-id="<?= $escape($website_id) ?>"
+             data-theme-editor-base="@backend-url('theme/backend/theme-editor')">
+            <div class="w-card">
+                <div class="w-card__header">
+                    <div>
+                        <h2><lang>产品布局</lang></h2>
+                        <p><lang>后台新建/编辑 layout_option；指派本商品或继承分类默认；定时只改有效 option 并清理本商品缓存。</lang></p>
+                    </div>
+                </div>
+                <div class="w-card__body w-stack" data-gap="md">
+                    <section class="w-stack" data-gap="sm" data-product-layout-effective>
+                        <h3><lang>当前有效布局</lang></h3>
+                        <p data-tone="muted" data-product-layout-effective-text><lang>加载中…</lang></p>
+                    </section>
+                    <section class="w-stack" data-gap="sm">
+                        <h3><lang>本商品布局选择</lang></h3>
+                        <div class="w-cluster" data-wrap="true" data-gap="sm">
+                            <label class="w-product-check">
+                                <input type="radio" name="product_layout_mode" value="inherit" data-product-layout-mode checked>
+                                <span><lang>继承（分类默认 → 文件 default）</lang></span>
+                            </label>
+                            <label class="w-product-check">
+                                <input type="radio" name="product_layout_mode" value="explicit" data-product-layout-mode>
+                                <span><lang>指定 layout_option</lang></span>
+                            </label>
+                        </div>
+                        <div class="w-cluster" data-wrap="true" data-gap="sm">
+                            <select class="w-select" data-product-layout-option aria-label="@lang(布局选项)"></select>
+                            <button class="w-button" type="button" data-tone="primary" data-product-layout-save-selection><lang>保存选择</lang></button>
+                            <button class="w-button" type="button" data-product-layout-open-editor><lang>打开可视化编辑</lang></button>
+                            <button class="w-button" type="button" data-product-layout-clear-selection><lang>清除专属选择</lang></button>
+                        </div>
+                    </section>
+                    <section class="w-stack" data-gap="sm">
+                        <div class="w-cluster" data-justify="between" data-align="center">
+                            <h3><lang>可用布局</lang></h3>
+                            <button class="w-button" type="button" data-tone="primary" data-product-layout-create><lang>+ 新建布局</lang></button>
+                        </div>
+                        <div class="w-cluster" data-wrap="true" data-gap="sm" data-product-layout-option-cards></div>
+                    </section>
+                    <section class="w-stack" data-gap="sm">
+                        <div class="w-cluster" data-justify="between" data-align="center">
+                            <h3><lang>定时计划（目标=本商品）</lang></h3>
+                            <button class="w-button" type="button" data-product-layout-schedule-add><lang>+ 添加定时</lang></button>
+                        </div>
+                        <div class="w-table-wrap">
+                            <table class="w-table" data-product-layout-schedule-table>
+                                <thead>
+                                <tr>
+                                    <th><lang>名称</lang></th>
+                                    <th>option</th>
+                                    <th><lang>开始</lang></th>
+                                    <th><lang>结束</lang></th>
+                                    <th><lang>优先</lang></th>
+                                    <th></th>
+                                </tr>
+                                </thead>
+                                <tbody data-product-layout-schedule-body>
+                                <tr><td colspan="6" data-tone="muted"><lang>暂无定时</lang></td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p data-tone="muted"><lang>定时只改有效 option，不改永久选择；到点清本商品详情缓存。</lang></p>
+                    </section>
+                </div>
+            </div>
+            <dialog class="w-dialog w-product-layout-dialog" data-product-layout-create-dialog>
+                <div class="w-stack w-product-layout-dialog__body" data-gap="md">
+                    <h3><lang>新建产品布局</lang></h3>
+                    <label class="w-field">
+                        <span class="w-field__label"><lang>代码 layout_option</lang></span>
+                        <input class="w-input" name="layout_option" data-product-layout-create-code required pattern="[a-z][a-z0-9_-]{0,63}" placeholder="mothers_day">
+                    </label>
+                    <label class="w-field">
+                        <span class="w-field__label"><lang>显示名称</lang></span>
+                        <input class="w-input" name="name" data-product-layout-create-name placeholder="@lang(母亲节产品布局)">
+                    </label>
+                    <label class="w-field">
+                        <span class="w-field__label"><lang>克隆自</lang></span>
+                        <select class="w-select" name="clone_from" data-product-layout-clone-from required>
+                            <option value="default" selected>默认 (default)</option>
+                            <option value="festival">节日活动 (festival)</option>
+                            <option value="custom">自定义 (custom)</option>
+                        </select>
+                    </label>
+                    <div class="w-cluster" data-justify="end" data-gap="sm">
+                        <button class="w-button" type="button" data-product-layout-create-cancel><lang>取消</lang></button>
+                        <button class="w-button" type="button" data-tone="primary" data-product-layout-create-submit><lang>创建并打开编辑器</lang></button>
+                    </div>
+                </div>
+            </dialog>
+            <dialog class="w-dialog w-product-layout-dialog" data-product-layout-schedule-dialog>
+                <div class="w-stack w-product-layout-dialog__body" data-gap="md">
+                    <h3><lang>编辑定时布局</lang></h3>
+                    <input type="hidden" name="schedule_id" value="0" data-product-layout-schedule-id>
+                    <label class="w-field"><span class="w-field__label"><lang>名称</lang></span><input class="w-input" name="name" data-product-layout-schedule-name required></label>
+                    <label class="w-field"><span class="w-field__label">layout_option</span><select class="w-select" name="layout_option" data-product-layout-schedule-option></select></label>
+                    <label class="w-field"><span class="w-field__label"><lang>开始</lang></span><input class="w-input" name="starts_at" type="datetime-local" data-product-layout-schedule-starts required></label>
+                    <label class="w-field"><span class="w-field__label"><lang>结束</lang></span><input class="w-input" name="ends_at" type="datetime-local" data-product-layout-schedule-ends required></label>
+                    <label class="w-field"><span class="w-field__label"><lang>优先级</lang></span><input class="w-input" name="priority" type="number" value="10" data-product-layout-schedule-priority></label>
+                    <p data-tone="muted"><lang>目标=产品 → 只清该商品详情/FPC；不写回永久布局选择。</lang></p>
+                    <div class="w-cluster" data-justify="end" data-gap="sm">
+                        <button class="w-button" type="button" data-product-layout-schedule-cancel><lang>取消</lang></button>
+                        <button class="w-button" type="button" data-tone="primary" data-product-layout-schedule-submit><lang>保存计划</lang></button>
+                    </div>
                 </div>
             </dialog>
         </div>
@@ -1863,7 +2104,89 @@ $statusLabel = $statusLabelMap[$productStatus] ?? $productStatus;
                 <span class="w-status" data-status="archived"><lang>只读归档</lang></span>
             <?php endif; ?>
         </div>
+
+            <dialog class="w-product-variant-option-dialog"
+                    data-w-component="dialog"
+                    data-product-variant-option-dialog
+                    aria-labelledby="product-variant-option-dialog-title">
+                <div class="w-product-variant-option-dialog__form" data-product-variant-option-form>
+                    <header class="w-product-variant-option-dialog__header">
+                        <div>
+                            <h2 id="product-variant-option-dialog-title"><lang>新增规格值</lang></h2>
+                            <p class="w-text" data-tone="muted" data-product-variant-option-axis-hint></p>
+                        </div>
+                        <button class="w-button" type="button" data-product-variant-option-cancel aria-label="@lang(关闭)">
+                            <lang>关闭</lang>
+                        </button>
+                    </header>
+                    <div class="w-product-variant-option-dialog__body w-stack" data-gap="md">
+                        <label class="w-field">
+                            <span class="w-field__label"><lang>显示名称</lang></span>
+                            <input class="w-input" type="text" data-product-variant-option-label maxlength="128" required>
+                        </label>
+                        <label class="w-field">
+                            <span class="w-field__label"><lang>规格值代码</lang></span>
+                            <input class="w-input" type="text" data-product-variant-option-value maxlength="128" required>
+                            <span class="w-field__help"><lang>用于组合键；默认同显示名称，可按需改成稳定代码。</lang></span>
+                        </label>
+                        <div class="w-field" data-product-variant-option-color-field hidden>
+                            <span class="w-field__label"><lang>颜色</lang></span>
+                            <div class="w-product-variant-option-dialog__color">
+                                <input type="color" data-product-variant-option-swatch-color value="#cccccc" aria-label="@lang(颜色)">
+                                <input class="w-input" type="text" data-product-variant-option-swatch-color-text
+                                       maxlength="32" placeholder="#RRGGBB" aria-label="@lang(颜色色值)">
+                            </div>
+                        </div>
+                        <div class="w-field" data-product-variant-option-image-field hidden>
+                            <span class="w-field__label"><lang>规格图</lang></span>
+                            <div class="w-product-variant-option-dialog__image">
+                                <img class="w-product-variant-option-dialog__preview"
+                                     data-product-variant-option-swatch-image-preview
+                                     alt=""
+                                     hidden>
+                                <input type="hidden" data-product-variant-option-swatch-image value="">
+                                <div class="w-cluster" data-gap="sm">
+                                    <button class="w-button" type="button" data-variant="outline" data-product-variant-option-image-open>
+                                        <lang>选择图片</lang>
+                                    </button>
+                                    <button class="w-button" type="button" data-variant="ghost" data-tone="danger"
+                                            data-product-variant-option-image-clear hidden>
+                                        <lang>清除</lang>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <footer class="w-product-variant-option-dialog__footer w-cluster" data-justify="end" data-gap="sm">
+                        <button class="w-button" type="button" data-product-variant-option-cancel><lang>取消</lang></button>
+                        <button class="w-button" type="button" data-tone="primary" data-product-variant-option-confirm>
+                            <lang>添加规格值</lang>
+                        </button>
+                    </footer>
+                </div>
+            </dialog>
+
+            <dialog class="w-product-media-picker"
+                    data-w-component="dialog"
+                    data-product-variant-option-image-dialog
+                    aria-labelledby="product-variant-option-image-title">
+                <div class="w-product-media-picker__surface">
+                    <header>
+                        <div>
+                            <h2 id="product-variant-option-image-title"><lang>选择规格图</lang></h2>
+                            <p><lang>为当前规格值选择色板/图板预览图。</lang></p>
+                        </div>
+                        <button class="w-button" type="button" data-product-variant-option-image-close aria-label="@lang(关闭)">
+                            <lang>关闭</lang>
+                        </button>
+                    </header>
+                    <iframe title="@lang(媒体库)"
+                            src="about:blank"
+                            data-product-variant-option-image-frame
+                            data-src="@backend-url('media/backend/manager/iframe')?target=product-variant-option-image&multi=0&usage=1&ext=jpg,png,gif,webp"></iframe>
+                </div>
+            </dialog>
     </form>
 </div>
 <script type="module" src="@static(Weline_Theme::ui/pages/weline-eav-manager.js)"></script>
-<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260903-media-asset-open" defer data-no-extract="true"></script>
+<script src="@static(Weline_Product::js/backend/product-admin.js)?v=20260905-layout-create-no-nest" defer data-no-extract="true"></script>

@@ -4,6 +4,9 @@
 
 总体完善路线与待确认产品决策见：[万能产品完善计划](万能产品完善计划.md)。
 
+商品搜索引擎 URL 接入见 [商品 Sitemap 与 URL 变更](product-seo-sitemap.md)：
+Product 提供 SitemapUrlProvider，保存/发布/下架复用现有 ResourceChange 并携带当前及旧 URL。
+
 ## P2A-002：Product shard schema/state
 
 - Family code：`product.website`
@@ -94,6 +97,8 @@
 ## P2A-005：Product Provider capability SPI
 
 - 扩展点：`extends/module/Weline_Product/ProductProvider/`（见 `extends.php`）
+- 前台成交价（活动/折扣扩展）：见 [storefront-offer-price.md](storefront-offer-price.md)；槽位 `StorefrontPriceAdjustmentProvider`。
+- 商品询价（仅询价规格提交落库）：见 [product-quote-request.md](product-quote-request.md)。
 - 接口：`Api/ProductProviderInterface` + `Api/Capability/{Pricing,Inventory,Renderer}CapabilityInterface`
 - Registry：`Service/ProductProviderRegistry`（code/type 唯一硬失败；
   注册时固化 required/capability contract；权威 metadata 防伪；
@@ -129,6 +134,16 @@
 - `Weline_Inventory::stock_projection_changed`（Product 观察者 `InventoryStockProjectionChangedObserver`）在库存投影真正变更后调用 `StorefrontCatalogCacheCoordinator::notifyCatalogChanged`，含默认站 `website_id=0`。
 - `StorefrontCatalogCacheInvalidator` 对 `website_id=0` 同样清理主题 chrome/片段缓存，不得把 0 当成空值跳过。
 
+## 目录快照细分计时
+
+目录快照读取继续在统一 `timing.log` 的 `trace_summary.phases` 下记录 `product.catalog.snapshot.attributes/prices/media_rows/media_url/availability/deals`，分别对应原属性读取、价格读取、媒体列表、每商品媒体地址、批量库存能力与每报价促销调用。标签仅包围原调用，保留返回与异常；记录次数和耗时而不记录业务值。它们和 options 已包含在 snapshots 父阶段中，不能重复求和；尚未覆盖的循环/覆盖合并不能仅由差额判作 CPU。
+
+## 基础商品搜索的详情批量读取
+
+`ProductAdminReadService::search` 在既有每批200商品内保持原身份解析和过滤，再对命中商品批量读取价格与媒体，按 Offer/Product 归组回填。原 `prices` 排序、主媒体选择、Store 选品与完整 DTO 字段/最终排序保持；零命中不读取价格、媒体或活动店铺。活动店铺列表仅在一次 search 首次命中时取得，后续批次复用函数内结果，不产生跨请求缓存。
+
+`PriceRepository::listExplicitRows` 和 `MediaRepository::listByProductIds` 的批量读取使用现有 `fetchIterator` 后按原规则归一化/排序，允许完整批次超过 fetchArray 的10000行上限，不提高或绕过框架保护参数；媒体旧分表缺 store_id 时的既有 PDO 回退保持。所有 Website/Store 筛选参数和 private asset 解析继续走原仓储与媒体 Presenter。
+
 ## P2E-001：Cart Product 快照
 
 - `ProductCartItemSnapshotProvider` 保留注入 catalog / resolver 的测试缝，
@@ -150,6 +165,10 @@
 - `ProductCopyDurableCatalogAdapterTest` 的一次性 SQLite shard 只作隔离开发
   回归，覆盖 published、Store overlay、名称、价格、媒体、库存与 Store
   下架；正式结论使用该测试的 PostgreSQL 隔离数据库模式
+
+## Catalog 快照选项性能诊断
+
+`ProductCatalogCartItemSnapshotResolver::resolveCatalogOffers` 的原 `buildOptions` 调用使用框架统一 `RequestLifecycleTrace::measurePhase('product.catalog.snapshot.options', ...)` 计时。在同请求 `timing.log` 的 `trace_summary.phases` 查看调用次数、耗时与已埋点 DB/WLS 计数；该阶段已经包含在 `product.catalog.snapshots` 中，不能重复相加。它不记录选项值、不改变范围或缓存，也不跳过任何 Offer、私有检查或异常路径。
 
 ## P3C-001：Search current projection source
 
@@ -249,6 +268,27 @@ shard 做隔离开发回归；正式矩阵必须注入任务独占、验收后�
 验证 Store overlay、跨站新 Category UUID、Product/Offer 去重、字段包、
 媒体、库存默认 0、receipt 重放/冲突、目录与库存共同失败回滚，以及
 Cart Product durable 快照解析。
+
+## 商品目录媒体批量读取
+
+目录快照先建立完整的首图引用 map，再一次调用
+`StorefrontProductMediaUrlResolver::resolveReferences()`。可选的
+`FileAssetBatchUrlResolverInterface` 把原始文件及语言记录查询集中在
+FileManager；未实现该能力的第三方 manager 继续原单项路径。
+
+保留 UUID v4 检查、非 asset 引用透传、不可用图片空字符串、请求语言到
+`en_US` 再到原网站默认语言的候选顺序，以及完整 website/store/channel
+`ScopeIdentity` 和逐项 `PUBLIC_PUBLISH` 权限。每项 URL 独立生成，不复用后台
+展示 URL，也不新增业务缓存。详情页的原媒体入口保持原有职责。
+
+`product.catalog.snapshot.media_url` 仍覆盖全部媒体 URL 工作，但 `calls`
+现在记录批次数，目录重建时为一次，不再等于逐商品调用次数。比较前后性能
+应查看整批 duration、DB spans 和真实图片结果；不能仅凭 calls 变小宣称提速。
+
+定向用例覆盖跨 200 项分块、语言/范围/权限、私有 URL 及旧接口兼容。
+真实验收须核对商品页完整图片、价格、库存和语言输出，并完成 Browser
+排序/筛选/分页操作；完整 WLS 冷请求低于 1 秒的目标仍在进行中。
+交付地址：[商品页](https://p05113ef3.test.weline.com:9555/en_US/products)。
 
 当前模块版本：`1.0.23`。V1 `ProductIdentityResolverInterface` 继续兼容读取，
 新 Product/Offer 身份、后台命令/读模型、五类 Provider 与 Search/Cart 等消费链

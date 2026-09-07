@@ -12,15 +12,15 @@ use Weline\Product\Repository\CategoryRepository;
 use Weline\Product\Repository\OfferRepository;
 use Weline\Product\Repository\ProductRepository;
 use Weline\Product\Repository\SupplierRepository;
-use Weline\Product\Service\Hanfu1688\AcceptedOfferDetailEnricher;
-use Weline\Product\Service\Hanfu1688\CatalogCollector;
-use Weline\Product\Service\Hanfu1688\FactoryPageParser;
-use Weline\Product\Service\Hanfu1688\HanfuProductClassifier;
-use Weline\Product\Service\Hanfu1688\MediaImporter;
-use Weline\Product\Service\Hanfu1688\OfferEavMapper;
-use Weline\Product\Service\Hanfu1688\OfferDetailParser;
-use Weline\Product\Service\Hanfu1688\PublicHttpClient;
-use Weline\Product\Service\Hanfu1688\RunArtifactStore;
+use Weline\Product\Sample\Hanfu1688\AcceptedOfferDetailEnricher;
+use Weline\Product\Sample\Hanfu1688\CatalogCollector;
+use Weline\Product\Sample\Hanfu1688\FactoryPageParser;
+use Weline\Product\Sample\Hanfu1688\HanfuProductClassifier;
+use Weline\Product\Sample\Hanfu1688\MediaImporter;
+use Weline\Product\Sample\Hanfu1688\OfferEavMapper;
+use Weline\Product\Sample\Hanfu1688\OfferDetailParser;
+use Weline\Product\Sample\Hanfu1688\PublicHttpClient;
+use Weline\Product\Sample\Hanfu1688\RunArtifactStore;
 use Weline\Product\Service\ProductAdminCommandService;
 use Weline\Product\Service\ProductAttributeMetadataCatalog;
 use Weline\Product\Service\ProductCatalogEavBootstrap;
@@ -86,6 +86,29 @@ function hanfu1688OfferBrandIdentity(array $offer, string $fallbackCode, string 
     return ['code' => $sourceBrandCode, 'name' => $sourceBrandName, 'source' => true];
 }
 
+function hanfu1688NormalizeDetailUrl(string $url): string
+{
+    $url = trim($url);
+    $parts = parse_url($url);
+    if (!is_array($parts)
+        || strcasecmp((string)($parts['host'] ?? ''), 'detail.1688.com') !== 0
+        || preg_match('#^/offer/[1-9][0-9]*\.html$#D', (string)($parts['path'] ?? '')) !== 1
+    ) {
+        return $url;
+    }
+
+    $query = [];
+    parse_str((string)($parts['query'] ?? ''), $query);
+    $query['forcePC'] = '1';
+    $query['td_page_id'] = 'PC-DEFAULT-2026';
+
+    return (string)($parts['scheme'] ?? 'https') . '://'
+        . (string)$parts['host']
+        . (string)$parts['path']
+        . '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986)
+        . (isset($parts['fragment']) ? '#' . $parts['fragment'] : '');
+}
+
 if (defined('WELINE_HANFU_IMPORT_HELPERS_ONLY') && WELINE_HANFU_IMPORT_HELPERS_ONLY === true) {
     return;
 }
@@ -101,6 +124,7 @@ $options = getopt('', [
     'brand-code:',
     'supplier-code:',
     'limit::',
+    'listing-page-size::',
     'reuse-snapshot',
     'publish-first',
     'publish-all',
@@ -116,6 +140,7 @@ $factoryUrl = trim((string)($options['factory-url'] ?? ''));
 $brandCode = strtolower(trim((string)($options['brand-code'] ?? '')));
 $supplierCode = strtolower(trim((string)($options['supplier-code'] ?? '')));
 $limit = max(0, (int)($options['limit'] ?? 0));
+$listingPageSize = min(100, max(20, (int)($options['listing-page-size'] ?? 20)));
 $publishFirst = array_key_exists('publish-first', $options);
 $publishAll = array_key_exists('publish-all', $options);
 if ($runId === '' || $sourceCode === '' || $factoryUrl === '' || $brandCode === '' || $supplierCode === '') {
@@ -148,7 +173,44 @@ $fileAssets = $manager->get(FileAssetLibraryInterface::class);
 /** @var ProductCatalogEavBootstrap $eavBootstrap */
 $eavBootstrap = $manager->get(ProductCatalogEavBootstrap::class);
 $eavBootstrap->ensureHanfuSchema();
-$http = new PublicHttpClient();
+$directTransport = static function (string $url, array $headers): array {
+    $responseHeaders = [];
+    $handle = curl_init($url);
+    if ($handle === false) {
+        throw new RuntimeException('hanfu_1688_import_transport_init_failed');
+    }
+    curl_setopt_array($handle, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => false,
+        CURLOPT_CONNECTTIMEOUT => 5,
+        CURLOPT_TIMEOUT => 20,
+        CURLOPT_ENCODING => '',
+        CURLOPT_NOPROXY => '*',
+        CURLOPT_SSL_VERIFYPEER => true,
+        CURLOPT_SSL_VERIFYHOST => 2,
+        CURLOPT_HTTPHEADER => $headers,
+        CURLOPT_HEADERFUNCTION => static function ($curl, string $line) use (&$responseHeaders): int {
+            $length = strlen($line);
+            $position = strpos($line, ':');
+            if ($position !== false) {
+                $name = strtolower(trim(substr($line, 0, $position)));
+                $responseHeaders[$name][] = trim(substr($line, $position + 1));
+            }
+            return $length;
+        },
+    ]);
+    $body = curl_exec($handle);
+    $status = (int)curl_getinfo($handle, CURLINFO_RESPONSE_CODE);
+    $error = curl_error($handle);
+    curl_close($handle);
+    if (!is_string($body)) {
+        throw new RuntimeException('hanfu_1688_import_transport_failed:' . $error);
+    }
+    return ['status' => $status, 'headers' => $responseHeaders, 'body' => $body];
+};
+$http = new PublicHttpClient($directTransport);
+$listingHttp = new PublicHttpClient($directTransport);
+$detailHttp = new PublicHttpClient($directTransport, null, 800, 8_388_608, 1_000);
 $classifier = new HanfuProductClassifier();
 $eavMapper = new OfferEavMapper();
 $descriptionParser = new OfferDetailParser();
@@ -181,13 +243,28 @@ if (array_key_exists('reuse-snapshot', $options)) {
         $http,
         new FactoryPageParser(),
         new OfferDetailParser(),
+        static fn(string $memberId, int $page): array => $listingHttp->factoryOffers(
+            $memberId,
+            $page,
+            $listingPageSize,
+        ),
+        static fn(string $url): string => $detailHttp->get(hanfu1688NormalizeDetailUrl($url)),
     );
     $collected = $collector->collect(
         $source,
         500,
-        static fn(array $listing): bool => false,
+        fn(array $listing): bool => (bool)($classifier->classify(
+            (string)($listing['title'] ?? ''),
+        )['accepted'] ?? false),
     );
-    $collected = (new AcceptedOfferDetailEnricher(new OfferDetailParser()))
+    $collected = (new AcceptedOfferDetailEnricher(
+        new OfferDetailParser(),
+        static fn(string $url): string => $detailHttp->get(hanfu1688NormalizeDetailUrl($url)),
+        null,
+        0,
+        2,
+        static fn(string $offerId): array => $detailHttp->offerDetail($offerId),
+    ))
         ->enrich($collected, $classifier);
     $sourceDigest = hash('sha256', json_encode(
         $source,
@@ -211,7 +288,10 @@ if (array_key_exists('reuse-snapshot', $options)) {
 
 $collected = (new AcceptedOfferDetailEnricher(
     $descriptionParser,
-    static fn(string $url): string => $http->get($url),
+    static fn(string $url): string => $detailHttp->get(hanfu1688NormalizeDetailUrl($url)),
+    null,
+    0,
+    2,
 ))->enrichDescriptions($collected, $classifier);
 
 $brandEnrichment = ['accepted' => 0, 'attempted' => 0, 'enriched' => 0, 'cached' => 0, 'errors' => []];
@@ -415,6 +495,7 @@ foreach ($collected['offers'] as $offer) {
             $catalog,
             $sku,
         );
+        $catalog = hanfu1688AlignProductValuesToSharedEav($attributeMetadata, $catalog);
     } catch (Throwable $exception) {
         $errors[] = [
             'offer_id' => $offerId,
@@ -479,6 +560,7 @@ foreach ($collected['offers'] as $offer) {
         'axes' => $catalog['axes'],
         'sku_prefix' => $sku,
         'sku_overrides' => $catalog['sku_overrides'],
+        'sparse_variant_matrix' => !empty($catalog['sparse_matrix']),
         'attribute_set' => 'hanfu',
         'attribute_set_label' => '汉服',
         'short_description' => trim((string)($offer['short_title'] ?? '')) ?: $title,
@@ -568,11 +650,19 @@ foreach ($collected['offers'] as $offer) {
         }
         $matrixRows = [];
         foreach ((array)$catalog['matrix_rows'] as $matrixRow) {
+            // Attach uuid only when combination_key AND sku both match. A stale draft
+            // may already sit on the rematerialized key with a different sku; attaching
+            // that uuid races ProductVariantMatrixService SKU migration and throws
+            // variant_offer_uuid_mismatch.
             $existingOffer = $existingByKey[(string)$matrixRow['combination_key']] ?? null;
             if (is_array($existingOffer)) {
-                $matrixRow['global_offer_uuid'] = (string)($existingOffer['global_offer_uuid'] ?? '');
-                $matrixRow['offer_version'] = (int)($existingOffer['publish_version'] ?? 0);
-                $matrixRow['identity_version'] = (int)($existingOffer['identity_version'] ?? 0);
+                $existingSku = strtolower(trim((string)($existingOffer['sku'] ?? '')));
+                $rowSku = strtolower(trim((string)($matrixRow['sku'] ?? '')));
+                if ($existingSku !== '' && $rowSku !== '' && $existingSku === $rowSku) {
+                    $matrixRow['global_offer_uuid'] = (string)($existingOffer['global_offer_uuid'] ?? '');
+                    $matrixRow['offer_version'] = (int)($existingOffer['publish_version'] ?? 0);
+                    $matrixRow['identity_version'] = (int)($existingOffer['identity_version'] ?? 0);
+                }
             }
             $variantPrice = $priceBySku[(string)$matrixRow['sku']] ?? null;
             if (is_array($variantPrice)) {
@@ -768,6 +858,99 @@ function hanfu1688CategoryId(string $title, array $categoryByPath, int $fallback
 }
 
 /**
+ * Map import-generated option codes onto shared EAV identities.
+ * Truncated pinyin codes often diverge from an earlier shared code while the
+ * Chinese label still matches (e.g. ju-zhi-xian-wei-di-lun vs ju-zhi-xian).
+ *
+ * @param array<string,mixed> $catalog
+ * @return array<string,mixed>
+ */
+function hanfu1688AlignProductValuesToSharedEav(
+    ProductAttributeMetadataCatalog $attributeMetadata,
+    array $catalog,
+): array {
+    $identityByCode = [];
+    $identityByLabel = [];
+    foreach ($attributeMetadata->editorCatalog() as $set) {
+        foreach (is_array($set['groups'] ?? null) ? $set['groups'] : [] as $group) {
+            foreach (is_array($group['attributes'] ?? null) ? $group['attributes'] : [] as $attribute) {
+                if (!is_array($attribute)) {
+                    continue;
+                }
+                $attributeCode = strtolower(trim((string)($attribute['code'] ?? '')));
+                if ($attributeCode === '') {
+                    continue;
+                }
+                foreach (is_array($attribute['options'] ?? null) ? $attribute['options'] : [] as $option) {
+                    if (!is_array($option)) {
+                        continue;
+                    }
+                    $canonical = trim((string)($option['value'] ?? $option['id'] ?? ''));
+                    if ($canonical === '') {
+                        continue;
+                    }
+                    foreach (['value', 'id', 'code'] as $field) {
+                        $token = trim((string)($option[$field] ?? ''));
+                        if ($token !== '' && !isset($identityByCode[$attributeCode][$token])) {
+                            $identityByCode[$attributeCode][$token] = $canonical;
+                        }
+                    }
+                    $label = trim((string)($option['label'] ?? $option['name'] ?? ''));
+                    if ($label !== '' && !isset($identityByLabel[$attributeCode][$label])) {
+                        $identityByLabel[$attributeCode][$label] = $canonical;
+                    }
+                }
+            }
+        }
+    }
+
+    $labelByGeneratedCode = [];
+    foreach (is_array($catalog['definitions'] ?? null) ? $catalog['definitions'] : [] as $definition) {
+        if (!is_array($definition)) {
+            continue;
+        }
+        $attributeCode = strtolower(trim((string)($definition['code'] ?? '')));
+        foreach (is_array($definition['options'] ?? null) ? $definition['options'] : [] as $option) {
+            if (!is_array($option)) {
+                continue;
+            }
+            $generatedCode = strtolower(trim((string)($option['code'] ?? $option['value'] ?? '')));
+            $label = trim((string)($option['label'] ?? $option['name'] ?? ''));
+            if ($attributeCode !== '' && $generatedCode !== '' && $label !== '') {
+                $labelByGeneratedCode[$attributeCode][$generatedCode] = $label;
+            }
+        }
+    }
+
+    $productValues = is_array($catalog['product_values'] ?? null) ? $catalog['product_values'] : [];
+    foreach ($productValues as $attributeCode => $values) {
+        $attributeCode = strtolower(trim((string)$attributeCode));
+        if (!is_array($values) || $attributeCode === '') {
+            continue;
+        }
+        $aligned = [];
+        foreach ($values as $value) {
+            $value = trim((string)$value);
+            if ($value === '') {
+                continue;
+            }
+            $canonical = $identityByCode[$attributeCode][$value] ?? '';
+            if ($canonical === '') {
+                $label = $labelByGeneratedCode[$attributeCode][strtolower($value)] ?? '';
+                if ($label !== '') {
+                    $canonical = $identityByLabel[$attributeCode][$label] ?? '';
+                }
+            }
+            $aligned[$canonical !== '' ? $canonical : $value] = true;
+        }
+        $productValues[$attributeCode] = array_keys($aligned);
+    }
+    $catalog['product_values'] = $productValues;
+
+    return $catalog;
+}
+
+/**
  * Resolve source option codes through formal EAV metadata before Product/Offer/media writes.
  * Exact code or ID wins; when a historical code changed, the earliest same-label option is reused.
  *
@@ -781,7 +964,6 @@ function hanfu1688CanonicalVariantCatalog(
     string $skuPrefix,
 ): array {
     $identityOptions = [];
-    $labelOptions = [];
     foreach ($attributeMetadata->editorCatalog() as $set) {
         foreach (is_array($set['groups'] ?? null) ? $set['groups'] : [] as $group) {
             foreach (is_array($group['attributes'] ?? null) ? $group['attributes'] : [] as $attribute) {
@@ -800,19 +982,14 @@ function hanfu1688CanonicalVariantCatalog(
                     if ($canonicalValue === '') {
                         continue;
                     }
-                    foreach (['value', 'id', 'code'] as $identityField) {
+                    // Map only by stable option identity (value / id). Never by option
+                    // code: truncated pinyin codes (e.g. bai-xiao-xiu) are reused across
+                    // different 白小袖* labels and would remap 水蓝 → 浅黄 on reimport.
+                    foreach (['value', 'id'] as $identityField) {
                         $identity = trim((string)($option[$identityField] ?? ''));
                         if ($identity !== '' && !isset($identityOptions[$attributeCode][$identity])) {
                             $identityOptions[$attributeCode][$identity] = $canonicalValue;
                         }
-                    }
-                    $label = trim((string)preg_replace(
-                        '/\s+/u',
-                        ' ',
-                        trim((string)($option['label'] ?? '')),
-                    ));
-                    if ($label !== '' && !isset($labelOptions[$attributeCode][$label])) {
-                        $labelOptions[$attributeCode][$label] = $canonicalValue;
                     }
                 }
             }
@@ -836,10 +1013,14 @@ function hanfu1688CanonicalVariantCatalog(
                 ' ',
                 trim((string)($option['label'] ?? $option['name'] ?? $sourceValue)),
             ));
-            $canonicalValue = $identityOptions[$attributeCode][$sourceValue]
-                ?? $labelOptions[$attributeCode][$label]
-                ?? '';
-            if ($attributeCode === '' || $sourceValue === '' || $canonicalValue === '') {
+            // Map only by option identity (value/id). Never rewrite via unstable
+            // truncated codes, and never rewrite to a display label alone.
+            $canonicalValue = $identityOptions[$attributeCode][$sourceValue] ?? '';
+            if ($canonicalValue === '') {
+                // Instance-private options are materialized during Product create/save.
+                $canonicalValue = $sourceValue;
+            }
+            if ($attributeCode === '' || $sourceValue === '') {
                 throw new InvalidArgumentException(
                     'hanfu_1688_eav_option_unresolved:' . $attributeCode . ':' . $label,
                 );
@@ -859,35 +1040,51 @@ function hanfu1688CanonicalVariantCatalog(
             'options' => array_values($canonicalOptions),
         ];
     }
-    $canonicalAxes = $attributeMetadata->canonicalizeVariantAxes($canonicalAxes);
+    try {
+        $canonicalAxes = $attributeMetadata->canonicalizeVariantAxes($canonicalAxes);
+    } catch (InvalidArgumentException) {
+        // Custom option codes are ensured as instance-private rows on Product create/save.
+    }
 
     $canonicalizeCombination = static function (array $sourceCombination) use (
         $sourceValueMap,
-        $attributeMetadata,
     ): array {
         $canonical = [];
         foreach ($sourceCombination as $attributeCode => $sourceValue) {
             $attributeCode = strtolower(trim((string)$attributeCode));
             $sourceValue = trim((string)$sourceValue);
-            $canonicalValue = $sourceValueMap[$attributeCode][$sourceValue] ?? '';
-            if ($canonicalValue === '') {
+            $canonicalValue = $sourceValueMap[$attributeCode][$sourceValue] ?? $sourceValue;
+            if ($attributeCode === '' || $canonicalValue === '') {
                 throw new InvalidArgumentException(
                     'hanfu_1688_variant_value_unresolved:' . $attributeCode . ':' . $sourceValue,
                 );
             }
             $canonical[$attributeCode] = $canonicalValue;
         }
+        ksort($canonical, SORT_STRING);
 
-        return $attributeMetadata->canonicalizeVariantCombination($canonical);
+        return $canonical;
     };
 
     $matrixRows = [];
     $canonicalOverrides = [];
-    foreach ($variantMatrix->generate(
-        $sourceAxes,
-        $skuPrefix,
-        is_array($catalog['sku_overrides'] ?? null) ? $catalog['sku_overrides'] : [],
-    ) as $row) {
+    $sourceOverrides = is_array($catalog['sku_overrides'] ?? null) ? $catalog['sku_overrides'] : [];
+    $familyCodes = ['color', 'style_type', 'character', 'look_ref', 'prop'];
+    $familyAxisCount = 0;
+    foreach ($sourceAxes as $axis) {
+        if (!is_array($axis)) {
+            continue;
+        }
+        if (in_array(strtolower(trim((string)($axis['code'] ?? ''))), $familyCodes, true)) {
+            ++$familyAxisCount;
+        }
+    }
+    $useSparseMatrix = !empty($catalog['sparse_matrix'])
+        || ($familyAxisCount >= 2 && $sourceOverrides !== []);
+    $generatedRows = $useSparseMatrix
+        ? $variantMatrix->materializeOverrides($sourceAxes, $skuPrefix, $sourceOverrides)
+        : $variantMatrix->generate($sourceAxes, $skuPrefix, $sourceOverrides);
+    foreach ($generatedRows as $row) {
         $combination = $canonicalizeCombination((array)$row['combination']);
         $combinationKey = $variantMatrix->combinationKey($combination);
         $row['combination'] = $combination;

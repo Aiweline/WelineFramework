@@ -107,6 +107,7 @@ final class StorefrontVariantContextResolver
                 );
             }
         }
+        $catalog = $selection->compactCatalogMedia($catalog);
         $catalog['selected_offer'] = $selectedOffer;
 
         return $catalog;

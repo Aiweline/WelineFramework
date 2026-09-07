@@ -16,8 +16,6 @@ use Weline\Theme\Service\AllMenu\MenuTreeNormalizer;
 final class StorefrontAllMenuCategoryTreeService
 {
     private const CACHE_POOL = 'weline_product_storefront_category_tree';
-    private const FRESH_TTL_SECONDS = 3600;
-    private const STALE_TTL_SECONDS = 86400;
 
     public function __construct(
         private readonly ProductCatalogQueryConsumer $catalog,
@@ -27,10 +25,16 @@ final class StorefrontAllMenuCategoryTreeService
     ) {
     }
 
-    public static function logicalCacheKey(int $websiteId): string
+    public static function logicalCacheKey(int $websiteId, string $locale = ''): string
     {
-        // v3: bust keys polluted when SWR rebuild used live State lang.
-        return 'product.all_menu_category_tree.v3.' . max(0, $websiteId);
+        // v4: embed resolved storefront locale in the logical key so EN pages
+        // cannot reuse a ZH tree when KeyBuilder lang lags behind State.
+        $locale = trim(str_replace('-', '_', $locale));
+        if ($locale === '') {
+            $locale = 'zh_Hans_CN';
+        }
+
+        return 'product.all_menu_category_tree.v4.' . max(0, $websiteId) . '.' . $locale;
     }
 
     public static function cachePool(): string
@@ -44,24 +48,21 @@ final class StorefrontAllMenuCategoryTreeService
     public function navTree(int $websiteId): array
     {
         $websiteId = max(0, $websiteId);
-        // Capture KeyBuilder lang at remember-time so PostResponse SWR cannot
-        // rebuild this scoped key with another request's State::getLangLocal().
-        $locale = trim((string)(KeyBuilder::storefrontDimensions(false)['lang'] ?? ''));
+        // Prefer live State locale (query/path override). Fall back to KeyBuilder
+        // only when State is empty so PostResponse SWR still has a stable value.
+        $locale = trim((string)State::getLangLocal());
         if ($locale === '') {
-            $locale = trim((string)State::getLangLocal());
+            $locale = trim((string)(KeyBuilder::storefrontDimensions(false)['lang'] ?? ''));
         }
         if ($locale === '') {
             $locale = 'zh_Hans_CN';
         }
 
         /** @var list<array<string, mixed>> $tree */
-        $tree = $this->hotCache->remember(
-            self::CACHE_POOL,
-            self::logicalCacheKey($websiteId),
-            self::FRESH_TTL_SECONDS,
+        $tree = $this->hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::categoryMenuPolicy(),
+            self::logicalCacheKey($websiteId, $locale),
             fn(): array => $this->build($websiteId, $locale),
-            ['website' => true, 'lang' => true, 'currency' => true],
-            self::STALE_TTL_SECONDS,
         );
 
         return $tree;
@@ -70,12 +71,19 @@ final class StorefrontAllMenuCategoryTreeService
     public function invalidate(int $websiteId): void
     {
         $websiteId = max(0, $websiteId);
-        $this->hotCache->purgeProcessCacheForLogicalKey(self::logicalCacheKey($websiteId));
-        $this->hotCache->forget(
-            self::CACHE_POOL,
-            self::logicalCacheKey($websiteId),
-            ['website' => true, 'lang' => true, 'currency' => true],
-        );
+        foreach (['zh_Hans_CN', 'en_US', trim((string)State::getLangLocal())] as $locale) {
+            $locale = trim((string)$locale);
+            if ($locale === '') {
+                continue;
+            }
+            $logicalKey = self::logicalCacheKey($websiteId, $locale);
+            $this->hotCache->forgetPolicy(
+                StorefrontCatalogCacheCoordinator::categoryMenuPolicy(),
+                $logicalKey,
+            );
+        }
+        // Legacy v3 key (pre-locale-in-key).
+        $this->hotCache->purgeProcessCacheForLogicalKey('product.all_menu_category_tree.v3.' . $websiteId);
     }
 
     /**

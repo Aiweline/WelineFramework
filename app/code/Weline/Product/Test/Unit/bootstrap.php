@@ -19,6 +19,14 @@ if (!\function_exists('__')) {
 if (!\defined('BP')) {
     \define('BP', \dirname(__DIR__, 6) . DIRECTORY_SEPARATOR);
 }
+
+// The standalone fixture bootstrap has no runtime logger service.
+if (!\function_exists('w_log_warning')) {
+    function w_log_warning(mixed ...$arguments): void {}
+}
+if (!\function_exists('w_log_error')) {
+    function w_log_error(mixed ...$arguments): void {}
+}
 if (!\defined('DS')) {
     \define('DS', DIRECTORY_SEPARATOR);
 }

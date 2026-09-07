@@ -1,0 +1,387 @@
+<!DOCTYPE html>
+<html lang="zh-Hans">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PROTOTYPE · 详情尺码表排版</title>
+  <style>
+    :root {
+      --ink: #0f1111;
+      --muted: #565959;
+      --line: #e7e7e7;
+      --panel: #f7f8f8;
+      --accent: #2162a1;
+      --bg: #eaeded;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font: 14px/1.5 "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+    .proto-note {
+      max-width: 980px;
+      margin: 12px auto 0;
+      padding: 10px 14px;
+      background: #fff8e1;
+      border: 1px solid #f0e0a0;
+      border-radius: 8px;
+      color: #5c4b00;
+      font-size: 13px;
+    }
+    .proto-note code { background: #fff; padding: 1px 5px; border-radius: 4px; }
+    /* Fake Amazon PDP chrome so density feels real */
+    .pdp {
+      max-width: 980px;
+      margin: 16px auto 96px;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px 24px 40px;
+    }
+    .pdp__eyebrow { color: var(--muted); font-size: 12px; margin: 0 0 4px; }
+    .pdp__title { margin: 0 0 18px; font-size: 22px; font-weight: 700; }
+    .pdp__h2 { margin: 0 0 14px; font-size: 18px; font-weight: 700; border-top: 1px solid var(--line); padding-top: 18px; }
+    .pdp__gallery-stub {
+      height: 120px;
+      margin-top: 24px;
+      border-radius: 6px;
+      background: linear-gradient(180deg, #dfe8ef, #c8d4de);
+      display: grid;
+      place-items: center;
+      color: #445;
+      font-size: 13px;
+    }
+    [data-variant] { display: none; }
+    [data-variant].is-active { display: block; }
+
+    /* ===== A: full-bleed Amazon panel table ===== */
+    .v-a {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+    .v-a__head {
+      background: var(--panel);
+      padding: 14px 16px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .v-a__head h3 { margin: 0 0 4px; font-size: 16px; }
+    .v-a__head p { margin: 0; color: var(--muted); font-size: 13px; }
+    .v-a table { width: 100%; border-collapse: collapse; }
+    .v-a th, .v-a td {
+      padding: 11px 16px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      vertical-align: middle;
+    }
+    .v-a th {
+      font-size: 12px;
+      text-transform: none;
+      letter-spacing: 0;
+      color: var(--muted);
+      background: #fafafa;
+      font-weight: 600;
+    }
+    .v-a tr:last-child td { border-bottom: 0; }
+    .v-a td:nth-child(2) { color: var(--muted); }
+    .v-a td:last-child {
+      font-weight: 700;
+      font-size: 16px;
+      text-align: right;
+      width: 4.5rem;
+    }
+    .v-a__group td:first-child { font-weight: 600; }
+    .v-a__foot {
+      padding: 12px 16px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 13px;
+      background: #fcfcfc;
+    }
+
+    /* ===== B: dual gender columns ===== */
+    .v-b__intro { margin: 0 0 14px; color: var(--muted); }
+    .v-b__intro strong { color: var(--ink); font-size: 16px; display: block; margin-bottom: 4px; }
+    .v-b__grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
+    @media (max-width: 720px) {
+      .v-b__grid { grid-template-columns: 1fr; }
+    }
+    .v-b__col {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      min-width: 0;
+    }
+    .v-b__col h4 {
+      margin: 0;
+      padding: 12px 14px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      font-size: 14px;
+    }
+    .v-b__col table { width: 100%; border-collapse: collapse; }
+    .v-b__col td {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+    }
+    .v-b__col tr:last-child td { border-bottom: 0; }
+    .v-b__col td:first-child { color: var(--muted); font-size: 13px; }
+    .v-b__col td:last-child {
+      text-align: right;
+      font-weight: 700;
+      font-size: 18px;
+      width: 3.5rem;
+    }
+    .v-b__foot { margin: 12px 0 0; color: var(--muted); font-size: 13px; }
+
+    /* ===== C: segmented + size ladder ===== */
+    .v-c {
+      max-width: 520px;
+      margin-inline: auto;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 16px;
+      background: #fff;
+    }
+    .v-c h3 { margin: 0 0 6px; text-align: center; font-size: 16px; }
+    .v-c__note { margin: 0 0 14px; text-align: center; color: var(--muted); font-size: 13px; }
+    .v-c__tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+      padding: 4px;
+      background: var(--panel);
+      border-radius: 999px;
+      margin-bottom: 14px;
+    }
+    .v-c__tabs button {
+      border: 0;
+      background: transparent;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .v-c__tabs button[aria-selected="true"] {
+      background: #fff;
+      color: var(--ink);
+      box-shadow: 0 1px 2px rgba(0,0,0,.08);
+    }
+    .v-c__panel[hidden] { display: none; }
+    .v-c__row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 4px;
+      border-bottom: 1px solid var(--line);
+    }
+    .v-c__row:last-child { border-bottom: 0; }
+    .v-c__weight { color: var(--muted); font-size: 13px; }
+    .v-c__size {
+      min-width: 3rem;
+      text-align: center;
+      font-weight: 700;
+      font-size: 18px;
+      padding: 6px 10px;
+      border-radius: 8px;
+      background: #eef3f8;
+      color: var(--accent);
+    }
+    .v-c__foot { margin: 12px 0 0; text-align: center; color: var(--muted); font-size: 13px; }
+
+    /* switcher */
+    .switcher {
+      position: fixed;
+      left: 50%;
+      bottom: 18px;
+      transform: translateX(-50%);
+      z-index: 50;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 8px 10px;
+      background: #111;
+      color: #fff;
+      border-radius: 999px;
+      box-shadow: 0 8px 24px rgba(0,0,0,.28);
+      font-size: 13px;
+    }
+    .switcher button {
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 50%;
+      background: #333;
+      color: #fff;
+      cursor: pointer;
+      font-size: 16px;
+    }
+    .switcher strong { min-width: 12rem; text-align: center; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <!--
+    PROTOTYPE (throwaway): Three variants for product-detail size-chart typography.
+    Question: how should textified 尺码建议表 sit in Amazon-like PDP — not left-ragged plain text?
+    Open with ?variant=A|B|C
+  -->
+  <div class="proto-note">
+    <strong>抛开式原型</strong>：对比详情「尺码建议表」三种排版。用底部切换条或键盘 ← →。
+    当前：<code id="stateLabel">A</code>
+  </div>
+
+  <main class="pdp">
+    <p class="pdp__eyebrow">关于该商品 · 原型预览</p>
+    <h1 class="pdp__title">学生演出服（尺码建议表排版）</h1>
+    <h2 class="pdp__h2">关于该商品</h2>
+
+    <section data-variant="A" class="is-active">
+      <div class="v-a">
+        <div class="v-a__head">
+          <h3>尺码建议表</h3>
+          <p>此款为男女分码款，可按以下尺码放心选择。</p>
+        </div>
+        <table>
+          <thead>
+            <tr><th>款式</th><th>建议体重</th><th>尺码</th></tr>
+          </thead>
+          <tbody>
+            <tr class="v-a__group"><td>女款</td><td>70-90 斤（35-45 kg）</td><td>S</td></tr>
+            <tr class="v-a__group"><td>女款</td><td>90-110 斤（45-55 kg）</td><td>M</td></tr>
+            <tr class="v-a__group"><td>女款</td><td>110-120 斤（55-60 kg）</td><td>L</td></tr>
+            <tr class="v-a__group"><td>女款</td><td>115-125 斤（57.5-62.5 kg）</td><td>XL</td></tr>
+            <tr class="v-a__group"><td>男款</td><td>90-110 斤（45-55 kg）</td><td>M</td></tr>
+            <tr class="v-a__group"><td>男款</td><td>110-120 斤（55-60 kg）</td><td>L</td></tr>
+            <tr class="v-a__group"><td>男款</td><td>120-140 斤（60-70 kg）</td><td>XL</td></tr>
+            <tr class="v-a__group"><td>男款</td><td>140-155 斤（70-77.5 kg）</td><td>2XL</td></tr>
+          </tbody>
+        </table>
+        <div class="v-a__foot">建议按体重选购。</div>
+      </div>
+    </section>
+
+    <section data-variant="B">
+      <div class="v-b__intro">
+        <strong>尺码建议表</strong>
+        此款为男女分码款，可按以下尺码放心选择。
+      </div>
+      <div class="v-b__grid">
+        <div class="v-b__col">
+          <h4>女款</h4>
+          <table>
+            <tr><td>70-90 斤（35-45 kg）</td><td>S</td></tr>
+            <tr><td>90-110 斤（45-55 kg）</td><td>M</td></tr>
+            <tr><td>110-120 斤（55-60 kg）</td><td>L</td></tr>
+            <tr><td>115-125 斤（57.5-62.5 kg）</td><td>XL</td></tr>
+          </table>
+        </div>
+        <div class="v-b__col">
+          <h4>男款</h4>
+          <table>
+            <tr><td>90-110 斤（45-55 kg）</td><td>M</td></tr>
+            <tr><td>110-120 斤（55-60 kg）</td><td>L</td></tr>
+            <tr><td>120-140 斤（60-70 kg）</td><td>XL</td></tr>
+            <tr><td>140-155 斤（70-77.5 kg）</td><td>2XL</td></tr>
+          </table>
+        </div>
+      </div>
+      <p class="v-b__foot">建议按体重选购。</p>
+    </section>
+
+    <section data-variant="C">
+      <div class="v-c" data-c-root>
+        <h3>尺码建议表</h3>
+        <p class="v-c__note">此款为男女分码款，可按以下尺码放心选择。</p>
+        <div class="v-c__tabs" role="tablist">
+          <button type="button" role="tab" aria-selected="true" data-c-tab="women">女款</button>
+          <button type="button" role="tab" aria-selected="false" data-c-tab="men">男款</button>
+        </div>
+        <div class="v-c__panel" data-c-panel="women">
+          <div class="v-c__row"><span class="v-c__weight">70-90 斤（35-45 kg）</span><span class="v-c__size">S</span></div>
+          <div class="v-c__row"><span class="v-c__weight">90-110 斤（45-55 kg）</span><span class="v-c__size">M</span></div>
+          <div class="v-c__row"><span class="v-c__weight">110-120 斤（55-60 kg）</span><span class="v-c__size">L</span></div>
+          <div class="v-c__row"><span class="v-c__weight">115-125 斤（57.5-62.5 kg）</span><span class="v-c__size">XL</span></div>
+        </div>
+        <div class="v-c__panel" data-c-panel="men" hidden>
+          <div class="v-c__row"><span class="v-c__weight">90-110 斤（45-55 kg）</span><span class="v-c__size">M</span></div>
+          <div class="v-c__row"><span class="v-c__weight">110-120 斤（55-60 kg）</span><span class="v-c__size">L</span></div>
+          <div class="v-c__row"><span class="v-c__weight">120-140 斤（60-70 kg）</span><span class="v-c__size">XL</span></div>
+          <div class="v-c__row"><span class="v-c__weight">140-155 斤（70-77.5 kg）</span><span class="v-c__size">2XL</span></div>
+        </div>
+        <p class="v-c__foot">建议按体重选购。</p>
+      </div>
+    </section>
+
+    <div class="pdp__gallery-stub">下方接详情实拍图（保持居中全宽）</div>
+  </main>
+
+  <div class="switcher" aria-label="prototype variant switcher">
+    <button type="button" data-dir="-1" aria-label="previous">←</button>
+    <strong id="switchLabel">A · 全宽面板表</strong>
+    <button type="button" data-dir="1" aria-label="next">→</button>
+  </div>
+
+  <script>
+    const VARIANTS = [
+      { key: 'A', name: '全宽面板表' },
+      { key: 'B', name: '男女双栏' },
+      { key: 'C', name: '分段尺码梯' },
+    ];
+    const params = new URLSearchParams(location.search);
+    let current = (params.get('variant') || 'A').toUpperCase();
+    if (!VARIANTS.some(v => v.key === current)) current = 'A';
+
+    function render() {
+      document.querySelectorAll('[data-variant]').forEach(el => {
+        el.classList.toggle('is-active', el.getAttribute('data-variant') === current);
+      });
+      const meta = VARIANTS.find(v => v.key === current);
+      document.getElementById('switchLabel').textContent = meta.key + ' · ' + meta.name;
+      document.getElementById('stateLabel').textContent = meta.key + ' (' + meta.name + ')';
+      const url = new URL(location.href);
+      url.searchParams.set('variant', current);
+      history.replaceState(null, '', url);
+    }
+
+    function cycle(dir) {
+      const i = VARIANTS.findIndex(v => v.key === current);
+      current = VARIANTS[(i + dir + VARIANTS.length) % VARIANTS.length].key;
+      render();
+    }
+
+    document.querySelectorAll('.switcher [data-dir]').forEach(btn => {
+      btn.addEventListener('click', () => cycle(Number(btn.getAttribute('data-dir'))));
+    });
+    document.addEventListener('keydown', (e) => {
+      const t = e.target;
+      if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+      if (e.key === 'ArrowLeft') cycle(-1);
+      if (e.key === 'ArrowRight') cycle(1);
+    });
+
+    document.querySelectorAll('[data-c-tab]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const key = btn.getAttribute('data-c-tab');
+        const root = btn.closest('[data-c-root]');
+        root.querySelectorAll('[data-c-tab]').forEach(b => b.setAttribute('aria-selected', b === btn ? 'true' : 'false'));
+        root.querySelectorAll('[data-c-panel]').forEach(p => {
+          p.hidden = p.getAttribute('data-c-panel') !== key;
+        });
+      });
+    });
+
+    render();
+  </script>
+</body>
+</html>

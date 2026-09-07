@@ -7,12 +7,20 @@ namespace Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider;
 use Weline\Cart\Api\CartSelectionHash;
 use Weline\Cart\Api\Data\CartItemSnapshot;
 use Weline\Cart\Api\Data\OfferIdentity;
+use Weline\Eav\Api\Metadata\AttributeMetadata;
+use Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface;
+use Weline\Eav\Api\Metadata\AttributeOptionMetadata;
+use Weline\Eav\Api\Metadata\AttributeSetMetadata;
 use Weline\FileManager\Api\FileAssetManagerInterface;
 use Weline\FileManager\Model\FileAsset;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\RuntimeProviderResolver;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Product\Api\Data\StorefrontPriceContext;
+use Weline\Product\Api\ResolvedScopeValue;
+use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
+use Weline\Product\Model\ProductCatalogAttributeEntity;
 use Weline\Product\Model\Shard\Media;
 use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Product;
@@ -22,8 +30,11 @@ use Weline\Product\Repository\OfferRepository;
 use Weline\Product\Repository\PriceRepository;
 use Weline\Product\Repository\ProductRepository;
 use Weline\Product\Repository\StoreOfferRepository;
+use Weline\Product\Service\CatalogOverlayResolver;
 use Weline\Product\Service\ProductCurrentCustomerResolver;
+use Weline\Product\Service\StorefrontEavLabelResolver;
 use Weline\Product\Service\StorefrontProductMediaUrlResolver;
+use Weline\Product\Service\StorefrontVariantSelectionService;
 use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 
 /**
@@ -62,6 +73,7 @@ final class ProductCatalogCartItemSnapshotResolver
         private readonly ?FileAssetManagerInterface $fileAssets = null,
         ?callable $customerResolver = null,
         private readonly ?StorefrontProductMediaUrlResolver $mediaUrls = null,
+        private readonly ?StorefrontEavLabelResolver $variantLabels = null,
     ) {
         $this->currencyResolver = $currencyResolver === null
             ? null
@@ -182,6 +194,23 @@ final class ProductCatalogCartItemSnapshotResolver
             );
         }
 
+        $unitPriceMinor = max(0, (int)$price->value);
+        if ($this->isQuoteOnly($websiteId, $storeId, $productId, $locale)) {
+            return $this->unavailable(
+                $identity,
+                $selection,
+                (string)__('仅询价，不可加入购物车'),
+                $sku,
+                $name,
+                $currency,
+            );
+        }
+        $dealPrice = $this->resolveActiveDealPrice($productId, $unitPriceMinor);
+        $unitPriceMinor = $dealPrice['unit_price_minor'];
+        $compareAtMinor = $dealPrice['compare_at_minor'];
+        $campaignLabel = $dealPrice['campaign_label'];
+        $campaignUrl = $dealPrice['campaign_url'];
+
         $productType = $this->productType($websiteId, $storeId, $productId, $locale);
         $fulfillmentMetadata = [];
         if ($productType === 'downloadable') {
@@ -223,7 +252,7 @@ final class ProductCatalogCartItemSnapshotResolver
                 sku: $sku,
                 image: $this->image($websiteId, $productId, $scope, $locale),
                 currency: $currency,
-                unitPriceMinor: max(0, (int)$price->value),
+                unitPriceMinor: $unitPriceMinor,
                 found: true,
                 sellable: false,
                 stock: $stock,
@@ -235,6 +264,10 @@ final class ProductCatalogCartItemSnapshotResolver
                 offerId: $offerId,
                 productId: $productId,
                 fulfillmentMetadata: $fulfillmentMetadata,
+                options: $this->buildOptions($websiteId, $productId, $selection, $scope, $locale),
+                compareAtMinor: $compareAtMinor,
+                campaignLabel: $campaignLabel,
+                campaignUrl: $campaignUrl,
             );
         }
 
@@ -244,7 +277,7 @@ final class ProductCatalogCartItemSnapshotResolver
             sku: $sku,
             image: $this->image($websiteId, $productId, $scope, $locale),
             currency: $currency,
-            unitPriceMinor: max(0, (int)$price->value),
+            unitPriceMinor: $unitPriceMinor,
             found: true,
             sellable: true,
             stock: $stock,
@@ -255,7 +288,317 @@ final class ProductCatalogCartItemSnapshotResolver
             offerId: $offerId,
             productId: $productId,
             fulfillmentMetadata: $fulfillmentMetadata,
+            options: $this->buildOptions($websiteId, $productId, $selection, $scope, $locale),
+            compareAtMinor: $compareAtMinor,
+            campaignLabel: $campaignLabel,
+            campaignUrl: $campaignUrl,
         );
+    }
+
+    /**
+     * Storefront catalog projection for already-loaded durable Offer rows.
+     *
+     * Product, attribute, price, inventory, media and Store-overlay facts are
+     * resolved in batches so a configurable PDP does not repeat the complete
+     * Cart snapshot query chain once per variant.
+     *
+     * @param list<array<string,mixed>> $offerRows
+     * @param list<array<string,mixed>> $productRows
+     * @param list<array<string,mixed>>|null $attributeRows
+     * @param list<array<string,mixed>>|null $mediaRows
+     * @return list<CartItemSnapshot>
+     */
+    public function resolveCatalogOffers(
+        array $offerRows,
+        ScopeIdentity $scope,
+        array $productRows = [],
+        ?array $attributeRows = null,
+        ?array $mediaRows = null,
+    ): array {
+        $offerRows = array_values(array_filter($offerRows, 'is_array'));
+        if ($offerRows === []) {
+            return [];
+        }
+
+        $identities = array_map(
+            static fn(array $row): OfferIdentity => new OfferIdentity(
+                'product',
+                trim((string)($row[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? '')),
+                max(0, (int)($row[Offer::schema_fields_PRODUCT_ID] ?? 0)),
+            ),
+            $offerRows,
+        );
+        if ($scope->isGlobal() || $scope->websiteId === null) {
+            return array_map(
+                fn(OfferIdentity $identity): CartItemSnapshot => $this->unavailable(
+                    $identity,
+                    [],
+                    (string)__('Global Scope 不支持商品加购'),
+                ),
+                $identities,
+            );
+        }
+
+        $websiteId = $scope->websiteId;
+        $store = $this->resolveStore($scope);
+        if ($store['sellable'] === false) {
+            return array_map(
+                fn(OfferIdentity $identity): CartItemSnapshot => $this->unavailable(
+                    $identity,
+                    [],
+                    $store['message'],
+                ),
+                $identities,
+            );
+        }
+        $storeId = $store['store_id'];
+        $offerIds = [];
+        $productIds = [];
+        foreach ($offerRows as $row) {
+            $offerId = (int)($row[Offer::schema_fields_ID] ?? 0);
+            $productId = (int)($row[Offer::schema_fields_PRODUCT_ID] ?? 0);
+            if ($offerId > 0) {
+                $offerIds[$offerId] = $offerId;
+            }
+            if ($productId > 0) {
+                $productIds[$productId] = $productId;
+            }
+        }
+        $offerIds = array_values($offerIds);
+        $productIds = array_values($productIds);
+
+        if ($productRows === []) {
+            $productRows = $this->products->listAll($websiteId);
+        }
+        $wantedProductIds = array_fill_keys($productIds, true);
+        $productsById = [];
+        foreach ($productRows as $productRow) {
+            if (!is_array($productRow)) {
+                continue;
+            }
+            $productId = (int)($productRow[Product::schema_fields_ID] ?? 0);
+            if ($productId > 0 && isset($wantedProductIds[$productId])) {
+                $productsById[$productId] = $productRow;
+            }
+        }
+
+        $locale = $this->locale();
+        $currency = $this->currency();
+        $storeIds = array_values(array_unique([0, $storeId]));
+        $overlay = new CatalogOverlayResolver();
+
+        $attributeRowsByProductAndCode = [];
+        $attributeRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'product.catalog.snapshot.attributes',
+            fn() => $this->attributes->listExplicitRows($websiteId, 'product', $productIds, $storeIds),
+        );
+        foreach ($attributeRows as $attributeRow) {
+            $productId = (int)($attributeRow['entity_id'] ?? 0);
+            $code = strtolower(trim((string)($attributeRow['attribute_code'] ?? '')));
+            if ($productId > 0 && ($code === 'name' || $code === 'product_type')) {
+                $attributeRowsByProductAndCode[$productId][$code][] = $attributeRow;
+            }
+        }
+
+        $productFacts = [];
+        foreach ($productIds as $productId) {
+            $productRow = $productsById[$productId] ?? null;
+            if (!is_array($productRow)) {
+                continue;
+            }
+            $name = $overlay->resolveAttribute(
+                $attributeRowsByProductAndCode[$productId]['name'] ?? [],
+                $storeId,
+                $locale,
+                [''],
+            );
+            $type = $overlay->resolveAttribute(
+                $attributeRowsByProductAndCode[$productId]['product_type'] ?? [],
+                $storeId,
+                $locale,
+                [''],
+            );
+            $productSku = trim((string)($productRow[Product::schema_fields_SKU] ?? ''));
+            $nameValue = $name->isExplicit() ? trim((string)$name->value) : '';
+            $typeValue = $type->isExplicit() ? strtolower(trim((string)$type->value)) : '';
+            $productFacts[$productId] = [
+                'row' => $productRow,
+                'name' => $nameValue !== '' ? $nameValue : ($productSku !== '' ? $productSku : (string)__('商品')),
+                'sku' => $productSku,
+                'type' => $typeValue !== '' ? $typeValue : 'simple',
+            ];
+        }
+
+        $priceRowsByOffer = [];
+        foreach (\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'product.catalog.snapshot.prices',
+            fn() => $this->prices->listExplicitRows($websiteId, $offerIds, $storeIds),
+        ) as $priceRow) {
+            if (strcasecmp(trim((string)($priceRow['currency'] ?? '')), $currency) !== 0) {
+                continue;
+            }
+            $offerId = (int)($priceRow['offer_id'] ?? 0);
+            if ($offerId <= 0) {
+                continue;
+            }
+            $priceRowsByOffer[$offerId][] = [
+                'store_id' => (int)($priceRow['store_id'] ?? 0),
+                'cleared' => !empty($priceRow['cleared']),
+                'value' => $priceRow['amount_minor'] ?? null,
+            ];
+        }
+        $pricesByOffer = [];
+        foreach ($offerIds as $offerId) {
+            $pricesByOffer[$offerId] = $overlay->resolvePrice(
+                $priceRowsByOffer[$offerId] ?? [],
+                $storeId,
+            );
+        }
+
+        $firstMediaByProduct = [];
+        $mediaRows ??= \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'product.catalog.snapshot.media_rows',
+            fn() => $this->media->listByProductIds($websiteId, $productIds),
+        );
+        foreach ($mediaRows as $mediaRow) {
+            $productId = (int)($mediaRow[Media::schema_fields_PRODUCT_ID] ?? 0);
+            if ($productId > 0 && !isset($firstMediaByProduct[$productId])) {
+                $firstMediaByProduct[$productId] = trim((string)($mediaRow[Media::schema_fields_PATH] ?? ''));
+            }
+        }
+        $imageReferences = [];
+        foreach ($productIds as $productId) {
+            $imageReferences[$productId] = $firstMediaByProduct[$productId] ?? '';
+        }
+        $imagesByProduct = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'product.catalog.snapshot.media_url',
+            fn() => $this->resolveImageReferences($imageReferences, $scope, $locale),
+        );
+
+        $availabilityByOffer = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'product.catalog.snapshot.availability',
+            fn() => $this->availabilities($websiteId, $storeId, $offerIds),
+        );
+        $selectionByOffer = $scope->scopeKind === ScopeIdentity::KIND_WEBSITE
+            ? array_fill_keys($offerIds, true)
+            : $this->storeOffers->selectionMap($websiteId, $storeId, $offerIds);
+
+        $snapshots = [];
+        foreach ($offerRows as $index => $offerRow) {
+            $identity = $identities[$index];
+            $offerId = (int)($offerRow[Offer::schema_fields_ID] ?? 0);
+            $productId = (int)($offerRow[Offer::schema_fields_PRODUCT_ID] ?? 0);
+            $facts = $productFacts[$productId] ?? null;
+            if ($identity->globalOfferUuid === '' || $offerId <= 0 || $productId <= 0) {
+                $snapshots[] = $this->notFound($identity, [], (string)__('Offer 不存在'));
+                continue;
+            }
+            if (strtolower(trim((string)($offerRow[Offer::schema_fields_STATUS] ?? ''))) !== 'published') {
+                $snapshots[] = $this->unavailable($identity, [], (string)__('Offer 未发布'));
+                continue;
+            }
+            if (!is_array($facts)) {
+                $snapshots[] = $this->notFound($identity, [], (string)__('Offer 对应商品不存在'));
+                continue;
+            }
+
+            $sku = trim((string)($offerRow[Offer::schema_fields_SKU] ?? ''));
+            if ($sku === '') {
+                $sku = (string)$facts['sku'];
+            }
+            if (strtolower(trim((string)($facts['row'][Product::schema_fields_STATUS] ?? '')))
+                !== Product::STATUS_PUBLISHED
+            ) {
+                $snapshots[] = $this->unavailable(
+                    $identity,
+                    [],
+                    (string)__('商品未发布'),
+                    $sku,
+                );
+                continue;
+            }
+            if (!($selectionByOffer[$offerId] ?? true)) {
+                $snapshots[] = $this->unavailable(
+                    $identity,
+                    [],
+                    (string)__('该 Offer 未在当前 Store 上架'),
+                    $sku,
+                );
+                continue;
+            }
+
+            // Downloadable products have per-customer private asset checks; keep
+            // the authoritative single-item path for this uncommon catalog type.
+            if ((string)$facts['type'] === 'downloadable') {
+                $snapshots[] = $this->resolve($identity, $scope);
+                continue;
+            }
+
+            $price = $pricesByOffer[$offerId] ?? ResolvedScopeValue::unresolved();
+            if ($price->isCleared()) {
+                $snapshots[] = $this->unavailable(
+                    $identity,
+                    [],
+                    (string)__('商品价格在当前 Scope 已清除'),
+                    $sku,
+                    (string)$facts['name'],
+                    $currency,
+                );
+                continue;
+            }
+            if ($price->isUnresolved()) {
+                $snapshots[] = $this->unavailable(
+                    $identity,
+                    [],
+                    (string)__('商品价格未配置'),
+                    $sku,
+                    (string)$facts['name'],
+                    $currency,
+                );
+                continue;
+            }
+
+            $availability = $availabilityByOffer[$offerId] ?? ['sellable' => null, 'stock' => null];
+            $isQuoteOnly = $this->attributeFlagEnabled(
+                $attributeRowsByProductAndCode[$productId]['quote_only'] ?? [],
+                $storeId,
+                $locale,
+            );
+            $isSellable = !$isQuoteOnly && $availability['sellable'] !== false;
+            // Listing/PDP/shelf Assembler is the single deal applicator. Keep this
+            // phase for timing, but emit raw catalog minor (cart add still deals).
+            $unitPriceMinor = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                'product.catalog.snapshot.deals',
+                fn() => max(0, (int)$price->value),
+            );
+            $snapshots[] = new CartItemSnapshot(
+                offer: $identity,
+                name: (string)$facts['name'],
+                sku: $sku,
+                image: $imagesByProduct[$productId] ?? '',
+                currency: $currency,
+                unitPriceMinor: $unitPriceMinor,
+                found: true,
+                sellable: $isSellable,
+                stock: $availability['stock'],
+                message: $isSellable
+                    ? ''
+                    : ($isQuoteOnly
+                        ? (string)__('仅询价，不可加入购物车')
+                        : (string)__('商品库存不足')),
+                productType: (string)$facts['type'],
+                sourceModule: 'Weline_Product',
+                sourceApp: 'Weline',
+                offerId: $offerId,
+                productId: $productId,
+                options: \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                    'product.catalog.snapshot.options',
+                    fn() => $this->buildOptions($websiteId, $productId, [], $scope, $this->locale()),
+                ),
+            );
+        }
+
+        return $snapshots;
     }
 
     /**
@@ -311,6 +654,68 @@ final class ProductCatalogCartItemSnapshotResolver
         $result = $this->availabilityResolver === null
             ? $this->runtimeAvailability($websiteId, $storeId, $offerId)
             : ($this->availabilityResolver)($websiteId, $storeId, $offerId);
+        return $this->normalizeAvailability($result);
+    }
+
+    /**
+     * @param list<int> $offerIds
+     * @return array<int, array{sellable:?bool,stock:?int}>
+     */
+    private function availabilities(int $websiteId, int $storeId, array $offerIds): array
+    {
+        if ($offerIds === []) {
+            return [];
+        }
+
+        if ($this->availabilityResolver !== null) {
+            $resolved = [];
+            foreach ($offerIds as $offerId) {
+                $resolved[$offerId] = $this->normalizeAvailability(
+                    ($this->availabilityResolver)($websiteId, $storeId, $offerId),
+                );
+            }
+            return $resolved;
+        }
+
+        $contract = 'Weline\\Inventory\\Api\\InventoryCapabilityInterface';
+        if (!interface_exists($contract)) {
+            return [];
+        }
+        try {
+            $inventory = ObjectManager::getInstance(RuntimeProviderResolver::class)->resolve($contract);
+            if (!$inventory instanceof $contract) {
+                return [];
+            }
+
+            $results = method_exists($inventory, 'getAvailabilities')
+                ? $inventory->getAvailabilities($websiteId, $storeId, $offerIds)
+                : array_combine(
+                    $offerIds,
+                    array_map(
+                        static fn(int $offerId): mixed => $inventory->getAvailability(
+                            $websiteId,
+                            $storeId,
+                            $offerId,
+                        ),
+                        $offerIds,
+                    ),
+                );
+            $resolved = [];
+            foreach (is_array($results) ? $results : [] as $offerId => $result) {
+                $offerId = (int)$offerId;
+                if ($offerId > 0) {
+                    $resolved[$offerId] = $this->normalizeAvailability($result);
+                }
+            }
+            return $resolved;
+        } catch (\Throwable) {
+            return [];
+        }
+    }
+
+    /** @return array{sellable:?bool,stock:?int} */
+    private function normalizeAvailability(mixed $result): array
+    {
         if ($result === null) {
             return ['sellable' => null, 'stock' => null];
         }
@@ -356,6 +761,12 @@ final class ProductCatalogCartItemSnapshotResolver
     {
         $rows = $this->media->listByProductIds($websiteId, [$productId]);
         $reference = trim((string)($rows[0][Media::schema_fields_PATH] ?? ''));
+        return $this->resolveImageReference($reference, $scope, $locale);
+    }
+
+    private function resolveImageReference(string $reference, ScopeIdentity $scope, string $locale): string
+    {
+        $reference = trim($reference);
         if ($reference === '') {
             return '';
         }
@@ -382,6 +793,28 @@ final class ProductCatalogCartItemSnapshotResolver
         return $resolver->resolveReference($reference, $scope, $localeCode);
     }
 
+    /** @param array<int,string> $references @return array<int,string> */
+    private function resolveImageReferences(array $references, ScopeIdentity $scope, string $locale): array
+    {
+        $resolver = $this->mediaUrls;
+        if ($resolver === null) {
+            try {
+                $candidate = ObjectManager::getInstance(StorefrontProductMediaUrlResolver::class);
+                $resolver = $candidate instanceof StorefrontProductMediaUrlResolver ? $candidate : null;
+            } catch (\Throwable) {
+                $resolver = null;
+            }
+        }
+        if ($resolver === null) {
+            return array_map(static function (string $reference): string {
+                $reference = trim($reference);
+                return str_starts_with(strtolower($reference), 'asset://') ? '' : $reference;
+            }, $references);
+        }
+        $localeCode = trim($locale);
+        return $resolver->resolveReferences($references, $scope, $localeCode === '' ? 'zh_Hans_CN' : $localeCode);
+    }
+
     private function productType(int $websiteId, int $storeId, int $productId, string $locale): string
     {
         $type = $this->attributes->read(
@@ -395,6 +828,123 @@ final class ProductCatalogCartItemSnapshotResolver
         );
         $value = $type->isExplicit() ? strtolower(trim((string)$type->value)) : '';
         return $value !== '' ? $value : 'simple';
+    }
+
+    private function applyActiveDealMinor(int $productId, int $catalogMinor): int
+    {
+        return $this->resolveActiveDealPrice($productId, $catalogMinor)['unit_price_minor'];
+    }
+
+    /**
+     * Same Assembler path as PDP/cards so cart lines carry compare-at + campaign chrome.
+     *
+     * @return array{
+     *     unit_price_minor:int,
+     *     compare_at_minor:int,
+     *     campaign_label:string,
+     *     campaign_url:string
+     * }
+     */
+    private function resolveActiveDealPrice(int $productId, int $catalogMinor): array
+    {
+        $catalogMinor = max(0, $catalogMinor);
+        $fallback = [
+            'unit_price_minor' => $catalogMinor,
+            'compare_at_minor' => 0,
+            'campaign_label' => '',
+            'campaign_url' => '',
+        ];
+        if ($productId <= 0 || $catalogMinor <= 0) {
+            return $fallback;
+        }
+        try {
+            $assembler = null;
+            if (interface_exists(StorefrontOfferPriceAssemblerInterface::class)) {
+                try {
+                    $assembler = ObjectManager::getInstance(StorefrontOfferPriceAssemblerInterface::class);
+                } catch (\Throwable) {
+                    $assembler = null;
+                }
+            }
+            if (!$assembler instanceof StorefrontOfferPriceAssemblerInterface
+                && class_exists(\Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler::class)
+            ) {
+                $assembler = ObjectManager::getInstance(
+                    \Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler::class,
+                );
+            }
+            if (!$assembler instanceof StorefrontOfferPriceAssemblerInterface) {
+                return $fallback;
+            }
+            $view = $assembler->assemble(StorefrontPriceContext::fromCatalogMinor($productId, $catalogMinor));
+            $unit = max(0, $view->finalPriceMinor);
+            $compareAt = max(0, $view->compareAtMinor);
+            if (!$view->hasDeal || $compareAt <= $unit) {
+                $compareAt = 0;
+            }
+
+            return [
+                'unit_price_minor' => $unit,
+                'compare_at_minor' => $compareAt,
+                'campaign_label' => $compareAt > 0 ? $view->campaignLabel() : '',
+                'campaign_url' => $compareAt > 0 ? $view->campaignUrl() : '',
+            ];
+        } catch (\Throwable) {
+            return $fallback;
+        }
+    }
+
+    private function isQuoteOnly(int $websiteId, int $storeId, int $productId, string $locale): bool
+    {
+        $value = $this->attributes->read(
+            $websiteId,
+            $storeId,
+            'product',
+            $productId,
+            'quote_only',
+            $locale,
+            [''],
+        );
+        if (!$value->isExplicit()) {
+            return false;
+        }
+        $raw = strtolower(trim((string)$value->value));
+
+        return $raw === '1' || $raw === 'true' || $raw === 'yes';
+    }
+
+    /**
+     * @param list<array<string, mixed>> $rows
+     */
+    private function attributeFlagEnabled(array $rows, int $storeId, string $locale): bool
+    {
+        if ($rows === []) {
+            return false;
+        }
+        $preferred = null;
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                continue;
+            }
+            $rowStore = (int)($row['store_id'] ?? 0);
+            $rowLocale = trim((string)($row['locale'] ?? ''));
+            if ($rowStore === $storeId && ($rowLocale === $locale || $rowLocale === '')) {
+                $preferred = $row;
+                break;
+            }
+            if ($preferred === null && $rowStore === 0) {
+                $preferred = $row;
+            }
+        }
+        if ($preferred === null) {
+            $preferred = is_array($rows[0] ?? null) ? $rows[0] : null;
+        }
+        if ($preferred === null) {
+            return false;
+        }
+        $raw = strtolower(trim((string)($preferred['value'] ?? $preferred['value_text'] ?? '')));
+
+        return $raw === '1' || $raw === 'true' || $raw === 'yes';
     }
 
     private function currentCustomerId(): int
@@ -536,6 +1086,245 @@ final class ProductCatalogCartItemSnapshotResolver
             throw new \RuntimeException('download_entitlement_policy_invalid');
         }
         return (int)$value;
+    }
+
+    /**
+     * @param array<string, scalar|null> $selection
+     * @return list<array{code:string,label:string,value:string,value_label:string,swatch_image?:string,swatch_color?:string}>
+     */
+    private function buildOptions(
+        int $websiteId,
+        int $productId,
+        array $selection,
+        ScopeIdentity $scope,
+        string $locale,
+    ): array {
+        $selection = CartSelectionHash::normalizeSelection($selection);
+        if ($selection === []) {
+            return [];
+        }
+
+        $labels = $this->variantLabels;
+        if ($labels === null) {
+            try {
+                $resolved = ObjectManager::getInstance(StorefrontEavLabelResolver::class);
+                $labels = $resolved instanceof StorefrontEavLabelResolver ? $resolved : null;
+            } catch (\Throwable) {
+                $labels = null;
+            }
+        }
+        if ($labels !== null && $productId > 0) {
+            $labels = $labels->forProduct($productId);
+        }
+
+        $swatches = $productId > 0
+            ? $this->variantSwatchesByAxis($websiteId, $productId)
+            : [];
+        $eavSwatches = $this->eavOptionSwatches(array_keys($selection), $productId);
+
+        $options = [];
+        foreach ($selection as $code => $value) {
+            $code = trim((string)$code);
+            $value = trim((string)$value);
+            if ($code === '' || $value === '') {
+                continue;
+            }
+            $axisLabel = $labels !== null ? trim($labels->attributeLabel($code)) : '';
+            $valueLabel = $labels !== null ? trim($labels->resolve($code, $value)) : $value;
+            $aliases = [$value];
+            if ($labels !== null) {
+                foreach ([
+                    $labels->canonicalOptionId($code, $value),
+                    $labels->publicOptionCode($code, $value),
+                    $valueLabel,
+                ] as $alias) {
+                    $alias = trim((string)$alias);
+                    if ($alias !== '' && !in_array($alias, $aliases, true)) {
+                        $aliases[] = $alias;
+                    }
+                }
+            }
+
+            $swatchImage = '';
+            foreach ($aliases as $alias) {
+                $candidate = trim((string)($swatches[$code][$alias] ?? ''));
+                if ($candidate !== '') {
+                    $swatchImage = $this->resolveImageReference($candidate, $scope, $locale);
+                    if ($swatchImage !== '') {
+                        break;
+                    }
+                }
+            }
+            if ($swatchImage === '') {
+                foreach ($aliases as $alias) {
+                    $candidate = trim((string)($eavSwatches['images'][$code][$alias] ?? ''));
+                    if ($candidate !== '') {
+                        $swatchImage = $this->resolveImageReference($candidate, $scope, $locale);
+                        if ($swatchImage !== '') {
+                            break;
+                        }
+                    }
+                }
+            }
+
+            $swatchColor = '';
+            foreach ($aliases as $alias) {
+                $candidate = trim((string)($eavSwatches['colors'][$code][$alias] ?? ''));
+                if ($candidate !== '') {
+                    $swatchColor = $candidate;
+                    break;
+                }
+            }
+
+            $option = [
+                'code' => $code,
+                'label' => $axisLabel !== '' ? $axisLabel : $code,
+                'value' => $value,
+                'value_label' => $valueLabel !== '' ? $valueLabel : $value,
+            ];
+            if ($swatchImage !== '') {
+                $option['swatch_image'] = $swatchImage;
+            }
+            if ($swatchColor !== '') {
+                $option['swatch_color'] = $swatchColor;
+            }
+            $options[] = $option;
+        }
+
+        return $options;
+    }
+
+    /**
+     * @return array<string, array<string, string>> axis => optionValue => media path
+     */
+    private function variantSwatchesByAxis(int $websiteId, int $productId): array
+    {
+        $parser = new StorefrontVariantSelectionService();
+        $swatches = [];
+        foreach ($this->media->listByProductIds($websiteId, [$productId]) as $mediaRow) {
+            if (!is_array($mediaRow)) {
+                continue;
+            }
+            if (strtolower(trim((string)($mediaRow[Media::schema_fields_ROLE] ?? ''))) !== 'variant') {
+                continue;
+            }
+            $path = trim((string)($mediaRow[Media::schema_fields_PATH] ?? ''));
+            if ($path === '') {
+                continue;
+            }
+            $combination = $parser->parseCombinationKey(
+                (string)($mediaRow[Media::schema_fields_COMBINATION_KEY] ?? ''),
+            );
+            foreach ($combination as $axis => $value) {
+                $axis = strtolower(trim((string)$axis));
+                $value = trim((string)$value);
+                // Match PDP: combination media previews color (and similar) axes, not size chips.
+                if ($axis === '' || $value === '' || $axis === 'size') {
+                    continue;
+                }
+                if (!isset($swatches[$axis][$value])) {
+                    $swatches[$axis][$value] = $path;
+                }
+            }
+        }
+
+        return $swatches;
+    }
+
+    /**
+     * Product-private options (scope_instance_id = product_id) carry the same
+     * swatch_image / swatch_color shown on the PDP; shared catalog alone misses them.
+     *
+     * @param list<string|int> $axisCodes
+     * @return array{
+     *   images: array<string, array<string, string>>,
+     *   colors: array<string, array<string, string>>
+     * }
+     */
+    private function eavOptionSwatches(array $axisCodes, int $productId = 0): array
+    {
+        $empty = ['images' => [], 'colors' => []];
+        $wanted = [];
+        foreach ($axisCodes as $code) {
+            $code = strtolower(trim((string)$code));
+            if ($code !== '') {
+                $wanted[$code] = true;
+            }
+        }
+        if ($wanted === []) {
+            return $empty;
+        }
+
+        try {
+            $metadata = ObjectManager::getInstance(AttributeMetadataCatalogInterface::class);
+            $entity = ObjectManager::getInstance(ProductCatalogAttributeEntity::class);
+            if (!$metadata instanceof AttributeMetadataCatalogInterface
+                || !$entity instanceof ProductCatalogAttributeEntity
+            ) {
+                return $empty;
+            }
+        } catch (\Throwable) {
+            return $empty;
+        }
+
+        $images = [];
+        $colors = [];
+        try {
+            $sets = $productId > 0
+                ? $metadata->catalogForProduct($entity, $productId)
+                : $metadata->catalog($entity);
+            foreach ($sets as $set) {
+                if (!$set instanceof AttributeSetMetadata) {
+                    continue;
+                }
+                foreach ($set->toArray()['groups'] ?? [] as $group) {
+                    if (!is_array($group)) {
+                        continue;
+                    }
+                    foreach ($group['attributes'] ?? [] as $attribute) {
+                        if ($attribute instanceof AttributeMetadata) {
+                            $attribute = $attribute->toArray();
+                        }
+                        if (!is_array($attribute)) {
+                            continue;
+                        }
+                        $code = strtolower(trim((string)($attribute['code'] ?? '')));
+                        if ($code === '' || !isset($wanted[$code])) {
+                            continue;
+                        }
+                        foreach ($attribute['options'] ?? [] as $option) {
+                            if ($option instanceof AttributeOptionMetadata) {
+                                $option = $option->toArray();
+                            }
+                            if (!is_array($option)) {
+                                continue;
+                            }
+                            $image = trim((string)($option['swatch_image'] ?? ''));
+                            $color = trim((string)($option['swatch_color'] ?? $option['swatch'] ?? ''));
+                            if ($image === '' && $color === '') {
+                                continue;
+                            }
+                            foreach (['id', 'code', 'value', 'label'] as $key) {
+                                $token = trim((string)($option[$key] ?? ''));
+                                if ($token === '') {
+                                    continue;
+                                }
+                                if ($image !== '' && !isset($images[$code][$token])) {
+                                    $images[$code][$token] = $image;
+                                }
+                                if ($color !== '' && !isset($colors[$code][$token])) {
+                                    $colors[$code][$token] = $color;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable) {
+            return $empty;
+        }
+
+        return ['images' => $images, 'colors' => $colors];
     }
 
     /**

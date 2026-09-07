@@ -11,6 +11,25 @@ use Weline\Product\Service\StorefrontProductDetailProjector;
 
 final class StorefrontProductDetailProjectorTest extends TestCase
 {
+    public function testEnglishProductCopyKeepsSharedPunctuationInsteadOfFallingBackToSku(): void
+    {
+        $name = 'Feitian Dunhuang · Mamian Skirt and Hanfu Shirt';
+        $detail = $this->projector()->project(
+            ['product_id' => 94, 'sku' => 'HANFU-DUNHUANG'],
+            [
+                $this->attribute(0, 'name', '', '飞天敦煌马面裙'),
+                $this->attribute(0, 'name', 'en_US', $name),
+                $this->attribute(0, 'short_description', 'en_US', 'Hanfu · Everyday styling'),
+            ],
+            [],
+            0,
+            'en_US',
+        );
+
+        self::assertSame($name, $detail['name']);
+        self::assertSame('Hanfu · Everyday styling', $detail['short_description']);
+    }
+
     public function testItProjectsLocalizedPublicDetailsAndOrderedMedia(): void
     {
         $projector = $this->projector();
@@ -52,8 +71,8 @@ final class StorefrontProductDetailProjectorTest extends TestCase
         self::assertSame('', $detail['meta_keywords']);
         self::assertSame(
             [
-                ['code' => 'displacement', 'value' => '294.9 ml'],
-                ['code' => 'engine', 'value' => '隆鑫 YBS300 PRO'],
+                ['code' => 'displacement', 'label' => '', 'value' => '294.9 ml'],
+                ['code' => 'engine', 'label' => '', 'value' => '隆鑫 YBS300 PRO'],
             ],
             $detail['specifications'],
         );
@@ -111,7 +130,7 @@ final class StorefrontProductDetailProjectorTest extends TestCase
 
         self::assertSame('ztot-z7l-yb300h-gasoline-dirt-bike', $detail['slug']);
         self::assertSame(
-            [['code' => 'engine', 'value' => 'LONCIN']],
+            [['code' => 'engine', 'label' => '', 'value' => 'LONCIN']],
             $detail['specifications'],
         );
     }
@@ -152,6 +171,17 @@ final class StorefrontProductDetailProjectorTest extends TestCase
                     'size' => $value === 'm' ? 'M' : strtoupper($value),
                     'style_type' => $value === 'set' ? '套装（上衣+马面裙）' : $value,
                     default => $value,
+                };
+            }
+
+            public function attributeLabel(string $attributeCode): string
+            {
+                return match (strtolower(trim($attributeCode))) {
+                    'color' => '颜色',
+                    'size' => '尺码',
+                    'style_type' => '类型',
+                    'material' => '材质',
+                    default => '',
                 };
             }
         };
@@ -294,10 +324,10 @@ final class StorefrontProductDetailProjectorTest extends TestCase
         self::assertSame('醉欢楼', $detail['brand']);
         self::assertSame(
             [
-                ['code' => 'color', 'value' => '米白色'],
-                ['code' => 'material', 'value' => '聚酯纤维100%'],
-                ['code' => 'size', 'value' => 'M'],
-                ['code' => 'style_type', 'value' => '套装（上衣+马面裙）'],
+                ['code' => 'color', 'label' => '颜色', 'value' => '米白色'],
+                ['code' => 'material', 'label' => '材质', 'value' => '聚酯纤维100%'],
+                ['code' => 'size', 'label' => '尺码', 'value' => 'M'],
+                ['code' => 'style_type', 'label' => '类型', 'value' => '套装（上衣+马面裙）'],
             ],
             $detail['specifications'],
         );
@@ -311,6 +341,7 @@ final class StorefrontProductDetailProjectorTest extends TestCase
                     'options' => [[
                         'value' => 'm-white',
                         'label' => '米白色',
+                        'code' => 'm-white',
                         'swatch_image' => '/media/m-white-set.jpg',
                     ]],
                 ],
@@ -319,7 +350,7 @@ final class StorefrontProductDetailProjectorTest extends TestCase
                     'label' => '尺码',
                     'value' => 'm',
                     'value_label' => 'M',
-                    'options' => [['value' => 'm', 'label' => 'M']],
+                    'options' => [['value' => 'm', 'label' => 'M', 'code' => 'm']],
                 ],
                 [
                     'code' => 'style_type',
@@ -329,6 +360,7 @@ final class StorefrontProductDetailProjectorTest extends TestCase
                     'options' => [[
                         'value' => 'set',
                         'label' => '套装（上衣+马面裙）',
+                        'code' => 'set',
                         'swatch_image' => '/media/m-white-set.jpg',
                     ]],
                 ],
@@ -340,6 +372,309 @@ final class StorefrontProductDetailProjectorTest extends TestCase
             $detail['images'],
         );
         self::assertSame('/media/m-white-set.jpg', $detail['image']);
+    }
+
+    public function testEnglishLocaleKeepsHanCharacterAxisSwatchesFromVariantMedia(): void
+    {
+        $labels = $this->passthroughLabels();
+        $option = static fn(
+            int $id,
+            string $code,
+            string $label,
+        ): \Weline\Eav\Api\Metadata\AttributeOptionMetadata => new \Weline\Eav\Api\Metadata\AttributeOptionMetadata(
+            id: $id,
+            value: $label,
+            code: $code,
+            label: $label,
+            sortOrder: $id,
+        );
+        $attribute = static fn(
+            int $id,
+            string $code,
+            string $name,
+            \Weline\Eav\Api\Metadata\AttributeOptionMetadata $attributeOption,
+        ): \Weline\Eav\Api\Metadata\AttributeMetadata => new \Weline\Eav\Api\Metadata\AttributeMetadata(
+            id: $id,
+            entityId: 1,
+            code: $code,
+            name: $name,
+            typeCode: 'varchar',
+            fieldType: 'multiselect',
+            element: 'select',
+            setId: 1,
+            groupId: 1,
+            required: false,
+            multiple: true,
+            enabled: true,
+            hasOption: true,
+            sortOrder: $id,
+            options: [$attributeOption],
+        );
+        $set = new \Weline\Eav\Api\Metadata\AttributeSetMetadata(
+            id: 1,
+            entityId: 1,
+            code: 'costume',
+            name: 'Costume',
+            sortOrder: 1,
+            groups: [
+                new \Weline\Eav\Api\Metadata\AttributeGroupMetadata(
+                    id: 1,
+                    entityId: 1,
+                    setId: 1,
+                    code: 'variants',
+                    name: 'Variants',
+                    sortOrder: 1,
+                    attributes: [
+                        $attribute(1, 'character', '角色', $option(1, '关羽', '关羽')),
+                        $attribute(2, 'size', '尺码', $option(2, 'L', 'L')),
+                    ],
+                ),
+            ],
+        );
+        $metadata = new class([$set]) implements \Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface {
+            public function __construct(private readonly array $sets)
+            {
+            }
+
+            public function catalog(\Weline\Eav\Api\Entity\EntityDefinitionInterface $entity): array
+            {
+                return $this->sets;
+            }
+
+            public function catalogForProduct(
+                \Weline\Eav\Api\Entity\EntityDefinitionInterface $entity,
+                int $productId,
+                string $freeSetCode = '__product_free',
+            ): array {
+                return $this->sets;
+            }
+
+            public function attributeIndexByEntityCode(string $entityCode): array
+            {
+                return [];
+            }
+        };
+        $entity = (new \ReflectionClass(\Weline\Product\Model\ProductCatalogAttributeEntity::class))
+            ->newInstanceWithoutConstructor();
+        $variantAxes = new \Weline\Product\Service\StorefrontVariantAxisResolver(
+            $metadata,
+            $entity,
+            $labels,
+        );
+        $projector = new StorefrontProductDetailProjector(
+            new CatalogOverlayResolver(),
+            $labels,
+            $variantAxes,
+        );
+
+        $detail = $projector->project(
+            [
+                'product_id' => 125,
+                'name' => 'Three Kingdoms Costume',
+                'image' => '',
+                'combination' => ['character' => '关羽', 'size' => 'L'],
+                'combination_key' => 'character=%E5%85%B3%E7%BE%BD|size=L',
+            ],
+            [
+                $this->attribute(0, 'name', 'en_US', 'Three Kingdoms Costume'),
+                $this->attribute(0, 'character', '', ['关羽', '诸葛亮'], false, 'multiselect'),
+                $this->attribute(0, 'size', '', ['L'], false, 'multiselect'),
+            ],
+            [
+                [
+                    'media_id' => 1,
+                    'path' => '/media/guanyu.jpg',
+                    'role' => 'variant',
+                    'combination_key' => 'character=%E5%85%B3%E7%BE%BD|size=L',
+                    'position' => 0,
+                ],
+                [
+                    'media_id' => 2,
+                    'path' => '/media/zhugeliang.jpg',
+                    'role' => 'variant',
+                    'combination_key' => 'character=%E8%AF%B8%E8%91%9B%E4%BA%AE|size=L',
+                    'position' => 0,
+                ],
+            ],
+            0,
+            'en_US',
+            ['zh_Hans_CN', ''],
+        );
+
+        $characterAxis = null;
+        foreach ($detail['variant_axes'] as $axis) {
+            if (($axis['code'] ?? '') === 'character') {
+                $characterAxis = $axis;
+                break;
+            }
+        }
+        self::assertNotNull($characterAxis);
+        $byValue = [];
+        foreach ($characterAxis['options'] as $optionRow) {
+            $byValue[(string)($optionRow['value'] ?? '')] = $optionRow;
+        }
+        self::assertSame('/media/guanyu.jpg', $byValue['关羽']['swatch_image'] ?? null);
+        self::assertSame('/media/zhugeliang.jpg', $byValue['诸葛亮']['swatch_image'] ?? null);
+    }
+
+    public function testItKeepsDefaultChineseSpecificationValuesOnEnglishLocale(): void
+    {
+        $labels = new class extends StorefrontEavLabelResolver {
+            public function __construct()
+            {
+            }
+
+            public function resolve(string $attributeCode, string $value): string
+            {
+                // Simulate EAV Option LocalDescription: en for color, default/zh for others.
+                return match (strtolower(trim($attributeCode))) {
+                    'color' => $value === 'pink' ? 'Pink' : $value,
+                    'fabric_name' => $value === 'polyester' ? '涤纶' : $value,
+                    'craft' => $value === 'emboss' ? '压花' : $value,
+                    default => $value,
+                };
+            }
+
+            public function attributeLabel(string $attributeCode): string
+            {
+                return match (strtolower(trim($attributeCode))) {
+                    'color' => 'Color',
+                    'fabric_name' => '织物名称',
+                    'craft' => '工艺',
+                    default => '',
+                };
+            }
+        };
+        $projector = new StorefrontProductDetailProjector(
+            new CatalogOverlayResolver(),
+            $labels,
+        );
+
+        $detail = $projector->project(
+            ['product_id' => 91, 'name' => 'Sample Skirt', 'image' => ''],
+            [
+                $this->attribute(0, 'name', 'en_US', 'Sample Skirt'),
+                $this->attribute(0, 'color', '', 'pink'),
+                $this->attribute(0, 'fabric_name', '', 'polyester'),
+                $this->attribute(0, 'craft', '', 'emboss'),
+            ],
+            [],
+            0,
+            'en_US',
+        );
+
+        self::assertSame(
+            [
+                ['code' => 'color', 'label' => 'Color', 'value' => 'Pink'],
+                ['code' => 'craft', 'label' => '工艺', 'value' => '压花'],
+                ['code' => 'fabric_name', 'label' => '织物名称', 'value' => '涤纶'],
+            ],
+            $detail['specifications'],
+        );
+    }
+
+    public function testMetadataPrefetchFailureKeepsLabelFallbackAndRecordsPhaseError(): void
+    {
+        $previousTrace = \Weline\Framework\App\Env::get('wls.debug.request_trace', false);
+        \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace' => true]]]);
+        \Weline\Framework\Runtime\Runtime::setMode(\Weline\Framework\Runtime\RuntimeInterface::MODE_WLS);
+        if (\Weline\Framework\Context::hasCurrent()) {
+            \Weline\Framework\Context::leave();
+        }
+        \Weline\Framework\Context::enter(new \Weline\Framework\Context([
+            'input' => ['uri' => '/products'],
+            'runtime' => ['request_context' => ['initialized' => true, 'request_id' => uniqid('eav-prefetch-failure-', true)]],
+        ]));
+        \Weline\Framework\Runtime\RequestContext::setWelineUserLang('en_US');
+        try {
+            $metadata = new class implements
+                \Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface,
+                \Weline\Eav\Api\Metadata\AttributeMetadataPrefetchInterface {
+                public bool $recovered = false;
+                public int $prefetchCalls = 0;
+                public int $catalogCalls = 0;
+                public \RuntimeException $failure;
+
+                public function __construct()
+                {
+                    $this->failure = new \RuntimeException('metadata fixture unavailable');
+                }
+
+                public function prefetchForProducts(
+                    \Weline\Eav\Api\Entity\EntityDefinitionInterface $entity,
+                    array $productIds,
+                    string $freeSetCode = '__product_free',
+                ): void {
+                    ++$this->prefetchCalls;
+                    if (!$this->recovered) {
+                        throw $this->failure;
+                    }
+                }
+
+                public function catalog(\Weline\Eav\Api\Entity\EntityDefinitionInterface $entity): array
+                {
+                    ++$this->catalogCalls;
+                    if (!$this->recovered) {
+                        throw $this->failure;
+                    }
+                    return [new \Weline\Eav\Api\Metadata\AttributeSetMetadata(10, 4, 'base', 'Base', 10, [
+                        new \Weline\Eav\Api\Metadata\AttributeGroupMetadata(20, 4, 10, 'details', 'Details', 20, [
+                            new \Weline\Eav\Api\Metadata\AttributeMetadata(30, 4, 'color', 'Paint color', 'varchar', 'varchar', 'select', 10, 20, false, false, true, true, 30, [
+                                new \Weline\Eav\Api\Metadata\AttributeOptionMetadata(98765, 'Red', 'red', 'English red', 98765),
+                            ]),
+                        ]),
+                    ])];
+                }
+
+                public function catalogForProduct(
+                    \Weline\Eav\Api\Entity\EntityDefinitionInterface $entity,
+                    int $productId,
+                    string $freeSetCode = '__product_free',
+                ): array {
+                    return $this->catalog($entity);
+                }
+
+                public function attributeIndexByEntityCode(string $entityCode): array
+                {
+                    return [];
+                }
+            };
+            $entity = (new \ReflectionClass(\Weline\Product\Model\ProductCatalogAttributeEntity::class))
+                ->newInstanceWithoutConstructor();
+            // Numeric option identity takes the injected store path; no ORM or
+            // business database is accessed when the ordinary fallback runs.
+            $optionStore = $this->createMock(\Weline\Eav\Api\Attribute\Option\AttributeOptionStoreInterface::class);
+            $optionStore->method('assertUsableByInstance')->willThrowException($metadata->failure);
+            $labels = new StorefrontEavLabelResolver($metadata, $entity, $optionStore);
+            $offer = ['product_id' => 101, 'name' => 'Sample', 'image' => ''];
+            $attributes = [$this->attribute(0, 'color', '', '98765')];
+            $baseline = $this->projector($labels)->projectListing($offer, $attributes, 0, 'en_US');
+            self::assertSame([['code' => 'color', 'label' => '', 'value' => '98765']], $baseline['specifications']);
+            self::assertSame(2, $metadata->catalogCalls);
+
+            $projector = $this->projector($labels);
+            $projector->prefetchForProducts([101, 202]);
+            self::assertSame(1, $metadata->prefetchCalls);
+            $phase = \Weline\Framework\Runtime\RequestLifecycleTrace::getAggregateSummary()['phases']['product.catalog.metadata_prefetch'];
+            self::assertSame(1, $phase['calls']);
+            self::assertSame(1, $phase['errors']);
+            self::assertSame(2, $phase['meta']['products']);
+            self::assertSame($baseline, $projector->projectListing($offer, $attributes, 0, 'en_US'));
+
+            $metadata->recovered = true;
+            $projector->prefetchForProducts([101, 202]);
+            self::assertSame(2, $metadata->prefetchCalls, 'Failure must not be memoized as successful empty preload.');
+            $phase = \Weline\Framework\Runtime\RequestLifecycleTrace::getAggregateSummary()['phases']['product.catalog.metadata_prefetch'];
+            self::assertSame(2, $phase['calls']);
+            self::assertSame(1, $phase['errors']);
+            $freshProduct = $projector->projectListing(array_replace($offer, ['product_id' => 202]), $attributes, 0, 'en_US');
+            self::assertSame([['code' => 'color', 'label' => 'Paint color', 'value' => 'English red']], $freshProduct['specifications']);
+        } finally {
+            \Weline\Framework\Runtime\RequestLifecycleTrace::reset();
+            \Weline\Framework\Context::leave();
+            \Weline\Framework\Runtime\Runtime::resetModeCache();
+            \Weline\Framework\App\Env::getInstance()->applyRuntimeConfig(['wls' => ['debug' => ['request_trace' => $previousTrace]]]);
+        }
     }
 
     /** @return array<string, mixed> */
@@ -381,6 +716,11 @@ final class StorefrontProductDetailProjectorTest extends TestCase
             public function resolve(string $attributeCode, string $value): string
             {
                 return $value;
+            }
+
+            public function attributeLabel(string $attributeCode): string
+            {
+                return '';
             }
         };
     }

@@ -64,6 +64,20 @@ final class ProductSearchProvider extends AbstractSearchProvider implements Sear
 
     public function execute(SearchRequest $request, SearchExpression $expression): SearchResult
     {
+        if (\trim($request->q) === '') {
+            return new SearchResult(
+                ok: true,
+                type: $this->code(),
+                hits: [],
+                hitCount: 0,
+                meta: [
+                    'source' => 'skipped_empty_query',
+                    'degraded' => false,
+                ],
+                engine: 'mysql',
+            );
+        }
+
         $legacy = $this->legacySearch->search([
             'website_id' => $request->websiteId,
             'store_id' => $request->storeId,
@@ -92,24 +106,51 @@ final class ProductSearchProvider extends AbstractSearchProvider implements Sear
             $rows[$index]['title'] = $this->resolveDisplayTitle($row, $request->locale);
         }
 
-        $rows = $this->hitPresenter->prepareRows($rows);
-
-        $hits = $this->mapLegacyHits($rows, $this->code());
+        // Deduplicate SPUs before pagination so hit_count matches storefront cards.
+        $deduped = $this->dedupeRowsByProductId($rows);
+        $hitCount = count($deduped);
         $offset = $expression->getOffset();
         $limit = $expression->getLimit();
-        $pageHits = array_slice($hits, $offset, $limit);
+        $pageRows = array_slice($deduped, $offset, $limit);
+        $pageRows = $this->hitPresenter->prepareRows($pageRows);
+        $pageHits = $this->mapLegacyHits($pageRows, $this->code());
 
         return new SearchResult(
             ok: (bool)($legacy['ok'] ?? $legacy['success'] ?? true),
             type: $this->code(),
             hits: $pageHits,
-            hitCount: count($hits),
+            hitCount: $hitCount,
             meta: [
                 'source' => (string)($legacy['source'] ?? ''),
                 'degraded' => (bool)($legacy['degraded'] ?? false),
             ],
             engine: 'mysql',
         );
+    }
+
+    /**
+     * @param list<array<string,mixed>> $rows
+     * @return list<array<string,mixed>>
+     */
+    private function dedupeRowsByProductId(array $rows): array
+    {
+        $seenProducts = [];
+        $deduped = [];
+        foreach ($rows as $row) {
+            if (!\is_array($row)) {
+                continue;
+            }
+            $productId = (int)($row['product_id'] ?? 0);
+            if ($productId > 0) {
+                if (isset($seenProducts[$productId])) {
+                    continue;
+                }
+                $seenProducts[$productId] = true;
+            }
+            $deduped[] = $row;
+        }
+
+        return $deduped;
     }
 
     public function hitTemplate(): string
