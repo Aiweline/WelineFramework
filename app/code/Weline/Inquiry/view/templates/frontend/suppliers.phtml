@@ -10,9 +10,80 @@ $formHtml = ObjectManager::getInstance(InquiryRendererInterface::class)->render(
     ['mode' => 'inline', 'skin' => 'amazon']
 );
 ?>
-<css>Weline_Inquiry::css/supplier-application-amazon.css</css>
-<section class="w-inquiry-suppliers w-inquiry-suppliers--amazon" data-testid="inquiry-supplier-application" weline-code="inquiry.frontend.suppliers">
-    <div class="w-inquiry-suppliers__card">
-        <?= $formHtml ?>
+<css>Weline_Inquiry::css/supplier-application-atelier.css</css>
+<link rel="stylesheet" href="/Weline/Inquiry/view/statics/css/supplier-application-atelier.css?v=20260907-stretch2" data-inquiry-atelier-css="1" data-no-extract="true">
+<section class="w-inquiry-suppliers w-inquiry-suppliers--atelier" data-testid="inquiry-supplier-application" weline-code="inquiry.frontend.suppliers">
+    <div class="w-inquiry-suppliers__shell">
+        <aside class="w-inquiry-suppliers__story" aria-label="@lang{'合作说明'}">
+            <p class="w-inquiry-suppliers__eyebrow">@lang{'云裳 · 供应合作'}</p>
+            <h1 class="w-inquiry-suppliers__story-title">@lang{'把好工艺带进更多衣橱'}</h1>
+            <p class="w-inquiry-suppliers__story-lead">@lang{'本页说明合作准入、样品与质检、交期产能、结算对账与禁止事项。填写右侧资料后，采购会按品类与产能评估合作意向。'}</p>
+
+            <nav class="w-inquiry-suppliers__toc" aria-label="@lang{'合作说明目录'}">
+                <a href="#supplier-s1">@lang{'一、合作对象'}</a>
+                <a href="#supplier-s2">@lang{'二、准入与资料'}</a>
+                <a href="#supplier-s3">@lang{'三、样品与质检'}</a>
+                <a href="#supplier-s4">@lang{'四、交期与产能'}</a>
+                <a href="#supplier-s5">@lang{'五、结算与对账'}</a>
+                <a href="#supplier-s6">@lang{'六、禁止事项'}</a>
+                <a href="#supplier-s7">@lang{'七、申请流程'}</a>
+            </nav>
+
+            <div class="w-inquiry-suppliers__guide" data-testid="inquiry-supplier-guide">
+                <section class="w-inquiry-suppliers__section" id="supplier-s1" weline-code="inquiry.frontend.suppliers.s1">
+                    <h2>@lang{'一、合作对象'}</h2>
+                    <p>@lang{'我们优先寻找面料、成衣与配饰伙伴，尤其具备汉服/新中式相关工艺与稳定复购产能的工厂或品牌方。'}</p>
+                    <ul>
+                        <li>@lang{'品类清晰：写明形制、材质与主力 SKU，方便对口选品。'}</li>
+                        <li>@lang{'响应及时：完整联系方式可显著缩短首轮沟通周期。'}</li>
+                        <li>@lang{'长期合作：优先稳定交付与可复购产能，而非一次性出货。'}</li>
+                    </ul>
+                </section>
+
+                <section class="w-inquiry-suppliers__section" id="supplier-s2" weline-code="inquiry.frontend.suppliers.s2">
+                    <h2>@lang{'二、准入与资料'}</h2>
+                    <p>@lang{'首轮评估通常需要：营业执照或主体信息、主要品类与产能区间、代表性产品图或链接、商务联系人邮箱与电话。必要时会补充询价单、质检报告或验厂资料。'}</p>
+                    <p>@lang{'请使用真实商务邮箱与电话；虚假主体、无法核验的联系方式将直接终止评估。'}</p>
+                </section>
+
+                <section class="w-inquiry-suppliers__section" id="supplier-s3" weline-code="inquiry.frontend.suppliers.s3">
+                    <h2>@lang{'三、样品与质检'}</h2>
+                    <p>@lang{'进入样品环节时，双方约定样品费用、寄送与留样规则。大货需与确认样一致；色差、工艺缺陷、尺寸偏差等按双方确认的质检标准处理。'}</p>
+                    <p>@lang{'若商品涉及特殊工艺或定制，以书面确认的工艺单与验收标准为准。'}</p>
+                </section>
+
+                <section class="w-inquiry-suppliers__section" id="supplier-s4" weline-code="inquiry.frontend.suppliers.s4">
+                    <h2>@lang{'四、交期与产能'}</h2>
+                    <p>@lang{'请在申请中如实填写常规交期与可承诺产能。确认订单后的交期变更须提前书面沟通；多次失信或严重延期可能影响后续合作。'}</p>
+                </section>
+
+                <section class="w-inquiry-suppliers__section" id="supplier-s5" weline-code="inquiry.frontend.suppliers.s5">
+                    <h2>@lang{'五、结算与对账'}</h2>
+                    <p>@lang{'结算方式、账期与开票要求以双方书面协议为准。申请阶段请说明期望结算方式；未签订合作协议前，本站不承诺具体账期或预付款条款。'}</p>
+                </section>
+
+                <section class="w-inquiry-suppliers__section" id="supplier-s6" weline-code="inquiry.frontend.suppliers.s6">
+                    <h2>@lang{'六、禁止事项'}</h2>
+                    <ul>
+                        <li>@lang{'假冒伪劣、侵权仿制、无授权使用他人商标或设计。'}</li>
+                        <li>@lang{'隐瞒关键质量风险、虚假产能或伪造资质证明。'}</li>
+                        <li>@lang{'绕过约定渠道向终端顾客推销或泄露订单隐私信息。'}</li>
+                    </ul>
+                </section>
+
+                <section class="w-inquiry-suppliers__section" id="supplier-s7" weline-code="inquiry.frontend.suppliers.s7">
+                    <h2>@lang{'七、申请流程'}</h2>
+                    <ol class="w-inquiry-suppliers__process-list">
+                        <li>@lang{'核对公司与联系信息'}</li>
+                        <li>@lang{'按供应类型分发给对口采购'}</li>
+                        <li>@lang{'需要时约样品或产能沟通'}</li>
+                    </ol>
+                    <p>@lang{'提交后我们将尽快回复；若资料不完整，采购可能先补齐信息再进入样品或报价环节。'}</p>
+                </section>
+            </div>
+        </aside>
+        <div class="w-inquiry-suppliers__card">
+            <?= $formHtml ?>
+        </div>
     </div>
 </section>

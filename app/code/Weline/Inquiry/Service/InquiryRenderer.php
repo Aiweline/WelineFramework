@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace Weline\Inquiry\Service;
 
 use Weline\Captcha\Service\LazyCaptchaClientRuntime;
+use Weline\Framework\App\State;
 use Weline\Framework\Registry\Service\RegistryModulePresence;
 use Weline\Inquiry\Api\InquiryRendererInterface;
 use Weline\SystemConfig\Api\ConfigReader;
 
 final class InquiryRenderer implements InquiryRendererInterface
 {
-    private const ADDRESS_LOADER = '/Weline/Theme/view/statics/js/address-loader.js?v=20260831-address-catalog-2';
+    private const ADDRESS_SCRIPT = '/Weline/Theme/view/statics/js/address.js?v=20260907-district-single2';
+    private const ADDRESS_LOADER = '/Weline/Theme/view/statics/js/address-loader.js?v=20260907-district-single2';
 
     public function __construct(private readonly ConfigReader $config) {}
 
@@ -77,6 +79,7 @@ final class InquiryRenderer implements InquiryRendererInterface
             'allowJs' => $this->trustedJsAllowed(),
             'customJs' => $customJs,
             'addressLoader' => self::ADDRESS_LOADER,
+            'addressScript' => self::ADDRESS_SCRIPT,
             'addressSourceUrl' => (string)w_url('/shipping/frontend/region/list'),
             'captchaEnabled' => $this->captchaEnabled(),
             'captchaModule' => 'captchaLazy',
@@ -90,6 +93,8 @@ final class InquiryRenderer implements InquiryRendererInterface
             'captchaLoadFailed' => (string)__('人机验证加载失败，请稍后重试'),
             'countryRequired' => (string)__('请选择国家 / 地区'),
             'close' => (string)__('关闭'),
+            // Prefer storefront URL/runtime locale over browser navigator language.
+            'locale' => $this->requestLocale(),
         ], JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}';
 
         $js = <<<'JS'
@@ -98,21 +103,28 @@ var root=document.getElementById(c.id);if(!root)return;
 var modal=root.querySelector("[data-inquiry-modal]"),body=root.querySelector("[data-inquiry-body]"),loaded=null,pending=null,customRan=false,addressBooted=false;
 var el=function(t,a,x){var n=document.createElement(t);Object.keys(a||{}).forEach(function(k){if(k==="class")n.className=a[k];else if(k==="text")n.textContent=a[k];else n.setAttribute(k,a[k])});if(x!==undefined)n.textContent=x;return n};
 var text=function(v){return v==null?"":String(v)};
-var locale=function(){var v=(navigator.language||"").replace("-","_");return v==="zh_CN"?"zh_Hans_CN":(v==="zh_TW"?"zh_Hant_TW":v)};
+var locale=function(){
+  var fromConfig=text(c.locale).trim();
+  if(fromConfig)return fromConfig;
+  var runtime=(window.Weline&&Weline.config&&(Weline.config.currentLang||(Weline.config.api&&Weline.config.api.locale)))||"";
+  if(runtime)return String(runtime).replace("-","_");
+  var htmlLang=(document.documentElement.getAttribute("data-lang")||document.documentElement.getAttribute("data-local")||"").replace("-","_");
+  if(htmlLang)return htmlLang;
+  var v=(navigator.language||"").replace("-","_");
+  return v==="zh_CN"?"zh_Hans_CN":(v==="zh_TW"?"zh_Hant_TW":v);
+};
 var fieldId=function(k){return c.id+"-"+String(k).replace(/[^A-Za-z0-9_-]/g,"-")};
 var safeType=function(t){return ["text","email","tel","number","date","url"].indexOf(t)>=0?t:"text"};
 var showMessage=function(v){body.replaceChildren(el("p",{class:"weline-inquiry__message"},v))};
-function ensureAddressLoader(){
-  if(window.WelineThemeAddress&&typeof window.WelineThemeAddress.boot==="function"){
-    window.WelineThemeAddress.boot();
+function ensureAddressLoader(onReady){
+  var done=function(){
+    if(typeof onReady==="function"){onReady();}
     addressBooted=true;
-    return;
-  }
-  if(document.querySelector('script[data-inquiry-address-loader="1"]')){
+  };
+  if(document.querySelector('script[data-inquiry-address-direct="1"]')){
     var tries=0;(function waitBoot(){
       if(window.WelineThemeAddress&&typeof window.WelineThemeAddress.boot==="function"){
-        window.WelineThemeAddress.boot();
-        addressBooted=true;
+        done();
         return;
       }
       if(++tries>80)return;
@@ -120,16 +132,16 @@ function ensureAddressLoader(){
     })();
     return;
   }
+  // Always inject a cache-busted address.js so sticky deploy assetVersion cannot keep an old module.
   var s=document.createElement("script");
-  s.src=c.addressLoader||"/Weline/Theme/view/statics/js/address-loader.js";
+  s.src=c.addressScript||"/Weline/Theme/view/statics/js/address.js?v=20260907-district-single2";
   s.defer=true;
-  s.setAttribute("data-inquiry-address-loader","1");
+  s.setAttribute("data-inquiry-address-direct","1");
   s.setAttribute("data-no-extract","true");
   s.onload=function(){
     var tries=0;(function waitBoot(){
       if(window.WelineThemeAddress&&typeof window.WelineThemeAddress.boot==="function"){
-        window.WelineThemeAddress.boot();
-        addressBooted=true;
+        done();
         return;
       }
       if(++tries>80)return;
@@ -141,28 +153,55 @@ function ensureAddressLoader(){
 function addField(form,field,copy){
   var key=text(field.key),type=text(field.type),required=!!field.required;
   if(!key)return;
+  // Companion region keys are owned by the country address widget.
+  if((type==="text"||type==="hidden")&&(key==="province"||key==="city"||key==="district")&&form.querySelector("[data-inquiry-country-field]")){
+    return;
+  }
   var wrap=el("div",{class:"weline-inquiry__field"}),id=fieldId(key),name="values["+key+"]",input;
   if(type==="country"){
     wrap.className="weline-inquiry__field weline-inquiry__field--country";
+    wrap.setAttribute("data-inquiry-country-field","1");
     if(required)wrap.setAttribute("data-inquiry-country-required","1");
-    var addr=el("div",{class:"w-address","data-w-address":"1"});
+    var addr=el("div",{class:"w-address"});
     var labelText=text(copy.label||key)+(required?" *":"");
     var countryCatalog=(field.validation&&field.validation.catalog)||"global";
     if(countryCatalog!=="global"){countryCatalog="installed";}
+    var levels=((field.validation&&field.validation.levels)||"country|province|city|district").split("|").map(function(v){return String(v||"").trim()}).filter(Boolean);
+    if(!levels.length){levels=["country","province","city","district"]}
+    var levelNames={};
+    levels.forEach(function(level){
+      levelNames[level]=level==="country"?name:("values["+level+"]");
+    });
+    var levelLabels={
+      country:labelText,
+      province:text((copy.levels&&copy.levels.province)||"省份"),
+      city:text((copy.levels&&copy.levels.city)||"城市"),
+      district:text((copy.levels&&copy.levels.district)||"区县"),
+      selectCountry:text(copy.placeholder||"")
+    };
+    addr.setAttribute("data-catalog",countryCatalog);
     addr.setAttribute("data-address-config",JSON.stringify({
-      for:"country",
+      for:levels.join("|"),
       code:"inquiry-"+c.id+"-"+key,
-      names:{country:name,province:"province",city:"city",district:"district"},
-      labels:{country:labelText,selectCountry:text(copy.placeholder||"")},
+      names:levelNames,
+      labels:levelLabels,
       filters:{},
       sourceUrl:c.addressSourceUrl||"",
       searchable:true,
-      cascade:false,
-      catalog:countryCatalog
+      cascade:true,
+      catalog:countryCatalog,
+      selection:"single"
     }));
+    // Defer data-w-address until the cache-busted address.js is ready, so a sticky older
+    // module (header/checkout) cannot mount this field with installed/province catalog first.
     wrap.appendChild(addr);
     form.appendChild(wrap);
-    ensureAddressLoader();
+    ensureAddressLoader(function(){
+      addr.setAttribute("data-w-address","1");
+      if(window.WelineThemeAddress&&typeof window.WelineThemeAddress.boot==="function"){
+        window.WelineThemeAddress.boot();
+      }
+    });
     return;
   }
   var label=el("label",{for:id},text(copy.label||key)+(required?" *":""));
@@ -251,7 +290,7 @@ function render(data){
     if(c.captchaEnabled&&form.dataset.welineCaptchaPending==="1")return;
     var countryWraps=form.querySelectorAll('[data-inquiry-country-required="1"]');
     for(var i=0;i<countryWraps.length;i++){
-      var hidden=countryWraps[i].querySelector('input[name^="values["]');
+      var hidden=countryWraps[i].querySelector('input[name="values[country]"]')||countryWraps[i].querySelector('input[name^="values["]');
       if(!hidden||!String(hidden.value||"").trim()){message.textContent=c.countryRequired||"Please select country / region";return;}
     }
     submit.disabled=true;
@@ -299,5 +338,15 @@ JS;
     private function captchaEnabled(): bool
     {
         return RegistryModulePresence::isActivePresent('Weline_Captcha');
+    }
+
+    private function requestLocale(): string
+    {
+        $locale = trim((string)State::getLang());
+        if ($locale === '' || strtolower($locale) === 'default') {
+            return 'zh_Hans_CN';
+        }
+
+        return str_replace('-', '_', $locale);
     }
 }

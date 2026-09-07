@@ -1,0 +1,288 @@
+/* Inquiry backend form editor — schema workshop within Weline Backend tokens */
+.w-inquiry-editor {
+  --iq-rail: color-mix(in srgb, var(--weline-color-border, #d5d9de) 88%, transparent);
+  --iq-ink: var(--weline-color-text, #1f2328);
+  --iq-muted: var(--weline-color-text-muted, #6b7280);
+  --iq-accent: var(--weline-color-primary, #2563eb);
+  --iq-country: color-mix(in srgb, var(--iq-accent) 55%, #0f766e);
+  display: grid;
+  gap: var(--weline-space-4, 1rem);
+}
+
+.w-inquiry-editor__chrome {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  padding: var(--weline-space-3, 0.75rem) 0;
+  margin-block-end: var(--weline-space-1, 0.25rem);
+  background: color-mix(in srgb, var(--weline-color-surface, #fff) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--iq-rail);
+  flex-wrap: wrap;
+  gap: var(--weline-space-2, 0.5rem);
+}
+
+.w-inquiry-editor__actions {
+  flex-wrap: wrap;
+}
+
+.w-inquiry-editor__lede {
+  margin: 0;
+  font-size: 0.875rem;
+  letter-spacing: 0.01em;
+}
+
+.w-inquiry-editor__count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.75rem;
+  height: 1.5rem;
+  padding-inline: 0.45rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--iq-ink);
+  background: color-mix(in srgb, var(--iq-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--iq-accent) 22%, transparent);
+}
+
+.w-inquiry-editor__rail-head {
+  display: none;
+}
+
+@media (min-width: 900px) {
+  .w-inquiry-editor__rail-head {
+    display: grid;
+    grid-template-columns: 2.5rem minmax(0, 1.4fr) minmax(7rem, 0.9fr) 5.5rem 2.5rem;
+    gap: var(--weline-space-2, 0.5rem);
+    padding: 0 var(--weline-space-3, 0.75rem) var(--weline-space-2, 0.5rem);
+    margin-bottom: var(--weline-space-1, 0.25rem);
+  }
+}
+
+.w-inquiry-editor__field {
+  border: 1px solid var(--iq-rail);
+  border-radius: var(--weline-radius-md, 0.5rem);
+  background: var(--weline-color-surface, #fff);
+  padding: var(--weline-space-3, 0.75rem);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.w-inquiry-editor__field:focus-within {
+  border-color: color-mix(in srgb, var(--iq-accent) 45%, var(--iq-rail));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--iq-accent) 16%, transparent);
+}
+
+.w-inquiry-editor__field.is-country {
+  border-left: 3px solid var(--iq-country);
+}
+
+/* Mobile-first: 两行紧凑轨 —— 键名+删除 / 类型+必填；避免删除键单独掉行、类型被挤成一字 */
+.w-inquiry-editor__field-main {
+  display: grid;
+  grid-template-columns: 2rem minmax(0, 1fr) auto 2.25rem;
+  grid-template-areas:
+    "ord key key remove"
+    ". type required required";
+  gap: var(--weline-space-2, 0.5rem);
+  align-items: center;
+}
+
+.w-inquiry-editor__ord { grid-area: ord; }
+.w-inquiry-editor__cell--key { grid-area: key; margin: 0; min-width: 0; }
+.w-inquiry-editor__cell--type { grid-area: type; margin: 0; min-width: 0; }
+.w-inquiry-editor__cell--required { grid-area: required; justify-self: start; }
+.w-inquiry-editor__cell--remove {
+  grid-area: remove;
+  justify-self: end;
+  min-width: 2.25rem;
+  padding-inline: 0.35rem;
+}
+
+.w-inquiry-editor__cell--type .w-select,
+.w-inquiry-editor__cell--key .w-input {
+  width: 100%;
+  min-width: 0;
+}
+
+@media (min-width: 560px) and (max-width: 899px) {
+  .w-inquiry-editor__field-main {
+    grid-template-columns: 2rem minmax(0, 1.2fr) minmax(7.5rem, 0.9fr) auto 2.25rem;
+    grid-template-areas: "ord key type required remove";
+  }
+}
+
+@media (min-width: 900px) {
+  .w-inquiry-editor__field-main {
+    grid-template-columns: 2.5rem minmax(0, 1.4fr) minmax(7rem, 0.9fr) 5.5rem 2.5rem;
+    grid-template-areas: "ord key type required remove";
+  }
+}
+
+.w-inquiry-editor__ord {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.75rem;
+  color: var(--iq-muted);
+  text-align: center;
+}
+
+.w-inquiry-editor__required {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.8125rem;
+  color: var(--iq-ink);
+  white-space: nowrap;
+}
+
+.w-inquiry-editor__extras {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--weline-space-3, 0.75rem);
+  margin-top: var(--weline-space-3, 0.75rem);
+  padding-top: var(--weline-space-3, 0.75rem);
+  border-top: 1px dashed var(--iq-rail);
+}
+
+@media (min-width: 640px) {
+  .w-inquiry-editor__extras {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 900px) {
+  .w-inquiry-editor__extras {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+.w-inquiry-editor__panel .w-card__header {
+  flex-wrap: wrap;
+  gap: var(--weline-space-2, 0.5rem);
+}
+
+.w-inquiry-editor__guide {
+  padding: var(--weline-space-3, 0.75rem) var(--weline-space-4, 1rem);
+  border: 1px solid color-mix(in srgb, var(--iq-accent) 22%, var(--iq-rail));
+  border-radius: var(--weline-radius-md, 0.5rem);
+  background: color-mix(in srgb, var(--iq-accent) 6%, var(--weline-color-surface, #fff));
+}
+
+.w-inquiry-editor__steps {
+  margin: 0;
+  padding-left: 1.15rem;
+  display: grid;
+  gap: 0.35rem;
+  color: var(--iq-ink);
+  font-size: 0.875rem;
+  line-height: 1.45;
+}
+
+.w-inquiry-editor__locale-bar {
+  gap: var(--weline-space-3, 0.75rem);
+  flex-wrap: wrap;
+}
+
+.w-inquiry-editor__locale-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.w-inquiry-editor__locale-tab {
+  appearance: none;
+  border: 1px solid var(--iq-rail);
+  background: var(--weline-color-surface, #fff);
+  color: var(--iq-ink);
+  border-radius: 999px;
+  padding: 0.3rem 0.75rem;
+  font-size: 0.8125rem;
+  cursor: pointer;
+}
+
+.w-inquiry-editor__locale-tab.is-active {
+  border-color: color-mix(in srgb, var(--iq-accent) 55%, var(--iq-rail));
+  background: color-mix(in srgb, var(--iq-accent) 12%, transparent);
+  color: var(--iq-accent);
+  font-weight: 600;
+}
+
+.w-inquiry-editor__subhead {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--iq-ink);
+}
+
+.w-inquiry-editor__i18n-field {
+  border: 1px solid var(--iq-rail);
+  border-radius: var(--weline-radius-md, 0.5rem);
+  padding: var(--weline-space-3, 0.75rem);
+  background: color-mix(in srgb, var(--weline-color-surface, #fff) 96%, var(--iq-muted));
+}
+
+.w-inquiry-editor__i18n-key {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+}
+
+.w-inquiry-editor__i18n-options {
+  display: grid;
+  gap: var(--weline-space-2, 0.5rem);
+  margin-top: var(--weline-space-3, 0.75rem);
+}
+
+.w-inquiry-editor__i18n-levels {
+  margin-top: var(--weline-space-3, 0.75rem);
+}
+
+.w-inquiry-editor__advanced {
+  border-top: 1px dashed var(--iq-rail);
+  padding-top: var(--weline-space-3, 0.75rem);
+}
+
+.w-inquiry-editor__advanced > summary {
+  cursor: pointer;
+  color: var(--iq-muted);
+  font-size: 0.875rem;
+}
+
+.w-inquiry-editor__json {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+.w-inquiry-editor .w-field__hint {
+  display: block;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: var(--iq-muted);
+}
+
+.w-inquiry-editor__message {
+  min-height: 1.25rem;
+  margin: 0;
+  font-size: 0.875rem;
+}
+
+.w-inquiry-editor__message[data-tone="success"] { color: var(--weline-color-success, #15803d); }
+.w-inquiry-editor__message[data-tone="danger"] { color: var(--weline-color-danger, #b91c1c); }
+
+.w-inquiry-editor .visually-hidden {
+  position: absolute !important;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .w-inquiry-editor__field {
+    transition: none;
+  }
+}
