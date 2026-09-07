@@ -73,23 +73,23 @@ class FiberScheduler
     /**
      * @param resource $stream
      */
-    public function addReadableWaiter(\Fiber $fiber, mixed $stream, float $timeoutSec): void
+    public function addReadableWaiter(\Fiber $fiber, mixed $stream, float $timeoutSec, ?\stdClass $ioTiming = null): void
     {
-        $this->addIoWaiter($fiber, $stream, 'read', $timeoutSec);
+        $this->addIoWaiter($fiber, $stream, 'read', $timeoutSec, $ioTiming);
     }
 
     /**
      * @param resource $stream
      */
-    public function addWritableWaiter(\Fiber $fiber, mixed $stream, float $timeoutSec): void
+    public function addWritableWaiter(\Fiber $fiber, mixed $stream, float $timeoutSec, ?\stdClass $ioTiming = null): void
     {
-        $this->addIoWaiter($fiber, $stream, 'write', $timeoutSec);
+        $this->addIoWaiter($fiber, $stream, 'write', $timeoutSec, $ioTiming);
     }
 
     /**
      * @param resource $stream
      */
-    private function addIoWaiter(\Fiber $fiber, mixed $stream, string $direction, float $timeoutSec): void
+    private function addIoWaiter(\Fiber $fiber, mixed $stream, string $direction, float $timeoutSec, ?\stdClass $ioTiming = null): void
     {
         $direction = $direction === 'write' ? 'write' : 'read';
 
@@ -100,6 +100,7 @@ class FiberScheduler
             ) {
                 $this->ioWaiters[$id]['deadline'] = self::monotonicSeconds() + \max(0.0, $timeoutSec);
                 $this->ioWaiters[$id]['result'] = null;
+                self::attachIoTiming($this->ioWaiters[$id], $ioTiming);
                 return;
             }
             if (\is_resource($stream)
@@ -121,6 +122,7 @@ class FiberScheduler
                 'deadline' => self::monotonicSeconds(),
                 'result' => false,
             ];
+            self::attachIoTiming($this->ioWaiters[$id], $ioTiming);
             return;
         }
 
@@ -131,7 +133,72 @@ class FiberScheduler
             'deadline' => self::monotonicSeconds() + \max(0.0, $timeoutSec),
             'result' => null,
         ];
+        self::attachIoTiming($this->ioWaiters[$id], $ioTiming);
     }
+
+    /** Attach only caller-owned diagnostics; waiter state remains authoritative. */
+    private static function attachIoTiming(array &$waiter, ?\stdClass $ioTiming): void
+    {
+        unset($waiter['io_timing']);
+        if ($ioTiming === null) {
+            return;
+        }
+
+        $registeredNs = \hrtime(true);
+        $ioTiming->registered_ns = $registeredNs;
+        $ioTiming->deadline_ns = (int) \round($waiter['deadline'] * 1_000_000_000);
+        $ioTiming->yield_return_ns = null;
+        $ioTiming->after_resume_start_ns = null;
+        $ioTiming->after_resume_end_ns = null;
+        $ioTiming->guard_start_ns = null;
+        $ioTiming->guard_end_ns = null;
+        $ioTiming->collect_seen_ns = null;
+        $ioTiming->first_poll_start_ns = null;
+        $ioTiming->first_poll_end_ns = null;
+        $ioTiming->resolved_ns = $waiter['result'] === false ? $registeredNs : null;
+        $ioTiming->resolution = $waiter['result'] === false ? 'invalid_stream' : null;
+        $ioTiming->before_resume_start_ns = null;
+        $ioTiming->before_resume_end_ns = null;
+        $ioTiming->resume_call_ns = null;
+        $waiter['io_timing'] = $ioTiming;
+    }
+
+    /** Observe the existing Worker guard only for waits not yet collected or polled. */
+    public function observePendingIoGuard(callable $guard): bool
+    {
+        $pending = [];
+        foreach ($this->ioWaiters as $waiter) {
+            if ($waiter['result'] !== null || !isset($waiter['io_timing'])) {
+                continue;
+            }
+            $timing = $waiter['io_timing'];
+            if ($timing->collect_seen_ns !== null
+                || $timing->first_poll_start_ns !== null
+                || $timing->guard_start_ns !== null
+            ) {
+                continue;
+            }
+            $pending[] = [$timing, $timing->registered_ns];
+        }
+        if ($pending === []) {
+            return $guard();
+        }
+
+        $startNs = \hrtime(true);
+        try {
+            return $guard();
+        } finally {
+            $endNs = \hrtime(true);
+            foreach ($pending as [$timing, $registrationNs]) {
+                // Do not attribute an old guard to a re-registered or newly observed wait.
+                if ($timing->registered_ns === $registrationNs && $timing->guard_start_ns === null) {
+                    $timing->guard_start_ns = $startNs;
+                    $timing->guard_end_ns = $endNs;
+                }
+            }
+        }
+    }
+
 
     /**
      * Merge pending I/O waiter sockets into Worker EventLoop sets.
@@ -139,7 +206,7 @@ class FiberScheduler
      * @param array<int|string, resource> $read
      * @param array<int|string, resource> $write
      */
-    public function collectIoWaitStreams(array &$read, array &$write): void
+    public function collectIoWaitStreams(array &$read, array &$write, ?array &$ioTimings = null): void
     {
         foreach ($this->ioWaiters as $waiter) {
             if ($waiter['result'] !== null) {
@@ -155,6 +222,15 @@ class FiberScheduler
                 }
             } elseif (!\in_array($stream, $read, true)) {
                 $read[] = $stream;
+            }
+            if ($ioTimings !== null
+                && isset($waiter['io_timing'])
+                && $waiter['io_timing']->first_poll_start_ns === null
+            ) {
+                // First observation in the existing collection; not method-entry time.
+                $waiter['io_timing']->collect_seen_ns ??= \hrtime(true);
+                // Snapshot only this poll's unresolved, included waiter carriers.
+                $ioTimings[] = $waiter['io_timing'];
             }
         }
     }
@@ -178,14 +254,26 @@ class FiberScheduler
             $stream = $waiter['stream'];
             if (!\is_resource($stream)) {
                 $this->ioWaiters[$id]['result'] = false;
+                if (isset($waiter['io_timing'])) {
+                    $waiter['io_timing']->resolved_ns = \hrtime(true);
+                    $waiter['io_timing']->resolution = 'invalid_stream';
+                }
                 continue;
             }
             if ($waiter['direction'] === 'write') {
                 if (\in_array($stream, $readyWrite, true)) {
                     $this->ioWaiters[$id]['result'] = true;
+                    if (isset($waiter['io_timing'])) {
+                        $waiter['io_timing']->resolved_ns = \hrtime(true);
+                        $waiter['io_timing']->resolution = 'ready';
+                    }
                 }
             } elseif (\in_array($stream, $readyRead, true)) {
                 $this->ioWaiters[$id]['result'] = true;
+                if (isset($waiter['io_timing'])) {
+                    $waiter['io_timing']->resolved_ns = \hrtime(true);
+                    $waiter['io_timing']->resolution = 'ready';
+                }
             }
         }
     }
@@ -313,8 +401,16 @@ class FiberScheduler
             if ($waiter['result'] === null) {
                 if (!\is_resource($waiter['stream'])) {
                     $waiter['result'] = false;
+                    if (isset($waiter['io_timing'])) {
+                        $waiter['io_timing']->resolved_ns = \hrtime(true);
+                        $waiter['io_timing']->resolution = 'invalid_stream';
+                    }
                 } elseif ($waiter['deadline'] <= $now) {
                     $waiter['result'] = false;
+                    if (isset($waiter['io_timing'])) {
+                        $waiter['io_timing']->resolved_ns = \hrtime(true);
+                        $waiter['io_timing']->resolution = 'timeout';
+                    }
                 } else {
                     continue;
                 }
@@ -336,6 +432,7 @@ class FiberScheduler
                 $beforeResume,
                 $afterResume,
                 $onResumeFailure,
+                $waiter['io_timing'] ?? null,
             );
         }
     }
@@ -346,18 +443,59 @@ class FiberScheduler
         ?callable $beforeResume,
         ?callable $afterResume,
         ?callable $onResumeFailure,
+        ?\stdClass $ioTiming = null,
     ): void {
         if (!$fiber->isSuspended()) {
             return;
         }
 
         try {
-            if ($beforeResume !== null) {
-                $beforeResume($fiber);
+            if ($ioTiming === null) {
+                if ($beforeResume !== null) {
+                    $beforeResume($fiber);
+                }
+            } else {
+                $ioTiming->before_resume_start_ns = \hrtime(true);
+                try {
+                    if ($beforeResume !== null) {
+                        $beforeResume($fiber);
+                    }
+                } finally {
+                    $ioTiming->before_resume_end_ns = \hrtime(true);
+                }
+                // resume() returns after more business execution, outside this await.
+                $ioTiming->resume_call_ns = \hrtime(true);
             }
             $fiber->resume($resumeValue);
-            if ($afterResume !== null) {
-                $afterResume($fiber);
+            // A new await may have suspended during resume(). The previous carrier
+            // belongs to the already returned await and must not receive these stamps.
+            $nextIoTiming = null;
+            if ($fiber->isSuspended()) {
+                foreach ($this->ioWaiters as $pendingWaiter) {
+                    if (isset($pendingWaiter['io_timing']) && $pendingWaiter['fiber'] === $fiber) {
+                        $nextIoTiming = $pendingWaiter['io_timing'];
+                        break;
+                    }
+                }
+            }
+            if ($nextIoTiming === null) {
+                if ($afterResume !== null) {
+                    $afterResume($fiber);
+                }
+            } else {
+                $registrationNs = $nextIoTiming->registered_ns;
+                $nextIoTiming->yield_return_ns = \hrtime(true);
+                $nextIoTiming->after_resume_start_ns = \hrtime(true);
+                try {
+                    if ($afterResume !== null) {
+                        $afterResume($fiber);
+                    }
+                } finally {
+                    // A callback may re-register this carrier; do not finish an old interval.
+                    if ($nextIoTiming->registered_ns === $registrationNs) {
+                        $nextIoTiming->after_resume_end_ns = \hrtime(true);
+                    }
+                }
             }
         } catch (RequestExitException) {
             // Fiber ended via request-exit path.

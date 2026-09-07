@@ -47,12 +47,12 @@ Results:
 Scope:
 
 - Locked the AppStore runtime resolver regression around the current environment
-  decision: local development uses `https://app.weline.test:9523`, while
+  decision: local development uses `https://app.test.weline.com:9523`, while
   deployed production tests use `https://app.aiweline.com` from deployment
   metadata.
 - Hardened `AppStorePlatformUrlResolver` so an invalid local config lookup or
   pre-bootstrap config layer cannot prevent the local fallback from resolving.
-- Added resolver tests proving `www.weline.test:9518` and
+- Added resolver tests proving `www.test.weline.com:9518` and
   `www.aiweline.com` are official website hosts, not marketplace roots.
 
 Commands:
@@ -74,11 +74,11 @@ Results:
 - PHP lint passed for the resolver and resolver test.
 - `AppStorePlatformUrlResolverTest` passed: 5 tests, 15 assertions.
 - Source-contract gate passed and reported:
-  `local_development_appstore=https://app.weline.test:9523`,
+  `local_development_appstore=https://app.test.weline.com:9523`,
   `production_deployed_appstore=https://app.aiweline.com`, and deployment
   artifact `var/deploy/current.json`.
 - Local deploy-current policy passed with resolved endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Production deploy-current policy passed with resolved endpoint
   `https://app.aiweline.com/api/v1/platform/module/list`.
 - GitNexus did not find the new/local symbols in the current index, so the
@@ -131,9 +131,9 @@ Results:
   `ready_for_local_live_capture=false`, and `goal_complete=false`.
 - Deferred-action validation returned `passed=true`.
 - Workorder/authorization consistency returned `passed=true` with local
-  marketplace root `https://app.weline.test:9523`, local App checkout
+  marketplace root `https://app.test.weline.com:9523`, local App checkout
   `E:\WelineFramework\Framework-Official\App\weline`, local App env WLS
-  endpoint `https://app.weline.test:9523`, and deployed production root
+  endpoint `https://app.test.weline.com:9523`, and deployed production root
   `https://app.aiweline.com`.
 - Strict goal completion gate still exits non-zero with `complete=false`, as
   expected, because both captured evidence files are absent:
@@ -187,7 +187,7 @@ Operator boundary:
 - Before local live evidence can be captured, rerun the authorization packet,
   compare the latest drift review fingerprint, then explicitly authorize only
   the scoped App checkout sync paths, run App setup, materialize the official
-  manifest/source catalog, start App WLS on `app.weline.test:9523`, set the
+  manifest/source catalog, start App WLS on `app.test.weline.com:9523`, set the
   bearer token outside repository files, and only then run the guarded local
   live capture command.
 - Production evidence remains a post-launch gate and must use deployed
@@ -209,7 +209,7 @@ Scope:
   `app/code/Weline/PlatformAppStore` and `app/code/Weline/AppStore`.
 - The same probe now extracts the App checkout `app/etc/env.php` WLS endpoint
   without printing secrets and requires it to resolve to
-  `https://app.weline.test:9523`, matching both deploy-current metadata and
+  `https://app.test.weline.com:9523`, matching both deploy-current metadata and
   the probe endpoint.
 - `tools/wls-panel-final-preflight.php` now mirrors these checks as
   `local_readiness_app_checkout_identity_ok` and
@@ -271,7 +271,7 @@ Scope:
 - Hardened `tools/wls-panel-final-workorder.php` so the operator workorder
   carries the local App checkout identity
   `E:\WelineFramework\Framework-Official\App\weline`, the local App env WLS
-  endpoint `https://app.weline.test:9523`, and the deployed production
+  endpoint `https://app.test.weline.com:9523`, and the deployed production
   endpoint source `var\deploy\current.json -> https://app.aiweline.com`.
 - Hardened `tools/validate-final-workorder-deferred-actions.php` so a workorder
   fails if it omits the local checkout identity, omits the local env WLS endpoint
@@ -309,14 +309,14 @@ Results:
 - Real final workorder returned `workorder_ready=true`,
   `current_state=blocked_before_local_live_capture`,
   `environment_policy.local_development.checkout=E:\WelineFramework\Framework-Official\App\weline`,
-  `environment_policy.local_development.env_wls_endpoint=https://app.weline.test:9523`,
+  `environment_policy.local_development.env_wls_endpoint=https://app.test.weline.com:9523`,
   `preflight_checks.local_readiness_app_checkout_identity_ok=true`, and
   `preflight_checks.local_readiness_app_env_wls_endpoint_locked=true`.
 - The authorization packet returned `authorization_pack_ready_for_review=true`
   with `local_app_checkout_identity_ok=true`,
   `local_app_env_wls_endpoint_locked=true`,
   `local_app_env_wls_endpoint_exact_root=true`, local endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`, and production
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, and production
   endpoint `https://app.aiweline.com/api/v1/platform/module/list`.
 - The deferred-action validator returned `passed=true` with
   `local_policy_records_framework_official_app_checkout=true`,
@@ -348,7 +348,7 @@ Scope:
   `local_app_checkout_identity_consistent`, and
   `local_app_env_wls_endpoint_consistent`.
 - This closes the gap where the reports could all agree on
-  `https://app.weline.test:9523` while one report omitted the concrete local
+  `https://app.test.weline.com:9523` while one report omitted the concrete local
   App checkout identity or env-derived endpoint lock.
 
 Validation:
@@ -451,7 +451,7 @@ Scope:
 - Added and deployed `Weline_WlsDemoPlugin` through the AppStore official
   catalog path.
 - Verified local AppStore list, package metadata, zip hash match, and install
-  through `https://app.weline.test:9523`.
+  through `https://app.test.weline.com:9523`.
 - Deployed the AppStore update to `https://app.aiweline.com`, fixed production
   HTTPS routing to the App WLS listener, and verified production list, package
   metadata, zip hash match, and install through the HTTPS production endpoint.
@@ -491,7 +491,7 @@ Scope:
 
 - Rechecked the runtime and deployment contract behind the latest marketplace
   endpoint decision: local development uses the local App Store root
-  `https://app.weline.test:9523`, while deployed production evidence must come
+  `https://app.test.weline.com:9523`, while deployed production evidence must come
   from deployed `var/deploy/current.json` and carry
   `appstore_platform_url=https://app.aiweline.com` plus
   `appstore_platform_url_source=production_default`.
@@ -527,7 +527,7 @@ php app\code\Weline\Server\doc\wls-panel-plan\tools\wls-panel-final-preflight.ph
 Results:
 
 - Deploy endpoint policy self-test passed. It accepts local
-  `app.weline.test:9523`, accepts production `app.aiweline.com` only when the
+  `app.test.weline.com:9523`, accepts production `app.aiweline.com` only when the
   production source is `production_default`, and rejects empty production URL,
   local App Store in production, `www.aiweline.com`, API-path platform URLs,
   and `config:appstore.platform_url` as a production source.
@@ -552,7 +552,7 @@ Results:
   `deploy-current-production-default.json` resolved to
   `https://app.aiweline.com/api/v1/platform/module/list`, and
   `deploy-current-local-development.json` resolved to
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Guarded local and production live-gate wrapper self-tests still passed after
   the runner-level source/root validation was tightened.
 - PHP lint passed for `AppStorePlatformUrlResolver.php` and
@@ -568,7 +568,7 @@ Results:
 - Aggregate final preflight returned `ok=true`,
   `ready_for_live_local_appstore_e2e=false`, `goal_complete=false`, and locked
   local/production endpoints
-  `https://app.weline.test:9523/api/v1/platform/module/list` /
+  `https://app.test.weline.com:9523/api/v1/platform/module/list` /
   `https://app.aiweline.com/api/v1/platform/module/list`.
 - No App checkout sync, setup, deploy-current write, manifest/source write, WLS
   start, token read/export, live AppStore request, or browser automation was
@@ -642,7 +642,7 @@ Scope:
 - This turns the deployment endpoint rule into a final completion invariant:
   local development must use the local App Store checkout
   `E:\WelineFramework\Framework-Official\App\weline` and
-  `https://app.weline.test:9523`; deployed production proof must use
+  `https://app.test.weline.com:9523`; deployed production proof must use
   `https://app.aiweline.com` from deployment metadata.
 - The strict goal gate now requires
   `workorder_authorization_consistency_passed`,
@@ -724,7 +724,7 @@ Scope:
 - Added a read-only consistency gate for the final marketplace handoff.
 - The gate solidifies the environment rule requested for deployment
   information: local development uses the local App Store at
-  `https://app.weline.test:9523`, while deployed production tests must read and
+  `https://app.test.weline.com:9523`, while deployed production tests must read and
   use `https://app.aiweline.com` from deployment metadata.
 - The gate does not sync files, start WLS, write manifests, read token values,
   or call local/production AppStore APIs.
@@ -1405,9 +1405,9 @@ Runtime route/auth-gate smoke:
 php bin/w server:start ai-test-wls-db-slave-ui-10023 -p 10023 --no-ssl -c 1 --supervisor false --worker-memory-limit=512M
 php bin/w server:status ai-test-wls-db-slave-ui-10023
 curl.exe -I http://127.0.0.1:10023/
-curl.exe -I http://p11005ce4.weline.test:10023/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/weline_dbmanager/backend/wls-db-manager
-curl.exe -i -X POST http://p11005ce4.weline.test:10023/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/weline_dbmanager/backend/wls-db-manager/slave-create
-curl.exe -i -X POST http://p11005ce4.weline.test:10023/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/weline_dbmanager/backend/wls-db-manager/slave-remove
+curl.exe -I http://p11005ce4.test.weline.com:10023/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/weline_dbmanager/backend/wls-db-manager
+curl.exe -i -X POST http://p11005ce4.test.weline.com:10023/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/weline_dbmanager/backend/wls-db-manager/slave-create
+curl.exe -i -X POST http://p11005ce4.test.weline.com:10023/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/weline_dbmanager/backend/wls-db-manager/slave-remove
 php bin/w server:stop ai-test-wls-db-slave-ui-10023
 php bin/w server:status ai-test-wls-db-slave-ui-10023
 ```
@@ -1621,7 +1621,7 @@ plugin pages, not just inside the Dashboard.
 The previously provided browser URL:
 
 ```text
-http://pf9938bb3.weline.test:9608/puKoQDiP3210Lh2v6zKjWzN3bdxXM9B2/server/backend/panel-marketplace
+http://pf9938bb3.test.weline.com:9608/puKoQDiP3210Lh2v6zKjWzN3bdxXM9B2/server/backend/panel-marketplace
 ```
 
 could not be opened by the in-app browser during this pass because the browser
@@ -2458,7 +2458,7 @@ curl.exe -I --max-time 5 http://127.0.0.1:10042/
   - release-path scope and release-history scope both reported `project`;
   - release-path count and history count matched;
   - all WLS Deploy forms preserved `project_id=codex-deploy-path`,
-    `domain=codex-deploy-path.weline.test`, and `project_type=wls`;
+    `domain=codex-deploy-path.test.weline.com`, and `project_type=wls`;
   - path links to Profile, Webhook Replay, Manual Plan, and scoped Release
     History preserved the project context;
   - clicking the scoped history link landed on `#releases`;
@@ -2653,7 +2653,7 @@ Scope:
 - Probed public official endpoint reachability from the current host.
 - Superseded note: user later clarified that the current development
   marketplace is the local App Store project at
-  `E:\WelineFramework\Framework-Official\App` / `https://app.weline.test:9523`,
+  `E:\WelineFramework\Framework-Official\App` / `https://app.test.weline.com:9523`,
   while the production application marketplace after launch is
   `https://app.aiweline.com`. `www.aiweline.com` is not the WLS Panel
   marketplace endpoint for this plan, so the reachability results below are
@@ -2743,10 +2743,10 @@ Scope:
 - Confirmed the current development marketplace project is
   `E:\WelineFramework\Framework-Official\App`.
 - Confirmed the current local marketplace host is
-  `https://app.weline.test:9523/`.
+  `https://app.test.weline.com:9523/`.
 - Confirmed the separate official website project is
   `E:\WelineFramework\Framework-Official\Official` /
-  `https://www.weline.test:9518/`; it is not the App Store marketplace target.
+  `https://www.test.weline.com:9518/`; it is not the App Store marketplace target.
 - Recorded that production application marketplace validation belongs to
   `https://app.aiweline.com` after launch.
 - Solidified the Deploy-side environment contract so local development can use
@@ -2756,11 +2756,11 @@ Scope:
 Validation commands:
 
 ```powershell
-Resolve-DnsName app.weline.test
-Test-NetConnection app.weline.test -Port 9523 -InformationLevel Detailed
+Resolve-DnsName app.test.weline.com
+Test-NetConnection app.test.weline.com -Port 9523 -InformationLevel Detailed
 php bin/w server:status # from E:\WelineFramework\Framework-Official\App\weline
 php bin/w server:status # from E:\WelineFramework\Framework-Official\Official\weline
-php bin/w server:start wls --host app.weline.test --port 9523 --ssl-domain app.weline.test # from E:\WelineFramework\Framework-Official\App\weline
+php bin/w server:start wls --host app.test.weline.com --port 9523 --ssl-domain app.test.weline.com # from E:\WelineFramework\Framework-Official\App\weline
 php bin/w setup:upgrade --route --skip-composer-dump # from E:\WelineFramework\Framework-Official\App\weline
 php bin/w setup:upgrade --skip-composer-dump # from E:\WelineFramework\Framework-Official\App\weline
 php bin/w setup:upgrade --model -m Weline_Server --skip-composer-dump # from E:\WelineFramework\Framework-Official\App\weline
@@ -2770,12 +2770,12 @@ rg -n "appstore|app\.weline\.test|app\.aiweline\.com" app/code/Weline/Deploy/Ser
 
 Results:
 
-- `app.weline.test` resolves to `127.0.0.1`.
+- `app.test.weline.com` resolves to `127.0.0.1`.
 - TCP `9523` currently fails because the App project WLS is not running.
 - `Framework-Official\App\weline\app\etc\env.php` now defines sqlite
   `db.master` and `sandbox_db.master` paths under the App checkout and still
-  defines `wls.host=app.weline.test`, `wls.port=9523`, and
-  `ssl_domain=app.weline.test`.
+  defines `wls.host=app.test.weline.com`, `wls.port=9523`, and
+  `ssl_domain=app.test.weline.com`.
 - `php bin/w server:status` in `Framework-Official\App\weline` reports no
   running server instance.
 - `php bin/w setup:upgrade --route --skip-composer-dump` succeeds in the App
@@ -2797,7 +2797,7 @@ Results:
   also blocked before model execution by the environment-dependency auto-repair
   path. The nested repair scripts lose the expected Windows PATH and report
   `chcp` / `php` as not recognized.
-- Starting the App project WLS on `app.weline.test:9523` after the partial
+- Starting the App project WLS on `app.test.weline.com:9523` after the partial
   setup is currently blocked by the missing WLS Server table
   `m_weline_server_ssl_certificate`.
 - `php bin/w server:status` in `Framework-Official\Official\weline` reports
@@ -2810,16 +2810,16 @@ Results:
   when they are present in `current.json`.
 - Explicit `deploy=dev/local` in `app/etc/env.php` resolves the marketplace URL
   from `WELINE_APPSTORE_PLATFORM_URL`, then `appstore.platform_url`, then the
-  local default `https://app.weline.test:9523`; non-local or missing explicit
+  local default `https://app.test.weline.com:9523`; non-local or missing explicit
   deploy mode resolves to `https://app.aiweline.com`.
 
 Conclusion:
 
 - Current WLS Panel marketplace validation must use the local App Store
-  checkout and host, not `www.weline.test:9518` and not `www.aiweline.com`.
+  checkout and host, not `www.test.weline.com:9518` and not `www.aiweline.com`.
 - `www.aiweline.com` is removed from the WLS marketplace gate.
 - Local development should point WLS Panel marketplace calls to
-  `https://app.weline.test:9523`.
+  `https://app.test.weline.com:9523`.
 - Deployed tests and production release probes should read the deployed
   `appstore_platform_url` from `var/deploy/current.json`; non-local or missing
   explicit deploy mode resolves to `https://app.aiweline.com` and records
@@ -2844,15 +2844,15 @@ Post-sync local App Store verification sequence:
 cd E:\WelineFramework\Framework-Official\App\weline
 php bin/w setup:upgrade --skip-env-check --skip-composer-dump
 php bin/w setup:upgrade --route --skip-env-check --skip-composer-dump
-php bin/w server:start wls --host app.weline.test --port 9523 --ssl-domain app.weline.test
-curl.exe -k -I --max-time 12 --noproxy * --resolve app.weline.test:9523:127.0.0.1 https://app.weline.test:9523/
+php bin/w server:start wls --host app.test.weline.com --port 9523 --ssl-domain app.test.weline.com
+curl.exe -k -I --max-time 12 --noproxy * --resolve app.test.weline.com:9523:127.0.0.1 https://app.test.weline.com:9523/
 ```
 
 Post-start typed-tag runner target:
 
 ```powershell
 $env:WLS_MARKETPLACE_BEARER_TOKEN = '<set outside docs>'
-php E:\WelineFramework\DEV-workspace\app\code\Weline\Server\doc\wls-panel-plan\tools\marketplace-typed-tag-e2e.php --endpoint=https://app.weline.test:9523/api/v1/platform/module/list --expected-tags=custom:wls-panel-plugin --negative-tag=module:wls-extra --min-items=1 --timeout=20
+php E:\WelineFramework\DEV-workspace\app\code\Weline\Server\doc\wls-panel-plan\tools\marketplace-typed-tag-e2e.php --endpoint=https://app.test.weline.com:9523/api/v1/platform/module/list --expected-tags=custom:wls-panel-plugin --negative-tag=module:wls-extra --min-items=1 --timeout=20
 Remove-Item Env:\WLS_MARKETPLACE_BEARER_TOKEN
 ```
 
@@ -3087,7 +3087,7 @@ Scope:
   runtime clients share the same marketplace endpoint policy as Deploy.
 - Explicit local mode in `app/etc/env.php` (`deploy=dev/local`) keeps local
   `WELINE_APPSTORE_PLATFORM_URL` or `appstore.platform_url`, which is the
-  current `https://app.weline.test:9523` development target.
+  current `https://app.test.weline.com:9523` development target.
 - When local mode is not explicitly declared and
   `var/deploy/current.json` records `appstore_environment=production`, the
   resolver uses `appstore_platform_url` from the deploy artifact before
@@ -3122,7 +3122,7 @@ Results:
   `appstore_environment=production` in `var/deploy/current.json` returns
   `https://app.aiweline.com` with source `deploy:var/deploy/current.json`;
   explicit local `deploy=dev` in `app/etc/env.php` keeps
-  `https://app.weline.test:9523` from `appstore.platform_url`.
+  `https://app.test.weline.com:9523` from `appstore.platform_url`.
 - `git diff --check` passed for the changed AppStore services and WLS Panel
   plan docs, and `rg -n "[ \t]+$"` returned no trailing-whitespace hits.
 
@@ -3130,7 +3130,7 @@ Residual risk:
 
 - This closes the runtime endpoint-selection gap. It still does not replace the
   local token-authenticated App Store API E2E against
-  `https://app.weline.test:9523/api/v1/platform/module/list`, which requires the
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, which requires the
   approved DEV-to-App sync and local App WLS startup.
 
 ## 2026-06-22 WLS/AppStore Marketplace Endpoint Observability
@@ -3142,7 +3142,7 @@ Scope:
 - Added machine-readable page attributes for the resolved `platform_url` and
   resolver source so browser checks can prove which marketplace is active.
 - Kept the local/deployed policy explicit: `deploy=dev/local` uses
-  `https://app.weline.test:9523`, while deployed production checks read
+  `https://app.test.weline.com:9523`, while deployed production checks read
   `var/deploy/current.json` and default to `https://app.aiweline.com`.
 - Wired the WLS Panel to consume the AppStore resolver dynamically, so the
   Server module can display the decision without a hard compile-time AppStore
@@ -3180,7 +3180,7 @@ Results:
 - AppStore focused PHPUnit passed: 30 tests, 69 assertions. The run still
   prints the existing Windows `chcp` warning from command-building checks.
 - An isolated resolver probe returned the expected two branches:
-  local `deploy=dev` resolves to `https://app.weline.test:9523` with source
+  local `deploy=dev` resolves to `https://app.test.weline.com:9523` with source
   `config:appstore.platform_url`; production deploy artifact mode resolves to
   `https://app.aiweline.com` with source `deploy:var/deploy/current.json`.
 - Codex in-app Browser was blocked by the local self-signed certificate
@@ -3190,7 +3190,7 @@ Results:
   covered WLS Panel marketplace plus AppStore backend marketplace at desktop
   `1440` and phone `390`.
 - Both pages exposed the local development endpoint as
-  `https://app.weline.test:9523` with source `config:appstore.platform_url`;
+  `https://app.test.weline.com:9523` with source `config:appstore.platform_url`;
   there was no login fallback, fatal text, target-page console error, or
   horizontal overflow.
 - Screenshot and JSON evidence were saved under
@@ -3204,7 +3204,7 @@ Residual risk:
 - This closes endpoint observability and local/deployed endpoint selection for
   the UI/runtime client path. It still does not replace the local
   token-authenticated App Store API E2E against
-  `https://app.weline.test:9523/api/v1/platform/module/list`, which remains
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, which remains
   blocked on the approved DEV-to-App sync, local App WLS startup, and local
   bearer token/account setup.
 
@@ -3215,7 +3215,7 @@ Scope:
 - Tightened `Weline\AppStore\Service\AppStorePlatformUrlResolver` so local
   env/config marketplace URLs are honored only when `app/etc/env.php`
   explicitly declares `deploy=dev/local`.
-- Added a local default of `https://app.weline.test:9523` for explicit local
+- Added a local default of `https://app.test.weline.com:9523` for explicit local
   mode, matching the Deploy-side local default.
 - Ensured non-local resolver paths read production `var/deploy/current.json` or
   fall back to `https://app.aiweline.com` without reading leftover local
@@ -3236,7 +3236,7 @@ php vendor\phpunit\phpunit\phpunit --bootstrap app\code\Weline\AppStore\test\boo
 Isolated resolver probe:
 
 ```text
-local -> https://app.weline.test:9523, source env:WELINE_APPSTORE_PLATFORM_URL, environment local
+local -> https://app.test.weline.com:9523, source env:WELINE_APPSTORE_PLATFORM_URL, environment local
 prod-env-residue -> https://app.aiweline.com, source default:production, environment production
 prod-current -> https://app.aiweline.com, source deploy:var/deploy/current.json, environment production
 ```
@@ -3264,7 +3264,7 @@ Residual risk:
 
 - This closes runtime endpoint leakage from stale local config. It still does
   not replace the local token-authenticated App Store API E2E against
-  `app.weline.test:9523`.
+  `app.test.weline.com:9523`.
 
 ## 2026-06-22 Local App Store Gate Recheck
 
@@ -3278,8 +3278,8 @@ Scope:
 Read-only commands:
 
 ```powershell
-Test-NetConnection -ComputerName app.weline.test -Port 9523
-curl.exe -k -I --max-time 8 --noproxy * --resolve app.weline.test:9523:127.0.0.1 https://app.weline.test:9523/
+Test-NetConnection -ComputerName app.test.weline.com -Port 9523
+curl.exe -k -I --max-time 8 --noproxy * --resolve app.test.weline.com:9523:127.0.0.1 https://app.test.weline.com:9523/
 git -C E:\WelineFramework\Framework-Official\App\weline status --short
 git -C E:\WelineFramework\Framework-Official\App\weline rev-parse --abbrev-ref HEAD
 git -C E:\WelineFramework\Framework-Official\App\weline rev-parse --short HEAD
@@ -3290,7 +3290,7 @@ Select-String -Path E:\WelineFramework\DEV-workspace\app\code\Weline\Framework\D
 
 Results:
 
-- `app.weline.test:9523` is still not listening. `Test-NetConnection` returned
+- `app.test.weline.com:9523` is still not listening. `Test-NetConnection` returned
   `TcpTestSucceeded=False`, and curl failed with connection error `7`.
 - The actual App project repository is
   `E:\WelineFramework\Framework-Official\App\weline`, branch `dev`, commit
@@ -3301,7 +3301,7 @@ Results:
   These must be preserved by the later sync workflow.
 - App `env.php` is already aligned for this gate: `deploy=dev`, sqlite
   database paths under the App checkout, and WLS host/port
-  `app.weline.test:9523`.
+  `app.test.weline.com:9523`.
 - The App checkout still lacks the DEV-side sqlite composite-primary-key guard:
   its `SchemaMigrationExecutor` adds `AUTO_INCREMENT` whenever
   `$col->autoIncrement` is true, while DEV now guards that with
@@ -3312,7 +3312,7 @@ Conclusion:
 - The final local App Store API E2E must remain gated. The next authorized step
   is still to run the approved `分项` sync path so the App checkout receives the
   DEV sqlite composite-primary-key fix, then rerun App setup, start WLS on
-  `app.weline.test:9523`, and execute the token-safe typed-tag API runner.
+  `app.test.weline.com:9523`, and execute the token-safe typed-tag API runner.
 
 ## 2026-06-22 Local AppStore Sync Manifest
 
@@ -3354,7 +3354,7 @@ Residual risk:
 - The manifest closes the operational ambiguity around the next authorized
   step, but it does not complete the local token-authenticated App Store API
   E2E. That remains gated by explicit `分项` authorization, App setup, App WLS
-  startup on `app.weline.test:9523`, and a local bearer token/account.
+  startup on `app.test.weline.com:9523`, and a local bearer token/account.
 
 ## 2026-06-22 Local AppStore Manifest Guard
 
@@ -3384,10 +3384,10 @@ Results:
 - The checker confirmed 30 allowed paths, 30 command include paths, 5 forbidden
   paths, no errors, and no warnings.
 - The checker confirmed the manifest contains the local App checkout,
-  `https://app.weline.test:9523`, production `https://app.aiweline.com`, and
+  `https://app.test.weline.com:9523`, production `https://app.aiweline.com`, and
   the two `www.*` hosts only as non-marketplace endpoints.
 - The local deploy-current fixture resolved to
-  `https://app.weline.test:9523/api/v1/platform/module/list` with
+  `https://app.test.weline.com:9523/api/v1/platform/module/list` with
   `appstore_environment=local`.
 - The production deploy-current fixture resolved to
   `https://app.aiweline.com/api/v1/platform/module/list` with
@@ -3399,7 +3399,7 @@ Residual risk:
 
 - This strengthens the sync/deployment gate, but it still does not complete the
   authenticated local AppStore API E2E. That remains gated by explicit `分项`
-  authorization, App checkout setup, App WLS startup on `app.weline.test:9523`,
+  authorization, App checkout setup, App WLS startup on `app.test.weline.com:9523`,
   and a local bearer token/account.
 
 ## 2026-06-22 Machine-Readable Completion Audit Gate
@@ -3439,7 +3439,7 @@ Results:
   marketplace, while local development uses local App Store.`
 - The incomplete row status is
   `Partial / local App Store API E2E gate`, with the remaining gate pointing to
-  App checkout startup, `app.weline.test:9523`, and exact `tag=module:wls`
+  App checkout startup, `app.test.weline.com:9523`, and exact `tag=module:wls`
   / `module:wls-extra` API proof.
 - `--fail-on-incomplete=1` returned the expected non-zero completion gate,
   proving this tool will block final release while the marketplace API gate is
@@ -3447,7 +3447,7 @@ Results:
 - The manifest guard still returned `ok=true`: one App site target, 30 allowed
   paths, 30 include paths, 5 forbidden paths, no errors, no warnings.
 - The local deploy-current fixture resolved to
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - The production deploy-current fixture resolved to
   `https://app.aiweline.com/api/v1/platform/module/list`.
 - `00-INDEX.md`, `90`, `95`, and `96` now reference the completion audit tool
@@ -3488,7 +3488,7 @@ Results:
   `app_schema_has_sqlite_composite_pk_guard=false`,
   `app_port_listening=false`, and `bearer_token_env_present=false`.
 - The probe resolved the expected local endpoint as
-  `https://app.weline.test:9523` and reported the TCP listener as closed.
+  `https://app.test.weline.com:9523` and reported the TCP listener as closed.
 - The probe redacts token state as `<not set>` / `<redacted>` and does not read
   or print token values.
 
@@ -3496,7 +3496,7 @@ Residual risk:
 
 - This makes the remaining local App Store gate explicit, but it does not run
   the authenticated API E2E. The next executable step is still the authorized
-  App-only `分项` sync, App setup/startup on `app.weline.test:9523`, and the
+  App-only `分项` sync, App setup/startup on `app.test.weline.com:9523`, and the
   token-safe typed-tag runner.
 
 ## 2026-06-22 Readiness Manifest Refresh
@@ -3529,7 +3529,7 @@ Results:
 - `--fail-on-incomplete=1` returned the expected non-zero gate while the local
   App Store API E2E remains incomplete.
 - The local deploy-current fixture resolved to
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - The production deploy-current fixture resolved to
   `https://app.aiweline.com/api/v1/platform/module/list`.
 - `git diff --check` passed for the touched WLS Panel Plan files; Git only
@@ -3563,20 +3563,20 @@ Results:
   emits duplicate-extension warnings before normal output.
 - `--self-test=1` returned `passed=true` across six in-memory cases with no
   file, network, token, WLS, or write side effects. The positive cases keep
-  local development on `https://app.weline.test:9523` and production on
+  local development on `https://app.test.weline.com:9523` and production on
   `https://app.aiweline.com`; the negative cases prove production artifacts
   fail if `appstore_platform_url` is empty, resolves to
-  `https://app.weline.test:9523`, resolves to `https://www.aiweline.com`, or
+  `https://app.test.weline.com:9523`, resolves to `https://www.aiweline.com`, or
   carries a local deploy mode.
 - The local deploy-current fixture returned `passed=true`, resolved
   `environment=local`, `deploy_mode=dev`, and endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - The production deploy-current fixture returned `passed=true`, resolved
   `environment=production`, `deploy_mode=prod`, and endpoint
   `https://app.aiweline.com/api/v1/platform/module/list` from an explicitly
   recorded `appstore_platform_url=https://app.aiweline.com`.
 - The checker confirmed required deploy metadata keys, rejected `www.*`
-  marketplace hosts, verifies production does not resolve to `app.weline.test`,
+  marketplace hosts, verifies production does not resolve to `app.test.weline.com`,
   and rejects empty production `appstore_platform_url` values.
 - The local AppStore sync manifest now returns `ok=true` with 34 allowed paths
   and 34 command include paths.
@@ -3617,11 +3617,11 @@ Results:
 - Negative cases proved `module:wls-extra` does not satisfy `module:wls` and
   ordinary backend/server-tool tags do not pass the WLS module filter.
 - Endpoint-only preflights still resolve local deploy metadata to
-  `https://app.weline.test:9523/api/v1/platform/module/list` and production
+  `https://app.test.weline.com:9523/api/v1/platform/module/list` and production
   metadata to `https://app.aiweline.com/api/v1/platform/module/list`.
 - The read-only local AppStore readiness probe still returned `ready=false`.
   Current blockers are the App checkout missing the sqlite composite-primary-key
-  guard, `app.weline.test:9523` not listening, and no
+  guard, `app.test.weline.com:9523` not listening, and no
   `WLS_MARKETPLACE_BEARER_TOKEN` environment value.
 - This does not close the live AppStore E2E gate. The remaining proof still
   requires the local App checkout sync/startup, a local bearer token, and the
@@ -3665,7 +3665,7 @@ Scope:
 - Extended the read-only local AppStore readiness probe so it checks the real
   official catalog source for WLS marketplace typed-tag E2E readiness.
 - Confirmed the environment split remains fixed: local development uses
-  `https://app.weline.test:9523`, while deployed/production tests use
+  `https://app.test.weline.com:9523`, while deployed/production tests use
   deployment metadata that resolves to `https://app.aiweline.com`.
 
 Observed local App checkout state:
@@ -3734,7 +3734,7 @@ Residual gate:
 
 - Prepare the App Store official manifest through an authorized App checkout
   change, then rerun the readiness probe, start App WLS on
-  `app.weline.test:9523`, and run the token-safe typed-tag API E2E with
+  `app.test.weline.com:9523`, and run the token-safe typed-tag API E2E with
   `--require-negative-conclusive=1`.
 
 ## 2026-06-23 Production AppStore Endpoint Solidification
@@ -3773,7 +3773,7 @@ Results:
 - The production fixture now records
   `appstore_platform_url=https://app.aiweline.com` and passes with no warnings.
 - Endpoint-only runner checks resolve local metadata to
-  `https://app.weline.test:9523/api/v1/platform/module/list` and production
+  `https://app.test.weline.com:9523/api/v1/platform/module/list` and production
   metadata to `https://app.aiweline.com/api/v1/platform/module/list` without
   token, network, WLS startup, or repository writes.
 - The local AppStore sync manifest guard still reports `ok=true`, one App site
@@ -3893,7 +3893,7 @@ Residual gate:
 
 - After explicit App checkout authorization, sync the scoped DEV fixes, run the
   authorized official manifest write, validate the real manifest, start
-  `app.weline.test:9523`, set a local bearer token outside repository files,
+  `app.test.weline.com:9523`, set a local bearer token outside repository files,
   and run the live typed-tag API E2E with the strict `module:wls-extra`
   negative canary.
 
@@ -3939,7 +3939,7 @@ Residual gate:
 
 - This quantifies the later authorized `分项` scope. It is not authorization to
   sync. The live AppStore API E2E remains gated on an approved App checkout
-  update, official manifest preparation, `app.weline.test:9523` startup, and a
+  update, official manifest preparation, `app.test.weline.com:9523` startup, and a
   local bearer token outside repository files.
 
 ## 2026-06-23 Post-Sync Drift Failure Gate
@@ -4019,7 +4019,7 @@ Residual gate:
 
 - Compact output is log hygiene only. After the authorized scoped sync, the
   fail-on-drift command must still return `ok=true` before App setup, local App
-  WLS startup on `app.weline.test:9523`, or live typed-tag API E2E can count as
+  WLS startup on `app.test.weline.com:9523`, or live typed-tag API E2E can count as
   final marketplace proof.
 
 ## 2026-06-23 Local AppStore Readiness Next Actions
@@ -4072,7 +4072,7 @@ Residual gate:
 - This makes the remaining AppStore gate executable and auditable, but it does
   not authorize App checkout sync or manifest writes. The live typed-tag API E2E
   still waits for explicit App sync authorization, official manifest
-  preparation, local App WLS startup on `app.weline.test:9523`, and a local
+  preparation, local App WLS startup on `app.test.weline.com:9523`, and a local
   bearer token outside repository files.
 
 ## 2026-06-23 Readiness Action Plan Compact Output
@@ -4173,7 +4173,7 @@ Residual gate:
 
 - Final preflight remains red until the approved App checkout sync removes
   allowed-path drift, the official manifest exists and validates, local App WLS
-  listens on `app.weline.test:9523`, and a local bearer token is provided
+  listens on `app.test.weline.com:9523`, and a local bearer token is provided
   outside repository files.
 
 ## 2026-06-23 Final Marketplace Preflight Endpoint And Source Catalog Lock
@@ -4184,7 +4184,7 @@ Scope:
   production default resolver.
 - The aggregate now validates both deployment fixtures directly:
   `deploy-current-local-development.json` must pass the local deploy endpoint
-  policy and resolve to `https://app.weline.test:9523/api/v1/platform/module/list`;
+  policy and resolve to `https://app.test.weline.com:9523/api/v1/platform/module/list`;
   `deploy-current-production-default.json` must pass the production deploy
   endpoint policy and resolve to
   `https://app.aiweline.com/api/v1/platform/module/list`.
@@ -4221,7 +4221,7 @@ Results:
   canary source `Weline_WlsTagCanary`; all target paths are under
   `E:\WelineFramework\Framework-Official\App\weline\official-apps\modules`.
 - The local deploy endpoint policy fixture returned `passed=true` and resolved
-  to `https://app.weline.test:9523/api/v1/platform/module/list`.
+  to `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - The production deploy endpoint policy fixture returned `passed=true` and
   resolved to `https://app.aiweline.com/api/v1/platform/module/list`.
 - Endpoint-only runner checks returned `passed=true` for both fixtures without
@@ -4259,7 +4259,7 @@ Scope:
   available.
 - The gate verifies that `AccountBindService` and WLS Panel consume the shared
   resolver, and that the checked source files do not contain `www.aiweline.com`
-  or `www.weline.test:9518` as marketplace hosts.
+  or `www.test.weline.com:9518` as marketplace hosts.
 - The final marketplace preflight now includes
   `endpoint_source_contract_passed`.
 
@@ -4288,13 +4288,13 @@ Results:
   `account_bind_uses_resolver`, `panel_exposes_resolver_state`, and
   `source_has_no_www_marketplace_host`.
 - The locked contract remains local development
-  `https://app.weline.test:9523`, deployed production
+  `https://app.test.weline.com:9523`, deployed production
   `https://app.aiweline.com`, and deployment artifact
   `var/deploy/current.json`.
 - Final preflight `--report-only=1` returned exit `0` and reported
   `endpoint_source_contract_passed=true`, `local_endpoint_locked=true`,
   `production_endpoint_locked=true`, local endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`, and production
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, and production
   endpoint `https://app.aiweline.com/api/v1/platform/module/list`.
 - Completion audit returned `ok=true`, `complete=false`, and
   `endpoint_source_contract_gate=true`; `--fail-on-incomplete=1` still exits
@@ -4304,7 +4304,7 @@ Residual gate:
 
 - This closes the source-contract drift risk for the endpoint policy. It does
   not replace the remaining App checkout sync, App WLS startup on
-  `app.weline.test:9523`, official catalog preparation, token readiness, or
+  `app.test.weline.com:9523`, official catalog preparation, token readiness, or
   live typed-tag API E2E gates.
 
 ## 2026-06-23 Local AppStore Typed-Tag Live Gate Wrapper
@@ -4344,7 +4344,7 @@ Results:
 - `local-appstore-typed-tag-live-gate.php --report-only=1` returned exit `0`
   with `status=blocked`, `guard_passed=true`, `ready_for_live=false`,
   `live_executed=false`, local endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`, and no source or
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, and no source or
   local deploy policy errors.
 - Running the same wrapper without `--report-only=1` returned the expected
   non-zero exit while preserving `live_executed=false`; it did not call the
@@ -4361,7 +4361,7 @@ Residual gate:
 
 - The wrapper is now the preferred live proof entry point, but it correctly
   blocks until the approved App checkout sync, official catalog preparation,
-  App WLS startup on `app.weline.test:9523`, and bearer-token readiness are all
+  App WLS startup on `app.test.weline.com:9523`, and bearer-token readiness are all
   complete.
 
 ## 2026-06-23 Production AppStore Typed-Tag Live Gate Wrapper
@@ -4633,9 +4633,9 @@ Results:
   `production_records_exact_app_aiweline_platform_url=true`, and resolved
   endpoint `https://app.aiweline.com/api/v1/platform/module/list`.
 - The local fixture still passed with
-  `raw_platform_url=https://app.weline.test:9523`,
+  `raw_platform_url=https://app.test.weline.com:9523`,
   `local_records_exact_app_weline_platform_url=true`, and resolved endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Final preflight `--report-only=1` returned exit `0` with
   `deploy_endpoint_policy_passed=true`,
   `local_deploy_endpoint_policy_passed=true`, and
@@ -4685,11 +4685,11 @@ Results:
   `local_deploy_endpoint_policy_exact_root=true` and
   `production_deploy_endpoint_policy_exact_root=true`.
 - Final preflight now reports
-  `local_deploy_platform_url=https://app.weline.test:9523` and
+  `local_deploy_platform_url=https://app.test.weline.com:9523` and
   `production_deploy_platform_url=https://app.aiweline.com` in its summary.
 - The local deploy endpoint policy result reports
-  `raw_platform_url=https://app.weline.test:9523`, `exact_root=true`, and
-  resolved endpoint `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `raw_platform_url=https://app.test.weline.com:9523`, `exact_root=true`, and
+  resolved endpoint `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - The production deploy endpoint policy result reports
   `raw_platform_url=https://app.aiweline.com`, `exact_root=true`, and resolved
   endpoint `https://app.aiweline.com/api/v1/platform/module/list`.
@@ -4744,8 +4744,8 @@ Results:
   `ready_for_live=false`, `live_executed=false`, `guard_passed=true`, and
   `local_deploy_policy_exact_root=true`.
 - Local wrapper summary reported
-  `local_deploy_platform_url=https://app.weline.test:9523`; its deploy policy
-  result reported `raw_platform_url=https://app.weline.test:9523` and
+  `local_deploy_platform_url=https://app.test.weline.com:9523`; its deploy policy
+  result reported `raw_platform_url=https://app.test.weline.com:9523` and
   `exact_root=true`.
 - Production wrapper `--report-only=1` against
   `deploy-current-production-default.json` returned exit `0` with
@@ -4764,7 +4764,7 @@ Results:
 Residual gate:
 
 - This locks the wrapper behavior to deployment metadata: local development
-  resolves to `https://app.weline.test:9523`, and production deployment resolves
+  resolves to `https://app.test.weline.com:9523`, and production deployment resolves
   to `https://app.aiweline.com`. It does not run App checkout sync, App setup,
   WLS startup, token reads, or live API calls.
 
@@ -4815,8 +4815,8 @@ Results:
   extension and OPcache warnings before normal output.
 - The normal readiness action plan returned exit `1` as expected because the
   App checkout still has real blockers, but it now reported endpoint
-  `https://app.weline.test:9523`, `source=deploy-current`,
-  `local_deploy_current.raw_platform_url=https://app.weline.test:9523`, and
+  `https://app.test.weline.com:9523`, `source=deploy-current`,
+  `local_deploy_current.raw_platform_url=https://app.test.weline.com:9523`, and
   `local_deploy_current_matches_probe_endpoint=true`.
 - The negative readiness action plan with `--host=127.0.0.1 --port=9518`
   returned exit `1`, reported
@@ -4829,7 +4829,7 @@ Results:
   `guard_passed=true`, and `readiness_deploy_current_locked=true`.
 - Final preflight `--report-only=1` returned exit `0` with
   `local_readiness_deploy_current_locked=true`,
-  `readiness_deploy_current_url=https://app.weline.test:9523`, and
+  `readiness_deploy_current_url=https://app.test.weline.com:9523`, and
   `ready_for_live_local_appstore_e2e=false`.
 - Completion audit returned `ok=true`, `complete=false`, and all required text
   checks passed.
@@ -4889,7 +4889,7 @@ Results:
 - The normal readiness action plan returned exit `1` as expected because the
   App checkout still has real blockers, but it now reported
   `app_env_deploy_mode_local=true`, `app_env.deploy_mode=dev`,
-  `app_env.is_local=true`, endpoint `https://app.weline.test:9523`, and
+  `app_env.is_local=true`, endpoint `https://app.test.weline.com:9523`, and
   `source=deploy-current`.
 - The readiness action plan with `--host=127.0.0.1 --port=9518` returned exit
   `1`, kept `app_env_deploy_mode_local=true`, reported
@@ -5002,7 +5002,7 @@ Scope:
   captured evidence with `--expect=local`, while deployed/production proof must
   validate captured evidence with `--expect=production`.
 - The deployment information rule is now explicit in both runbook and
-  validators: local uses `https://app.weline.test:9523`, production/deployed
+  validators: local uses `https://app.test.weline.com:9523`, production/deployed
   tests read `var/deploy/current.json` and must resolve to
   `https://app.aiweline.com`; `www.aiweline.com` is not a WLS marketplace
   endpoint.
@@ -5034,7 +5034,7 @@ Results:
   negative canary evidence, and bearer/cookie/private-key style secret output.
 - Final preflight `--report-only=1` returned exit `0` with
   `live_e2e_evidence_validator_self_test_passed=true`,
-  `local_endpoint=https://app.weline.test:9523/api/v1/platform/module/list`,
+  `local_endpoint=https://app.test.weline.com:9523/api/v1/platform/module/list`,
   `production_endpoint=https://app.aiweline.com/api/v1/platform/module/list`,
   `ready_for_live_local_appstore_e2e=false`, and `goal_complete=false`.
 - Completion audit returned `ok=true`, `complete=false`, and
@@ -5044,7 +5044,7 @@ Results:
 - Local live-gate report mode returned `status=blocked`,
   `ready_for_live=false`, `live_executed=false`, `live_evidence=null`,
   `guard_passed=true`, and endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Production live-gate report mode returned `status=blocked`,
   `ready_for_live=false`, `live_executed=false`, `live_evidence=null`,
   `guard_passed=true`, `production_deploy_platform_url=https://app.aiweline.com`,
@@ -5104,7 +5104,7 @@ Results:
 - Local capture preflight returned exit `0` with `status=preflight_only`,
   `allow_live=false`, `live_executed=false`, `evidence_written=false`, and the
   underlying endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Production capture preflight using the production fixture returned exit `0`
   with `status=preflight_only`, `allow_live=false`, `live_executed=false`,
   `evidence_written=false`, and the underlying endpoint
@@ -5209,7 +5209,7 @@ Scope:
 - Rechecked the user correction that local development must use the local App
   Store, while deployed and production tests must automatically use the online
   App Store.
-- The locked development root is `https://app.weline.test:9523`.
+- The locked development root is `https://app.test.weline.com:9523`.
 - The locked deployed production root is `https://app.aiweline.com`.
 - Production tests are required to resolve the endpoint from
   `var/deploy/current.json`, not from a manually supplied URL and not from a
@@ -5234,10 +5234,10 @@ Results:
   `DeployOrchestratorService` contains the local and production App Store
   constants, writes the release `current.json` marketplace fields, resolves
   deploy mode and AppStore information, and rejects `www.aiweline.com` /
-  `www.weline.test:9518` as marketplace hosts.
+  `www.test.weline.com:9518` as marketplace hosts.
 - Deploy endpoint policy self-test returned `passed=true`. It proves local
   `dev/local` deployment resolves to
-  `https://app.weline.test:9523/api/v1/platform/module/list`, production
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, production
   deployment resolves to
   `https://app.aiweline.com/api/v1/platform/module/list`, and negative cases
   reject empty production URLs, local URLs in production, `www.aiweline.com`,
@@ -5338,11 +5338,11 @@ Scope:
 
 - Rechecked the corrected App Store endpoint rule after confirming the local
   marketplace checkout is `E:\WelineFramework\Framework-Official\App\weline`
-  and the local marketplace URL is `https://app.weline.test:9523`.
-- Local development remains locked to `https://app.weline.test:9523`.
+  and the local marketplace URL is `https://app.test.weline.com:9523`.
+- Local development remains locked to `https://app.test.weline.com:9523`.
 - Deployed and production checks must resolve from deployment metadata and must
   record `appstore_platform_url=https://app.aiweline.com`.
-- `www.weline.test:9518` and `www.aiweline.com` remain official-site hosts, not
+- `www.test.weline.com:9518` and `www.aiweline.com` remain official-site hosts, not
   WLS marketplace endpoints.
 
 Commands:
@@ -5363,8 +5363,8 @@ Results:
   hosts, API paths stored inside `appstore_platform_url`, and local production
   mode drift.
 - Local deployment metadata fixture returned `passed=true` with
-  `raw_platform_url=https://app.weline.test:9523` and resolved endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `raw_platform_url=https://app.test.weline.com:9523` and resolved endpoint
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Production deployment metadata fixture returned `passed=true` with
   `raw_platform_url=https://app.aiweline.com` and resolved endpoint
   `https://app.aiweline.com/api/v1/platform/module/list`.
@@ -5379,7 +5379,7 @@ Results:
   `https://app.aiweline.com/api/v1/platform/module/list`; it stayed blocked
   because no production bearer token was provided, so no live API call ran.
 - Local live gate report-only mode returned `guard_passed=true` and endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`; it stayed blocked
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`; it stayed blocked
   because the local App Store checkout still needs the authorized sync/setup,
   official manifest, WLS startup, and token readiness before live E2E.
 - No App checkout sync, manifest/source write, WLS start, token read, or live
@@ -5395,7 +5395,7 @@ Scope:
   checks; `--include-drift-rows=1` exposes bounded per-file drift rows for
   human review.
 - This gate keeps the local/deployed App Store endpoint rule explicit:
-  development uses `https://app.weline.test:9523`, while deployed production
+  development uses `https://app.test.weline.com:9523`, while deployed production
   verification must read `https://app.aiweline.com` from deployment metadata.
 
 Commands:
@@ -5426,9 +5426,9 @@ Results:
   `drift_summary_only=false`, and `drift_rows_count=36`; the drift summary was
   `different=19` and `missing_app=17`.
 - Final preflight returned `ok=true`, `ready_for_live_local_appstore_e2e=false`,
-  `goal_complete=false`, `local_deploy_platform_url=https://app.weline.test:9523`,
+  `goal_complete=false`, `local_deploy_platform_url=https://app.test.weline.com:9523`,
   `production_deploy_platform_url=https://app.aiweline.com`,
-  `local_endpoint=https://app.weline.test:9523/api/v1/platform/module/list`,
+  `local_endpoint=https://app.test.weline.com:9523/api/v1/platform/module/list`,
   `production_endpoint=https://app.aiweline.com/api/v1/platform/module/list`,
   and `drifted_count=36`.
 - Completion audit returned `ok=true`, `complete=false`, with 13 of 14
@@ -5484,7 +5484,7 @@ Results:
   and `drift_rows_default=false`, while the packet still returns
   `ready_for_review=true` and `current_state=blocked_before_live_run`.
 - Final preflight returned `ok=true`, `ready_for_live_local_appstore_e2e=false`,
-  `goal_complete=false`, local URL `https://app.weline.test:9523`, production
+  `goal_complete=false`, local URL `https://app.test.weline.com:9523`, production
   URL `https://app.aiweline.com`, and `drifted_count=36`.
 - Completion audit returned `ok=true`, `complete=false`, with 13 of 14
   completion rows proven and one marketplace live E2E row still incomplete.
@@ -5499,7 +5499,7 @@ Scope:
   includes a machine-readable `deferred_action_plan` derived from aggregate
   preflight `summary.readiness_next_actions`.
 - The plan preserves the corrected endpoint split: local development uses
-  `https://app.weline.test:9523`, while deployed production capture uses
+  `https://app.test.weline.com:9523`, while deployed production capture uses
   `https://app.aiweline.com` from `var/deploy/current.json`.
 - The blocked plan keeps the App checkout sync, App setup, official manifest
   materialization, token setup, local WLS startup, and live typed-tag E2E as
@@ -5542,7 +5542,7 @@ Results:
   `endpoint_source_contract_passed=true`,
   `local_deploy_endpoint_policy_exact_root=true`,
   `production_deploy_endpoint_policy_exact_root=true`,
-  local endpoint `https://app.weline.test:9523/api/v1/platform/module/list`,
+  local endpoint `https://app.test.weline.com:9523/api/v1/platform/module/list`,
   and production endpoint
   `https://app.aiweline.com/api/v1/platform/module/list`.
 - No App checkout sync, manifest/source write, WLS start, token read, or live
@@ -5614,7 +5614,7 @@ Scope:
   `var\wls-panel-plan\production-appstore-live-e2e.json`, and hands off to the
   production final evidence gate.
 - This records the user rule: local development uses the local App Store
-  `https://app.weline.test:9523`; deployed production tests must automatically
+  `https://app.test.weline.com:9523`; deployed production tests must automatically
   use `https://app.aiweline.com` from deployment metadata, not a remembered
   `www.*` or local URL.
 
@@ -5646,7 +5646,7 @@ Results:
   `production_capture_requires_deployed_app_aiweline=true`, and
   `production_final_gate_operator_step_present=true`.
 - Final preflight returned `ok=true`, `goal_complete=false`,
-  `local_endpoint=https://app.weline.test:9523/api/v1/platform/module/list`,
+  `local_endpoint=https://app.test.weline.com:9523/api/v1/platform/module/list`,
   and
   `production_endpoint=https://app.aiweline.com/api/v1/platform/module/list`.
 - Strict goal completion gate still exits non-zero with `complete=false`
@@ -5665,7 +5665,7 @@ Scope:
   local capture operator step is checked beyond command shape.
 - The validator now requires the local capture handoff to list the reviewed
   App checkout sync/setup path, official manifest/source catalog readiness,
-  `app.weline.test:9523` listener readiness, and
+  `app.test.weline.com:9523` listener readiness, and
   `WLS_MARKETPLACE_BEARER_TOKEN` setup outside repository files before
   `var\wls-panel-plan\local-appstore-live-e2e.json` can become accepted final
   proof.
@@ -5807,7 +5807,7 @@ Scope:
 - The normal path still reuses AppStore's resolver. The WLS-only fallback now
   uses explicit `deploy=dev/local` to allow
   `WELINE_APPSTORE_PLATFORM_URL`, `appstore.platform_url`, or the local default
-  `https://app.weline.test:9523`; non-local paths read production
+  `https://app.test.weline.com:9523`; non-local paths read production
   `var/deploy/current.json` with `appstore_environment=production` and
   `appstore_platform_url`, then fall back to `https://app.aiweline.com` only for
   runtime panel availability.
@@ -5843,7 +5843,7 @@ Results:
 - Final preflight returned `ok=true`,
   `ready_for_live_local_appstore_e2e=false`, `goal_complete=false`,
   `endpoint_source_contract_passed=true`, local endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`, and production
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, and production
   endpoint `https://app.aiweline.com/api/v1/platform/module/list`.
 - `git diff --check` exited zero. The local PHP CLI still emits duplicate
   extension and OPcache warnings before normal output.
@@ -5858,7 +5858,7 @@ Scope:
   must read an explicit `appstore_platform_url=https://app.aiweline.com` from
   `var/deploy/current.json`.
 - Kept local development locked to the local App Store fixture
-  `https://app.weline.test:9523`.
+  `https://app.test.weline.com:9523`.
 - Removed the acceptance-path behavior where a production deploy-current record
   with an empty `appstore_platform_url` could still resolve to the default
   production endpoint.
@@ -5885,7 +5885,7 @@ Results:
   cases. Production with missing `appstore_platform_url` returns
   `deploy_current_missing_appstore_platform_url`; explicit production resolves
   to `https://app.aiweline.com/api/v1/platform/module/list`; explicit local
-  resolves to `https://app.weline.test:9523/api/v1/platform/module/list`.
+  resolves to `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Deploy endpoint policy self-test still proves local and production positive
   fixtures and rejects empty production URL, local URL in production,
   `www.aiweline.com`, API endpoint paths stored in `appstore_platform_url`, and
@@ -5964,7 +5964,7 @@ Scope:
   evidence gate accepted the capture.
 - Capture output exposes `final_gate_passed_when_written` and
   `tool_results.final_evidence_gate`, so a deployment run can prove whether the
-  local environment used `https://app.weline.test:9523` and the production
+  local environment used `https://app.test.weline.com:9523` and the production
   environment used `https://app.aiweline.com`.
 - The capture self-test now includes local and production final-gate argument
   cases. The self-test is in-memory only.
@@ -6001,14 +6001,14 @@ Results:
   missing evidence files before a live capture run.
 - Local capture without live authorization returned `status=preflight_only`,
   `live_executed=false`, `evidence_written=false`, local endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`, and no
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, and no
   `tool_results.final_evidence_gate` payload because no evidence file was
   written in preflight-only mode.
 - Final preflight returned `ok=true`,
   `ready_for_live_local_appstore_e2e=false`, `goal_complete=false`,
   `tools_parsed=true`, `live_e2e_capture_self_test_passed=true`,
   `live_e2e_final_gate_self_test_passed=true`, local endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`, and production
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, and production
   endpoint `https://app.aiweline.com/api/v1/platform/module/list`.
 - Completion audit returned `ok=true`, `complete=false`, with 13 of 14
   completion rows proven, 20 of 22 traceability rows proven, three open rows,
@@ -6061,8 +6061,8 @@ Results:
   `current_state=blocked_before_local_live_capture`,
   `ready_for_local_live_capture=false`, `goal_complete=false`,
   `user_authorization_required=true`, and `user_secret_required=true`.
-- Environment policy reported local root `https://app.weline.test:9523`,
-  local endpoint `https://app.weline.test:9523/api/v1/platform/module/list`,
+- Environment policy reported local root `https://app.test.weline.com:9523`,
+  local endpoint `https://app.test.weline.com:9523/api/v1/platform/module/list`,
   production root `https://app.aiweline.com`, production endpoint
   `https://app.aiweline.com/api/v1/platform/module/list`, and forbidden roots
   including `https://www.aiweline.com`.
@@ -6074,7 +6074,7 @@ Results:
   source for `app.aiweline.com`, conclusive `module:wls-extra` negative canary,
   and `no_secret_values_in_evidence`.
 - Source summary still reports `completion_open_rows=3`, `drifted_count=36`,
-  local platform URL `https://app.weline.test:9523`, and production platform
+  local platform URL `https://app.test.weline.com:9523`, and production platform
   URL `https://app.aiweline.com`.
 - Aggregate final preflight now mirrors the new workorder gate with
   `checks.final_workorder_self_test_passed=true`,
@@ -6099,7 +6099,7 @@ Scope:
   `tool_results`.
 - Updated completion audit, index, final acceptance runbook, completion matrix,
   and traceability so local development keeps using
-  `https://app.weline.test:9523` while deployed/production checks are accepted
+  `https://app.test.weline.com:9523` while deployed/production checks are accepted
   only through deployed `var/deploy/current.json` resolving to
   `https://app.aiweline.com`.
 
@@ -6133,7 +6133,7 @@ Results:
 - Final preflight returned `ok=true`,
   `ready_for_live_local_appstore_e2e=false`, `goal_complete=false`,
   `tools_parsed=true`, `live_e2e_final_gate_self_test_passed=true`,
-  local endpoint `https://app.weline.test:9523/api/v1/platform/module/list`,
+  local endpoint `https://app.test.weline.com:9523/api/v1/platform/module/list`,
   production endpoint `https://app.aiweline.com/api/v1/platform/module/list`,
   and `blocked_preflight_no_evidence_files=true`.
 - Completion audit returned `ok=true`, `complete=false`, with 13 of 14
@@ -6193,12 +6193,12 @@ Results:
   `local_live_gate_self_test_case_count=6`,
   `production_live_gate_self_test_passed=true`,
   `production_live_gate_self_test_case_count=6`,
-  local endpoint `https://app.weline.test:9523/api/v1/platform/module/list`,
+  local endpoint `https://app.test.weline.com:9523/api/v1/platform/module/list`,
   and production endpoint `https://app.aiweline.com/api/v1/platform/module/list`.
 - Local live-gate report-only output stayed blocked with
   `live_executed=false`, `guard_passed=true`,
   `manual_endpoint_rejected=true`, `local_insecure_disabled=true`, and the
-  endpoint locked to `https://app.weline.test:9523/api/v1/platform/module/list`.
+  endpoint locked to `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Production live-gate report-only output stayed blocked with
   `live_executed=false`, `guard_passed=true`,
   `manual_endpoint_rejected=true`, `production_insecure_disabled=true`, and
@@ -6432,7 +6432,7 @@ Scope:
   `official_manifest_catalog_source_plan_ok` before it can be marked safe for
   review.
 - This keeps the local development AppStore target locked to
-  `https://app.weline.test:9523`, while deployed production live proof remains
+  `https://app.test.weline.com:9523`, while deployed production live proof remains
   locked to `https://app.aiweline.com` from deployment metadata.
 
 Commands:
@@ -6458,7 +6458,7 @@ Expected assertions:
   `negative_canary_count=1`, and `source_entry_count=5`.
 - Final preflight still returns `ready_for_live_local_appstore_e2e=false` and
   `goal_complete=false` until the authorized App checkout sync, App setup,
-  `app.weline.test:9523` WLS startup, bearer token, and local live typed-tag
+  `app.test.weline.com:9523` WLS startup, bearer token, and local live typed-tag
   evidence exist.
 - No App checkout sync, manifest/source write, WLS start, token read, or live
   AppStore network request is part of this gate.
@@ -6502,7 +6502,7 @@ Results:
   `ready_for_live_local_appstore_e2e=false`, `goal_complete=false`,
   `sync_manifest_self_test_passed=true`, the same action-review and
   rollback-review command fields, `drifted_count=36`, local endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`, and production
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, and production
   endpoint `https://app.aiweline.com/api/v1/platform/module/list`.
 - PHP lint passed for `local-appstore-readiness-probe.php`. The local PHP CLI
   still emits duplicate extension and OPcache warnings before normal output.
@@ -6540,7 +6540,7 @@ Results:
 - Final preflight returned `ok=true`,
   `ready_for_live_local_appstore_e2e=false`, `goal_complete=false`,
   `sync_manifest_self_test_passed=true`, `tools_parsed=true`,
-  `drifted_count=36`, local URL `https://app.weline.test:9523`, and production
+  `drifted_count=36`, local URL `https://app.test.weline.com:9523`, and production
   URL `https://app.aiweline.com`.
 - Authorization packet with drift rows and rollback review remained safe for
   review: `current_state=blocked_before_live_run`,
@@ -6562,7 +6562,7 @@ Scope:
 - The new self-test case is
   `acceptance_contract_preserves_final_evidence_invariants`.
 - This locks the local development marketplace proof to
-  `https://app.weline.test:9523` and locks deployed/production proof to
+  `https://app.test.weline.com:9523` and locks deployed/production proof to
   `appstore_platform_url=https://app.aiweline.com` read from
   `var/deploy/current.json`.
 
@@ -6595,7 +6595,7 @@ Results:
 - Final preflight returned `ok=true`,
   `ready_for_live_local_appstore_e2e=false`, `goal_complete=false`,
   `final_workorder_self_test_passed=true`, local deploy platform URL
-  `https://app.weline.test:9523`, and production deploy platform URL
+  `https://app.test.weline.com:9523`, and production deploy platform URL
   `https://app.aiweline.com`.
 - Strict goal completion gate exited `1` as expected with `complete=false`.
   The remaining blockers are the incomplete marketplace typed-tag live E2E row
@@ -6652,8 +6652,8 @@ Results:
   checks as true.
 - Existing AppStore resolver PHPUnit coverage passed: 3 tests, 9 assertions.
 - A framework-bootstrap smoke snippet proved
-  `WELINE_APPSTORE_PLATFORM_URL=https://www.weline.test:9518` in local mode
-  resolves to `https://app.weline.test:9523`, and production
+  `WELINE_APPSTORE_PLATFORM_URL=https://www.test.weline.com:9518` in local mode
+  resolves to `https://app.test.weline.com:9523`, and production
   `current.json` with a `www.*` website URL resolves back to
   `https://app.aiweline.com`. Final live evidence still requires deployed
   `current.json` to explicitly record `appstore_platform_url=https://app.aiweline.com`;
@@ -6863,7 +6863,7 @@ Scope:
 - The new self-test case is
   `production_captured_payload_uses_deploy_current_metadata`.
 - This keeps local development capture on
-  `https://app.weline.test:9523/api/v1/platform/module/list` with
+  `https://app.test.weline.com:9523/api/v1/platform/module/list` with
   `endpoint_source=deploy-current:tools/deploy-current-local-development.json`,
   while production capture must use
   `https://app.aiweline.com/api/v1/platform/module/list` with
@@ -6903,7 +6903,7 @@ Results:
   and the checked source has no `www.*` marketplace host.
 - Deploy endpoint policy returned `passed=true` for production
   `appstore_platform_url=https://app.aiweline.com` and local
-  `appstore_platform_url=https://app.weline.test:9523`.
+  `appstore_platform_url=https://app.test.weline.com:9523`.
 - Endpoint resolution-only check returned `passed=true` for production and
   resolved to `https://app.aiweline.com/api/v1/platform/module/list` from the
   provided deployment-current artifact, with token redacted and no live request.
@@ -7012,8 +7012,8 @@ Scope:
   and not a leftover local env/config value.
 - Local development metadata remains allowed only through `local_default`,
   `env:WELINE_APPSTORE_PLATFORM_URL`, or `config:appstore.platform_url`, all of
-  which resolve to the local App Store root `https://app.weline.test:9523`.
-- `www.weline.test:9518` and `www.aiweline.com` remain forbidden marketplace
+  which resolve to the local App Store root `https://app.test.weline.com:9523`.
+- `www.test.weline.com:9518` and `www.aiweline.com` remain forbidden marketplace
   roots; they are official website endpoints, not App Store endpoints.
 
 Commands:
@@ -7038,7 +7038,7 @@ Results:
   `local_rejects_unknown_appstore_source`.
 - Local deploy-current fixture passed with
   `platform_url_source=local_default` and resolved endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Production deploy-current fixture passed with
   `platform_url_source=production_default` and resolved endpoint
   `https://app.aiweline.com/api/v1/platform/module/list`.
@@ -7122,13 +7122,13 @@ Scope:
 - Rechecked the corrected marketplace split after the local AppStore checkout
   was identified as `E:\WelineFramework\Framework-Official\App\weline`.
 - Local development remains pinned to
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Production/deployed checks must resolve from
   `deploy_root/var/deploy/current.json`; the deploy artifact must record
   `appstore_environment=production`,
   `appstore_platform_url=https://app.aiweline.com`, and
   `appstore_platform_url_source=production_default`.
-- `www.weline.test:9518`, `www.aiweline.com`, manual production endpoints,
+- `www.test.weline.com:9518`, `www.aiweline.com`, manual production endpoints,
   insecure production mode, empty production URLs, local production URLs, and
   platform fields that store the full API path are rejected by the read-only
   gates before any token or live request is allowed.
@@ -7159,7 +7159,7 @@ Results:
   OPcache warnings before normal output.
 - Deploy endpoint policy self-test returned `passed=true`; positive cases
   resolved local to
-  `https://app.weline.test:9523/api/v1/platform/module/list` and production to
+  `https://app.test.weline.com:9523/api/v1/platform/module/list` and production to
   `https://app.aiweline.com/api/v1/platform/module/list`.
 - The same self-test rejected empty production URLs, local URLs in production,
   `www.aiweline.com`, API-path values in `appstore_platform_url`, production
@@ -7167,7 +7167,7 @@ Results:
   unknown local endpoint sources.
 - Local deploy-current fixture passed with `environment=local`,
   `platform_url_source=local_default`, and endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - Production deploy-current fixture passed with `environment=production`,
   `platform_url_source=production_default`, and endpoint
   `https://app.aiweline.com/api/v1/platform/module/list`.
@@ -7186,7 +7186,7 @@ Results:
 - `marketplace-typed-tag-e2e.php --resolve-endpoint-only=1` returned
   `endpoint_source=deploy-current:*` for both fixtures: production resolved to
   `https://app.aiweline.com/api/v1/platform/module/list`, local resolved to
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - No App checkout sync, deploy current write, manifest/source write, WLS start,
   token read, live AppStore request, or browser automation was performed.
 
@@ -7196,11 +7196,11 @@ Scope:
 
 - Rechecked the final WLS Panel marketplace handoff after the local AppStore
   checkout was confirmed as `E:\WelineFramework\Framework-Official\App\weline`
-  and the local endpoint as `https://app.weline.test:9523`.
+  and the local endpoint as `https://app.test.weline.com:9523`.
 - Reconfirmed the deployment endpoint contract: local development uses the
   local AppStore root, while production/deployed tests must read
   `appstore_platform_url=https://app.aiweline.com` from deployment metadata.
-- Rechecked that `www.weline.test:9518` and `www.aiweline.com` remain forbidden
+- Rechecked that `www.test.weline.com:9518` and `www.aiweline.com` remain forbidden
   marketplace roots for this gate.
 
 Commands:
@@ -7228,7 +7228,7 @@ Results:
   `only_live_step_runnable_when_ready=true`, and `no_secret_values=true`.
 - Readiness action-plan mode returned `ready=false`. Current blockers are the
   missing App sqlite composite-primary-key guard, closed
-  `app.weline.test:9523`, missing bearer-token env, and missing official
+  `app.test.weline.com:9523`, missing bearer-token env, and missing official
   `official-apps/manifest.json` with the required positive WLS entries plus the
   strict `module:wls-extra` negative canary.
 - Drift summary returned `ok=true` with `allowed_path_count=46`,
@@ -7447,7 +7447,7 @@ Results:
   corrected rollback review whose out-of-scope paths now preserve the
   `app/code/...` prefix.
 - The packet still locks marketplace roots to local
-  `https://app.weline.test:9523` and production `https://app.aiweline.com`.
+  `https://app.test.weline.com:9523` and production `https://app.aiweline.com`.
   This is read-only review evidence; it does not authorize App checkout sync,
   setup, deploy-current writes, WLS startup, token export, or live AppStore
   requests.
@@ -7507,7 +7507,7 @@ Results:
   manifest and changes the fingerprint when edited.
 - Final workorder returned `workorder_ready=true`,
   `current_state=blocked_before_local_live_capture`, local root
-  `https://app.weline.test:9523`, production root
+  `https://app.test.weline.com:9523`, production root
   `https://app.aiweline.com`, and the same
   `source_summary.drift_review_fingerprint` as the aggregate preflight.
 - Deferred-action validation returned `passed=true` with
@@ -7572,7 +7572,7 @@ Results:
 - Aggregate final preflight returned `ok=true`,
   `ready_for_live_local_appstore_e2e=false`, and `goal_complete=false`; the
   locked local endpoint remains
-  `https://app.weline.test:9523/api/v1/platform/module/list`, and the locked
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, and the locked
   production endpoint remains
   `https://app.aiweline.com/api/v1/platform/module/list`.
 - Completion audit returned `ok=true`, `complete=false`,
@@ -7652,8 +7652,8 @@ Scope:
   passing workorder/authorization consistency payload into
   `capture_metadata.workorder_authorization_consistency`.
 - The captured metadata records the locked local development root
-  `https://app.weline.test:9523`, local module-list endpoint
-  `https://app.weline.test:9523/api/v1/platform/module/list`, deployed
+  `https://app.test.weline.com:9523`, local module-list endpoint
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`, deployed
   production root `https://app.aiweline.com`, deployed module-list endpoint
   `https://app.aiweline.com/api/v1/platform/module/list`, and the shared
   `drift_review_fingerprint`.
@@ -7704,7 +7704,7 @@ Results:
   `authorization_pack_ready_for_review=true` with
   `current_state=blocked_before_live_run`.
 - Workorder/authorization consistency gate returned `passed=true`, proving the
-  local root remains `https://app.weline.test:9523` and deployed production
+  local root remains `https://app.test.weline.com:9523` and deployed production
   remains `https://app.aiweline.com` across final preflight, final workorder,
   authorization packet, and captured-evidence metadata contract.
 - Completion audit still returns `complete=false`; strict goal completion gate
@@ -7726,13 +7726,13 @@ Scope:
   now only accept production `var/deploy/current.json` marketplace metadata when
   `appstore_platform_url=https://app.aiweline.com` and
   `appstore_platform_url_source=production_default`.
-- A production deployment artifact that points to `https://app.weline.test:9523`,
+- A production deployment artifact that points to `https://app.test.weline.com:9523`,
   `www.*`, a custom source, or a full API URL cannot become the runtime
   marketplace root. The runtime falls back to the locked production root, and
   the deploy endpoint policy gate rejects the drift before live evidence can be
   accepted.
 - The existing deploy contract remains: local development uses
-  `https://app.weline.test:9523`; production capture uses deployed
+  `https://app.test.weline.com:9523`; production capture uses deployed
   `var/deploy/current.json` and resolves to `https://app.aiweline.com`.
 
 Validation:
@@ -7789,7 +7789,7 @@ Results:
 Scope:
 
 - Local development is now locked to
-  `https://app.weline.test:9523`. `AppStorePlatformUrlResolver`,
+  `https://app.test.weline.com:9523`. `AppStorePlatformUrlResolver`,
   `DeployOrchestratorService`, and the standalone `WlsPanel` fallback resolver
   only accept local env/config marketplace values when the normalized root is
   exactly that URL.
@@ -7828,7 +7828,7 @@ Results:
   including `rejects_runtime_without_locked_local_appstore_root`.
 - Deploy endpoint policy self-test returned `passed=true`. The local fixture
   resolved exactly to
-  `https://app.weline.test:9523/api/v1/platform/module/list` with
+  `https://app.test.weline.com:9523/api/v1/platform/module/list` with
   `platform_url_source=local_default`; the production fixture resolved exactly
   to `https://app.aiweline.com/api/v1/platform/module/list` with
   `platform_url_source=production_default`.
@@ -7860,7 +7860,7 @@ Scope:
   resolving the right URL from a runtime fallback or fixture.
 - `96-requirement-traceability.md` now records the same split: local
   development uses `E:\WelineFramework\Framework-Official\App\weline` and
-  `https://app.weline.test:9523`; deployed production capture uses
+  `https://app.test.weline.com:9523`; deployed production capture uses
   `https://app.aiweline.com` only from deployment metadata carrying
   `production_default`.
 
@@ -7905,7 +7905,7 @@ Results:
   `production_capture_requires_production_default_source=true`.
 - Aggregate final preflight returned `ok=true`,
   `ready_for_live_local_appstore_e2e=false`, `goal_complete=false`,
-  local endpoint `https://app.weline.test:9523/api/v1/platform/module/list`,
+  local endpoint `https://app.test.weline.com:9523/api/v1/platform/module/list`,
   and production endpoint
   `https://app.aiweline.com/api/v1/platform/module/list`.
 - No App checkout sync, setup, deploy-current write, manifest/source write, WLS
@@ -7919,7 +7919,7 @@ Scope:
 - Updated the WLS Panel Plan index, completion matrix notes, and final
   acceptance runbook so the marketplace environment rule is explicit in both
   human and machine-facing handoff text.
-- Local development remains locked to `https://app.weline.test:9523`.
+- Local development remains locked to `https://app.test.weline.com:9523`.
 - Production/deployed marketplace proof must read deployed
   `var/deploy/current.json` and require both
   `appstore_platform_url=https://app.aiweline.com` and
@@ -7947,7 +7947,7 @@ Results:
   and `appstore_platform_url_source=production_default`.
 - Aggregate final preflight returned `ok=true`,
   `ready_for_live_local_appstore_e2e=false`, `goal_complete=false`, local
-  endpoint `https://app.weline.test:9523/api/v1/platform/module/list`, and
+  endpoint `https://app.test.weline.com:9523/api/v1/platform/module/list`, and
   production endpoint `https://app.aiweline.com/api/v1/platform/module/list`.
 - `git diff --check` reported no whitespace errors for the touched plan docs.
 - The trailing-whitespace scan returned no matches.
@@ -7987,7 +7987,7 @@ Results:
 - `marketplace-typed-tag-e2e.php` lint passed. Its 14-case self-test passed,
   including production `production_default` source acceptance, production
   non-`production_default` source rejection, production API-path platform URL
-  rejection, local `app.weline.test:9523` source acceptance, and local
+  rejection, local `app.test.weline.com:9523` source acceptance, and local
   `production_default` source rejection.
 - Production endpoint-only preflight resolved
   `tools/deploy-current-production-default.json` to
@@ -7995,7 +7995,7 @@ Results:
   `endpoint_source=deploy-current:*` and `appstore_environment=production`.
 - Local endpoint-only preflight resolved
   `tools/deploy-current-local-development.json` to
-  `https://app.weline.test:9523/api/v1/platform/module/list` with
+  `https://app.test.weline.com:9523/api/v1/platform/module/list` with
   `endpoint_source=deploy-current:*` and `appstore_environment=local`.
 - Local and production live-gate wrapper self-tests passed with no file read,
   no network, no token, no WLS start, and no writes.
@@ -8005,7 +8005,7 @@ Results:
   E2E chain.
 - Aggregate final preflight returned `ok=true`,
   `ready_for_live_local_appstore_e2e=false`, `goal_complete=false`, local
-  endpoint `https://app.weline.test:9523/api/v1/platform/module/list`, and
+  endpoint `https://app.test.weline.com:9523/api/v1/platform/module/list`, and
   production endpoint `https://app.aiweline.com/api/v1/platform/module/list`.
 - `git diff --check` reported no whitespace errors for the touched files. The
   trailing-whitespace scan returned no matches.
@@ -8050,7 +8050,7 @@ Results:
 - Authorization packet returned `ok=true`,
   `authorization_pack_ready_for_review=true`,
   `current_state=blocked_before_live_run`, exact local root
-  `https://app.weline.test:9523`, exact production root
+  `https://app.test.weline.com:9523`, exact production root
   `https://app.aiweline.com`, and `drifted_count=47`.
 - Rollback review in the authorization packet still sees two out-of-scope App
   checkout rows, both outside the allowed sync path list:
@@ -8062,7 +8062,7 @@ Results:
   preflight, final workorder, and authorization packet all share the same
   freshly computed drift fingerprint, local App checkout
   `E:\WelineFramework\Framework-Official\App\weline`, local App env endpoint
-  `https://app.weline.test:9523`, and production root
+  `https://app.test.weline.com:9523`, and production root
   `https://app.aiweline.com`.
 - Strict goal-completion gate returned exit code `1` with `complete=false`, as
   expected. It reports completion audit incomplete, local final evidence

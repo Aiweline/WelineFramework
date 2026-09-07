@@ -63,7 +63,7 @@ final class SslCertificateMacosTrustTest extends TestCase
 
         $sessionCommands = [];
         $session = new AdministratorAuthorizationSession(
-            commandRunner: static function (array $command) use (&$sessionCommands): int {
+            commandRunner: static function (array $command, ?array $environment = null) use (&$sessionCommands): int {
                 $sessionCommands[] = $command;
 
                 return 0;

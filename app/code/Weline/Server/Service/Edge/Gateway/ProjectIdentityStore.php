@@ -1820,7 +1820,8 @@ final class ProjectIdentityStore
             if (\trim($base) === '') {
                 throw new \RuntimeException('WLS edge state requires LOCALAPPDATA or PROGRAMDATA.');
             }
-            return \rtrim($base, '/\\') . DIRECTORY_SEPARATOR . 'Weline'
+            $base = $this->normalizeAbsolutePath($base, 'LOCALAPPDATA/PROGRAMDATA');
+            return $base . DIRECTORY_SEPARATOR . 'Weline'
                 . DIRECTORY_SEPARATOR . 'WlsEdge' . DIRECTORY_SEPARATOR . 'v2';
         }
         $stateHome = (string)(\getenv('XDG_STATE_HOME') ?: '');
@@ -1829,10 +1830,13 @@ final class ProjectIdentityStore
             if (\trim($userHome) === '') {
                 throw new \RuntimeException('WLS edge state requires HOME or XDG_STATE_HOME.');
             }
-            $stateHome = \rtrim($userHome, '/\\') . DIRECTORY_SEPARATOR . '.local'
+            $userHome = $this->normalizeAbsolutePath($userHome, 'HOME');
+            $stateHome = $userHome . DIRECTORY_SEPARATOR . '.local'
                 . DIRECTORY_SEPARATOR . 'state';
+        } else {
+            $stateHome = $this->normalizeAbsolutePath($stateHome, 'XDG_STATE_HOME');
         }
-        return \rtrim($stateHome, '/\\') . DIRECTORY_SEPARATOR . 'weline'
+        return $stateHome . DIRECTORY_SEPARATOR . 'weline'
             . DIRECTORY_SEPARATOR . 'wls-edge' . DIRECTORY_SEPARATOR . 'v2';
     }
 
@@ -1842,6 +1846,21 @@ final class ProjectIdentityStore
             throw new \RuntimeException($label . ' contains a null byte.');
         }
         $path = \trim($path);
+        // Reject URI-like values (e.g. https://host:port) before absolute checks.
+        // Agent shells have polluted HOME with site URLs / HTTP status codes, which
+        // otherwise become cwd-relative paths such as <repo>/https:/host/...
+        if (\preg_match('#\A[a-z][a-z0-9+.-]*:#i', $path) === 1
+            && \preg_match('/\A[A-Za-z]:[\\\\\/]/', $path) !== 1
+        ) {
+            throw new \RuntimeException(
+                $label . ' must be a filesystem path, not a URI or scheme-prefixed value.'
+            );
+        }
+        if (\preg_match('/\A\d{3}\z/D', $path) === 1) {
+            throw new \RuntimeException(
+                $label . ' looks like an HTTP status code, not a filesystem path.'
+            );
+        }
         $absolute = \str_starts_with($path, '/')
             || \preg_match('/^[A-Za-z]:[\\\\\/]/', $path) === 1
             || \str_starts_with($path, '\\\\');

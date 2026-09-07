@@ -8,7 +8,10 @@ namespace Weline\Server\Service;
  * One process-local sudo ticket for bounded privileged startup actions.
  *
  * The session never accepts, stores, pipes, or prints a password. Interactive
- * authentication is handled exclusively by sudo; every later action uses -n.
+ * authentication is handled exclusively by sudo:
+ * - TTY start: `sudo -v`
+ * - macOS non-TTY start (Cursor/agent): `sudo -Av` + fixed GUI askpass helper
+ * Every later action uses `sudo -n` against the same ticket.
  */
 final class AdministratorAuthorizationSession
 {
@@ -17,7 +20,7 @@ final class AdministratorAuthorizationSession
 
     private ?bool $authorizationGranted = null;
 
-    /** @var null|\Closure(array<int,string>):int */
+    /** @var null|\Closure(array<int,string>, ?array<string,string>):int */
     private readonly ?\Closure $commandRunner;
 
     /** @var null|\Closure():bool */
@@ -26,16 +29,21 @@ final class AdministratorAuthorizationSession
     /** @var null|\Closure():int */
     private readonly ?\Closure $effectiveUidProbe;
 
+    /** @var null|\Closure():?string */
+    private readonly ?\Closure $askpassPathResolver;
+
     public function __construct(
         ?\Closure $commandRunner = null,
         ?\Closure $interactiveProbe = null,
         ?\Closure $effectiveUidProbe = null,
         private readonly string $sudoBinary = '/usr/bin/sudo',
         private readonly ?string $osFamily = null,
+        ?\Closure $askpassPathResolver = null,
     ) {
         $this->commandRunner = $commandRunner;
         $this->interactiveProbe = $interactiveProbe;
         $this->effectiveUidProbe = $effectiveUidProbe;
+        $this->askpassPathResolver = $askpassPathResolver;
     }
 
     /**
@@ -72,18 +80,31 @@ final class AdministratorAuthorizationSession
         if ($this->effectiveUid() === 0) {
             return $this->authorizationGranted = true;
         }
-        if (!$this->interactive()
-            || $this->sudoBinary === ''
+        if ($this->sudoBinary === ''
             || \str_contains($this->sudoBinary, "\0")
             || ($this->commandRunner === null && !\is_executable($this->sudoBinary))
         ) {
             return $this->authorizationGranted = false;
         }
 
+        if ($this->interactive()) {
+            return $this->authorizationGranted = $this->runCommand([
+                $this->sudoBinary,
+                '-v',
+            ]) === 0;
+        }
+
+        $askpass = $this->resolveAskpassPath();
+        if ($askpass === null) {
+            return $this->authorizationGranted = false;
+        }
+
+        $env = $this->buildAskpassEnvironment($askpass);
+
         return $this->authorizationGranted = $this->runCommand([
             $this->sudoBinary,
-            '-v',
-        ]) === 0;
+            '-Av',
+        ], $env) === 0;
     }
 
     /**
@@ -140,13 +161,98 @@ final class AdministratorAuthorizationSession
         return @\stream_isatty(STDIN) && @\stream_isatty(STDOUT);
     }
 
+    private function resolveAskpassPath(): ?string
+    {
+        if ($this->askpassPathResolver !== null) {
+            $resolved = ($this->askpassPathResolver)();
+            if (!\is_string($resolved) || $resolved === '' || \str_contains($resolved, "\0")) {
+                return null;
+            }
+
+            return $resolved;
+        }
+
+        if ($this->osFamily() !== 'Darwin') {
+            return null;
+        }
+
+        $candidate = \dirname(__DIR__)
+            . DIRECTORY_SEPARATOR
+            . 'bin'
+            . DIRECTORY_SEPARATOR
+            . 'wls_sudo_askpass.php';
+        $askpass = @\realpath($candidate);
+        $phpBinary = @\realpath(PHP_BINARY);
+        if (!\is_string($askpass)
+            || $askpass === ''
+            || !\is_file($askpass)
+            || \is_link($candidate)
+            || !\is_string($phpBinary)
+            || $phpBinary === ''
+            || !\is_file($phpBinary)
+            || !\is_executable($phpBinary)
+        ) {
+            return null;
+        }
+
+        // sudo askpass must be a single executable path. Wrap via a tiny
+        // executable shim is unnecessary when the helper itself has a shebang
+        // and is executable; fall back to php wrapper script path only when
+        // the file mode already allows direct execution.
+        if (!\is_executable($askpass)) {
+            return null;
+        }
+
+        return $askpass;
+    }
+
+    /**
+     * @return array<string,string>
+     */
+    private function buildAskpassEnvironment(string $askpass): array
+    {
+        $env = [];
+        $snapshot = \getenv();
+        if (\is_array($snapshot)) {
+            foreach ($snapshot as $key => $value) {
+                if (!\is_string($key)
+                    || $key === ''
+                    || \str_contains($key, "\0")
+                    || !\is_string($value)
+                    || \str_contains($value, "\0")
+                ) {
+                    continue;
+                }
+                $env[$key] = $value;
+            }
+        }
+        foreach (['PATH', 'HOME', 'USER', 'LOGNAME', 'SHELL', 'TMPDIR', 'LANG', 'LC_ALL'] as $key) {
+            if (isset($env[$key])) {
+                continue;
+            }
+            $value = \getenv($key);
+            if (\is_string($value) && $value !== '' && !\str_contains($value, "\0")) {
+                $env[$key] = $value;
+            }
+        }
+        if (!isset($env['PATH']) || \trim($env['PATH']) === '') {
+            $env['PATH'] = '/usr/bin:/bin:/usr/sbin:/sbin:/opt/homebrew/bin:/usr/local/bin';
+        }
+        $env['SUDO_ASKPASS'] = $askpass;
+        // Force askpass even when a controlling terminal is absent.
+        $env['SUDO_ASKPASS_REQUIRE'] = 'force';
+
+        return $env;
+    }
+
     /**
      * @param array<int,string> $command
+     * @param array<string,string>|null $environment
      */
-    private function runCommand(array $command): int
+    private function runCommand(array $command, ?array $environment = null): int
     {
         if ($this->commandRunner !== null) {
-            return (int)($this->commandRunner)($command);
+            return (int)($this->commandRunner)($command, $environment);
         }
         if (!\function_exists('proc_open')
             || !\function_exists('proc_get_status')
@@ -158,13 +264,13 @@ final class AdministratorAuthorizationSession
 
         $nullDevice = $this->osFamily() === 'Windows' ? 'NUL' : '/dev/null';
         $descriptors = [
-            0 => \defined('STDIN') && \is_resource(STDIN)
+            0 => \defined('STDIN') && \is_resource(STDIN) && $environment === null
                 ? STDIN
                 : ['file', $nullDevice, 'r'],
-            1 => \defined('STDOUT') && \is_resource(STDOUT)
+            1 => \defined('STDOUT') && \is_resource(STDOUT) && $environment === null
                 ? STDOUT
                 : ['file', $nullDevice, 'w'],
-            2 => \defined('STDERR') && \is_resource(STDERR)
+            2 => \defined('STDERR') && \is_resource(STDERR) && $environment === null
                 ? STDERR
                 : ['file', $nullDevice, 'w'],
         ];
@@ -173,7 +279,7 @@ final class AdministratorAuthorizationSession
             $descriptors,
             $pipes,
             null,
-            null,
+            $environment,
             ['bypass_shell' => true],
         );
         if (!\is_resource($process)) {

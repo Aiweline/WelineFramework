@@ -22,7 +22,8 @@ final class CoroutineRuntime
      */
     public function wait(array &$read, array &$write, array &$except, int $defaultUsec = 100000): int|false
     {
-        $this->scheduler->collectIoWaitStreams($read, $write);
+        $ioTimings = [];
+        $this->scheduler->collectIoWaitStreams($read, $write, $ioTimings);
 
         $timeoutSec = 0;
         $timeoutUsec = $defaultUsec;
@@ -44,7 +45,25 @@ final class CoroutineRuntime
         $readyRead = $read;
         $readyWrite = $write;
         $readyExcept = $except;
-        $changed = $this->loop->wait($readyRead, $readyWrite, $readyExcept, $timeoutSec, $timeoutUsec);
+        if ($ioTimings === []) {
+            $changed = $this->loop->wait($readyRead, $readyWrite, $readyExcept, $timeoutSec, $timeoutUsec);
+        } else {
+            $pollStartNs = \hrtime(true);
+            foreach ($ioTimings as $ioTiming) {
+                $ioTiming->first_poll_start_ns = $pollStartNs;
+            }
+            try {
+                $changed = $this->loop->wait($readyRead, $readyWrite, $readyExcept, $timeoutSec, $timeoutUsec);
+            } finally {
+                $pollEndNs = \hrtime(true);
+                foreach ($ioTimings as $ioTiming) {
+                    // Re-registration can reset a carrier while the backend runs.
+                    if ($ioTiming->first_poll_start_ns === $pollStartNs) {
+                        $ioTiming->first_poll_end_ns = $pollEndNs;
+                    }
+                }
+            }
+        }
 
         // Always publish the ready sets back to the caller (stream_select semantics).
         $read = \is_array($readyRead) ? $readyRead : [];

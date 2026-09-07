@@ -1054,7 +1054,10 @@ PHP;
                 self::SELECT_MICROSECONDS,
                 ($executionDeadline - $now) * 1_000_000,
             ));
-            self::drainReadyPipes($pipes, $stdout, $stderr, $truncated, $waitMicros);
+            $pipeExitStatus = null;
+            self::drainReadyPipes(
+                $pipes, $stdout, $stderr, $truncated, $waitMicros, $process, $pipeExitStatus,
+            );
             self::drainReadyToken($pipes, $readyBuffer, $launchInvalid);
             if (!$groupReady && !$launchInvalid && \str_contains($readyBuffer, "\n")) {
                 $groupReady = \hash_equals(
@@ -1067,7 +1070,7 @@ PHP;
                     unset($pipes[3]);
                 }
             }
-            $status = @\proc_get_status($process);
+            $status = $pipeExitStatus ?? @\proc_get_status($process);
             if (!\is_array($status)) {
                 $statusUnknown = true;
                 $status = ['running' => true, 'exitcode' => -1];
@@ -2115,6 +2118,8 @@ PHP;
         string &$stderr,
         bool &$truncated,
         int $waitMicroseconds,
+        $process = null,
+        ?array &$observedExitStatus = null,
     ): void {
         $read = [];
         foreach ([1, 2] as $index) {
@@ -2127,6 +2132,14 @@ PHP;
         }
         if ($read === []) {
             if ($waitMicroseconds > 0) {
+                if (\is_resource($process)) {
+                    $status = @\proc_get_status($process);
+                    if (\is_array($status) && ($status['running'] ?? null) === false) {
+                        // Preserve the first observed exit code for the caller's normal path.
+                        $observedExitStatus = $status;
+                        return;
+                    }
+                }
                 \usleep($waitMicroseconds);
             }
             return;

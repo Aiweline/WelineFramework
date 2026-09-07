@@ -669,7 +669,7 @@ LiteSSL,精简版SSL
 面板操作警告,面板操作警告
 应用商城端点,应用商城端点
 商城端点,商城端点
-"本地开发使用 https://app.weline.test:9523；部署测试从 deploy current.json 读取并使用 https://app.aiweline.com。","本地开发使用 https://app.weline.test:9523；部署测试从 deploy current.json 读取并使用 https://app.aiweline.com。"
+"本地开发使用 https://app.test.weline.com:9523；部署测试从 deploy current.json 读取并使用 https://app.aiweline.com。","本地开发使用 https://app.test.weline.com:9523；部署测试从 deploy current.json 读取并使用 https://app.aiweline.com。"
 来源,来源
 插件刷新摘要,插件刷新摘要
 能力重载,能力重载
@@ -2529,15 +2529,15 @@ P99：%{1},P99：%{1}
 "已归因目标的边缘身份或协议策略未绑定，auto 已拒绝降级猜测。","已归因目标的边缘身份或协议策略未绑定，auto 已拒绝降级猜测。"
 "目标与当前 cURL 没有共同且已完成运行验证的 HTTP 协议。","目标与当前 cURL 没有共同且已完成运行验证的 HTTP 协议。"
 "当前 system.env=%{1} 禁止执行 hosts 写入","当前 system.env=%{1} 禁止执行 hosts 写入"
-"*.weline.test 固定写入 127.0.0.1，无需也不应指定其它 IP","*.weline.test 固定写入 127.0.0.1，无需也不应指定其它 IP"
+"*.test.weline.com 固定写入 127.0.0.1，无需也不应指定其它 IP","*.test.weline.com 固定写入 127.0.0.1，无需也不应指定其它 IP"
 "域名 %{1} 使用 .localhost 回环后缀，无需写入 hosts","域名 %{1} 使用 .localhost 回环后缀，无需写入 hosts"
-"仅允许写入单标签的 *.weline.test 本地域名；*.weline.localhost 无需 hosts","仅允许写入单标签的 *.weline.test 本地域名；*.weline.localhost 无需 hosts"
+"仅允许写入单标签的 *.test.weline.com 本地域名；*.weline.localhost 无需 hosts","仅允许写入单标签的 *.test.weline.com 本地域名；*.weline.localhost 无需 hosts"
 "托管本地域名 %{1} 固定使用 %{2}，已忽略传入 IP %{3}","托管本地域名 %{1} 固定使用 %{2}，已忽略传入 IP %{3}"
 需要提升权限,需要提升权限
 "写入 hosts 失败","写入 hosts 失败"
-"向本机 hosts 添加需要显式解析的本地域名（当前仅 *.weline.test → 127.0.0.1）","向本机 hosts 添加需要显式解析的本地域名（当前仅 *.weline.test → 127.0.0.1）"
+"向本机 hosts 添加需要显式解析的本地域名（*.test.weline.com / 遗留 *.weline.test → 127.0.0.1）","向本机 hosts 添加需要显式解析的本地域名（*.test.weline.com / 遗留 *.weline.test → 127.0.0.1）"
 用法,用法
-"与 server:start 使用同一套 HostsFileManager；*.weline.test 固定写入 127.0.0.1；仅 system.env 为 local/dev/test 时可用","与 server:start 使用同一套 HostsFileManager；*.weline.test 固定写入 127.0.0.1；仅 system.env 为 local/dev/test 时可用"
+"与 server:start 使用同一套 HostsFileManager；*.test.weline.com 固定写入 127.0.0.1；仅 system.env 为 local/dev/test 时可用","与 server:start 使用同一套 HostsFileManager；*.test.weline.com 固定写入 127.0.0.1；仅 system.env 为 local/dev/test 时可用"
 "端口 %{1} 当前没有进程在监听","端口 %{1} 当前没有进程在监听"
 框架进程,框架进程
 异常占用,异常占用
@@ -2805,6 +2805,7 @@ Previous：%{1},上一篇：%{1}
 无法证明受管代次时拒绝发送任何终止信号,无法证明受管代次时拒绝发送任何终止信号
 "已退役：console:server:start 不再启动 PHP 内置 Web Server。","已退役：console:server:start 不再启动 PHP 内置 Web Server。"
 "已退役：PHP 内置 Web Server 启动入口","已退役：PHP 内置 Web Server 启动入口"
+"向本机 hosts 添加需要显式解析的本地域名（当前仅 *.test.weline.com → 127.0.0.1）","向本机 hosts 添加需要显式解析的本地域名（当前仅 *.test.weline.com → 127.0.0.1）"
 "Session Server %{1}","会话服务器 %{1}"
 "Memory Service %{1}","内存服务 %{1}"
 "应用 WLS 网关路由","应用 WLS 网关路由"

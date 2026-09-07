@@ -653,6 +653,54 @@ PHP;
         return [$instance, $token, $manager, $store, $lease];
     }
 
+    public function testCurrentCredentialValidationClassifiesOnlyOwnerUnknownAsTransient(): void
+    {
+        $instance = 'credential-owner-status-' . \bin2hex(\random_bytes(4));
+        $manager = new class extends MasterLeaseManager {
+            public string $ownerStatus = MasterLeaseRuntimeIdentity::OWNER_UNKNOWN;
+
+            public function validateRunningLease(
+                string $path,
+                string $expectedInstance = '',
+                int $expectedMasterPid = 0,
+                int $expectedEpoch = 0,
+                string $expectedToken = '',
+                int $expectedControlPort = 0,
+                bool $requireManagedName = false,
+            ): array {
+                return [
+                    'authorized' => false,
+                    'identity_authorized' => false,
+                    'veto' => $this->ownerStatus === MasterLeaseRuntimeIdentity::OWNER_UNKNOWN,
+                    'fresh' => true,
+                    'same_boot' => true,
+                    'foreign_pid_namespace' => false,
+                    'owner_status' => $this->ownerStatus,
+                    'reason' => 'Master owner evidence is not observable.',
+                    'lease' => ['instance' => 'credential-owner-status'],
+                ];
+            }
+        };
+        $store = new MasterChildCredentialStore(leaseManager: $manager);
+        $validate = static fn (): array => $store->validateCurrentProcessCredential(
+            MasterLeaseManager::pathForInstance($instance),
+            $instance,
+            4242,
+            7,
+            \str_repeat('a', 64),
+            false,
+        );
+
+        $unknown = $validate();
+        self::assertFalse($unknown['authorized']);
+        self::assertTrue($unknown['transient_owner_unknown']);
+
+        $manager->ownerStatus = MasterLeaseRuntimeIdentity::OWNER_MISMATCH;
+        $mismatch = $validate();
+        self::assertFalse($mismatch['authorized']);
+        self::assertFalse($mismatch['transient_owner_unknown']);
+    }
+
     public function testWindowsCredentialResolutionKeepsAnExactChildPendingWhileMasterOwnerIsUnobservable(): void
     {
         $instance = 'windows-birth-only-' . \bin2hex(\random_bytes(4));

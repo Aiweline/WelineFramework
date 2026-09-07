@@ -640,9 +640,9 @@ if ($manifest === '' || !is_file($manifest) || !is_readable($manifest)) {
 $content = (string)file_get_contents($manifest);
 $requiredText = [
     'local_checkout' => 'E:\WelineFramework\Framework-Official\App\weline',
-    'local_url' => 'https://app.weline.test:9523',
+    'local_url' => 'https://app.test.weline.com:9523',
     'production_url' => 'https://app.aiweline.com',
-    'not_marketplace_local_www' => 'www.weline.test:9518',
+    'not_marketplace_local_www' => 'www.test.weline.com:9518',
     'not_marketplace_prod_www' => 'www.aiweline.com',
 ];
 
@@ -736,7 +736,7 @@ if (!str_contains($commandSection, '-DryRun')) {
     $errors[] = 'authorized_command_missing_dry_run';
 }
 
-foreach (['www.weline.test', 'www.aiweline.com'] as $wrongHost) {
+foreach (['www.test.weline.com', 'www.aiweline.com'] as $wrongHost) {
     if (str_contains($commandSection, $wrongHost)) {
         $errors[] = 'authorized_command_uses_non_marketplace_host:' . $wrongHost;
     }

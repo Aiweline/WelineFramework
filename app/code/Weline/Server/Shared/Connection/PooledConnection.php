@@ -301,11 +301,12 @@ class PooledConnection implements PooledConnectionInterface
         $authStartTime = self::monotonicSeconds();
         $deadline = \min($outerDeadline, self::monotonicSeconds() + $this->timeout);
 
+        $diagnostics = ['attempts' => 0, 'failure_stage' => 'token_load', 'last_attempt_ms' => 0.0];
         $token = $this->loadToken();
         if ($token === null) {
             if ($this->tokenFilePath !== '') {
                 $this->authenticated = false;
-                $this->recordAuthMetric($authStartTime, 'failure', 'token_unavailable');
+                $this->recordAuthMetric($authStartTime, 'failure', 'token_unavailable', $diagnostics);
                 $this->incrementMetric(
                     'wls_pool_auth_failure_total',
                     ['reason' => 'token_unavailable'],
@@ -313,12 +314,13 @@ class PooledConnection implements PooledConnectionInterface
                 return false;
             }
             $this->authenticated = true;
-            $this->recordAuthMetric($authStartTime, 'success', 'no_auth');
+            $diagnostics['failure_stage'] = 'success';
+            $this->recordAuthMetric($authStartTime, 'success', 'no_auth', $diagnostics);
             return true;
         }
-        if ($this->tryAuthenticateWithToken($token, $deadline)) {
+        if ($this->tryAuthenticateWithToken($token, $deadline, $diagnostics)) {
             $this->authenticated = true;
-            $this->recordAuthMetric($authStartTime, 'success', 'first_attempt');
+            $this->recordAuthMetric($authStartTime, 'success', 'first_attempt', $diagnostics);
             return true;
         }
 
@@ -342,11 +344,12 @@ class PooledConnection implements PooledConnectionInterface
                 // SessionServer deliberately closes a connection after an
                 // invalid AUTH frame. A freshly loaded generation therefore
                 // must never be retried on that rejected transport.
+                $diagnostics['failure_stage'] = 'reconnect';
                 if ($this->reopenTransportForAuthentication($deadline)
-                    && $this->tryAuthenticateWithToken($freshToken, $deadline)
+                    && $this->tryAuthenticateWithToken($freshToken, $deadline, $diagnostics)
                 ) {
                     $this->authenticated = true;
-                    $this->recordAuthMetric($authStartTime, 'success', 'token_refresh_retry_' . ($retry + 1));
+                    $this->recordAuthMetric($authStartTime, 'success', 'token_refresh_retry_' . ($retry + 1), $diagnostics);
                     $this->incrementMetric('wls_pool_token_reload_total', ['reason' => 'auth_retry_' . ($retry + 1)]);
                     return true;
                 }
@@ -356,7 +359,7 @@ class PooledConnection implements PooledConnectionInterface
         }
 
         $this->authenticated = false;
-        $this->recordAuthMetric($authStartTime, 'failure', 'token_mismatch');
+        $this->recordAuthMetric($authStartTime, 'failure', 'token_mismatch', $diagnostics);
         $this->incrementMetric('wls_pool_auth_failure_total', ['reason' => 'token_mismatch']);
         return false;
     }
@@ -405,18 +408,29 @@ class PooledConnection implements PooledConnectionInterface
         return true;
     }
 
-    private function tryAuthenticateWithToken(string $token, float $deadline): bool
+    private function tryAuthenticateWithToken(string $token, float $deadline, array &$diagnostics = []): bool
     {
-        $remaining = $deadline - self::monotonicSeconds();
-        if ($remaining <= 0) {
-            return false;
+        $attemptStart = self::monotonicSeconds();
+        $diagnostics['attempts'] = (int)($diagnostics['attempts'] ?? 0) + 1;
+        $diagnostics['failure_stage'] = 'deadline';
+        try {
+            $remaining = $deadline - self::monotonicSeconds();
+            if ($remaining <= 0) {
+                return false;
+            }
+            // Temporarily bound send/read to remaining auth budget via absolute waits inside.
+            $diagnostics['failure_stage'] = 'write';
+            if (!$this->sendWithDeadline(SessionProtocol::buildAuth($token), $deadline)) {
+                return false;
+            }
+            $diagnostics['failure_stage'] = 'read';
+            $response = $this->readWithDeadline($deadline);
+            $success = \is_array($response) && SessionProtocol::isSuccess($response);
+            $diagnostics['failure_stage'] = $success ? 'success' : (\is_array($response) ? 'response' : 'read');
+            return $success;
+        } finally {
+            $diagnostics['last_attempt_ms'] = \round((self::monotonicSeconds() - $attemptStart) * 1000, 3);
         }
-        // Temporarily bound send/read to remaining auth budget via absolute waits inside.
-        if (!$this->sendWithDeadline(SessionProtocol::buildAuth($token), $deadline)) {
-            return false;
-        }
-        $response = $this->readWithDeadline($deadline);
-        return \is_array($response) && SessionProtocol::isSuccess($response);
     }
 
     private function sendWithDeadline(string $payload, float $deadline): bool
@@ -610,7 +624,7 @@ class PooledConnection implements PooledConnectionInterface
         WlsLogger::info_('[PooledConnection] ' . $message);
     }
 
-    private function recordAuthMetric(float $startTime, string $result, string $reason): void
+    private function recordAuthMetric(float $startTime, string $result, string $reason, array $diagnostics = []): void
     {
         $durationMs = (self::monotonicSeconds() - $startTime) * 1000;
         \Weline\Server\Service\Telemetry\MetricsCollector::getInstance()->recordHistogram(
@@ -618,7 +632,37 @@ class PooledConnection implements PooledConnectionInterface
             $durationMs,
             ['host' => $this->host, 'port' => (string)$this->port, 'result' => $result]
         );
-        unset($reason);
+        if (($result === 'success' && $durationMs < 10.0)
+            || !\class_exists(\Weline\Framework\Runtime\RequestLifecycleTrace::class, false)
+            || !\Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled()
+        ) {
+            return;
+        }
+
+        $meta = [
+            'host' => $this->host,
+            'port' => $this->port,
+            'service_type' => $this->serviceType,
+            'timeout_sec' => $this->timeout,
+            'connect_timeout_sec' => $this->connectTimeout,
+            'result' => $result,
+            'reason' => $reason,
+            'authenticated' => $this->authenticated,
+            'attempts' => (int)($diagnostics['attempts'] ?? 0),
+            'failure_stage' => (string)($diagnostics['failure_stage'] ?? ''),
+            'last_attempt_ms' => (float)($diagnostics['last_attempt_ms'] ?? 0.0),
+        ];
+        \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan(
+            'wls.connection.auth', $durationMs, 'rpc', null, $meta
+        );
+        if ($result !== 'success') {
+            // This summary is the last failure, not a count or cumulative duration.
+            \Weline\Framework\Runtime\RequestLifecycleTrace::recordPhase(
+                'wls.connection.auth.last_failure',
+                $durationMs,
+                $meta + ['measurement' => 'last_failure']
+            );
+        }
     }
 
     private function recordPhaseMetric(string $phase, float $startTime, string $result): void
@@ -639,6 +683,34 @@ class PooledConnection implements PooledConnectionInterface
                 'phase' => $phase,
                 'result' => $result,
             ]);
+        }
+
+        if (($result === 'success' && $durationMs < 10.0)
+            || !\class_exists(\Weline\Framework\Runtime\RequestLifecycleTrace::class, false)
+            || !\Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled()
+        ) {
+            return;
+        }
+
+        $meta = [
+            'host' => $this->host,
+            'port' => $this->port,
+            'service_type' => $this->serviceType,
+            'phase' => $phase,
+            'timeout_sec' => $this->timeout,
+            'connect_timeout_sec' => $this->connectTimeout,
+            'result' => $result,
+        ];
+        \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan(
+            'wls.connection.' . $phase, $durationMs, 'rpc', null, $meta
+        );
+        if ($result !== 'success') {
+            // A fixed summary name keeps failures bounded across all I/O phases.
+            \Weline\Framework\Runtime\RequestLifecycleTrace::recordPhase(
+                'wls.connection.io.last_failure',
+                $durationMs,
+                $meta + ['measurement' => 'last_failure']
+            );
         }
     }
 

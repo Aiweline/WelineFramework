@@ -32,7 +32,7 @@ Final gate result:
 - `ok=true`.
 - `ready=true`.
 - local endpoint:
-  `https://app.weline.test:9523/api/v1/platform/module/list`.
+  `https://app.test.weline.com:9523/api/v1/platform/module/list`.
 - local endpoint source: `arg:endpoint`.
 - production endpoint:
   `https://app.aiweline.com/api/v1/platform/module/list`.
@@ -154,7 +154,7 @@ E:\WelineFramework\Framework-Official\App\weline\var\wls-panel-plan\local-demo-i
 Important fields:
 
 - `environment=local`
-- `base_url=https://app.weline.test:9523`
+- `base_url=https://app.test.weline.com:9523`
 - `module_name=Weline_WlsDemoPlugin`
 - `api_list_demo_plugin.status=200`
 - `api_list_demo_plugin.success=true`

@@ -376,7 +376,7 @@ $driftClear = ($driftSummary['drifted_count'] ?? null) === 0;
 $productionEndpointUrl = (string)($productionPayload['endpoint'] ?? '');
 $localEndpointUrl = (string)($localPayload['endpoint'] ?? '');
 $productionEndpointLocked = $productionEndpointUrl === 'https://app.aiweline.com/api/v1/platform/module/list';
-$localEndpointLocked = $localEndpointUrl === 'https://app.weline.test:9523/api/v1/platform/module/list';
+$localEndpointLocked = $localEndpointUrl === 'https://app.test.weline.com:9523/api/v1/platform/module/list';
 $blockedPreflightEvidenceFiles = [
     'local_live_evidence' => [
         'path' => wlsPanelFinalPreflightPath($workspaceRoot, 'var/wls-panel-plan/local-appstore-live-e2e.json'),
@@ -456,12 +456,12 @@ $checks = [
         && ($readinessChecks['app_env_wls_https_enabled'] ?? false) === true
         && ($readinessChecks['app_env_wls_endpoint_matches_deploy_current'] ?? false) === true
         && ($readinessChecks['app_env_wls_endpoint_matches_probe_endpoint'] ?? false) === true
-        && ($readinessAppEnvWlsEndpoint['url'] ?? '') === 'https://app.weline.test:9523',
+        && ($readinessAppEnvWlsEndpoint['url'] ?? '') === 'https://app.test.weline.com:9523',
     'local_readiness_deploy_current_locked' =>
-        ($readinessEndpoint['url'] ?? '') === 'https://app.weline.test:9523'
+        ($readinessEndpoint['url'] ?? '') === 'https://app.test.weline.com:9523'
         && ($readinessEndpoint['source'] ?? '') === 'deploy-current'
-        && ($readinessDeployCurrent['raw_platform_url'] ?? '') === 'https://app.weline.test:9523'
-        && ($readinessDeployCurrent['endpoint'] ?? '') === 'https://app.weline.test:9523/api/v1/platform/module/list',
+        && ($readinessDeployCurrent['raw_platform_url'] ?? '') === 'https://app.test.weline.com:9523'
+        && ($readinessDeployCurrent['endpoint'] ?? '') === 'https://app.test.weline.com:9523/api/v1/platform/module/list',
     'readiness_action_authorized_sync_present' => $authorizedSyncActionPresent,
     'readiness_action_authorized_sync_requires_user_authorization' =>
         ($authorizedSyncAction['requires_user_authorization'] ?? false) === true,

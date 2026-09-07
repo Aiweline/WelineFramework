@@ -11,7 +11,7 @@ declare(strict_types=1);
  */
 
 const WLS_PANEL_AUTH_PACK_EXIT_UNSAFE = 1;
-const WLS_PANEL_AUTH_PACK_LOCAL_ROOT = 'https://app.weline.test:9523';
+const WLS_PANEL_AUTH_PACK_LOCAL_ROOT = 'https://app.test.weline.com:9523';
 const WLS_PANEL_AUTH_PACK_PRODUCTION_ROOT = 'https://app.aiweline.com';
 const WLS_PANEL_AUTH_PACK_MAX_DRIFT_ROWS = 60;
 

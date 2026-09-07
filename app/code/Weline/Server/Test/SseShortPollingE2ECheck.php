@@ -112,7 +112,7 @@ class SseShortPollingE2ECheck
 
     private function startSseConnection(): int
     {
-        $url = "https://p11005ce4.weline.test/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/stream-sse?public_id=test&last_event_id=0";
+        $url = "https://p11005ce4.test.weline.com/U0Ma5pkoi8tl3wiDiIh6FV0XCo1Tg1E8/pagebuilder/backend/ai-site-agent/stream-sse?public_id=test&last_event_id=0";
 
         $cmd = sprintf(
             'curl -k "%s" -H "Accept: text/event-stream" -N -s > /dev/null 2>&1 & echo $!',
@@ -131,7 +131,7 @@ class SseShortPollingE2ECheck
         $pids = [];
 
         for ($i = 1; $i <= $count; $i++) {
-            $url = "https://p11005ce4.weline.test/";
+            $url = "https://p11005ce4.test.weline.com/";
             $outputFile = sys_get_temp_dir() . "/sse_test_resource_$i.txt";
 
             $cmd = sprintf(

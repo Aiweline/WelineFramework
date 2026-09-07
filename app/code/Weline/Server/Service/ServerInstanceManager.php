@@ -1120,6 +1120,53 @@ class ServerInstanceManager
     }
 
     /**
+     * Persist the desired Worker capacity after server:scale (or equivalent control-plane resize).
+     *
+     * The endpoint `count` drives status, stop/cleanup managed-process discovery, and the next
+     * start generation. Saved instance config `worker_count` must stay aligned so a later
+     * `server:start` without `-c` does not silently shrink back to the pre-scale size.
+     */
+    public function updateDesiredWorkerCount(
+        string $instanceName,
+        int $workerCount,
+        ?string $savedConfigDirectory = null,
+    ): void {
+        $workerCount = \max(1, $workerCount);
+        $file = $this->getInstanceFile($instanceName);
+        if (\is_file($file)) {
+            $updated = $this->atomicUpdateJson($file, function (array $data) use ($workerCount): array {
+                $data['count'] = $workerCount;
+                $data['updated_at'] = \time();
+                return $this->filterEndpointRecord($data);
+            });
+            if (!$updated) {
+                throw new \RuntimeException('Failed to atomically publish WLS desired worker count.');
+            }
+        }
+
+        $configDir = $savedConfigDirectory
+            ?? (Env::VAR_DIR . 'server' . DIRECTORY_SEPARATOR . 'config');
+        $store = new \Weline\Server\Service\Edge\Gateway\SavedInstanceConfigStore($configDir);
+        try {
+            $store->update(
+                $instanceName,
+                static function (array $config) use ($workerCount): array {
+                    $config['worker_count'] = $workerCount;
+                    $config['worker_count_requested'] = $workerCount;
+                    $config['saved_at'] = \date('Y-m-d H:i:s');
+                    return [$config, true];
+                },
+                requireExisting: true,
+            );
+        } catch (\Throwable $e) {
+            // Missing saved config is allowed for virgin instances that only have an endpoint file.
+            if (!\str_contains($e->getMessage(), 'missing')) {
+                throw $e;
+            }
+        }
+    }
+
+    /**
      * Publish a terminal Master bootstrap failure so the parent start command
      * can stop immediately instead of waiting for a control port that can never
      * appear.
