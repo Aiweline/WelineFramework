@@ -4,9 +4,20 @@
  * @widget.code {checkout-coupon}
  * @widget.default_injections {[{"layout_type":"checkout","layout_option":"default","slot":"checkout-summary-discount","area":"content","sort_order":10,"required":true,"reason":"结账摘要默认展示优惠券部件（Amazon 默认样式）","config":{"title":"优惠券"}}]}
  */
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
 ?>
-<div class="w-marketing-checkout-coupon" data-testid="marketing-checkout-coupon" data-marketing-checkout-coupon data-weline-load="checkoutCoupon">
-    <label class="w-marketing-checkout-coupon__label" for="marketing-checkout-coupon-code">
+<div class="w-marketing-checkout-coupon"
+     data-testid="marketing-checkout-coupon"
+     data-marketing-checkout-coupon
+     data-weline-load="checkoutCoupon"
+     data-mini-cart-tab-label="<?= $esc((string)__('优惠券')) ?>"
+     data-i18n-enter-code="<?= $esc((string)__('请输入优惠券代码')) ?>"
+     data-i18n-already-applied="<?= $esc((string)__('该优惠券已应用')) ?>"
+     data-i18n-unavailable="<?= $esc((string)__('优惠券不可用')) ?>"
+     data-i18n-invalid-limit="<?= $esc((string)__('优惠券无效、不可用或已达使用上限')) ?>"
+     data-i18n-service-unavailable="<?= $esc((string)__('营销服务暂时不可用')) ?>"
+     data-i18n-removed="<?= $esc((string)__('已移除优惠券')) ?>">
+    <label class="w-marketing-checkout-coupon__label" for="marketing-checkout-coupon-code" data-mini-cart-tab-label-source>
         <lang>优惠券代码</lang>
     </label>
     <div class="w-marketing-checkout-coupon__tags" data-marketing-coupon-tags hidden></div>
@@ -20,15 +31,18 @@
                     name="coupon_code"
                     autocomplete="off"
                     data-marketing-coupon-input
-                    placeholder="<?= htmlspecialchars((string)__('输入优惠券代码'), ENT_QUOTES, 'UTF-8') ?>"
+                    placeholder="<?= $esc((string)__('输入优惠券代码')) ?>"
                 />
             </div>
-            <button type="button" class="w-marketing-checkout-coupon__apply" data-marketing-coupon-apply>
+            <button type="button"
+                    class="w-marketing-checkout-coupon__apply"
+                    data-marketing-coupon-apply
+                    data-i18n-loading="<?= $esc((string)__('应用中...')) ?>">
                 <lang>应用</lang>
             </button>
         </div>
     </div>
     <p class="w-marketing-checkout-coupon__message" data-marketing-coupon-message aria-live="polite"></p>
 </div>
-<link rel="stylesheet" href="@static(Weline_Marketing::css/widgets/checkout-coupon.css)?v=20260903-coupon-customer1">
+<link rel="stylesheet" href="@static(Weline_Marketing::css/widgets/checkout-coupon.css)?v=20260905-coupon-i18n1">
 <?php // checkoutCoupon：由部件根 data-weline-load 声明，禁止 @static 直引 ?>

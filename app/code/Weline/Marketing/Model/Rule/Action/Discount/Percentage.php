@@ -37,6 +37,17 @@ class Percentage extends AbstractAction
 
     public function execute(array $action, array $context): array
     {
+        // Storefront cart already bakes Promotion theme deals into unit_price_minor.
+        // Skip the synced automatic rule to avoid double discounting at quote time.
+        if (!empty($action['external_managed'])
+            && (string)($action['source_type'] ?? '') === 'promotion_activity_theme'
+        ) {
+            return [
+                'discount_amount' => 0,
+                'messages' => [],
+            ];
+        }
+
         $discountValue = (float)($action['discount_value'] ?? 0);
         $maxDiscount = isset($action['max_discount']) ? (float)$action['max_discount'] : null;
         $applyTo = $action['apply_to'] ?? 'subtotal'; // subtotal, shipping
