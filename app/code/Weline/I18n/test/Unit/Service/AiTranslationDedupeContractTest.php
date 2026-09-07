@@ -42,10 +42,11 @@ final class AiTranslationDedupeContractTest extends TestCase
     public function testQueueServiceDedupesPendingRunningByBizKey(): void
     {
         $source = $this->read('app/code/Weline/I18n/Service/AiTranslationQueueService.php');
-        self::assertStringContainsString('getLatestQueueByBizKey', $source);
-        self::assertStringContainsString('TaskStatus::PENDING', $source);
-        self::assertStringContainsString('TaskStatus::RUNNING', $source);
+        self::assertStringContainsString('IdempotentQueueAdmission', $source);
+        self::assertStringContainsString('IDEMPOTENCY_SCOPE', $source);
+        self::assertStringContainsString("admission->admit", $source);
         self::assertStringContainsString('consecutive_failures', $source);
+        self::assertStringNotContainsString("w_query('queue', 'create'", $source);
     }
 
     public function testQueueStopsAfterThreeConsecutiveBatchFailures(): void
@@ -56,7 +57,10 @@ final class AiTranslationDedupeContractTest extends TestCase
         self::assertStringContainsString('MAX_CONSECUTIVE_BATCH_FAILURES = 3', $config);
         self::assertStringContainsString('advanceConsecutiveFailures', $queue);
         self::assertStringContainsString('isBatchFailure', $queue);
+        self::assertStringContainsString('resultIndicatesBusy', $queue);
+        self::assertStringContainsString('$stopRound', $queue);
         self::assertStringContainsString('已停止自动续跑', $queue);
+        self::assertStringContainsString('不立刻续队', $queue);
         self::assertStringNotContainsString('throw new \\RuntimeException', $queue);
     }
 

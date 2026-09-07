@@ -107,7 +107,7 @@ class InternationalSeoContextService
         }
 
         $websiteId = $this->websiteId($template, $context);
-        if ($websiteId <= 0) {
+        if ($websiteId === null) {
             return [];
         }
 
@@ -153,7 +153,7 @@ class InternationalSeoContextService
         }
 
         $websiteId = $this->websiteId($template, $context);
-        if ($websiteId <= 0) {
+        if ($websiteId === null) {
             return '';
         }
 
@@ -169,17 +169,26 @@ class InternationalSeoContextService
     /**
      * @param array<string, mixed> $context
      */
-    private function websiteId($template, array $context): int
+    private function websiteId($template, array $context): ?int
     {
-        $value = $this->firstNonEmpty([
+        $values = [
             $this->readTemplate($template, 'website_id'),
             $context['website_id'] ?? null,
             $this->read($context['website'] ?? [], ['website_id', 'id']),
             WelineEnv::server('WELINE_WEBSITE_ID', ''),
             $_SERVER['WELINE_WEBSITE_ID'] ?? '',
-        ]);
+        ];
 
-        return max(0, (int)$value);
+        foreach ($values as $value) {
+            if (is_array($value) || is_object($value) || $value === null || trim((string)$value) === '') {
+                continue;
+            }
+
+            // website_id=0 is the default website and remains a valid scope.
+            return max(0, (int)$value);
+        }
+
+        return null;
     }
 
     /**

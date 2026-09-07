@@ -3,14 +3,16 @@ declare(strict_types=1);
 
 namespace Weline\I18n\Service;
 
-use Weline\Framework\Async\TaskStatus;
+use Weline\Queue\Service\IdempotentQueueAdmission;
 
 class AiTranslationQueueService
 {
     public const QUEUE_CLASS = 'Weline\\I18n\\Queue\\AiTranslateQueue';
+    public const IDEMPOTENCY_SCOPE = 'i18n_ai_translation_slot';
 
     public function __construct(
-        private readonly AiTranslationConfig $config
+        private readonly AiTranslationConfig $config,
+        private readonly IdempotentQueueAdmission $admission,
     ) {
     }
 
@@ -46,13 +48,6 @@ class AiTranslationQueueService
         }
 
         $bizKey = $this->buildBizKey($localeCode);
-        if ($deduplicate && !$force) {
-            $existing = $this->getLatestQueueByBizKey($bizKey);
-            if ($existing && in_array((string)($existing['status'] ?? ''), [TaskStatus::PENDING, TaskStatus::RUNNING], true)) {
-                return (int)($existing['queue_id'] ?? 0);
-            }
-        }
-
         $content = array_merge([
             'locale_code' => $localeCode,
             'source_locale' => $this->config->getSourceLocale(),
@@ -65,19 +60,16 @@ class AiTranslationQueueService
             'consecutive_failures' => 0,
         ], $overrides);
 
-        $result = w_query('queue', 'create', [
+        return $this->admission->admit([
             'class' => self::QUEUE_CLASS,
             'name' => (string)__('I18n AI翻译 %{1}', [$localeCode]),
             'module' => AiTranslationConfig::MODULE,
             'content' => $content,
-            'status' => TaskStatus::PENDING,
-            'auto' => true,
             'biz_key' => $bizKey,
+            'idempotency_scope' => self::IDEMPOTENCY_SCOPE,
+            'idempotency_key' => $bizKey,
+            'auto' => true,
         ]);
-
-        $queue = $this->normalizeQueueRow($result);
-
-        return (int)($queue['queue_id'] ?? 0);
     }
 
     public function enqueueContinuation(string $localeCode, array $currentContent): int
@@ -109,36 +101,5 @@ class AiTranslationQueueService
     public function buildBizKey(string $localeCode): string
     {
         return 'i18n:ai_translation:' . trim(str_replace('-', '_', $localeCode));
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function getLatestQueueByBizKey(string $bizKey): ?array
-    {
-        try {
-            $row = w_query('queue', 'getByBizKey', ['biz_key' => $bizKey]);
-        } catch (\Throwable) {
-            return null;
-        }
-
-        return $this->normalizeQueueRow($row);
-    }
-
-    /**
-     * @return array<string, mixed>|null
-     */
-    private function normalizeQueueRow(mixed $row): ?array
-    {
-        if (is_array($row)) {
-            return $row;
-        }
-
-        if (is_object($row) && method_exists($row, 'getData')) {
-            $data = $row->getData();
-            return is_array($data) ? $data : null;
-        }
-
-        return null;
     }
 }

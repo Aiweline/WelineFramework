@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Weline\I18n\Test\Unit\Service;
 
 use PHPUnit\Framework\TestCase;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Service\Query\FrameworkQueryService;
 use Weline\I18n\Service\ActiveLocaleCodeProvider;
 use Weline\I18n\Service\Seo\InternationalSeoContextService;
 
@@ -61,6 +63,59 @@ class InternationalSeoContextServiceTest extends TestCase
         self::assertSame('https://example.com/en_US/example', $context['canonical_url']);
         self::assertSame('https://example.com/media/example-en.jpg', $context['image']);
         self::assertSame('https://example.com/example', $context['alternates']['zh_Hans_CN']);
+    }
+
+    public function testDefaultWebsiteZeroUsesWebsiteLocalesInsteadOfPlatformCatalog(): void
+    {
+        $originalQueryService = ObjectManager::_getInstance(FrameworkQueryService::class);
+        $queryService = new class extends FrameworkQueryService {
+            public function __construct()
+            {
+            }
+
+            public function execute(
+                ?string $provider = null,
+                ?string $operation = null,
+                array $params = [],
+                string $area = 'frontend',
+            ): mixed {
+                if ($provider !== 'websites' || (int)($params['website_id'] ?? -1) !== 0) {
+                    return [];
+                }
+
+                return match ($operation) {
+                    'getWebsiteLanguageCodes' => ['zh_Hans_CN', 'en_US'],
+                    'getWebsiteById' => ['default_language' => 'zh_Hans_CN'],
+                    default => [],
+                };
+            }
+        };
+        ObjectManager::setInstance(FrameworkQueryService::class, $queryService);
+
+        try {
+            $service = new InternationalSeoContextService(
+                $this->localeProvider(['zh_Hans_CN', 'en_US', 'de_DE']),
+            );
+            $template = new InternationalSeoTemplateStub([
+                'website_id' => 0,
+            ]);
+
+            $context = $service->build($template, [
+                'locale' => 'en_US',
+                'canonical_url' => 'https://example.com/en_US/products/item',
+            ]);
+
+            self::assertSame(['zh-Hans-CN', 'en-US'], $context['available_languages']);
+            self::assertArrayHasKey('zh_Hans_CN', $context['alternates']);
+            self::assertArrayHasKey('en_US', $context['alternates']);
+            self::assertArrayNotHasKey('de_DE', $context['alternates']);
+        } finally {
+            if ($originalQueryService instanceof FrameworkQueryService) {
+                ObjectManager::setInstance(FrameworkQueryService::class, $originalQueryService);
+            } else {
+                ObjectManager::removeInstance(FrameworkQueryService::class);
+            }
+        }
     }
 
     /**

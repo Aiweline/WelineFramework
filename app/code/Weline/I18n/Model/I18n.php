@@ -342,7 +342,7 @@ class I18n
     public function getLocalesWithFlags(int $width = 24, int $height = 18, string $lang_code = 'zh_Hans_CN', bool $installed = true)
     {
         $lang_code = $this->normalizeIntlDisplayLocale($lang_code);
-        $cache_key = 'getLocalesWithFlags' . $lang_code . $width . $height . (string)$installed;
+        $cache_key = 'getLocalesWithFlags_img_v1_' . $lang_code . $width . $height . (string)$installed;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
         }
@@ -394,7 +394,7 @@ class I18n
         if ($width <= 0) $width = $default_width;
         if ($height <= 0) $height = $default_height;
         
-        $cache_key = 'getLocalesWithFlagsDisplaySelf_v2_' . $width . $height . (string)$installed . (string)$autoSize . $display_locale_code;
+        $cache_key = 'getLocalesWithFlagsDisplaySelf_img_v1_' . $width . $height . (string)$installed . (string)$autoSize . $display_locale_code;
         if ($data = $this->i18nCache->get($cache_key)) {
             return $data;
         }

@@ -317,9 +317,15 @@ class JsTranslationsExtractor
             }
         }
         
-        // 3. 匹配 @lang{...} 格式
+        // 3. 匹配 @lang{...} 格式（与运行时一致：剥离包裹引号）
         if (preg_match_all('/@lang\{(.*?)}/s', $content, $matches)) {
             foreach ($matches[1] as $match) {
+                $match = trim($match);
+                if (preg_match('/^([\'"])(.*)\1$/', $match, $quoted)) {
+                    $match = $quoted[2];
+                } elseif (preg_match('/^([^,]+?)\s*,\s*(.+)$/', $match, $parts)) {
+                    $match = trim($parts[1], " \t\n\r\0\x0B'\"");
+                }
                 $match = trim($match);
                 if (!empty($match) && $collector->isValidTranslationString($match)) {
                     $words[$match] = $match;
