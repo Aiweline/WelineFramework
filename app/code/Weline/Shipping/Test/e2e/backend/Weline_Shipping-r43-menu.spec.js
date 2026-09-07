@@ -11,7 +11,6 @@ const ITEMS = [
   ['Weline_Shipping::shipping_address', '发货地址', 'shipping-address-management', 'CK-R43-SHIPPING-002'],
   ['Weline_Shipping::delivery_address', '运送地址', 'delivery-address-management', 'CK-R43-SHIPPING-003'],
   ['Weline_Shipping::region', '地区管理', 'shipping-region-management', 'CK-R43-SHIPPING-004'],
-  ['Weline_Shipping::zone', '配送区域', 'shipping-zone-management', 'CK-R43-SHIPPING-005'],
   ['Weline_Shipping::carrier', '快递公司', 'shipping-carrier-management', 'CK-R43-SHIPPING-006'],
   ['Weline_Shipping::rate_template', '费用模板', 'shipping-rate-template-management', 'CK-R43-SHIPPING-007'],
   ['Weline_Shipping::free_shipping_rule', '免邮规则', 'shipping-free-rule-management', 'CK-R43-SHIPPING-008'],
@@ -30,11 +29,10 @@ moduleDescribe(test, MODULE, 'R4.3 配送后台菜单', () => {
     ['address', ITEMS[1], 'CK-R43-SHIPPING-WRITE-002'],
     ['delivery', ITEMS[2], 'CK-R43-SHIPPING-WRITE-003'],
     ['region', ITEMS[3], 'CK-R43-SHIPPING-WRITE-004'],
-    ['zone', ITEMS[4], 'CK-R43-SHIPPING-WRITE-005'],
-    ['carrier', ITEMS[5], 'CK-R43-SHIPPING-WRITE-006'],
-    ['rate', ITEMS[6], 'CK-R43-SHIPPING-WRITE-007'],
-    ['free', ITEMS[7], 'CK-R43-SHIPPING-WRITE-008'],
-    ['service', ITEMS[8], 'CK-R43-SHIPPING-WRITE-009'],
+    ['carrier', ITEMS[4], 'CK-R43-SHIPPING-WRITE-006'],
+    ['rate', ITEMS[5], 'CK-R43-SHIPPING-WRITE-007'],
+    ['free', ITEMS[6], 'CK-R43-SHIPPING-WRITE-008'],
+    ['service', ITEMS[7], 'CK-R43-SHIPPING-WRITE-009'],
   ];
   for (const [kind, [source, title, anchor], caseId] of writes) {
     moduleCase(test, { module: MODULE, id: caseId }, `${title}通过菜单完成真实写入`, async ({ page }) => {
@@ -85,7 +83,6 @@ async function performWrite(page, kind, fixture) {
     const form = page.getByTestId(`shipping-${kind === 'rate' ? 'rate-template' : kind === 'free' ? 'free-rule' : kind}-create-form`);
     const fields = {
       region: { region_code: fixture.code, region_name: `R43 Region ${token}` },
-      zone: { zone_code: fixture.code, zone_name: `R43 Zone ${token}` },
       rate: { template_code: fixture.code, template_name: `R43 Rate ${token}` },
       free: { rule_code: fixture.code, rule_name: `R43 Free ${token}` },
       service: { service_code: fixture.code, service_name: `R43 Service ${token}` },
@@ -93,7 +90,6 @@ async function performWrite(page, kind, fixture) {
     for (const [name, value] of Object.entries(fields)) await form.locator(`[name="${name}"]`).fill(value);
     if (kind === 'service') {
       await form.locator('select[name="carrier_id"]').selectOption(String(fixture.carrier_id));
-      await form.locator('select[name="zone_id"]').selectOption(String(fixture.zone_id));
     }
     await form.locator('button[type="submit"]').click();
   }

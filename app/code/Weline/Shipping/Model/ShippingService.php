@@ -14,9 +14,6 @@ use Weline\Framework\Database\Schema\Attribute\Table;
 #[Table(comment: '配送服务表')]
 #[Index(name: 'idx_service_code', columns: ['service_code'], type: 'UNIQUE')]
 #[Index(name: 'idx_carrier_id', columns: ['carrier_id'])]
-#[Index(name: 'idx_zone_id', columns: ['zone_id'])]
-#[Index(name: 'idx_rate_template_id', columns: ['rate_template_id'])]
-#[Index(name: 'idx_free_shipping_rule_id', columns: ['free_shipping_rule_id'])]
 class ShippingService extends AbstractModel
 {
     public const schema_table = 'w_shipping_services';
@@ -29,8 +26,6 @@ class ShippingService extends AbstractModel
     public const schema_fields_SERVICE_CODE = 'service_code';
     #[Col('int', null, nullable: false, comment: '快递公司ID')]
     public const schema_fields_CARRIER_ID = 'carrier_id';
-    #[Col('int', null, nullable: false, comment: '配送区域ID')]
-    public const schema_fields_ZONE_ID = 'zone_id';
     #[Col('int', null, comment: '费用模板ID')]
     public const schema_fields_RATE_TEMPLATE_ID = 'rate_template_id';
     #[Col('int', null, comment: '免邮规则ID')]
@@ -56,7 +51,7 @@ class ShippingService extends AbstractModel
     /**
      * 索引排序键
      */
-    public array $_index_sort_keys = ['service_id', 'service_code', 'carrier_id', 'zone_id'];
+    public array $_index_sort_keys = ['service_id', 'service_code', 'carrier_id'];
     /**
      * 初始化模型
      */

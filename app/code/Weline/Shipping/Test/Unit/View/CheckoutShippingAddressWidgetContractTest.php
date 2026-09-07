@@ -33,16 +33,24 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         $template = (string)file_get_contents(
             dirname(__DIR__, 3) . '/view/templates/frontend/widgets/checkout-shipping-address.phtml',
         );
+        $modules = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/view/statics/frontend/weline.modules.js',
+        );
         self::assertStringContainsString('data-testid="shipping-checkout-address"', $template);
         self::assertStringContainsString('@widget.default_injections', $template);
         self::assertStringContainsString('checkout-shipping-address', $template);
         self::assertStringContainsString('<w:theme:address', $template);
         self::assertStringContainsString('code="checkout-shipping-address"', $template);
         self::assertStringContainsString('data-saved-addresses', $template);
+        self::assertStringContainsString('<?= $hasSaved ? \'\' : \'hidden\' ?>', $template);
         self::assertStringContainsString('name="address1"', $template);
         self::assertStringContainsString('name="postal_code"', $template);
         self::assertStringContainsString('data-weline-load="shippingCheckoutAddress"', $template);
-        self::assertStringContainsString('checkout-shipping-address.css)?v=20260903-csa3', $template);
+        self::assertStringContainsString('checkout-shipping-address.v20260917.js', $modules);
+        self::assertStringContainsString('WelineShippingCheckoutAddress', $modules);
+        self::assertStringContainsString('data-field-error-for="phone"', $template);
+        self::assertStringContainsString("'err_name'", $template);
+        self::assertStringContainsString('checkout-shipping-address.css)?v=20260905-csa11', $template);
         self::assertStringNotContainsString('name="country_code" type="text"', $template);
         self::assertStringNotContainsString('<input name="province"', $template);
         self::assertStringNotContainsString('<input name="city"', $template);
@@ -64,16 +72,48 @@ final class CheckoutShippingAddressWidgetContractTest extends TestCase
         self::assertStringContainsString('type="radio"', $template);
         self::assertStringContainsString('data-edit-address', $template);
         self::assertStringContainsString('data-add-address', $template);
+        self::assertStringContainsString('data-change-address', $template);
+        self::assertStringContainsString('data-list-loaded', $template);
+        self::assertStringContainsString('data-address-count', $template);
         self::assertStringContainsString('data-billing-same', $template);
         self::assertStringContainsString('data-billing-editor', $template);
         self::assertStringContainsString('name="billing_name"', $template);
 
-        self::assertStringContainsString("root.addEventListener('change'", $js);
-        self::assertStringContainsString('[data-billing-same]', $js);
-        self::assertStringContainsString('syncBillingFromShipping', $js);
+        self::assertStringContainsString('data-use-edited-address', $template);
+        self::assertStringContainsString('w-shipping-checkout-address__editor-action-buttons', $template);
+        self::assertSame(
+            1,
+            substr_count($template, 'data-shipping-message'),
+            'Non-field message must appear once, beside save button',
+        );
+        self::assertStringContainsString('data-is-logged-in', $template);
+        self::assertStringContainsString('data-shipping-message', $template);
+
+        self::assertStringContainsString('commitEditedAddress', $js);
+        self::assertStringContainsString('saveDeliveryAddress', $js);
+        self::assertStringContainsString('applyFieldErrors', $js);
+        self::assertStringContainsString('focusFirstFieldError', $js);
+        self::assertStringContainsString('validateShippingFields', $js);
+        self::assertStringContainsString('renderSavedAddresses', $js);
+        self::assertStringContainsString('ensureSavedShell', $js);
+        self::assertStringContainsString('synthesizeAddressFromContext', $js);
+        self::assertStringContainsString('refreshGuestCaptchaOnOpen', $js);
+        self::assertStringContainsString('openAddressPicker', $js);
+        self::assertStringContainsString('collapseAddressList', $js);
+        self::assertStringContainsString("picking", $js);
+        self::assertStringContainsString('getDeliveryContext', $js);
+        self::assertStringContainsString('weline:checkout:address-updated', $js);
 
         self::assertStringContainsString('w-shipping-checkout-address__card', $css);
+        self::assertStringContainsString('gap: 1rem', $css);
+        self::assertStringContainsString('padding: 1.25rem', $css);
         self::assertStringContainsString('--sca-link', $css);
         self::assertStringContainsString('data-mode="collapsed"', $css);
+        self::assertStringContainsString('[data-mode="picking"]', $css);
+        self::assertStringContainsString('__saved[hidden]', $css);
+        self::assertStringContainsString('w-shipping-checkout-address__saved-toolbar', $css);
+        self::assertStringContainsString('w-shipping-checkout-address__editor-action-buttons', $css);
+        self::assertStringContainsString('w-shipping-checkout-address__message', $css);
+        self::assertStringContainsString('w-shipping-checkout-address__field-error', $css);
     }
 }

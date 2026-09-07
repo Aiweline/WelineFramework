@@ -4,13 +4,22 @@ declare(strict_types=1);
 
 namespace Weline\Shipping\Service;
 
+use Weline\Framework\Http\Cookie;
+use Symfony\Component\Intl\Countries as IntlCountries;
+
 class AddressFormatter
 {
-    public function __construct(private AddressSchemaProvider $schemaProvider)
-    {
+    public function __construct(
+        private AddressSchemaProvider $schemaProvider,
+        private RegionLocalNameResolver $localNames,
+    ) {
     }
 
-    public function normalize(array $address): array
+    /**
+     * @param array<string, mixed> $address
+     * @return array<string, mixed>
+     */
+    public function normalize(array $address, bool $localize = false): array
     {
         $countryCode = $this->schemaProvider->inferCountryCode($address);
         $address['country_code'] = $countryCode;
@@ -20,12 +29,16 @@ class AddressFormatter
             $address[$field] = $this->clean((string)($address[$field] ?? ''));
         }
 
+        if ($localize) {
+            $address = $this->localNames->localizeAddressFields($address);
+        }
+
         return $address;
     }
 
     public function formatSingleLine(array $address): string
     {
-        $address = $this->normalize($address);
+        $address = $this->normalize($address, true);
         $schema = $this->schemaProvider->getSchema($address['country_code']);
         $parts = [];
         foreach ($schema['format']['single_line'] as $field) {
@@ -40,7 +53,7 @@ class AddressFormatter
 
     public function formatTokens(array $address): array
     {
-        $address = $this->normalize($address);
+        $address = $this->normalize($address, true);
         $schema = $this->schemaProvider->getSchema($address['country_code']);
         $icons = [
             'country' => 'country',
@@ -71,7 +84,7 @@ class AddressFormatter
 
     public function toPayload(array $address): array
     {
-        $address = $this->normalize($address);
+        $address = $this->normalize($address, true);
         $address['full_address'] = $this->formatSingleLine($address);
         $address['address_tokens'] = $this->formatTokens($address);
         $address['address_schema'] = $this->schemaProvider->getSchema($address['country_code']);
@@ -85,12 +98,30 @@ class AddressFormatter
 
     private function countryName(string $countryCode): string
     {
-        return match ($countryCode) {
-            'CN' => '中国',
-            'US' => 'United States',
-            'GB' => 'United Kingdom',
-            'JP' => 'Japan',
-            default => $countryCode,
-        };
+        $countryCode = strtoupper(trim($countryCode));
+        if ($countryCode === '') {
+            return '';
+        }
+
+        try {
+            $locale = Cookie::getLangLocal() ?: 'en_US';
+            if ($locale === 'zh_Hans_CN') {
+                $intl = 'zh_Hans';
+            } elseif ($locale === 'zh_Hant_TW') {
+                $intl = 'zh_Hant';
+            } else {
+                $intl = $locale;
+            }
+
+            return IntlCountries::getName($countryCode, $intl);
+        } catch (\Throwable) {
+            return match ($countryCode) {
+                'CN' => 'China',
+                'US' => 'United States',
+                'GB' => 'United Kingdom',
+                'JP' => 'Japan',
+                default => $countryCode,
+            };
+        }
     }
 }

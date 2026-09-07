@@ -2,19 +2,90 @@
 /** @var \Weline\Framework\View\Template $this */
 /** @var \Weline\Backend\Block\ThemeConfig $themeConfig */
 
-$countries = $this->getData('countries') ?? [];
-$currentCountryCode = $this->getData('current_country_code') ?? '';
-$regionTree = $this->getData('region_tree') ?? [];
-
+$currentCountryCode = strtoupper(trim((string)($this->getData('current_country_code') ?? '')));
+$currentCountryCodes = $this->getData('current_country_codes') ?? [];
+if (!is_array($currentCountryCodes) || $currentCountryCodes === []) {
+    $currentCountryCodes = $currentCountryCode !== '' ? [$currentCountryCode] : [];
+}
+$currentCountryCodes = array_values(array_unique(array_filter(array_map(
+    static fn ($code): string => strtoupper(trim((string)$code)),
+    $currentCountryCodes
+), static fn (string $code): bool => preg_match('/^[A-Z]{2}$/D', $code) === 1)));
+if ($currentCountryCodes === []) {
+    $currentCountryCodes = ['CN'];
+}
+if ($currentCountryCode === '' || !preg_match('/^[A-Z]{2}$/D', $currentCountryCode)) {
+    $currentCountryCode = $currentCountryCodes[0];
+}
 $embed = $this->getData('embed') ?? false;
 $dialogJsonFlags = JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_HEX_AMP | JSON_THROW_ON_ERROR;
 $confirmMessages = [
     'confirmTitle' => (string)__('确认操作'),
     'confirmButton' => (string)__('确定'),
     'cancelButton' => (string)__('取消'),
-    'syncRegions' => (string)__('确定要从i18n同步国家数据吗？'),
 ];
+
+// 仅码级 seed，不查库；正式国名由 theme:address / region API 异步解析。
+$countrySeed = [];
+foreach ($currentCountryCodes as $seedCode) {
+    $countrySeed[] = [
+        'region_type' => 'country',
+        'country_code' => $seedCode,
+        'region_code' => $seedCode,
+        'region_id' => 0,
+        'region_name' => $seedCode,
+        'label' => $seedCode,
+    ];
+}
+$listApiUrl = (string)w_url('/shipping/frontend/region/list', [], 'frontend');
 ?>
+<style>
+/* 筛选：必须用 theme:address multi；chips 贴控件、限宽降空白（Manager iframe 勿强制竖排） */
+[data-testid="shipping-region-filter-address"] {
+    width: 100%;
+    max-width: 40rem;
+    box-sizing: border-box;
+    margin-block-end: var(--weline-space-2, 0.5rem);
+}
+[data-testid="shipping-region-filter-address"] .w-address,
+[data-testid="shipping-region-filter-address"] .w-address__multi {
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+}
+[data-testid="shipping-region-filter-address"] .w-address__multi {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: var(--weline-space-2, 0.5rem) !important;
+}
+[data-testid="shipping-region-filter-address"] .w-address__multi-chips {
+    margin: 0;
+    min-height: 0;
+}
+[data-testid="shipping-region-filter-address"] .w-address__multi > .w-address.w-address--multi {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: var(--weline-space-2, 0.5rem) !important;
+    width: 100%;
+}
+#shipping-region-create-dialog .w-dialog__surface,
+#shipping-region-create-dialog .w-dialog__body {
+    overflow: visible;
+}
+#shipping-region-create-dialog .w-dialog__body {
+    max-height: none;
+}
+[data-testid="shipping-region-create-country"] .w-address {
+    width: 100%;
+    max-width: 28rem;
+}
+[data-testid="shipping-region-create-section-title"] {
+    margin: 0;
+    font-size: var(--weline-layout-font-size-sm, 13px);
+    font-weight: var(--weline-layout-font-weight-semibold, 600);
+    color: var(--weline-theme-text-muted, #667085);
+}
+</style>
 <?php if (empty($embed)): ?>
 <div class="w-grid" data-testid="shipping-region-management">
                     <div style="--w-span:12;">
@@ -33,207 +104,577 @@ $confirmMessages = [
                 </div>
 <?php endif; ?>
 
-                <div class="w-grid" style="--w-mb:var(--weline-space-4);">
+                <div class="w-grid">
                     <div style="--w-span:12;">
-                        <div class="w-card" data-testid="shipping-region-create-form">
-                            <div class="w-card__header"><h5 class="w-card__title" style="--w-mb:0;"><?= __('新增地区') ?></h5></div>
-                            <div class="w-card__body">
-                                <w:form method="post" action="@backend-url('shipping/backend/region/save')">
-                                    <div class="w-grid" style="--w-gap:var(--weline-space-4);">
-                                        <div style="--w-span-md:2;"><label class="w-field__label"><?= __('国家代码') ?></label><input class="w-input" name="country_code" maxlength="2" value="<?= htmlspecialchars((string)($currentCountryCode ?: 'CN')) ?>" required></div>
-                                        <div style="--w-span-md:2;"><label class="w-field__label"><?= __('地区代码') ?></label><input class="w-input" name="region_code" maxlength="50" required></div>
-                                        <div style="--w-span-md:3;"><label class="w-field__label"><?= __('地区名称') ?></label><input class="w-input" name="region_name" maxlength="255" required></div>
-                                        <div style="--w-span-md:2;"><label class="w-field__label"><?= __('类型') ?></label><select class="w-select" name="region_type"><option value="province"><?= __('省/州') ?></option><option value="city"><?= __('城市') ?></option><option value="district"><?= __('区县') ?></option><option value="country"><?= __('国家') ?></option></select></div>
-                                        <div style="--w-span-md:1;"><label class="w-field__label"><?= __('排序') ?></label><input class="w-input" type="number" min="0" name="sort_order" value="0"></div>
-                                        <div class="w-cluster" data-align="end" style="--w-span-md:2;"><input type="hidden" name="is_active" value="1"><button class="w-button" type="submit" data-testid="shipping-region-submit" data-w-width="full" data-tone="primary"><?= __('创建') ?></button></div>
-                                    </div>
-                                </w:form>
+                        <div class="w-card" data-testid="shipping-region-list-card">
+                            <div class="w-card__header">
+                                <h5 class="w-card__title" style="--w-mb:0;"><?= __('地区列表') ?></h5>
+                                <button
+                                    type="button"
+                                    class="w-button"
+                                    data-tone="primary"
+                                    data-testid="shipping-region-open-create"
+                                    data-w-target="#shipping-region-create-dialog"
+                                    data-w-action="dialog.open"
+                                ><?= __('新增地区') ?></button>
+                            </div>
+                            <div class="w-card__body" style="--w-padding-block:var(--weline-space-4);--w-padding-inline:var(--weline-space-4);">
+                                <div data-testid="shipping-region-filter-address" class="shipping-region-address-row">
+                                    <w:theme:address
+                                        selection="multi"
+                                        multi-levels="country|province|district"
+                                        levels="country|province|district"
+                                        catalog="global"
+                                        searchable="true"
+                                        street="false"
+                                        code="shipping-region-filter"
+                                    />
+                                </div>
+                                <p class="w-text" data-tone="muted" data-region-list-hint style="--w-mb:var(--weline-space-2);--w-font-size:var(--weline-layout-font-size-sm,13px);">
+                                    <?= __('列表仅展示省份（浅层）。市/区请用上方筛选按需加载，避免整国地址树一次渲染过大。') ?>
+                                </p>
+                                <div class="w-alert" data-tone="info" data-region-list-status hidden style="--w-mb:var(--weline-space-2);"></div>
+                                <div class="w-table-wrap" data-region-table-wrap hidden>
+                                    <table class="w-table" data-w-vertical="middle" data-region-tree-table>
+                                        <thead>
+                                        <tr>
+                                            <th style="width: 50%;"><?= __('地区名称') ?></th>
+                                            <th><?= __('地区代码') ?></th>
+                                            <th><?= __('类型') ?></th>
+                                            <th><?= __('启用') ?></th>
+                                        </tr>
+                                        </thead>
+                                        <tbody data-region-tree-body></tbody>
+                                    </table>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="w-grid">
-                    <div style="--w-span:12;">
-                        <div class="w-card">
-                            <div class="w-card__header">
-                                <div class="w-grid" data-align="center">
-                                    <div style="--w-span-md:6;">
-                                        <h5 class="w-card__title" style="--w-mb:0;"><?= __('地区列表') ?></h5>
-                                    </div>
-                                    <div class="w-text" data-align="end" style="--w-span-md:6;">
-                                        <w:form method="get" action="@backend-url{'shipping/backend/region'}" class="w-cluster" data-align="center">
-                                            <label class="me-2" style="--w-mb:0;"><?= __('国家') ?>:</label>
-                                            <select name="country_code" class="w-select me-2" data-region-country-select data-size="sm">
-                                                <?php foreach ($countries as $country): ?>
-                                                    <?php $code = (string)($country['code'] ?? ''); ?>
-                                                    <option value="<?= htmlspecialchars($code) ?>"
-                                                        <?= $code === $currentCountryCode ? 'selected' : '' ?>>
-                                                        <?= htmlspecialchars($code) ?>
-                                                    </option>
-                                                <?php endforeach; ?>
-                                            </select>
-                                            <a href="@backend-url{'shipping/backend/region/syncFromI18n'}" class="w-button" data-region-confirm="syncRegions" data-tone="neutral" data-size="sm">
-                                                <w:icon name="globe" size="sm"></w:icon> <?= __('从i18n同步国家') ?>
-                                            </a>
-                                        </w:form>
-                                    </div>
+<div class="w-dialog" id="shipping-region-create-dialog" tabindex="-1" aria-hidden="true" data-w-component="dialog" data-state="closed" hidden data-testid="shipping-region-create-dialog">
+    <div class="w-dialog__frame" data-size="lg">
+        <div class="w-dialog__surface">
+            <w:form method="post" action="@backend-url('shipping/backend/region/save')" data-testid="shipping-region-create-form-el">
+                <?php if (!empty($embed)): ?>
+                    <input type="hidden" name="embed" value="1">
+                <?php endif; ?>
+                <input type="hidden" name="create_mode" value="manual_path">
+                <input type="hidden" name="is_active" value="1">
+                <input type="hidden" name="country_code" id="shipping-region-create-country-code" value="<?= htmlspecialchars($currentCountryCode !== '' ? $currentCountryCode : '', ENT_QUOTES, 'UTF-8') ?>">
+                <input type="hidden" name="country_name" id="shipping-region-create-country-name" value="">
+                <div class="w-dialog__header">
+                    <h5 class="w-dialog__title"><?= __('新增地区') ?></h5>
+                    <button type="button" class="w-button" aria-label="<?= __('关闭') ?>" data-w-action="dialog.close" data-w-close="" data-tone="quiet" data-size="sm"></button>
+                </div>
+                <div class="w-dialog__body">
+                    <div class="w-stack" style="--w-gap:var(--weline-space-5);">
+                        <div class="w-text" data-tone="muted" style="--w-mb:0;">
+                            <?= __('选择国家后，填写要新增的省份（必填）与区县（可选）。已存在的地区代码不能重复添加。') ?>
+                        </div>
+                        <div data-testid="shipping-region-create-country">
+                            <w:theme:address
+                                selection="single"
+                                levels="country"
+                                catalog="global"
+                                searchable="true"
+                                cascade="false"
+                                street="false"
+                                code="shipping-region-create-country"
+                                country-name="address_country_pick"
+                            />
+                        </div>
+                        <div class="w-stack" style="--w-gap:var(--weline-space-3);">
+                            <p class="w-text" data-testid="shipping-region-create-section-title"><?= __('省份（必填）') ?></p>
+                            <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                                <div style="--w-span:6;--w-span-md:6;">
+                                    <label class="w-field__label" for="shipping-region-province-name"><?= __('省份名称') ?></label>
+                                    <input class="w-input" type="text" name="add_province_name" id="shipping-region-province-name" required maxlength="255" placeholder="<?= __('例如：加利福尼亚州') ?>" data-testid="shipping-region-province-name">
+                                </div>
+                                <div style="--w-span:6;--w-span-md:6;">
+                                    <label class="w-field__label" for="shipping-region-province-code"><?= __('省份代码') ?></label>
+                                    <input class="w-input" type="text" name="add_province_code" id="shipping-region-province-code" required maxlength="50" placeholder="<?= __('例如：US-CA') ?>" data-testid="shipping-region-province-code" autocomplete="off">
                                 </div>
                             </div>
-                            <div class="w-card__body">
-                                <?php if (empty($regionTree)): ?>
-                                    <div class="w-alert" data-tone="info" style="--w-mb:0;">
-                                        <?= __('当前国家暂无地区数据，请先从i18n同步或手动添加。') ?>
-                                    </div>
-                                <?php else: ?>
-                                    <div class="w-table-wrap">
-                                        <table class="w-table" data-w-vertical="middle">
-                                            <thead>
-                                            <tr>
-                                                <th style="width: 50%;"><?= __('地区名称') ?></th>
-                                                <th><?= __('地区代码') ?></th>
-                                                <th><?= __('类型') ?></th>
-                                                <th><?= __('启用') ?></th>
-                                            </tr>
-                                            </thead>
-                                            <tbody>
-                                            <?php
-                                            $renderNode = function (array $node, int $level = 0) use (&$renderNode) {
-                                                $indent = str_repeat('&mdash; ', $level);
-                                                ?>
-                                                <tr>
-                                                    <td><?= $indent . htmlspecialchars($node['region_name']) ?></td>
-                                                    <td><?= htmlspecialchars($node['region_code']) ?></td>
-                                                    <td><?= htmlspecialchars($node['region_type']) ?></td>
-                                                    <td>
-                                                        <?php if (!empty($node['is_active'])): ?>
-                                                            <span class="w-badge" data-w-background="success"><?= __('启用') ?></span>
-                                                        <?php else: ?>
-                                                            <span class="w-badge" data-w-background="muted"><?= __('禁用') ?></span>
-                                                        <?php endif; ?>
-                                                    </td>
-                                                </tr>
-                                                <?php if (!empty($node['children'])): ?>
-                                                    <?php foreach ($node['children'] as $child): ?>
-                                                        <?php $renderNode($child, $level + 1); ?>
-                                                    <?php endforeach; ?>
-                                                <?php endif; ?>
-                                                <?php
-                                            };
-                                            ?>
-                                            <?php foreach ($regionTree as $rootNode): ?>
-                                                <?php $renderNode($rootNode, 0); ?>
-                                            <?php endforeach; ?>
-                                            </tbody>
-                                        </table>
-                                    </div>
-                                <?php endif; ?>
+                        </div>
+                        <div class="w-stack" style="--w-gap:var(--weline-space-3);">
+                            <p class="w-text" data-testid="shipping-region-create-section-title"><?= __('区县（可选）') ?></p>
+                            <div class="w-grid" style="--w-gap:var(--weline-space-4);">
+                                <div style="--w-span:6;--w-span-md:6;">
+                                    <label class="w-field__label" for="shipping-region-district-name"><?= __('区县名称') ?></label>
+                                    <input class="w-input" type="text" name="add_district_name" id="shipping-region-district-name" maxlength="255" placeholder="<?= __('例如：洛杉矶县') ?>" data-testid="shipping-region-district-name">
+                                </div>
+                                <div style="--w-span:6;--w-span-md:6;">
+                                    <label class="w-field__label" for="shipping-region-district-code"><?= __('区县代码') ?></label>
+                                    <input class="w-input" type="text" name="add_district_code" id="shipping-region-district-code" maxlength="50" placeholder="<?= __('例如：US-CA-LA') ?>" data-testid="shipping-region-district-code" autocomplete="off">
+                                </div>
                             </div>
+                        </div>
+                        <div style="--w-max-inline-size:8rem;">
+                            <label class="w-field__label" for="shipping-region-sort-order"><?= __('排序') ?></label>
+                            <input class="w-input" type="number" min="0" name="sort_order" id="shipping-region-sort-order" value="0">
                         </div>
                     </div>
                 </div>
+                <div class="w-dialog__footer">
+                    <button type="button" class="w-button" data-w-action="dialog.close" data-tone="neutral" data-variant="outline"><?= __('取消') ?></button>
+                    <button class="w-button" type="submit" data-testid="shipping-region-submit" data-tone="primary"><?= __('创建') ?></button>
+                </div>
+            </w:form>
+        </div>
+    </div>
+</div>
+
 <script>
 (function () {
     'use strict';
 
     const messages = <?= json_encode($confirmMessages, $dialogJsonFlags) ?>;
+    const initialCountry = <?= json_encode($currentCountryCode, $dialogJsonFlags) ?>;
+    const initialCountries = <?= json_encode($currentCountryCodes, $dialogJsonFlags) ?>;
+    const countrySeedJson = <?= json_encode($countrySeed, $dialogJsonFlags) ?>;
+    const listApiUrl = <?= json_encode($listApiUrl, $dialogJsonFlags) ?>;
+    const i18n = {
+        pickCountry: <?= json_encode((string)__('请先在上方筛选中选择国家。'), $dialogJsonFlags) ?>,
+        loading: <?= json_encode((string)__('正在加载地区…'), $dialogJsonFlags) ?>,
+        loadFail: <?= json_encode((string)__('地区加载失败，请稍后重试。'), $dialogJsonFlags) ?>,
+        empty: <?= json_encode((string)__('当前国家暂无地区数据，请先执行 shipping:addresscatalog:import 或手动添加。'), $dialogJsonFlags) ?>,
+        active: <?= json_encode((string)__('启用'), $dialogJsonFlags) ?>,
+        inactive: <?= json_encode((string)__('禁用'), $dialogJsonFlags) ?>,
+        needCountry: <?= json_encode((string)__('请先选择国家。'), $dialogJsonFlags) ?>,
+        needProvince: <?= json_encode((string)__('请填写要新增的省份名称与代码。'), $dialogJsonFlags) ?>,
+        needDistrictCode: <?= json_encode((string)__('请填写要新增的区县代码。'), $dialogJsonFlags) ?>,
+        needDistrictName: <?= json_encode((string)__('请填写要新增的区县名称。'), $dialogJsonFlags) ?>,
+        codeExists: <?= json_encode((string)__('该地区代码已存在，不能重复添加。'), $dialogJsonFlags) ?>
+    };
 
-    function showLocalChoice(message) {
-        return new Promise(function(resolve) {
-            const overlay = document.createElement('div');
-            overlay.style.cssText = 'position:fixed;inset:0;z-index:1055;background:rgba(15,23,42,.45);display:flex;align-items:center;justify-content:center;padding:20px;';
+    var listCache = {};
+    var listRequestSeq = 0;
 
-            const dialog = document.createElement('div');
-            dialog.setAttribute('role', 'dialog');
-            dialog.setAttribute('aria-modal', 'true');
-            dialog.style.cssText = 'width:min(420px,100%);background:#fff;border-radius:8px;box-shadow:0 20px 60px rgba(15,23,42,.25);padding:24px;';
+    function text(value) {
+        return value == null ? '' : String(value).trim();
+    }
 
-            const title = document.createElement('h4');
-            title.textContent = messages.confirmTitle;
-            title.style.cssText = 'margin:0 0 12px;font-size:18px;';
+    function escapeHtml(value) {
+        return String(value == null ? '' : value)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
+    }
 
-            const body = document.createElement('p');
-            body.textContent = message;
-            body.style.cssText = 'margin:0 0 20px;color:#475569;';
+    function countryCodeOf(row) {
+        return text(row && (row.country_code || row.region_code)).toUpperCase();
+    }
 
-            const actions = document.createElement('div');
-            actions.style.cssText = 'display:flex;justify-content:flex-end;gap:10px;';
+    function parseSelection(root) {
+        try {
+            var raw = root.getAttribute('data-multi-selection') || '[]';
+            var list = JSON.parse(raw);
+            return Array.isArray(list) ? list : [];
+        } catch (e) {
+            return [];
+        }
+    }
 
-            const cancelButton = document.createElement('button');
-            cancelButton.type = 'button';
-            cancelButton.className = 'btn btn-secondary';
-            cancelButton.textContent = messages.cancelButton;
-
-            const confirmButton = document.createElement('button');
-            confirmButton.type = 'button';
-            confirmButton.className = 'btn btn-primary';
-            confirmButton.textContent = messages.confirmButton;
-
-            function close(value) {
-                document.removeEventListener('keydown', onKeydown);
-                overlay.remove();
-                resolve(value);
+    function uniqueSortedCodes(codes) {
+        var map = {};
+        (codes || []).forEach(function (code) {
+            code = text(code).toUpperCase();
+            if (/^[A-Z]{2}$/.test(code)) {
+                map[code] = true;
             }
+        });
+        return Object.keys(map).sort();
+    }
 
-            function onKeydown(event) {
-                if (event.key === 'Escape') {
-                    close(false);
-                }
+    function sameCodeSet(a, b) {
+        return uniqueSortedCodes(a).join(',') === uniqueSortedCodes(b).join(',');
+    }
+
+    function syncUrlCountries(codes) {
+        codes = uniqueSortedCodes(codes);
+        var url = new URL(window.location.href);
+        var currentMulti = uniqueSortedCodes((url.searchParams.get('country_codes') || '').split(/[,\s]+/));
+        var currentSingle = text(url.searchParams.get('country_code')).toUpperCase();
+        var current = currentMulti.length ? currentMulti : (currentSingle ? [currentSingle] : []);
+        if (sameCodeSet(current, codes)) {
+            return;
+        }
+        if (codes.length === 0) {
+            url.searchParams.delete('country_code');
+            url.searchParams.delete('country_codes');
+        } else if (codes.length === 1) {
+            url.searchParams.set('country_code', codes[0]);
+            url.searchParams.delete('country_codes');
+        } else {
+            url.searchParams.set('country_codes', codes.join(','));
+            url.searchParams.delete('country_code');
+        }
+        if (window.history && typeof window.history.replaceState === 'function') {
+            window.history.replaceState({}, '', url.toString());
+        }
+    }
+
+    function collectSelectionCountries(selected) {
+        var codes = {};
+        (selected || []).forEach(function (row) {
+            var code = countryCodeOf(row);
+            if (/^[A-Z]{2}$/.test(code)) {
+                codes[code] = true;
             }
+        });
+        return Object.keys(codes).sort();
+    }
 
-            cancelButton.addEventListener('click', function() { close(false); });
-            confirmButton.addEventListener('click', function() { close(true); });
-            overlay.addEventListener('click', function(event) {
-                if (event.target === overlay) {
-                    close(false);
-                }
+    function statusEl() {
+        return document.querySelector('[data-region-list-status]');
+    }
+
+    function setStatus(tone, message, visible) {
+        var el = statusEl();
+        if (!el) {
+            return;
+        }
+        el.setAttribute('data-tone', tone || 'info');
+        el.textContent = message || '';
+        el.hidden = !visible;
+    }
+
+    function tableWrap() {
+        return document.querySelector('[data-region-table-wrap]');
+    }
+
+    function tableBody() {
+        return document.querySelector('[data-region-tree-body]');
+    }
+
+    function childrenUrl(countryCode) {
+        var url = new URL(listApiUrl, window.location.origin);
+        url.searchParams.set('mode', 'children');
+        url.searchParams.set('country_code', countryCode);
+        url.searchParams.set('limit', '500');
+        return url.toString();
+    }
+
+    function fetchProvinces(countryCode) {
+        if (listCache[countryCode]) {
+            return Promise.resolve(listCache[countryCode]);
+        }
+        return fetch(childrenUrl(countryCode), {
+            credentials: 'same-origin',
+            headers: { 'Accept': 'application/json' }
+        }).then(function (res) {
+            if (!res.ok) {
+                throw new Error('HTTP ' + res.status);
+            }
+            return res.json();
+        }).then(function (payload) {
+            var rows = payload && payload.data;
+            if (!Array.isArray(rows)) {
+                rows = [];
+            }
+            listCache[countryCode] = rows;
+            return rows;
+        });
+    }
+
+    function renderRows(rows) {
+        var body = tableBody();
+        var wrap = tableWrap();
+        if (!body || !wrap) {
+            return;
+        }
+        if (!rows.length) {
+            body.innerHTML = '';
+            wrap.hidden = true;
+            return;
+        }
+        var html = rows.map(function (row) {
+            var regionId = Number(row.region_id || 0) || 0;
+            var parentId = Number(row.parent_region_id || 0) || 0;
+            var countryCode = text(row.country_code || row.region_code).toUpperCase();
+            if (!/^[A-Z]{2}$/.test(countryCode)) {
+                countryCode = '';
+            }
+            var active = row.is_active === undefined || row.is_active === null || Number(row.is_active) === 1;
+            return '<tr data-region-row'
+                + ' data-region-id="' + escapeHtml(regionId) + '"'
+                + ' data-parent-id="' + escapeHtml(parentId) + '"'
+                + ' data-country-code="' + escapeHtml(countryCode) + '"'
+                + ' data-region-code="' + escapeHtml(row.region_code || '') + '"'
+                + ' data-region-type="' + escapeHtml(row.region_type || 'province') + '"'
+                + ' data-ancestor-ids="' + escapeHtml(regionId > 0 ? String(regionId) : '') + '">'
+                + '<td>' + escapeHtml(row.region_name || '') + '</td>'
+                + '<td>' + escapeHtml(row.region_code || '') + '</td>'
+                + '<td>' + escapeHtml(row.region_type || 'province') + '</td>'
+                + '<td><span class="w-badge" data-w-background="' + (active ? 'success' : 'muted') + '">'
+                + escapeHtml(active ? i18n.active : i18n.inactive)
+                + '</span></td></tr>';
+        }).join('');
+        body.innerHTML = html;
+        wrap.hidden = false;
+    }
+
+    function applySelectionFilter(selected) {
+        var table = document.querySelector('[data-region-tree-table]');
+        if (!table) {
+            return;
+        }
+        var rows = table.querySelectorAll('[data-region-row]');
+        if (!selected || !selected.length) {
+            rows.forEach(function (row) { row.hidden = false; });
+            return;
+        }
+
+        var countryOnly = {};
+        var provinceFocusIds = {};
+        selected.forEach(function (row) {
+            var type = text(row.region_type);
+            var code = countryCodeOf(row);
+            if (!/^[A-Z]{2}$/.test(code)) {
+                return;
+            }
+            if (type === 'country') {
+                countryOnly[code] = true;
+                return;
+            }
+            var provinceId = 0;
+            if (type === 'province') {
+                provinceId = Number(row.region_id || 0) || 0;
+            } else if (type === 'city') {
+                provinceId = Number(row.parent_region_id || row.province_region_id || 0) || 0;
+            } else if (type === 'district') {
+                provinceId = Number(row.province_region_id || row.parent_region_id || 0) || 0;
+            }
+            if (provinceId > 0) {
+                provinceFocusIds[provinceId] = true;
+                delete countryOnly[code];
+            }
+        });
+
+        var focusIdList = Object.keys(provinceFocusIds).map(Number);
+        rows.forEach(function (row) {
+            var id = Number(row.getAttribute('data-region-id') || 0) || 0;
+            var rowCountry = text(row.getAttribute('data-country-code')).toUpperCase();
+            var keep = false;
+            if (rowCountry && countryOnly[rowCountry]) {
+                keep = true;
+            }
+            if (!keep && focusIdList.length && focusIdList.indexOf(id) > -1) {
+                keep = true;
+            }
+            row.hidden = !keep;
+        });
+    }
+
+    function loadProvinceList(countryCodes, selected) {
+        countryCodes = uniqueSortedCodes(countryCodes);
+        var seq = ++listRequestSeq;
+        if (!countryCodes.length) {
+            renderRows([]);
+            setStatus('info', i18n.pickCountry, true);
+            return Promise.resolve();
+        }
+        setStatus('info', i18n.loading, true);
+        return Promise.all(countryCodes.map(fetchProvinces)).then(function (chunks) {
+            if (seq !== listRequestSeq) {
+                return;
+            }
+            var merged = [];
+            chunks.forEach(function (rows) {
+                (rows || []).forEach(function (row) { merged.push(row); });
             });
-
-            actions.append(cancelButton, confirmButton);
-            dialog.append(title, body, actions);
-            overlay.appendChild(dialog);
-            document.body.appendChild(overlay);
-            document.addEventListener('keydown', onKeydown);
-            confirmButton.focus();
+            renderRows(merged);
+            if (!merged.length) {
+                setStatus('info', i18n.empty, true);
+            } else {
+                setStatus('info', '', false);
+                applySelectionFilter(selected || []);
+            }
+        }).catch(function () {
+            if (seq !== listRequestSeq) {
+                return;
+            }
+            renderRows([]);
+            setStatus('warning', i18n.loadFail, true);
         });
     }
 
-    function showRegionChoice(message) {
-        return Weline.UI.dialog.request({
-            tone: 'warning',
-            title: messages.confirmTitle,
-            message: message,
-            cancelable: true,
-            confirmLabel: messages.confirmButton,
-            cancelLabel: messages.cancelButton
-        }).then(function(result) {
-            return !!(result && result.confirmed);
-        });
+    function bindCreateCountry(root) {
+        if (!root || root.dataset.regionCreateCountryBound === '1') {
+            return;
+        }
+        root.dataset.regionCreateCountryBound = '1';
+        var form = root.closest('form');
+        var codeHidden = document.getElementById('shipping-region-create-country-code');
+        var nameHidden = document.getElementById('shipping-region-create-country-name');
+
+        function syncCountry() {
+            var metaCode = form ? form.querySelector('input[name="country_code"]') : null;
+            var pick = form ? form.querySelector('input[name="address_country_pick"]') : null;
+            var visible = root.querySelector('.w-address__input');
+            var code = text(metaCode && metaCode.value).toUpperCase();
+            if (!/^[A-Z]{2}$/.test(code)) {
+                code = text(codeHidden && codeHidden.value).toUpperCase();
+            }
+            var label = text(pick && pick.value) || text(visible && visible.value);
+            if (codeHidden && /^[A-Z]{2}$/.test(code)) {
+                codeHidden.value = code;
+            }
+            if (nameHidden && label && !/^[A-Z]{2}$/.test(label)) {
+                nameHidden.value = label;
+            }
+        }
+
+        if (/^[A-Z]{2}$/.test(initialCountry) && window.WelineThemeAddress && typeof window.WelineThemeAddress.applyValues === 'function') {
+            window.WelineThemeAddress.applyValues(root, {
+                country_code: initialCountry,
+                country: initialCountry
+            }).then(function () { syncCountry(); }).catch(function () { syncCountry(); });
+        }
+
+        root.addEventListener('change', syncCountry);
+        root.addEventListener('input', syncCountry);
+        if (form) {
+            form.addEventListener('change', syncCountry);
+            form.addEventListener('input', syncCountry);
+        }
+        syncCountry();
     }
 
-    document.querySelectorAll('[data-region-confirm]').forEach(function(link) {
-        link.addEventListener('click', function(event) {
-            const key = link.getAttribute('data-region-confirm');
-            const message = messages[key];
+    function existingCodesForCountry(country) {
+        var codes = {};
+        country = text(country).toUpperCase();
+        document.querySelectorAll('[data-region-tree-table] [data-region-row]').forEach(function (row) {
+            var rowCountry = text(row.getAttribute('data-country-code')).toUpperCase();
+            var code = text(row.getAttribute('data-region-code')).toUpperCase();
+            if (country && rowCountry === country && code) {
+                codes[code] = true;
+            }
+        });
+        return codes;
+    }
+
+    function bindCreateForm(form) {
+        if (!form || form.dataset.regionCreateFormBound === '1') {
+            return;
+        }
+        form.dataset.regionCreateFormBound = '1';
+        form.addEventListener('submit', function (event) {
+            var countryInput = form.querySelector('[name="country_code"]');
+            var provinceName = text((form.querySelector('[name="add_province_name"]') || {}).value);
+            var provinceCode = text((form.querySelector('[name="add_province_code"]') || {}).value).toUpperCase();
+            var districtName = text((form.querySelector('[name="add_district_name"]') || {}).value);
+            var districtCode = text((form.querySelector('[name="add_district_code"]') || {}).value).toUpperCase();
+            var country = text(countryInput && countryInput.value).toUpperCase();
+            var message = '';
+            if (!/^[A-Z]{2}$/.test(country)) {
+                message = i18n.needCountry;
+            } else if (!provinceName || !provinceCode) {
+                message = i18n.needProvince;
+            } else if (districtName && !districtCode) {
+                message = i18n.needDistrictCode;
+            } else if (districtCode && !districtName) {
+                message = i18n.needDistrictName;
+            } else {
+                var existing = existingCodesForCountry(country);
+                if (existing[provinceCode] && !districtName) {
+                    message = i18n.codeExists;
+                } else if (districtCode && existing[districtCode]) {
+                    message = i18n.codeExists;
+                }
+            }
             if (!message) {
                 return;
             }
-
             event.preventDefault();
-            showRegionChoice(message).then(function(confirmed) {
-                if (confirmed) {
-                    window.location.href = link.href;
-                }
-            });
-        });
-    });
-
-    document.querySelectorAll('[data-region-country-select]').forEach(function(select) {
-        select.addEventListener('change', function() {
-            if (select.form) {
-                select.form.submit();
+            if (window.Weline && Weline.UI && Weline.UI.dialog && typeof Weline.UI.dialog.request === 'function') {
+                Weline.UI.dialog.request({
+                    tone: 'warning',
+                    title: messages.confirmTitle,
+                    message: message,
+                    cancelable: false,
+                    confirmLabel: messages.confirmButton
+                });
+            } else {
+                window.alert(message);
             }
         });
-    });
+    }
+
+    function bindFilterAddress(root) {
+        if (!root || root.dataset.regionFilterBound === '1') {
+            return;
+        }
+        root.dataset.regionFilterBound = '1';
+        try { root.setAttribute('data-multi-seed', JSON.stringify(countrySeedJson || [])); } catch (e) {}
+        var loadedCountries = [];
+
+        function sync() {
+            var selected = parseSelection(root);
+            var neededCountries = collectSelectionCountries(selected);
+            if (!neededCountries.length && initialCountries.length && !selected.length) {
+                neededCountries = uniqueSortedCodes(initialCountries);
+            }
+            syncUrlCountries(neededCountries);
+            if (!sameCodeSet(neededCountries, loadedCountries)) {
+                loadedCountries = neededCountries.slice();
+                loadProvinceList(neededCountries, selected);
+                return;
+            }
+            applySelectionFilter(selected);
+        }
+
+        root.addEventListener('weline:address:multi-change', sync);
+        sync();
+    }
+
+    function bootAddress() {
+        if (!window.WelineThemeAddress || typeof window.WelineThemeAddress.boot !== 'function') {
+            return false;
+        }
+        var createRoot = document.querySelector('[data-address-code="shipping-region-create-country"]')
+            || document.querySelector('[data-testid="shipping-region-create-country"] [data-w-address]');
+        var filterRoot = document.querySelector('[data-address-code="shipping-region-filter"]')
+            || document.querySelector('[data-testid="shipping-region-filter-address"] [data-w-address]');
+        if (createRoot) {
+            createRoot.dataset.wAddressReady = '';
+        }
+        if (filterRoot) {
+            try { filterRoot.setAttribute('data-multi-seed', JSON.stringify(countrySeedJson || [])); } catch (e) {}
+            filterRoot.dataset.wAddressReady = '';
+        }
+        window.WelineThemeAddress.boot();
+        bindCreateCountry(createRoot);
+        bindCreateForm(document.querySelector('[data-testid="shipping-region-create-form-el"]'));
+        bindFilterAddress(filterRoot);
+        if (!filterRoot && initialCountries.length) {
+            loadProvinceList(initialCountries, []);
+        }
+        return true;
+    }
+
+    var bootTries = 0;
+    function waitBoot() {
+        if (bootAddress()) {
+            return;
+        }
+        bootTries += 1;
+        if (bootTries < 120) {
+            setTimeout(waitBoot, 50);
+        } else if (initialCountries.length) {
+            loadProvinceList(initialCountries, []);
+        } else {
+            setStatus('info', i18n.pickCountry, true);
+        }
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', waitBoot);
+    } else {
+        waitBoot();
+    }
 })();
 </script>

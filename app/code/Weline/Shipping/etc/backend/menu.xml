@@ -15,9 +15,6 @@
     <menu source="Weline_Shipping::region" name="shipping_region" title="地区管理"
           action="shipping/backend/region/index" parent="Weline_Backend::shipping_group"
           icon="pin" order="40"/>
-    <menu source="Weline_Shipping::zone" name="shipping_zone" title="配送区域"
-          action="shipping/backend/zone/index" parent="Weline_Backend::shipping_group"
-          icon="circle" order="50"/>
     <menu source="Weline_Shipping::carrier" name="shipping_carrier" title="快递公司"
           action="shipping/backend/carrier/index" parent="Weline_Backend::shipping_group"
           icon="truck" order="60"/>

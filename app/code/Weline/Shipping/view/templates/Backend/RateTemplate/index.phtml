@@ -26,6 +26,16 @@ $embed = $this->getData('embed') ?? false;
                 </div>
 <?php endif; ?>
 
+                <div class="w-grid" style="--w-mb:var(--weline-space-4);"><div style="--w-span:12;">
+                    <div class="w-alert" role="status" data-tone="info" data-testid="shipping-rate-template-design-note" style="--w-mb:var(--weline-space-4);">
+                        <w:icon name="info" size="sm"></w:icon>
+                        <div class="w-alert__content">
+                            <strong class="w-alert__title"><?= __('设计说明') ?></strong>
+                            <span><?= __('费用模板只定义「怎么算钱」（固定 / 重量 / 体积 / 件数 / 混合），挂到配送服务上使用。它不按到达国家/州省设费率；能否运到某地由承运商「支持范围」与网站可售/禁运决定。若要对不同目的地不同价，请拆多条配送服务（各绑不同模板与承运商），而非在模板里配地区矩阵。') ?></span>
+                        </div>
+                    </div>
+                </div></div>
+
                 <div class="w-grid" style="--w-mb:var(--weline-space-4);"><div style="--w-span:12;"><div class="w-card" data-testid="shipping-rate-template-create-form">
                     <div class="w-card__header"><h5 class="w-card__title" style="--w-mb:0;"><?= __('新增费用模板') ?></h5></div>
                     <div class="w-card__body"><w:form method="post" action="@backend-url('shipping/backend/ratetemplate/save')"><div class="w-grid" style="--w-gap:var(--weline-space-4);">

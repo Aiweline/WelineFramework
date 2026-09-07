@@ -19,8 +19,6 @@ use Weline\Framework\Setup\Db\ModelSetup;
 use Weline\Shipping\Model\ShippingAddress;
 use Weline\Shipping\Model\DeliveryAddress;
 use Weline\Shipping\Model\Region;
-use Weline\Shipping\Model\Zone;
-use Weline\Shipping\Model\ZoneRegion;
 use Weline\Shipping\Model\Carrier;
 use Weline\Shipping\Model\RateTemplate;
 use Weline\Shipping\Model\FreeShippingRule;
@@ -55,20 +53,6 @@ class Install implements InstallInterface
         $modelSetup = ObjectManager::make(ModelSetup::class);
         $modelSetup->putModel($region);
         $region->setup($modelSetup, $context);
-        
-        // 安装配送区域表
-        /** @var Zone $zone */
-        $zone = ObjectManager::getInstance(Zone::class);
-        $modelSetup = ObjectManager::make(ModelSetup::class);
-        $modelSetup->putModel($zone);
-        $zone->setup($modelSetup, $context);
-        
-        // 安装配送区域地区关联表
-        /** @var ZoneRegion $zoneRegion */
-        $zoneRegion = ObjectManager::getInstance(ZoneRegion::class);
-        $modelSetup = ObjectManager::make(ModelSetup::class);
-        $modelSetup->putModel($zoneRegion);
-        $zoneRegion->setup($modelSetup, $context);
         
         // 安装快递公司表
         /** @var Carrier $carrier */

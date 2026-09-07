@@ -19,6 +19,8 @@ use Weline\Shipping\Model\Tracking as TrackingModel;
 #[Acl('Weline_Shipping::tracking', '物流跟踪管理', 'search', '物流跟踪管理', 'Weline_Backend::shipping_group')]
 class Tracking extends BackendController
 {
+    use ShippingBackendEmbedTrait;
+
     private TrackingModel $tracking;
 
     public function __construct(ObjectManager $objectManager)
@@ -39,7 +41,7 @@ class Tracking extends BackendController
             ->getItems();
 
         $this->assign('records', $records);
-        $this->assign('embed', ($this->request->getGet('embed') === '1' || $this->request->getGet('embed') === true));
+        $this->assignShippingEmbedLayout();
 
         return $this->fetch();
     }
