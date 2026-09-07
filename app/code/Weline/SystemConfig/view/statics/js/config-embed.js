@@ -123,7 +123,9 @@
         root.querySelectorAll('[data-w-config-embed-control]').forEach(function (control) {
             control.dataset.lastValue = readControlValue(control);
             var fieldEl = control.closest('[data-testid="config-embed-field"]');
-            var isSwitch = control.type === 'checkbox' || control.tagName === 'SELECT';
+            var isSwitch = control.type === 'checkbox'
+                || control.tagName === 'SELECT'
+                || !!(control.closest && control.closest('[data-w-search-select]'));
 
             if (isSwitch) {
                 control.addEventListener('change', function () {

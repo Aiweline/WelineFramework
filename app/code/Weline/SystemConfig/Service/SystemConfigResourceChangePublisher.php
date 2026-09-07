@@ -57,7 +57,8 @@ final class SystemConfigResourceChangePublisher
             after: $after,
             changedFields: $changedFields,
             impact: [
-                'namespaces' => $this->impactNamespaces($module, $scope, $identity),
+                'namespaces' => $this->impactNamespaces($module, $scope, $identity, $changedFields),
+                'urls' => $this->impactUrls($module, $changedFields),
             ],
             origin: ['entry' => $entry],
         );
@@ -65,8 +66,13 @@ final class SystemConfigResourceChangePublisher
         return $change;
     }
 
-    /** @return list<string> */
-    private function impactNamespaces(string $module, string $scope, string $identity): array
+    /** @param list<string> $changedFields @return list<string> */
+    private function impactNamespaces(
+        string $module,
+        string $scope,
+        string $identity,
+        array $changedFields = [],
+    ): array
     {
         $namespaces = [
             $this->namespacePath->global('system-config', [hash('sha256', $identity)]),
@@ -82,6 +88,9 @@ final class SystemConfigResourceChangePublisher
             'Weline_Currency' => 'price',
             default => null,
         };
+        if ($module === 'Weline_Customer' && $this->hasSocialLoginFields($changedFields)) {
+            $dimension = 'auth';
+        }
         if ($dimension !== null) {
             $namespaces[] = $this->namespacePath->global('storefront', [$dimension]);
             if ($websiteCode !== '' && $websiteCode !== 'default') {
@@ -92,6 +101,35 @@ final class SystemConfigResourceChangePublisher
         $namespaces = array_values(array_unique($namespaces));
         sort($namespaces, SORT_STRING);
         return $namespaces;
+    }
+
+    /** @param list<string> $changedFields @return list<string> */
+    private function impactUrls(string $module, array $changedFields): array
+    {
+        if ($module !== 'Weline_Customer' || !$this->hasSocialLoginFields($changedFields)) {
+            return [];
+        }
+
+        $urls = [
+            '/customer/account/login',
+            '/customer/account/register',
+        ];
+        sort($urls, SORT_STRING);
+
+        return $urls;
+    }
+
+    /** @param list<string> $changedFields */
+    private function hasSocialLoginFields(array $changedFields): bool
+    {
+        foreach ($changedFields as $field) {
+            $field = strtolower(trim((string)$field));
+            if ($field !== '' && str_starts_with($field, 'customer/social_login/')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /** @param array<string,mixed> $change */
