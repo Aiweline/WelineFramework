@@ -1,12 +1,93 @@
 <?php
-/** @var \Weline\Framework\View\Template $this */
+/**
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Customer\Service\CustomerAuthReturnUrlService;
+use Weline\Framework\Http\Request;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Session\SessionFactory;
+
 $this->setData('title', __('用户登录'));
-$redirectUrl = (string) ($this->getData('redirect_url') ?? (\w_env_get('redirect_url', '') ?: \w_env_get('redirect', '')));
+
+$safe = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+$redirectUrl = trim((string) ($this->getData('redirect_url') ?? ''));
+if ($redirectUrl === '') {
+    $redirectUrl = trim((string) (\w_env_get('redirect_url', '') ?: \w_env_get('redirect', '') ?: \w_env_get('return_url', '')));
+}
+try {
+    $authReturn = ObjectManager::getInstance(CustomerAuthReturnUrlService::class);
+    $request = ObjectManager::getInstance(Request::class);
+    $explicit = $redirectUrl !== '' ? $redirectUrl : trim((string) (
+        $request->getParam('redirect_url')
+        ?? $request->getParam('redirect')
+        ?? $request->getParam('return_url')
+        ?? ''
+    ));
+    $referer = (string) ($request->getParam('referer') ?: $request->getReferer() ?: '');
+    try {
+        $session = ObjectManager::getInstance(SessionFactory::class)->createFrontendSession();
+        $redirectUrl = $authReturn->capture($session, $explicit, $referer);
+    } catch (\Throwable) {
+        $redirectUrl = $authReturn->normalizeTarget($explicit);
+        if ($redirectUrl === '') {
+            $redirectUrl = $authReturn->normalizeTarget($referer);
+        }
+    }
+} catch (\Throwable) {
+    // keep $redirectUrl as-is
+}
+if ($redirectUrl === '' && isset($explicit) && is_string($explicit)) {
+    // last resort already attempted above
+}
 $heading = trim((string)($this->getData('login_widget_title') ?? ''));
 $subheading = trim((string)($this->getData('login_widget_subtitle') ?? ''));
-$safe = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+// Do not pass params via w:widget attribute (short-echo PHP inside attrs breaks Taglib).
 ?>
+<style>
+/* Critical login layout — keep in sync with account-login.css meta row (Theme UI pack may cache). */
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta{
+    display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;
+    align-items:center;justify-content:space-between;gap:.65rem;min-width:0;width:100%;
+}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember{
+    display:inline-flex!important;align-items:center;gap:.35rem;flex-wrap:nowrap;
+    flex:0 1 auto!important;min-width:0!important;max-width:calc(100% - 5.75rem)!important;width:max-content!important;
+    padding:0!important;border:0!important;border-radius:0!important;background:transparent!important;overflow:visible!important;
+}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember-label{
+    flex:0 0 auto!important;overflow:visible!important;color:#565959;font-size:.8125rem;font-weight:400;white-space:nowrap;
+}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember .w-select{
+    flex:0 0 auto!important;width:max-content!important;min-width:4.5rem!important;max-width:7rem!important;
+    min-height:1.5rem!important;padding:.05rem 1.1rem .05rem .15rem!important;
+    border:0!important;border-radius:0!important;background:transparent!important;box-shadow:none!important;
+    font-size:.8125rem!important;color:#0f1111;
+}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__forgot{
+    display:flex!important;flex:0 0 auto!important;width:auto!important;margin:0!important;justify-content:flex-end;
+}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__forgot-link{
+    color:var(--color-link);font-size:.8125rem;font-weight:650;text-decoration:none;white-space:nowrap;
+}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__forgot-link:hover{color:var(--color-link-hover);text-decoration:underline;}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__password>.w-button{
+    border:0!important;background:transparent!important;box-shadow:none!important;color:var(--color-link)!important;
+}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__form{gap:.7rem;}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__header{padding:1.15rem 1.25rem .35rem;gap:.25rem;}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social{padding:.15rem 1.25rem .2rem;}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social-title{
+    display:block;margin:0;color:#565959;font-size:.8125rem;text-align:center;
+}
+[data-w-component="account-login"].w-auth-login--amazon .w-auth-login__social-divider{margin:.35rem 1.25rem .15rem;}
+@media (max-width:39.99rem){
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__meta{flex-wrap:wrap!important;}
+    [data-w-component="account-login"].w-auth-login--amazon .w-auth-login__remember{max-width:none!important;}
+}
+</style>
 <section class="w-card w-auth-login w-auth-login--amazon" data-w-component="account-login"
+         data-w-auth-return="<?= $safe($redirectUrl) ?>"
          data-weline-load="api,account"
          weline-code="customer.account.login"
          data-username-required-message="<?= $safe(__('请输入用户名或邮箱')) ?>"
@@ -34,6 +115,34 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT
         <template>Weline_Component::message.phtml</template>
         <div class="w-alert" data-w-login-feedback role="alert" hidden></div>
     </div>
+
+    <div class="w-auth-login__social w-auth-login__social--quick">
+        <p class="w-auth-login__social-title"><lang>快捷登录</lang></p>
+        <?php
+        // Fetch (not nested w:widget params) so Taglib/exclusive slot cannot drop the default entry.
+        $this->setData('redirect_url', $redirectUrl);
+        try {
+            echo $this->fetch('Weline_Customer::templates/frontend/widgets/account-social-login.phtml');
+        } catch (\Throwable $socialFetchError) {
+            echo '<!-- social-login-fetch-error:'
+                . htmlspecialchars($socialFetchError->getMessage(), ENT_QUOTES, 'UTF-8')
+                . ' -->';
+        }
+        ?>
+        <w:slot id="account-login-social-providers"
+                weline-code="customer.account.login.social_providers"
+                name="社媒登录入口"
+                accept="account-login-social-providers,layout-account-login-social-providers,social-login"
+                reject="header,footer"
+                multiple="true"
+                exclusive="false"
+                position="content"
+                class="w-auth-login__social-slot">
+        </w:slot>
+        <w:hook name="Weline_Customer::frontend::account::login::providers"/>
+    </div>
+
+    <p class="w-auth-login__social-divider" role="presentation"><span><lang>或使用账户登录</lang></span></p>
 
     <w:form id="loginForm" action="@url{'customer/account/login'}" method="post"
             class="w-form w-auth-login__form" csrf="off" captcha="lazy" intent="customer.login"
@@ -71,29 +180,30 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT
             </div>
         </div>
 
-        <div class="w-auth-login__remember">
-            <label class="w-auth-login__remember-label" for="remember_duration">
-                <w:icon name="clock" size="md"></w:icon><lang>记住登录状态</lang>
-            </label>
-            <select class="w-select" id="remember_duration" name="remember_duration">
-                <option value="0"><lang>本次会话（关闭浏览器后失效）</lang></option>
-                <option value="21600"><lang>6小时</lang></option>
-                <option value="86400"><lang>1天</lang></option>
-                <option value="604800" selected><lang>1周</lang></option>
-                <option value="2592000"><lang>1个月</lang></option>
-            </select>
-        </div>
-
-        <div class="w-auth-login__forgot">
-            <?php if ($redirectUrl !== ''): ?>
-                <a href="@url{'customer/account/forgot-password'|['redirect_url' => $redirectUrl]}" class="w-button" data-tone="quiet" data-size="sm">
-                    <w:icon name="key" size="md"></w:icon><lang>忘记密码？</lang>
-                </a>
-            <?php else: ?>
-                <a href="@url{'customer/account/forgot-password'}" class="w-button" data-tone="quiet" data-size="sm">
-                    <w:icon name="key" size="md"></w:icon><lang>忘记密码？</lang>
-                </a>
-            <?php endif; ?>
+        <div class="w-auth-login__meta">
+            <div class="w-auth-login__remember">
+                <label class="w-auth-login__remember-label" for="remember_duration">
+                    <lang>记住</lang>
+                </label>
+                <select class="w-select" id="remember_duration" name="remember_duration" aria-label="<?= $safe(__('记住登录状态')) ?>">
+                    <option value="0"><lang>本次会话</lang></option>
+                    <option value="21600"><lang>6小时</lang></option>
+                    <option value="86400"><lang>1天</lang></option>
+                    <option value="604800" selected><lang>1周</lang></option>
+                    <option value="2592000"><lang>1个月</lang></option>
+                </select>
+            </div>
+            <div class="w-auth-login__forgot">
+                <?php if ($redirectUrl !== ''): ?>
+                    <a href="@url{'customer/account/forgot-password'|['redirect_url' => $redirectUrl]}" class="w-auth-login__forgot-link">
+                        <lang>忘记密码？</lang>
+                    </a>
+                <?php else: ?>
+                    <a href="@url{'customer/account/forgot-password'}" class="w-auth-login__forgot-link">
+                        <lang>忘记密码？</lang>
+                    </a>
+                <?php endif; ?>
+            </div>
         </div>
 
         <div data-weline-form-captcha-slot></div>
@@ -107,11 +217,6 @@ $safe = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT
             </span>
         </button>
     </w:form>
-
-    <div class="w-auth-login__social">
-        <p class="w-auth-login__social-title"><lang>或使用以下方式登录</lang></p>
-        <w:hook name="Weline_Customer::frontend::account::login::providers"/>
-    </div>
 
     <footer class="w-auth-login__footer">
         <p class="w-auth-login__divider" role="presentation"><span><lang>新客户？</lang></span></p>

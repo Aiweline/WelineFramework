@@ -1,0 +1,98 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$providers = (array) ($this->getData('social_login_providers') ?? []);
+$safe = static fn(mixed $value): string => htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8');
+?>
+<link rel="stylesheet" href="@static(Weline_Customer::css/account-social-bindings.css)?v=20260906-unbind1">
+
+<div class="customer-social-bindings" data-customer-social-bindings data-testid="customer-social-bindings">
+    <header class="customer-social-bindings__intro">
+        <h2 class="customer-social-bindings__title"><lang>社媒登录</lang></h2>
+        <p class="customer-social-bindings__desc">
+            <lang>绑定后可在登录页使用对应社媒账户一键登录。也可在此随时解绑各提供方。</lang>
+            <a href="@url{'guide/social-login'}"><lang>查看社媒登录指南与政策</lang></a>
+        </p>
+    </header>
+
+    <?php if ($providers === []): ?>
+        <div class="customer-social-bindings__empty" data-testid="customer-social-bindings-empty">
+            <lang>暂无可用的社媒登录提供方。商户激活后可在此绑定或解绑。</lang>
+        </div>
+    <?php else: ?>
+        <div class="customer-social-bindings__list" role="list">
+            <?php foreach ($providers as $row): ?>
+                <?php
+                $code = (string) ($row['code'] ?? '');
+                $label = (string) ($row['label'] ?? $code);
+                $bound = !empty($row['bound']);
+                $active = !empty($row['active']);
+                $display = trim((string) ($row['display_name'] ?? ''));
+                $email = trim((string) ($row['email'] ?? ''));
+                $iconSvg = (string) ($row['icon_svg'] ?? '');
+                $brandClass = (string) ($row['brand_class'] ?? '');
+                $guideRoute = (string) ($row['guide_route'] ?? ('guide/social-login/' . $code));
+                $policyRoute = (string) ($row['policy_route'] ?? ('guide/social-login/' . $code . '/policy'));
+                $bindUrl = (string) ($row['bind_url'] ?? '');
+                $confirmUnbind = (string) __(
+                    '确定解绑 %{1}？解绑后将无法再用该社媒一键登录，本站账户与订单不受影响。',
+                    [$label]
+                );
+                ?>
+                <article
+                    class="customer-social-bindings__card"
+                    role="listitem"
+                    data-social-provider="<?= $safe($code) ?>"
+                    data-social-bound="<?= $bound ? '1' : '0' ?>"
+                    data-testid="customer-social-binding-<?= $safe($code) ?>">
+                    <div class="customer-social-bindings__identity">
+                        <?php if ($iconSvg !== ''): ?>
+                            <span class="customer-social-bindings__logo <?= $safe($brandClass) ?>" aria-hidden="true">
+                                <?= $iconSvg ?>
+                            </span>
+                        <?php endif; ?>
+                        <div>
+                            <h3 class="customer-social-bindings__name"><?= $safe($label) ?></h3>
+                            <?php if ($bound): ?>
+                                <p class="customer-social-bindings__meta">
+                                    <?= $safe($display !== '' ? $display : ($email !== '' ? $email : (string) __('已绑定'))) ?>
+                                </p>
+                                <span class="customer-social-bindings__badge customer-social-bindings__badge--on"><lang>已绑定</lang></span>
+                            <?php elseif (!$active): ?>
+                                <p class="customer-social-bindings__meta"><lang>商户尚未激活该社媒登录入口</lang></p>
+                                <span class="customer-social-bindings__badge customer-social-bindings__badge--off"><lang>不可用</lang></span>
+                            <?php else: ?>
+                                <p class="customer-social-bindings__meta"><lang>尚未绑定，绑定后可用于登录</lang></p>
+                                <span class="customer-social-bindings__badge customer-social-bindings__badge--off"><lang>未绑定</lang></span>
+                            <?php endif; ?>
+                            <p class="customer-social-bindings__meta">
+                                <a href="@url{$guideRoute}"><lang>指南</lang></a>
+                                ·
+                                <a href="@url{$policyRoute}"><lang>政策</lang></a>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="customer-social-bindings__actions">
+                        <?php if ($bound): ?>
+                            <w:form method="post" action="@frontend-url{'customer/account/social-login/unbind'}" csrf="off"
+                                    data-testid="customer-social-unbind-<?= $safe($code) ?>"
+                                    data-customer-social-unbind-confirm="<?= $safe($confirmUnbind) ?>">
+                                <?= $this->getFormKey('customer/account/social-login/unbind') ?>
+                                <input type="hidden" name="provider" value="<?= $safe($code) ?>">
+                                <input type="hidden" name="return_url" value="@url{'customer/account/index'}#social-login">
+                                <button type="submit" class="customer-social-bindings__btn customer-social-bindings__btn--danger">
+                                    <lang>解绑</lang>
+                                </button>
+                            </w:form>
+                        <?php elseif ($active && $bindUrl !== ''): ?>
+                            <a class="customer-social-bindings__btn customer-social-bindings__btn--primary"
+                               data-testid="customer-social-bind-<?= $safe($code) ?>"
+                               href="<?= $safe($bindUrl) ?>">
+                                <lang>绑定</lang>
+                            </a>
+                        <?php endif; ?>
+                    </div>
+                </article>
+            <?php endforeach; ?>
+        </div>
+    <?php endif; ?>
+</div>

@@ -8,6 +8,20 @@ $referralCode = trim((string) ($this->getData('referral_code') ?? ($_GET['ref'] 
 $failMsg = (string)__('注册失败，请稍后重试');
 $reqFailMsg = (string)__('注册请求失败，请稍后重试');
 $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT;
+// Prefer fetching the gated Mail widget over calling Mail services from Customer.
+// Empty output => enterprise mail unavailable => single-form register (no tabs).
+$mailRegisterPanelHtml = '';
+if (\Weline\Framework\Registry\Service\RegistryModulePresence::isActivePresent('Weline_Mail')) {
+    try {
+        $mailRegisterPanelHtml = (string)$this->setData('mail_register_variant', 'panel')
+            ->fetch('Weline_Mail::templates/frontend/widgets/account-mail-register.phtml');
+    } catch (\Throwable $mailRegisterFetchError) {
+        $mailRegisterPanelHtml = '<!-- mail-register-fetch-error:'
+            . htmlspecialchars($mailRegisterFetchError->getMessage(), ENT_QUOTES, 'UTF-8')
+            . ' -->';
+    }
+}
+$showRegisterTabs = trim(preg_replace('/<!--.*?-->/s', '', $mailRegisterPanelHtml) ?? '') !== '';
 ?>
 <section class="w-card w-auth-login w-auth-login--amazon w-auth-login--register" data-w-component="account-register"
          data-weline-load="api,account"
@@ -34,8 +48,24 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         <div id="registerClientError" class="w-alert wflash wflash--danger auth-form__error" role="alert" hidden></div>
     </div>
 
+    <?php if ($showRegisterTabs): ?>
+    <div class="w-auth-login__register-modes" data-w-component="tabs">
+        <nav class="w-tabs__list" data-variant="soft" role="tablist" aria-label="<?= $safe(__('注册方式')) ?>">
+            <button class="w-tabs__tab" id="customer-register-tab" type="button" role="tab"
+                    aria-controls="customer-register-panel" aria-selected="true">
+                <w:icon name="user" size="sm"></w:icon><span><lang>账户注册</lang></span>
+            </button>
+            <button class="w-tabs__tab" id="mail-register-tab" type="button" role="tab"
+                    aria-controls="mail-register-panel" aria-selected="false" tabindex="-1">
+                <w:icon name="mail" size="sm"></w:icon><span><lang>企业邮箱（可选）</lang></span>
+            </button>
+        </nav>
+        <div class="w-tabs__panel" id="customer-register-panel" role="tabpanel" aria-labelledby="customer-register-tab">
+    <?php endif; ?>
+
     <w:form action="@url{'customer/account/register'}" method="post"
             class="w-form w-auth-login__form" data-customer-register-form csrf="off"
+            captcha="off" intent="customer.register"
             data-account-home-url="@url{'customer/account'}">
         <?= $this->getFormKey('customer/account/register') ?>
         <input type="hidden" name="redirect_url" value="<?= $safe($redirectUrl) ?>">
@@ -130,6 +160,24 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         </button>
     </w:form>
 
+    <?php if ($showRegisterTabs): ?>
+        </div>
+        <div class="w-tabs__panel" id="mail-register-panel" role="tabpanel" aria-labelledby="mail-register-tab" hidden>
+            <?= $mailRegisterPanelHtml ?>
+        </div>
+    </div>
+    <?php endif; ?>
+
+    <w:slot id="account-register-extras"
+            name="account-register-extras"
+            accept="account-register-extras,layout-account-register-extras,mail-register"
+            multiple="true"
+            position="content"
+            wrapper="div"
+            class="w-auth-login__extras"
+            weline-code="customer.account.register.extras">
+    </w:slot>
+
     <footer class="w-auth-login__footer">
         <p class="w-auth-login__divider" role="presentation"><span><lang>已有账户？</lang></span></p>
         <?php if ($redirectUrl !== ''): ?>
@@ -143,6 +191,13 @@ $jsonFlags = JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APO
         <?php endif; ?>
     </footer>
 </section>
+<style>
+.w-auth-login--register .w-auth-login__register-modes{padding-inline:1.25rem;margin-block-end:.35rem}
+.w-auth-login--register .w-auth-login__register-modes .w-tabs__list{margin-block-end:.35rem}
+.w-auth-login--register .w-auth-login__register-modes .w-tabs__panel{padding-block:.35rem 0}
+.w-auth-login--register .w-auth-login__register-modes .w-auth-login__form{padding-inline:0}
+.w-auth-login--register .w-auth-login__mail-panel{display:grid;gap:.75rem}
+</style>
 <script>
 (function () {
     'use strict';

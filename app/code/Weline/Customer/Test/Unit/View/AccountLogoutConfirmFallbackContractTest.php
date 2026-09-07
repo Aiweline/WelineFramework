@@ -23,5 +23,8 @@ final class AccountLogoutConfirmFallbackContractTest extends TestCase
             'Notice confirmation is unavailable; logout cancelled.',
             $content
         );
+        self::assertStringContainsString('clearFrontendSessionCache', $content);
+        self::assertStringContainsString('weline_frontend_session_user', $content);
+        self::assertStringContainsString('weline:account:frontend:logout', $content);
     }
 }

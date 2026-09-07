@@ -1,0 +1,136 @@
+/* Account center — social login bind/unbind cards (lazy sidebar safe; no inline <style>). */
+.customer-social-bindings {
+    display: grid;
+    gap: 18px;
+}
+.customer-social-bindings__intro {
+    border: 1px solid #dbeafe;
+    border-radius: 8px;
+    background: #f0f9ff;
+    padding: 18px;
+}
+.customer-social-bindings__title {
+    margin: 0 0 6px;
+    color: #0c4a6e;
+    font-size: 18px;
+    font-weight: 800;
+}
+.customer-social-bindings__desc {
+    margin: 0;
+    color: #475569;
+    font-size: 14px;
+}
+.customer-social-bindings__list {
+    display: grid;
+    gap: 12px;
+}
+.customer-social-bindings__card {
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background: #fff;
+    padding: 18px;
+    display: flex;
+    justify-content: space-between;
+    gap: 16px;
+    align-items: center;
+}
+.customer-social-bindings__identity {
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    min-width: 0;
+}
+.customer-social-bindings__logo {
+    width: 44px;
+    height: 44px;
+    border-radius: 999px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    overflow: hidden;
+}
+.customer-social-bindings__logo .account-social-login__mark {
+    width: 22px;
+    height: 22px;
+    display: block;
+}
+.customer-social-bindings__name {
+    margin: 0;
+    color: #0f172a;
+    font-size: 16px;
+    font-weight: 800;
+}
+.customer-social-bindings__meta {
+    margin: 4px 0 0;
+    color: #64748b;
+    font-size: 13px;
+    word-break: break-word;
+}
+.customer-social-bindings__badge {
+    display: inline-block;
+    margin-top: 8px;
+    border-radius: 999px;
+    padding: 3px 10px;
+    font-size: 12px;
+    font-weight: 700;
+}
+.customer-social-bindings__badge--on {
+    background: #ecfdf5;
+    color: #166534;
+}
+.customer-social-bindings__badge--off {
+    background: #f1f5f9;
+    color: #64748b;
+}
+.customer-social-bindings__actions {
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.customer-social-bindings__btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: 8px;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    color: #0f172a;
+    font-weight: 700;
+    text-decoration: none;
+    cursor: pointer;
+}
+.customer-social-bindings__btn--primary {
+    border-color: #2563eb;
+    background: #2563eb;
+    color: #fff;
+}
+.customer-social-bindings__btn--danger {
+    border-color: #fecaca;
+    color: #b91c1c;
+    background: #fff;
+}
+.customer-social-bindings__empty {
+    border: 1px dashed #cbd5e1;
+    border-radius: 8px;
+    padding: 24px;
+    text-align: center;
+    color: #64748b;
+    background: #f8fafc;
+}
+@media (max-width: 640px) {
+    .customer-social-bindings__card {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    .customer-social-bindings__actions {
+        width: 100%;
+    }
+    .customer-social-bindings__btn {
+        width: 100%;
+    }
+}

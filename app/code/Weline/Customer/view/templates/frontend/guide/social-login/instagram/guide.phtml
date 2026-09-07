@@ -1,0 +1,54 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$entry = (array) ($this->getData('social_login_guide_entry') ?? []);
+$policyRoute = (string) ($entry['policy_route'] ?? '');
+?>
+<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/sidebar.phtml'); ?>
+
+<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="social-login-guide-instagram" weline-code="customer.social_login.guide.instagram">
+    <header class="amazon-payment-guide-article__header">
+        <p class="amazon-payment-guide-article__badge">Instagram</p>
+        <h1 class="amazon-payment-guide-article__title"><lang>Instagram 登录指南</lang></h1>
+        <p class="amazon-payment-guide-article__lead"><lang>使用 Instagram 账户授权后，可一键登录本站，或绑定到已有顾客账户。</lang></p>
+    </header>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.instagram.prepare">
+        <h2><lang>开始前准备</lang></h2>
+        <ul>
+            <li><lang>准备 Instagram 专业账户（Business 或 Creator）。个人号已不被 Meta 支持。</lang></li>
+            <li><lang>商户须在后台配置 Instagram App ID / Secret（Instagram API with Instagram Login）并激活前台入口。</lang></li>
+            <li><lang>Instagram 登录接口通常不返回邮箱；本站会使用占位邮箱完成账户关联，不影响一键登录。</lang></li>
+        </ul>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.instagram.steps">
+        <h2><lang>登录步骤</lang></h2>
+        <ol>
+            <li><lang>在登录页点击 Instagram Logo。</lang></li>
+            <li><lang>完成 Instagram 授权后返回本站。</lang></li>
+            <li><lang>已绑定则登录成功；未绑定则选择绑定已有账户或新建账户。</lang></li>
+        </ol>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.guide.instagram.faq">
+        <h2><lang>常见问题</lang></h2>
+        <ul class="social-login-guide-article__faq amazon-payment-guide-article__faq">
+            <li>
+                <strong><lang>为什么没有邮箱？</lang></strong>
+                <p><lang>Instagram API with Instagram Login 通常不提供邮箱。本站用内部占位邮箱维护绑定，您仍可稍后在账户资料中补充真实邮箱。</lang></p>
+            </li>
+            <li>
+                <strong><lang>为什么授权失败或看不到登录？</lang></strong>
+                <p><lang>本站仅支持 Instagram 专业账户（Business / Creator）。请确认账户类型，并确认商户已用 Instagram App ID（非 Facebook App ID）完成后台配置。</lang></p>
+            </li>
+        </ul>
+    </section>
+
+    <?php if ($policyRoute !== ''): ?>
+        <footer class="amazon-payment-guide-article__footer">
+            <a href="@url{$policyRoute}"><lang>查看 Instagram 登录政策</lang></a>
+        </footer>
+    <?php endif; ?>
+</article>
+<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/shell-close.phtml'); ?>

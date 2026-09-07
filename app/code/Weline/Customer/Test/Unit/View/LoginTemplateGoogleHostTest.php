@@ -15,7 +15,8 @@ class LoginTemplateGoogleHostTest extends TestCase
         $this->assertFileExists($templateFile);
         $content = (string) file_get_contents($templateFile);
 
-        $this->assertStringContainsString('$redirectUrl = (string) ($this->getData(\'redirect_url\')', $content);
+        $this->assertStringContainsString('CustomerAuthReturnUrlService', $content);
+        $this->assertStringContainsString("trim((string) (\$this->getData('redirect_url')", $content);
         $this->assertStringContainsString('id="loginForm"', $content);
         $this->assertStringContainsString("action=\"@url{'customer/account/login'}\"", $content);
         $this->assertStringContainsString('method="post"', $content);

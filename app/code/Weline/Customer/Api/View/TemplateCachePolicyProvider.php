@@ -13,6 +13,8 @@ final class TemplateCachePolicyProvider implements TemplateCachePolicyProviderIn
         return [
             'output_files' => [
                 'Weline_Customer::hooks/header-account-links.phtml' => ['context' => 'frontend_auth'],
+                'Weline_Customer::hooks/Weline_Theme/frontend/layouts/base/body-end.phtml' => ['context' => 'frontend_auth'],
+                'Weline_Customer::hooks/Weline_Theme/frontend/layouts/homepage/body-end.phtml' => ['context' => 'frontend_auth'],
             ],
         ];
     }

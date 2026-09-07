@@ -154,6 +154,17 @@
 
             confirmLogout(config).then(function (confirmed) {
                 if (confirmed) {
+                    try {
+                        if (window.WelineAccountModule
+                            && typeof window.WelineAccountModule.clearFrontendSessionCache === 'function') {
+                            window.WelineAccountModule.clearFrontendSessionCache();
+                        } else {
+                            localStorage.removeItem('weline_frontend_session_user');
+                        }
+                        window.dispatchEvent(new CustomEvent('weline:account:frontend:logout'));
+                    } catch (_error) {
+                        try { localStorage.removeItem('weline_frontend_session_user'); } catch (_e) { /* ignore */ }
+                    }
                     window.location.assign(targetUrl);
                 }
             });

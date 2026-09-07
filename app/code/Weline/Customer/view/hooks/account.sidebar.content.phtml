@@ -1,0 +1,58 @@
+<?php
+/**
+ * Customer social login bindings — account sidebar content.
+ *
+ * Hook: account.sidebar.content
+ *
+ * @hook-priority 160
+ * @hook-sort-order 15
+ * @hook-solo false
+ */
+
+use Weline\Customer\Api\View\AccountSidebarProjectionProviderInterface;
+use Weline\Customer\Model\Customer;
+use Weline\Customer\Service\SocialLogin\SocialLoginAccountLinker;
+use Weline\Customer\Service\SocialLogin\SocialLoginConfig;
+use Weline\Customer\Service\SocialLogin\SocialLoginOAuthService;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+
+$projectionProvider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+    ->resolve(AccountSidebarProjectionProviderInterface::class);
+if (!$projectionProvider instanceof AccountSidebarProjectionProviderInterface) {
+    return;
+}
+
+$projection = $projectionProvider->forSections('social-login');
+if ($projection === null) {
+    return;
+}
+
+$customerId = (int) ($projection->getCustomerId() ?? 0);
+if ($customerId <= 0) {
+    // Lazy sidebar may set template user before facade session is mirrored.
+    $user = $this->getData('user');
+    if ($user instanceof Customer && $user->getId()) {
+        $customerId = (int) $user->getId();
+    }
+}
+
+$config = ObjectManager::getInstance(SocialLoginConfig::class);
+$linker = ObjectManager::getInstance(SocialLoginAccountLinker::class);
+$oauth = ObjectManager::getInstance(SocialLoginOAuthService::class);
+$providers = $linker->listProviderStatusForCustomer($customerId, $config);
+foreach ($providers as &$row) {
+    $code = (string) ($row['code'] ?? '');
+    $row['bind_url'] = $oauth->startUrl(
+        $code,
+        '/customer/account/index#social-login',
+        SocialLoginOAuthService::INTENT_BIND
+    );
+}
+unset($row);
+
+$this->assign('social_login_providers', $providers);
+?>
+<section class="account-hook-section account-index__section" id="social-login-section" data-account-section="social-login" hidden weline-code="customer.account_sidebar_content.social_login_section">
+    <?= $this->fetch('Weline_Customer::templates/frontend/account/social-bindings.phtml') ?>
+</section>
