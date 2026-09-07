@@ -1,0 +1,20 @@
+<?php
+/**
+ * Customer social login bindings — connections group entry.
+ *
+ * Hook: account.sidebar.group.connections
+ *
+ * @hook-priority 50
+ * @hook-sort-order 20
+ * @hook-solo false
+ */
+?>
+<a class="account-hook-nav-link" href="@url{'customer/account/index'}#social-login" data-section="social-login" data-account-nav-link="true" data-account-nav-parent="connections">
+    <span class="account-hook-nav-link__label">
+        <w:icon name="share-2" size="sm"></w:icon>
+        <span class="account-hook-nav-link__text">
+            <strong><?= __('社媒登录') ?></strong>
+            <span><?= __('绑定 Google / Facebook / Instagram') ?></span>
+        </span>
+    </span>
+</a>

@@ -6,6 +6,11 @@
 缺少账户分区参数,"Missing account partition parameters"
 "搜索客户（姓名 / 邮箱）","Search customers (name / email)"
 解析单个客户显示信息,"Resolve customer display label"
+"交换社媒 access token 失败","Failed to exchange social access token"
+"Google 未返回可用的账号标识或邮箱","Google did not return a usable account id or email"
+"Facebook 未返回用户标识","Facebook 未返回用户标识"
+"交换 Instagram access token 失败","交换 Instagram access token 失败"
+"Instagram 未返回用户标识","Instagram 未返回用户标识"
 未找到匹配客户,"No matching customers found"
 搜索中...,Searching...
 id属性不能为空,id属性不能为空
@@ -20,6 +25,9 @@ id属性不能为空,id属性不能为空
 在顾客账户首页“我的订单”分区注入订单列表、订单状态与售后入口等内容。,"Inject the order list, order status, after-sales portal, etc. into the ""My Orders"" section on the homepage of the customer account."
 账户发现卡片扩展,账户发现卡片扩展
 在顾客账户中心发现页卡片区域注入扩展入口，例如分销摘要卡片。,在顾客账户中心发现页卡片区域注入扩展入口，例如分销摘要卡片。
+"Customer ResourceChange Observer 只接受 v1 契约","Customer ResourceChange Observer 只接受 v1 契约"
+社媒登录指南,"Social login guides"
+查看各社媒登录提供方的使用指南与登录政策。,"Browse sign-in guides and policies for each social login provider."
 无法统计令牌数量：%{1},"Unable to count tokens: %{1}"
 加载前端客户失败：%{1},"Failed to load frontend client: %{1}"
 无效的用户ID,"Invalid user ID"
@@ -52,9 +60,6 @@ lock,lock
 你已经登录了，请先退出登录.,"You are already logged in. Please log out first."
 请输入用户名/邮箱和密码。,"Username/email and password are required."
 人机验证失败或已过期，请重试,"Human-machine verification failed or has expired, please try again"
-用户不存在.,"User does not exist."
-登录尝试次数过多，请稍后再试.,"Too many login attempts, please try again later."
-密码错误.,"Incorrect password."
 请完成两步验证。,"Please complete two-factor verification."
 登录成功.,"Login successful."
 "登录失败: %{1}","Login failed: %{1}"
@@ -87,6 +92,14 @@ lock,lock
 两次输入的密码不一致,"The passwords entered twice are inconsistent"
 账户不存在,账户不存在
 密码已设置,密码已设置
+请先登录后再绑定社媒账户,请先登录后再绑定社媒账户
+绑定社媒账户需要登录同一账户,绑定社媒账户需要登录同一账户
+社媒账户已绑定,社媒账户已绑定
+社媒登录会话已过期，请重试,社媒登录会话已过期，请重试
+"请填写本站已有账户的用户名/邮箱与密码（不是 Google 登录密码）。若尚未注册，请使用下方「新建账户」。","Enter your existing store username/email and password (not your Google password). If you are new here, use Create account below."
+已绑定社媒账户并登录,已绑定社媒账户并登录
+已创建账户并完成社媒登录,已创建账户并完成社媒登录
+已解除社媒绑定,已解除社媒绑定
 重置链接无效或已过期。,"The reset link is invalid or has expired."
 重置密码,"Reset Password"
 忘记密码,"Forgot Password"
@@ -99,8 +112,114 @@ lock,lock
 账户,Account
 个人资料,"Personal information"
 安全设置,"Security settings"
-退出登录,"Log Out"
 注册,Register
+社媒登录,"Social Login"
+"绑定 Google / Facebook / Instagram","Link Google / Facebook / Instagram"
+"Google 登录指南","Google sign-in guide"
+"使用 Google 账户授权后，可一键登录本站顾客账户，或把 Google 绑定到已有账户，无需重复输入密码。","After authorizing with Google, you can sign in to your store account in one click, or link Google to an existing account without re-entering your password."
+开始前准备,"Before you start"
+"准备可用的 Google 账户，并允许浏览器弹出 Google 授权窗口。","Have a working Google account ready and allow the browser to open the Google authorization window."
+"商户须在后台「顾客社媒登录」填写 Google OAuth Client ID/Secret，并开启「激活前台入口」；未激活时登录页不会显示 Google Logo。","Merchants must enter the Google OAuth Client ID/Secret under Customer Social Login in admin and enable “Activate storefront entry”. Until then, the Google logo will not appear on the login page."
+"首次授权时，若该 Google 尚未绑定本站账户，可选择「绑定已有账户」或「新建账户」。","On first authorization, if this Google account is not linked yet, choose “Link existing account” or “Create account”."
+登录步骤,"Sign-in steps"
+"打开本站登录页，在「快捷登录」区域点击 Google Logo。","Open this store’s login page and click the Google logo in Quick sign-in."
+"跳转到 Google 安全授权页，选择账户并确认允许本站读取基础资料（邮箱、姓名、头像等）。","You are redirected to Google’s secure consent page. Choose an account and allow this store to read basic profile data (email, name, avatar, and similar)."
+授权成功后自动返回本站：已绑定则直接登录；未绑定则进入选择页完成绑定或新建。,"After successful authorization you return here automatically: linked accounts sign in directly; unlinked accounts open the choose-binding or create-account page."
+之后可在个人中心「连接与应用」查看绑定状态，或随时解绑。,"Later you can check the link status under Connections & apps in your account, or unlink at any time."
+绑定与解绑,"Link and unlink"
+"已登录顾客可在个人中心发起「绑定」，完成 Google 授权后写入绑定关系。","Signed-in customers can start linking from their account center; after Google authorization the link is saved."
+"解绑不会删除本站账户，仅移除 Google 一键登录能力；仍可用邮箱/密码登录。","Unlinking does not delete your store account—it only removes one-click Google sign-in. You can still sign in with email/password."
+"同一 Google 账户通常只能绑定一个本站顾客；已被他人绑定时需先解绑或联系客服。","A Google account can usually link to only one store customer. If it is already linked elsewhere, unlink it first or contact support."
+常见问题,FAQ
+"登录页看不到 Google Logo？","Don’t see the Google logo on the login page?"
+"请确认后台已填写凭据并开启「激活前台入口」；主题部件也未关闭 enable_google。","Confirm credentials are saved in admin and “Activate storefront entry” is on, and that the theme widget has not disabled enable_google."
+授权后提示状态无效或失败？,"Authorization fails or says the state is invalid?"
+"请勿重复使用过期回调链接；关闭多余标签页后从登录页重新点击 Google Logo。","Do not reuse an expired callback link. Close extra tabs, then click the Google logo again from the login page."
+"不想再用 Google 登录？","No longer want to use Google sign-in?"
+"在个人中心解绑即可；也可在 Google 账户安全设置中撤销对本站的应用授权。","Unlink it in your account center, or revoke this store’s app access in Google account security settings."
+"查看 Google 登录政策","View Google sign-in policy"
+"Google 登录政策","Google sign-in policy"
+"说明本站如何通过 Google OAuth 获取与使用授权信息，以及您如何管理绑定与撤销授权。","Explains how this store obtains and uses Google OAuth data, and how you manage linking and revoked access."
+我们获取哪些信息,"What information we receive"
+"在您确认授权后，本站仅获取 Google 返回的账户标识、邮箱、显示名称与头像（以实际授权范围为准）。","After you consent, this store only receives the Google account id, email, display name, and avatar that Google returns (within the scopes you granted)."
+这些信息用于登录识别、账户绑定与展示头像，不会用于未告知的其他用途。,"This data is used for sign-in identity, account linking, and avatar display—not for undisclosed purposes."
+"本站不会保存您的 Google 密码，也无法代替您登录 Google。","This store never stores your Google password and cannot sign in to Google on your behalf."
+信息如何使用与存储,"How information is used and stored"
+绑定关系保存在本站社媒绑定表中，用于下次一键登录校验。,"The link is stored in this store’s social-login binding table for the next one-click sign-in check."
+邮箱、显示名称与头像可能随登录同步更新到本站顾客资料（在您授权范围内）。,"Email, display name, and avatar may sync into your store profile on sign-in (within authorized scopes)."
+"OAuth 过程中的临时 state 仅保存在会话中，并在短时有效后失效。","Temporary OAuth state is kept only for the session and expires after a short time."
+您的控制权,"Your controls"
+"可在个人中心「连接与应用」随时解绑 Google。","You can unlink Google anytime under Connections & apps in your account."
+"也可在 Google 账户「安全性 / 第三方应用」中撤销对本站的授权。","You can also revoke this store’s access under Google Account → Security → Third-party apps."
+解绑或撤销后，需使用其他方式登录本站；已有订单与账户数据不受影响。,"After unlinking or revoking access, use another way to sign in. Existing orders and account data are unchanged."
+用户数据删除,用户数据删除
+"若您希望本站删除与 Google 登录相关的绑定与资料：请登录个人中心「连接与应用」解绑 Google，或联系本站客服协助删除账户/绑定数据。","若您希望本站删除与 Google 登录相关的绑定与资料：请登录个人中心「连接与应用」解绑 Google，或联系本站客服协助删除账户/绑定数据。"
+"解绑后本站不再通过 Google 一键登录您的账户；仍可用邮箱/密码登录（若已设置）。","解绑后本站不再通过 Google 一键登录您的账户；仍可用邮箱/密码登录（若已设置）。"
+"您也可在 Google 账户安全设置中撤销对本站应用的授权。","您也可在 Google 账户安全设置中撤销对本站应用的授权。"
+"返回 Google 登录指南","Back to Google sign-in guide"
+当前暂无已接入的社媒登录指南。,"No social login guides are available yet."
+查看登录指南,"View sign-in guide"
+查看登录政策,"View sign-in policy"
+"Facebook 登录指南","Facebook sign-in guide"
+"使用 Facebook 账户授权后，可一键登录本站，或把 Facebook 绑定到已有顾客账户。","After authorizing with Facebook, you can sign in with one click or link Facebook to an existing customer account."
+"准备可用的 Facebook 账户，并允许弹出授权窗口。","Have a working Facebook account ready and allow the authorization popup."
+"商户须在后台配置 Facebook App ID/Secret 并激活前台入口后，登录页才会显示 Facebook Logo。","Merchants must configure the Facebook App ID/Secret and activate the storefront entry before the Facebook logo appears on the login page."
+首次授权未绑定时，可选择绑定已有本站账户或新建账户。,"If the account is not linked on first authorization, choose to link an existing store account or create a new one."
+"商户须开通的 Meta 权限","Meta permissions merchants must enable"
+"本站 Facebook 登录固定请求以下 OAuth 权限（与后台配置指南、FacebookProvider 一致）：","This store’s Facebook sign-in always requests these OAuth permissions (same as the admin setup guide and FacebookProvider):"
+姓名和头像（授权弹窗显示「姓名和头像」）,"Name and profile picture (shown as “Name and profile picture” on the consent dialog)"
+邮箱（授权弹窗显示「邮箱」）,"Email (shown as “Email” on the consent dialog)"
+"开发模式下可用应用角色或测试用户验证流程。对普通顾客上线前，须在 Meta「应用审核 / 权限与功能」为上述权限申请 Advanced Access，完成「登录审核」，并将应用切换为正式模式。","In Development mode, verify with app roles or test users. Before serving ordinary customers, request Advanced Access for these permissions under Meta App Review / Permissions and features, complete Login Review, and switch the app to Live."
+"在登录页「快捷登录」点击 Facebook Logo。","On the login page, click the Facebook logo under Quick sign-in."
+"在 Facebook 确认授权后返回本站。","Confirm authorization on Facebook, then return to this store."
+已绑定则直接登录；未绑定则按提示完成绑定或新建。,"If already linked, you sign in directly. If not, follow the prompts to link or create an account."
+"看不到 Facebook 入口？","Don’t see the Facebook entry?"
+"请确认后台已激活 Facebook 前台入口，且部件未关闭 enable_facebook。","Confirm the Facebook storefront entry is activated in admin and the widget has not disabled enable_facebook."
+"Meta 创建应用时找不到「登录」用例？","Can’t find a Login use case when creating a Meta app?"
+"新向导的精选/全部列表常无「Facebook 登录」。请滚到底部选「其他」（消费者）或「创建一个没有用例的应用」，创建后再到应用仪表盘添加「Facebook Login」产品；不要用广告类用例代替。","The new wizard’s Featured/All lists often omit Facebook Login. Scroll to the bottom, choose Other (Consumer) or Create an app without a use case, then add the Facebook Login product in the app dashboard—don’t substitute ads use cases."
+"跳转 URI 验证器报无效？","Redirect URI validator says invalid?"
+"请先把完整回调 URL 粘贴进上方「有效 OAuth 跳转 URI」并保存；验证器只测试、不会自动写入。快捷弹窗还需开启「使用 JavaScript SDK 登录」并登记允许域名。","Paste the full callback URL into Valid OAuth Redirect URIs above and save—the validator only tests and does not write the list. Quick popup also needs Login with JavaScript SDK enabled and an allowed domain."
+授权页提示「提交登录审核」？,"Consent page shows “Submit for Login Review”?"
+"说明 `public_profile` / `email` 尚未通过 Meta 登录审核。应用角色与测试用户通常仍可点「继续」完成联调；对普通 Facebook 用户上线前必须提交并获批 Advanced Access。","It means `public_profile` / `email` have not passed Meta Login Review. App roles and test users can usually still Continue for integration testing; before serving ordinary Facebook users you must submit and get Advanced Access approved."
+"看不到 Facebook One Tap？","Don’t see Facebook One Tap?"
+"本站使用 Meta FedCM One Tap（须点击芯片确认，不做静默自动登录）。需 HTTPS、Chrome 131+、已开启 JS SDK 并登记允许域名；首次用户请点 Logo。关闭后台「未登录 Facebook One Tap」或已登录本站时不会出现。","本站使用 Meta FedCM One Tap（须点击芯片确认，不做静默自动登录）。需 HTTPS、Chrome 131+、已开启 JS SDK 并登记允许域名；首次用户请点 Logo。关闭后台「未登录 Facebook One Tap」或已登录本站时不会出现。"
+未返回邮箱怎么办？,"What if no email is returned?"
+"部分 Facebook 账户可能不返回邮箱；本站会使用占位邮箱完成绑定，不影响后续一键登录。","Some Facebook accounts may not return an email. This store uses a placeholder email to complete linking; later one-click sign-in still works."
+"查看 Facebook 登录政策","View Facebook sign-in policy"
+"Facebook 登录政策","Facebook sign-in policy"
+"说明本站如何使用 Facebook 授权信息，以及您如何管理绑定与撤销。","Explains how this store uses Facebook authorization data, and how you manage linking and revocation."
+"Facebook 返回的用户标识、姓名、邮箱与头像（以您授权的范围为准）。","Facebook returns a user id, name, email, and avatar (within the scopes you grant)."
+"本站不会保存 Facebook 密码。","This store never stores your Facebook password."
+"可在个人中心随时解绑 Facebook。","You can unlink Facebook anytime from your account center."
+"也可在 Facebook 设置中撤销对本站应用的授权。","You can also revoke this store’s app access in Facebook settings."
+"若您希望本站删除与 Facebook 登录相关的绑定与资料：请登录个人中心「连接与应用」解绑 Facebook，或联系本站客服协助删除账户/绑定数据。","若您希望本站删除与 Facebook 登录相关的绑定与资料：请登录个人中心「连接与应用」解绑 Facebook，或联系本站客服协助删除账户/绑定数据。"
+"解绑后本站不再通过 Facebook 一键登录您的账户；仍可用邮箱/密码登录（若已设置）。","解绑后本站不再通过 Facebook 一键登录您的账户；仍可用邮箱/密码登录（若已设置）。"
+"您也可在 Facebook 账户安全设置中撤销对本站应用的授权，阻止后续授权访问。","您也可在 Facebook 账户安全设置中撤销对本站应用的授权，阻止后续授权访问。"
+"返回 Facebook 登录指南","Back to Facebook sign-in guide"
+"Instagram 登录指南","Instagram sign-in guide"
+"使用 Instagram 账户授权后，可一键登录本站，或绑定到已有顾客账户。","After authorizing with Instagram, you can sign in with one click or link it to an existing customer account."
+"准备 Instagram 专业账户（Business 或 Creator）。个人号已不被 Meta 支持。","Prepare an Instagram professional account (Business or Creator). Personal accounts are no longer supported by Meta."
+"商户须在后台配置 Instagram App ID / Secret（Instagram API with Instagram Login）并激活前台入口。","Merchants must configure Instagram App ID / Secret (Instagram API with Instagram Login) in admin and activate the storefront entry."
+"Instagram 登录接口通常不返回邮箱；本站会使用占位邮箱完成账户关联，不影响一键登录。","Instagram Login usually does not return an email. This store uses a placeholder email to keep the account link; one-click sign-in still works."
+"在登录页点击 Instagram Logo。","On the login page, click the Instagram logo."
+"完成 Instagram 授权后返回本站。","Finish Instagram authorization, then return to this store."
+已绑定则登录成功；未绑定则选择绑定已有账户或新建账户。,"If already linked, you are signed in. If not, choose to link an existing account or create a new one."
+为什么没有邮箱？,"Why is there no email?"
+"Instagram API with Instagram Login 通常不提供邮箱。本站用内部占位邮箱维护绑定，您仍可稍后在账户资料中补充真实邮箱。","Instagram API with Instagram Login usually does not provide an email. This store keeps the link with an internal placeholder email; you can add a real email later in account profile."
+为什么授权失败或看不到登录？,"Why does authorization fail or the login option not appear?"
+"本站仅支持 Instagram 专业账户（Business / Creator）。请确认账户类型，并确认商户已用 Instagram App ID（非 Facebook App ID）完成后台配置。","This store only supports Instagram professional accounts (Business / Creator). Confirm the account type, and that the merchant configured Instagram App ID (not Facebook App ID) in admin."
+"查看 Instagram 登录政策","View Instagram sign-in policy"
+"Instagram 登录政策","Instagram sign-in policy"
+"说明本站如何使用 Instagram 授权信息，以及您如何管理绑定与撤销。","Explains how this store uses Instagram authorization data, and how you manage linking and revocation."
+"Instagram 返回的用户标识与用户名等公开资料（以授权范围为准）。","Instagram returns a user id, username, and other public profile fields (within granted scopes)."
+"本站不会保存 Instagram 密码。","This store never stores your Instagram password."
+"可在个人中心随时解绑 Instagram。","You can unlink Instagram anytime from your account center."
+"也可在 Instagram / Meta 应用设置中撤销授权。","You can also revoke access in Instagram / Meta app settings."
+"若您希望本站删除与 Instagram 登录相关的绑定与资料：请登录个人中心「连接与应用」解绑 Instagram，或联系本站客服协助删除账户/绑定数据。","若您希望本站删除与 Instagram 登录相关的绑定与资料：请登录个人中心「连接与应用」解绑 Instagram，或联系本站客服协助删除账户/绑定数据。"
+"解绑后本站不再通过 Instagram 一键登录您的账户；仍可用邮箱/密码登录（若已设置）。","解绑后本站不再通过 Instagram 一键登录您的账户；仍可用邮箱/密码登录（若已设置）。"
+"您也可在 Instagram / Meta 应用设置中撤销对本站应用的授权。","您也可在 Instagram / Meta 应用设置中撤销对本站应用的授权。"
+"返回 Instagram 登录指南","Back to Instagram sign-in guide"
+全部提供方,"All providers"
 客户支持,"customer support"
 订单、配送、退换货和账户问题都可以从这里联系支持团队。请优先说明订单号或问题场景，便于客服更快定位。,"Ordering, shipping, returns, and account questions can all be directed to the support team from here. Please give priority to the order number or problem scenario so that customer service can locate it faster."
 打开在线客服,"Open online customer service"
@@ -115,14 +234,29 @@ lock,lock
 请准备好订单号、商品名称和问题说明，避免客服反复确认基础信息。,"Please prepare the order number, product name and problem description to avoid customer service repeatedly confirming basic information."
 售后资料,"After-sales information"
 退换货问题建议附上商品照片、包装照片和物流凭证，能减少处理等待。,"For returns and exchanges, it is recommended to attach photos of the product, packaging photos and logistics vouchers, which can reduce the wait for processing."
+完成社媒登录,"Finish social sign-in"
+绑定已有账户,"Link existing account"
+登录已有账户后，将自动关联本次社媒授权。,"Sign in to your existing account to link this social profile."
+本站用户名或邮箱,"Store username or email"
+本站密码,"Store password"
+绑定并登录,"Link and sign in"
+或,或
+新建账户,"Create new account"
+使用本次社媒身份创建新账户并立即登录。,"Create a new account from this social profile and sign in."
+新建并登录,"Create and sign in"
+"首次使用 %{1} 登录：可绑定已有账户，或新建账户并自动登录。","首次使用 %{1} 登录：可绑定已有账户，或新建账户并自动登录。"
+社媒,社媒
+例如本站已注册邮箱,"e.g. your registered store email"
+"不是 Google 密码","不是 Google 密码"
 已登录,已登录
 账户菜单,"Account menu"
 当前栏目,"Current column"
-消费与资产,消费与资产
-地址管理,地址管理
-连接与应用,连接与应用
-开发者,开发者
-更多,更多
+消费与资产,"Consumption and Assets"
+地址管理,"Address Management"
+连接与应用,"Connections and Applications"
+开发者,Developer
+更多,More
+退出登录,"Log Out"
 确定要退出登录吗？,"Are you sure you want to log out?"
 确认退出,"Log Out"
 取消,Cancel
@@ -144,6 +278,8 @@ lock,lock
 请再次输入密码,"Please enter the password again"
 请输入邮箱地址,"Please enter the email address"
 使用邮箱注册您的账户,"Register your account using email"
+账户注册,账户注册
+企业邮箱（可选）,企业邮箱（可选）
 名,Name
 姓,"Last Name"
 密码,Password
@@ -155,6 +291,7 @@ lock,lock
 立即登录,"Log in now"
 注册失败，请稍后重试,"Registration failed, please try again later"
 注册请求失败，请稍后重试,"Registration request failed, please try again later"
+注册方式,注册方式
 请输入名,"Enter first name"
 请输入姓,"Enter last name"
 请输入身份验证器应用生成的验证码或备用恢复码,"Please enter the verification code or backup recovery code generated by the authenticator app"
@@ -171,16 +308,17 @@ lock,lock
 账户邮箱,账户邮箱
 保存密码,保存密码
 使用您的账户继续购物,"Use your account to continue shopping"
+快捷登录,"Quick sign-in"
+或使用账户登录,"Or sign in with your account"
 用户名或邮箱,"Username or email"
-记住登录状态,"Remember Login Status"
-本次会话（关闭浏览器后失效）,"This Session (Invalid after closing browser)"
+记住,Remember
+本次会话,"This session"
 6小时,"6 hours"
 1天,"1 day"
 1周,"1 week"
 1个月,"1 month"
 忘记密码？,"Forgot Password?"
 登录中...,"Logging in..."
-或使用以下方式登录,"Or sign in with"
 新客户？,"New customer?"
 创建您的账户,"Create your account"
 用户登录,"User login"
@@ -188,6 +326,7 @@ lock,lock
 请输入密码,"Enter password"
 登录失败，请检查用户名和密码,"Login failed, please check your username and password"
 登录请求失败，请稍后重试,"Login request failed, please try again later"
+记住登录状态,"Remember Login Status"
 欢迎回来！您可以在这里管理您的账户信息,"Welcome back! You can manage your account information here"
 账户标识,"Account Identifier"
 "用户名和用户 ID 为系统标识，不可修改","Username and user ID are system identifiers and cannot be modified"
@@ -215,6 +354,23 @@ lock,lock
 "新密码长度不能少于 6 位","New password must be at least 6 characters long"
 服务器返回了无效响应，请稍后重试,"Server returned an invalid response, please try again later"
 保存接口不存在，页面脚本或路由需要同步修复,"Save interface does not exist. Page script or route needs to be fixed synchronously"
+加载中...,Loading...
+分区加载失败，请重试,"Failed to load this section. Please retry."
+绑定后可在登录页使用对应社媒账户一键登录。也可在此随时解绑各提供方。,绑定后可在登录页使用对应社媒账户一键登录。也可在此随时解绑各提供方。
+查看社媒登录指南与政策,查看社媒登录指南与政策
+暂无可用的社媒登录提供方。商户激活后可在此绑定或解绑。,暂无可用的社媒登录提供方。商户激活后可在此绑定或解绑。
+已绑定,Linked
+商户尚未激活该社媒登录入口,"This social login entry has not been activated by the merchant"
+不可用,不可用
+尚未绑定，绑定后可用于登录,"Not linked yet. Link it to enable social sign-in."
+未绑定,"Not linked"
+指南,指南
+政策,政策
+解绑,Unlink
+绑定,绑定
+"确定解绑 %{1}？解绑后将无法再用该社媒一键登录，本站账户与订单不受影响。","确定解绑 %{1}？解绑后将无法再用该社媒一键登录，本站账户与订单不受影响。"
+社媒登录指南与政策,"Social login guides and policies"
+"使用 %{1} 登录","Sign in with %{1}"
 保存订单到我的账户,保存订单到我的账户
 将使用结账邮箱,将使用结账邮箱
 该邮箱已有账户，请登录后查看订单。,该邮箱已有账户，请登录后查看订单。
@@ -263,6 +419,10 @@ Session标识,"Session ID"
 提交,Submit
 客户注册未返回有效账号,"Customer registration did not return a valid account"
 客户账号不存在,"Customer account does not exist"
+请输入用户名/邮箱和密码,请输入用户名/邮箱和密码
+本站没有该用户名/邮箱的账户。请填写本站已注册账户；若尚未注册，请使用「新建账户」。,"No local account matches that username/email. Use a registered store account, or choose Create account below."
+登录尝试次数过多，请稍后再试.,"Too many login attempts, please try again later."
+"密码错误，请填写本站账户密码（不是 Google 密码）。","Incorrect password. Use your store account password (not your Google password)."
 两步验证暂不可用。,"Two-factor verification is not available."
 密码必须至少8个字符，并且包含字母和数字.,"Password must be at least 8 characters and contain both letters and numbers."
 该邮箱已存在，请使用其他邮箱注册.,"This email already exists. Please use a different email to register."
@@ -278,8 +438,100 @@ Session标识,"Session ID"
 认证设备服务暂时不可用，请稍后重试。,"The authenticated device service is temporarily unavailable. Please try again later."
 当前认证会话无效。,"The current authenticated session is invalid."
 认证设备服务不可用。,"Authenticated device service is unavailable."
+"了解如何使用 %{1} 登录本站账户，以及绑定、解绑与隐私相关说明。","Learn how to sign in with %{1}, link or unlink accounts, and review privacy details."
+"%{1} 登录指南","%{1} sign-in guide"
+"%{1} 登录政策","%{1} sign-in policy"
+"无法初始化社媒 OAuth 请求","Unable to initialize social OAuth request"
+"社媒 OAuth 请求失败：无法连通提供商接口（%{1}）。若服务器无法直连 Google/Meta，请在「顾客社媒登录 → 出站代理」配置 HTTP/SOCKS 代理，或设置 HTTPS_PROXY。","Social OAuth request failed: cannot reach provider API (%{1}). If the server cannot reach Google/Meta directly, set an HTTP/SOCKS proxy under Customer social login → Outbound proxy, or set HTTPS_PROXY."
+"社媒 OAuth 请求失败：%{1}","Social OAuth request failed: %{1}"
+"社媒 OAuth 响应无效（HTTP %{1}）","Invalid social OAuth response (HTTP %{1})"
+目标语言不能为空,目标语言不能为空
+"社媒登录提供方 %{1} 未注册客户指南","Social login provider %{1} has no registered customer guide"
+全部,全部
+"社媒登录指南 AI 翻译 %{1} (%{2})","Social login guide AI translation %{1} (%{2})"
+"未启用 Google 快捷登录","未启用 Google 快捷登录"
+"未启用 Facebook 快捷登录","未启用 Facebook 快捷登录"
+"缺少 Facebook access token","缺少 Facebook access token"
+"Google id_token 无效","Google id_token 无效"
+"未配置 Google Client ID","未配置 Google Client ID"
+"Google id_token 校验失败：%{1}","Google id_token 校验失败：%{1}"
+"Google id_token audience 不匹配","Google id_token audience 不匹配"
+"Google id_token issuer 无效","Google id_token issuer 无效"
+"Google 邮箱尚未验证","Google 邮箱尚未验证"
+无法初始化社媒快捷登录请求,无法初始化社媒快捷登录请求
+社媒快捷登录请求失败：%{1},社媒快捷登录请求失败：%{1}
+"社媒登录配置变更后清理前台/FPC 缓存失败：%{1}","社媒登录配置变更后清理前台/FPC 缓存失败：%{1}"
+社媒身份缺少提供方或主体标识,社媒身份缺少提供方或主体标识
+该邮箱已有账户，请选择「绑定已有账户」,该邮箱已有账户，请选择「绑定已有账户」
+无效的顾客账户,无效的顾客账户
+顾客账户不存在,顾客账户不存在
+该社媒账户已绑定其他顾客,该社媒账户已绑定其他顾客
+"当前账户已绑定其他 %{1} 账号，请先解绑","当前账户已绑定其他 %{1} 账号，请先解绑"
+无法解绑社媒账户,无法解绑社媒账户
+不支持的社媒登录提供方,"Unsupported social login provider"
+当前账户未绑定该社媒提供方,当前账户未绑定该社媒提供方
+"请先在统一配置中心填写 %{1} OAuth 凭据","Please fill in %{1} OAuth credentials in System Config first"
+"请先在统一配置中心激活 %{1} 前台登录入口","Please activate the %{1} storefront login entry in System Config first"
+社媒登录状态无效或已过期，请重试,"Social login state is invalid or expired. Please try again."
+社媒授权失败：%{1},"Social authorization failed: %{1}"
+社媒授权回调缺少授权码,"Social authorization callback is missing the authorization code"
 重置您的密码,"Reset your password"
 请点击下方链接重置密码。,"Click the link below to reset your password."
+"社媒登录指南 i18n 审计：locale=%{1}，词条=%{2}，缺失=%{3}","Social login guide i18n audit: locale=%{1}, phrases=%{2}, missing=%{3}"
+"提供方 %{1}：词条=%{2}，缺失=%{3}","Provider %{1}: phrases=%{2}, missing=%{3}"
+共享外壳：词条=%{1}，缺失=%{2},"Shared chrome: phrases=%{1}, missing=%{2}"
+"审计社媒登录指南模板词条在目标语言 CSV 中的翻译缺口","Audit missing translations for social login guide templates in the target-locale CSV"
+"限定提供方 code，例如 google、facebook","限定提供方 code，例如 google、facebook"
+"目标语言，默认 en_US","目标语言，默认 en_US"
+"以 JSON 输出审计结果","以 JSON 输出审计结果"
+显示本帮助,显示本帮助
+社媒登录指南词条已全部翻译，无需入队。,"All social login guide phrases are already translated; nothing to enqueue."
+"未能创建 AI 翻译队列，请检查 I18n 配置与 Queue 模块。","未能创建 AI 翻译队列，请检查 I18n 配置与 Queue 模块。"
+"已入队社媒登录指南 AI 翻译：队列 #%{1}，locale=%{2}，词条=%{3}","Enqueued social login guide AI translation: queue #%{1}, locale=%{2}, phrases=%{3}"
+"为社媒登录客户指南未译词条入队 I18n AI 翻译","Enqueue I18n AI translation for missing social login customer-guide phrases"
+"限定提供方 code；省略则处理全部已注册指南","限定提供方 code；省略则处理全部已注册指南"
+翻译全部收集词条，而非仅缺失项,翻译全部收集词条，而非仅缺失项
+"忽略同 locale/provider 进行中的队列去重","忽略同 locale/provider 进行中的队列去重"
+"JSON 输出","JSON 输出"
+企业邮箱,企业邮箱
+"准备可用的 Instagram 账户。","Have a working Instagram account ready."
+"商户须在后台配置 Instagram Client 凭据并激活前台入口。","Merchants must configure Instagram client credentials in admin and activate the storefront entry."
+"Instagram 可能不返回邮箱；本站会使用占位邮箱完成账户关联，不影响一键登录。","Instagram may not return an email. This store uses a placeholder email to keep the account link; one-click sign-in still works."
+"Instagram Basic/部分登录接口不提供邮箱。本站用内部占位邮箱维护绑定，您仍可稍后在账户资料中补充真实邮箱。","Instagram Basic Display and some login APIs do not provide an email. This store keeps the link with an internal placeholder email; you can add a real email later in account profile."
+本次会话（关闭浏览器后失效）,"This Session (Invalid after closing browser)"
+框架资源变更,框架资源变更
+"消费 system_config 社媒登录键变更，清理登录页 FPC / frontend_auth hook 缓存。","消费 system_config 社媒登录键变更，清理登录页 FPC / frontend_auth hook 缓存。"
+"本站使用 Meta FedCM One Tap（非自动弹窗）。需 HTTPS、Chrome 131+、已开启 JS SDK 并登记允许域名，且该浏览器曾用 Facebook 登录过本站；首次用户请点 Logo。关闭后台「未登录 Facebook One Tap」或已登录本站时不会出现。","This store uses Meta FedCM One Tap (click the chip to confirm; no silent auto-login). Needs HTTPS, Chrome 131+, JavaScript SDK Login enabled with Allowed Domains; first-time users should click the logo. It won’t show if admin disabled “Facebook One Tap” or the customer is already signed in."
+绑定后可在登录页使用对应社媒账户一键登录。也可在此随时解绑。,"After linking, you can sign in with that social account. You can unlink anytime."
+暂无可用的社媒登录提供方,"No social login providers are available."
+用户不存在.,"User does not exist."
+密码错误.,"Incorrect password."
+"使用 Google 账户授权后，可一键登录本站顾客账户，或绑定到已有账户。","使用 Google 账户授权后，可一键登录本站顾客账户，或绑定到已有账户。"
+开始前,开始前
+"准备可用的 Google 账户，并允许本站弹出授权窗口。","准备可用的 Google 账户，并允许本站弹出授权窗口。"
+首次授权时，可选择绑定已有本站账户，或新建账户。,首次授权时，可选择绑定已有本站账户，或新建账户。
+"商户须在后台填写 Google OAuth 凭据并激活前台入口后，登录页才会显示 Google Logo。","商户须在后台填写 Google OAuth 凭据并激活前台入口后，登录页才会显示 Google Logo。"
+"在登录页点击 Google Logo。","在登录页点击 Google Logo。"
+"在 Google 页面选择账户并确认授权。","在 Google 页面选择账户并确认授权。"
+返回本站后自动登录；若尚未绑定，按页面提示绑定或新建。,返回本站后自动登录；若尚未绑定，按页面提示绑定或新建。
+"说明本站如何使用 Google 授权信息，以及您可如何管理绑定。","说明本站如何使用 Google 授权信息，以及您可如何管理绑定。"
+"Google 返回的账户标识、邮箱、显示名称与头像（以 Google 授权范围为准）。","Google 返回的账户标识、邮箱、显示名称与头像（以 Google 授权范围为准）。"
+"本站仅用这些信息完成登录识别与账户绑定，不会保存 Google 密码。","本站仅用这些信息完成登录识别与账户绑定，不会保存 Google 密码。"
+"也可在 Google 账户安全设置中撤销对本站的授权。","也可在 Google 账户安全设置中撤销对本站的授权。"
+"使用 Facebook 账户授权后，可一键登录本站或绑定已有账户。","使用 Facebook 账户授权后，可一键登录本站或绑定已有账户。"
+"准备可用的 Facebook 账户。","准备可用的 Facebook 账户。"
+首次授权可选择绑定已有本站账户或新建账户。,首次授权可选择绑定已有本站账户或新建账户。
+"在登录页点击 Facebook Logo。","在登录页点击 Facebook Logo。"
+"在 Facebook 确认授权后返回本站完成登录或绑定。","在 Facebook 确认授权后返回本站完成登录或绑定。"
+"说明本站如何使用 Facebook 授权信息，以及您可如何管理绑定。","说明本站如何使用 Facebook 授权信息，以及您可如何管理绑定。"
+"Facebook 返回的用户标识、姓名、邮箱与头像（以授权范围为准）。","Facebook 返回的用户标识、姓名、邮箱与头像（以授权范围为准）。"
+"也可在 Facebook 设置中撤销对本站的应用授权。","也可在 Facebook 设置中撤销对本站的应用授权。"
+"使用 Instagram 账户授权后，可一键登录本站或绑定已有账户。","使用 Instagram 账户授权后，可一键登录本站或绑定已有账户。"
+"Instagram 可能不返回邮箱；本站会用占位邮箱完成账户关联，不影响登录。","Instagram 可能不返回邮箱；本站会用占位邮箱完成账户关联，不影响登录。"
+"完成 Instagram 授权后返回本站登录或绑定。","完成 Instagram 授权后返回本站登录或绑定。"
+"说明本站如何使用 Instagram 授权信息，以及您可如何管理绑定。","说明本站如何使用 Instagram 授权信息，以及您可如何管理绑定。"
+"商户尚未配置该平台 OAuth 凭据","OAuth credentials are not configured for this provider."
+或使用以下方式登录,"Or sign in with"
 身份验证器应用,"Authenticator app"
 6位验证码或备用恢复码,"6-digit verification code or backup recovery code"
 欢迎回来,"Welcome back"
@@ -301,3 +553,5 @@ Session标识,"Session ID"
 "页脚帮助中心扩展槽：账户订单分区入口；默认注入 footer-help-links。","Footer help-center extras: account orders entry; default inject footer-help-links."
 页脚帮助中心默认展示我的账户,"Footer help center defaults to My Account"
 页脚帮助中心默认展示我的订单,"Footer help center defaults to My Orders"
+"共 %{1} 个提供方","%{1} providers"
+社媒登录导航,"Social login navigation"

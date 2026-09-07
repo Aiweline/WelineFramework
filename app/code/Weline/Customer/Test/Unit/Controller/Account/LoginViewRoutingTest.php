@@ -41,7 +41,7 @@ class LoginViewRoutingTest extends TestCase
             ->method('isLoggedIn')
             ->willReturn(false);
         $assignCalls = 0;
-        $controller->expects($this->exactly(4))
+        $controller->expects($this->exactly(6))
             ->method('assign')
             ->willReturnCallback(function (string $key, mixed $value) use (&$assignCalls, $controller): Login {
                 if ($assignCalls === 0) {
@@ -51,13 +51,19 @@ class LoginViewRoutingTest extends TestCase
                     TestCase::assertSame('register_url', $key);
                     TestCase::assertSame('/customer/account/register?redirect_url=customer%2Fcatalog', $value);
                 } elseif ($assignCalls === 2) {
+                    TestCase::assertSame('forgot_password_url', $key);
+                    TestCase::assertSame('/customer/account/forgot-password?redirect_url=customer%2Fcatalog', $value);
+                } elseif ($assignCalls === 3) {
+                    TestCase::assertSame('login_submit_url', $key);
+                    TestCase::assertSame('/customer/account/login?redirect_url=customer%2Fcatalog', $value);
+                } elseif ($assignCalls === 4) {
                     TestCase::assertSame('title', $key);
                     TestCase::assertNotSame('', (string) $value);
-                } elseif ($assignCalls === 3) {
+                } elseif ($assignCalls === 5) {
                     TestCase::assertSame('meta', $key);
                     TestCase::assertSame([
-                        'showHeader' => false,
-                        'showFooter' => false,
+                        'showHeader' => true,
+                        'showFooter' => true,
                     ], $value);
                 }
                 $assignCalls++;
@@ -65,7 +71,7 @@ class LoginViewRoutingTest extends TestCase
             });
         $controller->expects($this->once())
             ->method('fetch')
-            ->with('Weline_Customer::templates/frontend/account/login.phtml')
+            ->with('Weline_Customer::templates/frontend/account/login-shell.phtml')
             ->willReturn('rendered-theme-login-page');
         $controller->expects($this->never())
             ->method('redirect');

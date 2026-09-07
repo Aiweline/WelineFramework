@@ -1,0 +1,47 @@
+<?php
+/** @var \Weline\Framework\View\Template $this */
+$entry = (array) ($this->getData('social_login_guide_entry') ?? []);
+$guideRoute = (string) ($entry['guide_route'] ?? '');
+?>
+<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/shell-open.phtml'); ?>
+<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/sidebar.phtml'); ?>
+
+<article class="amazon-payment-guide-layout__main amazon-payment-guide-article" data-testid="social-login-policy-facebook" weline-code="customer.social_login.policy.facebook">
+    <header class="amazon-payment-guide-article__header">
+        <p class="amazon-payment-guide-article__badge">Facebook</p>
+        <h1 class="amazon-payment-guide-article__title"><lang>Facebook 登录政策</lang></h1>
+        <p class="amazon-payment-guide-article__lead"><lang>说明本站如何使用 Facebook 授权信息，以及您如何管理绑定与撤销。</lang></p>
+    </header>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.policy.facebook.data">
+        <h2><lang>我们获取哪些信息</lang></h2>
+        <ul>
+            <li><lang>Facebook 返回的用户标识、姓名、邮箱与头像（以您授权的范围为准）。</lang></li>
+            <li><lang>本站不会保存 Facebook 密码。</lang></li>
+        </ul>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" weline-code="customer.social_login.policy.facebook.control">
+        <h2><lang>您的控制权</lang></h2>
+        <ul>
+            <li><lang>可在个人中心随时解绑 Facebook。</lang></li>
+            <li><lang>也可在 Facebook 设置中撤销对本站应用的授权。</lang></li>
+        </ul>
+    </section>
+
+    <section class="amazon-payment-guide-article__panel" id="data-deletion" weline-code="customer.social_login.policy.facebook.data_deletion">
+        <h2><lang>用户数据删除</lang></h2>
+        <ul>
+            <li><lang>若您希望本站删除与 Facebook 登录相关的绑定与资料：请登录个人中心「连接与应用」解绑 Facebook，或联系本站客服协助删除账户/绑定数据。</lang></li>
+            <li><lang>解绑后本站不再通过 Facebook 一键登录您的账户；仍可用邮箱/密码登录（若已设置）。</lang></li>
+            <li><lang>您也可在 Facebook 账户安全设置中撤销对本站应用的授权，阻止后续授权访问。</lang></li>
+        </ul>
+    </section>
+
+    <?php if ($guideRoute !== ''): ?>
+        <footer class="amazon-payment-guide-article__footer">
+            <a href="@url{$guideRoute}"><lang>返回 Facebook 登录指南</lang></a>
+        </footer>
+    <?php endif; ?>
+</article>
+<?php echo $this->fetch('Weline_Customer::templates/Frontend/guide/social-login/partials/shell-close.phtml'); ?>

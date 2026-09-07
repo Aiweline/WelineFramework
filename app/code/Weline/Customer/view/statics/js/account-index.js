@@ -30,7 +30,9 @@
             passwordTooShort: 'New password must be at least 6 characters.',
             passwordMismatch: 'The two passwords do not match.',
             invalidServerResponse: 'Invalid server response. Please try again later.',
-            endpointNotFound: 'The save endpoint was not found.'
+            endpointNotFound: 'The save endpoint was not found.',
+            sectionLoading: 'Loading...',
+            sectionLoadFailed: 'Failed to load this section. Please retry.'
         };
 
         serverI18n = serverI18n && typeof serverI18n === 'object' ? serverI18n : {};
@@ -48,6 +50,11 @@
         var i18nAccount = mergeI18n(accountConfig.i18n);
         var sidebarContentReady = true;
         var accountApiPromise = null;
+
+        if (window.Weline && window.Weline.Api && window.Weline.Api.Account
+            && typeof window.Weline.Api.Account.refreshAccountMenuSignals === 'function') {
+            window.Weline.Api.Account.refreshAccountMenuSignals().catch(function () {});
+        }
 
         function welineDecodeHtmlEntities(message) {
             var s = String(message || '');
@@ -208,6 +215,17 @@
             });
         }
 
+        function clearPendingSectionFlag(sectionName) {
+            // Pending only exists to hide built-in profile/security until a hash
+            // target (e.g. #social-login after FB OAuth) finishes loading.
+            // Always clear when ANY section is revealed — otherwise switching to
+            // 个人资料 while pending=social-login leaves CSS display:none on profile.
+            try {
+                document.documentElement.removeAttribute('data-account-pending-section');
+            } catch (err) {}
+            void sectionName;
+        }
+
         // AJAX-injected sidebar HTML never re-runs the initial data-weline-load scan.
         function loadDeclaredSidebarModules(root) {
             if (!root || !window.Weline || typeof window.Weline.load !== 'function') {
@@ -244,16 +262,10 @@
                 return Promise.resolve(false);
             }
 
-            var existing = document.querySelector('[data-account-section="' + sectionName + '"]')
-                || document.getElementById(sectionName + '-section');
-            if (existing && existing.parentNode) {
-                existing.parentNode.removeChild(existing);
-            }
-
             delete loadedSidebarSections[sectionName];
             delete sidebarContentLoading[sectionName];
 
-            return loadSidebarContent(sectionName).then(function(ok) {
+            return loadSidebarContent(sectionName, { force: true }).then(function(ok) {
                 if (ok !== false) {
                     showAccountSection(sectionName);
                 }
@@ -309,12 +321,61 @@
             return baseUrl + separator + 'section=' + encodeURIComponent(sectionName);
         }
 
-        function loadSidebarContent(sectionName) {
+        function revealAccountSection(sectionName) {
+            if (!sectionName) {
+                return null;
+            }
+            var section = document.querySelector('[data-account-section="' + sectionName + '"]')
+                || document.getElementById(sectionName + '-section');
+            if (!section) {
+                return null;
+            }
+            hideAllAccountSections();
+            section.classList.remove('d-none');
+            section.hidden = false;
+            section.removeAttribute('aria-busy');
+            clearPendingSectionFlag(sectionName);
+            return section;
+        }
+
+        function markSectionLoadFailed(sectionName, message) {
+            var section = document.querySelector('[data-account-section="' + sectionName + '"]')
+                || document.getElementById(sectionName + '-section');
+            if (!section) {
+                section = ensureSectionLoadingPlaceholder(sectionName);
+            }
+            if (!section) {
+                return;
+            }
+            section.setAttribute('data-account-section-loading', 'failed');
+            section.removeAttribute('aria-busy');
+            section.classList.remove('d-none');
+            section.hidden = false;
+            var body = section.querySelector('.account-index__section-loading') || section;
+            body.innerHTML = '<p class="account-index__section-loading-text" data-tone="danger"></p>';
+            var text = body.querySelector('.account-index__section-loading-text');
+            if (text) {
+                text.textContent = message || i18nAccount.sectionLoadFailed || 'Failed to load this section. Please retry.';
+            }
+            clearPendingSectionFlag(sectionName);
+        }
+
+        function loadSidebarContent(sectionName, options) {
+            options = options || {};
             if (!sidebarContentMount || !sectionName) {
                 return Promise.resolve(sidebarContentReady);
             }
 
-            if (loadedSidebarSections[sectionName]) {
+            var existingSection = document.querySelector('[data-account-section="' + sectionName + '"]')
+                || document.getElementById(sectionName + '-section');
+            var stuckLoading = existingSection
+                && existingSection.getAttribute('data-account-section-loading') === 'true';
+
+            // Cached "loaded" but DOM still shows loading/failed → force refetch.
+            if (!options.force && loadedSidebarSections[sectionName] && !stuckLoading
+                && existingSection
+                && existingSection.getAttribute('data-account-section-loading') !== 'failed') {
+                revealAccountSection(sectionName);
                 return Promise.resolve(sidebarContentReady);
             }
 
@@ -333,32 +394,65 @@
                 ? window.Weline.load('api')
                 : Promise.resolve(window.Weline && window.Weline.Api)
             ).then(function(api) {
+                if (!api || typeof api.resource !== 'function') {
+                    if (!window.Weline || !window.Weline.Api || typeof window.Weline.Api.resource !== 'function') {
+                        throw new Error('Weline.Api is unavailable.');
+                    }
+                    api = window.Weline.Api;
+                }
                 return api.resource('account').getSidebarSection(sidebarPayload);
             }).then(function(payload) {
                 if (!payload || payload.success === false) {
                     if (payload && payload.redirect) {
                         window.location.href = payload.redirect;
+                        return false;
                     }
 
-                    loadedSidebarSections[sectionName] = true;
+                    delete loadedSidebarSections[sectionName];
+                    markSectionLoadFailed(
+                        sectionName,
+                        payload && payload.message ? String(payload.message) : ''
+                    );
                     return false;
                 }
 
                 if (payload.html) {
                     loadTrustedSidebarStyles(payload.html);
                     loadTrustedSidebarScripts(payload.html);
-                    sidebarContentMount.insertAdjacentHTML('beforeend', sanitizeSidebarHtml(payload.html));
+                    var safeHtml = sanitizeSidebarHtml(payload.html);
+                    var existing = document.querySelector('[data-account-section="' + sectionName + '"]')
+                        || document.getElementById(sectionName + '-section');
+                    if (existing && existing.parentNode) {
+                        existing.insertAdjacentHTML('afterend', safeHtml);
+                        existing.parentNode.removeChild(existing);
+                    } else {
+                        sidebarContentMount.insertAdjacentHTML('beforeend', safeHtml);
+                    }
                     loadDeclaredSidebarModules(sidebarContentMount);
+                    revealAccountSection(sectionName);
+                } else {
+                    delete loadedSidebarSections[sectionName];
+                    markSectionLoadFailed(sectionName, '');
+                    return false;
                 }
 
                 loadedSidebarSections[sectionName] = true;
                 window.dispatchEvent(new CustomEvent('weline:account-sidebar-content-loaded', {
                     detail: { section: sectionName, length: payload.length || 0 }
                 }));
+                // Sections may mark signals seen server-side; refresh JS badges.
+                if (window.Weline && window.Weline.Api && window.Weline.Api.Account
+                    && typeof window.Weline.Api.Account.refreshAccountMenuSignals === 'function') {
+                    window.Weline.Api.Account.refreshAccountMenuSignals().catch(function () {});
+                }
                 return true;
             }).catch(function(error) {
                 console.error(error);
-                loadedSidebarSections[sectionName] = true;
+                delete loadedSidebarSections[sectionName];
+                markSectionLoadFailed(
+                    sectionName,
+                    error && error.message ? String(error.message) : ''
+                );
                 return false;
             }).finally(function() {
                 delete sidebarContentLoading[sectionName];
@@ -480,12 +574,86 @@
                 }
             }
 
+            var nextSearch = '';
+            try {
+                var search = new URLSearchParams(window.location.search || '');
+                // Keep order_uuid only in hash so soft-nav does not fight location.search merges.
+                search.delete('order_uuid');
+                nextSearch = search.toString();
+            } catch (err) {
+                nextSearch = String(window.location.search || '').replace(/^\?/, '');
+            }
+
             if (window.history && typeof window.history.replaceState === 'function') {
-                window.history.replaceState(null, '', window.location.pathname + window.location.search + targetHash);
+                window.history.replaceState(
+                    null,
+                    '',
+                    window.location.pathname + (nextSearch ? '?' + nextSearch : '') + targetHash
+                );
             }
         }
 
+        function openOrdersSectionViaBinQuery(orderUuid) {
+            var query = {};
+            if (orderUuid) {
+                query.order_uuid = String(orderUuid);
+            }
+            setActiveNavLink('orders');
+            try {
+                updateHash('orders', query);
+            } catch (err) {}
+            return reloadSidebarSection('orders');
+        }
+
+        function bindAccountOrdersSoftNavigation(root) {
+            var scope = root || document;
+            if (!scope || typeof scope.addEventListener !== 'function') {
+                return;
+            }
+            if (scope.__welineAccountOrdersSoftNavBound) {
+                return;
+            }
+            scope.__welineAccountOrdersSoftNavBound = true;
+
+            scope.addEventListener('click', function(event) {
+                var target = event.target;
+                if (!target || typeof target.closest !== 'function') {
+                    return;
+                }
+
+                var detailLink = target.closest('[data-order-detail-link="true"]');
+                if (detailLink) {
+                    event.preventDefault();
+                    var detailUuid = detailLink.getAttribute('data-order-uuid') || '';
+                    if (!detailUuid) {
+                        try {
+                            var detailHref = new URL(detailLink.getAttribute('href') || '', window.location.href);
+                            detailUuid = detailHref.searchParams.get('order_uuid')
+                                || (parseHash(detailHref.hash || '').query.order_uuid || '');
+                        } catch (err) {}
+                    }
+                    if (!detailUuid) {
+                        return;
+                    }
+                    openOrdersSectionViaBinQuery(detailUuid);
+                    return;
+                }
+
+                var backLink = target.closest('[data-account-orders-back="true"]');
+                if (backLink) {
+                    event.preventDefault();
+                    openOrdersSectionViaBinQuery('');
+                }
+            });
+        }
+
+        function refreshNavLinks() {
+            navLinks = document.querySelectorAll('[data-account-nav-link][data-section]');
+            return navLinks;
+        }
+
         function setActiveNavLink(targetId) {
+            refreshNavLinks();
             var activeParent = '';
             navLinks.forEach(function(nav) {
                 if (nav.getAttribute('data-section') === targetId) {
@@ -505,10 +673,74 @@
                 }
                 if (nav.classList.contains('account-sidebar__nav-link')) {
                     nav.classList.add('account-sidebar__nav-link--active');
-                } else if (!isActiveParent) {
+                } else {
+                    // Hook entries (orders etc.) always get is-active when selected,
+                    // including children that declare data-account-nav-parent.
                     nav.classList.add('is-active');
                 }
             });
+
+            try {
+                document.documentElement.setAttribute('data-account-active-section', targetId || '');
+            } catch (err) {}
+        }
+
+        function hideAllAccountSections() {
+            document.querySelectorAll('[data-account-section]').forEach(function(section) {
+                section.classList.add('d-none');
+                section.hidden = true;
+            });
+        }
+
+        function escapeHtml(value) {
+            return String(value || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function ensureSectionLoadingPlaceholder(sectionName) {
+            if (!sectionName || !sidebarContentMount) {
+                return null;
+            }
+
+            hideAllAccountSections();
+
+            var existing = document.querySelector('[data-account-section="' + sectionName + '"]')
+                || document.getElementById(sectionName + '-section');
+            if (existing) {
+                existing.classList.remove('d-none');
+                existing.hidden = false;
+                if (!existing.hasAttribute('data-account-section-loading')) {
+                    return existing;
+                }
+                return existing;
+            }
+
+            var loadingText = escapeHtml(i18nAccount.sectionLoading || 'Loading...');
+            var safeId = String(sectionName).replace(/[^a-zA-Z0-9_-]/g, '');
+            if (!safeId) {
+                return null;
+            }
+
+            sidebarContentMount.insertAdjacentHTML(
+                'beforeend',
+                '<section class="account-index__section account-index__section--loading"'
+                    + ' id="' + safeId + '-section"'
+                    + ' data-account-section="' + escapeHtml(sectionName) + '"'
+                    + ' data-account-section-loading="true"'
+                    + ' aria-busy="true">'
+                    + '<div class="account-card account-index__section-loading" role="status" aria-live="polite">'
+                    + '<span class="account-index__section-loading-spinner" aria-hidden="true"></span>'
+                    + '<p class="account-index__section-loading-text">' + loadingText + '</p>'
+                    + '</div>'
+                    + '</section>'
+            );
+
+            return document.querySelector('[data-account-section="' + sectionName + '"]')
+                || document.getElementById(safeId + '-section');
         }
 
         function showAccountSection(targetId) {
@@ -516,27 +748,31 @@
                 return;
             }
 
-            var sections = document.querySelectorAll('[data-account-section]');
             var targetSection = document.querySelector('[data-account-section="' + targetId + '"]');
             if (!targetSection) {
                 targetSection = document.getElementById(targetId + '-section');
             }
-            if (!targetSection) {
-                return loadSidebarContent(targetId).then(function() {
-                    var loadedTargetSection = document.querySelector('[data-account-section="' + targetId + '"]') || document.getElementById(targetId + '-section');
-                    if (loadedTargetSection) {
-                        showAccountSection(targetId);
+
+            var loadingState = targetSection
+                ? String(targetSection.getAttribute('data-account-section-loading') || '')
+                : '';
+
+            // Lazy Hook sections: switch UI immediately, then fill via binquery.
+            if (!targetSection || loadingState === 'true' || loadingState === 'failed') {
+                if (loadingState !== 'failed') {
+                    ensureSectionLoadingPlaceholder(targetId);
+                }
+                return loadSidebarContent(targetId, loadingState === 'failed' ? { force: true } : {}).then(function(ok) {
+                    if (ok) {
+                        revealAccountSection(targetId);
+                        if (targetId === 'orders') {
+                            window.dispatchEvent(new CustomEvent('weshop:orders-viewed'));
+                        }
                     }
                 });
             }
-            sections.forEach(function(section) {
-                section.classList.add('d-none');
-                section.hidden = true;
-            });
-            if (targetSection) {
-                targetSection.classList.remove('d-none');
-                targetSection.hidden = false;
-            }
+
+            revealAccountSection(targetId);
             if (targetId === 'orders') {
                 window.dispatchEvent(new CustomEvent('weshop:orders-viewed'));
             }
@@ -586,6 +822,23 @@
         });
 
         sanitizeAccountLocationSearch();
+        bindAccountOrdersSoftNavigation(document);
+
+        // Lazy sidebar strips on* handlers; confirm unbind via data attribute.
+        document.addEventListener('submit', function(event) {
+            var form = event.target;
+            if (!form || !form.getAttribute) {
+                return;
+            }
+            var message = form.getAttribute('data-customer-social-unbind-confirm');
+            if (!message) {
+                return;
+            }
+            if (!window.confirm(message)) {
+                event.preventDefault();
+            }
+        }, true);
+
         syncFromHash();
         window.addEventListener('hashchange', syncFromHash);
 
@@ -672,6 +925,18 @@
                         if (data.success) {
                             errorMsg.textContent = '';
                             successMsg.textContent = welineDecodeHtmlEntities(data.message);
+                            var user = (data && data.user)
+                                || (data && data.data && data.data.user)
+                                || null;
+                            if (user && window.WelineAccountModule
+                                && typeof window.WelineAccountModule.applyFrontendProfileUpdate === 'function') {
+                                window.WelineAccountModule.applyFrontendProfileUpdate(user);
+                            } else if (user) {
+                                window.dispatchEvent(new CustomEvent('weline:account:frontend:profile', {
+                                    detail: { user: user }
+                                }));
+                            }
+                            syncAvatarPreview();
                         } else {
                             successMsg.textContent = '';
                             errorMsg.textContent = welineDecodeHtmlEntities(data.message) || i18nAccount.profileUpdateFailed;

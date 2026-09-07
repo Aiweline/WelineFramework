@@ -2,11 +2,12 @@
 
 return [
     "name" => 'Weline_Customer',
-    "version" => '1.0.19',
+    "version" => '1.0.84',
     "requires" => [
         'Weline_Backend' => '*',
         'Weline_Framework' => '^2.4',
         'Weline_Frontend' => '*',
+        'Weline_Queue' => '>=1.2.5',
     ],
     "optional" => [
         'Weline_Captcha' => '*',
@@ -17,6 +18,7 @@ return [
         'Weline_Payment' => '*',
         'Weline_Seo' => '*',
         'Weline_Shipping' => '*',
+        'Weline_SystemConfig' => '*',
         'Weline_Theme' => '*',
         'Weline_Widget' => '*',
     ],
