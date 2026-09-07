@@ -23,7 +23,7 @@ use Weline\Websites\Service\LocalWelineWildcardCertificateService;
 
 class WebsiteAgentService
 {
-    private const DEV_SIM_DOMAIN = 'weline-dev.weline.test';
+    private const DEV_SIM_DOMAIN = 'weline-dev.test.weline.com';
     private const RECOMMENDATION_MIN_LABEL_LENGTH = 10;
 
     public function __construct(
@@ -826,7 +826,7 @@ class WebsiteAgentService
 
         $rootDomain = \class_exists(LocalDomainPolicy::class)
             ? LocalDomainPolicy::TEST_ROOT_DOMAIN
-            : 'weline.test';
+            : 'test.weline.com';
 
         return $base . '-' . $suffix . '.' . $rootDomain;
     }

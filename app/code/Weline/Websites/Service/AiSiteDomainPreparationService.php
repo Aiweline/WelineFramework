@@ -49,8 +49,8 @@ final class AiSiteDomainPreparationService
             return $this->prepareBindExisting($request, $domain, $subPath);
         }
         if ($mode === AiSiteProvisioningRequest::DOMAIN_MODE_TEST) {
-            if (\preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $domain) !== 1) {
-                throw new AiSiteProvisioningException('TEST_DOMAIN_REQUIRED', (string)__('测试模式必须使用单标签 *.weline.test 域名。'));
+            if (\preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:test\.weline\.com|weline\.test)$/D', $domain) !== 1) {
+                throw new AiSiteProvisioningException('TEST_DOMAIN_REQUIRED', (string)__('测试模式必须使用单标签 *.test.weline.com 域名。'));
             }
             $this->defaultWebsiteService->ensureDefaultWebsite(false);
             $hosts = $this->hostsSyncService->ensureHostsInjected($domain);
@@ -156,7 +156,7 @@ final class AiSiteDomainPreparationService
     }
 
     /**
-     * Publish-bypass path for local *.weline.test domains: create/reuse the
+     * Publish-bypass path for local *.test.weline.com domains: create/reuse the
      * Website and bind the domain without rewriting hosts or certificates.
      *
      * @return array{
@@ -179,8 +179,8 @@ final class AiSiteDomainPreparationService
                 (string)__('跳过本机 hosts 的强制绑定仅支持测试域名模式。')
             );
         }
-        if (\preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $domain) !== 1) {
-            throw new AiSiteProvisioningException('TEST_DOMAIN_REQUIRED', (string)__('测试模式必须使用单标签 *.weline.test 域名。'));
+        if (\preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:test\.weline\.com|weline\.test)$/D', $domain) !== 1) {
+            throw new AiSiteProvisioningException('TEST_DOMAIN_REQUIRED', (string)__('测试模式必须使用单标签 *.test.weline.com 域名。'));
         }
         $this->defaultWebsiteService->ensureDefaultWebsite(false);
         $poolId = $this->persistLocalPool($domain);
@@ -256,7 +256,7 @@ final class AiSiteDomainPreparationService
         $pool->clearData()->loadByDomain($domain);
         $poolId = $pool->getPoolId() > 0 ? $pool->getPoolId() : 0;
         $isWelineTest = \preg_match(
-            '/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D',
+            '/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:test\.weline\.com|weline\.test)$/D',
             $domain
         ) === 1;
         // Pool rows for public SaaS hosts (www.qipaisaas.com) can be stale

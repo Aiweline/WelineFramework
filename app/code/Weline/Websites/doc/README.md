@@ -1,5 +1,10 @@
 # Weline_Websites 模块文档
 
+SEO Head 使用当前 Store 的名称和独立入口覆盖 Website 默认值，并提供 Store/Channel
+身份；Channel 尚无独立 URL/meta 字段时继承 Store/Website。店铺和渠道保存事件包含
+`before` 快照，供 SEO/CDN 对比旧入口，参见 `doc/event/store_save_after.md` 与
+`doc/event/channel_save_after.md`。
+
 ## 开发前先读
 
 先完成 `prepare_project` 并调用 `resolve_task_context`，再按返回来源阅读：

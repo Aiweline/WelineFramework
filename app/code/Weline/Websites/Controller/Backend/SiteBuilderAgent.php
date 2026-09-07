@@ -2875,7 +2875,7 @@ class SiteBuilderAgent extends BackendController
         $ts = \substr($digits !== '' ? $digits : (string)\random_int(10000000, 99999999), -8);
         $rootDomain = \class_exists(LocalDomainPolicy::class)
             ? LocalDomainPolicy::currentRootDomain()
-            : 'weline.test';
+            : 'test.weline.com';
         $out = [];
         for ($i = 0; $i < \max(1, $count); $i += 1) {
             $suffix = $i === 0 ? $ts : $ts . '-' . $i;

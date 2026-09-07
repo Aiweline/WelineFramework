@@ -15,16 +15,16 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
     public function testPreparedDomainPassesActualLoopbackAndWildcardCertificateChecks(): void
     {
         $service = $this->service(
-            static fn (string $domain): array => $domain === 'prepared-demo.weline.test'
+            static fn (string $domain): array => $domain === 'prepared-demo.test.weline.com'
                 ? ['::1', '127.0.0.1']
                 : [],
             static function (string $hostname): array {
-                self::assertSame('*.weline.test', $hostname);
+                self::assertSame('*.test.weline.com', $hostname);
 
                 return self::activeCertificate();
             },
             static fn (int $limit): array => [[
-                DomainPool::schema_fields_DOMAIN => 'prepared-demo.weline.test',
+                DomainPool::schema_fields_DOMAIN => 'prepared-demo.test.weline.com',
             ]]
         );
 
@@ -32,7 +32,7 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
 
         self::assertTrue($result['can_start']);
         self::assertSame('OK', $result['code']);
-        self::assertSame('prepared-demo.weline.test', $result['domain']);
+        self::assertSame('prepared-demo.test.weline.com', $result['domain']);
         self::assertSame(['127.0.0.1', '::1'], $result['resolved_ips']);
         self::assertTrue($result['certificate_ready']);
         self::assertTrue($result['candidates'][0]['prepared']);
@@ -47,7 +47,7 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
             static fn (string $hostname): array => self::activeCertificate()
         );
 
-        $result = $service->inspect('conflict-demo.weline.test');
+        $result = $service->inspect('conflict-demo.test.weline.com');
 
         self::assertFalse($result['can_start']);
         self::assertSame('TEST_DOMAIN_RESOLUTION_CONFLICT', $result['code']);
@@ -55,7 +55,7 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
         self::assertTrue($result['certificate_ready']);
         self::assertTrue($result['requires_admin']);
         self::assertSame(
-            "php bin/w server:hosts:add 'conflict-demo.weline.test'",
+            "php bin/w server:hosts:add 'conflict-demo.test.weline.com'",
             $result['preparation_command']
         );
     }
@@ -72,7 +72,7 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
             ]
         );
 
-        $result = $service->inspect('certificate-demo.weline.test');
+        $result = $service->inspect('certificate-demo.test.weline.com');
 
         self::assertFalse($result['can_start']);
         self::assertSame('TEST_DOMAIN_CERTIFICATE_UNAVAILABLE', $result['code']);
@@ -86,8 +86,8 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
         $certificateCalls = 0;
         $service = $this->service(
             static fn (string $domain): array => match ($domain) {
-                'ready-pool.weline.test', 'ai-ready.weline.test' => ['127.0.0.1'],
-                'stale-pool.weline.test' => ['198.51.100.7'],
+                'ready-pool.test.weline.com', 'ai-ready.test.weline.com' => ['127.0.0.1'],
+                'stale-pool.test.weline.com' => ['198.51.100.7'],
                 default => [],
             },
             static function (string $hostname) use (&$certificateCalls): array {
@@ -96,27 +96,27 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
                 return self::activeCertificate();
             },
             static fn (int $limit): array => [
-                [DomainPool::schema_fields_DOMAIN => 'stale-pool.weline.test'],
-                [DomainPool::schema_fields_DOMAIN => 'ready-pool.weline.test'],
+                [DomainPool::schema_fields_DOMAIN => 'stale-pool.test.weline.com'],
+                [DomainPool::schema_fields_DOMAIN => 'ready-pool.test.weline.com'],
             ]
         );
 
         $result = $service->inspectCandidates([
-            'brand-new.weline.test',
-            'ai-ready.weline.test',
+            'brand-new.test.weline.com',
+            'ai-ready.test.weline.com',
         ]);
 
         self::assertTrue($result['can_start']);
-        self::assertSame('ready-pool.weline.test', $result['domain']);
+        self::assertSame('ready-pool.test.weline.com', $result['domain']);
         self::assertSame(1, $certificateCalls, 'A batch must resolve the shared wildcard certificate once.');
-        self::assertSame('ready-pool.weline.test', $result['candidates'][0]['domain']);
+        self::assertSame('ready-pool.test.weline.com', $result['candidates'][0]['domain']);
         self::assertSame('prepared_pool', $result['candidates'][0]['source']);
-        self::assertSame('ai-ready.weline.test', $result['candidates'][1]['domain']);
+        self::assertSame('ai-ready.test.weline.com', $result['candidates'][1]['domain']);
         self::assertSame('ai_candidate', $result['candidates'][1]['source']);
 
         $unpreparedAi = null;
         foreach ($result['candidates'] as $candidate) {
-            if (($candidate['domain'] ?? '') === 'brand-new.weline.test') {
+            if (($candidate['domain'] ?? '') === 'brand-new.test.weline.com') {
                 $unpreparedAi = $candidate;
                 break;
             }
@@ -144,7 +144,7 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
             $certs
         );
 
-        $result = $service->prepare('auto-prep.weline.test', false);
+        $result = $service->prepare('auto-prep.test.weline.com', false);
 
         self::assertFalse($result['can_start']);
         self::assertSame('LOCAL_DOMAIN_PREPARE_CONFIRMATION_REQUIRED', $result['code']);
@@ -157,7 +157,7 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
         $hosts = $this->createMock(LocalWelineHostsSyncService::class);
         $hosts->expects(self::once())
             ->method('ensureHostsInjected')
-            ->with('auto-prep.weline.test')
+            ->with('auto-prep.test.weline.com')
             ->willReturnCallback(static function () use (&$resolved): array {
                 $resolved = ['127.0.0.1'];
 
@@ -166,7 +166,7 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
         $certs = $this->createMock(LocalWelineWildcardCertificateService::class);
         $certs->expects(self::once())
             ->method('ensureWildcardCertificateForDomain')
-            ->with('auto-prep.weline.test', 0)
+            ->with('auto-prep.test.weline.com', 0)
             ->willReturn(['success' => true, 'message' => 'cert ok']);
 
         $service = new AiSiteLocalDomainReadinessService(
@@ -180,8 +180,8 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
             $certs
         );
 
-        self::assertFalse($service->inspect('auto-prep.weline.test')['can_start']);
-        $result = $service->prepare('auto-prep.weline.test', true);
+        self::assertFalse($service->inspect('auto-prep.test.weline.com')['can_start']);
+        $result = $service->prepare('auto-prep.test.weline.com', true);
 
         self::assertTrue($result['can_start']);
         self::assertTrue($result['prepared_now']);
@@ -194,13 +194,13 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
         $hosts = $this->createMock(LocalWelineHostsSyncService::class);
         $hosts->expects(self::once())
             ->method('ensureHostsInjected')
-            ->with('pending-prep.weline.test')
+            ->with('pending-prep.test.weline.com')
             ->willReturn([
                 'success' => false,
                 'needs_admin' => true,
                 'authorization_pending' => true,
                 'authorization_already_started' => false,
-                'target_domain' => 'pending-prep.weline.test',
+                'target_domain' => 'pending-prep.test.weline.com',
                 'message' => 'authorization pending',
             ]);
         $certs = $this->createMock(LocalWelineWildcardCertificateService::class);
@@ -214,13 +214,13 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
             $certs
         );
 
-        $result = $service->prepare('pending-prep.weline.test', true);
+        $result = $service->prepare('pending-prep.test.weline.com', true);
 
         self::assertFalse($result['can_start']);
         self::assertSame('TEST_DOMAIN_HOSTS_AUTHORIZATION_PENDING', $result['code']);
         self::assertTrue($result['authorization_pending']);
         self::assertSame('', $result['preparation_command']);
-        self::assertSame('pending-prep.weline.test', $result['domain']);
+        self::assertSame('pending-prep.test.weline.com', $result['domain']);
         self::assertArrayNotHasKey('command', $result['hosts']);
     }
 
@@ -246,11 +246,11 @@ final class AiSiteLocalDomainReadinessServiceTest extends TestCase
             $certs
         );
 
-        $result = $service->prepare('manual-prep.weline.test', true);
+        $result = $service->prepare('manual-prep.test.weline.com', true);
 
         self::assertFalse($result['can_start']);
         self::assertSame(
-            "php bin/w server:hosts:add 'manual-prep.weline.test'",
+            "php bin/w server:hosts:add 'manual-prep.test.weline.com'",
             $result['preparation_command']
         );
         self::assertStringNotContainsString(

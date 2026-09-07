@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace Weline\Websites\Service;
 
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Context;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Websites\Api\Catalog\Data\SalesChannelSummary;
 use Weline\Websites\Api\Catalog\Data\StoreSummary;
 use Weline\Websites\Api\Catalog\SalesChannelCatalogInterface;
@@ -15,9 +18,12 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
 {
     private const MAX_CATALOG_ID = 2147483647;
 
+    private bool $hotCacheResolved = false;
+
     public function __construct(
         private readonly SalesChannel $channel,
         private readonly StoreCatalogInterface $storeCatalog,
+        private ?StorefrontScopeHotCache $hotCache = null,
     ) {
     }
 
@@ -26,14 +32,17 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
         if ($storeId < 0 || $storeId > self::MAX_CATALOG_ID) {
             throw new \InvalidArgumentException((string)__('店铺 ID 不能为负数（0 是系统默认店铺）'));
         }
-        $parentStore = $this->requireStore($storeId);
-        $rows = $this->newChannel()
-            ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
-            ->order(SalesChannel::schema_fields_ID, 'ASC')
-            ->select()
-            ->fetchArray();
+        $key = 'store:' . $storeId;
+        return $this->remember($key, function () use ($storeId): array {
+            $parentStore = $this->requireStore($storeId);
+            $rows = $this->newChannel()
+                ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
+                ->order(SalesChannel::schema_fields_ID, 'ASC')
+                ->select()
+                ->fetchArray();
 
-        return $this->mapRows($rows, $storeId, $parentStore);
+            return $this->mapRows($rows, $storeId, $parentStore);
+        }, StorefrontScopeCatalogCacheCoordinator::channelPolicy());
     }
 
     public function byCode(int $storeId, string $channelCode): ?SalesChannelSummary
@@ -46,15 +55,18 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
         if ($channelCode === '') {
             return null;
         }
-        $parentStore = $this->requireStore($storeId);
-        $rows = $this->newChannel()
-            ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
-            ->where(SalesChannel::schema_fields_CODE, $channelCode)
-            ->select()
-            ->fetchArray();
-        $mapped = $this->mapRows($rows, $storeId, $parentStore);
+        $key = 'code:' . $storeId . ':' . $channelCode;
+        return $this->remember($key, function () use ($storeId, $channelCode): ?SalesChannelSummary {
+            $parentStore = $this->requireStore($storeId);
+            $rows = $this->newChannel()
+                ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
+                ->where(SalesChannel::schema_fields_CODE, $channelCode)
+                ->select()
+                ->fetchArray();
+            $mapped = $this->mapRows($rows, $storeId, $parentStore);
 
-        return $this->singleOrNull($mapped, __('渠道代码在同一店铺下不唯一'));
+            return $this->singleOrNull($mapped, __('渠道代码在同一店铺下不唯一'));
+        }, StorefrontScopeCatalogCacheCoordinator::channelPolicy());
     }
 
     public function byId(int $channelId): ?SalesChannelSummary
@@ -63,13 +75,16 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
             return null;
         }
         $this->assertCatalogIdMaximum($channelId, __('销售渠道 ID'));
-        $rows = $this->newChannel()
-            ->where(SalesChannel::schema_fields_ID, $channelId)
-            ->select()
-            ->fetchArray();
-        $mapped = $this->mapRows($rows);
+        $key = 'id:' . $channelId;
+        return $this->remember($key, function () use ($channelId): ?SalesChannelSummary {
+            $rows = $this->newChannel()
+                ->where(SalesChannel::schema_fields_ID, $channelId)
+                ->select()
+                ->fetchArray();
+            $mapped = $this->mapRows($rows);
 
-        return $this->singleOrNull($mapped, __('渠道 ID 不唯一'));
+            return $this->singleOrNull($mapped, __('渠道 ID 不唯一'));
+        }, StorefrontScopeCatalogCacheCoordinator::channelPolicy());
     }
 
     public function defaultChannel(int $storeId): ?SalesChannelSummary
@@ -78,22 +93,106 @@ final class SalesChannelCatalog implements SalesChannelCatalogInterface
             return null;
         }
         $this->assertCatalogIdMaximum($storeId, __('店铺 ID'));
-        $parentStore = $this->requireStore($storeId);
-        $rows = $this->newChannel()
-            ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
-            ->where(SalesChannel::schema_fields_IS_DEFAULT, 1)
-            ->select()
-            ->fetchArray();
-        $mapped = $this->mapRows($rows, $storeId, $parentStore);
-        $default = $this->singleOrNull($mapped, __('同一店铺存在多个默认渠道'));
-        if ($default !== null) {
-            return $default;
+        $key = 'default:' . $storeId;
+        return $this->remember($key, function () use ($storeId): ?SalesChannelSummary {
+            $parentStore = $this->requireStore($storeId);
+            $rows = $this->newChannel()
+                ->where(SalesChannel::schema_fields_STORE_ID, $storeId)
+                ->where(SalesChannel::schema_fields_IS_DEFAULT, 1)
+                ->select()
+                ->fetchArray();
+            $mapped = $this->mapRows($rows, $storeId, $parentStore);
+            $default = $this->singleOrNull($mapped, __('同一店铺存在多个默认渠道'));
+            if ($default !== null) {
+                return $default;
+            }
+            $byCode = $this->byCode($storeId, SalesChannel::CODE_DEFAULT);
+            if ($byCode !== null && !$byCode->isDefault) {
+                throw new \RuntimeException(__('code=default 的渠道缺少默认标记'));
+            }
+            return $byCode;
+        }, StorefrontScopeCatalogCacheCoordinator::channelPolicy());
+    }
+
+    private function remember(string $logicalKey, callable $builder, ?\Weline\Framework\Cache\CachePolicy $policy = null): mixed
+    {
+        $hotCache = $this->hotCache();
+        if (!$hotCache instanceof StorefrontScopeHotCache) {
+            return $builder();
         }
-        $byCode = $this->byCode($storeId, SalesChannel::CODE_DEFAULT);
-        if ($byCode !== null && !$byCode->isDefault) {
-            throw new \RuntimeException(__('code=default 的渠道缺少默认标记'));
+
+        $value = $hotCache->rememberForRequest(
+            'websites.sales_channel_catalog',
+            $logicalKey,
+            $policy === null
+                ? $builder
+                : fn(): mixed => $hotCache->rememberPolicy($policy, $logicalKey, $builder),
+        );
+
+        return $this->rehydrateCachedValue($value);
+    }
+
+    /**
+     * Shared pools may JSON-round-trip DTO payloads into arrays; restore SalesChannelSummary.
+     */
+    private function rehydrateCachedValue(mixed $value): mixed
+    {
+        if ($value instanceof SalesChannelSummary || $value === null) {
+            return $value;
         }
-        return $byCode;
+        if (!\is_array($value)) {
+            throw new \RuntimeException((string)__('销售渠道目录缓存载荷类型无效'));
+        }
+        if ($value === [] || \array_is_list($value)) {
+            $restored = [];
+            foreach ($value as $item) {
+                $restored[] = $this->salesChannelSummaryFromCached($item);
+            }
+
+            return $restored;
+        }
+
+        return $this->salesChannelSummaryFromCached($value);
+    }
+
+    private function salesChannelSummaryFromCached(mixed $item): SalesChannelSummary
+    {
+        if ($item instanceof SalesChannelSummary) {
+            return $item;
+        }
+        if (!\is_array($item)) {
+            throw new \RuntimeException((string)__('销售渠道目录缓存条目必须是数组或 SalesChannelSummary'));
+        }
+
+        return new SalesChannelSummary(
+            (int)($item['channel_id'] ?? $item['id'] ?? 0),
+            (int)($item['website_id'] ?? $item['websiteId'] ?? 0),
+            (int)($item['store_id'] ?? $item['storeId'] ?? 0),
+            (string)($item['code'] ?? ''),
+            (string)($item['name'] ?? ''),
+            (bool)($item['is_default'] ?? $item['isDefault'] ?? false),
+            (bool)($item['enabled'] ?? true),
+            (string)($item['parent_store_lifecycle_status'] ?? $item['parentStoreLifecycleStatus'] ?? Store::LIFECYCLE_ACTIVE),
+            (bool)($item['effective_enabled'] ?? $item['effectiveEnabled'] ?? false),
+        );
+    }
+
+    private function hotCache(): ?StorefrontScopeHotCache
+    {
+        if ($this->hotCacheResolved) {
+            return $this->hotCache;
+        }
+        $this->hotCacheResolved = true;
+        if ($this->hotCache instanceof StorefrontScopeHotCache || !Context::hasCurrent()) {
+            return $this->hotCache;
+        }
+        try {
+            $this->hotCache = ObjectManager::getInstance(StorefrontScopeHotCache::class);
+        } catch (\Throwable) {
+            $this->hotCache = null;
+        }
+
+        return $this->hotCache;
     }
 
     /**

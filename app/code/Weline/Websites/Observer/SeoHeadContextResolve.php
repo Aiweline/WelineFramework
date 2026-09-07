@@ -6,6 +6,9 @@ namespace Weline\Websites\Observer;
 
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Websites\Api\Catalog\SalesChannelCatalogInterface;
+use Weline\Websites\Api\Catalog\StoreCatalogInterface;
 use Weline\Websites\Data\WebsiteData;
 
 /**
@@ -13,6 +16,12 @@ use Weline\Websites\Data\WebsiteData;
  */
 class SeoHeadContextResolve implements ObserverInterface
 {
+    public function __construct(
+        private readonly StoreCatalogInterface $stores,
+        private readonly SalesChannelCatalogInterface $channels,
+    ) {
+    }
+
     public function execute(Event &$event): void
     {
         $website = WebsiteData::getWebsite();
@@ -28,6 +37,22 @@ class SeoHeadContextResolve implements ObserverInterface
 
         $headContext = $event->getData('head_context');
         $headContext = is_array($headContext) ? $headContext : [];
+
+        $store = $this->stores->byId(RequestContext::getWelineStoreId());
+        if ($store !== null && $store->websiteId === $website->getWebsiteId()) {
+            $siteName = trim($store->name) ?: $siteName;
+            $siteUrl = trim((string)$store->url) ?: $siteUrl;
+            $headContext['store_id'] = $store->id;
+            $headContext['store_code'] = $store->code;
+            $channel = $this->channels->byId(RequestContext::getWelineChannelId());
+            if ($channel !== null && $channel->websiteId === $website->getWebsiteId()
+                && $channel->storeId === $store->id) {
+                // Channels have no separate URL/meta fields; retain their identity
+                // for SEO extensions and inherit the enclosing Store/Website values.
+                $headContext['channel_id'] = $channel->id;
+                $headContext['channel_code'] = $channel->code;
+            }
+        }
 
         if ($siteName !== '') {
             $headContext['site_name'] = $siteName;

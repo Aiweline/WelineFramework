@@ -543,6 +543,7 @@ class Website extends BackendController
         $this->assign('selected_currencies', []);
         $this->assign('selected_languages', []);
         $this->assign('selected_pool_ids', []);
+        $this->assign('selected_domain_names', []);
         $this->assign('domain_options', $this->getDomainOptions());
         $this->assign('sub_path', '');
         $this->assign('start_page_route_options', $this->getStartPageRouteOptions());
@@ -750,6 +751,7 @@ class Website extends BackendController
         $this->assign('selected_currencies', $selectedCurrencies);
         $this->assign('selected_languages', $selectedLanguages);
         $selectedPoolIds = [];
+        $selectedDomainNames = [];
         try {
             $websiteDomain = ObjectManager::getInstance(WebsiteDomain::class);
             $domains = $websiteDomain->getWebsiteDomains($websiteId);
@@ -758,11 +760,17 @@ class Website extends BackendController
                 if ($poolId > 0) {
                     $selectedPoolIds[] = $poolId;
                 }
+                $domainName = strtolower(trim((string)($domain[WebsiteDomain::schema_fields_DOMAIN] ?? '')));
+                if ($domainName !== '' && !in_array($domainName, $selectedDomainNames, true)) {
+                    $selectedDomainNames[] = $domainName;
+                }
             }
         } catch (\Exception $e) {
             $selectedPoolIds = [];
+            $selectedDomainNames = [];
         }
         $this->assign('selected_pool_ids', $selectedPoolIds);
+        $this->assign('selected_domain_names', $selectedDomainNames);
         $this->assign('domain_options', $this->getDomainOptions());
         $this->assign('sub_path', $this->getPrimarySubPathForWebsite($websiteId));
         $this->assign('start_page_route_options', $this->getStartPageRouteOptions());

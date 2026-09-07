@@ -8,14 +8,14 @@ use Weline\Websites\Model\DomainPool;
 use Weline\Websites\Model\Website;
 
 /**
- * Local *.weline.test readiness for AI Site V2.
+ * Local *.test.weline.com readiness for AI Site V2.
  *
  * `inspect*` stays read-only. `prepare` writes hosts/certificate only after an
  * explicit confirmed=true (browser auto-prepare or manual assist click).
  */
 class AiSiteLocalDomainReadinessService
 {
-    public const WILDCARD_DOMAIN = '*.weline.test';
+    public const WILDCARD_DOMAIN = '*.test.weline.com';
 
     private const MAX_CANDIDATES = 50;
 
@@ -68,7 +68,7 @@ class AiSiteLocalDomainReadinessService
             return $this->result(
                 false,
                 'TEST_DOMAIN_INVALID',
-                (string)__('本地测试域名必须是单标签 *.weline.test。'),
+                (string)__('本地测试域名必须是单标签 *.test.weline.com。'),
                 '',
                 [],
                 false,
@@ -197,7 +197,7 @@ class AiSiteLocalDomainReadinessService
             return $this->result(
                 false,
                 'TEST_DOMAIN_INVALID',
-                (string)__('本地测试域名必须是单标签 *.weline.test。'),
+                (string)__('本地测试域名必须是单标签 *.test.weline.com。'),
                 '',
                 [],
                 false,
@@ -351,7 +351,7 @@ class AiSiteLocalDomainReadinessService
             return $this->result(
                 false,
                 'TEST_DOMAIN_CERTIFICATE_UNAVAILABLE',
-                (string)__('本地 *.weline.test 通配证书未激活或已过期。'),
+                (string)__('本地 *.test.weline.com 通配证书未激活或已过期。'),
                 $domain,
                 $resolvedIps,
                 false,
@@ -498,7 +498,7 @@ class AiSiteLocalDomainReadinessService
     {
         $domain = \strtolower(\trim($domain));
 
-        return \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $domain) === 1
+        return \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:test\.weline\.com|weline\.test)$/D', $domain) === 1
             ? $domain
             : '';
     }

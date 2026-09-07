@@ -563,7 +563,7 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
         $subPath = $this->normalizeSubPath((string)($command['sub_path'] ?? $command['mount_path'] ?? ''));
         $managedLocal = $this->isManagedLocalDomain($targetDomain);
         if ($domainMode === AiSiteProvisioningRequest::DOMAIN_MODE_TEST && !$managedLocal) {
-            throw new AiSiteProvisioningException('TEST_DOMAIN_REQUIRED', (string)__('测试模式必须使用 *.weline.test 本地域名。'));
+            throw new AiSiteProvisioningException('TEST_DOMAIN_REQUIRED', (string)__('测试模式必须使用 *.test.weline.com 本地域名。'));
         }
         if ($domainMode === AiSiteProvisioningRequest::DOMAIN_MODE_PURCHASE && $managedLocal) {
             throw new AiSiteProvisioningException('PUBLIC_DOMAIN_REQUIRED', (string)__('正式购买模式必须选择可公开注册的域名。'));
@@ -709,7 +709,7 @@ class AiSiteProvisioningService implements AiSiteProvisioningInterface
 
     private function isManagedLocalDomain(string $domain): bool
     {
-        return \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $domain) === 1;
+        return \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:test\.weline\.com|weline\.test)$/D', $domain) === 1;
     }
 
     private function positiveInteger(mixed $value): ?int

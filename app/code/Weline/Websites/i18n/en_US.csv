@@ -1,5 +1,9 @@
 ﻿网站保存后,"After site is saved"
 网站保存后触发，可用于更新缓存、通知等相关操作。,"Triggered after the website is saved, it can be used to update cache, notifications and other related operations."
+店铺保存后,店铺保存后
+"店铺编辑保存后触发；扩展模块可读取 post_data.extensions 写入自有表。","店铺编辑保存后触发；扩展模块可读取 post_data.extensions 写入自有表。"
+渠道保存后,渠道保存后
+"渠道编辑保存后触发；扩展模块可读取 post_data.extensions 写入自有表。","渠道编辑保存后触发；扩展模块可读取 post_data.extensions 写入自有表。"
 域名购买成功,"Domain Purchase Success"
 "域名购买成功后触发，可用于通知、自动 DNS 解析、证书申请等后续操作。数据包含 domain、order_id、website_id、auto_create_site。","Triggered after a domain is successfully purchased. Can be used for notifications, auto DNS resolution, certificate requests, etc. Data includes domain, order_id, website_id, auto_create_site."
 域名池解析偏离本站,"Domain pool resolution deviates from this site"
@@ -10,7 +14,7 @@
 本地域名就绪查询器不支持的操作：%{1},"Operation not supported by local domain ready query: %{1}"
 "AI 建站本地域名就绪检查","AI website building local domain name readiness check"
 "检查本地域名解析与通配证书；默认可自动写入 hosts/证书，失败后再人工协助","Check local domain name resolution and wildcard certificate; by default, hosts/certificate can be automatically written, and manual assistance will be required after failure."
-"检查一个 *.weline.test 域名是否可以启动 AI 建站","Check whether a *.weline.test domain name can start AI website building"
+"检查一个 *.test.weline.com 域名是否可以启动 AI 建站","Check whether a *.test.weline.com domain name can start AI website building"
 "合并已准备域名池和 AI 候选并逐个只读复核","Merge prepared domain name pools and AI candidates and review them read-only one by one"
 "确认后自动写入本机 hosts 与通配证书，并复检域名就绪状态","After confirmation, automatically write the local hosts and wildcard certificate, and recheck the domain name readiness status."
 域名配置编排服务暂不可用：%{1},"Domain configuration orchestration service temporarily unavailable: %{1}"
@@ -272,7 +276,6 @@ id属性不能为空,"The id attribute cannot be empty"
 未找到匹配的域名,"No matching domain found"
 加载失败,"Failed to load"
 暂无可用域名，请先添加,"No domains available. Please add one first."
-"已选择 %s 个域名","%s domains selected"
 可建站,"Can Build Sites"
 证书到期,"Certificate Expiration"
 请输入域名,"Please enter domains"
@@ -327,6 +330,10 @@ id属性不能为空,"The id attribute cannot be empty"
 "在域名管理页面的标签页内容区域动态追加标签页内容面板。与 tabs Hook 配合使用，注入对应的 Tab 内容。","Dynamically append tab content panels in the domain management page. Used together with the tabs Hook to inject corresponding Tab content."
 网站编辑表单扩展区,"Website edit form extension area"
 "在网站编辑表单核心配置之后追加模块配置区。SEO/GEO 等模块应通过此 Hook 注入字段，Website 模块不直接依赖业务模块。","Append module configuration area after the core configuration of the website editor form. Modules like SEO/GEO should inject fields through this Hook, and the Website module does not directly depend on business modules."
+店铺编辑表单扩展区,店铺编辑表单扩展区
+"在店铺编辑表单核心字段之后追加模块配置区。扩展模块应 post 到 extensions[{module_code}]，并观察 store_save_after 落库。","在店铺编辑表单核心字段之后追加模块配置区。扩展模块应 post 到 extensions[{module_code}]，并观察 store_save_after 落库。"
+渠道编辑表单扩展区,渠道编辑表单扩展区
+"在渠道编辑表单核心字段之后追加模块配置区。扩展模块应 post 到 extensions[{module_code}]，并观察 channel_save_after 落库。","在渠道编辑表单核心字段之后追加模块配置区。扩展模块应 post 到 extensions[{module_code}]，并观察 channel_save_after 落库。"
 "Scope Token 暂时无法签发","Scope Token cannot be issued temporarily"
 "当前前台操作必须使用绑定商城 Scope 的 Worker Session","The current foreground operation must use the Worker Session bound to the mall scope."
 "Worker Scope 绑定已过期或时间窗口无效","Worker Scope binding has expired or time window is invalid"
@@ -1176,10 +1183,16 @@ CDN,CDN
 SSL,SSL
 已完成,Completed
 失败,Failed
+商店不存在,商店不存在
+渠道不存在,渠道不存在
 商店已创建,"Store created"
 创建商店失败：%{1},"Failed to create store: %{1}"
 渠道已创建,"Channel created"
 创建渠道失败：%{1},"Failed to create channel: %{1}"
+商店已保存,商店已保存
+保存商店失败：%{1},保存商店失败：%{1}
+渠道已保存,渠道已保存
+保存渠道失败：%{1},保存渠道失败：%{1}
 "Scope 数据读取失败：%{1}","Scope data read failed: %{1}"
 "%{1} 不能为空且最多 %{2} 字符","%{1} cannot be empty and must be at most %{2} characters"
 "%{1} 必须是正整数","%{1} must be a positive integer"
@@ -1189,10 +1202,18 @@ SSL,SSL
 渠道管理,"Channel management"
 branch,branch
 "管理 Sales Channel","Manage Sales Channel"
+编辑商店,编辑商店
+"编辑 Store","编辑 Store"
+编辑渠道,编辑渠道
+"编辑 Sales Channel","编辑 Sales Channel"
 创建商店,"Create store"
 "创建 Store","Create Store"
 创建渠道,"Create channel"
 "创建 Sales Channel","Create Sales Channel"
+保存商店,保存商店
+"保存 Store","保存 Store"
+保存渠道,保存渠道
+"保存 Sales Channel","保存 Sales Channel"
 目标域名格式无效。,"The target domain name format is invalid."
 子路径格式无效。,"The subpath format is invalid."
 子路径首段为保留字，请更换。,"The first segment of the subpath is a reserved word, please change it."
@@ -1405,7 +1426,6 @@ lock,lock
 启用,Enable
 停用,Disabled
 "SalesChannel 列表","SalesChannel list"
-"已选择 %{1} 个域名","%{1} domains selected"
 点击选择时区,"Click to select timezone"
 "Store 商品复制向导","Store Product Copy Wizard"
 "目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。","目标 Website 的活动 Store 默认全部选中，可按需取消；提交前强制 preview。库存默认 0，需显式勾选才复制数量。"
@@ -2148,6 +2168,10 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 删除备份失败,"Failed to delete backup"
 后台请求组件不可用，请刷新页面后重试。,"The background request component is unavailable, please refresh the page and try again."
 请选择网站,"Please select a website"
+返回列表,"Return to list"
+渠道代码,"channel code"
+"所属商店 ID","所属商店 ID"
+渠道名称,"Channel name"
 "Website Scope 管理工作台","Website Scope Management Workbench"
 商店代码,"store code"
 商店名称,"store name"
@@ -2155,8 +2179,6 @@ SSE连接超时，正在重新连接...,"SSE connection timed out, reconnecting.
 "独立 URL","Standalone URL"
 所属商店,Store
 请选择商店,"Please select a store"
-渠道代码,"channel code"
-渠道名称,"Channel name"
 AI建站域名准备队列,"AI website building domain name preparation queue"
 "域名准备与 AI Plan/Build 并行；域名未完成时只阻断 Publish。","Domain name preparation is done in parallel with AI Plan/Build; only Publish is blocked when the domain name is not completed."
 "域名准备队列缺少请求 ID 或执行令牌。","The domain name preparation queue is missing the request ID or execution token."
@@ -2182,6 +2204,8 @@ AI建站域名准备队列,"AI website building domain name preparation queue"
 "店铺 ID 不唯一","Store ID is not unique"
 "同一 Website 存在多个默认店铺","Multiple default Stores exist within the same Website"
 "code=default 的店铺缺少默认标记","The Store with code=default is missing the default flag"
+店铺目录缓存载荷类型无效,店铺目录缓存载荷类型无效
+"店铺目录缓存条目必须是数组或 StoreSummary","店铺目录缓存条目必须是数组或 StoreSummary"
 店铺目录查询结果必须是数组,"The Store Catalog query result must be an array"
 店铺目录包含非法数据行,"The Store Catalog contains an invalid data row"
 "店铺 %{1} 的 Website ID 与查询范围不一致","Store %{1} has a Website ID outside the requested scope"
@@ -2249,6 +2273,8 @@ AI建站域名准备队列,"AI website building domain name preparation queue"
 "渠道 ID 不唯一","SalesChannel ID is not unique"
 同一店铺存在多个默认渠道,"Multiple default SalesChannels exist within the same Store"
 "code=default 的渠道缺少默认标记","The SalesChannel with code=default is missing the default flag"
+销售渠道目录缓存载荷类型无效,销售渠道目录缓存载荷类型无效
+"销售渠道目录缓存条目必须是数组或 SalesChannelSummary","销售渠道目录缓存条目必须是数组或 SalesChannelSummary"
 销售渠道目录查询结果必须是数组,"The SalesChannel Catalog query result must be an array"
 销售渠道目录包含非法数据行,"The SalesChannel Catalog contains an invalid data row"
 "销售渠道 %{1} 的店铺 ID 与查询范围不一致","SalesChannel %{1} has a Store ID outside the requested scope"
@@ -2316,6 +2342,12 @@ AI建站域名准备,"AI website building domain name preparation"
 销售渠道代码和名称不能为空,"Sales channel code and name cannot be empty"
 销售渠道代码已存在：%{1},"Sales channel code already exists: %{1}"
 销售渠道写入后无法通过目录回读,"Sales channel cannot be read back through catalog after writing"
+"store_id 不能为负","store_id 不能为负"
+"channel_id 不能为负","channel_id 不能为负"
+店铺更新后无法通过目录回读,店铺更新后无法通过目录回读
+销售渠道不存在,销售渠道不存在
+销售渠道名称不能为空,销售渠道名称不能为空
+销售渠道更新后无法通过目录回读,销售渠道更新后无法通过目录回读
 "website_id 不能为负","website_id cannot be negative"
 开发环境模拟证书已签发：%{domain},"Development environment simulation certificate issued: %{domain}"
 删除店铺前必须加载明确的店铺记录,"Clear store records must be loaded before deleting a store"
@@ -2373,7 +2405,7 @@ AI建站域名准备,"AI website building domain name preparation"
 download,download
 "No reference URLs provided.","No reference URLs provided."
 "References: %{list}","References: %{list}"
-"Prefer a short brandable domain; local .weline.test is fine for demo.","Prefer a short brandable domain; local .weline.test is fine for demo."
+"Prefer a short brandable domain; local .test.weline.com is fine for demo.","Prefer a short brandable domain; local .test.weline.com is fine for demo."
 "Demo plan generated in local fake mode","Demo plan generated in local fake mode"
 "AI service is not available for plan generation","AI service is not available for plan generation"
 "AI plan generation failed: %{message}","AI plan generation failed: %{message}"
@@ -2480,7 +2512,7 @@ download,download
 "WLS 本地域名注册同步","WLS 本地域名注册同步"
 域名池保存后无法取得有效记录。,"Unable to obtain valid records after saving the domain name pool."
 "WLS 域名使用同步（%{1}）","WLS 域名使用同步（%{1}）"
-"本地测试域名必须是单标签 *.weline.test。","The local test domain name must be the single label *.weline.test."
+"本地测试域名必须是单标签 *.test.weline.com。","The local test domain name must be the single label *.test.weline.com."
 没有可检查的本地测试域名。,"There is no local test domain to check."
 已找到可直接启动建站的本地测试域名。,"A local test domain name has been found that can directly start website building."
 本地候选域名尚未完成解析与证书准备。,"The local candidate domain name has not yet completed resolution and certificate preparation."
@@ -2493,7 +2525,7 @@ download,download
 已尝试自动准备，但系统复检仍未通过；请点击协助处理。,"Automatic preparation has been attempted, but the system recheck has not passed; please click to assist."
 本地测试域名尚未通过系统解析。,"The local test domain name has not been resolved by the system."
 本地测试域名解析到了非回环地址，已阻止启动。,"The local test domain name resolves to a non-loopback address and is blocked from starting."
-"本地 *.weline.test 通配证书未激活或已过期。","The local *.weline.test wildcard certificate is inactive or has expired."
+"本地 *.test.weline.com 通配证书未激活或已过期。","The local *.test.weline.com wildcard certificate is inactive or has expired."
 本地测试域名解析与通配证书均已就绪。,"Local test domain name resolution and wildcard certificates are ready."
 已入池,Pooled
 入池,"Add to Pool"
@@ -2568,7 +2600,7 @@ download,download
 "来源会话公开 ID 不能为空。","Source session public ID cannot be empty."
 "幂等命令 ID 不能为空。","Idempotent command ID cannot be empty."
 当前站点绑定不支持域名模式：%{1},"The current site binding does not support the domain name pattern: %{1}"
-"测试模式必须使用 *.weline.test 本地域名。","Test mode must use the *.weline.test local domain name."
+"测试模式必须使用 *.test.weline.com 本地域名。","Test mode must use the *.test.weline.com local domain name."
 正式购买模式必须选择可公开注册的域名。,"The formal purchase mode must select a domain name that can be publicly registered."
 正式购买前必须选择域名购买账户。,"You must select a domain name purchase account before making the official purchase."
 正式域名购买需要明确确认。,"Official domain name purchases require explicit confirmation."
@@ -2774,7 +2806,7 @@ download,download
 证书申请成功,"Certificate application successful"
 域名商账号未配置,"Domain registrar account not configured"
 "网站快照缺少 code","Website snapshot is missing code"
-"测试模式必须使用单标签 *.weline.test 域名。","Test mode must use the single-tagged *.weline.test domain name."
+"测试模式必须使用单标签 *.test.weline.com 域名。","Test mode must use the single-tagged *.test.weline.com domain name."
 "本地测试域名 hosts 准备失败。","Preparation of local test domain name hosts failed."
 本地测试域名证书准备失败。,"The local test domain name certificate preparation failed."
 不支持的域名准备模式。,"Unsupported domain name preparation mode."
@@ -2985,6 +3017,19 @@ download,download
 域名可用性服务返回了无效结果。,"The Domain Availability Service returned an invalid result."
 域名注册商不存在。,"The domain name registrar does not exist."
 "默认站不使用站级 ACL 授权包","The default site does not use site-level ACL authorization packages"
+网站身份,网站身份
+网站简介,网站简介
+网站名称保存失败,网站名称保存失败
+网站名称同步到后台配置失败,网站名称同步到后台配置失败
+网站简介保存失败,网站简介保存失败
+店铺身份,店铺身份
+店铺名称,店铺名称
+店铺名称保存失败,店铺名称保存失败
+渠道身份,渠道身份
+渠道名称保存失败,渠道名称保存失败
+名称不能为空,名称不能为空
+"名称不能超过 %{1} 个字符","名称不能超过 %{1} 个字符"
+"简介不能超过 %{1} 个字符","简介不能超过 %{1} 个字符"
 "[NS 与配置 DNS 账户不一致] 域名 %{1}：公网识别为 %{2}，配置的 DNS 账户服务商为 %{3}（account_id=%{4}）。公网 NS：%{5}。请运营核对注册商 NS 或等待切换传播；此检查只做告警，不会在这里直接改 NS。","[NS is inconsistent with the configured DNS account] Domain name %{1}: The public network is identified as %{2}, and the configured DNS account service provider is %{3} (account_id=%{4}). Public network NS: %{5}. Please check the registrar NS or wait for the switch to propagate; this check is only for warning, and the NS will not be changed directly here."
 "[NS 自愈策略] 已为域名 %{1} 写入 dns_switch_pending=1（冷却内单次排队），将由 DnsCdnAutoSwitch 执行切换。","[NS self-healing policy] dns_switch_pending=1 has been written for the domain name %{1} (single queue within cooldown), the switch will be performed by DnsCdnAutoSwitch."
 "DNS 解析与子域入池","DNS resolution and subdomain pooling"
@@ -3143,6 +3188,8 @@ download,download
 "发现 %{1} 条非法域名记录：","Found %{1} illegal domain name records:"
 "已删除 %{1} 条非法记录","Deleted %{1} illegal record(s)"
 "处理完成：%d 条非法记录","Processing completed: %d illegal records"
+"已选择 %s 个域名","%s domains selected"
+"已选择 %{1} 个域名","%{1} domains selected"
 搜索站点名称或编码,"Search site name or code"
 点击选择货币（可多选）,点击选择货币（可多选）
 点击选择货币,点击选择货币
@@ -3202,7 +3249,6 @@ download,download
 标签,Label
 权限列表,"Permission list"
 勾选需要授予的权限，子权限会自动关联父权限,"Check the permissions that need to be granted, and the sub-permissions will automatically be associated with the parent permissions."
-返回列表,"Return to list"
 保存授权包,"Save license package"
 "搜索权限名称、ID 或描述...","Search permission name, ID or description..."
 所有模块,"All modules"
