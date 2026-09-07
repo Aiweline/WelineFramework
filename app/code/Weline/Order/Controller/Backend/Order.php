@@ -74,6 +74,15 @@ class Order extends BackendController
         if ($fulfillmentStatus = $this->request->getParam('fulfillment_status')) {
             $filters['fulfillment_status'] = $fulfillmentStatus;
         }
+
+        $orderTypeRegistry = ObjectManager::getInstance(\Weline\Order\Service\CommerceOrderTypeRegistry::class);
+        $orderTypeRows = $orderTypeRegistry->labelRows();
+        $orderTypeFilter = strtolower(trim((string)$this->request->getParam('order_type', '')));
+        if ($orderTypeFilter !== '' && $orderTypeRegistry->has($orderTypeFilter)) {
+            $filters['order_type'] = $orderTypeFilter;
+        } else {
+            $orderTypeFilter = '';
+        }
         
         if ($keyword = trim((string)$this->request->getParam('keyword'))) {
             $filters['keyword'] = $keyword;
@@ -116,6 +125,9 @@ class Order extends BackendController
         $this->assign('page_size', $pageSize);
         $this->assign('total_pages', $totalPages);
         $this->assign('filters', $filters);
+        $this->assign('order_type', $orderTypeFilter);
+        $this->assign('order_type_rows', $orderTypeRows);
+        $this->assign('order_type_registry', $orderTypeRegistry);
         $this->assign('order_action_grant_versions', $actionGrantVersions);
         
         return $this->fetch();
@@ -170,10 +182,23 @@ class Order extends BackendController
 
             $customerPresent = ObjectManager::getInstance(\Weline\Order\Service\BackendOrderListPresenter::class)
                 ->present($order);
+
+            $orderTypeRegistry = ObjectManager::getInstance(\Weline\Order\Service\CommerceOrderTypeRegistry::class);
+            $orderTypeCode = strtolower(trim((string)$order->getData(OrderModel::schema_fields_ORDER_TYPE)));
+            if ($orderTypeCode === '') {
+                $orderTypeCode = \Weline\Order\Service\CommerceOrderTypeRegistry::CODE_TOC;
+            }
+            $orderTypeTone = $orderTypeRegistry->resolveBadgeTone($orderTypeCode);
+            if ($orderTypeTone === 'muted') {
+                $orderTypeTone = 'secondary';
+            }
             
             $this->assign('order', $order);
             $this->assign('items', $items);
             $this->assign('customer_present', $customerPresent);
+            $this->assign('order_type', $orderTypeCode);
+            $this->assign('order_type_label', $orderTypeRegistry->resolveLabel($orderTypeCode));
+            $this->assign('order_type_tone', $orderTypeTone);
             $this->assign('shipments', $shipments);
             $this->assign('refunds', $refunds);
             $this->assign('invoices', $invoices);

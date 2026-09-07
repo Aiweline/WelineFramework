@@ -88,16 +88,19 @@ final class OrderPaidStateHook implements OrderPostPaymentHookInterface
                 );
             }
             if ($firstPaidProjection) {
-                $this->dispatch('Weline_Order::order_paid', [
-                    'order' => $publishedOrder,
-                    'order_id' => $orderId,
-                    'order_uuid' => $context->orderUuid,
-                    'context' => $context,
-                    'metadata' => $context->metadata,
-                    // Legacy observers may read this key. The generic Facade
-                    // path deliberately does not expose a Payment Model.
-                    'payment' => null,
-                ]);
+                $this->dispatch(
+                    'Weline_Order::order_paid',
+                    OrderTypeEventEnvelope::append([
+                        'order' => $publishedOrder,
+                        'order_id' => $orderId,
+                        'order_uuid' => $context->orderUuid,
+                        'context' => $context,
+                        'metadata' => $context->metadata,
+                        // Legacy observers may read this key. The generic Facade
+                        // path deliberately does not expose a Payment Model.
+                        'payment' => null,
+                    ]),
+                );
             }
 
             if ($ownsTransaction) {

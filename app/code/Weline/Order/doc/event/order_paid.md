@@ -19,8 +19,13 @@
     'context' => OrderPaidContext对象,
     'metadata' => array,
     'payment' => OrderPayment对象|null,
+    // ToC/ToB 一期追加（非破坏）
+    'order_type' => 'toc'|'tob'|string,
+    'type_payload' => array,
 ]
 ```
+
+追加字段与 `order_created` 同合同：只追加 `order_type` + `type_payload`，不删改既有键；tob 可含定金/`hang_status` 投影。详见 [`order_created.md`](order_created.md)。
 
 ## 可用数据
 
@@ -30,6 +35,8 @@
 - `context` (OrderPaidContext|null) - Facade 路径提供的冻结 Order 快照
 - `metadata` (array) - 不可信扩展元数据，不参与订单身份、Scope 或金额判定
 - `payment` (OrderPayment|null) - 仅旧 PaymentService 路径可能提供的支付记录
+- `order_type` (string) - 售卖类型 code（追加）
+- `type_payload` (array) - 类型扩展载荷（追加）
 
 ## 使用场景
 

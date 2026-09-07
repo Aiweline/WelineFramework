@@ -51,7 +51,9 @@ final class AccountOrdersTemplateTest extends TestCase
         ]);
 
         self::assertStringContainsString('data-order-detail-link="true"', $html);
-        self::assertStringContainsString('/USD/customer/account/index?order_uuid=f783cdc9-ad19-4a50-9137-eb9cea4741a6#orders', $html);
+        self::assertStringContainsString('data-order-uuid="f783cdc9-ad19-4a50-9137-eb9cea4741a6"', $html);
+        self::assertStringContainsString("['order_uuid' => \$primaryOrderUuid]", (string) file_get_contents($template));
+        self::assertStringContainsString('#orders', $html);
         self::assertStringContainsString('查看详情', $html);
     }
 
@@ -125,7 +127,8 @@ final class AccountOrdersTemplateTest extends TestCase
         self::assertStringContainsString('FCDC Dealer QA', $html);
         self::assertStringContainsString('Development Test Address 1', $html);
         self::assertStringContainsString('Taizhou', $html);
-        self::assertStringContainsString('/USD/customer/account/index#orders', $html);
+        self::assertStringContainsString('data-account-orders-back="true"', $html);
+        self::assertStringContainsString('#orders', $html);
         self::assertStringContainsString('返回订单列表', $html);
     }
 

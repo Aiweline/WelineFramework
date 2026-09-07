@@ -192,11 +192,14 @@ class OrderService
                 $transaction->commit();
             }
             
-            // 触发订单创建事件
-            $this->eventsManager->dispatch('Weline_Order::order_created', [
-                'order' => $order,
-                'order_id' => $order->getId(),
-            ]);
+            // 触发订单创建事件（非破坏追加 order_type + type_payload）
+            $this->eventsManager->dispatch(
+                'Weline_Order::order_created',
+                OrderTypeEventEnvelope::append([
+                    'order' => $order,
+                    'order_id' => $order->getId(),
+                ]),
+            );
             
             return $order;
             
@@ -381,6 +384,14 @@ class OrderService
         
         if (isset($filters['fulfillment_status']) && $filters['fulfillment_status']) {
             $model->where(Order::schema_fields_FULFILLMENT_STATUS, $filters['fulfillment_status']);
+        }
+
+        if (isset($filters['order_type']) && $filters['order_type']) {
+            $orderType = strtolower(trim((string)$filters['order_type']));
+            $registry = $this->objectManager->getInstance(CommerceOrderTypeRegistry::class);
+            if ($orderType !== '' && $registry->has($orderType)) {
+                $model->where(Order::schema_fields_ORDER_TYPE, $orderType);
+            }
         }
 
         if (isset($filters['source_app']) && $filters['source_app']) {

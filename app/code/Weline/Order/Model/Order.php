@@ -25,6 +25,7 @@ use Weline\Framework\DataObject\DataObject;
 #[Index(name: 'idx_created_at', columns: ['created_at'])]
 #[Index(name: 'uk_order_uuid', columns: ['order_uuid'], type: 'UNIQUE')]
 #[Index(name: 'idx_order_checkout_group_uuid', columns: ['checkout_group_uuid'])]
+#[Index(name: 'idx_order_type', columns: ['order_type'])]
 class Order extends Model
 {
     public const schema_table = 'weline_order';
@@ -110,6 +111,8 @@ class Order extends Model
     public const schema_fields_SPLIT_KEY = 'split_key';
     #[Col('int', 11, nullable: false, default: 0, comment: 'Order state CAS version')]
     public const schema_fields_STATE_VERSION = 'state_version';
+    #[Col('varchar', 16, nullable: false, default: 'toc', comment: '售卖类型 toc|tob')]
+    public const schema_fields_ORDER_TYPE = 'order_type';
     
     // 订单状态常量
     public const STATUS_PENDING = 'pending';
@@ -140,7 +143,7 @@ class Order extends Model
     /**
      * 索引排序键
      */
-    public array $_index_sort_keys = ['order_id', 'order_number', 'customer_id', 'status', 'created_at'];
+    public array $_index_sort_keys = ['order_id', 'order_number', 'customer_id', 'status', 'order_type', 'created_at'];
 /**
      * 生成订单号
      */
