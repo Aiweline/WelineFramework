@@ -18,8 +18,13 @@
     'new_status' => string,
     'comment' => string|null,
     'notify_customer' => bool,
+    // ToC/ToB 一期追加（非破坏）
+    'order_type' => 'toc'|'tob'|string,
+    'type_payload' => array,
 ]
 ```
+
+追加字段与 `order_created` 同合同：只追加 `order_type` + `type_payload`；tob 的 `type_payload.hang_status` 为挂单生命周期只读投影。详见 [`order_created.md`](order_created.md)。
 
 ## 可用数据
 
@@ -29,6 +34,8 @@
 - `new_status` (string) - 新状态
 - `comment` (string|null) - 状态变更备注
 - `notify_customer` (bool) - 是否通知客户
+- `order_type` (string) - 售卖类型 code（追加）
+- `type_payload` (array) - 类型扩展载荷（追加）
 
 ## 使用场景
 

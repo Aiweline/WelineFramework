@@ -14,13 +14,28 @@
 [
     'order' => Order对象,
     'order_id' => int,
+    // ToC/ToB 一期追加（非破坏；旧观察者可忽略）
+    'order_type' => 'toc'|'tob'|string,  // 已注册售卖类型；缺省/历史视为 toc
+    'type_payload' => array,             // 按类型扩展；见下
 ]
 ```
+
+### 追加字段合同（非破坏）
+
+- **只追加** `order_type` + `type_payload`；不删除、不重命名既有 `order` / `order_id`。
+- `order_type` 必须落在 Order 类型 Registry；冻结自来源车的 `cart_type`，且须在 Cart 与 Order Registry 均存在。
+- `type_payload` 示例：
+  - **toc**：零售价来源、促销 deal 摘要、普通 pending→paid 路径标记。
+  - **tob**：`group_id`、`price_list_id`、`list_version`、`moq`、`qty_step`、`deposit_ratio_bps`、`deposit_amount_minor`、`hang_status`（`awaiting_deposit|awaiting_merchant_approval|awaiting_balance|…`）、`b2b_snapshot_ref`、`discounts_applied=false`。
+- B2B 观察者只处理 `order_type=tob`；零售监听器忽略 tob 专用态。
+- 同合同亦适用于 `order_paid`、`order_status_changed` 等订单域事件（见对应文档短注）。
 
 ## 可用数据
 
 - `order` (Order) - 订单对象，包含完整的订单信息
 - `order_id` (int) - 订单ID
+- `order_type` (string) - 售卖类型 code（一期：`toc` \| `tob`）；追加字段
+- `type_payload` (array) - 类型扩展载荷；追加字段
 
 ## 使用场景
 

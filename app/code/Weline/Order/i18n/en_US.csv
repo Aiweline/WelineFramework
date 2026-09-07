@@ -49,37 +49,37 @@
 退款接口不支持该操作：%{1},"The refund interface does not support this operation: %{1}"
 系统订单追踪,"System order tracking"
 暂无第三方物流商时，按订单履约状态展示系统追踪。,"Shows system tracking from fulfillment status when no carrier provider is bound."
-已下单,已下单
+已下单,Ordered
 已支付,Paid
 已发货,Fulfilled
 发往目的地,"In transit to destination"
 已送达,Delivered
-订单已送达,订单已送达
+订单已送达,"Order delivered"
 已发货，发往目的地,"Shipped — in transit to destination"
-订单已支付，等待发货,订单已支付，等待发货
-订单处理中,订单处理中
-系统追踪不接收外部物流反馈,系统追踪不接收外部物流反馈
-系统追踪无需外部连接,系统追踪无需外部连接
+订单已支付，等待发货,"Order paid, awaiting shipment"
+订单处理中,"Order processing"
+系统追踪不接收外部物流反馈,"System tracking does not accept external carrier feedback"
+系统追踪无需外部连接,"System tracking requires no external connection"
 订单已创建,"Order created"
-支付完成，仓库备货中,支付完成，仓库备货中
-目的地,目的地
-发往目的地：%{1},发往目的地：%{1}
+支付完成，仓库备货中,"Payment completed, preparing in warehouse"
+目的地,Destination
+发往目的地：%{1},"In transit to destination: %{1}"
 演示物流,"Demo carrier"
 仅用于本地开发验证正式物流轨迹与反馈中转，不连接真实承运商。,"Local demo carrier for formal tracking and feedback relay; not a real carrier."
-已揽收,已揽收
-运输中,运输中
-派送中,派送中
-已签收,已签收
-【演示】快递员正在派送,【演示】快递员正在派送
-【演示】包裹已到达目的地转运中心,【演示】包裹已到达目的地转运中心
-【演示】承运商已揽收,【演示】承运商已揽收
-【演示】包裹派送中,【演示】包裹派送中
-空反馈体,空反馈体
-演示反馈签名无效,演示反馈签名无效
-演示反馈验签通过,演示反馈验签通过
-"演示反馈 JSON 无效","演示反馈 JSON 无效"
-【演示】物流状态已更新,【演示】物流状态已更新
-演示物流连接正常,演示物流连接正常
+已揽收,"Picked up"
+运输中,"In transit"
+派送中,"Out for delivery"
+已签收,"Signed for"
+【演示】快递员正在派送,"[Demo] Courier is out for delivery"
+【演示】包裹已到达目的地转运中心,"[Demo] Package arrived at destination hub"
+【演示】承运商已揽收,"[Demo] Carrier picked up the package"
+【演示】包裹派送中,"[Demo] Package out for delivery"
+空反馈体,"Empty feedback body"
+演示反馈签名无效,"Invalid demo feedback signature"
+演示反馈验签通过,"Demo feedback signature verified"
+"演示反馈 JSON 无效","Invalid demo feedback JSON"
+【演示】物流状态已更新,"[Demo] Tracking status updated"
+演示物流连接正常,"Demo carrier connection OK"
 账户首页订单分区,"Account Homepage Orders Section"
 在顾客账户首页「我的订单」分区注入订单列表、订单状态与售后入口等内容。,"Inject order lists, order states, and after-sales entries into the My Orders section on the customer account homepage."
 订单详情页之前,"Before Order Details Page"
@@ -210,8 +210,6 @@ switch,switch
 部分发货,"Partial Shipment"
 "Order asset snapshot 必填字段为空：%{1}","Order asset snapshot required fields are empty: %{1}"
 "Order asset snapshot 数值/hash 非法","Order asset snapshot value/hash is illegal"
-订单留言,"Order note"
-如有特殊要求请留言,"Leave a message if you have special requirements"
 我的订单,"My Orders"
 查看订单进度与支付状态,"View order progress and payment status"
 已关闭,Closed
@@ -225,7 +223,7 @@ SKU,SKU
 单价,Price
 小计,Subtotal
 收货信息,"Receiving information"
-物流追踪,物流追踪
+物流追踪,"Logistics tracking"
 商品小计,Subtotal
 运费,"Shipping Amount"
 税费,"Tax Amount"
@@ -236,18 +234,22 @@ SKU,SKU
 订单明细,"Order details"
 退货,Return
 与我的订单,"And My Orders"
-查询失败,查询失败
+查询失败,"Query failed"
 物流单号,"Tracking Number"
-当前,当前
+当前,Current
+订单留言,"Order note"
+如有特殊要求请留言,"Leave a message if you have special requirements"
 订单列表,"Order List"
 新建订单,"Create Order"
 搜索订单号、客户姓名、邮箱,"Search order number, customer name, email"
 全部状态,"All Status"
 全部支付状态,"All Payment Status"
 全部发货状态,"All Fulfillment Status"
+全部类型,"All types"
 搜索,Search
 重置,Reset
 订单号,"Order Number"
+类型,Type
 客户,Customer
 订单状态,"Order Status"
 支付状态,"Payment Status"
@@ -492,6 +494,11 @@ Outbox,Outbox
 "rollback 不得直接设为 on","rollback cannot be directly set to on"
 "已有新 Order 时拒绝会混淆事实源的 unsafe rollback；可切 shadow，且绝不恢复旧 writer","When there is a new Order, unsafe rollback that would confuse the source of truth is rejected; shadow can be cut, and the old writer will never be restored."
 "禁止回滚恢复旧 Checkout writer","Disable rollback to restore old Checkout writer"
+"Order 售卖类型 code 不能为空","Order 售卖类型 code 不能为空"
+"重复的 Order 售卖类型 code：%{1}","重复的 Order 售卖类型 code：%{1}"
+未注册的订单售卖类型：%{1},未注册的订单售卖类型：%{1}
+零售,Retail
+历史批发,"Historical wholesale"
 订单当前状态不允许退款,"Order cannot be refunded in current status"
 退款金额不能为空,"Refund amount cannot be empty"
 退款金额不能超过订单总额,"Refund amount cannot exceed order total"
@@ -573,3 +580,4 @@ Outbox,Outbox
 "OrderFacade get 当前仅 memory/harness","OrderFacade get currently only memory/harness"
 "OrderFacade getGroup 当前仅 memory/harness","OrderFacade getGroup currently only has memory/harness"
 "DisplayNumberAllocator 当前仅 memory/harness；请挂 Registry writer","DisplayNumberAllocator currently only has memory/harness; please hang Registry writer"
+批发,Wholesale

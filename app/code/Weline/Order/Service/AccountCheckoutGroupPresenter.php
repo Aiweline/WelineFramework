@@ -77,6 +77,7 @@ final class AccountCheckoutGroupPresenter
             'invoice_semantics' => array_values(array_unique($invoiceLabels)),
             'fulfillment_semantics' => array_values(array_unique($fulfillmentLabels)),
             'tracking_summary' => $this->trackingSummaryForGroup($orders),
+            'hang' => $this->primaryHang($orders),
             'orders' => $partial
                 ? array_map(fn (array $order): array => $this->mapOrder($order, $currency), $orders)
                 : [],
@@ -163,7 +164,28 @@ final class AccountCheckoutGroupPresenter
             'invoice_label' => $this->customerInvoiceLabel((string) ($order['invoice_status'] ?? 'none')),
             'fulfillment_label' => $this->customerFulfillmentLabel((string) ($order['fulfillment_status'] ?? 'none')),
             'tracking_summary' => $this->trackingSummaryForFulfillment((string) ($order['fulfillment_status'] ?? ''), $status),
+            'order_type' => strtolower(trim((string)($order['order_type'] ?? 'toc'))) ?: 'toc',
+            'hang' => is_array($order['hang'] ?? null) ? $order['hang'] : null,
         ];
+    }
+
+    /**
+     * @param list<array<string, mixed>> $orders
+     * @return array<string, mixed>|null
+     */
+    private function primaryHang(array $orders): ?array
+    {
+        foreach ($orders as $order) {
+            if (!is_array($order)) {
+                continue;
+            }
+            $hang = $order['hang'] ?? null;
+            if (is_array($hang) && trim((string)($hang['hang_status'] ?? '')) !== '') {
+                return $hang + ['order_ref' => (string)($order['order_uuid'] ?? $hang['order_ref'] ?? '')];
+            }
+        }
+
+        return null;
     }
 
     /** @param array<string, mixed> $group */
