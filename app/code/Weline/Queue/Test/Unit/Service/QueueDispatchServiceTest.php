@@ -53,6 +53,21 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertStringContainsString('public function getMaxConcurrent(): int', $source);
     }
 
+    public function testBatchDrainingClassesAreSingleFlightOnDispatch(): void
+    {
+        $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
+        $startSource = $this->extractPrivateMethodSource($source, 'startQueueProcess');
+        $eligibleSource = $this->extractPrivateMethodSource($source, 'dispatchQueueIfEligible');
+
+        self::assertFileExists(\dirname(__DIR__, 3) . '/Api/BatchDrainingQueueConsumerInterface.php');
+        self::assertStringContainsString('BatchDrainingQueueConsumerInterface', $source);
+        self::assertStringContainsString('countActiveAutoQueuesForClass(', $eligibleSource);
+        self::assertStringContainsString('resolveMaxConcurrentForClass(', $eligibleSource);
+        self::assertStringContainsString('withQueueClassDispatchLock(', $startSource);
+        self::assertStringContainsString('isBatchDrainingQueueClass(', $startSource);
+        self::assertStringContainsString("'queue.cron.max_concurrent_by_class.'", $source);
+    }
+
     public function testQueueWorkerMemoryLimitNormalizationAcceptsPhpIniUnits(): void
     {
         $source = (string)\file_get_contents(\dirname(__DIR__, 3) . '/Service/QueueDispatchService.php');
@@ -195,6 +210,7 @@ final class QueueDispatchServiceTest extends TestCase
         self::assertStringContainsString('队列记录的 PID %{1} 仍存在', $source);
         self::assertStringContainsString('updateQueueSnapshotIf($queue', $reconcileMethodSource);
         self::assertStringContainsString('Queue::schema_fields_process => $this->appendProcessMessage', $reconcileMethodSource);
+        self::assertStringContainsString('cleanupDeadQueuePidJsonOrphans()', $reconcileMethodSource);
     }
 
     public function testRecoverableDeadWorkersAreReturnedToSchedulerInsteadOfMarkedError(): void
