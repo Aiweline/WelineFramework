@@ -51,14 +51,15 @@ final class ProductStorefrontTemplateContractTest extends TestCase
         self::assertStringNotContainsString('Cookie::', $controller);
     }
 
-    public function testCatalogDelegatesCartMutationToTheSharedThemePartial(): void
+    public function testCatalogDelegatesCartMutationToUnifiedProductCard(): void
     {
         $template = (string)file_get_contents(
             BP . 'app/code/Weline/Product/view/templates/frontend/catalog/index.phtml',
         );
 
-        self::assertStringContainsString('ProductCardAddToCartParams::fetchDictionaryFromOffer', $template);
-        self::assertStringContainsString('Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml', $template);
+        self::assertStringContainsString('<w:product:card', $template);
+        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $template);
+        self::assertStringContainsString('show-add-to-cart="true"', $template);
     }
 
     public function testCartLinkKeepsTheActiveCurrencyAndLocaleRoute(): void
@@ -71,20 +72,18 @@ final class ProductStorefrontTemplateContractTest extends TestCase
         self::assertStringNotContainsString('href="/cart"', $template);
     }
 
-    public function testCatalogCardsUseWholeItemHitLinkToProductDetail(): void
+    public function testCatalogCardsUseUnifiedProductCardTag(): void
     {
         $template = (string)file_get_contents(
             BP . 'app/code/Weline/Product/view/templates/frontend/catalog/index.phtml',
         );
 
-        self::assertStringContainsString("\$productPath = 'product/' . \$productSlug", $template);
-        self::assertStringContainsString("\$productPath = 'product/' . \$productId", $template);
-        self::assertStringContainsString("StorefrontOfferDetailQuery::params", $template);
-        self::assertStringContainsString('href="@url{$productUrl|$productUrlParams}"', $template);
-        self::assertStringContainsString('class="product-storefront__card-hit"', $template);
-        self::assertStringContainsString('data-testid="storefront-product-card-link"', $template);
-        self::assertStringNotContainsString('class="product-storefront__title-link"', $template);
-        self::assertStringNotContainsString('href="/product/', $template);
+        self::assertStringContainsString('<w:product:card', $template);
+        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $template);
+        self::assertStringContainsString('show-sku="true"', $template);
+        self::assertStringContainsString('weline-product-card-shelf', $template);
+        self::assertStringNotContainsString('class="product-storefront__card-hit"', $template);
+        self::assertStringNotContainsString('product-storefront__card product-card', $template);
     }
 
     public function testProductListLayoutLeavesFiltersSlotForFiltersModuleInjection(): void
@@ -116,6 +115,13 @@ final class ProductStorefrontTemplateContractTest extends TestCase
         self::assertStringContainsString('Weline_Product::storefront_offers_filter', $controller);
         self::assertStringContainsString('EventsManager', $controller);
         self::assertStringNotContainsString('ObjectManager', $controller);
+    }
+
+    public function testProductEventSpecDeclaresStorefrontOffersFilter(): void
+    {
+        $spec = require BP . 'app/code/Weline/Product/event.php';
+        self::assertIsArray($spec);
+        self::assertArrayHasKey('Weline_Product::storefront_offers_filter', $spec);
     }
 
     public function testBrowserCartMutationDoesNotSubmitAClientOwnedScope(): void

@@ -51,15 +51,30 @@ final class Category extends FrontendController
         $this->request->setGet('path', $routePath);
 
         $productIds = $page['product_ids'];
+        // WLS request params also include values injected into the request context
+        // by routing/layout hooks. Use the raw query string for filter projection
+        // decisions so only an actual af_* URL filter expands listing details.
+        $queryParams = method_exists($this->request, 'getQueryParams')
+            ? (array)($this->request->getQueryParams() ?? [])
+            : ($this->request->getParams() ?: []);
+        $includeListingDetails = false;
+        foreach ($queryParams as $queryKey => $queryValue) {
+            $queryKey = strtolower(trim((string)$queryKey));
+            $queryValue = is_array($queryValue) ? (string)reset($queryValue) : (string)$queryValue;
+            if (str_starts_with($queryKey, 'af_') && trim($queryValue) !== '') {
+                $includeListingDetails = true;
+                break;
+            }
+        }
         $offers = $productIds === []
             ? []
-            : $this->catalog->publishedOffersForProductIds($productIds, 120);
+            : $this->catalog->publishedOffersForProductIds($productIds, 120, $includeListingDetails);
         $priceBucket = $this->listingFilter->normalizePriceBucket((string)$this->request->getParam('price', ''));
         $sort = $this->listingFilter->normalizeSort((string)$this->request->getParam('sort', ''));
         $filteredOffers = $this->listingFilter->apply($offers, $priceBucket, $sort);
         $filterEvent = [
             'offers' => $filteredOffers,
-            'query' => $this->request->getParams() ?: [],
+            'query' => $queryParams,
             'surface' => 'category',
         ];
         $this->events->dispatch('Weline_Product::storefront_offers_filter', $filterEvent);

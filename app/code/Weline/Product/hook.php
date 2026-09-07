@@ -6,6 +6,11 @@ declare(strict_types=1);
  * Weline_Product 模块 Hook 规约
  */
 return [
+    'Weline_Product::frontend::product::detail::after-price' => [
+        'name' => (string)__('商品详情价格之后'),
+        'description' => (string)__('在商品详情页价格区块之后注入扩展内容，例如 ToC/ToB 售卖模式切换。'),
+        'doc' => 'frontend/product/detail/after-price.md',
+    ],
     'Weline_Product::frontend::product::detail::after-add-to-cart' => [
         'name' => (string)__('商品详情加购之后'),
         'description' => (string)__('在商品详情页加购操作区域之后注入扩展内容，例如分销分享面板。'),

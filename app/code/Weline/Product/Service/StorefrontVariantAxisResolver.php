@@ -8,6 +8,7 @@ use Weline\Eav\Api\Metadata\AttributeMetadata;
 use Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface;
 use Weline\Eav\Api\Metadata\AttributeOptionMetadata;
 use Weline\Eav\Api\Metadata\AttributeSetMetadata;
+use Weline\Framework\App\State;
 use Weline\Product\Model\ProductCatalogAttributeEntity;
 
 /**
@@ -19,11 +20,49 @@ final class StorefrontVariantAxisResolver
     /** @var array<string, array<string, mixed>>|null */
     private ?array $attributesByCode = null;
 
+    private ?string $attributesCacheLocale = null;
+
+    private int $productId = 0;
+
+    private ?StorefrontEavLabelResolver $scopedLabelResolver = null;
+
+    private ?self $lastProductScopedResolver = null;
+
     public function __construct(
         private readonly AttributeMetadataCatalogInterface $metadata,
         private readonly ProductCatalogAttributeEntity $entity,
         private readonly StorefrontEavLabelResolver $labels,
     ) {
+    }
+
+    /**
+     * Bind product-private option scope so axis chips resolve Chinese labels.
+     */
+    public function forProduct(int $productId): self
+    {
+        $productId = max(0, $productId);
+        if ($this->productId === $productId) {
+            return $this;
+        }
+        if ($this->lastProductScopedResolver?->productId === $productId) {
+            return $this->lastProductScopedResolver;
+        }
+
+        $scoped = clone $this;
+        $scoped->productId = $productId;
+        $scoped->attributesByCode = null;
+        $scoped->attributesCacheLocale = null;
+        $scoped->scopedLabelResolver = null;
+        $scoped->lastProductScopedResolver = null;
+
+        return $this->lastProductScopedResolver = $scoped;
+    }
+
+    private function scopedLabels(): StorefrontEavLabelResolver
+    {
+        return $this->scopedLabelResolver ??= $this->productId > 0
+            ? $this->labels->forProduct($this->productId)
+            : $this->labels;
     }
 
     /**
@@ -89,7 +128,7 @@ final class StorefrontVariantAxisResolver
                 'code' => $code,
                 'label' => $label,
                 'value' => $selected,
-                'value_label' => $selected !== '' ? $this->labels->resolve($code, $selected) : '',
+                'value_label' => $selected !== '' ? $this->scopedLabels()->resolve($code, $selected) : '',
                 'options' => $options,
             ];
         }
@@ -161,8 +200,11 @@ final class StorefrontVariantAxisResolver
                 continue;
             }
             $label = trim((string)($option['label'] ?? ''));
-            if ($label === '') {
-                $label = $this->labels->resolve($code, $value);
+            $resolved = trim($this->scopedLabels()->resolve($code, $value));
+            if ($resolved !== '') {
+                $label = $resolved;
+            } elseif ($label === '') {
+                $label = $value;
             }
             $configured[$value] = $this->mergeOptionWithEav(
                 $this->normalizeOptionEntry($value, $label, $option),
@@ -215,6 +257,10 @@ final class StorefrontVariantAxisResolver
         $optionCode = trim((string)($eavOption['code'] ?? ''));
         if ($optionCode !== '' && trim((string)($entry['code'] ?? '')) === '') {
             $entry['code'] = $optionCode;
+        }
+        $eavLabel = trim((string)($eavOption['label'] ?? $eavOption['name'] ?? ''));
+        if ($eavLabel !== '' && trim((string)($entry['label'] ?? '')) === '') {
+            $entry['label'] = $eavLabel;
         }
         // 全局 EAV 选项图板仅表示抽象选项；具体样本图只来自 Product/Offer 媒体关联。
 
@@ -425,9 +471,14 @@ final class StorefrontVariantAxisResolver
      */
     private function attributesByCode(): array
     {
-        if ($this->attributesByCode !== null) {
+        $locale = trim(str_replace('-', '_', (string)State::getLangLocal()));
+        if ($locale === '') {
+            $locale = 'zh_Hans_CN';
+        }
+        if ($this->attributesByCode !== null && $this->attributesCacheLocale === $locale) {
             return $this->attributesByCode;
         }
+        $this->attributesCacheLocale = $locale;
 
         $index = [];
         try {

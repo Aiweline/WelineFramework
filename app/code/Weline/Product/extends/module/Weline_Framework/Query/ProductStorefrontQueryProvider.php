@@ -7,6 +7,7 @@ namespace Weline\Product\Extends\Module\Weline_Framework\Query;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Service\Query\Provider\QueryProviderInterface;
+use Weline\Product\Api\ProductQuoteRequestSubmitInterface;
 use Weline\Product\Model\Shard\Media;
 use Weline\Product\Repository\MediaRepository;
 use Weline\Product\Service\StorefrontCatalogViewService;
@@ -28,6 +29,7 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
     {
         return match ($operation) {
             'searchPublishedOffers' => $this->searchPublishedOffers($params),
+            'submitQuoteRequest' => $this->submitQuoteRequest($params),
             default => throw new \InvalidArgumentException((string)__(
                 'Product Storefront 接口不支持操作：%{1}',
                 [$operation],
@@ -40,24 +42,54 @@ class ProductStorefrontQueryProvider implements QueryProviderInterface
         return [
             'provider' => $this->getProviderName(),
             'name' => 'Product Storefront',
-            'description' => 'Server-side read boundary for published storefront offers.',
+            'description' => 'Server-side read/write boundary for published storefront offers and quote requests.',
             'module' => 'Weline_Product',
-            'operations' => [[
-                'name' => 'searchPublishedOffers',
-                'frontend' => false,
-                'external' => false,
-                'mode' => 'read',
-                'graph' => false,
-                'cost' => 4,
-                'params' => [
-                    ['name' => 'keyword', 'type' => 'string', 'required' => false, 'max_length' => 200],
-                    ['name' => 'page', 'type' => 'int', 'required' => false, 'min' => 1],
-                    ['name' => 'page_size', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 48],
+            'operations' => [
+                [
+                    'name' => 'searchPublishedOffers',
+                    'frontend' => false,
+                    'external' => false,
+                    'mode' => 'read',
+                    'graph' => false,
+                    'cost' => 4,
+                    'params' => [
+                        ['name' => 'keyword', 'type' => 'string', 'required' => false, 'max_length' => 200],
+                        ['name' => 'page', 'type' => 'int', 'required' => false, 'min' => 1],
+                        ['name' => 'page_size', 'type' => 'int', 'required' => false, 'min' => 1, 'max' => 48],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Search and normalize current-scope published Product offers',
                 ],
-                'returns' => ['type' => 'array'],
-                'summary' => 'Search and normalize current-scope published Product offers',
-            ]],
+                [
+                    'name' => 'submitQuoteRequest',
+                    'frontend' => true,
+                    'external' => false,
+                    'mode' => 'write',
+                    'graph' => false,
+                    'cost' => 3,
+                    'params' => [
+                        ['name' => 'product_id', 'type' => 'int', 'required' => true],
+                        ['name' => 'sku', 'type' => 'string', 'required' => true],
+                        ['name' => 'idempotency_key', 'type' => 'string', 'required' => true],
+                        ['name' => 'contact_name', 'type' => 'string', 'required' => true],
+                    ],
+                    'returns' => ['type' => 'array'],
+                    'summary' => 'Submit a Product-owned quote_only inquiry',
+                ],
+            ],
         ];
+    }
+
+    /**
+     * @param array<string, mixed> $params
+     * @return array<string, mixed>
+     */
+    private function submitQuoteRequest(array $params): array
+    {
+        /** @var ProductQuoteRequestSubmitInterface $service */
+        $service = ObjectManager::getInstance(ProductQuoteRequestSubmitInterface::class);
+
+        return $service->submit($params);
     }
 
     /**

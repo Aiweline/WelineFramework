@@ -64,6 +64,30 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertStringContainsString('if ($excludeProductId > 0 && $productId === $excludeProductId)', $source);
     }
 
+    public function testCardPoolsUseSummaryCatalogProjection(): void
+    {
+        $source = (string)file_get_contents(
+            dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php'
+        );
+
+        self::assertStringContainsString('$this->catalog->publishedOffers($limit * 3, false)', $source);
+        self::assertStringContainsString('shouldUseListingProjection', $source);
+        self::assertStringContainsString('$this->catalog->publishedOffers($limit * 3, true)', $source);
+        self::assertStringContainsString('$this->catalog->publishedOffers(max($limit * 3, 48), false)', $source);
+        self::assertStringContainsString(
+            '$this->catalog->publishedOffersForProductIds(' . "\n"
+                . '                \\array_keys($createdAtByProductId),' . "\n"
+                . '                \\max($limit * 3, 48),' . "\n"
+                . '                false,',
+            $source,
+        );
+        self::assertStringContainsString('$this->catalog->publishedOffers(max($limit * 4, 16), false)', $source);
+        self::assertStringContainsString(
+            '$this->catalog->publishedOffersForProductIds([$seedProductId], 4, false)',
+            $source,
+        );
+    }
+
     public function testNewArrivalCardsMethodFiltersByCreatedAtInSource(): void
     {
         $method = new ReflectionMethod(StorefrontProductWidgetCatalog::class, 'newArrivalCards');
@@ -143,6 +167,11 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertStringContainsString('data-testid="storefront-related-products"', $source);
         self::assertStringContainsString('Weline_Product::css/widgets/related-products.css', $source);
         self::assertStringContainsString('data-weline-load="relatedProducts"', $source);
+        self::assertStringContainsString('<w:product:card', $source);
+        self::assertStringContainsString('class="wpr-card"', $source);
+        self::assertStringContainsString('class="wpr-header"', $source);
+        self::assertStringNotContainsString('class="wpc-header"', $source);
+        self::assertStringNotContainsString('ProductCardRenderer::render', $source);
         self::assertStringNotContainsString('<script>', $source);
         self::assertStringContainsString('relatedCards(', $source);
 
@@ -179,10 +208,13 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertStringContainsString('->cards($limit)', $source);
         self::assertStringContainsString('Url::getPrefix()', $source);
         self::assertStringNotContainsString('$this->getUrl(ltrim($route', $source);
-        self::assertStringContainsString('ProductCardAddToCartParams::fetchDictionary', $source);
-        self::assertStringContainsString('Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml', $source);
-        self::assertStringContainsString("'button_class' => 'wpc-cta'", $source);
-        self::assertStringContainsString("'buy_now_enabled' => false", $source);
+        self::assertStringContainsString('<w:product:card', $source);
+        self::assertStringContainsString('class="wpr-card"', $source);
+        self::assertStringContainsString('class="wpr-header"', $source);
+        self::assertStringNotContainsString('class="wpc-header"', $source);
+        self::assertStringContainsString('wishlist-pixel="true"', $source);
+        self::assertStringNotContainsString('ProductCardAddToCartParams::fetchDictionary', $source);
+        self::assertStringNotContainsString('Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml', $source);
         self::assertStringContainsString('Weline_Product::css/widgets/recommended-products.css', $source);
         self::assertStringContainsString('data-weline-load="recommendedProducts"', $source);
         self::assertFileExists(dirname(__DIR__, 3) . '/view/statics/css/widgets/recommended-products.css');
@@ -192,7 +224,12 @@ final class StorefrontProductWidgetCatalogRelatedCardsTest extends TestCase
         self::assertStringContainsString('Weline_Product::js/widgets/recommended-products.js', $modulesSrc);
 
         $css = (string)file_get_contents(dirname(__DIR__, 3) . '/view/statics/css/widgets/recommended-products.css');
-        self::assertStringContainsString('max-width: var(--weline-layout-content-max-width', $css);
+        self::assertStringContainsString('var(--weline-layout-content-max-width', $css);
+        self::assertStringContainsString('.weline-product-card.wpr-card', $css);
+        self::assertStringContainsString('.wpr-header', $css);
+        self::assertStringNotContainsString('.weline-product-recommended .wpc-cta', $css);
+        self::assertStringNotContainsString('.weline-product-recommended .wpc-title', $css);
+        self::assertStringNotContainsString('.weline-product-recommended .wpc-media', $css);
 
         $catalogSrc = (string)file_get_contents(dirname(__DIR__, 3) . '/Service/StorefrontProductWidgetCatalog.php');
         self::assertStringContainsString("'/product/'", $catalogSrc);

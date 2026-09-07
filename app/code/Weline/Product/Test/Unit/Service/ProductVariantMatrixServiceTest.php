@@ -109,7 +109,7 @@ final class ProductVariantMatrixServiceTest extends TestCase
         self::assertSame('disable', $plan['impact'][0]['action']);
     }
 
-    public function testReconcileRejectsStaleVersionAndSkuReservedByRemovedIdentity(): void
+    public function testReconcileRejectsStaleVersionAndSkuReservedByActiveIdentity(): void
     {
         $service = new ProductVariantMatrixService();
         $axes = [['code' => 'color', 'options' => ['red']]];
@@ -140,11 +140,147 @@ final class ProductVariantMatrixServiceTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('variant_sku_reserved');
         $service->reconcile(
-            [['code' => 'color', 'options' => ['blue']]],
+            [['code' => 'color', 'options' => ['red', 'blue']]],
             'SKU',
-            [['combination' => ['color' => 'blue'], 'sku' => 'RED']],
+            [
+                [
+                    // New SKU on red: do not keep the old uuid here — that identity
+                    // still owns SKU RED until blue's steal is rejected.
+                    'combination' => ['color' => 'red'],
+                    'sku' => 'RED-NEW',
+                ],
+                [
+                    'combination' => ['color' => 'blue'],
+                    'sku' => 'RED',
+                ],
+            ],
             $existing,
         );
+    }
+
+    public function testReconcileMigratesSkuWhenObsoleteCombinationRematerializes(): void
+    {
+        $service = new ProductVariantMatrixService();
+        $oldKey = $service->combinationKey(['color' => 'pink', 'size' => 's']);
+        $newKey = $service->combinationKey(['size' => 's', 'style_type' => 'pink-skirt']);
+        $existing = [[
+            'offer_id' => 10,
+            'global_offer_uuid' => '10000000-0000-4000-8000-000000000010',
+            'sku' => 'PINK-S',
+            'combination_key' => $oldKey,
+            'publish_version' => 1,
+            'identity_version' => 2,
+            'status' => 'active',
+        ]];
+
+        $plan = $service->reconcile(
+            [
+                ['code' => 'size', 'options' => ['s']],
+                ['code' => 'style_type', 'options' => ['pink-skirt']],
+            ],
+            'SKU',
+            [['combination' => ['size' => 's', 'style_type' => 'pink-skirt'], 'sku' => 'PINK-S']],
+            $existing,
+        );
+
+        self::assertCount(1, $plan['update']);
+        self::assertCount(0, $plan['create']);
+        self::assertCount(0, $plan['disable']);
+        self::assertSame($newKey, $plan['update'][0]['combination_key']);
+        self::assertSame('10000000-0000-4000-8000-000000000010', $plan['update'][0]['global_offer_uuid']);
+        self::assertSame(1, $plan['update'][0]['offer_version']);
+        self::assertSame(2, $plan['update'][0]['identity_version']);
+    }
+
+    public function testReconcilePrefersSkuMigrationOverStaleDraftOnTargetKey(): void
+    {
+        $service = new ProductVariantMatrixService();
+        $obsoleteKey = $service->combinationKey(['color' => 'pink', 'size' => 's']);
+        $targetKey = $service->combinationKey(['size' => 's', 'style_type' => 'pink-skirt']);
+        $existing = [
+            [
+                'offer_id' => 10,
+                'global_offer_uuid' => '10000000-0000-4000-8000-000000000010',
+                'sku' => 'PINK-S',
+                'combination_key' => $obsoleteKey,
+                'publish_version' => 1,
+                'identity_version' => 2,
+                'status' => 'draft',
+            ],
+            [
+                'offer_id' => 11,
+                'global_offer_uuid' => '10000000-0000-4000-8000-000000000011',
+                'sku' => 'STALE-TARGET',
+                'combination_key' => $targetKey,
+                'publish_version' => 1,
+                'identity_version' => 1,
+                'status' => 'draft',
+            ],
+        ];
+
+        $plan = $service->reconcile(
+            [
+                ['code' => 'size', 'options' => ['s']],
+                ['code' => 'style_type', 'options' => ['pink-skirt']],
+            ],
+            'SKU',
+            [['combination' => ['size' => 's', 'style_type' => 'pink-skirt'], 'sku' => 'PINK-S']],
+            $existing,
+        );
+
+        self::assertCount(1, $plan['update']);
+        self::assertCount(0, $plan['create']);
+        self::assertCount(1, $plan['disable']);
+        self::assertSame('10000000-0000-4000-8000-000000000010', $plan['update'][0]['global_offer_uuid']);
+        self::assertSame($targetKey, $plan['update'][0]['combination_key']);
+        self::assertSame('10000000-0000-4000-8000-000000000011', $plan['disable'][0]['global_offer_uuid']);
+    }
+
+    public function testReconcileIgnoresStaleTargetUuidWhenMigratingBySku(): void
+    {
+        $service = new ProductVariantMatrixService();
+        $obsoleteKey = $service->combinationKey(['color' => 'pink', 'size' => 's']);
+        $targetKey = $service->combinationKey(['size' => 's', 'style_type' => 'pink-skirt']);
+        $existing = [
+            [
+                'offer_id' => 10,
+                'global_offer_uuid' => '10000000-0000-4000-8000-000000000010',
+                'sku' => 'PINK-S',
+                'combination_key' => $obsoleteKey,
+                'publish_version' => 1,
+                'identity_version' => 2,
+                'status' => 'draft',
+            ],
+            [
+                'offer_id' => 11,
+                'global_offer_uuid' => '10000000-0000-4000-8000-000000000011',
+                'sku' => 'STALE-TARGET',
+                'combination_key' => $targetKey,
+                'publish_version' => 1,
+                'identity_version' => 1,
+                'status' => 'draft',
+            ],
+        ];
+
+        $plan = $service->reconcile(
+            [
+                ['code' => 'size', 'options' => ['s']],
+                ['code' => 'style_type', 'options' => ['pink-skirt']],
+            ],
+            'SKU',
+            [[
+                'combination' => ['size' => 's', 'style_type' => 'pink-skirt'],
+                'sku' => 'PINK-S',
+                // Stale occupant uuid attached by key-only import match.
+                'global_offer_uuid' => '10000000-0000-4000-8000-000000000011',
+            ]],
+            $existing,
+        );
+
+        self::assertCount(1, $plan['update']);
+        self::assertSame('10000000-0000-4000-8000-000000000010', $plan['update'][0]['global_offer_uuid']);
+        self::assertSame($targetKey, $plan['update'][0]['combination_key']);
+        self::assertSame('10000000-0000-4000-8000-000000000011', $plan['disable'][0]['global_offer_uuid']);
     }
 
     public function testCommandContractUsesIdentityPreservingOfferTransitions(): void
@@ -183,5 +319,66 @@ final class ProductVariantMatrixServiceTest extends TestCase
         $this->expectException(\InvalidArgumentException::class);
         $this->expectExceptionMessage('variant_sku_duplicate');
         $service->generate($axes, 'SKU', [$red => 'SAME', $blue => 'same']);
+    }
+
+    public function testMaterializeOverridesKeepsSparseColorAndStyleTypeRows(): void
+    {
+        $service = new ProductVariantMatrixService();
+        $axes = [
+            [
+                'code' => 'color',
+                'options' => [['value' => 'blue', 'label' => '蓝色印花']],
+            ],
+            [
+                'code' => 'style_type',
+                'options' => [['value' => 'pink-set', 'label' => '肉粉上衣粉裙子']],
+            ],
+            [
+                'code' => 'size',
+                'options' => [['value' => 's', 'label' => 'S'], ['value' => 'm', 'label' => 'M']],
+            ],
+        ];
+        $rows = $service->materializeOverrides($axes, 'XINYAO', [
+            'color=blue|size=s' => 'XINYAO-C-S',
+            'size=m|style_type=pink-set' => 'XINYAO-T-M',
+        ]);
+        self::assertCount(2, $rows);
+        $keys = array_column($rows, 'combination_key');
+        sort($keys);
+        self::assertSame(['color=blue|size=s', 'size=m|style_type=pink-set'], $keys);
+    }
+
+    public function testReconcileAcceptsSparseColorAndStyleTypeRows(): void
+    {
+        $service = new ProductVariantMatrixService();
+        $axes = [
+            [
+                'code' => 'color',
+                'options' => [['value' => 'blue', 'label' => '蓝色印花']],
+            ],
+            [
+                'code' => 'style_type',
+                'options' => [['value' => 'pink-set', 'label' => '肉粉上衣粉裙子']],
+            ],
+            [
+                'code' => 'size',
+                'options' => [['value' => 's', 'label' => 'S'], ['value' => 'm', 'label' => 'M']],
+            ],
+        ];
+        $plan = $service->reconcile($axes, 'XINYAO', [
+            [
+                'sku' => 'XINYAO-C-S',
+                'combination' => ['color' => 'blue', 'size' => 's'],
+                'combination_key' => 'color=blue|size=s',
+            ],
+            [
+                'sku' => 'XINYAO-T-M',
+                'combination' => ['style_type' => 'pink-set', 'size' => 'm'],
+                'combination_key' => 'size=m|style_type=pink-set',
+            ],
+        ], []);
+        self::assertCount(2, $plan['desired']);
+        self::assertCount(2, $plan['create']);
+        self::assertSame([], $plan['update']);
     }
 }

@@ -566,6 +566,41 @@ final class CatalogRepositoryIntegrationTest extends TestCase
             str_repeat('c', 64),
             (string)$offers->findById(0, $offerId)?->getData(Offer::schema_fields_CAS_TOKEN),
         );
+
+        $draftOffer = $offers->create(0, [
+            Offer::schema_fields_PRODUCT_ID => $productId,
+            Offer::schema_fields_GLOBAL_OFFER_UUID => '00000000-0000-0000-0000-000000000045',
+            Offer::schema_fields_COMBINATION_KEY => 'draft-only',
+        ]);
+        self::assertSame(
+            [$offerId, (int)$draftOffer->getId()],
+            array_column($offers->listByProductIds(0, [$productId]), Offer::schema_fields_ID),
+            'The general repository read keeps draft and published offers available to back-office callers.',
+        );
+        self::assertSame(
+            [$offerId],
+            array_column(
+                $offers->listPublishedByProductIds(0, [$productId]),
+                Offer::schema_fields_ID,
+            ),
+            'The storefront repository read must push the published status predicate into the shard query.',
+        );
+
+        $laterPublishedOffer = $offers->create(0, [
+            Offer::schema_fields_PRODUCT_ID => $productId,
+            Offer::schema_fields_GLOBAL_OFFER_UUID => '00000000-0000-0000-0000-000000000046',
+            Offer::schema_fields_COMBINATION_KEY => 'published-later',
+        ]);
+        $laterPublishedOffer = $offers->publish(0, (int)$laterPublishedOffer->getId(), 0);
+        self::assertSame(
+            [$offerId],
+            array_column(
+                $offers->listPublishedRepresentativeByProductIds(0, [$productId]),
+                Offer::schema_fields_ID,
+            ),
+            'The representative storefront read must keep the lowest published offer ID per product.',
+        );
+        self::assertGreaterThan($offerId, (int)$laterPublishedOffer->getId());
     }
 
     private function assertMediaCowAndRollback(

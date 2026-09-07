@@ -121,17 +121,17 @@ final class MediaRepository extends AbstractWebsiteShardRepository
             $query->where(Media::schema_fields_STORE_ID, $storeIds, 'IN');
         }
         try {
-            $rows = $query->select()->fetchArray();
+            $rows = iterator_to_array($query->select()->fetchIterator(), false);
         } catch (\PDOException $e) {
             // Legacy website shards may predate store_id; retry without scope filter.
             if ($storeIds === null || !str_contains($e->getMessage(), 'store_id')) {
                 throw $e;
             }
-            $rows = $this->newModel($websiteId)
+            $rows = iterator_to_array($this->newModel($websiteId)
                 ->clear()
                 ->where(Media::schema_fields_PRODUCT_ID, $productIds, 'IN')
                 ->select()
-                ->fetchArray();
+                ->fetchIterator(), false);
         }
         usort(
             $rows,
@@ -175,12 +175,28 @@ final class MediaRepository extends AbstractWebsiteShardRepository
                 throw new \InvalidArgumentException('product_media_assignment_invalid');
             }
             $assetId = strtolower(trim((string)($row[Media::schema_fields_ASSET_ID] ?? '')));
-            if (preg_match('/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/', $assetId) !== 1) {
-                throw new \InvalidArgumentException('product_media_asset_id_invalid');
-            }
             $role = strtolower(trim((string)($row[Media::schema_fields_ROLE] ?? 'gallery')));
             $combinationKey = trim((string)($row[Media::schema_fields_COMBINATION_KEY] ?? ''));
-            $identity = $combinationKey . "\0" . $assetId;
+            $path = trim((string)($row[Media::schema_fields_PATH] ?? ''));
+            $isExternalVideo = $role === 'video' && $assetId === '';
+            if ($isExternalVideo) {
+                if ($path === ''
+                    || (
+                        !str_starts_with($path, 'video://')
+                        && !preg_match('#^https?://#i', $path)
+                    )
+                ) {
+                    throw new \InvalidArgumentException('product_media_assignment_invalid');
+                }
+            } elseif (preg_match(
+                '/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/',
+                $assetId,
+            ) !== 1) {
+                throw new \InvalidArgumentException('product_media_asset_id_invalid');
+            }
+            $identity = $isExternalVideo
+                ? "video\0" . $path
+                : $combinationKey . "\0" . $assetId;
             if (isset($desired[$identity])) {
                 throw new \InvalidArgumentException('product_media_asset_duplicate');
             }
@@ -188,7 +204,7 @@ final class MediaRepository extends AbstractWebsiteShardRepository
             $mimeType = strtolower(trim((string)($row[Media::schema_fields_MIME_TYPE] ?? '')));
             $policy = $row[Media::schema_fields_ACCESS_POLICY_JSON] ?? null;
             $position = (int)($row[Media::schema_fields_POSITION] ?? $index);
-            if (!in_array($role, ['main', 'gallery', 'variant', 'file', 'download'], true)
+            if (!in_array($role, ['main', 'gallery', 'variant', 'file', 'download', 'video'], true)
                 || ($role === 'variant' && $combinationKey === '')
                 || ($role !== 'variant' && $combinationKey !== '')
                 || strlen($combinationKey) > 512
@@ -221,6 +237,9 @@ final class MediaRepository extends AbstractWebsiteShardRepository
                 Media::schema_fields_MIME_TYPE => $mimeType,
                 Media::schema_fields_ACCESS_POLICY_JSON => $policy,
                 Media::schema_fields_POSITION => $position,
+                Media::schema_fields_PATH => $isExternalVideo
+                    ? $path
+                    : ('asset://' . $assetId),
             ];
         }
 
@@ -229,11 +248,21 @@ final class MediaRepository extends AbstractWebsiteShardRepository
         $duplicates = [];
         foreach ($existing as $row) {
             $assetId = strtolower(trim((string)($row[Media::schema_fields_ASSET_ID] ?? '')));
-            if ($assetId === '') {
-                continue;
-            }
+            $role = strtolower(trim((string)($row[Media::schema_fields_ROLE] ?? '')));
+            $path = trim((string)($row[Media::schema_fields_PATH] ?? ''));
             $combinationKey = trim((string)($row[Media::schema_fields_COMBINATION_KEY] ?? ''));
-            $identity = $combinationKey . "\0" . $assetId;
+            if ($role === 'video' && $assetId === '') {
+                if ($path === '') {
+                    $duplicates[] = (int)($row[Media::schema_fields_ID] ?? 0);
+                    continue;
+                }
+                $identity = "video\0" . $path;
+            } else {
+                if ($assetId === '') {
+                    continue;
+                }
+                $identity = $combinationKey . "\0" . $assetId;
+            }
             if (isset($byIdentity[$identity])) {
                 $duplicates[] = (int)($row[Media::schema_fields_ID] ?? 0);
                 continue;
@@ -243,19 +272,23 @@ final class MediaRepository extends AbstractWebsiteShardRepository
 
         foreach ($desired as $identity => $fields) {
             $assetId = (string)$fields[Media::schema_fields_ASSET_ID];
+            $path = (string)$fields[Media::schema_fields_PATH];
             $existingRow = $byIdentity[$identity] ?? null;
             if ($existingRow === null) {
+                $blobSeed = $assetId !== ''
+                    ? $assetId
+                    : $path;
                 $this->create($websiteId, array_merge($fields, [
                     Media::schema_fields_PRODUCT_ID => $productId,
-                    Media::schema_fields_PATH => 'asset://' . $assetId,
-                    Media::schema_fields_BLOB_KEY => 'asset:' . hash(
+                    Media::schema_fields_PATH => $path,
+                    Media::schema_fields_BLOB_KEY => ($assetId !== '' ? 'asset:' : 'video:') . hash(
                         'sha256',
                         implode("\0", [
                             (string)$websiteId,
                             (string)$productId,
                             (string)$storeId,
                             (string)$fields[Media::schema_fields_COMBINATION_KEY],
-                            $assetId,
+                            $blobSeed,
                             bin2hex(random_bytes(16)),
                         ]),
                     ),

@@ -4,12 +4,19 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
-use Weline\Cart\Api\Data\OfferIdentity;
 use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Context;
+use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RequestLifecycleTrace;
 use Weline\Framework\Runtime\ScopeIdentity;
+use Weline\Product\Api\Data\StorefrontOfferPriceView;
+use Weline\Product\Api\Data\StorefrontPriceAdjustment;
+use Weline\Product\Api\Data\StorefrontPriceContext;
+use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
 use Weline\Product\Extends\Module\Weline_Cart\CartItemSnapshotProvider\ProductCatalogCartItemSnapshotResolver;
 use Weline\Product\Model\Shard\AttributeValue;
+use Weline\Product\Model\Shard\Media;
 use Weline\Product\Model\Shard\Offer;
 use Weline\Product\Model\Shard\Product;
 use Weline\Product\Model\Shard\ProductSupplier;
@@ -32,8 +39,12 @@ use Weline\Websites\Data\WebsiteData;
 final class StorefrontCatalogViewService
 {
     private const CACHE_POOL = 'product';
-    private const OFFERS_FRESH_TTL_SECONDS = 300;
-    private const OFFERS_STALE_TTL_SECONDS = 1800;
+    private const MAX_CATALOG_PRODUCTS = 2000;
+    private const REQUEST_FULL_ROWS_KEY = 'product.catalog.full_rows.request';
+    private const REQUEST_ATTRIBUTE_ROWS_PREFIX = 'product.catalog.attribute_rows.request';
+
+    private ?StorefrontOfferPriceAssemblerInterface $priceAssembler = null;
+    private bool $priceAssemblerResolved = false;
 
     public static function cachePool(): string
     {
@@ -56,55 +67,322 @@ final class StorefrontCatalogViewService
     }
 
     /** @return list<array<string, mixed>> */
-    public function publishedOffers(int $limit = 100): array
+    public function publishedOffers(int $limit = 1000, bool $includeListingDetails = true): array
     {
-        return $this->publishedOffersForProductIds([], $limit);
+        return $this->publishedOffersForProductIds([], $limit, $includeListingDetails);
+    }
+
+    /**
+     * Return a bounded channel/locale summary projection for card surfaces.
+     *
+     * Summary rows intentionally cap the catalog build at the requested limit;
+     * callers that need filtering over the complete catalog should keep using
+     * publishedOffers(), which owns the full listing projection cache.
+     *
+     * @return list<array<string, mixed>>
+     */
+    public function publishedOfferSummaries(int $limit = 48): array
+    {
+        $limit = max(1, min(self::MAX_CATALOG_PRODUCTS, $limit));
+        $scope = $this->currentScope();
+        $websiteId = max(0, (int)$scope->websiteId);
+        $logicalKey = $this->catalogCache->catalogSummaryOffersLogicalKey($websiteId, $limit);
+        $requestKey = serialize([
+            $websiteId,
+            $scope->canonicalKey(),
+            max(0, RequestContext::getWelineStoreId()),
+            strtoupper(trim(RequestContext::getWelineUserCurrency())),
+            trim((string)RequestContext::getWelineUserLang()),
+            $limit,
+        ]);
+
+        /** @var list<array<string, mixed>> $rows */
+        $rows = $this->hotCache->rememberForRequest(
+            'product.catalog.summary.request',
+            $requestKey,
+            fn(): array => RequestLifecycleTrace::measurePhase(
+                'product.catalog.resolve_summary',
+                fn(): array => $this->hotCache->rememberPolicy(
+                    StorefrontCatalogCacheCoordinator::catalogSummaryOffersPolicy(),
+                    $logicalKey,
+                    fn(): array => RequestLifecycleTrace::measurePhase(
+                        'product.catalog.build_summary',
+                        fn(): array => $this->buildPublishedOffers(
+                            $websiteId,
+                            $scope,
+                            [],
+                            true,
+                            false,
+                            $limit,
+                        ),
+                        ['website_id' => $websiteId, 'limit' => $limit],
+                    ),
+                ),
+                ['website_id' => $websiteId, 'limit' => $limit],
+            ),
+        );
+
+        return array_slice($rows, 0, $limit);
     }
 
     /**
      * @param list<int> $productIds Empty list returns all published offers.
      * @return list<array<string, mixed>>
      */
-    public function publishedOffersForProductIds(array $productIds, int $limit = 100): array
+    public function publishedOffersForProductIds(
+        array $productIds,
+        int $limit = 100,
+        bool $includeListingDetails = true,
+    ): array
     {
-        $limit = max(1, min(200, $limit));
+        $limit = max(1, min(self::MAX_CATALOG_PRODUCTS, $limit));
         $filterIds = \array_values(\array_unique(\array_filter(
             \array_map('intval', $productIds),
             static fn(int $id): bool => $id > 0,
         )));
-        $rows = $this->rememberPublishedOffers();
+
+        // Targeted hydration must not rebuild the full catalog projection.
+        // Search hit cards and related-product widgets pass explicit IDs.
         if ($filterIds !== []) {
-            $allowed = \array_fill_keys($filterIds, true);
-            $rows = \array_values(\array_filter(
-                $rows,
-                static fn(array $row): bool => isset($allowed[(int)($row['product_id'] ?? 0)]),
-            ));
+            $scope = $this->currentScope();
+            $websiteId = max(0, (int)$scope->websiteId);
+            $requestIds = $filterIds;
+            sort($requestIds);
+            $requestKey = serialize([
+                $websiteId,
+                $scope->canonicalKey(),
+                max(0, RequestContext::getWelineStoreId()),
+                strtoupper(trim(RequestContext::getWelineUserCurrency())),
+                trim((string)RequestContext::getWelineUserLang()),
+                $requestIds,
+                $includeListingDetails,
+            ]);
+            $logicalKey = $this->catalogCache->catalogTargetedOffersLogicalKey(
+                $websiteId,
+                $requestIds,
+                $includeListingDetails,
+            );
+            $rows = $this->hotCache->rememberForRequest(
+                'product.catalog.filtered_offers.request',
+                $requestKey,
+                fn(): array => RequestLifecycleTrace::measurePhase(
+                    'product.catalog.resolve_filtered',
+                    fn(): array => $this->hotCache->rememberPolicy(
+                        StorefrontCatalogCacheCoordinator::catalogTargetedOffersPolicy(),
+                        $logicalKey,
+                        fn(): array => RequestLifecycleTrace::measurePhase(
+                            'product.catalog.build_filtered',
+                            fn(): array => $this->buildPublishedOffers(
+                                $websiteId,
+                                $scope,
+                                $filterIds,
+                                true,
+                                $includeListingDetails,
+                            ),
+                            ['website_id' => $websiteId, 'product_ids' => count($filterIds)],
+                        ),
+                    ),
+                    ['website_id' => $websiteId, 'product_ids' => count($filterIds)],
+                ),
+            );
+
+            return \array_slice($rows, 0, $limit);
         }
+
+        $rows = $this->rememberPublishedOffers($includeListingDetails);
 
         return \array_slice($rows, 0, $limit);
     }
 
-    /** @return list<array<string, mixed>> */
-    private function rememberPublishedOffers(): array
-    {
+    /**
+     * Resolve customer-facing attribute facet counts from the Product shard.
+     *
+     * Product catalog attributes are stored on the Website shard, while the
+     * legacy EAV filter service reads the global EAV value tables. Keeping this
+     * read model beside the catalog projection avoids a second full listing
+     * projection just to render the filter rail and preserves Store → Website
+     * and locale fallback semantics.
+     *
+     * @param list<int> $productIds
+     * @param array<string, string> $codeNames
+     * @param list<array<string, mixed>> $offers Representative offer rows may
+     * provide combination values for variant axes.
+     * @return array<string, array<string, int>>
+     */
+    public function facetCountsForProductIds(
+        array $productIds,
+        array $codeNames,
+        array $offers = [],
+    ): array {
+        $productIds = array_values(array_unique(array_filter(
+            array_map('intval', $productIds),
+            static fn(int $id): bool => $id > 0,
+        )));
+        if ($productIds === [] || $codeNames === []) {
+            return [];
+        }
+
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
-        $logicalKey = $this->catalogCache->catalogOffersLogicalKey($websiteId);
-        $locale = \trim((string)RequestContext::getWelineUserLang());
+        $storeId = max(0, RequestContext::getWelineStoreId());
+        $codes = [];
+        foreach (array_keys($codeNames) as $code) {
+            $code = strtolower(trim((string)$code));
+            if ($code !== '' && !str_starts_with($code, 'source_')) {
+                $codes[$code] = true;
+            }
+        }
+        if ($codes === []) {
+            return [];
+        }
+        $productIdsKey = $productIds;
+        sort($productIdsKey);
+        $combinationKey = [];
+        foreach ($offers as $offer) {
+            if (!is_array($offer)) {
+                continue;
+            }
+            $productId = (int)($offer['product_id'] ?? 0);
+            if ($productId <= 0 || isset($combinationKey[$productId])) {
+                continue;
+            }
+            $combination = is_array($offer['combination'] ?? null) ? $offer['combination'] : [];
+            $normalizedCombination = [];
+            foreach ($combination as $code => $value) {
+                $code = strtolower(trim((string)$code));
+                if ($code === '' || !isset($codes[$code])) {
+                    continue;
+                }
+                $tokens = $this->facetValueTokens($value);
+                if ($tokens !== []) {
+                    $normalizedCombination[$code] = $tokens;
+                }
+            }
+            if ($normalizedCombination !== []) {
+                ksort($normalizedCombination);
+                $combinationKey[$productId] = $normalizedCombination;
+            }
+        }
+        ksort($combinationKey);
+        $logicalKey = 'product.catalog_facet_counts.v1.' . hash('sha256', serialize([
+            $websiteId,
+            $scope->canonicalKey(),
+            $storeId,
+            trim((string)RequestContext::getWelineUserLang()),
+            $productIdsKey,
+            array_keys($codes),
+            $combinationKey,
+        ]));
+
+        $build = function () use ($websiteId, $storeId, $productIds, $codes, $combinationKey): array {
+            $storeIds = array_values(array_unique([0, $storeId]));
+            $rows = $this->requestAttributeRows($websiteId, $productIds, $storeIds);
+            $rowsByProductCode = [];
+            foreach ($rows as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $productId = (int)($row['entity_id'] ?? 0);
+                $code = strtolower(trim((string)($row['attribute_code'] ?? '')));
+                if ($productId <= 0 || $code === '' || !isset($codes[$code])) {
+                    continue;
+                }
+                $rowsByProductCode[$productId][$code][] = $row;
+            }
+
+            $locale = trim((string)RequestContext::getWelineUserLang());
+            $localeFallbacks = $this->localeFallbacks($locale);
+            $overlay = new CatalogOverlayResolver();
+            $counts = [];
+            foreach ($productIds as $productId) {
+                foreach (array_keys($codes) as $code) {
+                    $tokens = $combinationKey[$productId][$code] ?? null;
+                    if (!is_array($tokens) || $tokens === []) {
+                        $resolved = $overlay->resolveAttribute(
+                            $rowsByProductCode[$productId][$code] ?? [],
+                            $storeId,
+                            $locale,
+                            $localeFallbacks,
+                        );
+                        if (!$resolved->isExplicit()) {
+                            continue;
+                        }
+                        $tokens = $this->facetValueTokens($resolved->value);
+                    }
+                    foreach ($tokens as $value) {
+                        $counts[$code][$value] = ($counts[$code][$value] ?? 0) + 1;
+                    }
+                }
+            }
+
+            return $counts;
+        };
+
+        $result = $this->hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::catalogFacetCountsPolicy(),
+            $logicalKey,
+            fn(): array => $this->hotCache->rememberForRequest(
+                'product.catalog.facet_counts.request',
+                $logicalKey,
+                fn(): array => RequestLifecycleTrace::measurePhase(
+                    'product.catalog.facet_counts',
+                    $build,
+                    ['website_id' => $websiteId, 'products' => count($productIds), 'codes' => count($codes)],
+                ),
+            ),
+        );
+
+        return is_array($result) ? $result : [];
+    }
+
+    /** @return list<array<string, mixed>> */
+    private function rememberPublishedOffers(bool $includeListingDetails = true): array
+    {
+        // A listing renders the full catalog before its recommendation slot.
+        // Reuse that immutable request result for summary cards instead of
+        // rebuilding the same 220-product snapshot under the summary policy.
+        if (!$includeListingDetails && Context::hasCurrent() && RequestContext::has(self::REQUEST_FULL_ROWS_KEY)) {
+            $requestRows = RequestContext::get(self::REQUEST_FULL_ROWS_KEY);
+            if (is_array($requestRows)) {
+                RequestLifecycleTrace::recordPhase(
+                    'product.catalog.summary_reuse',
+                    0.0,
+                    ['rows' => count($requestRows)],
+                );
+                /** @var list<array<string, mixed>> $requestRows */
+                return $requestRows;
+            }
+        }
+
+        $scope = $this->currentScope();
+        $websiteId = max(0, (int)$scope->websiteId);
+        $logicalKey = $this->catalogCache->catalogOffersLogicalKey(
+            $websiteId,
+            $includeListingDetails ? 'full' : 'summary',
+        );
 
         /** @var list<array<string, mixed>> $rows */
-        $rows = $this->hotCache->remember(
-            self::CACHE_POOL,
-            $logicalKey,
-            self::OFFERS_FRESH_TTL_SECONDS,
-            fn(): array => $this->mediaUrls->resolveOffers(
-                $this->buildPublishedOffers($websiteId, $scope, []),
-                $scope,
-                $locale,
+        $rows = RequestLifecycleTrace::measurePhase('product.catalog.resolve',
+            fn(): array => $this->hotCache->rememberPolicy(
+                StorefrontCatalogCacheCoordinator::catalogOffersPolicy(),
+                $logicalKey,
+                fn(): array => RequestLifecycleTrace::measurePhase('product.catalog.build',
+                    fn(): array => $this->buildPublishedOffers(
+                        $websiteId,
+                        $scope,
+                        [],
+                        true,
+                        $includeListingDetails,
+                    ),
+                    ['website_id' => $websiteId],
+                ),
             ),
-            ['website' => true, 'lang' => true, 'currency' => true],
-            self::OFFERS_STALE_TTL_SECONDS,
+            ['website_id' => $websiteId],
         );
+
+        if ($includeListingDetails && Context::hasCurrent()) {
+            RequestContext::set(self::REQUEST_FULL_ROWS_KEY, $rows);
+        }
 
         return $rows;
     }
@@ -123,29 +401,80 @@ final class StorefrontCatalogViewService
             return [];
         }
 
+
         $scope = $this->currentScope();
         $websiteId = max(0, (int)$scope->websiteId);
-        $rows = \array_values(\array_filter(
-            $this->buildPublishedOffers($websiteId, $scope, [$productId]),
-            static fn(array $row): bool => (int)($row['product_id'] ?? 0) === $productId,
-        ));
+        $requestKey = serialize([
+            $productId,
+            $scope->canonicalKey(),
+            max(0, RequestContext::getWelineStoreId()),
+            strtoupper(trim(RequestContext::getWelineUserCurrency())),
+            trim((string)RequestContext::getWelineUserLang()),
+        ]);
+        $rows = RequestLifecycleTrace::measurePhase(
+            'product.catalog.live_request',
+            fn(): array => $this->hotCache->rememberForRequest(
+                'product.live_offers',
+                $requestKey,
+                fn(): array => \array_values(\array_filter(
+                    $this->buildPublishedOffers($websiteId, $scope, [$productId]),
+                    static fn(array $row): bool => (int)($row['product_id'] ?? 0) === $productId,
+                )),
+            ),
+            ['product_id' => $productId],
+        );
 
-        return \array_map(fn(array $row): array => $this->hydrateDetailOffer($row), $rows);
+        $hydrated = [];
+        // buildPublishedOffers() already performs the batched snapshot,
+        // detail projection, media URL resolution and unified price assembly.
+        // Re-reading EAV/media and projecting every variant again here only
+        // duplicated the PDP work; this pass now adds the one PDP-only fact.
+        $supplierFacts = null;
+        foreach ($rows as $row) {
+            $projected = $row;
+            if ($supplierFacts === null) {
+                $projected = $this->attachPrimarySupplier($projected, $websiteId, $productId);
+                $supplierFacts = [
+                    'supplier_id' => max(0, (int)($projected['supplier_id'] ?? 0)),
+                    'supplier_name' => trim((string)($projected['supplier_name'] ?? '')),
+                    'supplier_code' => trim((string)($projected['supplier_code'] ?? '')),
+                ];
+            } else {
+                $projected = array_replace($projected, $supplierFacts);
+            }
+            $hydrated[] = $projected;
+        }
+
+        return $hydrated;
     }
 
     /**
      * @param list<int> $productIdsFilter Empty list includes all published products.
      * @return list<array<string, mixed>>
      */
-    private function buildPublishedOffers(int $websiteId, ScopeIdentity $scope, array $productIdsFilter): array
+    private function buildPublishedOffers(
+        int $websiteId,
+        ScopeIdentity $scope,
+        array $productIdsFilter,
+        bool $representativeOnly = false,
+        bool $includeListingDetails = true,
+        ?int $maxRows = null,
+    ): array
     {
+        $maxRows = $maxRows === null
+            ? null
+            : max(1, min(self::MAX_CATALOG_PRODUCTS, $maxRows));
         $filterIds = \array_values(\array_unique(\array_filter(
             \array_map('intval', $productIdsFilter),
             static fn(int $id): bool => $id > 0,
         )));
         $allowedProductIds = $filterIds !== [] ? \array_fill_keys($filterIds, true) : [];
 
-        $products = $this->products->listAll($websiteId);
+        $phaseStartedAt = hrtime(true);
+        $products = $filterIds === []
+            ? $this->products->listAll($websiteId)
+            : $this->products->listByIds($websiteId, $filterIds);
+        RequestLifecycleTrace::recordPhase('product.catalog.products', (hrtime(true) - $phaseStartedAt) / 1e6, ['products' => count($products)]);
         $publishedProductIds = [];
 
         foreach ($products as $product) {
@@ -167,27 +496,107 @@ final class StorefrontCatalogViewService
             return [];
         }
 
-        $rows = [];
-        foreach ($this->offers->listByProductIds($websiteId, \array_keys($publishedProductIds)) as $offer) {
-            if (\count($rows) >= 200) {
+        $candidateOffers = [];
+        $representedProductIds = [];
+        $phaseStartedAt = hrtime(true);
+        $loadedOffers = $representativeOnly
+            ? $this->offers->listPublishedRepresentativeByProductIds(
+                $websiteId,
+                \array_keys($publishedProductIds),
+            )
+            : $this->offers->listPublishedByProductIds(
+                $websiteId,
+                \array_keys($publishedProductIds),
+            );
+        foreach ($loadedOffers as $offer) {
+            if ($maxRows !== null && count($candidateOffers) >= $maxRows) {
                 break;
             }
-            if (\strtolower(\trim((string)($offer[Offer::schema_fields_STATUS] ?? ''))) !== 'published') {
-                continue;
+            if ($representativeOnly && \count($candidateOffers) >= self::MAX_CATALOG_PRODUCTS) {
+                break;
             }
             $offerUuid = \trim((string)($offer[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? ''));
             $productId = (int)($offer[Offer::schema_fields_PRODUCT_ID] ?? 0);
             if ($offerUuid === '' || $productId <= 0) {
                 continue;
             }
+            if ($representativeOnly && isset($representedProductIds[$productId])) {
+                continue;
+            }
+            $candidateOffers[] = $offer;
+            if ($representativeOnly) {
+                $representedProductIds[$productId] = true;
+            }
+        }
 
-            $snapshot = $this->snapshots->resolve(
-                new OfferIdentity('product', $offerUuid, $productId),
-                $scope,
+        RequestLifecycleTrace::recordPhase('product.catalog.offers', (hrtime(true) - $phaseStartedAt) / 1e6, ['loaded' => count($loadedOffers), 'selected' => count($candidateOffers)]);
+        unset($loadedOffers);
+
+        // The snapshot resolver needs product attributes and the first media
+        // reference, while the detail/listing projector needs the same rows
+        // again. Load them once and pass the immutable request-local result
+        // through both phases. Inventory remains inside the snapshot phase so
+        // stock/sellability is still read live on every PDP request.
+        $storeId = max(0, RequestContext::getWelineStoreId());
+        $storeIds = \array_values(\array_unique([0, $storeId]));
+        $attributeRows = [];
+        if ($includeListingDetails) {
+            $attributeStartedAt = hrtime(true);
+            $attributeRows = $this->attributeValues->listExplicitRows(
+                $websiteId,
+                'product',
+                \array_keys($publishedProductIds),
+                $storeIds,
             );
+            RequestLifecycleTrace::recordPhase(
+                'product.catalog.attributes',
+                (hrtime(true) - $attributeStartedAt) / 1e6,
+                [
+                    'products' => count($publishedProductIds),
+                    'rows' => count($attributeRows),
+                    'listing_details' => $includeListingDetails,
+                ],
+            );
+            $this->rememberAttributeRowsForRequest(
+                $websiteId,
+                array_keys($publishedProductIds),
+                $storeIds,
+                $attributeRows,
+            );
+        }
+        $mediaRows = null;
+        if ($includeListingDetails) {
+            $mediaStartedAt = hrtime(true);
+            $mediaRows = $this->media->listByProductIds(
+                $websiteId,
+                \array_keys($publishedProductIds),
+            );
+            RequestLifecycleTrace::recordPhase(
+                'product.catalog.media_rows',
+                (hrtime(true) - $mediaStartedAt) / 1e6,
+                ['products' => count($publishedProductIds), 'rows' => count($mediaRows)],
+            );
+        }
+
+        $rows = [];
+        $phaseStartedAt = hrtime(true);
+        $snapshots = $this->snapshots->resolveCatalogOffers(
+            $candidateOffers,
+            $scope,
+            $products,
+            $attributeRows,
+            $mediaRows,
+        );
+        RequestLifecycleTrace::recordPhase('product.catalog.snapshots', (hrtime(true) - $phaseStartedAt) / 1e6, ['offers' => count($candidateOffers)]);
+        foreach ($candidateOffers as $index => $offer) {
+            $snapshot = $snapshots[$index] ?? null;
+            if ($snapshot === null) {
+                continue;
+            }
             if (!$snapshot->found) {
                 continue;
             }
+            $productId = (int)($offer[Offer::schema_fields_PRODUCT_ID] ?? 0);
             $rows[] = [
                 'product_id' => $snapshot->productId ?? $productId,
                 'offer_id' => $snapshot->offerId ?? (int)($offer[Offer::schema_fields_ID] ?? 0),
@@ -211,37 +620,287 @@ final class StorefrontCatalogViewService
             return [];
         }
 
-        $storeId = max(0, RequestContext::getWelineStoreId());
-        $storeIds = \array_values(\array_unique([0, $storeId]));
         $attributeRowsByProduct = [];
-        foreach ($this->attributeValues->listExplicitRows(
-            $websiteId,
-            'product',
-            \array_values(\array_unique(\array_map(
-                static fn(array $row): int => (int)($row['product_id'] ?? 0),
-                $rows,
-            ))),
-            $storeIds,
-        ) as $attributeRow) {
-            $attributeRowsByProduct[(int)($attributeRow[AttributeValue::schema_fields_ENTITY_ID] ?? 0)][] = $attributeRow;
+        if ($includeListingDetails) {
+            foreach ($attributeRows ?? [] as $attributeRow) {
+                $attributeRowsByProduct[(int)($attributeRow[AttributeValue::schema_fields_ENTITY_ID] ?? 0)][] = $attributeRow;
+            }
         }
 
         $locale = \trim((string)RequestContext::getWelineUserLang());
         $localeFallbacks = $this->localeFallbacks($locale);
-        foreach ($rows as $index => $row) {
-            $productId = (int)($row['product_id'] ?? 0);
-            $projected = $this->detailProjector->project(
-                $row,
-                $attributeRowsByProduct[$productId] ?? [],
-                [],
+        $projectionProductIds = array_values(array_unique(array_map(
+            static fn(array $row): int => (int)($row['product_id'] ?? 0),
+            $rows,
+        )));
+        $mediaRowsByProduct = [];
+        if (!$representativeOnly && $includeListingDetails) {
+            foreach ($mediaRows ?? [] as $mediaRow) {
+                if (!is_array($mediaRow)) {
+                    continue;
+                }
+                $mediaProductId = (int)($mediaRow[Media::schema_fields_PRODUCT_ID] ?? 0);
+                if ($mediaProductId > 0) {
+                    $mediaRowsByProduct[$mediaProductId][] = $mediaRow;
+                }
+            }
+        }
+        $phaseStartedAt = hrtime(true);
+        // Metadata prefetch amortizes private option/free-set reads across a
+        // multi-product listing. A PDP projects one product (even when it has
+        // many offers), so the prefetch scan costs more than the lazy,
+        // request-memoized catalogForProduct() path and adds no batching gain.
+        if ($includeListingDetails && count($projectionProductIds) > 1) {
+            $this->detailProjector->prefetchForProducts($projectionProductIds);
+        }
+        $fieldProjectionMs = 0.0;
+        $mediaProjectionMs = 0.0;
+        $bulkProjectedRows = null;
+        if (!$representativeOnly
+            && $includeListingDetails
+            && count($projectionProductIds) === 1
+            && count($rows) > 1
+        ) {
+            $bulkStartedAt = hrtime(true);
+            $bulkProjectedRows = $this->detailProjector->projectMany(
+                $rows,
+                $attributeRowsByProduct[$projectionProductIds[0]] ?? [],
+                $mediaRowsByProduct[$projectionProductIds[0]] ?? [],
                 $storeId,
                 $locale,
                 $localeFallbacks,
             );
-            $rows[$index] = $this->mediaUrls->resolveOffer($projected, $scope, $locale);
+            $fieldProjectionMs = (hrtime(true) - $bulkStartedAt) / 1e6;
+            RequestLifecycleTrace::recordPhase('product.catalog.projection.bulk', $fieldProjectionMs, [
+                'products' => 1,
+                'offers' => count($rows),
+            ]);
+        }
+        foreach ($rows as $index => $row) {
+            $productId = (int)($row['product_id'] ?? 0);
+            $itemStartedAt = hrtime(true);
+            if (is_array($bulkProjectedRows)) {
+                $projected = $bulkProjectedRows[$index] ?? $row;
+            } elseif ($representativeOnly) {
+                $projected = $includeListingDetails
+                    ? $this->detailProjector->projectListing(
+                        $row, $attributeRowsByProduct[$productId] ?? [], $storeId, $locale, $localeFallbacks,
+                    )
+                    : $this->detailProjector->projectListingSummary(
+                        $row, [], $storeId, $locale, $localeFallbacks,
+                    );
+            } else {
+                $projected = $this->detailProjector->project(
+                    $row,
+                    $attributeRowsByProduct[$productId] ?? [],
+                    $mediaRowsByProduct[$productId] ?? [],
+                    $storeId,
+                    $locale,
+                    $localeFallbacks,
+                );
+            }
+            $fieldProjectionMs += (hrtime(true) - $itemStartedAt) / 1e6;
+            $itemStartedAt = hrtime(true);
+            $rows[$index] = $representativeOnly
+                ? $this->mediaUrls->resolveListingOffer($projected, $scope, $locale)
+                : $this->mediaUrls->resolveOffer($projected, $scope, $locale);
+            $mediaProjectionMs += (hrtime(true) - $itemStartedAt) / 1e6;
+        }
+        RequestLifecycleTrace::recordPhase('product.catalog.projection', (hrtime(true) - $phaseStartedAt) / 1e6, [
+            'products' => count($rows), 'listing' => $representativeOnly,
+            'fields_ms' => round($fieldProjectionMs, 2), 'media_ms' => round($mediaProjectionMs, 2),
+        ]);
+
+        $dealStartedAt = hrtime(true);
+        foreach ($rows as $index => $row) {
+            $rows[$index] = $this->applyUnifiedStorefrontPricing(is_array($row) ? $row : []);
+        }
+        RequestLifecycleTrace::recordPhase(
+            'product.catalog.deal_pricing',
+            (hrtime(true) - $dealStartedAt) / 1e6,
+            ['products' => count($rows)],
+        );
+
+        return $rows;
+    }
+
+    /**
+     * Apply Product-unified Assembler once for card/listing display.
+     * Keeps catalog_price_minor as raw input so PDP/shelf can re-assemble without stacking.
+     *
+     * @param array<string, mixed> $row
+     * @return array<string, mixed>
+     */
+    private function applyUnifiedStorefrontPricing(array $row): array
+    {
+        $productId = max(0, (int)($row['product_id'] ?? 0));
+        $catalogMinor = max(0, (int)($row['catalog_price_minor'] ?? $row['unit_price_minor'] ?? 0));
+        $currency = \strtoupper(\trim((string)($row['currency'] ?? 'CNY'))) ?: 'CNY';
+        $row['catalog_price_minor'] = $catalogMinor;
+        $row['unit_price_minor'] = $catalogMinor;
+        $row['compare_at_minor'] = $catalogMinor;
+        $row['has_deal'] = false;
+        $row['campaign_label'] = '';
+        $row['campaign_url'] = '';
+        $row['deal_discount_type'] = '';
+        $row['deal_discount_value'] = 0.0;
+        if ($productId <= 0 || $catalogMinor <= 0) {
+            return $row;
+        }
+
+        try {
+            $assembler = $this->resolvePriceAssembler();
+            if (!$assembler instanceof StorefrontOfferPriceAssemblerInterface) {
+                return $row;
+            }
+            $view = $this->hotCache->rememberForRequest(
+                'product.storefront_price_view',
+                serialize([$productId, $catalogMinor, $currency]),
+                fn(): StorefrontOfferPriceView => $assembler->assemble(
+                    StorefrontPriceContext::fromCatalogMinor($productId, $catalogMinor, $currency),
+                ),
+            );
+            if (!$view instanceof StorefrontOfferPriceView) {
+                return $row;
+            }
+            $row['unit_price_minor'] = max(0, $view->finalPriceMinor);
+            $row['compare_at_minor'] = max(0, $view->compareAtMinor);
+            $row['has_deal'] = $view->hasDeal;
+            $row['campaign_label'] = $view->campaignLabel();
+            $row['campaign_url'] = $view->campaignUrl();
+            $primary = $view->appliedAdjustments[0] ?? null;
+            if ($primary instanceof StorefrontPriceAdjustment) {
+                $row['deal_discount_type'] = $primary->type;
+                $row['deal_discount_value'] = $primary->value;
+            }
+        } catch (\Throwable) {
+            // Keep raw catalog minor when Assembler providers are unavailable.
+        }
+
+        return $row;
+    }
+
+    private function resolvePriceAssembler(): ?StorefrontOfferPriceAssemblerInterface
+    {
+        if ($this->priceAssemblerResolved) {
+            return $this->priceAssembler;
+        }
+        $this->priceAssemblerResolved = true;
+
+        if (\interface_exists(StorefrontOfferPriceAssemblerInterface::class)) {
+            try {
+                $resolved = ObjectManager::getInstance(StorefrontOfferPriceAssemblerInterface::class);
+                if ($resolved instanceof StorefrontOfferPriceAssemblerInterface) {
+                    return $this->priceAssembler = $resolved;
+                }
+            } catch (\Throwable) {
+                // Fall through to the concrete class while setup metadata catches up.
+            }
+        }
+        if (\class_exists(\Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler::class)) {
+            try {
+                $resolved = ObjectManager::getInstance(
+                    \Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler::class,
+                );
+                if ($resolved instanceof StorefrontOfferPriceAssemblerInterface) {
+                    return $this->priceAssembler = $resolved;
+                }
+            } catch (\Throwable) {
+                // Keep the raw catalog price when the optional provider is unavailable.
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @param list<int> $storeIds
+     * @return list<array<string, mixed>>
+     */
+    private function requestAttributeRows(int $websiteId, array $productIds, array $storeIds): array
+    {
+        $key = $this->attributeRowsRequestKey($websiteId, $productIds, $storeIds);
+        if (Context::hasCurrent() && RequestContext::has($key)) {
+            $rows = RequestContext::get($key);
+            return is_array($rows) ? $rows : [];
+        }
+
+        $rows = $this->attributeValues->listExplicitRows($websiteId, 'product', $productIds, $storeIds);
+        if (Context::hasCurrent()) {
+            RequestContext::set($key, $rows);
         }
 
         return $rows;
+    }
+
+    /**
+     * @param list<int> $productIds
+     * @param list<int> $storeIds
+     * @param list<array<string, mixed>> $rows
+     */
+    private function rememberAttributeRowsForRequest(
+        int $websiteId,
+        array $productIds,
+        array $storeIds,
+        array $rows,
+    ): void {
+        if (!Context::hasCurrent()) {
+            return;
+        }
+        RequestContext::set(
+            $this->attributeRowsRequestKey($websiteId, $productIds, $storeIds),
+            $rows,
+        );
+    }
+
+    /** @param list<int> $productIds @param list<int> $storeIds */
+    private function attributeRowsRequestKey(int $websiteId, array $productIds, array $storeIds): string
+    {
+        $productIds = array_values(array_unique(array_map('intval', $productIds)));
+        $storeIds = array_values(array_unique(array_map('intval', $storeIds)));
+        sort($productIds);
+        sort($storeIds);
+
+        return self::REQUEST_ATTRIBUTE_ROWS_PREFIX . '.' . hash('sha256', serialize([
+            max(0, $websiteId),
+            $productIds,
+            $storeIds,
+        ]));
+    }
+
+    /** @return list<string> */
+    private function facetValueTokens(mixed $value): array
+    {
+        if (is_array($value)) {
+            $tokens = [];
+            foreach ($value as $item) {
+                foreach ($this->facetValueTokens($item) as $token) {
+                    $tokens[$token] = true;
+                }
+            }
+            return array_keys($tokens);
+        }
+        if (is_bool($value)) {
+            return [$value ? '1' : '0'];
+        }
+        if (!is_scalar($value)) {
+            return [];
+        }
+        $raw = trim((string)$value);
+        if ($raw === '') {
+            return [];
+        }
+        $parts = preg_split('/\s*(?:,|;|\||、)\s*/u', $raw) ?: [];
+        $tokens = [];
+        foreach ($parts as $part) {
+            $part = trim((string)$part);
+            if ($part !== '') {
+                $tokens[$part] = true;
+            }
+        }
+
+        return array_keys($tokens);
     }
 
     /** @return array<string, mixed>|null */
@@ -253,19 +912,7 @@ final class StorefrontCatalogViewService
     /** @return list<array<string, mixed>> */
     public function publishedOffersForProduct(int $productId): array
     {
-        if ($productId <= 0) {
-            return [];
-        }
-
-        $result = [];
-        foreach ($this->publishedOffersForProductIds([$productId], 200) as $offer) {
-            if ((int)($offer['product_id'] ?? 0) !== $productId) {
-                continue;
-            }
-            $result[] = $this->hydrateDetailOffer($offer);
-        }
-
-        return $result;
+        return $this->livePublishedOffersForProduct($productId);
     }
 
     /** @return array<string, mixed>|null */
@@ -282,14 +929,56 @@ final class StorefrontCatalogViewService
             return [];
         }
 
-        foreach ($this->publishedOffers(200) as $offer) {
-            if (\strtolower(\trim((string)($offer['slug'] ?? ''))) !== $slug) {
-                continue;
-            }
-            return $this->publishedOffersForProduct((int)($offer['product_id'] ?? 0));
-        }
+        $scope = $this->currentScope();
+        $websiteId = max(0, (int)$scope->websiteId);
+        $storeId = max(0, RequestContext::getWelineStoreId());
+        $memoKey = serialize([
+            $slug,
+            $scope->canonicalKey(),
+            $storeId,
+            strtoupper(trim(RequestContext::getWelineUserCurrency())),
+            trim((string)RequestContext::getWelineUserLang()),
+        ]);
 
-        return [];
+        return $this->hotCache->rememberForRequest(
+            'product.published_offers_by_slug',
+            $memoKey,
+            function () use ($slug, $scope, $websiteId, $storeId): array {
+                $candidateProductIds = [];
+                foreach (\array_values(\array_unique([$storeId, 0])) as $candidateStoreId) {
+                    foreach (['source_slug', 'slug'] as $attributeCode) {
+                        foreach ($this->attributeValues->findEntityIdsByAttributeValue(
+                            $websiteId,
+                            'product',
+                            $attributeCode,
+                            $slug,
+                            $candidateStoreId,
+                        ) as $productId) {
+                            $candidateProductIds[$productId] = $productId;
+                        }
+                    }
+                }
+                foreach ($candidateProductIds as $productId) {
+                    $offers = $this->livePublishedOffersForProduct($productId);
+                    if ($offers === []) {
+                        continue;
+                    }
+                    if (\strtolower(\trim((string)($offers[0]['slug'] ?? ''))) === $slug) {
+                        return $offers;
+                    }
+                }
+
+                // Compatibility fallback for legacy projections that predate product slug EAV rows.
+                foreach ($this->publishedOffers(200) as $offer) {
+                    if (\strtolower(\trim((string)($offer['slug'] ?? ''))) !== $slug) {
+                        continue;
+                    }
+                    return $this->publishedOffersForProduct((int)($offer['product_id'] ?? 0));
+                }
+
+                return [];
+            }
+        );
     }
 
     /**

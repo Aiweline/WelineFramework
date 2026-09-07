@@ -40,6 +40,23 @@ final class StorefrontProductMediaUrlResolver
      */
     public function resolveOffer(array $offer, ScopeIdentity $scope, string $locale): array
     {
+        return $this->resolveMedia($offer, $scope, $locale, true);
+    }
+
+    /**
+     * Resolve card media without loading every asset embedded in the PDP body.
+     * Raw description remains available as data; rendered description_html is detail-only.
+     *
+     * @param array<string, mixed> $offer
+     * @return array<string, mixed>
+     */
+    public function resolveListingOffer(array $offer, ScopeIdentity $scope, string $locale): array
+    {
+        return $this->resolveMedia($offer, $scope, $locale, false);
+    }
+
+    private function resolveMedia(array $offer, ScopeIdentity $scope, string $locale, bool $includeDescription): array
+    {
         $resolvedByReference = [];
         $resolve = function (string $reference) use (&$resolvedByReference, $scope, $locale): string {
             $reference = trim($reference);
@@ -135,10 +152,55 @@ final class StorefrontProductMediaUrlResolver
         $offer['image'] = $primary;
         $offer['images'] = $resolvedImages;
 
-        $descriptionHtml = self::renderDescriptionHtml(
-            (string)($offer['description'] ?? ''),
-            $resolve,
-        );
+        $videos = [];
+        foreach (is_array($offer['videos'] ?? null) ? $offer['videos'] : [] as $video) {
+            if (!is_array($video)) {
+                continue;
+            }
+            $provider = strtolower(trim((string)($video['provider'] ?? '')));
+            $embedUrl = trim((string)($video['embed_url'] ?? $video['src'] ?? ''));
+            $path = trim((string)($video['path'] ?? ''));
+            $assetId = strtolower(trim((string)($video['asset_id'] ?? '')));
+            if ($provider === 'file' || str_starts_with($embedUrl, self::ASSET_PREFIX) || str_starts_with($path, self::ASSET_PREFIX)) {
+                $resolvedSrc = $resolve($embedUrl !== '' ? $embedUrl : $path);
+                if ($resolvedSrc === '' && $assetId !== '') {
+                    $resolvedSrc = $resolve(self::ASSET_PREFIX . $assetId);
+                }
+                if ($resolvedSrc === '') {
+                    continue;
+                }
+                $embedUrl = $resolvedSrc;
+            }
+            if ($embedUrl === '') {
+                continue;
+            }
+            $poster = trim((string)($video['poster'] ?? $video['poster_url'] ?? ''));
+            if ($poster !== '' && str_starts_with($poster, self::ASSET_PREFIX)) {
+                $poster = $resolve($poster);
+            }
+            $videos[] = [
+                'type' => 'video',
+                'provider' => $provider !== '' ? $provider : 'file',
+                'provider_id' => trim((string)($video['provider_id'] ?? '')),
+                'path' => $path,
+                'asset_id' => $assetId,
+                'src' => $embedUrl,
+                'embed_url' => $embedUrl,
+                'watch_url' => trim((string)($video['watch_url'] ?? '')),
+                'poster' => $poster,
+                'mime_type' => trim((string)($video['mime_type'] ?? '')),
+                'position' => (int)($video['position'] ?? 0),
+            ];
+        }
+        if ($videos === []) {
+            unset($offer['videos']);
+        } else {
+            $offer['videos'] = $videos;
+        }
+
+        $descriptionHtml = $includeDescription
+            ? self::renderDescriptionHtml((string)($offer['description'] ?? ''), $resolve)
+            : '';
         if ($descriptionHtml === '') {
             unset($offer['description_html']);
         } else {
@@ -204,6 +266,57 @@ final class StorefrontProductMediaUrlResolver
         $this->resolvedReferenceCache[$cacheKey] = $resolvedUrl;
 
         return $resolvedUrl;
+    }
+
+    /** @param array<array-key,string> $references @return array<array-key,string> */
+    public function resolveReferences(array $references, ScopeIdentity $scope, string $locale): array
+    {
+        if (!$this->assets instanceof \Weline\FileManager\Api\FileAssetBatchUrlResolverInterface) {
+            $result = [];
+            foreach ($references as $key => $reference) {
+                $result[$key] = $this->resolveReference($reference, $scope, $locale);
+            }
+            return $result;
+        }
+
+        $result = [];
+        $requests = [];
+        $contexts = null;
+        foreach ($references as $key => $reference) {
+            $reference = trim($reference);
+            $result[$key] = $reference;
+            if ($reference === '' || !str_starts_with(strtolower($reference), self::ASSET_PREFIX)) {
+                continue;
+            }
+            $result[$key] = '';
+            $assetId = trim(substr($reference, strlen(self::ASSET_PREFIX)));
+            if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i', $assetId) !== 1) {
+                continue;
+            }
+            $contexts ??= array_map(
+                static fn(string $candidateLocale): FileAccessContext => new FileAccessContext(
+                    scope: $scope,
+                    localeCode: $candidateLocale,
+                    purpose: FileAccessContext::PURPOSE_PUBLIC_PUBLISH,
+                ),
+                $this->localeCandidates($locale),
+            );
+            $requests[$key] = ['asset_id' => $assetId, 'contexts' => $contexts];
+        }
+        if ($requests === []) {
+            return $result;
+        }
+        try {
+            $resolved = $this->assets->resolveUrls($requests);
+            foreach ($requests as $key => $_request) {
+                $result[$key] = trim($resolved[$key]?->url ?? '');
+            }
+        } catch (Throwable) {
+            foreach ($requests as $key => $_request) {
+                $result[$key] = $this->resolveReference($references[$key], $scope, $locale);
+            }
+        }
+        return $result;
     }
 
     /**
@@ -305,6 +418,11 @@ final class StorefrontProductMediaUrlResolver
                 continue;
             }
 
+            if ($tag === 'table' && self::isPromoOrRecommendedProductBlock($child)) {
+                $parent->removeChild($child);
+                continue;
+            }
+
             self::clearDescriptionAttributes($child);
             self::sanitizeDescriptionChildren($child, $assetResolver);
         }
@@ -312,6 +430,8 @@ final class StorefrontProductMediaUrlResolver
 
     private static function clearDescriptionAttributes(\DOMElement $element): void
     {
+        $class = trim($element->getAttribute('class'));
+        $marker = trim($element->getAttribute('data-weline-detail-text'));
         while ($element->attributes->length > 0) {
             $attribute = $element->attributes->item(0);
             if ($attribute === null) {
@@ -319,6 +439,47 @@ final class StorefrontProductMediaUrlResolver
             }
             $element->removeAttributeNode($attribute);
         }
+        $safeClass = self::safeDetailTextClass($class);
+        if ($safeClass !== '') {
+            $element->setAttribute('class', $safeClass);
+        }
+        if ($marker !== '' && preg_match('/^[a-z0-9_-]{1,40}$/D', $marker) === 1) {
+            $element->setAttribute('data-weline-detail-text', $marker);
+        }
+    }
+
+    private static function safeDetailTextClass(string $class): string
+    {
+        $tokens = preg_split('/\s+/', trim($class)) ?: [];
+        $kept = [];
+        foreach ($tokens as $token) {
+            if (preg_match('/^weline-detail-text(?:__[a-z0-9-]+|--[a-z0-9-]+)?$/D', $token) === 1) {
+                $kept[] = $token;
+            }
+        }
+
+        return implode(' ', array_values(array_unique($kept)));
+    }
+
+    /**
+     * Drop 1688 shop promo banners and nested recommended-product price grids
+     * that ride along in detail HTML (not this product's own copy/images).
+     */
+    private static function isPromoOrRecommendedProductBlock(\DOMElement $element): bool
+    {
+        $text = trim((string)preg_replace('/\s+/u', ' ', $element->textContent ?? ''));
+        if ($text === '') {
+            return false;
+        }
+        if (preg_match('/火爆大促销|狂欢购|猜你喜欢|推荐商品|店铺推荐|看了又看|同类热销|WUYIKUANHUANGOU/u', $text) === 1) {
+            return true;
+        }
+        if (preg_match('/[￥¥]\s*\d+/u', $text) !== 1) {
+            return false;
+        }
+
+        return $element->getElementsByTagName('img')->length > 0
+            || preg_match('/批发/u', $text) === 1;
     }
 
     private static function safeDescriptionUrl(string $url): bool

@@ -1,0 +1,171 @@
+<?php
+/**
+ * Account sidebar content: product quotes list.
+ *
+ * Hook: account.sidebar.content
+ *
+ * @hook-priority 162
+ * @hook-sort-order 12
+ * @hook-solo false
+ */
+use Weline\Customer\Api\View\AccountSidebarProjectionProviderInterface;
+use Weline\Customer\Service\AccountSidebarContentGate;
+use Weline\Framework\Manager\ObjectManager;
+use Weline\Framework\Runtime\RequestContext;
+use Weline\Framework\Runtime\RuntimeProviderResolver;
+use Weline\Product\Model\ProductQuoteRequest;
+use Weline\Product\Service\ProductQuoteRequestService;
+
+$section = ProductQuoteRequest::ACCOUNT_SECTION;
+if (!AccountSidebarContentGate::accepts($section)) {
+    return;
+}
+
+$renderKey = 'weline_product.account_sidebar_content.quotes.rendered';
+if (RequestContext::get($renderKey, false)) {
+    return;
+}
+RequestContext::set($renderKey, true);
+
+$quotes = [];
+$mailAccounts = [];
+$projectionProvider = ObjectManager::getInstance(RuntimeProviderResolver::class)
+    ->resolve(AccountSidebarProjectionProviderInterface::class);
+if ($projectionProvider instanceof AccountSidebarProjectionProviderInterface) {
+    $projection = $projectionProvider->forSections($section);
+    if ($projection !== null && $projection->getCustomerId() !== null) {
+        /** @var ProductQuoteRequestService $service */
+        $service = ObjectManager::getInstance(ProductQuoteRequestService::class);
+        $customerId = (int)$projection->getCustomerId();
+        $quotes = $service->listForCustomer($customerId);
+        $service->markSeenForCustomer($customerId);
+        if (\Weline\Framework\Registry\Service\RegistryModulePresence::isActivePresent('Weline_Mail')) {
+            try {
+                $mailService = ObjectManager::getInstance(\Weline\Mail\Service\MailCustomerAccountService::class);
+                foreach ($mailService->getActiveAccountsForCustomer($customerId) as $account) {
+                    $mailAccounts[] = [
+                        'account_id' => (int)$account->getId(),
+                        'email' => (string)$account->getData(\Weline\Mail\Model\MailAccount::schema_fields_EMAIL),
+                    ];
+                }
+            } catch (\Throwable) {
+            }
+        }
+    }
+}
+
+$statusLabels = [
+    ProductQuoteRequest::STATUS_NEW => (string)__('待处理'),
+    ProductQuoteRequest::STATUS_PROCESSING => (string)__('处理中'),
+    ProductQuoteRequest::STATUS_REPLIED => (string)__('已回复'),
+    ProductQuoteRequest::STATUS_PROCESSED => (string)__('已关闭'),
+    ProductQuoteRequest::STATUS_CANCELLED => (string)__('已取消'),
+];
+
+$formatMoney = static function (int $minor, string $currency): string {
+    $major = number_format(max(0, $minor) / 100, 2, '.', '');
+    $currency = strtoupper(trim($currency)) ?: 'CNY';
+
+    return $currency . ' ' . $major;
+};
+?>
+<section class="account-hook-section account-index__section motor-account-section"
+         id="<?= htmlspecialchars($section, ENT_QUOTES, 'UTF-8') ?>-section"
+         data-account-section="<?= htmlspecialchars($section, ENT_QUOTES, 'UTF-8') ?>"
+         hidden
+         weline-code="product.account.sidebar.quotes">
+    <header class="motor-account-section__header">
+        <h2 class="motor-account-section__title"><lang>我的询价</lang></h2>
+        <p class="motor-account-section__desc"><lang>查看您提交的商品询价与处理状态</lang></p>
+    </header>
+
+    <?php if ($quotes === []): ?>
+        <p class="motor-account-empty"><lang>暂无询价记录</lang></p>
+    <?php else: ?>
+        <div class="product-account-quotes" data-testid="product-account-quotes">
+            <table class="product-account-quotes__table">
+                <thead>
+                <tr>
+                    <th><lang>SKU</lang></th>
+                    <th><lang>状态</lang></th>
+                    <th><lang>参考价</lang></th>
+                    <th><lang>时间</lang></th>
+                    <th><lang>沟通</lang></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($quotes as $quote): ?>
+                    <?php
+                    $status = (string)($quote['status'] ?? '');
+                    $statusLabel = $statusLabels[$status] ?? $status;
+                    $sku = (string)($quote['sku'] ?? '');
+                    $url = trim((string)($quote['product_url'] ?? ''));
+                    $unread = !empty($quote['unread']);
+                    $quoteId = (int)($quote['quote_request_id'] ?? 0);
+                    $composerPayload = [
+                        'to' => '',
+                        'subject' => (string)__('询价沟通 #%{1}', [(string)$quoteId]),
+                        'body' => '',
+                        'source' => 'product_quote',
+                        'source_id' => $quoteId,
+                        'read_only' => true,
+                        'mailboxes' => [],
+                    ];
+                    if (!empty($mailAccounts)) {
+                        $composerPayload['read_only'] = false;
+                        $composerPayload['mailboxes'] = $mailAccounts;
+                        $composerPayload['account_id'] = (int)($mailAccounts[0]['account_id'] ?? 0);
+                        $composerPayload['to'] = (string)($quote['admin_reply_email'] ?? '');
+                    }
+                    $composerJson = htmlspecialchars(
+                        json_encode($composerPayload, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?: '{}',
+                        ENT_QUOTES,
+                        'UTF-8'
+                    );
+                    ?>
+                    <tr class="<?= $unread ? 'is-unread' : '' ?>">
+                        <td>
+                            <?php if ($url !== ''): ?>
+                                <a href="<?= htmlspecialchars($url, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8') ?></a>
+                            <?php else: ?>
+                                <?= htmlspecialchars($sku, ENT_QUOTES, 'UTF-8') ?>
+                            <?php endif; ?>
+                            <?php if (!empty($quote['campaign_label'])): ?>
+                                <span class="product-account-quotes__campaign"><?= htmlspecialchars((string)$quote['campaign_label'], ENT_QUOTES, 'UTF-8') ?></span>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= htmlspecialchars($statusLabel, ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= htmlspecialchars($formatMoney((int)($quote['reference_price_minor'] ?? 0), (string)($quote['currency'] ?? 'CNY')), ENT_QUOTES, 'UTF-8') ?></td>
+                        <td><?= htmlspecialchars((string)($quote['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                        <td>
+                            <button type="button" class="w-button" data-size="sm" data-quote-thread-open data-composer="<?= $composerJson ?>">
+                                <lang>查看沟通</lang>
+                            </button>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        </div>
+        <w:mail-composer area="frontend"/>
+        <script>
+        (function () {
+          document.querySelectorAll('[data-quote-thread-open]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+              var raw = btn.getAttribute('data-composer') || '{}';
+              var payload = {};
+              try { payload = JSON.parse(raw); } catch (e) {}
+              if (window.WelineMailComposer) window.WelineMailComposer.open(payload);
+            });
+          });
+        })();
+        </script>
+    <?php endif; ?>
+</section>
+<style>
+.product-account-quotes__table { width: 100%; border-collapse: collapse; }
+.product-account-quotes__table th,
+.product-account-quotes__table td { padding: .55rem .4rem; border-bottom: 1px solid rgba(0,0,0,.08); text-align: left; font-size: .9rem; }
+.product-account-quotes__table tr.is-unread td { font-weight: 600; }
+.product-account-quotes__campaign { display: block; font-size: .75rem; color: #666; font-weight: 400; }
+</style>

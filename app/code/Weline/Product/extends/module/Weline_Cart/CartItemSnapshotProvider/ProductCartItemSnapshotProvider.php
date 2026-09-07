@@ -121,7 +121,35 @@ final class ProductCartItemSnapshotProvider implements CartItemSnapshotProviderI
             fulfillmentMetadata: is_array($row['fulfillment_metadata'] ?? null)
                 ? $row['fulfillment_metadata']
                 : [],
+            options: $this->optionsFromSelection($selection),
+            compareAtMinor: max(0, (int)($row['compare_at_minor'] ?? 0)),
+            campaignLabel: trim((string)($row['campaign_label'] ?? '')),
+            campaignUrl: trim((string)($row['campaign_url'] ?? '')),
         );
+    }
+
+    /**
+     * @param array<string, scalar|null> $selection
+     * @return list<array{code:string,label:string,value:string,value_label:string}>
+     */
+    private function optionsFromSelection(array $selection): array
+    {
+        $options = [];
+        foreach (CartSelectionHash::normalizeSelection($selection) as $code => $value) {
+            $code = trim((string)$code);
+            $value = trim((string)$value);
+            if ($code === '' || $value === '') {
+                continue;
+            }
+            $options[] = [
+                'code' => $code,
+                'label' => $code,
+                'value' => $value,
+                'value_label' => $value,
+            ];
+        }
+
+        return $options;
     }
 
     private function normalize(string $code): string

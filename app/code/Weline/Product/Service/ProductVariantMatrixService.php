@@ -91,6 +91,98 @@ final class ProductVariantMatrixService
         return $rows;
     }
 
+    /**
+     * Build offer rows only from provided combination_key overrides (sparse matrix).
+     * Used when redistributed color-family axes are mutually exclusive per SKU
+     * and must not expand into a full cartesian product.
+     *
+     * @param list<array{code:string,label?:string,options:list<mixed>}> $axes
+     * @param array<string, string> $skuOverrides combination_key => SKU
+     * @return list<array{combination:array<string,string>,combination_key:string,sku:string}>
+     */
+    public function materializeOverrides(array $axes, string $skuPrefix, array $skuOverrides): array
+    {
+        $axes = $this->normalizeAxes($axes);
+        if ($axes === []) {
+            throw new \InvalidArgumentException('variant_axes_required');
+        }
+        if ($skuOverrides === []) {
+            throw new \InvalidArgumentException('variant_sku_overrides_required');
+        }
+        $skuPrefix = $this->normalizeSku($skuPrefix, 'variant_sku_prefix_invalid');
+        $allowed = [];
+        foreach ($axes as $axis) {
+            foreach ($axis['options'] as $option) {
+                $allowed[$axis['code']][(string)$option['value']] = true;
+            }
+        }
+
+        $rows = [];
+        $seenKeys = [];
+        $seenSkus = [];
+        foreach ($skuOverrides as $key => $sku) {
+            if (!is_string($key) || !is_string($sku)) {
+                throw new \InvalidArgumentException('variant_sku_override_invalid');
+            }
+            $key = trim($key);
+            if ($key === '' || isset($seenKeys[$key])) {
+                throw new \InvalidArgumentException('variant_sku_override_duplicate');
+            }
+            $combination = $this->parseCombinationKey($key);
+            foreach ($combination as $axisCode => $value) {
+                if (!isset($allowed[$axisCode][$value])) {
+                    throw new \InvalidArgumentException('variant_sku_override_unknown_combination');
+                }
+            }
+            $canonicalKey = $this->combinationKey($combination);
+            if ($canonicalKey !== $key) {
+                throw new \InvalidArgumentException('variant_sku_override_unknown_combination');
+            }
+            $sku = $this->normalizeSku($sku, 'variant_sku_override_invalid');
+            $skuIdentity = strtolower($sku);
+            if (isset($seenSkus[$skuIdentity])) {
+                throw new \InvalidArgumentException('variant_sku_duplicate');
+            }
+            $seenKeys[$key] = true;
+            $seenSkus[$skuIdentity] = true;
+            $rows[] = [
+                'combination' => $combination,
+                'combination_key' => $canonicalKey,
+                'sku' => $sku,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /** @return array<string, string> */
+    public function parseCombinationKey(string $key): array
+    {
+        $key = trim($key);
+        if ($key === '') {
+            throw new \InvalidArgumentException('variant_combination_empty');
+        }
+        $combination = [];
+        foreach (explode('|', $key) as $segment) {
+            $segment = trim($segment);
+            $position = strpos($segment, '=');
+            if ($position === false) {
+                throw new \InvalidArgumentException('variant_combination_invalid');
+            }
+            $axis = rawurldecode(substr($segment, 0, $position));
+            $value = rawurldecode(substr($segment, $position + 1));
+            $axis = trim($axis);
+            $value = trim($value);
+            if ($axis === '' || $value === '' || isset($combination[$axis])) {
+                throw new \InvalidArgumentException('variant_combination_invalid');
+            }
+            $combination[$axis] = $value;
+        }
+        ksort($combination, SORT_STRING);
+
+        return $combination;
+    }
+
     /** @param array<string, string> $combination */
     public function combinationKey(array $combination): string
     {
@@ -154,7 +246,23 @@ final class ProductVariantMatrixService
             $submittedByKey[$key] = $row;
         }
 
-        $generated = $this->generate($normalizedAxes, $skuPrefix, $skuOverrides);
+        $axisCodes = array_map(
+            static fn(array $axis): string => (string)$axis['code'],
+            $normalizedAxes,
+        );
+        sort($axisCodes, SORT_STRING);
+        $sparseSubmitted = false;
+        foreach ($submittedByKey as $row) {
+            $comboCodes = array_keys($row['combination']);
+            sort($comboCodes, SORT_STRING);
+            if ($comboCodes !== $axisCodes) {
+                $sparseSubmitted = true;
+                break;
+            }
+        }
+        $generated = $sparseSubmitted
+            ? $this->materializeOverrides($normalizedAxes, $skuPrefix, $skuOverrides)
+            : $this->generate($normalizedAxes, $skuPrefix, $skuOverrides);
         $generatedKeys = array_fill_keys(array_column($generated, 'combination_key'), true);
         foreach (array_keys($submittedByKey) as $submittedKey) {
             if (!isset($generatedKeys[$submittedKey])) {
@@ -186,15 +294,46 @@ final class ProductVariantMatrixService
         $create = [];
         $update = [];
         $usedExisting = [];
+        $generatedSkuKeys = [];
+        foreach ($generated as $generatedRow) {
+            $generatedSkuKeys[strtolower((string)$generatedRow['sku'])] = (string)$generatedRow['combination_key'];
+        }
         foreach ($generated as $generatedRow) {
             $key = $generatedRow['combination_key'];
             $input = $submittedByKey[$key] ?? [];
             $row = array_merge($input, $generatedRow);
-            $reservedBy = $existingSkuKeys[strtolower($row['sku'])] ?? null;
-            if ($reservedBy !== null && $reservedBy !== $key) {
-                throw new \InvalidArgumentException('variant_sku_reserved');
+            $skuLower = strtolower((string)$row['sku']);
+            $reservedBy = $existingSkuKeys[$skuLower] ?? null;
+            $existing = null;
+            $existingSourceKey = null;
+            $migratedFromObsoleteKey = false;
+            if ($reservedBy !== null) {
+                if ($reservedBy === $key) {
+                    $existing = $existingByKey[$key] ?? null;
+                    $existingSourceKey = $key;
+                } elseif (!isset($generatedKeys[$reservedBy])) {
+                    // Prefer identity (SKU) over a stale draft sitting on the new key.
+                    $existing = $existingByKey[$reservedBy] ?? null;
+                    $existingSourceKey = $reservedBy;
+                    $migratedFromObsoleteKey = is_array($existing);
+                } else {
+                    throw new \InvalidArgumentException('variant_sku_reserved');
+                }
+            } else {
+                $candidate = $existingByKey[$key] ?? null;
+                if (is_array($candidate)) {
+                    $candidateSku = strtolower(trim((string)($candidate['sku'] ?? '')));
+                    $skuOwnerKey = $candidateSku !== '' ? ($generatedSkuKeys[$candidateSku] ?? null) : null;
+                    if ($skuOwnerKey !== null && $skuOwnerKey !== $key) {
+                        // Offer at this key belongs to another desired combination via SKU.
+                        $candidate = null;
+                    }
+                }
+                if (is_array($candidate)) {
+                    $existing = $candidate;
+                    $existingSourceKey = $key;
+                }
             }
-            $existing = $existingByKey[$key] ?? null;
             if ($existing === null) {
                 if (trim((string)($input['global_offer_uuid'] ?? '')) !== '') {
                     throw new \InvalidArgumentException('variant_offer_uuid_unknown');
@@ -204,18 +343,37 @@ final class ProductVariantMatrixService
                 continue;
             }
 
-            $usedExisting[$key] = true;
+            if ($existingSourceKey !== null) {
+                $usedExisting[$existingSourceKey] = true;
+            }
             $expectedUuid = trim((string)($existing['global_offer_uuid'] ?? ''));
             $submittedUuid = trim((string)($input['global_offer_uuid'] ?? ''));
             if ($submittedUuid !== '' && $submittedUuid !== $expectedUuid) {
-                throw new \InvalidArgumentException('variant_offer_uuid_mismatch');
+                if ($migratedFromObsoleteKey) {
+                    // Import may have attached the stale occupant uuid on the target key;
+                    // SKU identity wins — drop the mismatched submitted uuid.
+                    $submittedUuid = '';
+                    unset($input['global_offer_uuid']);
+                } else {
+                    throw new \InvalidArgumentException('variant_offer_uuid_mismatch');
+                }
             }
             foreach ([
                 'offer_version' => 'publish_version',
                 'identity_version' => 'identity_version',
             ] as $submittedVersion => $existingVersion) {
                 if (!array_key_exists($submittedVersion, $input)) {
-                    throw new \InvalidArgumentException('variant_' . $submittedVersion . '_required');
+                    // Import may omit versions after canonicalize remaps combination keys
+                    // onto existing offers; fill from the matched row when uuid is absent
+                    // or already matches that identity.
+                    if ($migratedFromObsoleteKey
+                        || $submittedUuid === ''
+                        || $submittedUuid === $expectedUuid
+                    ) {
+                        $input[$submittedVersion] = (int)($existing[$existingVersion] ?? 0);
+                    } else {
+                        throw new \InvalidArgumentException('variant_' . $submittedVersion . '_required');
+                    }
                 }
                 if ((int)$input[$submittedVersion] !== (int)($existing[$existingVersion] ?? -1)) {
                     throw new ProductV2ConflictException(

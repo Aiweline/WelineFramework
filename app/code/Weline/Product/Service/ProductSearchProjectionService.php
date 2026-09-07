@@ -36,6 +36,14 @@ final class ProductSearchProjectionService
 
     private const SEARCH_NAME_ATTRIBUTE = 'name';
 
+    /** Keep a small per-process snapshot cache keyed by website + watermark. */
+    private const SNAPSHOT_PROCESS_CACHE_MAX = 8;
+
+    /**
+     * @var array<string, array{watermark:int, snapshot:array<string,mixed>}>
+     */
+    private static array $snapshotProcessCache = [];
+
     public function __construct(
         private readonly ProductRepository $products,
         private readonly StoreProductRepository $storeProducts,
@@ -65,6 +73,15 @@ final class ProductSearchProjectionService
     {
         $website = $this->website($websiteId);
         $watermark = $this->stream->current($websiteId);
+        $cacheKey = (string)$websiteId;
+        $cached = self::$snapshotProcessCache[$cacheKey] ?? null;
+        if (\is_array($cached)
+            && (int)($cached['watermark'] ?? -1) === $watermark
+            && \is_array($cached['snapshot'] ?? null)
+        ) {
+            return $cached['snapshot'];
+        }
+
         $scopes = $this->activeScopes($websiteId);
         $publishedProducts = [];
         foreach ($this->products->listAll($websiteId) as $row) {
@@ -81,6 +98,7 @@ final class ProductSearchProjectionService
         }
 
         $offersByProduct = [];
+        $allOfferIds = [];
         foreach ($this->offers->listByProductIds($websiteId, array_keys($publishedProducts)) as $offer) {
             if ((string)($offer[Offer::schema_fields_STATUS] ?? '') !== Offer::STATUS_PUBLISHED) {
                 continue;
@@ -88,24 +106,50 @@ final class ProductSearchProjectionService
             $productId = (int)($offer[Offer::schema_fields_PRODUCT_ID] ?? 0);
             if (isset($publishedProducts[$productId])) {
                 $offersByProduct[$productId][] = $offer;
+                $offerId = (int)($offer[Offer::schema_fields_ID] ?? 0);
+                if ($offerId > 0) {
+                    $allOfferIds[] = $offerId;
+                }
             }
         }
 
+        $productIds = array_keys($publishedProducts);
         $searchTexts = $this->buildProductSearchTexts(
             $websiteId,
-            array_keys($publishedProducts),
+            $productIds,
         );
 
+        $offerUuids = [];
+        $productUuids = [];
+        foreach ($offersByProduct as $offers) {
+            foreach ($offers as $offer) {
+                $offerUuid = \trim((string)($offer[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? ''));
+                if ($offerUuid !== '') {
+                    $offerUuids[] = $offerUuid;
+                }
+            }
+        }
+        foreach ($publishedProducts as $product) {
+            $productUuid = \trim((string)($product[Product::schema_fields_GLOBAL_PRODUCT_UUID] ?? ''));
+            if ($productUuid !== '') {
+                $productUuids[] = $productUuid;
+            }
+        }
+        $offerIdentities = $this->identities->resolveOffersByUuids($offerUuids);
+        $productIdentities = $this->identities->resolveProductsByUuids($productUuids);
+
         $documents = [];
-        foreach ($publishedProducts as $productId => $product) {
-            foreach ($scopes as $scope) {
-                $storeId = $scope['store']->id;
-                if (!$this->storeProducts->isSelected($websiteId, $storeId, $productId)) {
+        foreach ($scopes as $scope) {
+            $storeId = $scope['store']->id;
+            $productSelection = $this->storeProducts->selectionMap($websiteId, $storeId, $productIds);
+            $offerSelection = $this->storeOffers->selectionMap($websiteId, $storeId, $allOfferIds);
+            foreach ($publishedProducts as $productId => $product) {
+                if (!($productSelection[$productId] ?? true)) {
                     continue;
                 }
                 foreach ($offersByProduct[$productId] ?? [] as $offer) {
                     $offerId = (int)($offer[Offer::schema_fields_ID] ?? 0);
-                    if ($offerId <= 0 || !$this->storeOffers->isSelected($websiteId, $storeId, $offerId)) {
+                    if ($offerId <= 0 || !($offerSelection[$offerId] ?? true)) {
                         continue;
                     }
                     $documents[] = $this->document(
@@ -115,13 +159,15 @@ final class ProductSearchProjectionService
                         $offer,
                         $watermark,
                         $searchTexts[$productId] ?? ['title' => '', 'keywords' => '', 'localized_titles' => []],
+                        $offerIdentities,
+                        $productIdentities,
                     );
                 }
             }
         }
         $this->sortDocuments($documents);
 
-        return [
+        $snapshot = [
             'contract' => 'product.search_projection_snapshot.v1',
             'identity_contract' => 'product.offer_identity.v2',
             'website_id' => $websiteId,
@@ -131,6 +177,15 @@ final class ProductSearchProjectionService
             'documents' => $documents,
             'snapshot_hash' => $this->hashDocuments($documents),
         ];
+        self::$snapshotProcessCache[$cacheKey] = [
+            'watermark' => $watermark,
+            'snapshot' => $snapshot,
+        ];
+        if (\count(self::$snapshotProcessCache) > self::SNAPSHOT_PROCESS_CACHE_MAX) {
+            \array_shift(self::$snapshotProcessCache);
+        }
+
+        return $snapshot;
     }
 
     /**
@@ -266,6 +321,8 @@ final class ProductSearchProjectionService
      * @param array<string,mixed> $product
      * @param array<string,mixed> $offer
      * @param array{title:string,keywords:string,localized_titles:array<string,string>} $searchText
+     * @param array<string, \Weline\Product\Api\Data\OfferIdentityV2> $offerIdentities
+     * @param array<string, \Weline\Product\Api\Data\ProductIdentityV2> $productIdentities
      * @return array<string,mixed>
      */
     private function document(
@@ -275,13 +332,15 @@ final class ProductSearchProjectionService
         array $offer,
         int $documentVersion,
         array $searchText,
+        array $offerIdentities = [],
+        array $productIdentities = [],
     ): array {
         $productId = (int)($product[Product::schema_fields_ID] ?? 0);
         $offerId = (int)($offer[Offer::schema_fields_ID] ?? 0);
-        $offerUuid = \trim((string)($offer[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? ''));
+        $offerUuid = \strtolower(\trim((string)($offer[Offer::schema_fields_GLOBAL_OFFER_UUID] ?? '')));
         $offerIdentity = $offerUuid === ''
             ? null
-            : $this->identities->resolveOfferByUuid($offerUuid);
+            : ($offerIdentities[$offerUuid] ?? $this->identities->resolveOfferByUuid($offerUuid));
         $sku = \trim($offerIdentity?->sku
             ?? (string)($offer[Offer::schema_fields_SKU] ?? ''));
         if ($productId <= 0 || $offerId <= 0 || $offerUuid === '' || $sku === '') {
@@ -290,11 +349,11 @@ final class ProductSearchProjectionService
             ));
         }
 
-        $productUuid = \trim($offerIdentity?->globalProductUuid
-            ?? (string)($product[Product::schema_fields_GLOBAL_PRODUCT_UUID] ?? ''));
+        $productUuid = \strtolower(\trim($offerIdentity?->globalProductUuid
+            ?? (string)($product[Product::schema_fields_GLOBAL_PRODUCT_UUID] ?? '')));
         $productIdentity = $productUuid === ''
             ? null
-            : $this->identities->resolveProductByUuid($productUuid);
+            : ($productIdentities[$productUuid] ?? $this->identities->resolveProductByUuid($productUuid));
         $identity = $this->documentIdentity($website, $scope, $offerUuid);
 
         $title = \trim($searchText['title'] ?? '');
@@ -407,16 +466,21 @@ final class ProductSearchProjectionService
             $productIds,
             \array_merge([self::SEARCH_NAME_ATTRIBUTE], self::SEARCH_KEYWORD_ATTRIBUTES),
         );
+        $privateOptionLabels = $this->collectPrivateOptionLabelsByProduct($productIds);
 
         $categoryIds = [];
+        $categoryLinksByProduct = [];
         foreach ($this->categoryLinks->listByProductIds($websiteId, $productIds, [0]) as $link) {
             if ((int)($link['selected'] ?? 0) !== 1) {
                 continue;
             }
+            $productId = (int)($link['product_id'] ?? 0);
             $categoryId = (int)($link['category_id'] ?? 0);
-            if ($categoryId > 0) {
-                $categoryIds[$categoryId] = $categoryId;
+            if ($productId <= 0 || $categoryId <= 0) {
+                continue;
             }
+            $categoryIds[$categoryId] = $categoryId;
+            $categoryLinksByProduct[$productId][] = $categoryId;
         }
         $categoryAttributes = $categoryIds === []
             ? []
@@ -439,11 +503,11 @@ final class ProductSearchProjectionService
                 }
             }
 
-            foreach ($this->categoryLinks->listByProductIds($websiteId, [$productId], [0]) as $link) {
-                if ((int)($link['selected'] ?? 0) !== 1) {
-                    continue;
-                }
-                $categoryId = (int)($link['category_id'] ?? 0);
+            foreach ($privateOptionLabels[$productId] ?? [] as $optionLabel) {
+                $keywordParts[] = $optionLabel;
+            }
+
+            foreach ($categoryLinksByProduct[$productId] ?? [] as $categoryId) {
                 foreach ($categoryAttributes[$categoryId][self::SEARCH_NAME_ATTRIBUTE] ?? [] as $value) {
                     $keywordParts[] = $value;
                 }
@@ -456,6 +520,68 @@ final class ProductSearchProjectionService
         }
 
         return $texts;
+    }
+
+    /**
+     * Instance-private option labels (scope_instance_id = product_id) are searchable
+     * for that product only. Shared catalog options stay out of global facets.
+     *
+     * @param list<int> $productIds
+     * @return array<int, list<string>>
+     */
+    private function collectPrivateOptionLabelsByProduct(array $productIds): array
+    {
+        $labels = [];
+        if ($productIds === []) {
+            return [];
+        }
+
+        try {
+            /** @var \Weline\Eav\Model\EavAttribute\Option $model */
+            $model = \Weline\Framework\Manager\ObjectManager::getInstance(
+                \Weline\Eav\Model\EavAttribute\Option::class,
+            );
+        } catch (\Throwable) {
+            return [];
+        }
+
+        foreach ($productIds as $productId) {
+            $productId = (int)$productId;
+            if ($productId <= 0) {
+                continue;
+            }
+            try {
+                $rows = (clone $model)
+                    ->clearData()
+                    ->clearQuery()
+                    ->where(
+                        \Weline\Eav\Model\EavAttribute\Option::schema_fields_scope_instance_id,
+                        $productId,
+                    )
+                    ->select()
+                    ->fetch();
+            } catch (\Throwable) {
+                continue;
+            }
+            if (!\is_array($rows)) {
+                continue;
+            }
+            foreach ($rows as $row) {
+                $value = '';
+                if (\is_object($row) && \method_exists($row, 'getValue')) {
+                    $value = \trim((string)$row->getValue());
+                } elseif (\is_array($row)) {
+                    $value = \trim((string)($row[
+                        \Weline\Eav\Model\EavAttribute\Option::schema_fields_value
+                    ] ?? ''));
+                }
+                if ($value !== '') {
+                    $labels[$productId][] = $value;
+                }
+            }
+        }
+
+        return $labels;
     }
 
     /**

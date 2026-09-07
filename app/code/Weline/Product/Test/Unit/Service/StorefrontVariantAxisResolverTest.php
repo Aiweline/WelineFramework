@@ -41,6 +41,8 @@ final class StorefrontVariantAxisResolverTest extends TestCase
         self::assertStringContainsString("empty(\$eav['has_option'])", $resolver);
         self::assertStringContainsString('$productByCode', $projector);
         self::assertStringContainsString('$availableValues', $projector);
+        self::assertStringContainsString('allowHanIdentity', $projector);
+        self::assertStringContainsString('leaves character chips without media-backed swatch_image', $projector);
         self::assertStringNotContainsString(
             'return trim((string)json_encode($value',
             $projector,

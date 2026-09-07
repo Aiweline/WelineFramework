@@ -602,6 +602,64 @@ final class ProductIdentityV2Service implements ProductIdentityV2ResolverInterfa
         return $row === null ? null : $this->toOfferIdentity($row);
     }
 
+    /**
+     * @param list<string> $globalProductUuids
+     * @return array<string, ProductIdentityV2>
+     */
+    public function resolveProductsByUuids(array $globalProductUuids): array
+    {
+        $uuids = $this->normalizeUuidList($globalProductUuids);
+        if ($uuids === []) {
+            return [];
+        }
+
+        $out = [];
+        foreach (array_chunk($uuids, 500) as $chunk) {
+            $rows = $this->newProductRegistry()->clear()
+                ->where(ProductIdentityRegistry::schema_fields_UUID, $chunk, 'IN')
+                ->select()
+                ->fetchArray();
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $identity = $this->toProductIdentityRow($row);
+                $out[$identity->globalProductUuid] = $identity;
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * @param list<string> $globalOfferUuids
+     * @return array<string, OfferIdentityV2>
+     */
+    public function resolveOffersByUuids(array $globalOfferUuids): array
+    {
+        $uuids = $this->normalizeUuidList($globalOfferUuids);
+        if ($uuids === []) {
+            return [];
+        }
+
+        $out = [];
+        foreach (array_chunk($uuids, 500) as $chunk) {
+            $rows = $this->newOfferRegistry()->clear()
+                ->where(OfferIdentityRegistry::schema_fields_UUID, $chunk, 'IN')
+                ->select()
+                ->fetchArray();
+            foreach (is_array($rows) ? $rows : [] as $row) {
+                if (!is_array($row)) {
+                    continue;
+                }
+                $identity = $this->toOfferIdentityRow($row);
+                $out[$identity->globalOfferUuid] = $identity;
+            }
+        }
+
+        return $out;
+    }
+
     public function resolveOfferBySku(string $sku): ?OfferIdentityV2
     {
         $sku = $this->normalizeSku($sku);
@@ -844,16 +902,22 @@ final class ProductIdentityV2Service implements ProductIdentityV2ResolverInterfa
 
     private function toProductIdentity(ProductIdentityRegistry $row): ProductIdentityV2
     {
+        return $this->toProductIdentityRow($row->getData());
+    }
+
+    /** @param array<string,mixed> $row */
+    private function toProductIdentityRow(array $row): ProductIdentityV2
+    {
         return new ProductIdentityV2(
-            registryId: (int)$row->getId(),
-            globalProductUuid: (string)$row->getData(ProductIdentityRegistry::schema_fields_UUID),
-            productCode: (string)$row->getData(ProductIdentityRegistry::schema_fields_PRODUCT_CODE),
-            ownerWebsiteId: (int)$row->getData(ProductIdentityRegistry::schema_fields_OWNER_WEBSITE_ID),
-            providerCode: (string)$row->getData(ProductIdentityRegistry::schema_fields_PROVIDER_CODE),
-            productType: (string)$row->getData(ProductIdentityRegistry::schema_fields_PRODUCT_TYPE),
-            lifecycleStatus: (string)$row->getData(ProductIdentityRegistry::schema_fields_LIFECYCLE_STATUS),
-            version: (int)$row->getData(ProductIdentityRegistry::schema_fields_VERSION),
-            sharePolicy: (string)$row->getData(ProductIdentityRegistry::schema_fields_SHARE_POLICY),
+            registryId: (int)($row[ProductIdentityRegistry::schema_fields_ID] ?? 0),
+            globalProductUuid: (string)($row[ProductIdentityRegistry::schema_fields_UUID] ?? ''),
+            productCode: (string)($row[ProductIdentityRegistry::schema_fields_PRODUCT_CODE] ?? ''),
+            ownerWebsiteId: (int)($row[ProductIdentityRegistry::schema_fields_OWNER_WEBSITE_ID] ?? 0),
+            providerCode: (string)($row[ProductIdentityRegistry::schema_fields_PROVIDER_CODE] ?? ''),
+            productType: (string)($row[ProductIdentityRegistry::schema_fields_PRODUCT_TYPE] ?? ''),
+            lifecycleStatus: (string)($row[ProductIdentityRegistry::schema_fields_LIFECYCLE_STATUS] ?? ''),
+            version: (int)($row[ProductIdentityRegistry::schema_fields_VERSION] ?? 0),
+            sharePolicy: (string)($row[ProductIdentityRegistry::schema_fields_SHARE_POLICY] ?? ''),
         );
     }
 
@@ -917,6 +981,29 @@ final class ProductIdentityV2Service implements ProductIdentityV2ResolverInterfa
             throw new \InvalidArgumentException('uuid_invalid');
         }
         return $uuid;
+    }
+
+    /**
+     * @param list<string> $uuids
+     * @return list<string>
+     */
+    private function normalizeUuidList(array $uuids): array
+    {
+        $normalized = [];
+        foreach ($uuids as $uuid) {
+            $candidate = strtolower(trim((string)$uuid));
+            if (preg_match(
+                '/^[a-f0-9]{8}-[a-f0-9]{4}-[1-5][a-f0-9]{3}-[89ab][a-f0-9]{3}-[a-f0-9]{12}$/',
+                $candidate,
+            ) !== 1) {
+                continue;
+            }
+            $normalized[$candidate] = $candidate;
+        }
+        $list = array_values($normalized);
+        sort($list, SORT_STRING);
+
+        return $list;
     }
 
     private function productCode(string $uuid): string
