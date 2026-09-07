@@ -67,15 +67,15 @@ download,download
 数据浏览,"Data browsing"
 "SQL 控制台","SQL console"
 "SQL 导入","SQL import"
+模块,模块
 数据表,"Data table"
-加载数据,"Loading data"
 查看结构,"View Structure"
 行数据,"Row Data"
 "默认读取前 20 行，可用于快速检查表数据。","The first 20 rows are read by default, which can be used to quickly check table data."
 请先选择数据库与数据表,"Please select a database and table first"
 结构信息,"Structure information"
 字段、索引、外键和建表语句。,"Fields, indexes, foreign keys and table creation statements."
-点击“查看结构”加载字段和索引,"Click ""View Structure"" to load fields and indexes"
+选择数据表后自动展示结构,选择数据表后自动展示结构
 "SELECT 可直接执行；写操作需要确认。","SELECT can be executed directly; writes require confirmation."
 "SQL 语句","SQL statement"
 确认执行写操作,"Confirm execute write operation"
@@ -96,6 +96,8 @@ download,download
 展示备份文件、目标表和安全检查结果。,"Display backup files, target tables, and security check results."
 "请选择 .sql 文件上传，系统会先备份受影响数据表并下载备份。","Please select .sql file upload. The system will first back up the affected data table and download the backup."
 "最近 50 条数据库后台操作记录。","The latest 50 database background operation records."
+所有模块,所有模块
+搜索模块名称,搜索模块名称
 主题请求模块未加载，请刷新页面后重试,"The theme request module is not loaded, please refresh the page and try again"
 "请选择 .sql 文件","Please select a .sql file"
 当前数据表暂无可显示数据,"There is no data to display in the current data table."
@@ -113,6 +115,22 @@ download,download
 操作失败,"Operation failed"
 总行数,"Total number of rows"
 当前显示,"Currently showing"
+字段,字段
+索引,索引
+外键,外键
+建表语句,建表语句
+无,无
+字段名,字段名
+类型,类型
+长度,长度
+可空,可空
+默认值,默认值
+注释,注释
+名称,名称
+定义,定义
+约束,约束
+列,列
+引用,引用
 刷新,refresh
 "缺少版本 %{1} 的精确代码制品","Missing exact code artifact for version %{1}"
 模块名或目标版本无效,"Invalid module name or target version"
@@ -430,6 +448,8 @@ download,download
 数据库迁移备份恢复命令,"Database migration backup restore command"
 "备份记录 ID（恢复单条备份）","Backup record ID (restore single backup)"
 "迁移记录 ID（恢复该迁移的所有备份）","Migration record ID (restore all backups for this migration)"
+加载数据,"Loading data"
+点击“查看结构”加载字段和索引,"Click ""View Structure"" to load fields and indexes"
 """operation_id 长度不能超过 64 字符""","""operation_id cannot be longer than 64 characters"""
 "mdi mdi-database-cog-outline","mdi mdi-database-cog-outline"
 "mdi mdi-view-dashboard-outline","mdi mdi-view-dashboard-outline"
