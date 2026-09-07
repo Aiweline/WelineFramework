@@ -10,7 +10,7 @@ declare(strict_types=1);
  */
 
 const WLS_PANEL_LOCAL_LIVE_GATE_EXIT_BLOCKED = 1;
-const WLS_PANEL_LOCAL_LIVE_GATE_ENDPOINT = 'https://app.weline.test:9523/api/v1/platform/module/list';
+const WLS_PANEL_LOCAL_LIVE_GATE_ENDPOINT = 'https://app.test.weline.com:9523/api/v1/platform/module/list';
 const WLS_PANEL_LOCAL_LIVE_GATE_EXPECTED_TAGS = 'custom:wls-panel-plugin';
 const WLS_PANEL_LOCAL_LIVE_GATE_NEGATIVE_TAG = 'module:wls-extra';
 const WLS_PANEL_LOCAL_LIVE_GATE_TIMEOUT = '20';
@@ -302,9 +302,9 @@ $guardChecks = [
     'readiness_app_env_deploy_mode_local' =>
         ($readinessChecks['app_env_deploy_mode_local'] ?? false) === true,
     'readiness_deploy_current_locked' =>
-        ($readinessEndpoint['url'] ?? '') === 'https://app.weline.test:9523'
+        ($readinessEndpoint['url'] ?? '') === 'https://app.test.weline.com:9523'
         && ($readinessEndpoint['source'] ?? '') === 'deploy-current'
-        && ($readinessDeployCurrent['raw_platform_url'] ?? '') === 'https://app.weline.test:9523'
+        && ($readinessDeployCurrent['raw_platform_url'] ?? '') === 'https://app.test.weline.com:9523'
         && ($readinessDeployCurrent['endpoint'] ?? '') === WLS_PANEL_LOCAL_LIVE_GATE_ENDPOINT,
     'local_endpoint_locked' => $resolvedLocalEndpoint === WLS_PANEL_LOCAL_LIVE_GATE_ENDPOINT,
     'configured_endpoint_locked' => $endpoint === WLS_PANEL_LOCAL_LIVE_GATE_ENDPOINT,

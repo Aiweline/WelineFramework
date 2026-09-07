@@ -15,10 +15,10 @@ final class HostsFileManagerTest extends TestCase
         $method = new ReflectionMethod(HostsFileManager::class, 'addDomainToContent');
         $method->setAccessible(true);
 
-        $result = $method->invoke(null, "127.0.0.1 localhost\n", 'shop-a.weline.test', '127.0.0.1');
+        $result = $method->invoke(null, "127.0.0.1 localhost\n", 'shop-a.test.weline.com', '127.0.0.1');
 
         self::assertStringContainsString('# Weline WLS Auto-Config Start', $result);
-        self::assertStringContainsString('127.0.0.1 shop-a.weline.test', $result);
+        self::assertStringContainsString('127.0.0.1 shop-a.test.weline.com', $result);
         self::assertStringContainsString('# Weline WLS Auto-Config End', $result);
     }
 
@@ -30,14 +30,14 @@ final class HostsFileManagerTest extends TestCase
         $content = <<<HOSTS
 127.0.0.1 localhost
 # Weline WLS Auto-Config Start
-127.0.0.1 shop-a.weline.test
+127.0.0.1 shop-a.test.weline.com
 # Weline WLS Auto-Config End
 HOSTS;
 
-        $result = $method->invoke(null, $content, 'shop-b.weline.test', '127.0.0.1');
+        $result = $method->invoke(null, $content, 'shop-b.test.weline.com', '127.0.0.1');
 
-        self::assertStringContainsString('127.0.0.1 shop-a.weline.test', $result);
-        self::assertStringContainsString('127.0.0.1 shop-b.weline.test', $result);
+        self::assertStringContainsString('127.0.0.1 shop-a.test.weline.com', $result);
+        self::assertStringContainsString('127.0.0.1 shop-b.test.weline.com', $result);
         self::assertSame(1, substr_count($result, '# Weline WLS Auto-Config Start'));
     }
 
@@ -46,17 +46,17 @@ HOSTS;
         $content = <<<HOSTS
 127.0.0.1 localhost
 # Weline WLS Auto-Config Start
-192.168.88.10 shop-a.weline.test
+192.168.88.10 shop-a.test.weline.com
 # Weline WLS Auto-Config End
 HOSTS;
 
         $rewrite = new ReflectionMethod(HostsFileManager::class, 'rewriteDomainIpInContent');
         $rewrite->setAccessible(true);
-        $result = $rewrite->invoke(null, $content, 'shop-a.weline.test', '127.0.0.1');
+        $result = $rewrite->invoke(null, $content, 'shop-a.test.weline.com', '127.0.0.1');
 
-        self::assertStringContainsString('127.0.0.1 shop-a.weline.test', $result);
-        self::assertStringNotContainsString('192.168.88.10 shop-a.weline.test', $result);
-        self::assertSame('127.0.0.1', HostsFileManager::resolveIpForDomain('shop-a.weline.test', '10.0.0.8'));
+        self::assertStringContainsString('127.0.0.1 shop-a.test.weline.com', $result);
+        self::assertStringNotContainsString('192.168.88.10 shop-a.test.weline.com', $result);
+        self::assertSame('127.0.0.1', HostsFileManager::resolveIpForDomain('shop-a.test.weline.com', '10.0.0.8'));
         self::assertSame('127.0.0.1', HostsFileManager::resolveIpForDomain('demo.local.test', '203.0.113.9'));
     }
 
@@ -67,7 +67,7 @@ HOSTS;
         try {
             self::assertNotFalse(\file_put_contents(
                 $path,
-                "127.0.0.1 localhost\n127.0.0.1 shop-a.weline.test\n",
+                "127.0.0.1 localhost\n127.0.0.1 shop-a.test.weline.com\n",
             ));
             self::assertTrue(\chmod($path, 0444));
 
@@ -75,7 +75,7 @@ HOSTS;
             $method->setAccessible(true);
             self::assertSame(
                 'external_satisfied',
-                $method->invoke(null, $path, 'shop-a.weline.test', '127.0.0.1'),
+                $method->invoke(null, $path, 'shop-a.test.weline.com', '127.0.0.1'),
             );
 
             $add = new ReflectionMethod(HostsFileManager::class, 'addDomain');
@@ -113,12 +113,12 @@ HOSTS;
         $method = new ReflectionMethod(HostsFileManager::class, 'permissionDeniedResult');
         $method->setAccessible(true);
 
-        $result = $method->invoke(null, 'shop-a.weline.test', '127.0.0.1');
+        $result = $method->invoke(null, 'shop-a.test.weline.com', '127.0.0.1');
         self::assertIsArray($result);
         self::assertFalse($result['success'] ?? true);
         self::assertTrue($result['needs_admin'] ?? false);
         self::assertArrayNotHasKey('command', $result);
-        self::assertStringContainsString('127.0.0.1 shop-a.weline.test', (string)$result['message']);
+        self::assertStringContainsString('127.0.0.1 shop-a.test.weline.com', (string)$result['message']);
         self::assertStringContainsString('administrator authorization', \strtolower((string)$result['message']));
         self::assertStringNotContainsString('manually', \strtolower((string)$result['message']));
         self::assertStringNotContainsString('php', \strtolower((string)$result['message']));

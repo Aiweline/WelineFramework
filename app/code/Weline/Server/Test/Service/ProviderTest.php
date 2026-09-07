@@ -38,7 +38,7 @@ class ProviderTest extends TestCase
                 'wls' => [
                     ...self::testServingFence(),
                     'edge' => ['adapter' => 'wls'],
-                    'public_origin' => 'https://test.weline.test',
+                    'public_origin' => 'https://test.test.weline.com',
                     'worker_count' => 4,
                     'worker_base_port' => 10443,
                     'worker_memory_limit' => '512M',

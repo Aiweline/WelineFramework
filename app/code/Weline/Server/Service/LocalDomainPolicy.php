@@ -7,24 +7,39 @@ use Weline\Framework\App\Env;
 
 final class LocalDomainPolicy
 {
-    public const TEST_ROOT_DOMAIN = 'weline.test';
+    /** Default local/dev project root (public TLD; Google OAuth / console friendly). */
+    public const TEST_ROOT_DOMAIN = 'test.weline.com';
+
+    /** Previous default; still managed so existing hosts/certs keep working. */
+    public const LEGACY_WELINE_TEST_ROOT_DOMAIN = 'weline.test';
+
     public const LEGACY_LOCAL_TEST_ROOT_DOMAIN = 'local.test';
     public const LOOPBACK_ROOT_DOMAIN = 'weline.localhost';
 
-    public const TEST_WILDCARD_DOMAIN = '*.weline.test';
+    public const TEST_WILDCARD_DOMAIN = '*.test.weline.com';
+    public const LEGACY_WELINE_TEST_WILDCARD_DOMAIN = '*.weline.test';
     public const LEGACY_LOCAL_TEST_WILDCARD_DOMAIN = '*.local.test';
     public const LOOPBACK_WILDCARD_DOMAIN = '*.weline.localhost';
 
     private const LOCAL_ROOT_DOMAINS = [
         self::TEST_ROOT_DOMAIN,
+        self::LEGACY_WELINE_TEST_ROOT_DOMAIN,
         self::LEGACY_LOCAL_TEST_ROOT_DOMAIN,
         self::LOOPBACK_ROOT_DOMAIN,
     ];
 
     private const LOCAL_WILDCARD_DOMAINS = [
         self::TEST_WILDCARD_DOMAIN,
+        self::LEGACY_WELINE_TEST_WILDCARD_DOMAIN,
         self::LEGACY_LOCAL_TEST_WILDCARD_DOMAIN,
         self::LOOPBACK_WILDCARD_DOMAIN,
+    ];
+
+    /** Roots that need an explicit 127.0.0.1 hosts entry (not *.localhost). */
+    private const HOSTS_ENTRY_ROOT_DOMAINS = [
+        self::TEST_ROOT_DOMAIN,
+        self::LEGACY_WELINE_TEST_ROOT_DOMAIN,
+        self::LEGACY_LOCAL_TEST_ROOT_DOMAIN,
     ];
 
     public static function isDevelopmentMode(?string $deployMode = null): bool
@@ -89,7 +104,11 @@ final class LocalDomainPolicy
             $domain = \substr($domain, 2);
         }
 
-        foreach (self::LOCAL_ROOT_DOMAINS as $rootDomain) {
+        // Longer roots first so test.weline.com wins over accidental shorter suffixes.
+        $roots = self::LOCAL_ROOT_DOMAINS;
+        \usort($roots, static fn (string $a, string $b): int => \strlen($b) <=> \strlen($a));
+
+        foreach ($roots as $rootDomain) {
             if ($domain === $rootDomain || \str_ends_with($domain, '.' . $rootDomain)) {
                 return $rootDomain;
             }
@@ -134,7 +153,7 @@ final class LocalDomainPolicy
         }
 
         return (bool) \preg_match(
-            '/^p[0-9a-f]{8}\.(?:weline\.test|local\.test|weline\.localhost)$/i',
+            '/^p[0-9a-f]{8}\.(?:test\.weline\.com|weline\.test|local\.test|weline\.localhost)$/i',
             $domain
         );
     }
@@ -142,7 +161,7 @@ final class LocalDomainPolicy
     public static function requiresHostsEntry(string $domain): bool
     {
         $rootDomain = self::resolveRootDomain($domain);
-        return \in_array($rootDomain, [self::TEST_ROOT_DOMAIN, self::LEGACY_LOCAL_TEST_ROOT_DOMAIN], true);
+        return $rootDomain !== null && \in_array($rootDomain, self::HOSTS_ENTRY_ROOT_DOMAINS, true);
     }
 
     public static function resolvesViaLoopbackSuffix(string $domain): bool

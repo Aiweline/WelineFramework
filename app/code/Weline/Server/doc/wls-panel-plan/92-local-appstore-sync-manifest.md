@@ -12,10 +12,10 @@ App Store typed-tag API E2E. The local App Store checkout is:
 
 ```text
 E:\WelineFramework\Framework-Official\App\weline
-https://app.weline.test:9523
+https://app.test.weline.com:9523
 ```
 
-The official website endpoints `www.weline.test:9518` and `www.aiweline.com`
+The official website endpoints `www.test.weline.com:9518` and `www.aiweline.com`
 are not marketplace endpoints for this gate.
 
 ## Deployment Endpoint Rule
@@ -23,9 +23,9 @@ are not marketplace endpoints for this gate.
 This endpoint split is part of the deploy artifact contract:
 
 - Local development uses the local App Store checkout URL
-  `https://app.weline.test:9523`.
+  `https://app.test.weline.com:9523`.
 - Runtime local env/config overrides are only accepted when they normalize to
-  `https://app.weline.test:9523`; any other local marketplace root, `www.*`
+  `https://app.test.weline.com:9523`; any other local marketplace root, `www.*`
   host, or full API URL falls back to the locked local App Store root and fails
   the deploy endpoint policy gate when written to `current.json`.
 - The local readiness probe derives its default host and port from
@@ -46,7 +46,7 @@ This endpoint split is part of the deploy artifact contract:
   both `app/code/Weline/PlatformAppStore` and `app/code/Weline/AppStore`, the
   probe emits `select_local_appstore_checkout` and blocks the live call.
 - If `app/etc/env.php` does not expose WLS as
-  `https://app.weline.test:9523` through `wls.host`, `wls.port`, and
+  `https://app.test.weline.com:9523` through `wls.host`, `wls.port`, and
   `wls.https`, the probe emits
   `fix_local_deploy_current_marketplace_metadata` and blocks the live call.
 - Deployed verification uses `deploy_root/var/deploy/current.json`.
@@ -72,8 +72,8 @@ This endpoint split is part of the deploy artifact contract:
 
 Read-only proof from the current host:
 
-- `app.weline.test` resolves to `127.0.0.1`.
-- `app.weline.test:9523` is not listening.
+- `app.test.weline.com` resolves to `127.0.0.1`.
+- `app.test.weline.com:9523` is not listening.
 - The App checkout has unrelated local Admin return-url changes:
   `app/code/Weline/Admin/Service/BackendLoginReturnUrlService.php` and
   `app/code/Weline/Admin/Test/Unit/Service/BackendLoginReturnUrlServiceTest.php`.
@@ -226,7 +226,7 @@ php app\code\Weline\Server\doc\wls-panel-plan\tools\wls-panel-workorder-authoriz
 
 The checker confirms:
 
-- The local App Store checkout and `https://app.weline.test:9523` endpoint are
+- The local App Store checkout and `https://app.test.weline.com:9523` endpoint are
   recorded.
 - The production deploy endpoint rule includes `https://app.aiweline.com`.
 - The self-test proves production records `https://app.aiweline.com` directly
@@ -272,7 +272,7 @@ The checker confirms:
   checkout cannot receive only part of the WLS Panel marketplace verification
   chain.
 - Forbidden Admin, `generated/`, `var/`, and `vendor/` paths are not included.
-- The command does not use `www.weline.test` or `www.aiweline.com` as a
+- The command does not use `www.test.weline.com` or `www.aiweline.com` as a
   marketplace endpoint.
 - `--with-drift=1` hashes only allowed manifest paths under the DEV workspace
   and `E:\WelineFramework\Framework-Official\App\weline`, then reports
@@ -300,12 +300,12 @@ The readiness probe is read-only. Before sync it is expected to report
 `ready=false` until the App checkout has the sqlite composite-primary-key guard,
 `official-apps/manifest.json` contains at least one `module:wls` package entry,
 the same manifest contains a strict `module:wls-extra` negative canary entry,
-App WLS is listening on `app.weline.test:9523`, and a local
+App WLS is listening on `app.test.weline.com:9523`, and a local
 `WLS_MARKETPLACE_BEARER_TOKEN` is supplied outside repository files.
 Even while `ready=false`, its `official_manifest_materialize` section must show
 `dry_run_available=true` before an authorized manifest write is attempted.
 The deploy endpoint policy checker is also read-only; it proves local fixtures
-resolve to `app.weline.test:9523` and production fixtures both record and
+resolve to `app.test.weline.com:9523` and production fixtures both record and
 resolve to `app.aiweline.com` without using `www.*` hosts.
 The drift report is intentionally non-blocking before authorization: detected
 drift tells the operator what the scoped `分项` run must update; it is not a
@@ -400,8 +400,8 @@ Then start the local App Store WLS on the endpoint reported by
 `tools/deploy-current-local-development.json` and verify it is listening:
 
 ```powershell
-php bin/w server:start wls --host app.weline.test --port 9523 --ssl-domain app.weline.test
-curl.exe -k -I --max-time 12 --noproxy * --resolve app.weline.test:9523:127.0.0.1 https://app.weline.test:9523/
+php bin/w server:start wls --host app.test.weline.com --port 9523 --ssl-domain app.test.weline.com
+curl.exe -k -I --max-time 12 --noproxy * --resolve app.test.weline.com:9523:127.0.0.1 https://app.test.weline.com:9523/
 ```
 
 Before the live typed-tag run, make sure the App Store official catalog source
@@ -502,7 +502,7 @@ update `90-completion-audit-and-next-gates.md` only when all are true:
 - App checkout unrelated Admin changes are still present.
 - `setup:upgrade --route --skip-env-check --skip-composer-dump` succeeds in the
   App checkout.
-- `app.weline.test:9523` responds over HTTPS.
+- `app.test.weline.com:9523` responds over HTTPS.
 - The typed-tag runner proves `tag=module:wls` returns WLS-compatible plugins.
 - The negative exact-match check proves `module:wls-extra` does not satisfy
   `module:wls`.
@@ -534,7 +534,7 @@ If sync or setup fails, do not reset the App checkout. Capture:
 - `php app\code\Weline\Server\doc\wls-panel-plan\tools\validate-local-appstore-sync-manifest.php --with-drift=1 --rollback-review=1`
 - the exact failing command
 - the first actionable error line
-- whether `app.weline.test:9523` was started and needs cleanup
+- whether `app.test.weline.com:9523` was started and needs cleanup
 
 Compare the new `out_of_scope_fingerprint` with the pre-sync authorization
 packet. If it changed, stop and review unrelated App checkout work before any

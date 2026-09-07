@@ -57,7 +57,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $sslService->method('certificateMatchesHost')->willReturn(true);
         ObjectManager::setInstance(SslCertificateService::class, $sslService);
         $start = new StartConfigProbe([
-            'host' => 'unit-test.weline.test',
+            'host' => 'unit-test.test.weline.com',
             'ssl_cert' => '/tmp/unit-primary-cert.pem',
             'ssl_key' => '/tmp/unit-primary-key.pem',
             'edge_mode' => 'wls',
@@ -826,10 +826,10 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $probe = new StartConfigProbe(null, [], $sslService);
 
         $probe->completeCertificatePreparation('wls2-local', [
-            'host' => 'p05113ef3.weline.test',
-            'public_host' => 'p05113ef3.weline.test',
+            'host' => 'p05113ef3.test.weline.com',
+            'public_host' => 'p05113ef3.test.weline.com',
             'edge_mode' => 'auto',
-        ], false, 'p05113ef3.weline.test');
+        ], false, 'p05113ef3.test.weline.com');
 
         self::assertSame(0, $probe->localCertificateCalls);
         self::assertSame(0, $probe->managedWildcardCertificateCalls);
@@ -881,7 +881,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $result = $this->createProbe()->resolveMissingCertificate([
             'edge_mode' => 'wls',
             'gateway' => ['requested_mode' => 'auto'],
-        ], 'p8af22c44.weline.test', true, false);
+        ], 'p8af22c44.test.weline.com', true, false);
 
         self::assertNull($result);
     }
@@ -958,7 +958,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
 
         self::assertNull($probe->resolveMissingCertificate(
             ['edge_mode' => 'wls', 'certificate_profile' => 'test'],
-            'project.weline.test',
+            'project.test.weline.com',
             true,
             false,
         ));
@@ -1107,7 +1107,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
         );
         $config = $start->resolveConfig('default', []);
 
-        self::assertSame('unit-test.weline.test', (string)($config['host'] ?? ''));
+        self::assertSame('unit-test.test.weline.com', (string)($config['host'] ?? ''));
         self::assertArrayNotHasKey('ssl_domain', $config);
     }
 
@@ -1116,7 +1116,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
         $start = $this->createProbe(['host' => '', 'ssl_domain' => 'localhost']);
         $config = $start->resolveConfig('default', []);
 
-        self::assertSame('unit-test.weline.test', (string)($config['host'] ?? ''));
+        self::assertSame('unit-test.test.weline.com', (string)($config['host'] ?? ''));
         self::assertArrayNotHasKey('ssl_domain', $config);
     }
 
@@ -1132,7 +1132,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
     {
         $start = $this->createProbe();
 
-        self::assertSame('127.0.0.1', $start->resolveListenHost('p11005ce4.weline.test'));
+        self::assertSame('127.0.0.1', $start->resolveListenHost('p11005ce4.test.weline.com'));
         self::assertSame('127.0.0.1', $start->resolveListenHost('demo.weline.localhost'));
         self::assertSame('0.0.0.0', $start->resolveListenHost('0.0.0.0'));
         self::assertSame('0.0.0.0', $start->resolveListenHost('www.example.com'));
@@ -1207,9 +1207,9 @@ final class StartCommandArgsSolidificationTest extends TestCase
                 'edge_mode' => 'wls',
             ],
             ['wls' => [
-                'host' => 'environment.weline.test',
-                'public_host' => 'environment.weline.test',
-                'ssl_domain' => 'environment.weline.test',
+                'host' => 'environment.test.weline.com',
+                'public_host' => 'environment.test.weline.com',
+                'ssl_domain' => 'environment.test.weline.com',
                 'ssl_cert' => '/environment/fullchain.pem',
                 'ssl_key' => '/environment/privkey.pem',
             ]],
@@ -1298,7 +1298,7 @@ final class StartCommandArgsSolidificationTest extends TestCase
 
         $info = $manager->savedInstances[0]['info'];
         self::assertSame('127.0.0.1', $info['host'] ?? null);
-        self::assertSame('p11005ce4.weline.test', $info['public_host'] ?? null);
+        self::assertSame('p11005ce4.test.weline.com', $info['public_host'] ?? null);
     }
 
     public function testBaseStartExposesInstanceManagerForRuntimePersistence(): void
@@ -1531,7 +1531,7 @@ final class StartConfigProbe extends Start
 
     protected function getDefaultHost(): string
     {
-        return 'unit-test.weline.test';
+        return 'unit-test.test.weline.com';
     }
 
     protected function loadSavedInstanceConfig(string $instanceName): ?array
@@ -1688,7 +1688,7 @@ final class StartInstanceInfoProbe extends Start
             httpRedirectPort: 80,
             workerBasePort: 19443,
             workerMemoryLimit: '512M',
-            publicHost: 'p11005ce4.weline.test',
+            publicHost: 'p11005ce4.test.weline.com',
             runtimeMetadata: ['container_registry_digest' => \str_repeat('b', 64)]
         );
     }

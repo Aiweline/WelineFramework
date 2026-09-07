@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 namespace Weline\Server\IPC\ChildControl;
 
+use Weline\Framework\Runtime\SchedulerSystem;
 use Weline\Framework\System\Process\Processer;
 use Weline\Server\Log\WlsLogger;
 use Weline\Server\Service\MasterLeaseManager;
@@ -12,6 +13,9 @@ use Weline\Server\Service\MasterLeaseManager;
  */
 class ChildMasterGuard
 {
+    private const TRANSIENT_OWNER_UNKNOWN_RECHECK_SEC = 5.0;
+    private const TRANSIENT_OWNER_UNKNOWN_RECHECK_USEC = 50_000;
+
     private float $lastCheckAt = 0.0;
     private string $lastExitReason = '';
     private MasterLeaseManager $leaseManager;
@@ -106,6 +110,36 @@ class ChildMasterGuard
         }
 
         $reason = \trim((string)($validation['reason'] ?? ''));
+        if (!$this->strictLeaseFreshness
+            && ($validation['transient_owner_unknown'] ?? false) === true
+        ) {
+            // Darwin process-table evidence can be transiently unavailable under
+            // request/FD pressure. Never authorize that UNKNOWN observation:
+            // keep the worker only when a bounded recheck regains the complete
+            // protected credential authorization. Persistent UNKNOWN and every
+            // positive mismatch still retire the child.
+            $deadline = (\hrtime(true) / 1_000_000_000)
+                + self::TRANSIENT_OWNER_UNKNOWN_RECHECK_SEC;
+            do {
+                SchedulerSystem::usleep(self::TRANSIENT_OWNER_UNKNOWN_RECHECK_USEC);
+                $validation = $this->leaseManager->validateProtectedChildCredential(
+                    $this->leaseFile,
+                    $this->instance,
+                    $this->masterPid,
+                    $this->masterEpoch,
+                    $this->masterToken,
+                    false,
+                );
+                if (($validation['authorized'] ?? false) === true) {
+                    return '';
+                }
+                $reason = \trim((string)($validation['reason'] ?? ''));
+                if (($validation['transient_owner_unknown'] ?? false) !== true) {
+                    break;
+                }
+            } while ((\hrtime(true) / 1_000_000_000) < $deadline);
+        }
+
         return $reason !== ''
             ? $reason
             : 'Master lease identity or heartbeat is not authorized';

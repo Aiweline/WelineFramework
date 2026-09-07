@@ -3464,6 +3464,7 @@ class Stop extends CommandAbstract
 
     protected function cleanupStaleRecoverableProcessPidFiles(): void
     {
+        Processer::cleanupDeadPidJsonOrphansFast();
         Processer::cleanupStalePidFiles();
     }
 
@@ -3473,6 +3474,49 @@ class Stop extends CommandAbstract
     protected function cleanupStaleRecoverableProcessPidFilesForPids(array $pids): void
     {
         Processer::cleanupStalePidFilesForPids($pids);
+    }
+
+    /**
+     * Dead queue leases can swell var/process/pid past the fixed recovery scan
+     * budget. Prune dead *-pid.json first so residual stop never hard-fails on
+     * stale metadata alone.
+     */
+    protected function ensureRecoverablePidDirectoryWithinEntryLimit(string $pidDir): void
+    {
+        if ($this->countRecoveryDirectoryEntries($pidDir) <= self::MAX_RECOVERY_PID_DIRECTORY_ENTRIES) {
+            return;
+        }
+
+        $this->cleanupDeadRecoverablePidJsonOrphans();
+    }
+
+    protected function cleanupDeadRecoverablePidJsonOrphans(): int
+    {
+        return Processer::cleanupDeadPidJsonOrphansFast();
+    }
+
+    protected function countRecoveryDirectoryEntries(string $directory): int
+    {
+        if (!\is_dir($directory) || \is_link($directory)) {
+            return 0;
+        }
+        $handle = @\opendir($directory);
+        if (!\is_resource($handle)) {
+            return 0;
+        }
+        $count = 0;
+        try {
+            while (($leaf = @\readdir($handle)) !== false) {
+                if ($leaf === '.' || $leaf === '..') {
+                    continue;
+                }
+                $count++;
+            }
+        } finally {
+            @\closedir($handle);
+        }
+
+        return $count;
     }
 
     protected function queryStopPidRunning(int $pid): bool
@@ -3541,6 +3585,8 @@ class Stop extends CommandAbstract
         $pidDir = Env::VAR_DIR . 'process' . DS . 'pid' . DS;
         $scopedInstanceSuffix = '-' . MasterProcess::getScopedInstanceName($name);
         $pids = [];
+
+        $this->ensureRecoverablePidDirectoryWithinEntryLimit($pidDir);
 
         foreach ($this->enumerateBoundedRecoveryFiles(
             $pidDir,

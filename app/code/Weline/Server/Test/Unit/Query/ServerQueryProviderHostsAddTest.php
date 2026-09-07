@@ -46,12 +46,12 @@ final class ServerQueryProviderHostsAddTest extends TestCase
         $provider = $this->createProvider();
 
         $result = $provider->execute('hostsAdd', [
-            'domain' => 'weline.test',
+            'domain' => 'test.weline.com',
         ]);
 
         self::assertIsArray($result);
         self::assertFalse((bool)($result['success'] ?? true));
-        self::assertSame('weline.test', $result['domain'] ?? null);
+        self::assertSame('test.weline.com', $result['domain'] ?? null);
 
         $localTest = $provider->execute('hostsAdd', [
             'domain' => 'local.test',
@@ -81,18 +81,18 @@ final class ServerQueryProviderHostsAddTest extends TestCase
         $provider = $this->createProvider();
 
         $result = $provider->execute('ensureLocalWelineWildcardCertificate', [
-            'domain' => 'apk-seo-d4de8e.weline.test',
+            'domain' => 'apk-seo-d4de8e.test.weline.com',
         ]);
 
         self::assertIsArray($result);
         self::assertFalse((bool)($result['success'] ?? true));
-        self::assertSame('apk-seo-d4de8e.weline.test', $result['domain'] ?? null);
+        self::assertSame('apk-seo-d4de8e.test.weline.com', $result['domain'] ?? null);
     }
 
     public function testAdminRequestResolvesKebabCaseControllerName(): void
     {
         $result = $this->createProvider()->execute('adminRequest', [
-            'url' => 'https://project.weline.test/server/backend/server-monitor/noop',
+            'url' => 'https://project.test.weline.com/server/backend/server-monitor/noop',
             'method' => 'POST',
         ]);
 

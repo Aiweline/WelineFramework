@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 /**
  * Write managed local WLS domains into the local hosts file when required.
- * `.weline.test` needs a hosts entry during local/dev/test usage, while
+ * `.test.weline.com` needs a hosts entry during local/dev/test usage, while
  * `.weline.localhost` resolves to loopback automatically and is skipped.
  */
 
@@ -35,8 +35,8 @@ final class Add extends CommandAbstract
 
         $domain = \trim((string) ($args['domain'] ?? $positional[0] ?? ''));
         if ($domain === '') {
-            $this->printer->error(__('请指定域名，例如：php bin/w server:hosts:add shop123.weline.test'));
-            $this->printer->note(__('*.weline.test 固定写入 127.0.0.1，无需也不应指定其它 IP'));
+            $this->printer->error(__('请指定域名，例如：php bin/w server:hosts:add shop123.test.weline.com'));
+            $this->printer->note(__('*.test.weline.com 固定写入 127.0.0.1，无需也不应指定其它 IP'));
             return;
         }
 
@@ -46,7 +46,7 @@ final class Add extends CommandAbstract
         }
 
         if (!self::isEligibleLocalHostname($domain)) {
-            $this->printer->error(__('仅允许写入单标签的 *.weline.test 本地域名；*.weline.localhost 无需 hosts'));
+            $this->printer->error(__('仅允许写入单标签的 *.test.weline.com 本地域名；*.weline.localhost 无需 hosts'));
             return;
         }
 
@@ -87,15 +87,15 @@ final class Add extends CommandAbstract
 
     public function tip(): string
     {
-        return __('向本机 hosts 添加需要显式解析的本地域名（当前仅 *.weline.test → 127.0.0.1）');
+        return __('向本机 hosts 添加需要显式解析的本地域名（*.test.weline.com / 遗留 *.weline.test → 127.0.0.1）');
     }
 
     public function help(): array|string
     {
         return [
             __('用法') => 'php bin/w server:hosts:add <域名>',
-            __('示例') => 'php bin/w server:hosts:add myshop.weline.test',
-            __('说明') => __('与 server:start 使用同一套 HostsFileManager；*.weline.test 固定写入 127.0.0.1；仅 system.env 为 local/dev/test 时可用'),
+            __('示例') => 'php bin/w server:hosts:add myshop.test.weline.com',
+            __('说明') => __('与 server:start 使用同一套 HostsFileManager；*.test.weline.com 固定写入 127.0.0.1；仅 system.env 为 local/dev/test 时可用'),
         ];
     }
 }

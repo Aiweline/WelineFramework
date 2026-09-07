@@ -911,7 +911,13 @@ CDEF,
 
     public function isProcessDefinitelyMissing(int $pid): bool
     {
-        return ($this->inspectProcess($pid)['exists'] ?? null) === false;
+        $info = $pid > 0
+            && $this->processInfoResolver === null
+            && PHP_OS_FAMILY === 'Darwin'
+                ? $this->inspectDarwinProcess($pid, false)
+                : $this->inspectProcess($pid);
+
+        return ($info['exists'] ?? null) === false;
     }
 
     private function managedProcessStatus(int $pid, string $instance): string
@@ -922,7 +928,9 @@ CDEF,
                 : self::OWNER_MISMATCH;
         }
         $expected = MasterProcess::getMasterProcessName($instance);
-        $info = $this->inspectProcess($pid);
+        $info = PHP_OS_FAMILY === 'Darwin' && $this->processInfoResolver === null
+            ? ($this->inspectDarwinManagedProcess($pid) ?? $this->inspectProcess($pid))
+            : $this->inspectProcess($pid);
         if (($info['exists'] ?? null) === false) {
             return self::OWNER_MISSING;
         }
@@ -991,6 +999,120 @@ CDEF,
         ) === 1 ? self::OWNER_MATCH : self::OWNER_MISMATCH;
     }
 
+    /** Read fresh name/argv evidence without spawning ps; null keeps the full probe. */
+    private function inspectDarwinManagedProcess(int $pid): ?array
+    {
+        $first = $this->darwinProcessTableEvidence($pid);
+        if ($first === null) {
+            return null;
+        }
+        try {
+            $ffi = $this->darwinProcFfi();
+            if ($ffi === null) {
+                return null;
+            }
+            // Darwin sys/sysctl.h: CTL_KERN=1, KERN_ARGMAX=8, KERN_PROCARGS2=49.
+            $mib = $ffi->new('int[3]');
+            $mib[0] = 1;
+            $mib[1] = 8;
+            $argmax = $ffi->new('int');
+            $length = $ffi->new('size_t');
+            $length->cdata = \FFI::sizeof($argmax);
+            if (self::ffiScalarInt($ffi->sysctl($mib, 2, \FFI::addr($argmax), \FFI::addr($length), null, 0)) !== 0
+                || self::ffiScalarInt($length) !== \FFI::sizeof($argmax)
+            ) {
+                return null;
+            }
+            $capacity = self::ffiScalarInt($argmax);
+            if ($capacity <= \FFI::sizeof($argmax)) {
+                return null;
+            }
+            $buffer = $ffi->new('char[' . $capacity . ']');
+            $length->cdata = $capacity;
+            $mib[1] = 49;
+            $mib[2] = $pid;
+            if (self::ffiScalarInt($ffi->sysctl($mib, 3, $buffer, \FFI::addr($length), null, 0)) !== 0) {
+                return null;
+            }
+            $bytes = self::ffiScalarInt($length);
+            if ($bytes <= \FFI::sizeof($argmax) || $bytes > $capacity) {
+                return null;
+            }
+            $arguments = $this->parseDarwinProcessArguments(\FFI::string($buffer, $bytes));
+            if ($arguments === null) {
+                return null;
+            }
+            // Match ps' C-locale VIS_TAB | VIS_NL | VIS_NOSLASH presentation.
+            // The parser leaves non-ASCII input to ps rather than mutating locale.
+            $visible = $ffi->new('char[' . (\strlen($arguments) * 4 + 1) . ']');
+            $written = self::ffiScalarInt($ffi->strnvis($visible, \FFI::sizeof($visible), $arguments, 0x0008 | 0x0010 | 0x0040));
+            if ($written < 0 || $written >= \FFI::sizeof($visible)) {
+                return null;
+            }
+            $command = \trim(\FFI::string($visible));
+            $name = $this->processNameFromCommand($command);
+            if ($command === '' || \strlen($command) > self::MAX_PROCESS_COMMAND_BYTES
+                || $name === '' || \strlen($name) > self::MAX_PROCESS_NAME_BYTES
+            ) {
+                return null;
+            }
+            $info = $ffi->new('struct proc_bsdinfo');
+            $size = \FFI::sizeof($info);
+            if (self::ffiScalarInt($ffi->proc_pidinfo($pid, 3, 0, \FFI::addr($info), $size)) !== $size
+                || self::ffiScalarInt($info->pbi_pid) !== $pid
+                || self::ffiScalarInt($info->pbi_status) === 5 // Darwin sys/proc.h: SZOMB.
+            ) {
+                return null;
+            }
+            $last = $this->darwinProcessTableEvidence($pid);
+            if ($last === null || !\hash_equals($first['start_ticks'], $last['start_ticks'])) {
+                return null;
+            }
+
+            return ['exists' => true, 'pid' => $pid, 'name' => $name, 'command' => $command];
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    /** Parse only argc argv entries; kernel procargs also contains environment data. */
+    private function parseDarwinProcessArguments(string $raw): ?string
+    {
+        $length = \strlen($raw);
+        if ($length < 4) {
+            return null;
+        }
+        $argc = \unpack('i', \substr($raw, 0, 4))[1];
+        if ($argc < 1 || $argc > $length - 4) {
+            return null;
+        }
+        $offset = \strpos($raw, "\0", 4);
+        if ($offset === false) {
+            return null;
+        }
+        // Apple ps skips the saved executable path and its alignment padding.
+        while ($offset < $length && $raw[$offset] === "\0") {
+            ++$offset;
+        }
+        $command = '';
+        for ($index = 0; $index < $argc; ++$index) {
+            $end = \strpos($raw, "\0", $offset);
+            if ($end === false) {
+                return null;
+            }
+            $command .= ($index > 0 ? ' ' : '') . \substr($raw, $offset, $end - $offset);
+            if (\strlen($command) > self::MAX_PROCESS_COMMAND_BYTES) {
+                return null;
+            }
+            $offset = $end + 1;
+        }
+        if (\preg_match('/[\x80-\xFF]/', $command) === 1) {
+            return null;
+        }
+
+        return $command;
+    }
+
     /** @return array<string,mixed> */
     private function processInfo(int $pid): array
     {
@@ -1011,11 +1133,13 @@ CDEF,
                 return $cache[$pid];
             }
         }
-        $info = $this->processInfoResolver === null
-            && PHP_OS_FAMILY === 'Windows'
-            && !$includeMutableProcessMetadata
-                ? $this->inspectWindowsProcess($pid, false)
-                : $this->processInfo($pid);
+        $info = $this->processInfoResolver === null && !$includeMutableProcessMetadata
+            ? match (PHP_OS_FAMILY) {
+                'Windows' => $this->inspectWindowsProcess($pid, false),
+                'Darwin' => $this->inspectDarwinProcess($pid, false),
+                default => $this->processInfo($pid),
+            }
+            : $this->processInfo($pid);
         if (($info['exists'] ?? false) !== true) {
             return null;
         }
@@ -1367,7 +1491,7 @@ CDEF,
     }
 
     /** @return array<string,mixed> */
-    private function inspectDarwinProcess(int $pid): array
+    private function inspectDarwinProcess(int $pid, bool $includeMutableProcessMetadata = true): array
     {
         $stable = null;
         // libproc/FFI can flake under Master FD pressure; retry a longer streak
@@ -1417,6 +1541,16 @@ CDEF,
             return [];
         }
         $second = $stable;
+        if (!$includeMutableProcessMetadata) {
+            // Birth/existence checks consume only the stable kernel evidence.
+            // Keep full ps metadata for callers that actually verify names/argv.
+            return [
+                'exists' => true,
+                'pid' => $pid,
+                'start_ticks' => $second['start_ticks'],
+                'start_time' => 'darwin-start-timeval:' . $second['start_ticks'],
+            ];
+        }
         $info = $this->inspectPosixProcessWithPs($pid);
         if (($info['exists'] ?? null) === false) {
             // Bounded/direct ps can false-negative under Master FD inheritance
@@ -1591,6 +1725,8 @@ struct proc_bsdinfo {
     uint64_t pbi_start_tvusec;
 };
 int proc_pidinfo(int pid, int flavor, uint64_t arg, void *buffer, int buffersize);
+int sysctl(int *name, unsigned int namelen, void *oldp, size_t *oldlenp, void *newp, size_t newlen);
+int strnvis(char *dst, size_t dstsize, const char *src, int flags);
 CDEF,
                 '/usr/lib/libproc.dylib',
             );

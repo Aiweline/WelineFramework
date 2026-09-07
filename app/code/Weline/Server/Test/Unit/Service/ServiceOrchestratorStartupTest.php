@@ -335,7 +335,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             workerCount: 4,
             workerBasePort: 16894,
             workerPort: 16895,
-            publicHost: 'p11005ce4.weline.test',
+            publicHost: 'p11005ce4.test.weline.com',
         );
         $orchestrator = new class extends ServiceOrchestrator {
             public function markReady(ServiceContext $context, int $totalServices): void
@@ -528,7 +528,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             envConfig: [
                 'wls' => [
                     'edge' => ['adapter' => 'wls'],
-                    'public_origin' => 'https://p11005ce4.weline.test',
+                    'public_origin' => 'https://p11005ce4.test.weline.com',
                 ],
                 'router' => [
                     'area_routes' => [
@@ -542,7 +542,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             workerCount: 1,
             workerBasePort: 18080,
             workerPort: 18080,
-            publicHost: 'p11005ce4.weline.test',
+            publicHost: 'p11005ce4.test.weline.com',
         );
 
         $this->writePrivate($orchestrator, 'context', $context);
@@ -558,7 +558,7 @@ class ServiceOrchestratorStartupTest extends TestCase
         }
 
         self::assertStringContainsString('J3yXU3Y86zzJF0sbWd5S1PmDzPCc1mgE/', $output);
-        self::assertStringContainsString('https://p11005ce4.weline.test/', $output);
+        self::assertStringContainsString('https://p11005ce4.test.weline.com/', $output);
         self::assertStringNotContainsString('Nginx 是唯一公网边缘', $output);
         self::assertStringNotContainsString('→ HTTPS', $output);
 
@@ -4355,7 +4355,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             epoch: 1,
             controlPort: 19981,
             masterPid: 1234,
-            host: 'p11005ce4.weline.test',
+            host: 'p11005ce4.test.weline.com',
             mainPort: 9981,
             sslEnabled: false,
             sslCert: '',
@@ -4367,7 +4367,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             envConfig: [
                 'wls' => [
                     'edge' => ['adapter' => 'wls'],
-                    'host' => 'p11005ce4.weline.test',
+                    'host' => 'p11005ce4.test.weline.com',
                 ],
             ],
             workerCount: 4,
@@ -4377,7 +4377,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $command = $provider->buildCommand(1, $context);
 
-        self::assertSame('p11005ce4.weline.test', $command->arguments[0] ?? null);
+        self::assertSame('p11005ce4.test.weline.com', $command->arguments[0] ?? null);
     }
 
     public function testPureWlsDispatcherProviderIgnoresLegacyPrivateBindHostOverride(): void
@@ -4388,7 +4388,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             epoch: 1,
             controlPort: 19981,
             masterPid: 1234,
-            host: 'p11005ce4.weline.test',
+            host: 'p11005ce4.test.weline.com',
             mainPort: 9981,
             sslEnabled: false,
             sslCert: '',
@@ -4400,7 +4400,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             envConfig: [
                 'wls' => [
                     'edge' => ['adapter' => 'wls'],
-                    'host' => 'p11005ce4.weline.test',
+                    'host' => 'p11005ce4.test.weline.com',
                     'dispatcher' => [
                         'bind_host' => '127.0.0.1',
                     ],
@@ -4413,7 +4413,7 @@ class ServiceOrchestratorStartupTest extends TestCase
 
         $command = $provider->buildCommand(1, $context);
 
-        self::assertSame('p11005ce4.weline.test', $command->arguments[0] ?? null);
+        self::assertSame('p11005ce4.test.weline.com', $command->arguments[0] ?? null);
     }
 
     public function testGatewayDispatcherUsesSameBackendTokenAsWorkers(): void
@@ -4504,7 +4504,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             windowMode: false,
             envConfig: [
                 'wls' => [
-                    'public_origin' => 'https://gateway-worker-identity.weline.test',
+                    'public_origin' => 'https://gateway-worker-identity.test.weline.com',
                     'edge' => [
                         'adapter' => 'nginx',
                         'mode' => 'gateway',
@@ -4614,7 +4614,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             windowMode: false,
             envConfig: [
                 'wls' => [
-                    'public_origin' => 'https://gateway-direct-worker-identity.weline.test',
+                    'public_origin' => 'https://gateway-direct-worker-identity.test.weline.com',
                     'edge' => [
                         'adapter' => 'nginx',
                         'mode' => 'gateway',
@@ -4703,7 +4703,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             windowMode: false,
             envConfig: [
                 'wls' => [
-                    'public_origin' => 'https://gateway-maintenance-identity.weline.test',
+                    'public_origin' => 'https://gateway-maintenance-identity.test.weline.com',
                     'edge' => [
                         'adapter' => 'nginx',
                         'mode' => 'gateway',
@@ -4758,7 +4758,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             epoch: 1,
             controlPort: 19981,
             masterPid: 1234,
-            host: 'p11005ce4.weline.test',
+            host: 'p11005ce4.test.weline.com',
             mainPort: 443,
             sslEnabled: true,
             sslCert: '/tmp/cert.pem',
@@ -4770,7 +4770,7 @@ class ServiceOrchestratorStartupTest extends TestCase
             envConfig: [
                 'wls' => [
                     'edge' => ['adapter' => 'wls'],
-                    'host' => 'p11005ce4.weline.test',
+                    'host' => 'p11005ce4.test.weline.com',
                 ],
             ],
             httpRedirectPort: 80,

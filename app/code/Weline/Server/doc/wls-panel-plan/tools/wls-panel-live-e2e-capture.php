@@ -390,10 +390,10 @@ function wlsPanelCaptureSelfTest(): array
             'local_app_env_wls_endpoint_consistent' => true,
         ],
         'contract' => [
-            'local_development_root' => 'https://app.weline.test:9523',
-            'local_development_endpoint' => 'https://app.weline.test:9523/api/v1/platform/module/list',
+            'local_development_root' => 'https://app.test.weline.com:9523',
+            'local_development_endpoint' => 'https://app.test.weline.com:9523/api/v1/platform/module/list',
             'local_development_checkout' => 'E:\\WelineFramework\\Framework-Official\\App\\weline',
-            'local_development_env_wls_endpoint' => 'https://app.weline.test:9523',
+            'local_development_env_wls_endpoint' => 'https://app.test.weline.com:9523',
             'production_deployed_root' => 'https://app.aiweline.com',
             'production_deployed_endpoint' => 'https://app.aiweline.com/api/v1/platform/module/list',
         ],
@@ -403,7 +403,7 @@ function wlsPanelCaptureSelfTest(): array
     ];
     $payloadWithMetadata = wlsPanelCaptureEvidencePayload(
         [
-            'endpoint' => 'https://app.weline.test:9523/api/v1/platform/module/list',
+            'endpoint' => 'https://app.test.weline.com:9523/api/v1/platform/module/list',
             'live_evidence' => [
                 'endpoint_source' => 'deploy-current:tools/deploy-current-local-development.json',
             ],
@@ -512,10 +512,10 @@ function wlsPanelCaptureSelfTest(): array
             && ($localConsistencyMetadata['drift_fingerprints_match'] ?? false) === true
             && ($localConsistencyMetadata['local_app_checkout_identity_consistent'] ?? false) === true
             && ($localConsistencyMetadata['local_app_env_wls_endpoint_consistent'] ?? false) === true
-            && ($localConsistencyMetadata['local_development_root'] ?? '') === 'https://app.weline.test:9523'
-            && ($localConsistencyMetadata['local_development_endpoint'] ?? '') === 'https://app.weline.test:9523/api/v1/platform/module/list'
+            && ($localConsistencyMetadata['local_development_root'] ?? '') === 'https://app.test.weline.com:9523'
+            && ($localConsistencyMetadata['local_development_endpoint'] ?? '') === 'https://app.test.weline.com:9523/api/v1/platform/module/list'
             && ($localConsistencyMetadata['local_development_checkout'] ?? '') === 'E:\\WelineFramework\\Framework-Official\\App\\weline'
-            && ($localConsistencyMetadata['local_development_env_wls_endpoint'] ?? '') === 'https://app.weline.test:9523'
+            && ($localConsistencyMetadata['local_development_env_wls_endpoint'] ?? '') === 'https://app.test.weline.com:9523'
             && ($localConsistencyMetadata['production_deployed_root'] ?? '') === 'https://app.aiweline.com'
             && ($localConsistencyMetadata['production_deployed_endpoint'] ?? '') === 'https://app.aiweline.com/api/v1/platform/module/list'
             && ($localConsistencyMetadata['drift_review_fingerprint'] ?? '') === '1234567890abcdef',
@@ -539,8 +539,8 @@ function wlsPanelCaptureSelfTest(): array
             && ($productionConsistencyMetadata['production_deployed_root'] ?? '') === 'https://app.aiweline.com'
             && ($productionConsistencyMetadata['production_deployed_endpoint'] ?? '') === 'https://app.aiweline.com/api/v1/platform/module/list'
             && ($productionConsistencyMetadata['local_development_checkout'] ?? '') === 'E:\\WelineFramework\\Framework-Official\\App\\weline'
-            && ($productionConsistencyMetadata['local_development_env_wls_endpoint'] ?? '') === 'https://app.weline.test:9523'
-            && ($productionConsistencyMetadata['local_development_root'] ?? '') === 'https://app.weline.test:9523',
+            && ($productionConsistencyMetadata['local_development_env_wls_endpoint'] ?? '') === 'https://app.test.weline.com:9523'
+            && ($productionConsistencyMetadata['local_development_root'] ?? '') === 'https://app.test.weline.com:9523',
     ];
     $cases[] = [
         'name' => 'local_final_gate_uses_local_evidence_arg',

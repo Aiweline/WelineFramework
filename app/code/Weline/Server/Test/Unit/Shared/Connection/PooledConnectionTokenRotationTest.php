@@ -42,6 +42,106 @@ final class PooledConnectionTokenRotationTest extends TestCase
         parent::tearDown();
     }
 
+    public function testAuthTimingDistinguishesMissingResponse(): void
+    {
+        $this->assertAuthFailureTiming(null, 'read');
+    }
+
+    public function testAuthTimingDistinguishesNonSuccessResponse(): void
+    {
+        $this->assertAuthFailureTiming(
+            SessionProtocol::encodeError('Rejected by isolated fixture', 'AUTH_FAILED'),
+            'response',
+        );
+    }
+
+    private function assertAuthFailureTiming(?string $response, string $expectedStage): void
+    {
+        if (\PHP_OS_FAMILY === 'Windows') {
+            self::markTestSkipped('The authentication timing fixture requires a local socket pair.');
+        }
+        $pair = \stream_socket_pair(STREAM_PF_UNIX, STREAM_SOCK_STREAM, 0);
+        self::assertIsArray($pair);
+        [$client, $peer] = $pair;
+        \stream_set_blocking($client, false);
+        \stream_set_blocking($peer, false);
+        $port = 25431; // Capability identity only; no listener or TCP connection is opened.
+        $tokenPath = $this->directory . DIRECTORY_SEPARATOR . 'auth_timing.token';
+        $secret = \str_repeat('9', 64);
+        (new SharedStateTokenStore($tokenPath, 0.25, $this->authority($port)))->publish($secret, 1);
+        $connection = new PooledConnection(
+            '127.0.0.1', $port, 0.05, 0.05, $tokenPath, false, 'session_server', false,
+        );
+        (new \ReflectionProperty($connection, 'socket'))->setValue($connection, $client);
+        $originalServer = $_SERVER;
+        $originalGet = $_GET;
+        $_SERVER['REQUEST_URI'] = '/isolated-auth-timing?wls_trace=1';
+        $_SERVER['REQUEST_METHOD'] = 'GET';
+        $_GET['wls_trace'] = '1';
+        \Weline\Framework\Runtime\RequestContext::init();
+        \Weline\Framework\Runtime\RequestContext::set('server', $_SERVER);
+        \Weline\Framework\Runtime\RequestContext::set('get', $_GET);
+        \Weline\Framework\Runtime\RequestLifecycleTrace::reset();
+        self::assertTrue(\Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled());
+
+        try {
+            if ($response !== null) {
+                self::assertSame(\strlen($response), \fwrite($peer, $response));
+            }
+            // Exercise the actual auth/load/send/read/retry methods over real sockets.
+            $result = (new \ReflectionMethod($connection, 'authenticate'))->invoke(
+                $connection,
+                \hrtime(true) / 1_000_000_000 + 0.05,
+            );
+            $frame = $this->readFrame($peer);
+            $spans = \Weline\Framework\Runtime\RequestLifecycleTrace::getSpans();
+            $summary = \Weline\Framework\Runtime\RequestLifecycleTrace::getAggregateSummary();
+
+            // Existing behavior and actual AUTH bytes must pass before the new fields.
+            self::assertFalse($result);
+            self::assertSame(SessionProtocol::CMD_AUTH, $frame['cmd'] ?? null);
+            self::assertTrue(\hash_equals($secret, (string)($frame['token'] ?? '')));
+            $authSpans = \array_values(\array_filter(
+                $spans,
+                static fn(array $span): bool => $span['name'] === 'wls.connection.auth',
+            ));
+            self::assertCount(1, $authSpans);
+            $meta = $authSpans[0]['meta'];
+            $last = $summary['phases']['wls.connection.auth.last_failure']['meta'];
+            self::assertSame('failure', $meta['result']);
+            self::assertSame('token_mismatch', $meta['reason']);
+            self::assertFalse($meta['authenticated']);
+            self::assertSame('token_mismatch', $last['reason']);
+            self::assertSame('last_failure', $last['measurement']);
+            foreach (['token', 'secret', 'path', 'token_file_path', 'response'] as $key) {
+                self::assertArrayNotHasKey($key, $meta);
+                self::assertArrayNotHasKey($key, $last);
+            }
+            self::assertStringNotContainsString($secret, \json_encode($meta, JSON_THROW_ON_ERROR));
+            self::assertStringNotContainsString($tokenPath, \json_encode($meta, JSON_THROW_ON_ERROR));
+
+            self::assertArrayHasKey('failure_stage', $meta);
+            self::assertSame($expectedStage, $meta['failure_stage']);
+            self::assertSame(1, $meta['attempts']);
+            self::assertIsNumeric($meta['last_attempt_ms']);
+            self::assertGreaterThanOrEqual(0.0, $meta['last_attempt_ms']);
+            foreach (['failure_stage', 'attempts', 'last_attempt_ms'] as $key) {
+                self::assertSame($meta[$key], $last[$key]);
+            }
+        } finally {
+            $connection->close();
+            if (\is_resource($peer)) {
+                \fclose($peer);
+            }
+            \Weline\Framework\Runtime\RequestLifecycleTrace::reset();
+            $_SERVER = $originalServer;
+            $_GET = $originalGet;
+            \Weline\Framework\Runtime\RequestContext::set('server', $_SERVER);
+            \Weline\Framework\Runtime\RequestContext::set('get', $_GET);
+        }
+    }
+
+
     public function testTokenRotationReconnectsBeforeRetryingAuthentication(): void
     {
         if (!\function_exists('pcntl_fork') || \PHP_OS_FAMILY === 'Windows') {

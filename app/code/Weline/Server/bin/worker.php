@@ -1572,6 +1572,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                             \opcache_reset();
                         }
                         \clearstatcache(true);
+                        \Weline\Framework\App\Env::getInstance()->reloadPersistentConfigFromDisk();
                         $cachePoolResults = \Weline\Server\Service\Runtime\WorkerCachePoolResetter::clearFrameworkPools();
                         $failedCachePools = \Weline\Server\Service\Runtime\WorkerCachePoolResetter::failedPools(
                             $cachePoolResults
@@ -1836,9 +1837,9 @@ $connectionLastActivity = []; // 连接最后活动时间（用于超时清理�
 $requestLogged = []; // 记录已输出日志的连接（前端模式使用）
 $startTime = wlsWorkerMonotonicNow(); // 进程内 uptime 的 monotonic 起点
 
-// Keep-Alive 连接超时配置（秒）
-$keepAliveTimeout = 60; // 默认 60 秒空闲超时
-$connectionTimeoutCheckInterval = 5; // 每 5 秒检查一次超时连接
+// Keep-Alive 连接超时配置（秒）——电商店面默认
+$keepAliveTimeout = \Weline\Server\Service\WorkerConnectionIdlePolicy::DEFAULT_KEEP_ALIVE_SEC;
+$connectionTimeoutCheckInterval = \Weline\Server\Service\WorkerConnectionIdlePolicy::DEFAULT_TIMEOUT_CHECK_INTERVAL_SEC;
 $lastTimeoutCheck = wlsWorkerMonotonicNow();
 if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
     $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
@@ -2174,7 +2175,11 @@ $sharedRuntimeConnectionWarmupNotBefore = wlsWorkerMonotonicNow()
     + 0.10
     + ((($workerId * 53) % 700) / 1000);
 $deferredWorkerBootstrapWarmupStarted = false;
-$deferredWorkerBootstrapWarmupNotBefore = wlsWorkerMonotonicNow();
+$deferredWorkerBootstrapWarmupNotBefore = wlsWorkerDeferredWarmupNotBefore(
+    wlsWorkerMonotonicNow(),
+    $workerId,
+);
+$deferredWorkerBootstrapLoopCompleted = false;
 $homepageKeepWarmFiber = null;
 $attackLogNextFlushCheckAt = 0.0;
 
@@ -2395,10 +2400,15 @@ while (true) {
     }
 
     // ========== Deferred worker bootstrap warmup ==========
-    if (!$deferredWorkerBootstrapWarmupStarted
-        && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
-        && $workerLoopStartedSent
-        && !$ipcReceivedShutdown
+    if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+        && wlsWorkerDeferredWarmupMayStart(
+            $deferredWorkerBootstrapWarmupStarted,
+            $workerLoopStartedSent,
+            $ipcReceivedShutdown,
+            $deferredWorkerBootstrapLoopCompleted,
+            wlsWorkerHasPendingRequestWork($activeRequests, $requestBuffers, $writeBuffers, null),
+            wlsWorkerListenerHasPendingConnection($socket),
+        )
         && wlsWorkerMonotonicNow() >= $deferredWorkerBootstrapWarmupNotBefore
     ) {
         $deferredWorkerBootstrapWarmupStarted = true;
@@ -3272,6 +3282,7 @@ while (true) {
     }
     
     // 重置连续错误计数（本轮循环成功完成）
+    $deferredWorkerBootstrapLoopCompleted = true;
     $consecutiveErrors = 0;
     
     } catch (\Throwable $loopException) {

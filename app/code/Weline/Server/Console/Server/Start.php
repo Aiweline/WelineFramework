@@ -2554,7 +2554,7 @@ class Start extends CommandAbstract
             @\flush();
         }
 
-        // 前台模式也使用 listenHost；对外展示的访问域名保留为项目 host（如 *.weline.test / *.weline.localhost）
+        // 前台模式也使用 listenHost；对外展示的访问域名保留为项目 host（如 *.test.weline.com / *.weline.localhost）
         $config['public_host'] = (string)($config['public_host'] ?? $host);
         $config['host'] = $listenHost;
         $this->warnWindowsLocalDomainProxyRisk((string)$config['public_host']);
@@ -2825,11 +2825,14 @@ class Start extends CommandAbstract
     protected function buildSuggestedWindowsProxyBypassRule(string $host): string
     {
         $host = \strtolower(\trim($host));
-        if (\str_ends_with($host, '.weline.test')) {
-            return '*.weline.test;weline.test';
+        $root = LocalDomainPolicy::resolveRootDomain($host);
+        if ($root !== null && LocalDomainPolicy::requiresHostsEntry($host)) {
+            return '*.' . $root . ';' . $root;
         }
 
-        if (\str_ends_with($host, '.weline.localhost')) {
+        if ($root === LocalDomainPolicy::LOOPBACK_ROOT_DOMAIN
+            || \str_ends_with($host, '.weline.localhost')
+        ) {
             return '*.weline.localhost;weline.localhost';
         }
 
@@ -5909,7 +5912,7 @@ class Start extends CommandAbstract
         $this->ensureHostsFileConfigured($config['host'] ?? '127.0.0.1');
         $this->traceStartupPhase($instanceName, 'hosts:after');
 
-        // 开发环境：确保 *.weline.test 泛域名证书存在，避免 hosts 中其他子域 TLS 主机名不匹配
+        // 开发环境：确保 *.test.weline.com 泛域名证书存在，避免 hosts 中其他子域 TLS 主机名不匹配
         if (!empty($config['no_ssl'])) {
             $this->traceStartupPhase($instanceName, 'wildcard-certificate:skipped-http-only');
         } elseif ($deferCertificatePreparation) {
@@ -7185,7 +7188,7 @@ class Start extends CommandAbstract
             ];
         }
         if ($mode === \Weline\Server\Service\Edge\Gateway\GatewayStartupDecision::MODE_WLS) {
-            // Local/development domains (*.weline.test, loopback, etc.) still use
+            // Local/development domains (*.test.weline.com, loopback, etc.) still use
             // the project self-signed cold-start path. Public pure-WLS hosts remain
             // fail-closed until an enrolled project certificate exists.
             if ($needsLocalCertificate) {
@@ -8088,7 +8091,7 @@ class Start extends CommandAbstract
             && $selectedKeyPath !== ''
             && $sslService->canReuseConfiguredCertificate($selectedCertPath, $selectedKeyPath);
         foreach ($domains as $domain) {
-            // 当前已选证书（尤其是 *.weline.test）覆盖该 Host 时无需再次 ensure，
+            // 当前已选证书（尤其是 *.test.weline.com）覆盖该 Host 时无需再次 ensure，
             // 避免“复用证书”仍刷新映射并向全部历史实例广播 reload。
             if ($selectedCertificateReusable
                 && $sslService->certificateMatchesHost($selectedCertPath, $domain)) {
@@ -8383,7 +8386,7 @@ class Start extends CommandAbstract
      * 获取默认监听地址
      *
      * 为避免多项目 SSL 证书冲突，使用项目唯一的本地域名。
-     * 格式：p{项目哈希前8位}.weline.test 或 p{项目哈希前8位}.weline.localhost
+     * 格式：p{项目哈希前8位}.test.weline.com 或 p{项目哈希前8位}.weline.localhost
      *
      * @return string
      */
@@ -8455,7 +8458,7 @@ class Start extends CommandAbstract
         $result = $this->addHostsDomain($host);
         if (!($result['success'] ?? false) && ($result['needs_admin'] ?? false)) {
             $this->printer->note(__(
-                'hosts 记录缺失，WLS 将请求一次管理员授权；密码仅由操作系统 sudo 读取并由其会话票据复用。'
+                'hosts 记录缺失，WLS 将请求一次管理员授权；密码仅由操作系统 sudo 读取并由其会话票据复用（终端 sudo 或 macOS 图形密码框）。'
             ));
             $result = $this->configureHostsWithAdministratorAuthorization($host);
         }
@@ -8580,7 +8583,7 @@ class Start extends CommandAbstract
 
 
     /**
-     * 开发环境自动准备 *.weline.test 泛域名证书，并确保本地 CA 被系统信任。
+     * 开发环境自动准备 *.test.weline.com 泛域名证书，并确保本地 CA 被系统信任。
      */
     protected function ensureManagedLocalWildcardCertificate(): void
     {

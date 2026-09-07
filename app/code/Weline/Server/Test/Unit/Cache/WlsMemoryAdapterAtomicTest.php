@@ -11,6 +11,12 @@ use Weline\Server\Cache\Adapter\WlsMemoryAdapter;
 
 final class WlsMemoryAdapterAtomicTest extends TestCase
 {
+    protected function tearDown(): void
+    {
+        WlsMemoryAdapter::clearAllMemory();
+        parent::tearDown();
+    }
+
     public function testCasConflictEvictsWorkerLocalStaleSnapshot(): void
     {
         $shared = new SharedCacheStateDouble();
@@ -41,6 +47,32 @@ final class WlsMemoryAdapterAtomicTest extends TestCase
 
         self::assertNull($adapter->get('quota'));
         self::assertFalse($adapter->isAvailable());
+    }
+
+    public function testSlowRemoteReadOpensShortGlobalCooldownForAllCachePools(): void
+    {
+        WlsMemoryAdapter::clearAllMemory();
+        $shared = new SlowSharedCacheStateDouble();
+        $adapter = new WlsMemoryAdapter('slow_remote', [
+            'remote_slow_threshold_ms' => 25,
+        ], $shared);
+
+        self::assertNull($adapter->get('first'));
+        self::assertSame(1, $shared->cacheReads);
+
+        // A different key must skip the remote service while the short
+        // process-wide cooldown is active, even when another pool asks next.
+        self::assertNull($adapter->get('second'));
+        self::assertSame(1, $shared->cacheReads);
+    }
+
+    public function testEmptyLocalCacheSkipsEpochProbeBeforeFirstRemoteRead(): void
+    {
+        $shared = new CountingEpochStateDouble();
+        $adapter = new WlsMemoryAdapter('empty_epoch_probe', [], $shared);
+
+        self::assertNull($adapter->get('missing'));
+        self::assertSame(0, $shared->epochReads);
     }
 
     public function testClearBumpsEpochSoPeerWorkerDropsLocalCache(): void
@@ -90,7 +122,7 @@ final class WlsMemoryAdapterAtomicTest extends TestCase
     }
 }
 
-final class SharedCacheStateDouble implements SharedCacheStateInterface
+class SharedCacheStateDouble implements SharedCacheStateInterface
 {
     /** @var array<string, array<string, mixed>> */
     private array $values = [];
@@ -207,5 +239,35 @@ final class SharedCacheStateDouble implements SharedCacheStateInterface
         if ($this->fail) {
             throw new \RuntimeException('shared_cache_unavailable');
         }
+    }
+}
+
+final class SlowSharedCacheStateDouble extends SharedCacheStateDouble
+{
+    public int $cacheReads = 0;
+
+    public function get(string $namespace, string $key): mixed
+    {
+        return 0;
+    }
+
+    public function getCache(string $poolIdentity, string $key): mixed
+    {
+        ++$this->cacheReads;
+        usleep(50_000);
+
+        return null;
+    }
+}
+
+final class CountingEpochStateDouble extends SharedCacheStateDouble
+{
+    public int $epochReads = 0;
+
+    public function get(string $namespace, string $key): mixed
+    {
+        ++$this->epochReads;
+
+        return parent::get($namespace, $key);
     }
 }

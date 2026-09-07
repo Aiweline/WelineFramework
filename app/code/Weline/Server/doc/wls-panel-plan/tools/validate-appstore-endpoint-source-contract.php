@@ -10,7 +10,7 @@ declare(strict_types=1);
  */
 
 const WLS_PANEL_ENDPOINT_SOURCE_CONTRACT_EXIT_ASSERTION_FAILED = 1;
-const WLS_PANEL_ENDPOINT_SOURCE_CONTRACT_LOCAL_URL = 'https://app.weline.test:9523';
+const WLS_PANEL_ENDPOINT_SOURCE_CONTRACT_LOCAL_URL = 'https://app.test.weline.com:9523';
 const WLS_PANEL_ENDPOINT_SOURCE_CONTRACT_PRODUCTION_URL = 'https://app.aiweline.com';
 
 /**
@@ -77,7 +77,7 @@ function wlsPanelEndpointSourceRead(string $path, array &$errors): string
 function wlsPanelEndpointSourceHasNoWwwMarketplaceHost(array $sources): bool
 {
     foreach ($sources as $source) {
-        if (str_contains($source, 'www.aiweline.com') || str_contains($source, 'www.weline.test:9518')) {
+        if (str_contains($source, 'www.aiweline.com') || str_contains($source, 'www.test.weline.com:9518')) {
             return false;
         }
     }

@@ -4,6 +4,6 @@
   "deploy_mode": "dev",
   "deploy_mode_source": "env.php:system.deploy",
   "appstore_environment": "local",
-  "appstore_platform_url": "https://app.weline.test:9523",
+  "appstore_platform_url": "https://app.test.weline.com:9523",
   "appstore_platform_url_source": "local_default"
 }

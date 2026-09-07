@@ -826,6 +826,7 @@ final class MasterChildCredentialStore
         string $credential,
         bool $requireFreshness = true,
     ): array {
+        $transientOwnerUnknown = false;
         try {
             if (\preg_match('/\A[a-f0-9]{64}\z/D', $credential) !== 1) {
                 throw new \RuntimeException('Managed-child credential is malformed.');
@@ -837,15 +838,18 @@ final class MasterChildCredentialStore
                 $masterEpoch,
                 requireManagedName: true,
             );
+            $transientOwnerUnknown = ($validation['fresh'] ?? false) === true
+                && ($validation['same_boot'] ?? false) === true
+                && ($validation['veto'] ?? false) === true
+                && ($validation['foreign_pid_namespace'] ?? false) === false
+                && ($validation['owner_status'] ?? '') === MasterLeaseRuntimeIdentity::OWNER_UNKNOWN
+                && \is_array($validation['lease'] ?? null);
             $authorized = $requireFreshness
                 ? (($validation['authorized'] ?? false) === true)
                 : (($validation['identity_authorized'] ?? false) === true);
             if (!$authorized || !\is_array($validation['lease'] ?? null)) {
                 $reason = (string)($validation['reason'] ?? 'unknown reason');
-                if (!$requireFreshness
-                    && ($validation['same_boot'] ?? false) === true
-                    && ($validation['owner_status'] ?? '') !== MasterLeaseRuntimeIdentity::OWNER_MATCH
-                ) {
+                if (!$requireFreshness && $transientOwnerUnknown) {
                     $reason = 'Master owner evidence is not observable.';
                 }
                 throw new \RuntimeException(
@@ -871,11 +875,16 @@ final class MasterChildCredentialStore
             }
             $this->assertRecordProcessAndParent($matches[0], $state['records']);
 
-            return ['authorized' => true, 'reason' => ''];
+            return [
+                'authorized' => true,
+                'reason' => '',
+                'transient_owner_unknown' => false,
+            ];
         } catch (\Throwable $throwable) {
             return [
                 'authorized' => false,
                 'reason' => \substr($throwable->getMessage(), 0, 512),
+                'transient_owner_unknown' => $transientOwnerUnknown,
             ];
         }
     }

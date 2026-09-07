@@ -3879,6 +3879,7 @@ if ($controlPort > 0 || $supervisorEnabled) {
                             \opcache_reset();
                         }
                         \clearstatcache(true);
+                        \Weline\Framework\App\Env::getInstance()->reloadPersistentConfigFromDisk();
                         $cachePoolResults = \Weline\Server\Service\Runtime\WorkerCachePoolResetter::clearFrameworkPools();
                         $failedCachePools = \Weline\Server\Service\Runtime\WorkerCachePoolResetter::failedPools(
                             $cachePoolResults
@@ -4787,6 +4788,8 @@ $requestCount = 0;
 $activeRequests = 0; // 正在处理的请求数
 $requestBuffers = [];
 $connectionLastActivity = []; // 连接最后活动时间（用于超时清理）
+$connectionLastProgress = []; // 真实响应进度（写出字节 / H2 pending 下降），写停滞用此时钟
+$connectionHttp2PendingBytes = []; // 上一轮 H2 pending response 字节，用于检测流控是否有进展
 $requestLogged = []; // 记录已输出日志的连接（前端模式使用）
 $writeBuffers = [];
 $writableConnections = [];
@@ -4812,9 +4815,10 @@ $pendingClose = [];
 $handshakeStartTimes = [];
 $startTime = wlsWorkerMonotonicNow(); // 进程内 uptime 的 monotonic 起点
 
-// Keep-Alive 连接超时配置（秒）
-$keepAliveTimeout = 60; // 默认 60 秒空闲超时
-$connectionTimeoutCheckInterval = 5; // 每 5 秒检查一次超时连接
+// Keep-Alive 连接超时配置（秒）——电商店面默认：复用适中、卡死快断
+$keepAliveTimeout = \Weline\Server\Service\WorkerConnectionIdlePolicy::DEFAULT_KEEP_ALIVE_SEC;
+$responseWriteStallTimeout = \Weline\Server\Service\WorkerConnectionIdlePolicy::DEFAULT_WRITE_STALL_SEC;
+$connectionTimeoutCheckInterval = \Weline\Server\Service\WorkerConnectionIdlePolicy::DEFAULT_TIMEOUT_CHECK_INTERVAL_SEC;
 $lastTimeoutCheck = wlsWorkerMonotonicNow();
 if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php')) {
     $env = @include BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRECTORY_SEPARATOR . 'env.php';
@@ -4827,6 +4831,15 @@ if (\defined('BP') && \is_file(BP . 'app' . \DIRECTORY_SEPARATOR . 'etc' . \DIRE
         $configuredKeepAliveTimeout = (int)$configuredKeepAliveTimeout;
         if ($configuredKeepAliveTimeout > 0) {
             $keepAliveTimeout = $configuredKeepAliveTimeout;
+        }
+    }
+    $configuredWriteStallTimeout = $wlsInstance['response_write_stall_timeout']
+        ?? $wls['response_write_stall_timeout']
+        ?? null;
+    if (\is_numeric($configuredWriteStallTimeout)) {
+        $configuredWriteStallTimeout = (int)$configuredWriteStallTimeout;
+        if ($configuredWriteStallTimeout > 0) {
+            $responseWriteStallTimeout = $configuredWriteStallTimeout;
         }
     }
 }
@@ -4976,7 +4989,11 @@ $eventLoopWaitTimeouts = 0;
 $eventLoopLagWarnings = 0;
 $eventLoopLastMetricsLogAt = wlsWorkerMonotonicNow();
 $deferredWorkerBootstrapWarmupStarted = false;
-$deferredWorkerBootstrapWarmupNotBefore = wlsWorkerMonotonicNow();
+$deferredWorkerBootstrapWarmupNotBefore = wlsWorkerDeferredWarmupNotBefore(
+    wlsWorkerMonotonicNow(),
+    $workerId,
+);
+$deferredWorkerBootstrapLoopCompleted = false;
 $sharedRuntimeConnectionWarmupStarted = false;
 $sharedRuntimeConnectionWarmupNotBefore = wlsWorkerMonotonicNow()
     + 0.10
@@ -5175,7 +5192,7 @@ while (true) {
     // 注意：Worker 的主循环不进行连接池预热
     // 连接池将在首次需要时由请求 Fiber 按需初始化
 
-    if ($childMasterGuard->shouldExit()) {
+    if ($fiberScheduler->observePendingIoGuard(static fn(): bool => $childMasterGuard->shouldExit())) {
         $leaseExitReason = $childMasterGuard->getLastExitReason();
         WlsLogger::warning_('[Worker SSL] Master lease/PID 已失效，子进程自治退出: ' . $leaseExitReason);
         $gracefulExit(
@@ -5302,10 +5319,24 @@ while (true) {
             WlsLogger::warning_("[ConnectionPoolWarmup] async shared-state prewarm start failed worker={$workerId}: " . $e->getMessage());
         }
     }
-    if (!$deferredWorkerBootstrapWarmupStarted
-        && $runtime instanceof \Weline\Framework\Runtime\WlsRuntime
-        && $workerLoopStartedSent
-        && !$ipcReceivedShutdown
+    if ($runtime instanceof \Weline\Framework\Runtime\WlsRuntime
+        && wlsWorkerDeferredWarmupMayStart(
+            $deferredWorkerBootstrapWarmupStarted,
+            $workerLoopStartedSent,
+            $ipcReceivedShutdown,
+            $deferredWorkerBootstrapLoopCompleted,
+            wlsWorkerHasPendingRequestWork(
+                $activeRequests,
+                $requestBuffers,
+                $writeBuffers,
+                null,
+                $http2PendingRequests,
+            ),
+            $pendingPeek !== []
+                || $pendingHandshakes !== []
+                || $postHandshakeReadPending !== []
+                || wlsWorkerListenerHasPendingConnection($socket),
+        )
         && wlsWorkerMonotonicNow() >= $deferredWorkerBootstrapWarmupNotBefore
     ) {
         $deferredWorkerBootstrapWarmupStarted = true;
@@ -5756,82 +5787,114 @@ while (true) {
         }
     }
     
-    // Keep-Alive 连接超时清理（定期检查并关闭空闲连接）
+    // Keep-Alive / write-stall 清理：HTTP/1.1 与 HTTP/2 共用策略，禁止半开或写停滞无限 pending。
     if ($now - $lastTimeoutCheck >= $connectionTimeoutCheckInterval) {
         $lastTimeoutCheck = $now;
         foreach ($connections as $connId => $conn) {
             $lastActivity = $connectionLastActivity[$connId] ?? $now;
+            if (!isset($connectionLastProgress[$connId])) {
+                $connectionLastProgress[$connId] = $lastActivity;
+            }
             $idleTime = $now - $lastActivity;
-            $http2IdleAdapter = $http2ConnectionAdapters[$connId] ?? null;
-            if ($http2IdleAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter) {
-                // HTTP/2 connections are persistent multiplexed sessions. A completed
-                // END_STREAM can still have encrypted bytes queued below PHP; closing
-                // it with the HTTP/1.1 idle policy truncates slow clients. GOAWAY and
-                // peer FIN own the normal H2 shutdown path.
+            $http2TimeoutAdapter = $http2ConnectionAdapters[$connId] ?? null;
+            $isHttp2Connection = $http2TimeoutAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter;
+            $http2PendingBytes = $isHttp2Connection
+                ? (int)$http2TimeoutAdapter->pendingResponseBytes()
+                : 0;
+            $previousHttp2PendingBytes = $connectionHttp2PendingBytes[$connId] ?? null;
+            if ($previousHttp2PendingBytes !== null && $http2PendingBytes < (int)$previousHttp2PendingBytes) {
+                // Peer WINDOW_UPDATE drained queued DATA — real response progress.
+                $connectionLastProgress[$connId] = $now;
+            }
+            $connectionHttp2PendingBytes[$connId] = $http2PendingBytes;
+            $hasHttp2FlowControlledResponse = $isHttp2Connection
+                && $http2TimeoutAdapter->hasPendingResponseData();
+            $hasBufferedData = (isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '')
+                || $hasHttp2FlowControlledResponse;
+            $hasActiveRequestWork = !empty($http2PendingRequests[$connId])
+                || (!empty($requestBuffers[$connId]) && !$isHttp2Connection)
+                || isset($longLivedConnections[$connId]);
+            if (!$hasActiveRequestWork) {
+                foreach ($activeFibers as $fiberState) {
+                    if (!\is_array($fiberState)) {
+                        continue;
+                    }
+                    if ((int)($fiberState['conn_id'] ?? 0) === (int)$connId
+                        || (int)($fiberState['connection_id'] ?? 0) === (int)$connId
+                    ) {
+                        $hasActiveRequestWork = true;
+                        break;
+                    }
+                }
+            }
+
+            $progressIdleTime = $now - (float)$connectionLastProgress[$connId];
+            $idleAction = \Weline\Server\Service\WorkerConnectionIdlePolicy::decide(
+                (float)$idleTime,
+                (float)$keepAliveTimeout,
+                (float)$responseWriteStallTimeout,
+                $hasBufferedData,
+                $hasActiveRequestWork && !$hasBufferedData,
+                (float)$progressIdleTime,
+            );
+            if ($idleAction === \Weline\Server\Service\WorkerConnectionIdlePolicy::ACTION_KEEP) {
                 continue;
             }
-            
-            // 如果连接空闲时间超过超时时间，关闭连接
-            if ($idleTime >= $keepAliveTimeout) {
-                // HTTP/2 may have no transport bytes queued while DATA is waiting
-                // for the peer's flow-control WINDOW_UPDATE. That is still an
-                // active response and must not be mistaken for idle Keep-Alive.
-                $http2TimeoutAdapter = $http2ConnectionAdapters[$connId] ?? null;
-                $hasHttp2FlowControlledResponse =
-                    $http2TimeoutAdapter instanceof \Weline\Server\Protocol\Http2\ConnectionAdapter
-                    && $http2TimeoutAdapter->hasPendingResponseData();
-                $hasBufferedData = (isset($writeBuffers[$connId]) && $writeBuffers[$connId] !== '')
-                    || $hasHttp2FlowControlledResponse;
-                if ($hasBufferedData) {
-                    // 缓冲区有数据，跳过关闭，等待数据发送完成
-                    // 但更新超时时间，避免无限等待
-                    if ($idleTime >= $keepAliveTimeout * 3) {
-                        // 超过 3 倍超时时间仍未发送完成，强制关闭（防止僵尸连接）
-                        WlsLogger::warning_("连接超时且缓冲区有数据，强制关闭 (connId: {$connId}, 剩余: " . \strlen($writeBuffers[$connId]) . " 字节)");
-                        if (\is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
-                            safeCloseStream($conn);
-                        }
-                        unset($connections[$connId]);
-                        unset($requestBuffers[$connId]);
-                        unset($connectionLastActivity[$connId]);
-                        unset($requestLogged[$connId]);
-                        unset($writeBuffers[$connId]);
-                        unset($writableConnections[$connId]);
-                        unset($pendingClose[$connId]);
-                        if (isset($longLivedConnections[$connId])) {
-                            unset($longLivedConnections[$connId]);
-                        }
-                        wlsCancelActiveFibersForConnection(
-                            $activeFibers,
-                            $connId,
-                            $fiberScheduler,
-                            $activeRequests
-                        );
-                    }
-                    continue; // 跳过正常超时关闭
-                }
 
-                if (\is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
-                    safeCloseStream($conn);
-                }
-                unset($connections[$connId]);
-                unset($requestBuffers[$connId]);
-                unset($connectionLastActivity[$connId]);
-                unset($requestLogged[$connId]);
-                // 清理写缓冲区相关状态（虽然此时应该为空）
-                unset($writeBuffers[$connId]);
-                unset($writableConnections[$connId]);
-                unset($pendingClose[$connId]);
-                if (isset($longLivedConnections[$connId])) {
-                    unset($longLivedConnections[$connId]);
-                }
-                wlsCancelActiveFibersForConnection(
-                    $activeFibers,
-                    $connId,
-                    $fiberScheduler,
-                    $activeRequests
+            if ($idleAction === \Weline\Server\Service\WorkerConnectionIdlePolicy::ACTION_CLOSE_STALL) {
+                WlsLogger::warning_(
+                    '连接写停滞/无进展，强制关闭以防浏览器永久 pending'
+                    . " (connId: {$connId}, idle: " . \round($idleTime, 1)
+                    . 's, progress_idle: ' . \round($progressIdleTime, 1)
+                    . 's, buffered: ' . \strlen((string)($writeBuffers[$connId] ?? ''))
+                    . ' bytes, http2_pending: ' . $http2PendingBytes
+                    . ', http2: ' . ($isHttp2Connection ? '1' : '0') . ')'
                 );
             }
+
+            if ($isHttp2Connection) {
+                try {
+                    $http2GoawayFrame = $http2TimeoutAdapter->initiateGoaway(
+                        \Weline\Server\Protocol\Http2\FrameCodec::ERROR_ENHANCE_YOUR_CALM,
+                        $idleAction === \Weline\Server\Service\WorkerConnectionIdlePolicy::ACTION_CLOSE_STALL
+                            ? 'write_stall'
+                            : 'idle_timeout',
+                    );
+                    if ($http2GoawayFrame !== '') {
+                        $writeBuffers[$connId] = ($writeBuffers[$connId] ?? '') . $http2GoawayFrame;
+                        if (\is_resource($conn)) {
+                            @\fwrite($conn, (string)$writeBuffers[$connId]);
+                        }
+                    }
+                } catch (\Throwable) {
+                    // Force-close path must not throw.
+                }
+            }
+
+            if (\is_resource($conn) && \in_array(\get_resource_type($conn), ['stream', 'Socket'], true)) {
+                safeCloseStream($conn);
+            }
+            unset($connections[$connId]);
+            unset($requestBuffers[$connId]);
+            unset($connectionLastActivity[$connId]);
+            unset($connectionLastProgress[$connId]);
+            unset($connectionHttp2PendingBytes[$connId]);
+            unset($requestLogged[$connId]);
+            unset($writeBuffers[$connId]);
+            unset($writableConnections[$connId]);
+            unset($pendingClose[$connId]);
+            unset($http2PendingRequests[$connId]);
+            unset($http2ConnectionAdapters[$connId]);
+            unset($connectionProtocols[$connId]);
+            if (isset($longLivedConnections[$connId])) {
+                unset($longLivedConnections[$connId]);
+            }
+            wlsCancelActiveFibersForConnection(
+                $activeFibers,
+                $connId,
+                $fiberScheduler,
+                $activeRequests
+            );
         }
         
         // 定期记录 Worker 状态到数据库
@@ -7259,6 +7322,8 @@ while (true) {
                         $connections[$connId],
                         $requestBuffers[$connId],
                         $connectionLastActivity[$connId],
+                        $connectionLastProgress[$connId],
+                        $connectionHttp2PendingBytes[$connId],
                         $requestLogged[$connId],
                         $writeBuffers[$connId],
                         $writableConnections[$connId],
@@ -7270,9 +7335,10 @@ while (true) {
                     );
                     continue;
                 }
-                if (empty($http2PendingRequests[$connId])) {
-                    continue;
-                }
+                // Empty SSL read must NOT refresh keep-alive / stall clocks.
+                // Queued H2 streams are drained elsewhere; spinning here previously
+                // reset lastActivity and left Chrome documents pending forever.
+                continue;
             }
 
             $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
@@ -7413,6 +7479,10 @@ while (true) {
                 foreach ((array)($http2Result['requests'] ?? []) as $http2Request) {
                     if (\is_array($http2Request)) {
                         $http2PendingRequests[$connId][] = $http2Request;
+                        // New application work starts a fresh progress budget so
+                        // keep-alive PING clocks from the prior response cannot
+                        // immediately stall-close this stream.
+                        $connectionLastProgress[$connId] = wlsWorkerMonotonicNow();
                     }
                 }
             }
@@ -8648,6 +8718,7 @@ while (true) {
     );
 
     // 重置连续错误计数（本轮循环成功完成）
+    $deferredWorkerBootstrapLoopCompleted = true;
     $consecutiveErrors = 0;
     
     } catch (\Throwable $loopException) {
@@ -8813,6 +8884,7 @@ function wlsSslAcceptNewConnections(
             $connections[$connId] = $conn;
             $requestBuffers[$connId] = '';
             $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
+            $connectionLastProgress[$connId] = $connectionLastActivity[$connId];
         }
         $admitted++;
     }
@@ -8833,20 +8905,7 @@ function wlsSslTuneAcceptedStream(mixed $conn): void
 
     @\stream_set_read_buffer($conn, 0);
     @\stream_set_write_buffer($conn, 0);
-
-    if (!\function_exists('socket_import_stream')) {
-        return;
-    }
-
-    $socket = @\socket_import_stream($conn);
-    if (!$socket instanceof \Socket) {
-        return;
-    }
-
-    @\socket_set_option($socket, \SOL_SOCKET, \SO_KEEPALIVE, 1);
-    if (\defined('TCP_NODELAY') && \defined('SOL_TCP')) {
-        @\socket_set_option($socket, \SOL_TCP, (int) \TCP_NODELAY, 1);
-    }
+    \Weline\Server\Service\ClientTcpKeepAliveTuner::applyToStream($conn);
 }
 
 /**
@@ -9113,6 +9172,7 @@ function wlsSslAdvancePeekState(
                     $connections[$connId] = $conn;
                     $requestBuffers[$connId] = '';
                     $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
+                    $connectionLastProgress[$connId] = $connectionLastActivity[$connId];
                     $connectionProtocols[$connId] = 'http/1.1';
                     $connectionPlaintextHosts[$connId] = (string)$_host;
                     unset($connectionSniHosts[$connId]);
@@ -9226,6 +9286,7 @@ function wlsSslAdvancePeekState(
             $connections[$connId] = $conn;
             $requestBuffers[$connId] = '';
             $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
+            $connectionLastProgress[$connId] = $connectionLastActivity[$connId];
             $postHandshakeReadPending[$connId] = [
                 'conn' => $conn,
                 'deadline' => wlsWorkerMonotonicNow() + 0.20,
@@ -9378,6 +9439,7 @@ function wlsSslAdvanceHandshakeState(
         $connections[$connId] = $conn;
         $requestBuffers[$connId] = '';
         $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
+        $connectionLastProgress[$connId] = $connectionLastActivity[$connId];
         $postHandshakeReadPending[$connId] = [
             'conn' => $conn,
             'deadline' => wlsWorkerMonotonicNow() + 0.20,
@@ -9645,6 +9707,7 @@ function wlsSslFlushQueuedWrites(
                 // Slow HTTP/2 clients can keep TLS/TCP back-pressured for longer than
                 // the nominal idle timeout while bytes are still making progress.
                 $connectionLastActivity[$connId] = wlsWorkerMonotonicNow();
+                $connectionLastProgress[$connId] = $connectionLastActivity[$connId];
             }
 
             if ($written === false) {

@@ -5,7 +5,7 @@ declare(strict_types=1);
  * Weline Server host allowlist guard.
  *
  * Allowed hosts:
- * - `p[hash].weline.test`
+ * - `p[hash].test.weline.com`
  * - `p[hash].weline.localhost`
  * - `127.0.0.1` / `localhost` / `::1`
  * - custom domains configured in env
@@ -26,7 +26,7 @@ class LegacyDomainRedirect implements ObserverInterface
 {
     private const LEGACY_DOMAIN_PATTERN = '/^weline-p[0-9a-f]{8}\.local$/i';
 
-    private const STANDARD_DOMAIN_PATTERN = '/^p[0-9a-f]{8}\.(?:weline\.test|weline\.localhost)$/i';
+    private const STANDARD_DOMAIN_PATTERN = '/^p[0-9a-f]{8}\.(?:test\.weline\.com|weline\.test|weline\.localhost)$/i';
 
     public function execute(array &$data): void
     {
@@ -49,7 +49,7 @@ class LegacyDomainRedirect implements ObserverInterface
         if (\preg_match(self::LEGACY_DOMAIN_PATTERN, $domain)) {
             $this->rejectRequest(
                 $data,
-                'Legacy domain format is no longer supported. Please use p[hash].weline.test or p[hash].weline.localhost.'
+                'Legacy domain format is no longer supported. Please use p[hash].test.weline.com or p[hash].weline.localhost.'
             );
             return;
         }

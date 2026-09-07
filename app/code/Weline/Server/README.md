@@ -271,7 +271,7 @@ php bin/w server:benchmark --instance api-server
 php bin/w server:benchmark --instance api-server -c 500 -n 50000
 
 # 跨主机负载发生器：TCP 连接 Windows/Linux 节点，TLS SNI 与 HTTP Host 保持公开域名
-php bin/w server:benchmark --host 10.0.0.8 --authority-host app.weline.test -p 15443 --ssl --http-version 2 --physical-connections 3 -c 96 -n 5000
+php bin/w server:benchmark --host 10.0.0.8 --authority-host app.test.weline.com -p 15443 --ssl --http-version 2 --physical-connections 3 -c 96 -n 5000
 ```
 
 参数说明：

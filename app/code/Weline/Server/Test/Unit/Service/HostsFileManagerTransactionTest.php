@@ -41,8 +41,8 @@ final class HostsFileManagerTransactionTest extends TestCase
         $hostsPath = $this->directory . DIRECTORY_SEPARATOR . 'hosts';
         $initial = "127.0.0.1 localhost\n"
             . "# Weline WLS Auto-Config Start\n"
-            . "127.0.0.1 remove.weline.test\n"
-            . "192.0.2.10 rewrite.weline.test\n"
+            . "127.0.0.1 remove.test.weline.com\n"
+            . "192.0.2.10 rewrite.test.weline.com\n"
             . "# Weline WLS Auto-Config End\n";
         self::assertSame(\strlen($initial), \file_put_contents($hostsPath, $initial));
 
@@ -76,7 +76,7 @@ PHP;
                 $autoload,
                 $hostsPath,
                 'upsert',
-                'added.weline.test',
+                'added.test.weline.com',
                 '127.0.0.1',
             );
             $children[] = $this->startMutationChild(
@@ -84,7 +84,7 @@ PHP;
                 $autoload,
                 $hostsPath,
                 'upsert',
-                'rewrite.weline.test',
+                'rewrite.test.weline.com',
                 '127.0.0.1',
             );
             $children[] = $this->startMutationChild(
@@ -92,7 +92,7 @@ PHP;
                 $autoload,
                 $hostsPath,
                 'remove',
-                'remove.weline.test',
+                'remove.test.weline.com',
                 '127.0.0.1',
             );
 
@@ -114,21 +114,21 @@ PHP;
         }
         $published = (string)\file_get_contents($hostsPath);
         self::assertStringContainsString("127.0.0.1 localhost\n", $published);
-        self::assertStringContainsString("127.0.0.1 added.weline.test\n", $published);
-        self::assertStringContainsString("127.0.0.1 rewrite.weline.test\n", $published);
-        self::assertStringNotContainsString('192.0.2.10 rewrite.weline.test', $published);
-        self::assertStringNotContainsString('remove.weline.test', $published);
+        self::assertStringContainsString("127.0.0.1 added.test.weline.com\n", $published);
+        self::assertStringContainsString("127.0.0.1 rewrite.test.weline.com\n", $published);
+        self::assertStringNotContainsString('192.0.2.10 rewrite.test.weline.com', $published);
+        self::assertStringNotContainsString('remove.test.weline.com', $published);
     }
 
     public function testExternalExactEntrySatisfiesAddWithoutTakingOwnership(): void
     {
-        $hostsPath = $this->writeHosts("127.0.0.1 external.weline.test # user owned\r\n");
+        $hostsPath = $this->writeHosts("127.0.0.1 external.test.weline.com # user owned\r\n");
         $before = (string)\file_get_contents($hostsPath);
 
         $result = $this->invokeMutation(
             $hostsPath,
             'upsert',
-            'external.weline.test',
+            'external.test.weline.com',
             '127.0.0.1',
         );
 
@@ -140,13 +140,13 @@ PHP;
 
     public function testExternalEntryWithAttachedCommentStillRetainsOwnership(): void
     {
-        $hostsPath = $this->writeHosts("127.0.0.1 attached.weline.test#user-owned\n");
+        $hostsPath = $this->writeHosts("127.0.0.1 attached.test.weline.com#user-owned\n");
         $before = (string)\file_get_contents($hostsPath);
 
         $result = $this->invokeMutation(
             $hostsPath,
             'upsert',
-            'attached.weline.test',
+            'attached.test.weline.com',
             '127.0.0.1',
         );
 
@@ -157,13 +157,13 @@ PHP;
 
     public function testExternalConflictingEntryFailsWithoutChangingOneByte(): void
     {
-        $hostsPath = $this->writeHosts("192.0.2.40 conflict.weline.test # user owned\n");
+        $hostsPath = $this->writeHosts("192.0.2.40 conflict.test.weline.com # user owned\n");
         $before = (string)\file_get_contents($hostsPath);
 
         $result = $this->invokeMutation(
             $hostsPath,
             'upsert',
-            'conflict.weline.test',
+            'conflict.test.weline.com',
             '127.0.0.1',
         );
 
@@ -174,13 +174,13 @@ PHP;
 
     public function testAmbiguousExternalDomainTokenFailsClosedWithoutChangingOneByte(): void
     {
-        $hostsPath = $this->writeHosts("ambiguous.weline.test\n");
+        $hostsPath = $this->writeHosts("ambiguous.test.weline.com\n");
         $before = (string)\file_get_contents($hostsPath);
 
         $result = $this->invokeMutation(
             $hostsPath,
             'upsert',
-            'ambiguous.weline.test',
+            'ambiguous.test.weline.com',
             '127.0.0.1',
         );
 
@@ -191,13 +191,13 @@ PHP;
 
     public function testRemoveNeverDeletesAnExternalEntry(): void
     {
-        $hostsPath = $this->writeHosts("192.0.2.41 external.weline.test # user owned\n");
+        $hostsPath = $this->writeHosts("192.0.2.41 external.test.weline.com # user owned\n");
         $before = (string)\file_get_contents($hostsPath);
 
         $result = $this->invokeMutation(
             $hostsPath,
             'remove',
-            'external.weline.test',
+            'external.test.weline.com',
             '127.0.0.1',
         );
 
@@ -208,16 +208,16 @@ PHP;
 
     public function testManagedAndExternalOwnershipForSameDomainFailsClosed(): void
     {
-        $content = "127.0.0.1 mixed.weline.test # external\n"
+        $content = "127.0.0.1 mixed.test.weline.com # external\n"
             . "# Weline WLS Auto-Config Start\n"
-            . "127.0.0.1 mixed.weline.test\n"
+            . "127.0.0.1 mixed.test.weline.com\n"
             . "# Weline WLS Auto-Config End\n";
         $hostsPath = $this->writeHosts($content);
 
         $result = $this->invokeMutation(
             $hostsPath,
             'upsert',
-            'mixed.weline.test',
+            'mixed.test.weline.com',
             '127.0.0.1',
         );
 
@@ -229,7 +229,7 @@ PHP;
     public function testMalformedDuplicateNestedAndUnpairedMarkersFailClosed(): void
     {
         $fixtures = [
-            "# Weline WLS Auto-Config Start\n127.0.0.1 a.weline.test\n",
+            "# Weline WLS Auto-Config Start\n127.0.0.1 a.test.weline.com\n",
             "# Weline WLS Auto-Config End\n",
             "# Weline WLS Auto-Config Start\n# Weline WLS Auto-Config Start\n"
                 . "# Weline WLS Auto-Config End\n# Weline WLS Auto-Config End\n",
@@ -237,9 +237,9 @@ PHP;
                 . "# Weline WLS Auto-Config Start\n# Weline WLS Auto-Config End\n",
             "# Weline WLS Auto-Config Start\n# external syntax is forbidden here\n"
                 . "# Weline WLS Auto-Config End\n",
-            "# Weline WLS Auto-Config Start\n127.0.0.1 a.weline.test alias.weline.test\n"
+            "# Weline WLS Auto-Config Start\n127.0.0.1 a.test.weline.com alias.test.weline.com\n"
                 . "# Weline WLS Auto-Config End\n",
-            "# Weline WLS Auto-Config Start\nnot-an-ip a.weline.test\n"
+            "# Weline WLS Auto-Config Start\nnot-an-ip a.test.weline.com\n"
                 . "# Weline WLS Auto-Config End\n",
         ];
         foreach ($fixtures as $index => $content) {
@@ -248,7 +248,7 @@ PHP;
             $result = $this->invokeMutation(
                 $hostsPath,
                 'upsert',
-                'new.weline.test',
+                'new.test.weline.com',
                 '127.0.0.1',
             );
             self::assertFalse($result['success'] ?? true);
@@ -260,15 +260,15 @@ PHP;
     public function testDuplicateManagedDomainFailsClosed(): void
     {
         $content = "# Weline WLS Auto-Config Start\n"
-            . "127.0.0.1 duplicate.weline.test\n"
-            . "127.0.0.1 duplicate.weline.test\n"
+            . "127.0.0.1 duplicate.test.weline.com\n"
+            . "127.0.0.1 duplicate.test.weline.com\n"
             . "# Weline WLS Auto-Config End\n";
         $hostsPath = $this->writeHosts($content);
 
         $result = $this->invokeMutation(
             $hostsPath,
             'remove',
-            'duplicate.weline.test',
+            'duplicate.test.weline.com',
             '127.0.0.1',
         );
 
@@ -282,7 +282,7 @@ PHP;
         $content = "# external header\r\n"
             . "127.0.0.1\tlocalhost localhost.localdomain # keep spacing\r\n"
             . "# Weline WLS Auto-Config Start\r\n"
-            . "192.0.2.20 target.weline.test\r\n"
+            . "192.0.2.20 target.test.weline.com\r\n"
             . "# Weline WLS Auto-Config End\r\n";
         $hostsPath = $this->writeHosts($content);
         self::assertTrue(\chmod($hostsPath, 0640));
@@ -290,7 +290,7 @@ PHP;
         $result = $this->invokeMutation(
             $hostsPath,
             'upsert',
-            'target.weline.test',
+            'target.test.weline.com',
             '127.0.0.1',
         );
 
@@ -301,7 +301,7 @@ PHP;
             "# external header\r\n127.0.0.1\tlocalhost localhost.localdomain # keep spacing\r\n",
             $published,
         );
-        self::assertStringContainsString("127.0.0.1 target.weline.test\r\n", $published);
+        self::assertStringContainsString("127.0.0.1 target.test.weline.com\r\n", $published);
         self::assertDoesNotMatchRegularExpression('/(?<!\r)\n/', $published);
     }
 
@@ -322,7 +322,7 @@ PHP;
             $result = $this->invokeMutation(
                 $hostsPath,
                 'upsert',
-                'atomic.weline.test',
+                'atomic.test.weline.com',
                 '127.0.0.1',
             );
             self::assertTrue($result['success'] ?? false, (string)($result['message'] ?? ''));
@@ -335,7 +335,7 @@ PHP;
             self::assertSame(0, \fseek($oldHandle, 0, SEEK_SET));
             self::assertSame($original, \stream_get_contents($oldHandle));
             self::assertStringContainsString(
-                '127.0.0.1 atomic.weline.test',
+                '127.0.0.1 atomic.test.weline.com',
                 (string)\file_get_contents($hostsPath),
             );
             self::assertSame([], \glob($hostsPath . '.wls-hosts-txn-*') ?: []);
@@ -368,7 +368,7 @@ PHP;
             $result = $this->invokeMutation(
                 $hostsPath,
                 'upsert',
-                'acl.weline.test',
+                'acl.test.weline.com',
                 '127.0.0.1',
             );
             self::assertTrue($result['success'] ?? false, (string)($result['message'] ?? ''));
@@ -399,7 +399,7 @@ PHP;
             $result = $this->invokeMutation(
                 $hostsPath,
                 'upsert',
-                'no-stage.weline.test',
+                'no-stage.test.weline.com',
                 '127.0.0.1',
             );
             self::assertFalse($result['success'] ?? true);
@@ -420,7 +420,7 @@ PHP;
         $result = $this->invokeMutation(
             $hardLink,
             'upsert',
-            'hardlink.weline.test',
+            'hardlink.test.weline.com',
             '127.0.0.1',
         );
         self::assertFalse($result['success'] ?? true);
@@ -433,7 +433,7 @@ PHP;
             $result = $this->invokeMutation(
                 $symbolic,
                 'upsert',
-                'symlink.weline.test',
+                'symlink.test.weline.com',
                 '127.0.0.1',
             );
             self::assertFalse($result['success'] ?? true);
@@ -447,7 +447,7 @@ PHP;
         $first = $this->invokeMutation(
             $hostsPath,
             'upsert',
-            'one.weline.test',
+            'one.test.weline.com',
             '127.0.0.1',
         );
         self::assertTrue($first['success'] ?? false);
@@ -460,7 +460,7 @@ PHP;
         $rejected = $this->invokeMutation(
             $hostsPath,
             'upsert',
-            'two.weline.test',
+            'two.test.weline.com',
             '127.0.0.1',
         );
         self::assertFalse($rejected['success'] ?? true);
@@ -472,7 +472,7 @@ PHP;
         $second = $this->invokeMutation(
             $hostsPath,
             'upsert',
-            'two.weline.test',
+            'two.test.weline.com',
             '127.0.0.1',
         );
         self::assertTrue($second['success'] ?? false);

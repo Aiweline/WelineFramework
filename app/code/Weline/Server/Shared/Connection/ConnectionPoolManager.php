@@ -645,6 +645,44 @@ class ConnectionPoolManager implements ConnectionPoolInterface
                 ['host' => $this->host, 'port' => (string)$this->port]
             );
         }
+
+        if (($result === 'success' && $durationMs < 10.0)
+            || !\class_exists(\Weline\Framework\Runtime\RequestLifecycleTrace::class, false)
+            || !\Weline\Framework\Runtime\RequestLifecycleTrace::isEnabled()
+        ) {
+            return;
+        }
+
+        $pool = $this->getPoolMetrics();
+        $meta = [
+            'host' => $this->host,
+            'port' => $this->port,
+            'pool_profile' => \substr((string)($this->options['pool_profile'] ?? ''), 0, 128),
+            'timeout_sec' => (float)($this->options['timeout'] ?? 2.0),
+            'connect_timeout_sec' => (float)($this->options['connect_timeout'] ?? 1.0),
+            'result' => $result,
+            // acquire loop retries are not RPC retries or TCP connection attempts.
+            'retry_count' => $retryCount,
+            'busy' => $pool['busy'],
+            'idle' => $pool['idle'],
+            'total' => $pool['total'],
+            'max_size' => \max(1, (int)($this->options['max_size'] ?? 8)),
+            'cooldown_ms' => \round(\max(0.0, $this->nextConnectAttemptAt - self::monotonicSeconds()) * 1000, 3),
+            // These two values are pool history, not a diagnosis of this acquire.
+            'last_connect_failure_reason' => $this->lastConnectFailureReason,
+            'consecutive_connect_failures' => $this->consecutiveConnectFailures,
+        ];
+        \Weline\Framework\Runtime\RequestLifecycleTrace::recordSpan(
+            'wls.pool.acquire', $durationMs, 'rpc', null, $meta
+        );
+        if ($result !== 'success') {
+            // Keep the last failure after the detail cap without inflating its duration.
+            \Weline\Framework\Runtime\RequestLifecycleTrace::recordPhase(
+                'wls.pool.acquire.last_failure',
+                $durationMs,
+                $meta + ['measurement' => 'last_failure']
+            );
+        }
     }
 
     /**
