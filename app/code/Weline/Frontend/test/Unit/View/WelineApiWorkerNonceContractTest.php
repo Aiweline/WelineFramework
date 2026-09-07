@@ -33,5 +33,8 @@ final class WelineApiWorkerNonceContractTest extends TestCase
         );
         self::assertStringContainsString('nonce has already been used', $script);
         self::assertStringContainsString('worker session is unavailable', $script);
+        self::assertStringContainsString('createDedicatedWorkerFromScriptUrl', $script);
+        self::assertStringContainsString('URL.createObjectURL', $script);
+        self::assertStringContainsString('new Worker(blobUrl)', $script);
     }
 }

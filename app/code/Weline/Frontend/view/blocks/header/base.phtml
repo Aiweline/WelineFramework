@@ -4,12 +4,27 @@
 use Weline\Framework\App\Env;
 use Weline\Framework\App\State;
 use Weline\Framework\Session\SessionFactory;
+use Weline\Framework\Session\SessionCookieNameResolver;
 
 $host = rtrim((string)$this->request->getBaseHost(), '/');
 $baseRouter = (string)$this->request->getRouterData('router');
 $currentModule = (string)$this->request->getModuleName();
-$session = SessionFactory::frontend();
-$userId = (int)$session->getLoginUserID();
+$hasSessionCookie = false;
+try {
+    $hasSessionCookie = SessionCookieNameResolver::hasRequestCookie();
+} catch (\Throwable) {
+    // A malformed or incomplete request context must not make the public shell fail.
+}
+$session = null;
+$userId = 0;
+if ($hasSessionCookie) {
+    $session = SessionFactory::frontend();
+    $userId = (int)$session->getLoginUserID();
+}
+$csrfToken = '';
+if ($hasSessionCookie) {
+    $csrfToken = (string)\Weline\Framework\Security\Token::create('csrf', 16, 600);
+}
 $apiHost = rtrim((string)$this->request->getUrlBuilder()->getFrontendApiUrl('/', [], false), '/');
 $currentLang = (string)(State::getLang() ?: 'zh_Hans_CN');
 $currentCurrency = strtoupper(trim((string)(State::getCurrency() ?: 'CNY')));
@@ -29,6 +44,11 @@ if (class_exists(\Weline\I18n\Helper\JsWordsRegistry::class)) {
     } catch (\Throwable) {
     }
 }
+// Drop multiline / oversized docs (e.g. event.php __() descriptions) so the
+// storefront runtime JSON stays small enough for the main thread to parse.
+$i18nWords = \Weline\Frontend\Helper\FrontendRuntimeI18nDictionary::filterForClient(
+    is_array($i18nWords) ? $i18nWords : []
+);
 $deployMeta = @json_decode((string)@file_get_contents(BP . 'var/deploy/current.json'), true);
 $deployVersion = is_array($deployMeta) ? (string)($deployMeta['deploy_version'] ?? 'dev') : 'dev';
 $workerBuildId = is_array($deployMeta) ? (string)($deployMeta['worker_build_id'] ?? 'dev') : 'dev';
@@ -50,20 +70,31 @@ $workerUrl = DEV
     ? '/Weline/Frontend/view/statics/js/weline-api-worker.js'
     : '/static/Weline/Frontend/js/weline-api-worker.js';
 $workerUrl .= '?v=' . rawurlencode($deployVersion . '-' . $workerBuildId);
-// Bust lazy-loaded Weline.Api when source changes (local deploy_version is often sticky "dev").
+// Bust lazy-loaded Weline.Api / Account / Theme widgets when source changes
+// (local deploy_version is often sticky "dev" and would keep an old mini-cart.js).
 $apiJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api.js');
-$frontendAssetVersion = $deployVersion . ($apiJsMtime ? ('-' . (string)$apiJsMtime) : '');
+$accountJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/js/weline-api-account.js');
+$miniCartJsMtime = @filemtime(BP . 'app/code/Weline/Theme/view/statics/js/widgets/mini-cart-icon.js');
+$miniCartCssMtime = @filemtime(BP . 'app/code/Weline/Theme/view/statics/css/widgets/mini-cart-drawer.css');
+$frontendJsMtime = max((int)$apiJsMtime, (int)$accountJsMtime, (int)$miniCartJsMtime, (int)$miniCartCssMtime);
+$frontendAssetVersion = $deployVersion . ($frontendJsMtime > 0 ? ('-' . (string)$frontendJsMtime) : '');
+$modulesJsMtime = @filemtime(BP . 'app/code/Weline/Frontend/view/statics/base/weline.modules.js');
+$modulesConfigUrl = DEV
+    ? '/Weline/Frontend/view/statics/base/weline.modules.js'
+    : '/static/Weline/Frontend/base/weline.modules.js';
+if ($modulesJsMtime) {
+    $modulesConfigUrl .= '?v=' . rawurlencode((string)$modulesJsMtime);
+}
 $runtime = [
     'env' => ['WELINE_ENV' => DEV ? 'DEV' : 'PROD', 'DEV' => DEV, 'PROD' => !DEV],
     'area' => 'frontend',
     // baseUrl：在下方 JSON 用 url 标签注入根路径（禁止 PHP 赋 url 标签字符串 / getBaseUrl）
-    'modulesConfigUrl' => DEV
-        ? '/Weline/Frontend/view/statics/base/weline.modules.js'
-        : '/static/Weline/Frontend/base/weline.modules.js',
+    'modulesConfigUrl' => $modulesConfigUrl,
     'modulesBaseUrl' => DEV
         ? '/Weline/Frontend/view/statics/js/weline-api'
         : '/static/Weline/Frontend/js/weline-api',
     'assetVersion' => $frontendAssetVersion,
+
     'deployVersion' => $deployVersion,
     'workerBuildId' => $workerBuildId,
     'themePublishedVersionId' => $themePublishedVersionId,
@@ -98,7 +129,8 @@ $runtime = [
     ],
     'site' => [
         'user_id' => $userId,
-        'csrf_token' => \Weline\Framework\Security\Token::create('csrf', 16, 600),
+        // The guest shell stays session-free so the response can be published to FPC.
+        'csrf_token' => $csrfToken,
         'module' => $currentModule,
         'host' => $host . '/',
         'base_host' => (string)$this->request->getPrePath(),
