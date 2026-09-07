@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 return [
     'name' => 'Weline_Filters',
-    'version' => '1.0.3',
+    'version' => '1.0.7',
     'requires' => [
         'Weline_Framework' => '*',
         'Weline_Eav' => '*',

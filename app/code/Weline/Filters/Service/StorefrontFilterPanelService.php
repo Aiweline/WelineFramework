@@ -5,13 +5,17 @@ declare(strict_types=1);
 namespace Weline\Filters\Service;
 
 use Weline\Eav\Service\AttributeFilterService;
+use Weline\Framework\Cache\Service\StorefrontScopeHotCache;
+use Weline\Framework\Http\Url;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Product\Repository\CategoryLinkRepository;
 use Weline\Product\Service\StorefrontCatalogViewService;
+use Weline\Product\Service\StorefrontCatalogCacheCoordinator;
 use Weline\Product\Service\StorefrontCategoryListingFilter;
 use Weline\Product\Service\StorefrontCategoryTreeIndex;
 use Weline\Product\Service\StorefrontCategoryViewService;
+use Weline\Product\Service\StorefrontEavLabelResolver;
 
 /**
  * Builds storefront filter panel data: department roots, price buckets, EAV attributes.
@@ -29,6 +33,11 @@ final class StorefrontFilterPanelService
         private readonly StorefrontCatalogViewService $catalog,
         private readonly StorefrontCategoryViewService $categories,
         private readonly CategoryLinkRepository $categoryLinks,
+        private readonly StorefrontFacetPresentationPolicy $facetPresentation,
+        private readonly StorefrontEavLabelResolver $eavLabels,
+        private readonly StorefrontFacetTranslator $facetTranslator,
+        private readonly Url $url,
+        private readonly StorefrontScopeHotCache $hotCache,
     ) {
     }
 
@@ -58,10 +67,10 @@ final class StorefrontFilterPanelService
                     return [];
                 }
 
-                return $this->catalog->publishedOffersForProductIds($productIds, 120);
+                return $this->catalog->publishedOffersForProductIds($productIds, 120, false);
             }
 
-            return $this->catalog->publishedOffers();
+            return $this->catalog->publishedOffers(120, false);
         } catch (\Throwable) {
             return [];
         }
@@ -79,9 +88,15 @@ final class StorefrontFilterPanelService
         $queue = [$rootCategoryId];
         $seen = [$rootCategoryId => true];
         $categoryIds = [$rootCategoryId];
+        try {
+            $treeIndex = $this->tree->forWebsite($websiteId);
+            $byParent = is_array($treeIndex['by_parent'] ?? null) ? $treeIndex['by_parent'] : [];
+        } catch (\Throwable) {
+            return [];
+        }
         while ($queue !== []) {
             $parentId = array_shift($queue);
-            foreach ($this->tree->childrenOf($websiteId, (int)$parentId) as $child) {
+            foreach ($byParent[(int)$parentId] ?? [] as $child) {
                 if (!is_array($child)) {
                     continue;
                 }
@@ -127,6 +142,68 @@ final class StorefrontFilterPanelService
         int $websiteId = 0,
         bool $rootCurrent = false,
     ): array {
+        $query = $this->normalizePanelQuery($query);
+        $logicalKey = hash('sha256', serialize([
+            $offers,
+            $listingUrl,
+            $query,
+            max(0, $websiteId),
+            $rootCurrent,
+        ]));
+
+        $panel = $this->hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::filterPanelPolicy(),
+            $logicalKey,
+            fn(): array => $this->hotCache->rememberForRequest(
+                'storefront.filters.panel',
+                $logicalKey,
+                fn(): array => \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                    'storefront.filters.panel',
+                    fn(): array => $this->buildPanelData($offers, $listingUrl, $query, $websiteId, $rootCurrent),
+                    ['website_id' => $websiteId, 'offers' => count($offers)],
+                ),
+            ),
+        );
+
+        return is_array($panel) ? $panel : [];
+    }
+
+    /**
+     * Keep diagnostics and transport-only query values out of the panel cache key.
+     * The panel varies only by active price/sort and selected af_* facets.
+     *
+     * @param array<string, mixed> $query
+     * @return array<string, string>
+     */
+    private function normalizePanelQuery(array $query): array
+    {
+        $normalized = [];
+        foreach ($query as $rawKey => $rawValue) {
+            $key = strtolower(trim((string)$rawKey));
+            if ($key !== 'price' && $key !== 'sort' && !str_starts_with($key, 'af_')) {
+                continue;
+            }
+            if (is_array($rawValue)) {
+                $rawValue = reset($rawValue);
+            }
+            $value = trim((string)$rawValue);
+            if ($value === '') {
+                continue;
+            }
+            $normalized[$key] = $value;
+        }
+        ksort($normalized);
+
+        return $normalized;
+    }
+
+    private function buildPanelData(
+        array $offers,
+        string $listingUrl,
+        array $query = [],
+        int $websiteId = 0,
+        bool $rootCurrent = false,
+    ): array {
         $listingUrl = '/' . ltrim(trim($listingUrl), '/');
         if ($listingUrl === '/') {
             $listingUrl = '/categories';
@@ -150,7 +227,9 @@ final class StorefrontFilterPanelService
         }
         $productIds = array_values(array_unique($productIds));
 
-        $departments = $this->buildDepartmentNav(max(0, $websiteId), $listingUrl);
+        $departments = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.departments',
+            fn(): array => $this->buildDepartmentNav(max(0, $websiteId), $listingUrl),
+        );
 
         $priceOptions = [];
         foreach ($this->listingFilter->priceBucketsWithCounts($offers) as $bucket) {
@@ -178,7 +257,9 @@ final class StorefrontFilterPanelService
         $attributeGroups = [];
         $codeNames = [];
         try {
-            foreach ($this->attributes->getFilterableAttributeMetadata('product') as $code => $row) {
+            foreach (\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.metadata',
+                fn(): array => $this->attributes->getFilterableAttributeMetadata('product', [], null, false),
+            ) as $code => $row) {
                 if (!is_array($row)) {
                     continue;
                 }
@@ -194,10 +275,42 @@ final class StorefrontFilterPanelService
             $codeNames = [];
         }
 
+        $fallbackCodeNames = [
+            'hanfu_chao_dai' => '朝代',
+            'hanfu_xing_zhi' => '形制',
+            'hanfu_han_fu_zhi_shi' => '汉服形制',
+            'style_type' => '类型',
+            'hanfu_shi_yong_xing_bie' => '适用性别',
+            'color' => '颜色',
+            'available_colors' => '可选颜色',
+            'size' => '尺码',
+            'available_sizes' => '可选尺码',
+            'hanfu_zhi_wu' => '面料',
+            'material' => '材质',
+            'hanfu_zhi_wu_ming_cheng' => '面料名称',
+            'hanfu_zhu_zhi_wu_cheng_fen' => '主面料成分',
+            'hanfu_shi_yong_chang_he' => '适用场合',
+            'hanfu_shi_yong_ji_jie' => '适用季节',
+            'hanfu_shi_he_ji_jie' => '适合季节',
+            'hanfu_shang_shi_nian_fen_ji_jie' => '上市季节',
+            'hanfu_feng_ge' => '风格',
+            'hanfu_zao_xing_feng_ge' => '造型风格',
+            'hanfu_gong_yi' => '工艺',
+            'hanfu_zhi_wu_gong_yi' => '面料工艺',
+            'hanfu_tu_an' => '图案',
+            'brand' => '品牌',
+            'hanfu_pin_pai' => '品牌',
+        ];
+        $candidateCodeNames = $this->facetPresentation->candidateCodeNames(
+            array_replace($fallbackCodeNames, $codeNames),
+        );
+
         $facetData = [];
         if ($productIds !== []) {
             try {
-                $facetData = $this->attributes->getFilterableAttributes('product', $productIds);
+                $facetData = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.eav_counts',
+                    fn(): array => $this->attributes->getFilterableAttributes('product', $productIds, [], false),
+                );
             } catch (\Throwable) {
                 $facetData = [];
             }
@@ -209,6 +322,9 @@ final class StorefrontFilterPanelService
                 continue;
             }
             $code = strtolower(trim((string)$code));
+            if (!isset($candidateCodeNames[$code])) {
+                continue;
+            }
             $counts = is_array($row['counts'] ?? null) ? $row['counts'] : [];
             $nonEmpty = [];
             foreach ($counts as $value => $count) {
@@ -221,65 +337,115 @@ final class StorefrontFilterPanelService
                 $countsByCode[$code] = $nonEmpty;
                 $attr = is_array($row['attribute'] ?? null) ? $row['attribute'] : [];
                 $name = trim((string)($attr['name'] ?? ($codeNames[$code] ?? $code)));
-                $codeNames[$code] = $name !== '' ? $name : $code;
+                $candidateCodeNames[$code] = $name !== '' ? $name : $candidateCodeNames[$code];
+            }
+        }
+
+        // Product attributes live on the Website shard. Prefer the catalog
+        // facet read model when it has values, while retaining the legacy EAV
+        // result as a compatibility fallback for older installations.
+        if ($productIds !== []) {
+            try {
+                $catalogCounts = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+                    'storefront.filters.catalog_counts',
+                    fn(): array => $this->catalog->facetCountsForProductIds(
+                        $productIds,
+                        $candidateCodeNames,
+                        $offers,
+                    ),
+                    ['products' => count($productIds), 'codes' => count($candidateCodeNames)],
+                );
+                foreach ($catalogCounts as $code => $counts) {
+                    $code = strtolower(trim((string)$code));
+                    if ($code === '' || !is_array($counts) || $counts === []) {
+                        continue;
+                    }
+                    $normalizedCounts = [];
+                    foreach ($counts as $value => $count) {
+                        $value = trim((string)$value);
+                        if ($value === '' || (int)$count <= 0) {
+                            continue;
+                        }
+                        $label = trim($this->eavLabels->resolve($code, $value));
+                        $label = $label !== '' ? $label : $value;
+                        $normalizedCounts[$label] = ($normalizedCounts[$label] ?? 0) + (int)$count;
+                    }
+                    if ($normalizedCounts !== []) {
+                        $countsByCode[$code] = $normalizedCounts;
+                    }
+                }
+            } catch (\Throwable) {
+                // Keep legacy EAV/offer projection fallbacks below.
             }
         }
 
         // Product 店面快照常把可筛属性投影到 offer（brand/specifications），而经典 EAV 值表可能为空。
-        foreach ($this->attributeListing->countOfferAttributeValues($offers, $codeNames !== [] ? $codeNames : [
-            'brand' => '品牌',
-            'color' => '颜色',
-            'material' => '材质',
-            'size' => '尺码',
-            'style_type' => '类型',
-            'available_colors' => '可选颜色',
-            'available_sizes' => '可选尺码',
-        ]) as $code => $derived) {
+        foreach (\Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.offer_counts',
+            fn(): array => $this->attributeListing->countOfferAttributeValues($offers, $candidateCodeNames),
+        ) as $code => $derived) {
             if (isset($countsByCode[$code])) {
                 continue;
             }
             $countsByCode[$code] = $derived['counts'];
-            $codeNames[$code] = (string)$derived['name'];
+            $candidateCodeNames[$code] = (string)$derived['name'];
         }
 
-        foreach ($countsByCode as $code => $counts) {
-            $options = [];
-            foreach ($counts as $value => $count) {
-                $value = (string)$value;
-                $selected = isset($selectedAttrs[$code])
-                    && strtolower($selectedAttrs[$code]) === strtolower($value);
-                $nextSelected = $selectedAttrs;
-                if ($selected) {
-                    unset($nextSelected[$code]);
-                } else {
-                    $nextSelected[$code] = $value;
+        $curatedCounts = $this->facetPresentation->curateFacetCounts(
+            $countsByCode,
+            $candidateCodeNames,
+            $selectedAttrs,
+        );
+        $attributeGroups = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase('storefront.filters.options',
+            function () use ($curatedCounts, $selectedAttrs, $baseExtra, $activePrice, $listingUrl): array {
+                $attributeGroups = [];
+                foreach ($curatedCounts as $code => $facet) {
+                    $counts = $facet['counts'];
+                    $options = [];
+                    $localizedName = trim($this->eavLabels->attributeLabel((string)$code));
+                    $groupName = $localizedName !== '' ? $localizedName : (string)$facet['name'];
+                    $groupName = $this->facetTranslator->translate($groupName);
+                    foreach ($counts as $value => $count) {
+                        $value = (string)$value;
+                        $selected = isset($selectedAttrs[$code])
+                            && strtolower($selectedAttrs[$code]) === strtolower($value);
+                        $nextSelected = $selectedAttrs;
+                        if ($selected) {
+                            unset($nextSelected[$code]);
+                        } else {
+                            $nextSelected[$code] = $value;
+                        }
+                        $params = $baseExtra;
+                        if ($activePrice !== '') {
+                            $params['price'] = $activePrice;
+                        }
+                        $localizedLabel = trim($this->eavLabels->resolve((string)$code, $value));
+                        $label = $localizedLabel !== '' ? $localizedLabel : $value;
+                        $label = $this->facetTranslator->translate($label);
+                        $options[] = [
+                            'label' => $label,
+                            'value' => $value,
+                            'count' => (int)$count,
+                            'url' => $this->attributeListing->buildListingUrl($listingUrl, $nextSelected, $params),
+                            'selected' => $selected,
+                        ];
+                    }
+                    if ($options === []) {
+                        continue;
+                    }
+                    usort(
+                        $options,
+                        static fn(array $a, array $b): int => strcasecmp((string)$a['label'], (string)$b['label']),
+                    );
+                    $attributeGroups[] = [
+                        'code' => (string)$code,
+                        'name' => $groupName,
+                        'kind' => 'attribute',
+                        'options' => $options,
+                    ];
                 }
-                $params = $baseExtra;
-                if ($activePrice !== '') {
-                    $params['price'] = $activePrice;
-                }
-                $options[] = [
-                    'label' => $value,
-                    'value' => $value,
-                    'count' => (int)$count,
-                    'url' => $this->attributeListing->buildListingUrl($listingUrl, $nextSelected, $params),
-                    'selected' => $selected,
-                ];
-            }
-            if ($options === []) {
-                continue;
-            }
-            usort(
-                $options,
-                static fn(array $a, array $b): int => strcasecmp((string)$a['label'], (string)$b['label']),
-            );
-            $attributeGroups[] = [
-                'code' => (string)$code,
-                'name' => (string)($codeNames[$code] ?? $code),
-                'kind' => 'attribute',
-                'options' => $options,
-            ];
-        }
+                return $attributeGroups;
+            },
+        );
 
         $clearParams = $baseExtra;
         $clearUrl = $this->attributeListing->buildListingUrl($listingUrl, [], $clearParams);
@@ -306,21 +472,33 @@ final class StorefrontFilterPanelService
     private function buildDepartmentNav(int $websiteId, string $listingUrl): array
     {
         $websiteId = max(0, $websiteId);
-        $current = $this->resolveCategoryFromListingUrl($websiteId, $listingUrl);
+        try {
+            $treeIndex = $this->tree->forWebsite($websiteId);
+            $byId = is_array($treeIndex['by_id'] ?? null) ? $treeIndex['by_id'] : [];
+            $byParent = is_array($treeIndex['by_parent'] ?? null) ? $treeIndex['by_parent'] : [];
+        } catch (\Throwable) {
+            return [];
+        }
+
+        $current = $this->resolveCategoryFromListingUrl($websiteId, $listingUrl, $treeIndex);
         $currentId = is_array($current) ? (int)($current['id'] ?? 0) : 0;
         $pathSet = [];
         if ($currentId > 0) {
-            foreach ($this->tree->activePathIds($websiteId, $currentId) as $id) {
-                $id = (int)$id;
-                if ($id > 0) {
-                    $pathSet[$id] = true;
+            $cursor = $currentId;
+            $guard = 0;
+            while ($cursor > 0 && $guard++ < 32) {
+                $pathSet[$cursor] = true;
+                $row = $byId[$cursor] ?? null;
+                if (!is_array($row)) {
+                    break;
                 }
+                $cursor = max(0, (int)($row['parent_id'] ?? 0));
             }
         }
 
         $out = [];
-        $walk = function (int $parentId, int $depth) use (&$walk, &$out, $websiteId, $pathSet, $currentId): void {
-            foreach ($this->tree->childrenOf($websiteId, $parentId) as $child) {
+        $walk = function (int $parentId, int $depth) use (&$walk, &$out, $byParent, $pathSet, $currentId): void {
+            foreach ($byParent[$parentId] ?? [] as $child) {
                 if (!is_array($child)) {
                     continue;
                 }
@@ -348,9 +526,13 @@ final class StorefrontFilterPanelService
     /**
      * @return array<string, mixed>|null
      */
-    private function resolveCategoryFromListingUrl(int $websiteId, string $listingUrl): ?array
+    /**
+     * @param array{by_id?: array<int, array<string, mixed>>, by_path?: array<string, int>}|null $treeIndex
+     */
+    private function resolveCategoryFromListingUrl(int $websiteId, string $listingUrl, ?array $treeIndex = null): ?array
     {
         $path = strtolower(trim(str_replace('\\', '/', (string)(parse_url($listingUrl, PHP_URL_PATH) ?: $listingUrl)), '/'));
+        $path = strtolower($this->peelLocalePrefix($path));
         if ($path === '' || !str_starts_with($path, 'category/')) {
             return null;
         }
@@ -359,6 +541,11 @@ final class StorefrontFilterPanelService
             return null;
         }
         try {
+            if ($treeIndex !== null) {
+                $id = (int)($treeIndex['by_path'][$slug] ?? 0);
+                $row = $id > 0 ? ($treeIndex['by_id'][$id] ?? null) : null;
+                return is_array($row) ? $row : null;
+            }
             return $this->tree->findByPath($websiteId, $slug);
         } catch (\Throwable) {
             return null;
@@ -381,10 +568,12 @@ final class StorefrontFilterPanelService
             if ($path === '') {
                 return null;
             }
-            $url = '/category/' . $path;
+            $url = $this->localizeStorefrontPath('category/' . $path);
         } else {
-            $pathOnly = (string)(parse_url($url, PHP_URL_PATH) ?: $url);
-            $url = '/' . ltrim($pathOnly, '/');
+            $pathOnly = parse_url($url, PHP_URL_PATH);
+            $url = is_string($pathOnly) && $pathOnly !== ''
+                ? $pathOnly
+                : '/' . ltrim($url, '/');
         }
 
         return [
@@ -393,6 +582,46 @@ final class StorefrontFilterPanelService
             'current' => $currentId > 0 && (int)($node['id'] ?? 0) === $currentId,
             'depth' => max(0, $depth),
         ];
+    }
+
+    /**
+     * Rebuild a storefront path with the current currency/language prefix via Url.
+     */
+    private function localizeStorefrontPath(string $path): string
+    {
+        $route = $this->peelLocalePrefix(trim(str_replace('\\', '/', $path), '/'));
+        if ($route === '') {
+            $route = 'categories';
+        }
+
+        try {
+            $built = (string)$this->url->getFrontendUrl($route);
+            $pathOnly = parse_url($built, PHP_URL_PATH);
+            if (is_string($pathOnly) && $pathOnly !== '') {
+                return $pathOnly;
+            }
+        } catch (\Throwable) {
+            // CLI / unit without request context.
+        }
+
+        return '/' . $route;
+    }
+
+    private function peelLocalePrefix(string $path): string
+    {
+        $segments = $path === '' ? [] : explode('/', $path);
+        while ($segments !== []) {
+            $first = (string)$segments[0];
+            if (\Weline\Framework\App\State::isAllowedCurrencyCode($first)
+                || \Weline\Framework\App\State::isAllowedLanguageCode($first)
+            ) {
+                array_shift($segments);
+                continue;
+            }
+            break;
+        }
+
+        return implode('/', $segments);
     }
 
     public static function createDefault(): self
