@@ -35,7 +35,7 @@ final class WebsiteSelectOptionsTest extends TestCase
                 'website_id' => 2,
                 'name' => 'Demo',
                 'code' => 'demo',
-                'url' => 'https://demo.weline.test:9555/',
+                'url' => 'https://demo.test.weline.com:9555/',
             ],
         ]);
 
@@ -44,9 +44,9 @@ final class WebsiteSelectOptionsTest extends TestCase
                 [
                     'value' => '2',
                     'label' => 'Demo',
-                    'meta' => 'demo.weline.test',
-                    'url' => 'https://demo.weline.test:9555',
-                    'domain' => 'demo.weline.test',
+                    'meta' => 'demo.test.weline.com',
+                    'url' => 'https://demo.test.weline.com:9555',
+                    'domain' => 'demo.test.weline.com',
                     'code' => 'demo',
                 ],
             ],

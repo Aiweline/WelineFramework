@@ -9,6 +9,8 @@ use Weline\Framework\Database\Connection\ConnectionInterface;
 use Weline\Framework\Database\ConnectionFactory;
 use Weline\Framework\Database\Transaction\WriteIntentTransactionCoordinatorInterface;
 use Weline\Framework\Manager\ObjectManager;
+use Weline\Server\Api\Domain\LocalDomainPolicy;
+use Weline\Server\Service\MasterProcess;
 use Weline\Websites\Model\Website;
 use Weline\Websites\Model\WebsiteCurrency;
 use Weline\Websites\Model\WebsiteDomain;
@@ -280,14 +282,39 @@ class DefaultWebsiteService
         return strlen($currency) === 3 && ctype_alpha($currency) ? $currency : 'CNY';
     }
 
-    private function ensureLocalDomains(): bool
+    /**
+     * Bind a managed local/project host onto the system default website when missing.
+     */
+    public function ensureWebsiteDomainBinding(string $domain, int $poolId = 0): bool
     {
-        $changed = false;
+        $domain = \class_exists(LocalDomainPolicy::class)
+            ? LocalDomainPolicy::normalizeDomain($domain)
+            : \strtolower(\trim($domain));
+        if ($domain === '') {
+            return false;
+        }
+
         $existingDomains = $this->websiteDomain->getWebsiteDomains(Website::ID_DEFAULT);
-        $existingDomainSet = \array_map(
-            static fn(array $row): string => (string)($row[WebsiteDomain::schema_fields_DOMAIN] ?? ''),
-            $existingDomains
-        );
+        foreach ($existingDomains as $row) {
+            if ((string)($row[WebsiteDomain::schema_fields_DOMAIN] ?? '') === $domain) {
+                if ($poolId > 0
+                    && (int)($row[WebsiteDomain::schema_fields_POOL_ID] ?? 0) <= 0
+                    && \method_exists($this->websiteDomain, 'setPoolId')
+                ) {
+                    /** @var WebsiteDomain $binding */
+                    $binding = ObjectManager::getInstance(WebsiteDomain::class, [], false);
+                    $binding->setConnection($this->connectionFactory());
+                    $binding->load($row[WebsiteDomain::schema_fields_ID] ?? 0);
+                    if ((int)$binding->getId() > 0) {
+                        $binding->setPoolId($poolId)->save();
+                        return true;
+                    }
+                }
+
+                return false;
+            }
+        }
+
         $hasPrimary = false;
         foreach ($existingDomains as $row) {
             if (!empty($row[WebsiteDomain::schema_fields_IS_PRIMARY])) {
@@ -296,27 +323,111 @@ class DefaultWebsiteService
             }
         }
 
-        $firstNew = true;
-        foreach (self::LOCAL_DEFAULT_DOMAINS as $domain) {
+        /** @var WebsiteDomain $newDomain */
+        $newDomain = ObjectManager::getInstance(WebsiteDomain::class, [], false);
+        $newDomain->setConnection($this->connectionFactory());
+        $newDomain->setWebsiteId(Website::ID_DEFAULT);
+        $newDomain->setDomain($domain);
+        $newDomain->setSubPath('');
+        if ($poolId > 0) {
+            $newDomain->setPoolId($poolId);
+        }
+        if (\class_exists(LocalDomainPolicy::class)) {
+            $root = LocalDomainPolicy::resolveRootDomain($domain);
+            if (\is_string($root) && $root !== '') {
+                $newDomain->setData(WebsiteDomain::schema_fields_ROOT_DOMAIN, $root);
+            }
+        }
+        $newDomain->setIsPrimary(!$hasPrimary);
+        $newDomain->setStatus(WebsiteDomain::STATUS_ACTIVE);
+        $newDomain->save();
+
+        return true;
+    }
+
+    private function ensureLocalDomains(): bool
+    {
+        $changed = false;
+        $existingDomainSet = \array_map(
+            static fn(array $row): string => (string)($row[WebsiteDomain::schema_fields_DOMAIN] ?? ''),
+            $this->websiteDomain->getWebsiteDomains(Website::ID_DEFAULT)
+        );
+
+        foreach ($this->resolveLocalDefaultDomains() as $domain) {
             if (\in_array($domain, $existingDomainSet, true)) {
                 continue;
             }
 
-            /** @var WebsiteDomain $newDomain */
-            $newDomain = ObjectManager::getInstance(WebsiteDomain::class, [], false);
-            $newDomain->setConnection($this->connectionFactory());
-            $newDomain->setWebsiteId(Website::ID_DEFAULT);
-            $newDomain->setDomain($domain);
-            $newDomain->setSubPath('');
-            $newDomain->setIsPrimary(!$hasPrimary && $firstNew);
-            $newDomain->setStatus(WebsiteDomain::STATUS_ACTIVE);
-            $newDomain->save();
-            $changed = true;
-            $firstNew = false;
-            $existingDomainSet[] = $domain;
+            if ($this->ensureWebsiteDomainBinding($domain)) {
+                $changed = true;
+                $existingDomainSet[] = $domain;
+            }
         }
 
         return $changed;
+    }
+
+    /**
+     * Loopback aliases plus the current WLS project host under the active local root
+     * (e.g. p{hash}.test.weline.com).
+     *
+     * @return list<string>
+     */
+    private function resolveLocalDefaultDomains(): array
+    {
+        $domains = self::LOCAL_DEFAULT_DOMAINS;
+        foreach ($this->resolveManagedProjectHosts() as $host) {
+            if ($host !== '' && !\in_array($host, $domains, true)) {
+                $domains[] = $host;
+            }
+        }
+
+        return $domains;
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function resolveManagedProjectHosts(): array
+    {
+        if (!\class_exists(LocalDomainPolicy::class)) {
+            return [];
+        }
+
+        $hosts = [];
+        $shortHash = $this->resolveProjectShortHash();
+        if ($shortHash !== '') {
+            // Pass explicit deploy mode so Env/BP is not required during isolated unit tests.
+            $hosts[] = LocalDomainPolicy::buildProjectHost($shortHash, 'dev');
+        }
+
+        $hosts = \array_values(\array_unique(\array_filter(
+            $hosts,
+            static fn(string $host): bool => LocalDomainPolicy::isStandardProjectHost($host)
+        )));
+
+        return $hosts;
+    }
+
+    private function resolveProjectShortHash(): string
+    {
+        if (\class_exists(MasterProcess::class) && \defined('BP')) {
+            try {
+                $hash = \substr(MasterProcess::getProjectIdentityHash(), 0, 8);
+
+                return \preg_match('/^[0-9a-f]{8}$/', $hash) === 1 ? $hash : '';
+            } catch (\Throwable) {
+                // Fall through to path-based identity.
+            }
+        }
+
+        $basePath = \defined('BP') ? (string)\constant('BP') : (string)\getcwd();
+        $basePath = \rtrim(\str_replace('\\', '/', $basePath), '/');
+        if ($basePath === '') {
+            return '';
+        }
+
+        return \substr(\sha1(\strtolower($basePath)), 0, 8);
     }
 
     private function clearWebsiteCaches(): void

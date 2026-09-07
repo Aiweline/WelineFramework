@@ -31,7 +31,7 @@ final class AiSiteProvisioningJobHandlerTest extends TestCase
             AiSiteProvisioningRequest::schema_fields_ID => 9,
             AiSiteProvisioningRequest::schema_fields_REQUEST_ID => 'request-9',
             AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE => AiSiteProvisioningRequest::DOMAIN_MODE_TEST,
-            AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN => 'demo-site.weline.test',
+            AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN => 'demo-site.test.weline.com',
             AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID => null,
             AiSiteProvisioningRequest::schema_fields_PURCHASE_CONFIRMED => 0,
             AiSiteProvisioningRequest::schema_fields_PURCHASE_ATTEMPTED => 0,
@@ -56,7 +56,7 @@ final class AiSiteProvisioningJobHandlerTest extends TestCase
 
         self::assertSame(AiSiteProvisioningRequest::STATUS_DONE, $result['status']);
         self::assertSame(AiSiteProvisioningRequest::DOMAIN_MODE_TEST, $result['domain_mode']);
-        self::assertSame('demo-site.weline.test', $result['target_domain']);
+        self::assertSame('demo-site.test.weline.com', $result['target_domain']);
         self::assertSame(0, $result['purchase_order_id']);
         self::assertSame(1, $result['website_bound']);
         self::assertSame(0, $result['website_id']);
@@ -69,7 +69,7 @@ final class AiSiteProvisioningJobHandlerTest extends TestCase
             AiSiteProvisioningRequest::schema_fields_ID => 10,
             AiSiteProvisioningRequest::schema_fields_REQUEST_ID => 'request-10',
             AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE => AiSiteProvisioningRequest::DOMAIN_MODE_TEST,
-            AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN => 'demo-site.weline.test',
+            AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN => 'demo-site.test.weline.com',
             AiSiteProvisioningRequest::schema_fields_REGISTRAR_ACCOUNT_ID => null,
             AiSiteProvisioningRequest::schema_fields_PURCHASE_CONFIRMED => 0,
             AiSiteProvisioningRequest::schema_fields_PURCHASE_ATTEMPTED => 0,
@@ -114,7 +114,7 @@ final class AiSiteProvisioningJobHandlerTest extends TestCase
             AiSiteProvisioningRequest::schema_fields_ID => 11,
             AiSiteProvisioningRequest::schema_fields_REQUEST_ID => 'request-11',
             AiSiteProvisioningRequest::schema_fields_DOMAIN_MODE => AiSiteProvisioningRequest::DOMAIN_MODE_TEST,
-            AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN => 'demo-site.weline.test',
+            AiSiteProvisioningRequest::schema_fields_TARGET_DOMAIN => 'demo-site.test.weline.com',
             AiSiteProvisioningRequest::schema_fields_WEBSITE_BOUND => 0,
             AiSiteProvisioningRequest::schema_fields_WEBSITE_ID => 0,
             AiSiteProvisioningRequest::schema_fields_STATUS => AiSiteProvisioningRequest::STATUS_PENDING,
@@ -169,7 +169,7 @@ final class AiSiteProvisioningJobHandlerTest extends TestCase
         $hostsSyncService = $this->createMock(LocalWelineHostsSyncService::class);
         $hostsSyncService->expects(self::once())
             ->method('ensureHostsInjected')
-            ->with('demo-site.weline.test')
+            ->with('demo-site.test.weline.com')
             ->willReturn($hostsResult);
         $certificateService = $this->createMock(LocalWelineWildcardCertificateService::class);
         if (($hostsResult['authorization_pending'] ?? false) === true) {
@@ -177,7 +177,7 @@ final class AiSiteProvisioningJobHandlerTest extends TestCase
         } else {
             $certificateService->expects(self::once())
                 ->method('ensureWildcardCertificateForDomain')
-                ->with('demo-site.weline.test', 0)
+                ->with('demo-site.test.weline.com', 0)
                 ->willReturn(['success' => true]);
         }
 

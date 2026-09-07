@@ -218,7 +218,7 @@ class DomainPool extends BaseController
         $host = \strtolower(\trim((string)($domain[DomainPoolModel::schema_fields_DOMAIN] ?? '')));
         $isLocalServer = (int) ($domain[DomainPoolModel::schema_fields_IS_LOCAL_SERVER] ?? 0) === 1;
         $isLocal = $isLocalServer
-            || \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.weline\.test$/D', $host) === 1;
+            || \preg_match('/^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.(?:test\.weline\.com|weline\.test)$/D', $host) === 1;
 
         return [
             'pool_id' => $domain[DomainPoolModel::schema_fields_ID] ?? 0,

@@ -6,7 +6,7 @@
 ## 本次固化后的本地域名策略
 
 - 仅本地开发域名走这套特殊逻辑
-- 开发 / 本地 / 测试：`*.weline.test`
+- 开发 / 本地 / 测试：`*.test.weline.com`
 - 本地回环式生产入口：`*.weline.localhost`
 - 旧的历史本地域名后缀已移除
 - 真实购买域名、真实解析、真实证书流程不变
@@ -18,12 +18,12 @@
 - 当域名命中托管本地后缀时，工作台允许跳过真实注册商购买
 - 仍保留本地建站成功所需的生命周期数据、状态与交付结果
 - 本地推荐域名会跟随当前本地策略生成：
-  - 开发态优先 `*.weline.test`
+  - 开发态优先 `*.test.weline.com`
   - 本地回环式生产入口使用 `*.weline.localhost`
 
 ### 2. hosts 与回环
 
-- `*.weline.test`
+- `*.test.weline.com`
   - 需要通过 WLS 的 hosts 能力补解析
   - Websites 侧调用 hosts 注入时会走统一的 WLS 查询入口
 - `*.weline.localhost`
@@ -39,7 +39,7 @@
 
 - 托管本地域名共享本地通配证书
 - 共享证书仅适用于：
-  - `*.weline.test`
+  - `*.test.weline.com`
   - `*.weline.localhost`
 - 工作台在本地建站完成时，会把当前实际使用的 wildcard domain 回传给前端与日志
 
@@ -60,7 +60,7 @@
   - `wildcard_domain`
   - `https_ok`
 - 其中 `wildcard_domain` 只会是：
-  - `*.weline.test`
+  - `*.test.weline.com`
   - `*.weline.localhost`
 
 ## 工作区操作引导

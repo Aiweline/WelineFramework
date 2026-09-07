@@ -68,6 +68,7 @@ class DomainSelect implements TaglibInterface
             'value-type' => false,         // v1.6.0: 值类型 "domain"（默认）或 "pool_id"
             'website-id' => false,        // 编辑站点时传入当前 website_id，列表中包含本站已绑定域名便于取消绑定
             'bind-root-www' => false,     // 多选时：点选 apex 与 www.{apex} 其一则自动勾选另一（列表中存在时）；移除标签时成对移除
+            'selected-domains' => false,  // 多选 SSR/回填：逗号分隔域名，触发器直接显示域名胶囊（勿传「已选择 N 个」）
             'with-sub-path' => false,     // 标签内可选子路径 + 挂载契约输出
             'allow-bound' => false,       // 列表包含已被占用的就绪域名（供填 path 共用）
             'sub-path-name' => false,     // 子路径 hidden/input name，默认 sub_path
@@ -344,6 +345,7 @@ class DomainSelect implements TaglibInterface
                 . ' data-with-sub-path="' . $withSubPathAttr . '"'
                 . ' data-allow-bound="' . $allowBoundAttr . '"'
                 . ' data-value-type="' . htmlspecialchars($valueType, ENT_QUOTES, 'UTF-8') . '"'
+                . ' data-selected-domains="<?php echo htmlspecialchars(trim((string)($Taglib__selected_domains ?? \'\'), "\'\\""), ENT_QUOTES, \'UTF-8\'); ?>"'
                 . ' data-conflict-url="' . htmlspecialchars($conflictCheckPath, ENT_QUOTES, 'UTF-8') . '"'
                 . ' data-sub-path-name="' . htmlspecialchars($subPathName, ENT_QUOTES, 'UTF-8') . '"'
                 . ' data-mount-url-name="' . htmlspecialchars($mountUrlName, ENT_QUOTES, 'UTF-8') . '"'
@@ -358,10 +360,18 @@ class DomainSelect implements TaglibInterface
             $html[] = '  <button type="button" class="weline-domain-select-trigger" id="<?= htmlspecialchars($Taglib__id) ?>_trigger">';
             if ($isMultiple) {
                 $html[] = '    <div class="weline-domain-select-tags" id="<?= htmlspecialchars($Taglib__id) ?>_tags">';
+                $html[] = '      <?php';
+                $html[] = '        $_sd_raw = trim((string)($Taglib__selected_domains ?? \'\'), "\'\\"");';
+                $html[] = '        $_sd_list = $_sd_raw === \'\' ? [] : array_values(array_filter(array_map(\'trim\', explode(\',\', $_sd_raw)), static fn($v) => $v !== \'\'));';
+                $html[] = '        if ($_sd_list === []):';
+                $html[] = '      ?>';
                 $html[] = '      <span class="weline-domain-select-placeholder" id="<?= htmlspecialchars($Taglib__id) ?>_placeholder">';
                 $html[] = '        <w-icon name="globe" size="sm"></w-icon>';
                 $html[] = '        <span><?php $_display = trim($Taglib__display, "\'\""); if($_display !== ""): echo htmlspecialchars($_display); else: ?>' . htmlspecialchars(__('点击选择域名（可多选）')) . '<?php endif; ?></span>';
                 $html[] = '      </span>';
+                $html[] = '      <?php else: foreach ($_sd_list as $_sd_item): ?>';
+                $html[] = '      <span class="weline-domain-select-tag"><w-icon name="globe" size="sm"></w-icon><?= htmlspecialchars((string)$_sd_item, ENT_QUOTES, \'UTF-8\') ?><span class="weline-domain-select-tag-remove" data-domain="<?= htmlspecialchars((string)$_sd_item, ENT_QUOTES, \'UTF-8\') ?>">&times;</span></span>';
+                $html[] = '      <?php endforeach; endif; ?>';
                 $html[] = '    </div>';
             } else {
                 $html[] = '    <span>';
@@ -459,7 +469,6 @@ class DomainSelect implements TaglibInterface
             $t_load_fail = addslashes(__('加载失败'));
             $t_no_domain = addslashes(__('暂无可用域名，请先添加'));
             $t_default = addslashes(__('请选择域名'));
-            $t_selected = addslashes(__('已选择 %s 个域名'));
             
             $html[] = \Weline\Framework\View\Taglib\Support\FloatingDropdownEmitter::script();
             $html[] = '<script>(function(){';
@@ -818,7 +827,7 @@ class DomainSelect implements TaglibInterface
             $html[] = '    if (group.options && group.options.length) {';
             $html[] = '      group.options.forEach(function(opt) {';
             $html[] = '        var descParts = [];';
-            $html[] = '        var isLocal = !!(opt.is_local || opt.is_local_server || /\\.weline\\.test$/i.test(String(opt.domain || "")));';
+            $html[] = '        var isLocal = !!(opt.is_local || opt.is_local_server || /\\.(?:test\\.weline\\.com|weline\\.test)$/i.test(String(opt.domain || "")));';
             $html[] = '        var siteCreated = parseInt(opt.site_created || 0, 10) === 1;';
             $html[] = '        if (isLocal) { descParts.push(\'<span style="color:var(--backend-color-info,#0d6efd)">' . addslashes(__('本地域名')) . '</span>\'); }';
             $html[] = '        if (siteCreated) { descParts.push(\'<span style="color:var(--backend-color-danger,#dc3545)">' . addslashes(__('已占用')) . '</span>\'); }';
@@ -1243,6 +1252,26 @@ class DomainSelect implements TaglibInterface
             $html[] = '  }, 0);';
             $html[] = '});';
             $html[] = '';
+            $html[] = 'function hydrateInitialSelection() {';
+            $html[] = '  if (!isMultiple || !hidden) return;';
+            $html[] = '  var wrapperEl = document.getElementById(id + "_wrapper");';
+            $html[] = '  var seedAttr = wrapperEl ? String(wrapperEl.getAttribute("data-selected-domains") || "") : "";';
+            $html[] = '  var seed = seedAttr.split(",").map(function(v) { return String(v || "").trim(); }).filter(function(v) { return v !== ""; });';
+            $html[] = '  if (seed.length === 0 && valueType !== "pool_id") {';
+            $html[] = '    seed = String(hidden.value || "").split(",").map(function(v) { return String(v || "").trim(); }).filter(function(v) { return v !== ""; });';
+            $html[] = '  }';
+            $html[] = '  if (seed.length > 0) {';
+            $html[] = '    selectedDomains = seed.slice();';
+            $html[] = '    updateDisplay();';
+            $html[] = '  } else if (tagsContainer && tagsContainer.querySelector(".weline-domain-select-tag-remove")) {';
+            $html[] = '    bindTagRemove();';
+            $html[] = '  }';
+            $html[] = '  if (String(hidden.value || "").trim() !== "") {';
+            $html[] = '    loadData();';
+            $html[] = '  }';
+            $html[] = '}';
+            $html[] = 'hydrateInitialSelection();';
+            $html[] = '';
             $html[] = '})();</script>';
 
             return implode("\n", $html);
@@ -1289,6 +1318,7 @@ class DomainSelect implements TaglibInterface
   <li><code>site-ready-only</code>：<strong>[v1.6.0]</strong> 是否只显示 site_ready=1 的域名（默认 true）</li>
   <li><code>value-type</code>：<strong>[v1.6.0]</strong> 值类型 "domain"（默认）或 "pool_id"</li>
   <li><code>bind-root-www</code>：多选时若为 true，apex 与 <code>www.</code>apex 在列表中同时存在则成对勾选/取消（移除标签亦成对）</li>
+  <li><code>selected-domains</code>：多选时逗号分隔的已选域名，触发器直接渲染域名胶囊（勿传「已选择 N 个」类摘要文案）</li>
 </ul>
 
 <h4>使用示例</h4>

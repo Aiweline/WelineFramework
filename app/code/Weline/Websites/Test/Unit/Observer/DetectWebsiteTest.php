@@ -145,7 +145,7 @@ final class DetectWebsiteTest extends TestCase
         $websiteRows = [[
             'website_id' => 268,
             'code' => 'ai-card-game',
-            'url' => 'http://p11005ce4.weline.test',
+            'url' => 'http://p11005ce4.test.weline.com',
             'default_currency' => 'USD',
             'default_language' => 'en_US',
             'default_timezone' => 'UTC',
@@ -153,7 +153,7 @@ final class DetectWebsiteTest extends TestCase
 
         $domainRows = [[
             WebsiteDomain::schema_fields_WEBSITE_ID => 268,
-            WebsiteDomain::schema_fields_DOMAIN => 'p11005ce4.weline.test',
+            WebsiteDomain::schema_fields_DOMAIN => 'p11005ce4.test.weline.com',
             WebsiteDomain::schema_fields_SUB_PATH => '',
             WebsiteDomain::schema_fields_STATUS => WebsiteDomain::STATUS_ACTIVE,
         ]];
@@ -170,11 +170,11 @@ final class DetectWebsiteTest extends TestCase
         $observer->execute($sitesEvent);
 
         $siteUrls = \array_column($sitesEvent->getData('sites') ?: [], 'url');
-        $this->assertNotContains('http://p11005ce4.weline.test', $siteUrls);
-        $this->assertNotContains('https://p11005ce4.weline.test', $siteUrls);
+        $this->assertNotContains('http://p11005ce4.test.weline.com', $siteUrls);
+        $this->assertNotContains('https://p11005ce4.test.weline.com', $siteUrls);
 
         RequestContext::init();
-        $matchEvent = new Event(['data' => new DataObject(['url' => 'https://p11005ce4.weline.test/'])]);
+        $matchEvent = new Event(['data' => new DataObject(['url' => 'https://p11005ce4.test.weline.com/'])]);
         $observer->execute($matchEvent);
 
         $this->assertNull($matchEvent->getData('website_id'));

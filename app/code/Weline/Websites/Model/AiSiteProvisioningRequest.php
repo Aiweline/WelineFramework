@@ -27,7 +27,7 @@ class AiSiteProvisioningRequest extends Model
 
     public const DOMAIN_MODE_TEST = 'test';
     public const DOMAIN_MODE_PURCHASE = 'purchase';
-    /** Pool-existing domain: bind WebsiteDomain only, no purchase / no *.weline.test force. */
+    /** Pool-existing domain: bind WebsiteDomain only, no purchase / no *.test.weline.com force. */
     public const DOMAIN_MODE_BIND = 'bind';
 
     #[Col(type: 'int', primaryKey: true, autoIncrement: true, nullable: false, comment: '请求主键')]

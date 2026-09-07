@@ -12,7 +12,7 @@ final class DomainStartPageConfigTest extends TestCase
     public function testPortAndSchemeResolveToTheSameDomainScopedKey(): void
     {
         self::assertSame(
-            DomainStartPageConfig::key('local-demo.weline.test'),
+            DomainStartPageConfig::key('local-demo.test.weline.com'),
             DomainStartPageConfig::key('https://LOCAL-DEMO.WELINE.TEST:9502/')
         );
     }
@@ -20,8 +20,8 @@ final class DomainStartPageConfigTest extends TestCase
     public function testDifferentSessionDomainsNeverShareAStartPageKey(): void
     {
         self::assertNotSame(
-            DomainStartPageConfig::key('session-a.weline.test'),
-            DomainStartPageConfig::key('session-b.weline.test')
+            DomainStartPageConfig::key('session-a.test.weline.com'),
+            DomainStartPageConfig::key('session-b.test.weline.com')
         );
     }
 
