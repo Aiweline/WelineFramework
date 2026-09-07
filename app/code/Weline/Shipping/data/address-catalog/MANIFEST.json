@@ -1,0 +1,3401 @@
+{
+    "schema_version": "address-catalog.v1",
+    "pack_version": "address-catalog-geonames-cascade-v1",
+    "code_epoch": "v1",
+    "built_at": "2026-09-04T04:24:41+00:00",
+    "license": {
+        "notes": "Country names: common English ISO labels. Subnational from existing Shipping region packs (modood CN; CSC ODbL for G20).",
+        "sources": [
+            "dr5hn/countries-states-cities-database (ODbL)",
+            "modood/Administrative-divisions-of-China"
+        ]
+    },
+    "layers_ready": {
+        "cascade": true,
+        "postal_lookup": true,
+        "street_select": true
+    },
+    "countries": [
+        "AD",
+        "AE",
+        "AF",
+        "AG",
+        "AI",
+        "AL",
+        "AM",
+        "AO",
+        "AQ",
+        "AR",
+        "AS",
+        "AT",
+        "AU",
+        "AW",
+        "AX",
+        "AZ",
+        "BA",
+        "BB",
+        "BD",
+        "BE",
+        "BF",
+        "BG",
+        "BH",
+        "BI",
+        "BJ",
+        "BL",
+        "BM",
+        "BN",
+        "BO",
+        "BQ",
+        "BR",
+        "BS",
+        "BT",
+        "BV",
+        "BW",
+        "BY",
+        "BZ",
+        "CA",
+        "CC",
+        "CD",
+        "CF",
+        "CG",
+        "CH",
+        "CI",
+        "CK",
+        "CL",
+        "CM",
+        "CN",
+        "CO",
+        "CR",
+        "CU",
+        "CV",
+        "CW",
+        "CX",
+        "CY",
+        "CZ",
+        "DE",
+        "DJ",
+        "DK",
+        "DM",
+        "DO",
+        "DZ",
+        "EC",
+        "EE",
+        "EG",
+        "EH",
+        "ER",
+        "ES",
+        "ET",
+        "FI",
+        "FJ",
+        "FK",
+        "FM",
+        "FO",
+        "FR",
+        "GA",
+        "GB",
+        "GD",
+        "GE",
+        "GF",
+        "GG",
+        "GH",
+        "GI",
+        "GL",
+        "GM",
+        "GN",
+        "GP",
+        "GQ",
+        "GR",
+        "GS",
+        "GT",
+        "GU",
+        "GW",
+        "GY",
+        "HK",
+        "HM",
+        "HN",
+        "HR",
+        "HT",
+        "HU",
+        "ID",
+        "IE",
+        "IL",
+        "IM",
+        "IN",
+        "IO",
+        "IQ",
+        "IR",
+        "IS",
+        "IT",
+        "JE",
+        "JM",
+        "JO",
+        "JP",
+        "KE",
+        "KG",
+        "KH",
+        "KI",
+        "KM",
+        "KN",
+        "KP",
+        "KR",
+        "KW",
+        "KY",
+        "KZ",
+        "LA",
+        "LB",
+        "LC",
+        "LI",
+        "LK",
+        "LR",
+        "LS",
+        "LT",
+        "LU",
+        "LV",
+        "LY",
+        "MA",
+        "MC",
+        "MD",
+        "ME",
+        "MF",
+        "MG",
+        "MH",
+        "MK",
+        "ML",
+        "MM",
+        "MN",
+        "MO",
+        "MP",
+        "MQ",
+        "MR",
+        "MS",
+        "MT",
+        "MU",
+        "MV",
+        "MW",
+        "MX",
+        "MY",
+        "MZ",
+        "NA",
+        "NC",
+        "NE",
+        "NF",
+        "NG",
+        "NI",
+        "NL",
+        "NO",
+        "NP",
+        "NR",
+        "NU",
+        "NZ",
+        "OM",
+        "PA",
+        "PE",
+        "PF",
+        "PG",
+        "PH",
+        "PK",
+        "PL",
+        "PM",
+        "PN",
+        "PR",
+        "PS",
+        "PT",
+        "PW",
+        "PY",
+        "QA",
+        "RE",
+        "RO",
+        "RS",
+        "RU",
+        "RW",
+        "SA",
+        "SB",
+        "SC",
+        "SD",
+        "SE",
+        "SG",
+        "SH",
+        "SI",
+        "SJ",
+        "SK",
+        "SL",
+        "SM",
+        "SN",
+        "SO",
+        "SR",
+        "SS",
+        "ST",
+        "SV",
+        "SX",
+        "SY",
+        "SZ",
+        "TC",
+        "TD",
+        "TF",
+        "TG",
+        "TH",
+        "TJ",
+        "TK",
+        "TL",
+        "TM",
+        "TN",
+        "TO",
+        "TR",
+        "TT",
+        "TV",
+        "TW",
+        "TZ",
+        "UA",
+        "UG",
+        "UM",
+        "US",
+        "UY",
+        "UZ",
+        "VA",
+        "VC",
+        "VE",
+        "VG",
+        "VI",
+        "VN",
+        "VU",
+        "WF",
+        "WS",
+        "YE",
+        "YT",
+        "ZA",
+        "ZM",
+        "ZW"
+    ],
+    "countries_with_subnational": {
+        "AD": {
+            "provinces": 7,
+            "cities": 7,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "AE": {
+            "provinces": 7,
+            "cities": 28,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "AF": {
+            "provinces": 34,
+            "cities": 398,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "AG": {
+            "provinces": 8,
+            "cities": 8,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "AI": {
+            "provinces": 14,
+            "cities": 14,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "AL": {
+            "provinces": 12,
+            "cities": 61,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "AM": {
+            "provinces": 11,
+            "cities": 82,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "AO": {
+            "provinces": 21,
+            "cities": 162,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "AQ": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "AR": {
+            "provinces": 24,
+            "cities": 1136,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "AR.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "AS": {
+            "provinces": 5,
+            "cities": 14,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "AT": {
+            "provinces": 9,
+            "cities": 94,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "AU": {
+            "provinces": 8,
+            "cities": 4147,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "AU.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "AW": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "AX": {
+            "provinces": 3,
+            "cities": 16,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "AZ": {
+            "provinces": 71,
+            "cities": 21,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BA": {
+            "provinces": 3,
+            "cities": 18,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BB": {
+            "provinces": 11,
+            "cities": 11,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "BD": {
+            "provinces": 8,
+            "cities": 64,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BE": {
+            "provinces": 3,
+            "cities": 11,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BF": {
+            "provinces": 13,
+            "cities": 45,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BG": {
+            "provinces": 28,
+            "cities": 265,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BH": {
+            "provinces": 4,
+            "cities": 4,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "BI": {
+            "provinces": 16,
+            "cities": 119,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BJ": {
+            "provinces": 12,
+            "cities": 77,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BL": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "BM": {
+            "provinces": 11,
+            "cities": 11,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "BN": {
+            "provinces": 4,
+            "cities": 40,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BO": {
+            "provinces": 9,
+            "cities": 112,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BQ": {
+            "provinces": 3,
+            "cities": 3,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "BR": {
+            "provinces": 27,
+            "cities": 5629,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "BR.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "BS": {
+            "provinces": 32,
+            "cities": 32,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "BT": {
+            "provinces": 20,
+            "cities": 27,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BV": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "BW": {
+            "provinces": 16,
+            "cities": 25,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BY": {
+            "provinces": 7,
+            "cities": 158,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "BZ": {
+            "provinces": 6,
+            "cities": 2,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CA": {
+            "provinces": 13,
+            "cities": 1080,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "CA.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "CC": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "CD": {
+            "provinces": 26,
+            "cities": 195,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CF": {
+            "provinces": 20,
+            "cities": 71,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CG": {
+            "provinces": 12,
+            "cities": 89,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CH": {
+            "provinces": 26,
+            "cities": 149,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CI": {
+            "provinces": 14,
+            "cities": 33,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CK": {
+            "provinces": 11,
+            "cities": 8,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CL": {
+            "provinces": 16,
+            "cities": 56,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CM": {
+            "provinces": 10,
+            "cities": 58,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CN": {
+            "provinces": 31,
+            "cities": 342,
+            "districts": 3056,
+            "postal": 0,
+            "source_pack": "CN.json",
+            "pack_version": "modood-pca-code-v1"
+        },
+        "CO": {
+            "provinces": 33,
+            "cities": 1122,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CR": {
+            "provinces": 7,
+            "cities": 82,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CU": {
+            "provinces": 16,
+            "cities": 167,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CV": {
+            "provinces": 22,
+            "cities": 32,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CW": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "CX": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "CY": {
+            "provinces": 6,
+            "cities": 615,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "CZ": {
+            "provinces": 14,
+            "cities": 98,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "DE": {
+            "provinces": 16,
+            "cities": 7104,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "DE.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "DJ": {
+            "provinces": 6,
+            "cities": 3,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "DK": {
+            "provinces": 5,
+            "cities": 99,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "DM": {
+            "provinces": 10,
+            "cities": 10,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "DO": {
+            "provinces": 32,
+            "cities": 155,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "DZ": {
+            "provinces": 58,
+            "cities": 548,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "EC": {
+            "provinces": 24,
+            "cities": 221,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "EE": {
+            "provinces": 15,
+            "cities": 79,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "EG": {
+            "provinces": 27,
+            "cities": 138,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "EH": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "ER": {
+            "provinces": 6,
+            "cities": 58,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "ES": {
+            "provinces": 19,
+            "cities": 52,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "ET": {
+            "provinces": 14,
+            "cities": 122,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "FI": {
+            "provinces": 18,
+            "cities": 66,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "FJ": {
+            "provinces": 5,
+            "cities": 15,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "FK": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "FM": {
+            "provinces": 4,
+            "cities": 78,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "FO": {
+            "provinces": 6,
+            "cities": 29,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "FR": {
+            "provinces": 17,
+            "cities": 99,
+            "districts": 10530,
+            "postal": 0,
+            "source_pack": "FR.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "GA": {
+            "provinces": 9,
+            "cities": 48,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GB": {
+            "provinces": 4,
+            "cities": 217,
+            "districts": 3879,
+            "postal": 0,
+            "source_pack": "GB.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "GD": {
+            "provinces": 7,
+            "cities": 7,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "GE": {
+            "provinces": 12,
+            "cities": 84,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GF": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GG": {
+            "provinces": 11,
+            "cities": 11,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "GH": {
+            "provinces": 16,
+            "cities": 265,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GI": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "GL": {
+            "provinces": 5,
+            "cities": 3,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GM": {
+            "provinces": 6,
+            "cities": 37,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GN": {
+            "provinces": 8,
+            "cities": 34,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GP": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GQ": {
+            "provinces": 8,
+            "cities": 32,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GR": {
+            "provinces": 14,
+            "cities": 54,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GS": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "GT": {
+            "provinces": 22,
+            "cities": 340,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GU": {
+            "provinces": 19,
+            "cities": 19,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "GW": {
+            "provinces": 9,
+            "cities": 39,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "GY": {
+            "provinces": 10,
+            "cities": 10,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "HK": {
+            "provinces": 3,
+            "cities": 18,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "HK.json",
+            "pack_version": ""
+        },
+        "HM": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "HN": {
+            "provinces": 18,
+            "cities": 298,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "HR": {
+            "provinces": 21,
+            "cities": 572,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "HT": {
+            "provinces": 10,
+            "cities": 42,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "HU": {
+            "provinces": 20,
+            "cities": 197,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "ID": {
+            "provinces": 38,
+            "cities": 799,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "ID.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "IE": {
+            "provinces": 4,
+            "cities": 31,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "IL": {
+            "provinces": 7,
+            "cities": 17,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "IM": {
+            "provinces": 24,
+            "cities": 24,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "IN": {
+            "provinces": 36,
+            "cities": 4198,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "IN.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "IO": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "IQ": {
+            "provinces": 19,
+            "cities": 122,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "IR": {
+            "provinces": 31,
+            "cities": 435,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "IS": {
+            "provinces": 8,
+            "cities": 64,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "IT": {
+            "provinces": 20,
+            "cities": 189,
+            "districts": 9445,
+            "postal": 0,
+            "source_pack": "IT.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "JE": {
+            "provinces": 12,
+            "cities": 12,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "JM": {
+            "provinces": 14,
+            "cities": 825,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "JO": {
+            "provinces": 12,
+            "cities": 53,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "JP": {
+            "provinces": 47,
+            "cities": 1655,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "JP.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "KE": {
+            "provinces": 47,
+            "cities": 32,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "KG": {
+            "provinces": 9,
+            "cities": 45,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "KH": {
+            "provinces": 25,
+            "cities": 199,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "KI": {
+            "provinces": 3,
+            "cities": 33,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "KM": {
+            "provinces": 3,
+            "cities": 3,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "KN": {
+            "provinces": 14,
+            "cities": 14,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "KP": {
+            "provinces": 13,
+            "cities": 201,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "KR": {
+            "provinces": 17,
+            "cities": 308,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "KR.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "KW": {
+            "provinces": 6,
+            "cities": 109,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "KY": {
+            "provinces": 6,
+            "cities": 6,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "KZ": {
+            "provinces": 21,
+            "cities": 279,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "LA": {
+            "provinces": 18,
+            "cities": 148,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "LB": {
+            "provinces": 8,
+            "cities": 30,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "LC": {
+            "provinces": 10,
+            "cities": 546,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "LI": {
+            "provinces": 11,
+            "cities": 11,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "LK": {
+            "provinces": 9,
+            "cities": 25,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "LR": {
+            "provinces": 15,
+            "cities": 224,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "LS": {
+            "provinces": 10,
+            "cities": 15,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "LT": {
+            "provinces": 10,
+            "cities": 60,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "LU": {
+            "provinces": 12,
+            "cities": 105,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "LV": {
+            "provinces": 43,
+            "cities": 587,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "LY": {
+            "provinces": 22,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MA": {
+            "provinces": 12,
+            "cities": 75,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MC": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "MD": {
+            "provinces": 37,
+            "cities": 37,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "ME": {
+            "provinces": 25,
+            "cities": 25,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "MF": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "MG": {
+            "provinces": 23,
+            "cities": 119,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MH": {
+            "provinces": 33,
+            "cities": 33,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "MK": {
+            "provinces": 71,
+            "cities": 10,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "ML": {
+            "provinces": 11,
+            "cities": 50,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MM": {
+            "provinces": 15,
+            "cities": 73,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MN": {
+            "provinces": 22,
+            "cities": 387,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MO": {
+            "provinces": 3,
+            "cities": 7,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "MO.json",
+            "pack_version": ""
+        },
+        "MP": {
+            "provinces": 4,
+            "cities": 12,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MQ": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MR": {
+            "provinces": 15,
+            "cities": 55,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MS": {
+            "provinces": 3,
+            "cities": 3,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "MT": {
+            "provinces": 68,
+            "cities": 68,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "MU": {
+            "provinces": 12,
+            "cities": 12,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "MV": {
+            "provinces": 21,
+            "cities": 21,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "MW": {
+            "provinces": 3,
+            "cities": 28,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MX": {
+            "provinces": 32,
+            "cities": 9321,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "MX.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "MY": {
+            "provinces": 16,
+            "cities": 144,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "MZ": {
+            "provinces": 11,
+            "cities": 164,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "NA": {
+            "provinces": 14,
+            "cities": 47,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "NC": {
+            "provinces": 3,
+            "cities": 33,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "NE": {
+            "provinces": 8,
+            "cities": 67,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "NF": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "NG": {
+            "provinces": 37,
+            "cities": 785,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "NI": {
+            "provinces": 17,
+            "cities": 153,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "NL": {
+            "provinces": 12,
+            "cities": 342,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "NO": {
+            "provinces": 15,
+            "cities": 357,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "NP": {
+            "provinces": 7,
+            "cities": 77,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "NR": {
+            "provinces": 14,
+            "cities": 14,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "NU": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "OM": {
+            "provinces": 11,
+            "cities": 61,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PA": {
+            "provinces": 14,
+            "cities": 82,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PE": {
+            "provinces": 26,
+            "cities": 196,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PF": {
+            "provinces": 5,
+            "cities": 48,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PG": {
+            "provinces": 22,
+            "cities": 87,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PH": {
+            "provinces": 17,
+            "cities": 87,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PK": {
+            "provinces": 7,
+            "cities": 157,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PL": {
+            "provinces": 16,
+            "cities": 380,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PM": {
+            "provinces": 2,
+            "cities": 2,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "PN": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "PR": {
+            "provinces": 78,
+            "cities": 902,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PS": {
+            "provinces": 2,
+            "cities": 16,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PT": {
+            "provinces": 20,
+            "cities": 308,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PW": {
+            "provinces": 16,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "PY": {
+            "provinces": 18,
+            "cities": 246,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "QA": {
+            "provinces": 8,
+            "cities": 8,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "RE": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "RO": {
+            "provinces": 42,
+            "cities": 3181,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "RS": {
+            "provinces": 2,
+            "cities": 25,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "RU": {
+            "provinces": 83,
+            "cities": 5523,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "RU.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "RW": {
+            "provinces": 5,
+            "cities": 30,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SA": {
+            "provinces": 13,
+            "cities": 399,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "SA.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "SB": {
+            "provinces": 10,
+            "cities": 183,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SC": {
+            "provinces": 28,
+            "cities": 28,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "SD": {
+            "provinces": 18,
+            "cities": 42,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SE": {
+            "provinces": 21,
+            "cities": 290,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SG": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "SH": {
+            "provinces": 3,
+            "cities": 8,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SI": {
+            "provinces": 212,
+            "cities": 17,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SJ": {
+            "provinces": 2,
+            "cities": 4,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SK": {
+            "provinces": 8,
+            "cities": 79,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SL": {
+            "provinces": 5,
+            "cities": 16,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SM": {
+            "provinces": 9,
+            "cities": 9,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "SN": {
+            "provinces": 14,
+            "cities": 45,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SO": {
+            "provinces": 18,
+            "cities": 87,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SR": {
+            "provinces": 10,
+            "cities": 68,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SS": {
+            "provinces": 10,
+            "cities": 28,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "ST": {
+            "provinces": 2,
+            "cities": 7,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SV": {
+            "provinces": 14,
+            "cities": 44,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SX": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "SY": {
+            "provinces": 14,
+            "cities": 61,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "SZ": {
+            "provinces": 4,
+            "cities": 38,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TC": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "TD": {
+            "provinces": 23,
+            "cities": 133,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TF": {
+            "provinces": 5,
+            "cities": 5,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TG": {
+            "provinces": 5,
+            "cities": 30,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TH": {
+            "provinces": 77,
+            "cities": 928,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TJ": {
+            "provinces": 5,
+            "cities": 75,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TK": {
+            "provinces": 3,
+            "cities": 3,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "TL": {
+            "provinces": 13,
+            "cities": 65,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TM": {
+            "provinces": 6,
+            "cities": 57,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TN": {
+            "provinces": 24,
+            "cities": 264,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TO": {
+            "provinces": 5,
+            "cities": 23,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TR": {
+            "provinces": 81,
+            "cities": 980,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "TR.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "TT": {
+            "provinces": 15,
+            "cities": 36,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TV": {
+            "provinces": 8,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "TW": {
+            "provinces": 4,
+            "cities": 9,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "TW.json",
+            "pack_version": ""
+        },
+        "TZ": {
+            "provinces": 31,
+            "cities": 170,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "UA": {
+            "provinces": 27,
+            "cities": 146,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "UG": {
+            "provinces": 4,
+            "cities": 122,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "UM": {
+            "provinces": 9,
+            "cities": 9,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "US": {
+            "provinces": 52,
+            "cities": 16731,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "US.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "UY": {
+            "provinces": 19,
+            "cities": 124,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "UZ": {
+            "provinces": 14,
+            "cities": 221,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "VA": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "VC": {
+            "provinces": 6,
+            "cities": 6,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "VE": {
+            "provinces": 25,
+            "cities": 335,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "VG": {
+            "provinces": 1,
+            "cities": 1,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "VI": {
+            "provinces": 3,
+            "cities": 20,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "VN": {
+            "provinces": 34,
+            "cities": 723,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "VU": {
+            "provinces": 6,
+            "cities": 6,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "WF": {
+            "provinces": 3,
+            "cities": 5,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "WS": {
+            "provinces": 11,
+            "cities": 14,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "XK": {
+            "provinces": 7,
+            "cities": 38,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "YE": {
+            "provinces": 22,
+            "cities": 333,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "YT": {
+            "provinces": 17,
+            "cities": 17,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-synthetic-city",
+            "pack_version": "synthetic-city-per-province-v1"
+        },
+        "ZA": {
+            "provinces": 9,
+            "cities": 314,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "ZA.json",
+            "pack_version": "dr5hn-csc-sqlite-v1"
+        },
+        "ZM": {
+            "provinces": 10,
+            "cities": 108,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        },
+        "ZW": {
+            "provinces": 10,
+            "cities": 62,
+            "districts": 0,
+            "postal": 0,
+            "source_pack": "geonames-admin",
+            "pack_version": "geonames-admin1-admin2-v1"
+        }
+    },
+    "imported_at": "2026-09-07T04:28:00+00:00",
+    "postal_built_at": "2026-09-06T06:38:07+00:00",
+    "postal_sources": {
+        "CN": "tombcato/china-zipcode-data (adcode↔zip)",
+        "others": "GeoNames export/zip/{CC}.zip"
+    },
+    "postal_summary": {
+        "AD": {
+            "rows": 7,
+            "linked": 7,
+            "source": "geonames"
+        },
+        "AE": {
+            "rows": 178171,
+            "linked": 178171,
+            "source": "geonames"
+        },
+        "AF": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "AG": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "AI": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "AL": {
+            "rows": 494,
+            "linked": 494,
+            "source": "geonames"
+        },
+        "AM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "AO": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "AQ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "AR": {
+            "rows": 20260,
+            "linked": 20260,
+            "source": "geonames"
+        },
+        "AS": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "AT": {
+            "rows": 19031,
+            "linked": 19031,
+            "source": "geonames"
+        },
+        "AU": {
+            "rows": 18514,
+            "linked": 18514,
+            "source": "geonames"
+        },
+        "AW": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "AX": {
+            "rows": 37,
+            "linked": 37,
+            "source": "geonames"
+        },
+        "AZ": {
+            "rows": 1186,
+            "linked": 1186,
+            "source": "geonames"
+        },
+        "BA": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BB": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BD": {
+            "rows": 1349,
+            "linked": 1349,
+            "source": "geonames"
+        },
+        "BE": {
+            "rows": 2781,
+            "linked": 2781,
+            "source": "geonames"
+        },
+        "BF": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BG": {
+            "rows": 5299,
+            "linked": 3063,
+            "source": "geonames"
+        },
+        "BH": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BI": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BJ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BL": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BM": {
+            "rows": 112,
+            "linked": 112,
+            "source": "geonames"
+        },
+        "BN": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BO": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BQ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BR": {
+            "rows": 5525,
+            "linked": 5519,
+            "source": "geonames"
+        },
+        "BS": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BT": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BV": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BW": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "BY": {
+            "rows": 3132,
+            "linked": 3131,
+            "source": "geonames"
+        },
+        "BZ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "CA": {
+            "rows": 1657,
+            "linked": 1657,
+            "source": "geonames"
+        },
+        "CC": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "CD": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "CF": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "CG": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "CH": {
+            "rows": 4470,
+            "linked": 4470,
+            "source": "geonames"
+        },
+        "CI": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "CK": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "CL": {
+            "rows": 346,
+            "linked": 346,
+            "source": "geonames"
+        },
+        "CM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "CN": {
+            "rows": 2856,
+            "source": "adcode-zip-kept"
+        },
+        "CO": {
+            "rows": 3681,
+            "linked": 3681,
+            "source": "geonames"
+        },
+        "CR": {
+            "rows": 473,
+            "linked": 473,
+            "source": "geonames"
+        },
+        "CU": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "CV": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "CW": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "CX": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "CY": {
+            "rows": 1127,
+            "linked": 1127,
+            "source": "geonames"
+        },
+        "CZ": {
+            "rows": 15507,
+            "linked": 15507,
+            "source": "geonames"
+        },
+        "DE": {
+            "rows": 23297,
+            "linked": 22503,
+            "source": "geonames"
+        },
+        "DJ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "DK": {
+            "rows": 1159,
+            "linked": 1095,
+            "source": "geonames"
+        },
+        "DM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "DO": {
+            "rows": 544,
+            "linked": 7,
+            "source": "geonames"
+        },
+        "DZ": {
+            "rows": 15951,
+            "linked": 15230,
+            "source": "geonames"
+        },
+        "EC": {
+            "rows": 1225,
+            "linked": 1221,
+            "source": "geonames"
+        },
+        "EE": {
+            "rows": 5398,
+            "linked": 5398,
+            "source": "geonames"
+        },
+        "EG": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "EH": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "ER": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "ES": {
+            "rows": 37867,
+            "linked": 18453,
+            "source": "geonames"
+        },
+        "ET": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "FI": {
+            "rows": 3576,
+            "linked": 3576,
+            "source": "geonames"
+        },
+        "FJ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "FK": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "FM": {
+            "rows": 4,
+            "linked": 4,
+            "source": "geonames"
+        },
+        "FO": {
+            "rows": 130,
+            "linked": 14,
+            "source": "geonames"
+        },
+        "FR": {
+            "rows": 51588,
+            "linked": 51587,
+            "source": "geonames"
+        },
+        "GA": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "GB": {
+            "rows": 27450,
+            "linked": 27346,
+            "source": "geonames"
+        },
+        "GD": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "GE": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "GF": {
+            "rows": 77,
+            "linked": 77,
+            "source": "geonames"
+        },
+        "GG": {
+            "rows": 14,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "GH": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "GI": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "GL": {
+            "rows": 33,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "GM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "GN": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "GP": {
+            "rows": 105,
+            "linked": 105,
+            "source": "geonames"
+        },
+        "GQ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "GR": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "GS": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "GT": {
+            "rows": 548,
+            "linked": 548,
+            "source": "geonames"
+        },
+        "GU": {
+            "rows": 21,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "GW": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "GY": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "HK": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "HM": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "HN": {
+            "rows": 38,
+            "linked": 38,
+            "source": "geonames"
+        },
+        "HR": {
+            "rows": 6774,
+            "linked": 6774,
+            "source": "geonames"
+        },
+        "HT": {
+            "rows": 236,
+            "linked": 236,
+            "source": "geonames"
+        },
+        "HU": {
+            "rows": 3571,
+            "linked": 1664,
+            "source": "geonames"
+        },
+        "ID": {
+            "rows": 81058,
+            "linked": 1325,
+            "source": "geonames"
+        },
+        "IE": {
+            "rows": 139,
+            "linked": 139,
+            "source": "geonames"
+        },
+        "IL": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "IM": {
+            "rows": 87,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "IN": {
+            "rows": 155546,
+            "linked": 154917,
+            "source": "geonames"
+        },
+        "IO": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "IQ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "IR": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "IS": {
+            "rows": 195,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "IT": {
+            "rows": 18415,
+            "linked": 14833,
+            "source": "geonames"
+        },
+        "JE": {
+            "rows": 5,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "JM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "JO": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "JP": {
+            "rows": 146447,
+            "linked": 146447,
+            "source": "geonames"
+        },
+        "KE": {
+            "rows": 890,
+            "linked": 890,
+            "source": "geonames"
+        },
+        "KG": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "KH": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "KI": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "KM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "KN": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "KP": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "KR": {
+            "rows": 35583,
+            "linked": 5628,
+            "source": "geonames"
+        },
+        "KW": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "KY": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "KZ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "LA": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "LB": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "LC": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "LI": {
+            "rows": 13,
+            "linked": 13,
+            "source": "geonames"
+        },
+        "LK": {
+            "rows": 1837,
+            "linked": 1837,
+            "source": "geonames"
+        },
+        "LR": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "LS": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "LT": {
+            "rows": 21865,
+            "linked": 21865,
+            "source": "geonames"
+        },
+        "LU": {
+            "rows": 4519,
+            "linked": 4519,
+            "source": "geonames"
+        },
+        "LV": {
+            "rows": 6070,
+            "linked": 6070,
+            "source": "geonames"
+        },
+        "LY": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MA": {
+            "rows": 1325,
+            "linked": 1325,
+            "source": "geonames"
+        },
+        "MC": {
+            "rows": 29,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "MD": {
+            "rows": 1753,
+            "linked": 1489,
+            "source": "geonames"
+        },
+        "ME": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MF": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MG": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MH": {
+            "rows": 2,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "MK": {
+            "rows": 220,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "ML": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MN": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MO": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "MP": {
+            "rows": 3,
+            "linked": 3,
+            "source": "geonames"
+        },
+        "MQ": {
+            "rows": 100,
+            "linked": 100,
+            "source": "geonames"
+        },
+        "MR": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MS": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MT": {
+            "rows": 73,
+            "linked": 73,
+            "source": "geonames"
+        },
+        "MU": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MV": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "MW": {
+            "rows": 491,
+            "linked": 491,
+            "source": "geonames"
+        },
+        "MX": {
+            "rows": 144655,
+            "linked": 143248,
+            "source": "geonames"
+        },
+        "MY": {
+            "rows": 2815,
+            "linked": 2669,
+            "source": "geonames"
+        },
+        "MZ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "NA": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "NC": {
+            "rows": 52,
+            "linked": 52,
+            "source": "geonames"
+        },
+        "NE": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "NF": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "NG": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "NI": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "NL": {
+            "rows": 4333,
+            "linked": 4333,
+            "source": "geonames"
+        },
+        "NO": {
+            "rows": 5132,
+            "linked": 5132,
+            "source": "geonames"
+        },
+        "NP": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "NR": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "NU": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "NZ": {
+            "rows": 1738,
+            "linked": 1721,
+            "source": "geonames"
+        },
+        "OM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "PA": {
+            "rows": 729,
+            "linked": 706,
+            "source": "geonames"
+        },
+        "PE": {
+            "rows": 96943,
+            "linked": 96943,
+            "source": "geonames"
+        },
+        "PF": {
+            "rows": 207,
+            "linked": 207,
+            "source": "geonames"
+        },
+        "PG": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "PH": {
+            "rows": 2317,
+            "linked": 2037,
+            "source": "geonames"
+        },
+        "PK": {
+            "rows": 2563,
+            "linked": 2563,
+            "source": "geonames"
+        },
+        "PL": {
+            "rows": 72898,
+            "linked": 72898,
+            "source": "geonames"
+        },
+        "PM": {
+            "rows": 2,
+            "linked": 2,
+            "source": "geonames"
+        },
+        "PN": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "PR": {
+            "rows": 177,
+            "linked": 177,
+            "source": "geonames"
+        },
+        "PS": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "PT": {
+            "rows": 206942,
+            "linked": 206942,
+            "source": "geonames"
+        },
+        "PW": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "PY": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "QA": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "RE": {
+            "rows": 152,
+            "linked": 145,
+            "source": "geonames"
+        },
+        "RO": {
+            "rows": 37915,
+            "linked": 37915,
+            "source": "geonames"
+        },
+        "RS": {
+            "rows": 1155,
+            "linked": 4,
+            "source": "geonames"
+        },
+        "RU": {
+            "rows": 43538,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "RW": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SA": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SB": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SC": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SD": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SE": {
+            "rows": 18887,
+            "linked": 7858,
+            "source": "geonames"
+        },
+        "SG": {
+            "rows": 121154,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "SH": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SI": {
+            "rows": 556,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "SJ": {
+            "rows": 8,
+            "linked": 8,
+            "source": "geonames"
+        },
+        "SK": {
+            "rows": 5233,
+            "linked": 1299,
+            "source": "geonames"
+        },
+        "SL": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SM": {
+            "rows": 26,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "SN": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SO": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SR": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SS": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "ST": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SV": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SX": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SY": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "SZ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TC": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "TD": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TF": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TG": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TH": {
+            "rows": 903,
+            "linked": 903,
+            "source": "geonames"
+        },
+        "TJ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TK": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TL": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TN": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TO": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TR": {
+            "rows": 36307,
+            "linked": 35841,
+            "source": "geonames"
+        },
+        "TT": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TV": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TW": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "TZ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "UA": {
+            "rows": 29571,
+            "linked": 29571,
+            "source": "geonames"
+        },
+        "UG": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "UM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "US": {
+            "rows": 41490,
+            "linked": 40977,
+            "source": "geonames"
+        },
+        "UY": {
+            "rows": 1964,
+            "linked": 1964,
+            "source": "geonames"
+        },
+        "UZ": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "VA": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "VC": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "VE": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "VG": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "VI": {
+            "rows": 16,
+            "linked": 7,
+            "source": "geonames"
+        },
+        "VN": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "VU": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "WF": {
+            "rows": 3,
+            "linked": 3,
+            "source": "geonames"
+        },
+        "WS": {
+            "rows": 1,
+            "linked": 0,
+            "source": "geonames"
+        },
+        "XK": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "YE": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "YT": {
+            "rows": 21,
+            "linked": 20,
+            "source": "geonames"
+        },
+        "ZA": {
+            "rows": 3920,
+            "linked": 1845,
+            "source": "geonames"
+        },
+        "ZM": {
+            "rows": 0,
+            "source": "missing"
+        },
+        "ZW": {
+            "rows": 0,
+            "source": "missing"
+        }
+    },
+    "cascade_built_at": "2026-09-06T06:35:44+00:00",
+    "cascade_source": {
+        "fill": "geonames admin1CodesASCII + admin2Codes",
+        "kept": [
+            "CN"
+        ],
+        "mode": "fill-missing"
+    },
+    "synthetic_cities_built_at": "2026-09-07T04:27:45+00:00",
+    "synthetic_cities_source": "province-mirror-CITY"
+}
