@@ -36,7 +36,7 @@ class AccountManager
      */
     private function getAccountModel(): Account
     {
-        return $this->objectManager->getInstance(Account::class);
+        return clone $this->objectManager->getInstance(Account::class);
     }
 
     /**
@@ -46,7 +46,28 @@ class AccountManager
      */
     private function getDomainModel(): Domain
     {
-        return $this->objectManager->getInstance(Domain::class);
+        return clone $this->objectManager->getInstance(Domain::class);
+    }
+
+    /** Empty secret fields on an edit mean keep the stored value. */
+    public static function mergeCredentials(array $existing, mixed $input): array
+    {
+        if ($input === null || $input === '') {
+            return $existing;
+        }
+        if (is_string($input)) {
+            $input = json_decode($input, true, 512, JSON_THROW_ON_ERROR);
+        }
+        if (!is_array($input)) {
+            throw new \InvalidArgumentException(__('凭证信息格式无效'));
+        }
+        foreach ($input as $key => $value) {
+            if ($value === null || (is_string($value) && trim($value) === '')) {
+                continue;
+            }
+            $existing[$key] = is_string($value) ? trim($value) : $value;
+        }
+        return $existing;
     }
 
     /**

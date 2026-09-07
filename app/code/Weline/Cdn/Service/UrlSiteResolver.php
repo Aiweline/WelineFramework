@@ -47,7 +47,7 @@ class UrlSiteResolver
         $host = $parsedUrl['host'];
 
         /** @var Domain $domainModel */
-        $domainModel = $this->objectManager->getInstance(Domain::class);
+        $domainModel = clone $this->objectManager->getInstance(Domain::class);
 
         $query = $domainModel->reset()
             ->where(Domain::schema_fields_ENABLED, 1);
@@ -56,11 +56,24 @@ class UrlSiteResolver
         }
         $domains = $query->select()->fetch()->getItems();
 
+        return self::matchDomainByHost($domains, $host);
+    }
+
+    /** Match only within the caller's already scoped domain collection. */
+    public static function matchDomainByHost(array $domains, string $host): ?Domain
+    {
+        $host = strtolower(rtrim(trim($host), '.'));
         $matchedDomain = null;
         $maxMatchLength = 0;
 
         foreach ($domains as $domain) {
-            $domainName = $domain->getData(Domain::schema_fields_DOMAIN_NAME);
+            if (!$domain instanceof Domain) {
+                continue;
+            }
+            $domainName = strtolower(rtrim(trim((string)$domain->getData(Domain::schema_fields_DOMAIN_NAME)), '.'));
+            if ($domainName === '') {
+                continue;
+            }
 
             if ($domainName === $host) {
                 return $domain;
@@ -86,7 +99,7 @@ class UrlSiteResolver
     public function resolveDomainBySiteId(int $siteId): ?Domain
     {
         /** @var Domain $domainModel */
-        $domainModel = $this->objectManager->getInstance(Domain::class);
+        $domainModel = clone $this->objectManager->getInstance(Domain::class);
 
         $domain = $domainModel->reset()
             ->where(Domain::schema_fields_SITE_ID, $siteId)
@@ -108,4 +121,3 @@ class UrlSiteResolver
         return \rtrim($cow->resolveCowMediaUrl('', $scope, $shared), '/');
     }
 }
-

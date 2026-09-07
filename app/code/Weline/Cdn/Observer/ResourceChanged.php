@@ -6,12 +6,17 @@ namespace Weline\Cdn\Observer;
 
 use Weline\Cdn\Model\Domain;
 use Weline\Cdn\Service\CachePurger;
+use Weline\Cdn\Service\UrlSiteResolver;
 use Weline\Framework\Api\Event\AsyncObserverInterface;
 use Weline\Framework\Event\Async\Exception\NonRetryableAsyncEventException;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ResourceChange\ResourceChange;
 
-/** CDN side effect for URL-bearing ResourceChange v1. Purge operations are idempotent. */
+/**
+ * CDN side effect for ResourceChange v1; purge operations are idempotent.
+ * The current Event dispatcher invokes this observer inline. Async interface/XML
+ * metadata alone do not provide durable delivery or retries on that runtime path.
+ */
 final class ResourceChanged implements AsyncObserverInterface
 {
     public function __construct(
@@ -35,7 +40,7 @@ final class ResourceChanged implements AsyncObserverInterface
                 __('CDN ResourceChange Observer 只接受 v1 契约')
             );
         }
-        if (!in_array($change->resourceType(), ['website', 'cms_page', 'url_rewrite', 'theme', 'theme_layout'], true)) {
+        if (!in_array($change->resourceType(), ['website', 'cms_page', 'url_rewrite', 'theme', 'theme_layout', 'product_search_projection'], true)) {
             return;
         }
 
@@ -55,6 +60,9 @@ final class ResourceChanged implements AsyncObserverInterface
             is_array($impact['urls'] ?? null) ? $impact['urls'] : [],
             is_array($impact['previous_urls'] ?? null) ? $impact['previous_urls'] : [],
         ));
+        if ($urls === [] && $change->resourceType() === 'product_search_projection') {
+            return;
+        }
 
         foreach ($domains as $domain) {
             if (!$domain instanceof Domain) {
@@ -64,15 +72,24 @@ final class ResourceChanged implements AsyncObserverInterface
             if ($domainId < 1) {
                 continue;
             }
-            $domainUrls = $this->urlsForDomain(
-                $urls,
-                (string)$domain->getData(Domain::schema_fields_DOMAIN_NAME)
-            );
+            $domainUrls = array_values(array_filter($urls, static function (string $url) use ($domains, $domainId): bool {
+                $match = UrlSiteResolver::matchDomainByHost($domains, (string)(parse_url($url, PHP_URL_HOST) ?: ''));
+                return $match !== null && (int)$match->getData(Domain::schema_fields_DOMAIN_ID) === $domainId;
+            }));
             if ($urls !== [] && $domainUrls === []) {
                 continue;
             }
+            if ($change->resourceType() === 'website' && $domainUrls !== []) {
+                foreach ($domainUrls as $baseUrl) {
+                    $result = $this->cachePurger->purgePublicScope($domainId, $baseUrl);
+                    if (($result['success'] ?? false) !== true) {
+                        throw new \RuntimeException(__('CDN 资源变更清理失败'));
+                    }
+                }
+                continue;
+            }
             $result = $domainUrls === []
-                ? $this->cachePurger->purge($domainId, 'everything')
+                ? $this->cachePurger->purge($domainId, 'hosts', ['hosts' => [(string)$domain->getData(Domain::schema_fields_DOMAIN_NAME)]])
                 : $this->cachePurger->purge($domainId, 'urls', ['urls' => $domainUrls]);
             if (($result['success'] ?? false) !== true) {
                 throw new \RuntimeException(__('CDN 资源变更清理失败'));
@@ -93,16 +110,4 @@ final class ResourceChanged implements AsyncObserverInterface
         return array_values($normalized);
     }
 
-    /** @param list<string> $urls @return list<string> */
-    private function urlsForDomain(array $urls, string $domain): array
-    {
-        $domain = strtolower(trim($domain));
-        if ($domain === '') {
-            return [];
-        }
-        return array_values(array_filter($urls, static function (string $url) use ($domain): bool {
-            $host = strtolower((string)(parse_url($url, PHP_URL_HOST) ?: ''));
-            return $host === $domain || str_ends_with($host, '.' . $domain);
-        }));
-    }
 }

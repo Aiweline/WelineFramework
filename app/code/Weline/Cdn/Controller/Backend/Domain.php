@@ -34,7 +34,7 @@ class Domain extends BackendController
      */
     private function getDomainModel(): DomainModel
     {
-        return ObjectManager::getInstance(DomainModel::class);
+        return clone ObjectManager::getInstance(DomainModel::class);
     }
 
     /**
@@ -199,7 +199,7 @@ class Domain extends BackendController
                 if (!isset($accounts[$adapterCode])) {
                     $accounts[$adapterCode] = [];
                 }
-                $accounts[$adapterCode][] = $account;
+                $accounts[$adapterCode][] = array_intersect_key($account, array_flip(['account_id', 'adapter', 'name', 'is_default', 'status']));
             }
         } catch (\Exception $e) {
             // 如果获取失败，使用空数组
@@ -293,9 +293,12 @@ class Domain extends BackendController
                 ]);
             }
 
-            // 检查域名名称全局唯一性
+            $data['domain_name'] = strtolower(rtrim(trim((string)$data['domain_name']), '.'));
+            // 同一网站、适配器内保持映射唯一，允许不同网站共享 Cloudflare Zone。
             $existingByName = $this->getDomainModel()->reset()
-                ->where(DomainModel::schema_fields_DOMAIN_NAME, $data['domain_name']);
+                ->where(DomainModel::schema_fields_DOMAIN_NAME, $data['domain_name'])
+                ->where(DomainModel::schema_fields_SITE_ID, (int)$data['site_id'])
+                ->where(DomainModel::schema_fields_ADAPTER, $data['adapter']);
             
             if ($id) {
                 // 编辑时，排除当前记录
@@ -311,24 +314,6 @@ class Domain extends BackendController
                 ]);
             }
             
-            // 检查 Zone ID 全局唯一性
-            $existingByZoneId = $this->getDomainModel()->reset()
-                ->where(DomainModel::schema_fields_ZONE_ID, $data['zone_id']);
-            
-            if ($id) {
-                // 编辑时，排除当前记录
-                $existingByZoneId->where(DomainModel::schema_fields_DOMAIN_ID, $id, '!=');
-            }
-            
-            $existingByZoneId = $existingByZoneId->find()->fetch();
-            
-            if ($existingByZoneId->getId()) {
-                return $this->jsonResponse([
-                    'success' => false,
-                    'message' => __('Zone ID "%{1}" 已存在，请使用不同的 Zone ID', $data['zone_id'])
-                ]);
-            }
-
             // 设置数据
             $domain->setData(DomainModel::schema_fields_SITE_ID, $data['site_id']);
             $domain->setData(DomainModel::schema_fields_ADAPTER, $data['adapter']);
@@ -350,12 +335,7 @@ class Domain extends BackendController
 
             // 处理自定义凭据
             if (isset($data['credentials']) && !empty($data['credentials'])) {
-                $credentials = is_array($data['credentials']) 
-                    ? $data['credentials'] 
-                    : json_decode($data['credentials'], true);
-                if (is_array($credentials)) {
-                    $domain->setCredentialsArray($credentials);
-                }
+                $domain->setCredentialsArray(AccountManager::mergeCredentials($domain->getCredentialsArray(), $data['credentials']));
             }
 
             // 处理规则覆盖

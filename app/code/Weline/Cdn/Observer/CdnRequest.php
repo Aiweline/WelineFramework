@@ -8,6 +8,7 @@ use Weline\Cdn\Model\Domain;
 use Weline\Cdn\Service\AdapterResolver;
 use Weline\Cdn\Service\CachePurger;
 use Weline\Cdn\Service\RuleManager;
+use Weline\Cdn\Service\UrlSiteResolver;
 use Weline\Framework\Event\Event;
 use Weline\Framework\Event\ObserverInterface;
 
@@ -49,10 +50,6 @@ class CdnRequest implements ObserverInterface
         $siteIdValue = array_key_exists('site_id', $eventData)
             ? $eventData['site_id']
             : ($eventData['website_id'] ?? null);
-        $siteId = $this->normalizeSiteId(
-            $siteIdProvided ? $siteIdValue : w_env_website_id(),
-            $siteIdProvided
-        );
         $domain = $event->getData('domain');
         $data = $event->getData('data') ?? [];
 
@@ -64,6 +61,22 @@ class CdnRequest implements ObserverInterface
         ];
 
         try {
+            $siteId = $this->normalizeSiteId(
+                $siteIdProvided ? $siteIdValue : w_env_website_id(),
+                $siteIdProvided
+            );
+            if ($action === 'purge_urls' || $action === 'purge_scope') {
+                $event->setData('response', $this->handleScopedPurgeUrls($siteId, is_string($domain) ? $domain : null, $data, $action === 'purge_scope'));
+                return;
+            }
+            if ($action === 'purge_all' && !$domain) {
+                $results = [];
+                foreach ($this->domainsForSite($siteId) as $configuredDomain) {
+                    $results[] = $this->handlePurgeAll($configuredDomain);
+                }
+                $event->setData('response', $this->combineResults($results));
+                return;
+            }
             // 获取域名配置
             $domainConfig = $this->resolveDomain($siteId, is_string($domain) ? $domain : null);
             
@@ -75,11 +88,7 @@ class CdnRequest implements ObserverInterface
 
             switch ($action) {
                 case 'purge_all':
-                    $response = $this->handlePurgeAll($domainConfig);
-                    break;
-
-                case 'purge_urls':
-                    $response = $this->handlePurgeUrls($domainConfig, $data);
+                    $response = $this->handlePurgeAll($domainConfig, is_string($domain) ? $domain : null);
                     break;
 
                 case 'push_rule':
@@ -115,35 +124,77 @@ class CdnRequest implements ObserverInterface
             return null;
         }
 
+        $domains = $this->domainsForSite($siteId);
         $domain = trim((string)$domain);
-        if ($domain !== '') {
-            $domainModel = clone $this->domainModel;
-            $domainModel->reset()
-                ->where(Domain::schema_fields_DOMAIN_NAME, $domain)
-                ->where(Domain::schema_fields_ENABLED, 1)
-                ->where(Domain::schema_fields_SITE_ID, $siteId);
-            $domainModel->find()->fetch();
-            
-            if ($domainModel->getData(Domain::schema_fields_DOMAIN_ID)) {
-                return $domainModel;
-            }
+        return $domain !== ''
+            ? UrlSiteResolver::matchDomainByHost($domains, $domain)
+            : ($domains[0] ?? null);
+    }
 
-            // 调用方显式指定了域名时，未命中就是未命中，不能退回同站其他域名。
-            return null;
+    /** @return list<Domain> */
+    private function domainsForSite(?int $siteId): array
+    {
+        if ($siteId === null) {
+            return [];
         }
-
-        $domainModel = clone $this->domainModel;
-        $domainModel->reset()
+        return (clone $this->domainModel)->reset()
             ->where(Domain::schema_fields_SITE_ID, $siteId)
             ->where(Domain::schema_fields_ENABLED, 1)
-            ->find()
-            ->fetch();
+            ->select()->fetch()->getItems();
+    }
 
-        if ($domainModel->getData(Domain::schema_fields_DOMAIN_ID)) {
-            return $domainModel;
+    private function handleScopedPurgeUrls(?int $siteId, ?string $explicitDomain, array $data, bool $scope = false): array
+    {
+        $domains = $this->domainsForSite($siteId);
+        $urls = $data['urls'] ?? [];
+        if (!is_array($urls) || $urls === []) {
+            return ['success' => false, 'message' => __('URL 列表不能为空'), 'data' => []];
         }
+        $selected = trim((string)$explicitDomain) !== '' ? UrlSiteResolver::matchDomainByHost($domains, (string)$explicitDomain) : null;
+        if (trim((string)$explicitDomain) !== '' && $selected === null) {
+            return ['success' => false, 'message' => __('未找到 CDN 域名配置'), 'data' => []];
+        }
+        $groups = [];
+        $unmatched = [];
+        foreach ($urls as $url) {
+            $rawUrl = is_array($url) ? ($url['url'] ?? '') : $url;
+            $host = is_string($rawUrl) ? (string)(parse_url($rawUrl, PHP_URL_HOST) ?: '') : '';
+            $match = UrlSiteResolver::matchDomainByHost($domains, $host);
+            if ($match === null || ($selected !== null && $match->getData(Domain::schema_fields_DOMAIN_ID) !== $selected->getData(Domain::schema_fields_DOMAIN_ID))) {
+                $unmatched[] = $rawUrl;
+                continue;
+            }
+            $id = (int)$match->getData(Domain::schema_fields_DOMAIN_ID);
+            $groups[$id]['domain'] = $match;
+            $groups[$id]['urls'][] = $url;
+        }
+        $results = [];
+        foreach ($groups as $group) {
+            try {
+                if ($scope) {
+                    foreach ($group['urls'] as $scopeUrl) {
+                        $results[] = $this->cachePurger->purgePublicScope($group['domain']->getData(Domain::schema_fields_DOMAIN_ID), is_array($scopeUrl) ? $scopeUrl['url'] : $scopeUrl);
+                    }
+                } else {
+                    $results[] = $this->handlePurgeUrls($group['domain'], ['urls' => $group['urls']]);
+                }
+            } catch (\Throwable $e) {
+                $results[] = ['success' => false, 'message' => $e->getMessage()];
+            }
+        }
+        if ($unmatched !== []) {
+            $results[] = ['success' => false, 'message' => __('URL 未匹配当前网站的 CDN 域名'), 'unmatched_urls' => $unmatched];
+        }
+        return $this->combineResults($results);
+    }
 
-        return null;
+    private function combineResults(array $results): array
+    {
+        $success = $results !== [];
+        foreach ($results as $result) {
+            $success = $success && (($result['success'] ?? null) === true);
+        }
+        return ['success' => $success, 'message' => $results === [] ? __('未找到 CDN 域名配置') : ($success ? __('缓存清理成功') : __('缓存清理失败')), 'data' => $results];
     }
 
     private function normalizeSiteId(mixed $value, bool $explicit): ?int
@@ -169,11 +220,12 @@ class CdnRequest implements ObserverInterface
     /**
      * 处理全站缓存清理
      */
-    private function handlePurgeAll(Domain $domain): array
+    private function handlePurgeAll(Domain $domain, ?string $requestedHost = null): array
     {
         $result = $this->cachePurger->purge(
             $domain->getData(Domain::schema_fields_DOMAIN_ID),
-            'everything'
+            'hosts',
+            ['hosts' => [strtolower(rtrim(trim($requestedHost ?: (string)$domain->getData(Domain::schema_fields_DOMAIN_NAME)), '.'))]]
         );
 
         return [

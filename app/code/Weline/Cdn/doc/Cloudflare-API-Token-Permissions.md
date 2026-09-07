@@ -1,170 +1,51 @@
 # Cloudflare API Token 权限配置指南
 
-## 概述
+更新：2026-09-05，对应 Weline_Cdn 1.0.4。
 
-在使用 Weline_Cdn 模块的 Cloudflare 适配器时，需要创建一个具有适当权限的 API Token。本指南将详细说明需要配置的权限。
+## 账户与域名配置
 
-## 必需权限
+在后台 **CDN管理 > 账户管理** 保存 Cloudflare 实际签发的 API Token；账户名称为本地标识，Account ID 可选。Token 通过已有 `secret_ref` 边界保存。编辑表单不回显 Token；留空保留原值，输入新值才替换。
 
-根据代码中使用的 API 端点，Cloudflare API Token 需要以下权限：
+在 **域名管理** 选择网站、适配器，填写公开主机名和 Cloudflare Zone ID，选择账户或继承默认账户。默认网站 `website_id=0` 有效。`www.example.com`、`shop.example.com` 通常使用父 Zone `example.com` 的 ID；发给 Cloudflare 的清理 URL 仍为原始完整 URL。同一 Zone 可以用于多个网站/域名记录；独立配置的子域 Zone 优先匹配。参见 [子域 Zone 设置](https://developers.cloudflare.com/dns/zone-setups/subdomain-setup/)。
 
-### 1. Zone 读取权限
-- **权限名称**：`Zone:Read`
-- **用途**：用于搜索和获取 Zone 信息
-- **API 端点**：
-  - `GET /zones` - 搜索域名对应的 Zone
-  - `GET /zones/{zone_id}` - 获取 Zone 详细信息
+企业邮箱的 OAuth/DNS 设置另见 [Cloudflare-OAuth-Client-Setup.md](Cloudflare-OAuth-Client-Setup.md)，它不等同于 CDN 缓存权限。
 
-### 2. 缓存清理权限
-- **权限名称**：`Zone:Cache Purge:Edit`
-- **用途**：用于清理 CDN 缓存
-- **API 端点**：
-  - `POST /zones/{zone_id}/purge_cache` - 清理缓存（支持全部、URL、Host、Tag、Prefixes）
+## 按操作配置权限
 
-### 3. Cache Rules 读取权限
-- **权限名称**：`Zone:Cache Rules:Read`
-- **用途**：用于读取缓存规则
-- **API 端点**：
-  - `GET /zones/{zone_id}/rulesets/phases/http_request_cache_settings/entrypoint` - 获取缓存规则
+| 操作 | 权限与资源 |
+|---|---|
+| 清理缓存 | `Zone / Cache Purge / Purge`（API 权限 Cache Purge）；资源选目标 Zone |
+| 自动查找 Zone ID | `Zone / Zone / Read`，用于 `GET /zones` |
+| 管理缓存规则 | `Zone / Cache Rules / Read` 或 `Edit`，按读取/写入需要配置 |
 
-### 4. Cache Rules 编辑权限
-- **权限名称**：`Zone:Cache Rules:Edit`
-- **用途**：用于创建和更新缓存规则
-- **API 端点**：
-  - `PUT /zones/{zone_id}/rulesets/{ruleset_id}` - 更新缓存规则
-  - `POST /zones/{zone_id}/rulesets/phases/http_request_cache_settings/entrypoint` - 创建缓存规则
+手工配置 Zone ID 的清缓存流程不要求额外授予缓存规则编辑权。[Zone 详情 API](https://developers.cloudflare.com/api/resources/zones/methods/get/) 的允许权限包含 Cache Purge；已知 ID 的只读访问测试不要求额外开通 Zone 列表权限。Token 可在 [Cloudflare API Tokens](https://dash.cloudflare.com/profile/api-tokens) 创建，并限制到实际使用的 Zone。
 
-## 创建 API Token 步骤
+## 后台连接验证
 
-### 方式一：使用自定义令牌（推荐）
+保存账户后点击“测试已保存账户连接”。可选输入 Zone ID；输入框仅用于当次测试，不修改域名配置。
 
-1. **登录 Cloudflare 控制台**
-   - 访问 [Cloudflare 控制台](https://dash.cloudflare.com/)
-   - 使用您的账户凭据登录
+1. `GET /user/tokens/verify` 必须返回 HTTP 2xx、JSON `success: true`、`result.status: active`，才确认 Token 状态有效。
+2. 指定 Zone ID 时再执行 `GET /zones/{zone_id}`，核对返回 ID 和 Zone 名称；Query API 传入 `domain` 时也核对其为该 Zone 或点分隔子域。
+3. 结果区分 `token_verified` 与 `zone_verified`，始终返回 `purge_verified: false`。Token verify 不返回权限/资源范围，也不应用 Token 的客户端 IP 限制；只有真实清缓存结果能验证该操作可用。
 
-2. **导航到 API Token 页面**
-   - 点击右上角的个人资料图标
-   - 选择"我的个人资料"（My Profile）
-   - 点击"API 令牌"（API Tokens）选项卡
-   - 或直接访问：https://dash.cloudflare.com/profile/api-tokens
+测试过程不发出 purge、DNS 或规则写请求。普通 API Token 使用上述验证端点；OAuth 连接使用独立的 OAuth 流程。
 
-3. **创建自定义令牌**
-   - 点击"创建令牌"（Create Token）按钮
-   - 选择"自定义令牌"（Custom Token）模板
+依据：[Token verify](https://developers.cloudflare.com/api/resources/user/subresources/tokens/methods/verify/)、[Token 限制](https://developers.cloudflare.com/fundamentals/api/how-to/restrict-tokens/)。
 
-4. **配置权限**
-   
-   按照以下配置设置权限：
+## 清理结果与批量
 
-   **权限配置**：
-   ```
-   Zone:Read
-   Zone:Cache Purge:Edit
-   Zone:Cache Rules:Read
-   Zone:Cache Rules:Edit
-   ```
+Cloudflare 各套餐均支持按 URL、Host、Tag 和 Prefix 清理。当前单 URL 请求批量上限：Free/Pro/Business 100，Enterprise 500；Host/Tag/Prefix 每批 100。本模块统一分成每批最多 100 项，按顺序发送；仍受账户共享限速约束，遇到服务商拒绝会返回失败，不自行宣称完成。套餐限速以 [当前清理文档](https://developers.cloudflare.com/cache/how-to/purge-cache/) 为准。
 
-   **资源设置**：
-   - 选择"特定区域"（Specific Zone）
-   - 选择需要管理的域名（Zone）
-   - 或者选择"所有区域"（All Zones）以管理所有域名
+仅 HTTP 2xx 且 JSON `success` 严格为布尔 `true` 才算该批被服务商接受。批量响应保留已接受的 `purged_count`、总 `requested_count` 和 `purge_ids`；后续批次失败则整体 `success: false`。这表示 API 接受情况，实际缓存失效需观察目标 URL 的 CDN 响应。
 
-5. **创建并保存 Token**
-   - 确认权限设置无误后，点击"创建令牌"（Create Token）
-   - **重要**：生成的 API Token 只会显示一次，请立即复制并妥善保存
+网站与店铺/渠道资源变更按公开基址的 Host/Prefix 范围清理，`Weline_Cdn::request` 的 `purge_all` 按绑定或显式请求主机清理，避免同 Zone 其他主机被一起清除。显式管理 API/CLI 的 `mode=everything` 保留整 Zone 清理语义。按 URL 清理保留协议、主机、路径、查询参数，以及调用方提供的缓存键 Header 对象。
 
-### 方式二：使用预设模板（快捷方式）
+依据：[Purge API](https://developers.cloudflare.com/api/resources/cache/methods/purge/)、[按 URL 清理](https://developers.cloudflare.com/cache/how-to/purge-cache/purge-by-single-file/)、[按 Host 清理](https://developers.cloudflare.com/cache/how-to/purge-cache/purge-by-hostname/)。
 
-Cloudflare 也提供了一些预设模板，但为了安全起见，建议使用自定义令牌：
+## 验收与诊断
 
-1. 在 API Token 页面，点击"创建令牌"
-2. 选择"编辑 Cloudflare Workers"（Edit Cloudflare Workers）模板
-3. 但此模板可能不包含所有需要的权限，建议使用自定义令牌
+开发定向回归：`php app/code/Weline/Cdn/Test/Regression/CdnDeliveryRegression.script.php`，不连接外部服务。
 
-## 权限详细说明
+当前宿主的事件分发直接执行 CDN 观察者，既有异步 XML 声明尚未接入实际异步投递链；此处不承诺业务保存之外的网络执行、Outbox 持久化或自动重试。没有账户/域名配置时提前返回，不能作为外部清理成功证据。
 
-### Zone:Read
-- **功能**：读取 Zone 信息
-- **用途**：用于域名管理时查找 Zone ID
-- **安全级别**：只读，相对安全
-
-### Zone:Cache Purge:Edit
-- **功能**：清理缓存
-- **用途**：用于清理全部缓存、按 URL 清理、按 Host 清理等
-- **安全级别**：会清除缓存，可能影响网站性能，需谨慎使用
-
-### Zone:Cache Rules:Read
-- **功能**：读取缓存规则
-- **用途**：用于获取当前的缓存规则配置
-- **安全级别**：只读，相对安全
-
-### Zone:Cache Rules:Edit
-- **功能**：编辑缓存规则
-- **用途**：用于创建和更新 Cache Rules
-- **安全级别**：会修改缓存策略，可能影响网站缓存行为，需谨慎使用
-
-## 安全建议
-
-1. **最小权限原则**：只授予必要的权限，避免使用全局权限
-2. **特定区域限制**：如果可能，将 Token 限制在特定的 Zone，而不是所有区域
-3. **定期轮换**：定期更换 API Token，提高安全性
-4. **妥善保管**：不要将 API Token 提交到代码仓库或公开分享
-5. **监控使用**：定期检查 API Token 的使用日志，发现异常及时处理
-
-## 在 Weline_Cdn 中配置
-
-企业邮箱 DNS 推荐使用后台 Cloudflare OAuth 一键授权，最终用户无需复制 API Token。平台管理员先按 Cloudflare-OAuth-Client-Setup.md 配置一次 OAuth Client。
-
-若必须使用 API Token 兼容模式：
-
-1. 进入后台：**CDN管理 > 账户管理**
-2. 添加或编辑 Cloudflare 账户
-3. 仅粘贴 Cloudflare 实际签发、且权限最小化的 API Token
-4. 保存账户
-
-随机字符串不是 Cloudflare API Token，不能用于真实连接。不要把 Token 写入源码、模板、日志或沟通记录。
-
-## 验证 Token 权限
-
-创建 Token 后，可以通过以下方式验证：
-
-1. **在 Cloudflare 控制台**：
-   - 查看 Token 的权限列表
-   - 确认包含上述所有必需权限
-
-2. **在 Weline_Cdn 中测试**：
-   - 添加域名时，系统会自动查找 Zone ID
-   - 如果可以成功获取 Zone ID，说明 Zone:Read 权限正常
-   - 尝试清理缓存，如果成功，说明 Zone:Cache Purge:Edit 权限正常
-   - 尝试获取或推送规则，如果成功，说明 Cache Rules 相关权限正常
-
-## 常见问题
-
-### Q: 为什么需要这么多权限？
-A: Weline_Cdn 模块提供了完整的 CDN 管理功能，包括缓存清理和规则管理，因此需要相应的权限。
-
-### Q: 可以只给部分权限吗？
-A: 可以，但功能会受限：
-- 只有 Zone:Read 和 Zone:Cache Purge:Edit：只能清理缓存，不能管理规则
-- 缺少 Cache Rules 权限：无法使用规则管理功能
-
-### Q: Token 权限不足怎么办？
-A: 如果遇到权限错误，请检查：
-1. Token 是否包含所有必需权限
-2. Token 是否对目标 Zone 有效
-3. Token 是否已过期或被撤销
-
-### Q: 如何撤销 Token？
-A: 在 Cloudflare 控制台的 API Token 页面，找到对应的 Token，点击"撤销"（Revoke）按钮。
-
-## 参考链接
-
-- [Cloudflare API Token 文档](https://developers.cloudflare.com/fundamentals/api/get-started/create-token/)
-- [Cloudflare API 权限列表](https://developers.cloudflare.com/fundamentals/api/get-started/permissions/)
-- [Cloudflare Cache Rules API](https://developers.cloudflare.com/cache/how-to/cache-rules/)
-- [Cloudflare Cache Purge API](https://developers.cloudflare.com/api/operations/zone-purge-cache-files-by-url)
-
-## 更新日志
-
-- 2024-01-XX：初始版本
-
+真实验收需已有有效账户、对应 Zone 和可缓存 URL：先保存并重新打开账户确认凭据保留，再做只读连接验证，最后按实际业务变更清理受影响 URL，记录响应成功状态与 purge ID，并观察缓存响应。诊断只输出账户 ID、适配器、激活状态、默认标记和 `has_credentials`；不要输出 Token、secret_ref 或完整账户模型。
