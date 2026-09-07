@@ -2,6 +2,13 @@
  * Weline_Captcha lazy / refresh client runtime.
  * FPC-safe: shared page HTML may keep only lazy hosts; challenges are fetched
  * from weline_captcha/frontend/challenge (private, no-store).
+ * When a challenge was hidden and becomes visible again, force a fresh challenge
+ * so reopening editors/modals never reuse a stale image.
+ *
+ * Important: do NOT prefetch challenges for hosts that are still hidden (e.g. closed
+ * <details> quick-add). Parallel hidden fetches saturate the browser connection pool
+ * and leave /weline_captcha/frontend/challenge stuck in Network "pending" even though
+ * the same URL returns 200 when opened alone.
  */
 (function (w, d) {
     'use strict';
@@ -12,8 +19,12 @@
 
     var DEFAULT_ROUTE = 'weline_captcha/frontend/challenge';
     var STYLESHEET_ID = 'weline-captcha-local-styles';
-    var STYLESHEET_FALLBACK = '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260831-layout-fix1';
+    var STYLESHEET_FALLBACK = '/Weline/Captcha/view/statics/css/captcha-local.css?v=20260907-pending1';
+    var FETCH_TIMEOUT_MS = 8000;
     var booted = false;
+    var visibilityState = typeof WeakMap === 'function' ? new WeakMap() : null;
+    var inflightByUrl = Object.create(null);
+    var ensurePromiseByHost = typeof WeakMap === 'function' ? new WeakMap() : null;
 
     function resolveStylesheetUrl() {
         var scripts = d.querySelectorAll('script[src*="captcha-lazy"]');
@@ -62,7 +73,7 @@
         return wrap.firstElementChild;
     }
 
-    function challengeUrl(route, intent, formId) {
+    function challengeUrl(route, intent, formId, prefer) {
         var segments = String(w.location.pathname || '').split('/').filter(Boolean);
         var maybeLocale = segments[0] || '';
         var hasLocale = /^[a-z]{2}(_[A-Za-z0-9-]+)?$/i.test(maybeLocale);
@@ -73,7 +84,94 @@
             form_id: String(formId || ''),
             _: String(Date.now()),
         });
+        if (prefer) {
+            params.set('prefer', String(prefer));
+        }
         return prefix + '/' + clean + '?' + params.toString();
+    }
+
+    function isInsideClosedDetails(el) {
+        if (!(el instanceof Element) || !el.closest) {
+            return false;
+        }
+        var details = el.closest('details');
+        if (!(details instanceof HTMLDetailsElement)) {
+            return false;
+        }
+        if (details.open) {
+            return false;
+        }
+        // Summary stays visible while the rest of a closed details is not.
+        if (el.closest('summary') && details.querySelector('summary') && details.querySelector('summary').contains(el)) {
+            return false;
+        }
+        return true;
+    }
+
+    function isEffectivelyHidden(el) {
+        if (!(el instanceof Element)) {
+            return true;
+        }
+        if (isInsideClosedDetails(el)) {
+            return true;
+        }
+        var node = el;
+        while (node) {
+            if (node.nodeType === 1) {
+                if (node.hasAttribute('hidden') || node.getAttribute('aria-hidden') === 'true') {
+                    return true;
+                }
+                var style = w.getComputedStyle ? w.getComputedStyle(node) : null;
+                if (style && (style.display === 'none' || style.visibility === 'hidden')) {
+                    return true;
+                }
+            }
+            node = node.parentElement;
+        }
+        return false;
+    }
+
+    function captchaRoots(scope) {
+        var root = scope && scope.querySelectorAll ? scope : d;
+        var list = [];
+        if (root.matches && root.matches('[data-weline-captcha-lazy], .weline-captcha, [data-weline-captcha-provider]')) {
+            list.push(root);
+        }
+        if (root.querySelectorAll) {
+            root.querySelectorAll('[data-weline-captcha-lazy], .weline-captcha, [data-weline-captcha-provider]')
+                .forEach(function (el) {
+                    list.push(el);
+                });
+        }
+        return list;
+    }
+
+    function noteVisibility(el, hidden) {
+        if (!visibilityState || !(el instanceof Element)) {
+            return;
+        }
+        visibilityState.set(el, !!hidden);
+    }
+
+    function trackNewCaptchas(scope) {
+        captchaRoots(scope).forEach(function (el) {
+            if (!visibilityState || visibilityState.has(el)) {
+                return;
+            }
+            noteVisibility(el, isEffectivelyHidden(el));
+        });
+    }
+
+    function refreshWhenShown(scope) {
+        captchaRoots(scope).forEach(function (el) {
+            var hidden = isEffectivelyHidden(el);
+            var prev = visibilityState ? visibilityState.get(el) : undefined;
+            noteVisibility(el, hidden);
+            // 「曾隐藏 → 现可见」时再拉；首次可见也要拉（首屏跳过了隐藏宿主）
+            if (hidden === false && prev !== false) {
+                refresh(el).catch(function () {});
+            }
+        });
     }
 
     function resolveContext(anchor) {
@@ -109,24 +207,58 @@
         var route = (host && host.getAttribute('data-challenge-route'))
             || (anchorEl && anchorEl.getAttribute('data-challenge-route'))
             || DEFAULT_ROUTE;
-        return { form: form, host: host, existing: existing, anchor: anchorEl, intent: intent, formId: formId, route: route };
+        var prefer = (host && host.getAttribute('data-prefer'))
+            || (anchorEl && anchorEl.getAttribute('data-prefer'))
+            || '';
+        return { form: form, host: host, existing: existing, anchor: anchorEl, intent: intent, formId: formId, route: route, prefer: prefer };
+    }
+
+    function fetchWithTimeout(url, options, timeoutMs) {
+        var ctrl = typeof AbortController === 'function' ? new AbortController() : null;
+        var timer = 0;
+        var opts = Object.assign({}, options || {});
+        if (ctrl) {
+            opts.signal = ctrl.signal;
+            timer = w.setTimeout(function () {
+                try {
+                    ctrl.abort();
+                } catch (_error) {
+                }
+            }, timeoutMs || FETCH_TIMEOUT_MS);
+        }
+        return fetch(url, opts).finally(function () {
+            if (timer) {
+                w.clearTimeout(timer);
+            }
+        });
     }
 
     async function fetchChallengeHtml(ctx) {
-        var response = await fetch(challengeUrl(ctx.route, ctx.intent, ctx.formId), {
-            credentials: 'same-origin',
-            headers: { Accept: 'application/json' },
-            cache: 'no-store',
+        var url = challengeUrl(ctx.route, ctx.intent, ctx.formId, ctx.prefer);
+        // Drop cache-buster for inflight key so parallel hosts share one network call.
+        var inflightKey = url.replace(/([?&])_=\d+/, '$1_={ts}');
+        if (inflightByUrl[inflightKey]) {
+            return inflightByUrl[inflightKey];
+        }
+        inflightByUrl[inflightKey] = (async function () {
+            var response = await fetchWithTimeout(url, {
+                credentials: 'same-origin',
+                headers: { Accept: 'application/json' },
+                cache: 'no-store',
+            }, FETCH_TIMEOUT_MS);
+            if (!response.ok) {
+                throw new Error('captcha_http_' + response.status);
+            }
+            var payload = await response.json();
+            var html = String((payload && (payload.html || (payload.data && payload.data.html))) || '');
+            if (!html) {
+                throw new Error('captcha_empty');
+            }
+            return html;
+        })().finally(function () {
+            delete inflightByUrl[inflightKey];
         });
-        if (!response.ok) {
-            throw new Error('captcha_http_' + response.status);
-        }
-        var payload = await response.json();
-        var html = String((payload && (payload.html || (payload.data && payload.data.html))) || '');
-        if (!html) {
-            throw new Error('captcha_empty');
-        }
-        return html;
+        return inflightByUrl[inflightKey];
     }
 
     function replaceAnchor(anchor, html, form) {
@@ -144,29 +276,63 @@
             anchor.setAttribute('data-loaded', '1');
         }
         anchor.replaceWith(node);
+        trackNewCaptchas(node);
+        noteVisibility(node, isEffectivelyHidden(node));
         if (form instanceof HTMLFormElement && w.Weline && w.Weline.Form && typeof w.Weline.Form.mount === 'function') {
             w.Weline.Form.mount(form);
         }
         return node;
     }
 
-    async function ensure(target, force) {
+    async function ensure(target, force, prefer) {
         var ctx = resolveContext(target);
         if (!ctx.anchor) {
             return null;
         }
-        if (!force && ctx.host && ctx.host.getAttribute('data-loaded') === '1') {
+        if (prefer) {
+            ctx.prefer = String(prefer);
+        }
+        if (!force && isEffectivelyHidden(ctx.anchor) && !prefer) {
+            noteVisibility(ctx.anchor, true);
+            return null;
+        }
+        if (!force && ctx.host && ctx.host.getAttribute('data-loaded') === '1' && !prefer) {
             return ctx.existing || ctx.host;
         }
-        if (!force && !ctx.host && ctx.existing) {
+        if (!force && !ctx.host && ctx.existing && !prefer) {
             return ctx.existing;
         }
-        var html = await fetchChallengeHtml(ctx);
-        return replaceAnchor(ctx.anchor, html, ctx.form);
+        if (ensurePromiseByHost && ctx.anchor && ensurePromiseByHost.has(ctx.anchor) && !force && !prefer) {
+            return ensurePromiseByHost.get(ctx.anchor);
+        }
+        var task = (async function () {
+            var html = await fetchChallengeHtml(ctx);
+            return replaceAnchor(ctx.anchor, html, ctx.form);
+        })();
+        if (ensurePromiseByHost && ctx.anchor) {
+            ensurePromiseByHost.set(ctx.anchor, task);
+            task.finally(function () {
+                if (ensurePromiseByHost.get(ctx.anchor) === task) {
+                    ensurePromiseByHost.delete(ctx.anchor);
+                }
+            });
+        }
+        return task;
     }
 
-    async function refresh(target) {
-        return ensure(target, true);
+    async function refresh(target, prefer) {
+        return ensure(target, true, prefer);
+    }
+
+    async function degradeToLocal(target) {
+        var ctx = resolveContext(target);
+        var form = ctx.form;
+        if (form instanceof HTMLFormElement) {
+            delete form.dataset.welineCaptchaBound;
+            delete form.dataset.welineCaptchaVerified;
+            delete form.dataset.welineCaptchaPending;
+        }
+        return refresh(target || ctx.anchor || ctx.form, 'local_image');
     }
 
     function ensureAll(root, force) {
@@ -176,6 +342,10 @@
             : [];
         var tasks = [];
         hosts.forEach(function (host) {
+            if (!force && isEffectivelyHidden(host)) {
+                noteVisibility(host, true);
+                return;
+            }
             tasks.push(ensure(host, !!force).catch(function () {}));
         });
         return Promise.all(tasks);
@@ -200,25 +370,63 @@
         refresh(target).catch(function () {});
     }
 
+    function onDegradeEvent(event) {
+        var detail = event && event.detail;
+        if (!detail || detail.prefer !== 'local_image') {
+            return;
+        }
+        var target = detail.form || detail.target || event.target;
+        degradeToLocal(target).catch(function () {});
+    }
+
+    function onToggle(event) {
+        var target = event && event.target;
+        if (!(target instanceof HTMLDetailsElement)) {
+            return;
+        }
+        refreshWhenShown(target);
+    }
+
     function boot(root) {
         ensureStylesheet();
-        ensureAll(root || d, false);
+        ensureAll(root || d, false).then(function () {
+            trackNewCaptchas(root || d);
+        }).catch(function () {
+            trackNewCaptchas(root || d);
+        });
         if (booted) {
             return api;
         }
         booted = true;
         d.addEventListener('click', onClick);
+        d.addEventListener('toggle', onToggle, true);
         d.addEventListener('weline:captcha:refresh-requested', onRefreshEvent);
+        d.addEventListener('weline:captcha:degrade', onDegradeEvent);
         if (typeof MutationObserver === 'function') {
             new MutationObserver(function (records) {
+                var needShownCheck = false;
                 records.forEach(function (record) {
+                    if (record.type === 'attributes'
+                        && (record.attributeName === 'hidden' || record.attributeName === 'open')) {
+                        needShownCheck = true;
+                        refreshWhenShown(record.target);
+                    }
                     record.addedNodes.forEach(function (node) {
                         if (node.nodeType === 1) {
                             ensureAll(node, false);
+                            trackNewCaptchas(node);
                         }
                     });
                 });
-            }).observe(d.documentElement, { childList: true, subtree: true });
+                if (needShownCheck) {
+                    refreshWhenShown(d);
+                }
+            }).observe(d.documentElement, {
+                childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['hidden', 'open'],
+            });
         }
         return api;
     }
@@ -228,7 +436,9 @@
         challengeUrl: challengeUrl,
         ensure: ensure,
         refresh: refresh,
+        degradeToLocal: degradeToLocal,
         ensureAll: ensureAll,
+        refreshWhenShown: refreshWhenShown,
         boot: boot,
     };
     w.Weline.Captcha = api;

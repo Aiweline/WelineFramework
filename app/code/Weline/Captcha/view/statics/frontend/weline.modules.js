@@ -8,7 +8,7 @@ window.WelineModulesConfig.moduleAliases = window.WelineModulesConfig.moduleAlia
 Object.assign(window.WelineModulesConfig.modules, {
     captchaLazy: {
         paths: [
-            'Weline_Captcha::js/captcha-lazy.js?v=20260831-layout-fix1',
+            'Weline_Captcha::js/captcha-lazy.js?v=20260907-pending1',
         ],
         globalVar: null,
         description: 'FPC-safe lazy captcha client runtime (Weline.Captcha)',

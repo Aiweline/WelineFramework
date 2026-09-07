@@ -14,6 +14,6 @@ Register::register(
     'Weline_Captcha',
     __DIR__,
     '1.0.1',
-    '统一人机验证模块 - 默认支持 Google reCAPTCHA Enterprise 与一次性本地图形挑战',
+    '统一人机验证模块 - 腾讯云 / Google reCAPTCHA Enterprise / 本地图码，支持按国家路由',
     ['Weline_Framework', 'Weline_SystemConfig']
 );

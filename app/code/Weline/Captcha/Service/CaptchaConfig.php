@@ -103,6 +103,170 @@ final class CaptchaConfig
             && ($this->googleApiKey() !== '' || $this->googleAccessToken() !== '' || $this->googleRefreshToken() !== '');
     }
 
+    public function tencentEnabled(): bool
+    {
+        return $this->boolean('captcha/tencent/enabled', true);
+    }
+
+    public function tencentAppId(): string
+    {
+        return $this->string('captcha/tencent/app_id');
+    }
+
+    public function tencentAppSecretKey(): string
+    {
+        return $this->string('captcha/tencent/app_secret_key');
+    }
+
+    public function isTencentReady(): bool
+    {
+        return $this->tencentEnabled()
+            && $this->tencentAppId() !== ''
+            && $this->tencentAppSecretKey() !== '';
+    }
+
+    /** @return list<string> */
+    public function chinaCodes(): array
+    {
+        return $this->countryCodeList('captcha/routing/china_codes', ['CN']);
+    }
+
+    public function chinaDefaultProvider(): string
+    {
+        return $this->providerCode('captcha/routing/china_default', CaptchaProviderRouter::TENCENT);
+    }
+
+    public function worldDefaultProvider(): string
+    {
+        return $this->providerCode('captcha/routing/world_default', CaptchaProviderRouter::GOOGLE);
+    }
+
+    public function unknownDefaultProvider(): string
+    {
+        return $this->providerCode('captcha/routing/unknown_default', CaptchaProviderRouter::GOOGLE);
+    }
+
+    /**
+     * @return array<string, string> ISO2 => provider
+     */
+    public function countryOverrides(): array
+    {
+        $raw = $this->string('captcha/routing/country_overrides');
+        if ($raw === '') {
+            return [];
+        }
+        $map = [];
+        foreach (\preg_split('/\R/', $raw) ?: [] as $line) {
+            $line = \trim((string)$line);
+            if ($line === '' || \str_starts_with($line, '#')) {
+                continue;
+            }
+            if (!\str_contains($line, '=')) {
+                continue;
+            }
+            [$country, $provider] = \array_map('trim', \explode('=', $line, 2));
+            $country = \strtoupper($country);
+            $provider = \strtolower($provider);
+            if (\preg_match('/\A[A-Z]{2}\z/D', $country) !== 1) {
+                continue;
+            }
+            if (!\in_array($provider, CaptchaProviderRouter::KNOWN_PROVIDERS, true)) {
+                continue;
+            }
+            $map[$country] = $provider;
+        }
+        return $map;
+    }
+
+    /** @return list<string> */
+    public function fallbackChain(): array
+    {
+        $raw = $this->string('captcha/routing/fallback_chain');
+        if ($raw === '') {
+            return [
+                CaptchaProviderRouter::TENCENT,
+                CaptchaProviderRouter::GOOGLE,
+                CaptchaProviderRouter::LOCAL,
+            ];
+        }
+        // Select UI encodes ordered chains with "+" to avoid options CSV collisions.
+        $raw = \str_replace('+', ',', $raw);
+        $chain = [];
+        foreach (\preg_split('/[\s,;]+/', \strtolower($raw), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $code) {
+            if (\in_array($code, CaptchaProviderRouter::KNOWN_PROVIDERS, true)) {
+                $chain[] = $code;
+            }
+        }
+        if ($chain === []) {
+            return [
+                CaptchaProviderRouter::TENCENT,
+                CaptchaProviderRouter::GOOGLE,
+                CaptchaProviderRouter::LOCAL,
+            ];
+        }
+        return $chain;
+    }
+
+    public function allowLocalDegrade(): bool
+    {
+        return $this->boolean('captcha/routing/allow_local_degrade', true);
+    }
+
+    /** @return list<string> */
+    public function geoHeaders(): array
+    {
+        $raw = $this->string('captcha/routing/geo_headers');
+        if ($raw === '') {
+            return [
+                'CF-IPCountry',
+                'CloudFront-Viewer-Country',
+                'X-Country-Code',
+                'X-Geo-Country',
+            ];
+        }
+        $headers = [];
+        foreach (\preg_split('/[\s,;]+/', $raw, -1, PREG_SPLIT_NO_EMPTY) ?: [] as $header) {
+            $header = \trim($header);
+            if ($header !== '' && \preg_match('/\A[A-Za-z0-9_-]+\z/D', $header) === 1) {
+                $headers[] = $header;
+            }
+        }
+        return $headers !== [] ? $headers : [
+            'CF-IPCountry',
+            'CloudFront-Viewer-Country',
+            'X-Country-Code',
+            'X-Geo-Country',
+        ];
+    }
+
+    private function providerCode(string $key, string $default): string
+    {
+        $code = \strtolower($this->string($key));
+        if (\in_array($code, CaptchaProviderRouter::KNOWN_PROVIDERS, true)) {
+            return $code;
+        }
+        return $default;
+    }
+
+    /**
+     * @param list<string> $default
+     * @return list<string>
+     */
+    private function countryCodeList(string $key, array $default): array
+    {
+        $raw = $this->string($key);
+        if ($raw === '') {
+            return $default;
+        }
+        $codes = [];
+        foreach (\preg_split('/[\s,;]+/', \strtoupper($raw), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $code) {
+            if (\preg_match('/\A[A-Z]{2}\z/D', $code) === 1) {
+                $codes[$code] = true;
+            }
+        }
+        return $codes !== [] ? \array_keys($codes) : $default;
+    }
+
     private function string(string $key): string
     {
         return \trim((string)$this->config->get($key, self::MODULE, self::AREA, ''));
