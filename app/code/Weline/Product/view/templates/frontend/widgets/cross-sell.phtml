@@ -60,8 +60,15 @@ if ($seedProductId <= 0) {
 
 $products = [];
 try {
-    $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
-        ->bundleCards($seedProductId, $companionLimit);
+    $editorPreview = $isPreviewMode || (bool)($this->getData('editor_mode') ?? false);
+    // No PDP seed in theme-editor product-layout preview: skip cold catalog
+    // rebuild (bundleCards → relatedCards → publishedOffers).
+    if ($editorPreview && $seedProductId <= 0) {
+        $products = [];
+    } else {
+        $products = ObjectManager::getInstance(StorefrontProductWidgetCatalog::class)
+            ->bundleCards($seedProductId, $companionLimit);
+    }
 } catch (\Throwable) {
     $products = [];
 }

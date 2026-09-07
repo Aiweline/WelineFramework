@@ -20,6 +20,7 @@ final class StorefrontOfferResolver
      */
     public static function resolve(Template $template): array
     {
+
         $offer = $template->getData('storefront_offer');
         $offer = is_array($offer) ? $offer : [];
         if ($offer !== []) {
@@ -57,7 +58,7 @@ final class StorefrontOfferResolver
             if (is_array($resolved) && $resolved !== []) {
                 return $resolved;
             }
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // Optional catalog dependency; keep empty when unavailable.
         }
 

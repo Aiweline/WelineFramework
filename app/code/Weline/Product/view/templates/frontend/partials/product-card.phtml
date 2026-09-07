@@ -1,0 +1,151 @@
+<?php
+/**
+ * Canonical storefront product card (owned by Weline_Product).
+ *
+ * @var \Weline\Framework\View\Template $this
+ */
+
+use Weline\Theme\Helper\ProductCardAddToCartParams;
+use Weline\Theme\Helper\ProductCardShopperActionParams;
+
+$product = $this->getData('product');
+$product = is_array($product) ? $product : [];
+$esc = static fn (string $value): string => htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+$productId = (int)($product['id'] ?? $product['product_id'] ?? 0);
+if ($productId <= 0) {
+    return;
+}
+
+$showPrice = (bool)($this->getData('show_price') ?? true);
+$showRating = (bool)($this->getData('show_rating') ?? true);
+$showAddToCart = (bool)($this->getData('show_add_to_cart') ?? true);
+$showWishlist = (bool)($this->getData('show_wishlist') ?? true);
+$showCompare = (bool)($this->getData('show_compare') ?? true);
+$showQuickview = (bool)($this->getData('show_quickview') ?? true);
+$showLabels = (bool)($this->getData('show_labels') ?? true);
+$showSku = (bool)($this->getData('show_sku') ?? false);
+$wishlistPixel = (bool)($this->getData('wishlist_pixel') ?? false);
+$density = (string)($this->getData('density') ?? 'standard');
+if (!in_array($density, ['standard', 'compact', 'shelf'], true)) {
+    $density = 'standard';
+}
+$extraClass = trim((string)($this->getData('class') ?? ''));
+
+$productName = (string)($product['name'] ?? '');
+$productUrl = trim((string)($product['url'] ?? ''));
+$productUrlPath = trim((string)($product['url_path'] ?? ''));
+$productImage = (string)($product['image'] ?? '');
+$imageFallback = (string)($product['image_fallback'] ?? '');
+$currency = (string)($product['currency'] ?? 'CNY');
+$price = (float)($product['price'] ?? 0);
+$originalPrice = (float)($product['original_price'] ?? 0);
+$rating = (float)($product['rating'] ?? 0);
+$reviewCount = (int)($product['review_count'] ?? 0);
+$sku = (string)($product['sku'] ?? '');
+$isNew = !empty($product['is_new']);
+$isSale = !empty($product['is_sale']);
+$isDemo = !empty($product['is_demo']);
+$sellable = !empty($product['sellable']);
+$quoteOnly = !empty($product['quote_only']);
+$offerUuid = trim((string)($product['global_offer_uuid'] ?? ''));
+$campaignLabel = trim((string)($product['campaign_label'] ?? ''));
+$campaignUrl = trim((string)($product['campaign_url'] ?? ''));
+
+$classes = trim('weline-product-card product-card density-' . $density . ($extraClass !== '' ? ' ' . $extraClass : ''));
+$hrefAttr = $productUrl !== ''
+    ? 'href="' . $esc($productUrl) . '"'
+    : ($productUrlPath !== '' ? 'href="@url{' . $productUrlPath . '}"' : 'href="#"');
+?>
+<article class="<?= $esc($classes) ?>"
+         data-testid="weline-product-card"
+         data-product-id="<?= $productId ?>"
+         data-density="<?= $esc($density) ?>">
+    <div class="wpc-media">
+        <a class="wpc-media-link" <?= $hrefAttr ?> aria-label="<?= $esc($productName) ?>">
+            <img src="<?= $esc($productImage) ?>"
+                 alt="<?= $esc($productName) ?>"
+                 class="wpc-image"
+                 loading="lazy"
+                 decoding="async"
+                 data-storefront-img
+                 data-fallback="<?= $esc($imageFallback) ?>">
+        </a>
+
+        <?php if ($showLabels && ($isDemo || $isNew || $isSale)): ?>
+            <?= $this->fetch('Weline_Theme::theme/frontend/partials/product/labels.phtml', [
+                'is_demo' => $isDemo,
+                'is_new' => $isNew,
+                'is_sale' => $isSale,
+                'class' => 'wpc-badges',
+            ]) ?>
+        <?php endif; ?>
+
+        <?= $this->fetch(
+            'Weline_Theme::theme/frontend/partials/product/shopper-actions.phtml',
+            ProductCardShopperActionParams::fetchDictionary($productId, [
+                'show_wishlist' => $showWishlist,
+                'show_compare' => $showCompare,
+                'show_quickview' => $showQuickview,
+            ], $wishlistPixel)
+        ) ?>
+    </div>
+
+    <div class="wpc-body">
+        <h3 class="wpc-title">
+            <a <?= $hrefAttr ?>><?= $esc($productName) ?></a>
+        </h3>
+
+        <?php if ($showSku && $sku !== ''): ?>
+            <p class="wpc-sku">SKU: <?= $esc($sku) ?></p>
+        <?php endif; ?>
+
+        <?php if ($showRating && $rating > 0): ?>
+            <div class="wpc-rating" aria-label="<?= $esc(number_format($rating, 1)) ?>">
+                <span class="wpc-stars" style="--rating: <?= $esc(number_format(min(5, max(0, $rating)), 2)) ?>"></span>
+                <?php if ($reviewCount > 0): ?>
+                    <span class="wpc-reviews">(<?= $reviewCount ?>)</span>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($showPrice): ?>
+            <div class="wpc-price">
+                <?php if ($quoteOnly): ?>
+                    <span class="wpc-price-quote">@lang{联系询价}</span>
+                <?php else: ?>
+                    <span class="wpc-price-now weline-pixel::add_to_cart:value"
+                          data-pixel-value="<?= $esc((string)$price) ?>">
+                        <?= $esc($currency) ?> <?= number_format($price, 2) ?>
+                    </span>
+                    <?php if ($originalPrice > $price && $price > 0): ?>
+                        <span class="wpc-price-was"><?= $esc($currency) ?> <?= number_format($originalPrice, 2) ?></span>
+                        <?php if ($campaignLabel !== ''): ?>
+                            <?php if ($campaignUrl !== ''): ?>
+                                <a class="wpc-campaign" href="<?= $esc($campaignUrl) ?>"><?= $esc($campaignLabel) ?></a>
+                            <?php else: ?>
+                                <span class="wpc-campaign"><?= $esc($campaignLabel) ?></span>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+
+        <?php if ($showAddToCart): ?>
+            <div class="wpc-cta">
+                <?php if ($sellable && $offerUuid !== '' && !$quoteOnly): ?>
+                    <?= $this->fetch(
+                        'Weline_Theme::theme/frontend/partials/product/add-to-cart.phtml',
+                        ProductCardAddToCartParams::fetchDictionary($product, [
+                            'wrapper_class' => 'wpc-cart-wrap',
+                            'button_class' => 'wpc-cart-btn',
+                        ])
+                    ) ?>
+                <?php else: ?>
+                    <a class="wpc-detail-link" <?= $hrefAttr ?>>@lang{查看详情}</a>
+                <?php endif; ?>
+            </div>
+        <?php endif; ?>
+    </div>
+</article>

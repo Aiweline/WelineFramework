@@ -10,7 +10,7 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
  * @widget.name {产品主要信息}
  * @widget.description {商品详情主信息：图库、标题、SKU、价格、购买操作槽与规格详情}
  * @widget.is_container {true}
- * @widget.slots {"product-purchase-actions":{"name":"购买操作","accepts":["product","cart","checkout"],"slot_type":"layout-product-purchase-actions","max":5}}
+ * @widget.slots {"product-purchase-actions":{"name":"购买操作","accepts":["product","cart","checkout"],"slot_type":"layout-product-purchase-actions","max":5},"product-selling-mode":{"name":"售卖模式","accepts":["product","b2b","selling-mode"],"slot_type":"layout-product-selling-mode","max":3}}
  * @widget.type {product}
  * @widget.area {frontend}
  * @widget.position {["content"]}
@@ -25,6 +25,9 @@ use Weline\Theme\Helper\StorefrontImagePlaceholder;
 use Weline\Framework\Manager\ObjectManager;
 use Weline\Product\Helper\StorefrontOfferResolver;
 use Weline\Product\Helper\StorefrontVariantContextResolver;
+use Weline\Product\Api\Data\StorefrontPriceContext;
+use Weline\Product\Api\StorefrontOfferPriceAssemblerInterface;
+use Weline\Product\Service\ProductQuoteRequestCaptchaGuard;
 use Weline\Theme\Helper\WidgetUiScope;
 
 $scope = WidgetUiScope::forWidget('product-info');
@@ -33,6 +36,7 @@ $showSupplier = filter_var($this->getData('show_supplier') ?? true, FILTER_VALID
 $isPreviewMode = (bool)($this->getData('preview_mode') ?? false)
     || (bool)($this->getData('editor_mode') ?? false)
     || (string)($this->getData('editor_mode') ?? '') === '1';
+$hasPublicRoute = false;
 try {
     $request = $this->getRequest();
     if ((string)$request->getParam('editor_mode', '') === '1'
@@ -41,6 +45,7 @@ try {
     ) {
         $isPreviewMode = true;
     }
+    $hasPublicRoute = \trim(\str_replace('\\', '/', (string)$request->getParam('theme_public_route', '')), '/') !== '';
 } catch (\Throwable) {
     // Template may not expose Request in all render paths.
 }
@@ -58,7 +63,30 @@ $storefrontOffers = is_array($storefrontOffers)
     : [];
 $selectedOfferUuid = trim((string)($this->getData('selected_offer_uuid') ?? ''));
 
-if ($offer === []) {
+// Theme Editor product-layout canvas has no PDP identity — skip catalog resolve.
+if ($offer === [] && $isPreviewMode && !$hasPublicRoute) {
+    $offer = [
+        'product_id' => 0,
+        'provider_code' => 'product',
+        'global_offer_uuid' => '',
+        'name' => 'R43 Storefront Product',
+        'sku' => 'R43-STORE-PREVIEW',
+        'image' => '',
+        'images' => [],
+        'currency' => 'USD',
+        'unit_price_minor' => 0,
+        'stock' => 0,
+        'sellable' => false,
+        'quote_only' => false,
+        'message' => '',
+        'short_description' => '',
+        'description' => '',
+        'specifications' => [],
+        'attribute_set_label' => 'Published Products',
+        'brand' => 'R43 Brand',
+        'supplier_name' => 'R43 Supplier',
+    ];
+} elseif ($offer === []) {
     $offer = StorefrontOfferResolver::resolve($this);
 }
 
@@ -104,12 +132,19 @@ if ($offer === []) {
 
 /** @var StorefrontVariantContextResolver $variantContext */
 $variantContext = ObjectManager::getInstance(StorefrontVariantContextResolver::class);
+if ($isPreviewMode && !$hasPublicRoute) {
+    // Layout editor canvas: keep the single demo offer — no variant catalog work.
+    $storefrontOffers = $storefrontOffers === [] ? [$offer] : $storefrontOffers;
+    $variantCatalog = [];
+} else {
 if ($storefrontOffers === []) {
     $storefrontOffers = $variantContext->resolveOffers($this);
 }
 $variantCatalog = $this->getData('variant_catalog') ?? [];
 $variantCatalog = is_array($variantCatalog) ? $variantCatalog : [];
-if (count($storefrontOffers) > 1) {
+if (count($storefrontOffers) > 1
+    && (!is_array($variantCatalog['offers'] ?? null) || $variantCatalog['offers'] === [])
+) {
     $variantCatalog = $variantContext->buildCatalog($this, $storefrontOffers, null);
     $selectedOffer = $variantCatalog['selected_offer'] ?? null;
     if (is_array($selectedOffer) && $selectedOffer !== []) {
@@ -117,9 +152,63 @@ if (count($storefrontOffers) > 1) {
         $selectedOfferUuid = trim((string)($offer['global_offer_uuid'] ?? $selectedOfferUuid));
     }
 }
-
+unset($variantCatalog['selected_offer']);
+}
 $minor = max(0, (int)($offer['unit_price_minor'] ?? 0));
+$catalogPriceMinor = max(0, (int)($offer['catalog_price_minor'] ?? $minor));
 $productId = max(0, (int)($offer['product_id'] ?? 0));
+$dealDiscountType = '';
+$dealDiscountValue = 0.0;
+$hasUnifiedPrice = array_key_exists('has_deal', $offer)
+    && array_key_exists('compare_at_minor', $offer);
+$hasActiveDeal = $hasUnifiedPrice && !empty($offer['has_deal']);
+$originalPriceMinor = $hasUnifiedPrice
+    ? max(0, (int)$offer['compare_at_minor'])
+    : $catalogPriceMinor;
+$campaignLabel = $hasUnifiedPrice ? trim((string)($offer['campaign_label'] ?? '')) : '';
+$campaignUrl = $hasUnifiedPrice ? trim((string)($offer['campaign_url'] ?? '')) : '';
+$dealDiscountType = $hasUnifiedPrice ? trim((string)($offer['deal_discount_type'] ?? '')) : '';
+$dealDiscountValue = $hasUnifiedPrice ? (float)($offer['deal_discount_value'] ?? 0) : 0.0;
+if (!$hasUnifiedPrice && $productId > 0 && $catalogPriceMinor > 0) {
+    try {
+        $priceAssembler = null;
+        if (interface_exists(StorefrontOfferPriceAssemblerInterface::class)) {
+            try {
+                $priceAssembler = ObjectManager::getInstance(StorefrontOfferPriceAssemblerInterface::class);
+            } catch (\Throwable) {
+                $priceAssembler = null;
+            }
+        }
+        if (!$priceAssembler instanceof StorefrontOfferPriceAssemblerInterface
+            && class_exists(\Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler::class)
+        ) {
+            $priceAssembler = ObjectManager::getInstance(
+                \Weline\Product\Service\Storefront\StorefrontOfferPriceAssembler::class,
+            );
+        }
+        if ($priceAssembler instanceof StorefrontOfferPriceAssemblerInterface) {
+            $priceView = $priceAssembler->assemble(StorefrontPriceContext::fromCatalogMinor(
+                $productId,
+                $catalogPriceMinor,
+                (string)($offer['currency'] ?? 'CNY'),
+            ));
+            if ($priceView->hasDeal) {
+                $hasActiveDeal = true;
+                $minor = $priceView->finalPriceMinor;
+                $originalPriceMinor = $priceView->compareAtMinor;
+                $campaignLabel = $priceView->campaignLabel();
+                $campaignUrl = $priceView->campaignUrl();
+                $primary = $priceView->appliedAdjustments[0] ?? null;
+                if ($primary !== null) {
+                    $dealDiscountType = $primary->type;
+                    $dealDiscountValue = $primary->value;
+                }
+            }
+        }
+    } catch (\Throwable) {
+        // Product remains usable when price providers are unavailable.
+    }
+}
 $stock = max(0, (int)($offer['stock'] ?? 0));
 $sellable = !empty($offer['sellable']);
 $quoteOnly = !empty($offer['quote_only']);
@@ -151,6 +240,43 @@ if ($images === []) {
         array_unshift($images, $image);
         $images = array_values(array_unique($images));
     }
+}
+$videos = array_values(array_filter(
+    (array)($offer['videos'] ?? []),
+    static fn(mixed $video): bool => is_array($video)
+        && trim((string)($video['embed_url'] ?? $video['src'] ?? '')) !== '',
+));
+$galleryItems = [];
+foreach ($images as $index => $galleryImage) {
+    $galleryItems[] = [
+        'type' => 'image',
+        'src' => $galleryImage,
+        'poster' => $galleryImage,
+        'provider' => '',
+        'mime_type' => '',
+    ];
+}
+foreach ($videos as $video) {
+    $embedUrl = trim((string)($video['embed_url'] ?? $video['src'] ?? ''));
+    if ($embedUrl === '') {
+        continue;
+    }
+    $galleryItems[] = [
+        'type' => 'video',
+        'src' => $embedUrl,
+        'poster' => trim((string)($video['poster'] ?? '')),
+        'provider' => strtolower(trim((string)($video['provider'] ?? 'file'))),
+        'mime_type' => trim((string)($video['mime_type'] ?? '')),
+    ];
+}
+if ($galleryItems === [] && $image !== '') {
+    $galleryItems[] = [
+        'type' => 'image',
+        'src' => $image,
+        'poster' => $image,
+        'provider' => '',
+        'mime_type' => '',
+    ];
 }
 $shortDescription = trim((string)($offer['short_description'] ?? ''));
 $description = trim((string)($offer['description'] ?? ''));
@@ -222,8 +348,18 @@ $hasInteractiveVariants = count($storefrontOffers) > 1
 $interactiveVariantAxes = $hasInteractiveVariants
     ? array_values((array)$variantCatalog['axes'])
     : $variantAxes;
-$specificationLabel = static function (string $code) use ($specificationLabels): string {
-    return (string)($specificationLabels[$code] ?? ucwords(str_replace('_', ' ', $code)));
+$specificationLabel = static function (string $code, string $rawLabel = '') use ($specificationLabels): string {
+    if (array_key_exists($code, $specificationLabels)) {
+        return (string)$specificationLabels[$code];
+    }
+    $rawLabel = trim($rawLabel);
+    // EAV Attribute LocalDescription is authoritative for the current locale.
+    // Do not wrap with __() — CSV reverse maps can turn English locals back to Chinese.
+    if ($rawLabel !== '') {
+        return $rawLabel;
+    }
+
+    return (string)__(ucwords(str_replace('_', ' ', $code)));
 };
 $brandName = trim((string)($offer['brand'] ?? ''));
 if ($brandName === '') {
@@ -277,8 +413,15 @@ if ($offerUuid !== '' && class_exists(\Weline\Review\Service\ReviewService::clas
     }
 }
 $qtyFieldId = 'product-qty-' . max(0, $productId);
+$quoteCaptchaHtml = '';
+try {
+    $quoteCaptchaHtml = (string)ObjectManager::getInstance(ProductQuoteRequestCaptchaGuard::class)->renderChallenge();
+} catch (\Throwable) {
+    $quoteCaptchaHtml = '';
+}
 ?>
 <section class="product-native-detail product-native-detail--amazon<?= $isPreviewMode ? ' is-preview' : '' ?>"
+         data-product-id="<?= (int)$productId ?>"
          data-testid="storefront-product-detail"
          data-widget-module="Weline_Product"
          data-widget-code="product-info"
@@ -289,31 +432,74 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
     </a>
 
     <div class="product-native-detail__hero-grid">
-        <div class="product-native-detail__gallery" aria-label="<?= $escape(__('商品图片')) ?>">
-            <?php if (count($images) > 1): ?>
-                <div class="product-native-detail__thumbs" role="tablist" aria-label="<?= $escape(__('选择图片')) ?>">
-                    <?php foreach ($images as $index => $galleryImage): ?>
+        <div class="product-native-detail__gallery" aria-label="<?= $escape(__('商品图片')) ?>" data-testid="product-gallery">
+            <?php if (count($galleryItems) > 1): ?>
+                <div class="product-native-detail__thumbs" role="tablist" aria-label="<?= $escape(__('选择图片或视频')) ?>">
+                    <?php foreach ($galleryItems as $index => $galleryItem): ?>
+                        <?php
+                        $itemType = (string)($galleryItem['type'] ?? 'image');
+                        $itemSrc = (string)($galleryItem['src'] ?? '');
+                        $itemPoster = trim((string)($galleryItem['poster'] ?? ''));
+                        $thumbSrc = $itemPoster !== '' ? $itemPoster : ($itemType === 'image' ? $itemSrc : '');
+                        ?>
                         <button type="button"
                                 role="tab"
-                                class="product-native-detail__thumb<?= $index === 0 ? ' is-active' : '' ?>"
-                                data-gallery-src="<?= $escape($galleryImage) ?>"
+                                class="product-native-detail__thumb<?= $index === 0 ? ' is-active' : '' ?><?= $itemType === 'video' ? ' is-video' : '' ?>"
+                                data-gallery-type="<?= $escape($itemType) ?>"
+                                data-gallery-src="<?= $escape($itemSrc) ?>"
+                                data-gallery-poster="<?= $escape($itemPoster) ?>"
+                                data-gallery-provider="<?= $escape((string)($galleryItem['provider'] ?? '')) ?>"
+                                data-gallery-mime="<?= $escape((string)($galleryItem['mime_type'] ?? '')) ?>"
                                 aria-selected="<?= $index === 0 ? 'true' : 'false' ?>"
-                                aria-label="<?= $escape(__('查看商品图片 %{1}', [$index + 1])) ?>">
-                            <img src="<?= $escape($galleryImage) ?>"
-                                 alt=""
-                                 data-storefront-img="1"
-                                 data-fallback="<?= $escape(StorefrontImagePlaceholder::url($productId + $index)) ?>">
+                                aria-label="<?= $escape($itemType === 'video' ? __('查看商品视频 %{1}', [$index + 1]) : __('查看商品图片 %{1}', [$index + 1])) ?>">
+                            <?php if ($thumbSrc !== ''): ?>
+                                <img src="<?= $escape($thumbSrc) ?>"
+                                     alt=""
+                                     data-storefront-img="1"
+                                     data-fallback="<?= $escape(StorefrontImagePlaceholder::url($productId + $index)) ?>">
+                            <?php else: ?>
+                                <span class="product-native-detail__thumb-video-label" aria-hidden="true">▶</span>
+                            <?php endif; ?>
+                            <?php if ($itemType === 'video'): ?>
+                                <span class="product-native-detail__thumb-play" aria-hidden="true">▶</span>
+                            <?php endif; ?>
                         </button>
                     <?php endforeach; ?>
                 </div>
             <?php endif; ?>
-            <div class="product-native-detail__stage-wrap" data-image-zoom="1">
+            <?php
+            $initialType = (string)(($galleryItems[0]['type'] ?? 'image'));
+            $initialSrc = (string)(($galleryItems[0]['src'] ?? $image));
+            $initialPoster = trim((string)(($galleryItems[0]['poster'] ?? '')));
+            $initialProvider = (string)(($galleryItems[0]['provider'] ?? ''));
+            $initialMime = (string)(($galleryItems[0]['mime_type'] ?? ''));
+            ?>
+            <div class="product-native-detail__stage-wrap" data-image-zoom="1" data-gallery-stage>
                 <div class="product-native-detail__stage">
                     <img class="product-native-detail__primary-image"
-                         src="<?= $escape($image) ?>"
+                         src="<?= $escape($initialType === 'image' ? $initialSrc : ($initialPoster !== '' ? $initialPoster : $image)) ?>"
                          alt="<?= $escape($name) ?>"
                          data-storefront-img="1"
-                         data-fallback="<?= $escape($imageFallback) ?>">
+                         data-fallback="<?= $escape($imageFallback) ?>"
+                         <?= $initialType === 'video' ? 'hidden' : '' ?>>
+                    <div class="product-native-detail__primary-video" data-testid="product-gallery-video" <?= $initialType === 'video' ? '' : 'hidden' ?>>
+                        <?php if ($initialType === 'video' && in_array($initialProvider, ['youtube', 'vimeo'], true)): ?>
+                            <iframe class="product-native-detail__video-frame"
+                                    src="<?= $escape($initialSrc) ?>"
+                                    title="<?= $escape(__('商品视频')) ?>"
+                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                                    allowfullscreen
+                                    loading="lazy"
+                                    referrerpolicy="strict-origin-when-cross-origin"></iframe>
+                        <?php elseif ($initialType === 'video'): ?>
+                            <video class="product-native-detail__video-file"
+                                   src="<?= $escape($initialSrc) ?>"
+                                   controls
+                                   playsinline
+                                   <?= $initialPoster !== '' ? 'poster="' . $escape($initialPoster) . '"' : '' ?>
+                                   <?= $initialMime !== '' ? 'type="' . $escape($initialMime) . '"' : '' ?>></video>
+                        <?php endif; ?>
+                    </div>
                     <div class="product-native-detail__zoom-lens" hidden aria-hidden="true"></div>
                 </div>
                 <div class="product-native-detail__zoom-result"
@@ -376,7 +562,7 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
 
                 <hr class="product-native-detail__divider">
 
-                <?php if (!$quoteOnly): ?>
+                <?php if ($minor > 0): ?>
                     <div class="product-native-detail__price-block">
                         <span class="product-native-detail__price-label"><?= __('价格') ?>:</span>
                         <span class="product-native-detail__price">
@@ -384,10 +570,54 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                             <span class="product-native-detail__price-whole"><?= $priceWhole ?></span>
                             <span class="product-native-detail__price-fraction">.<?= $priceFraction ?></span>
                         </span>
+                        <?php if ($hasActiveDeal && $originalPriceMinor > $minor): ?>
+                            <?php
+                            $originalWhole = (int) floor($originalPriceMinor / 100);
+                            $originalFraction = sprintf('%02d', $originalPriceMinor % 100);
+                            ?>
+                            <span class="product-native-detail__price-original"
+                                  data-testid="product-price-original">
+                                <span class="product-native-detail__price-symbol"><?= $escape($currencySymbol) ?></span>
+                                <span class="product-native-detail__price-original-whole"><?= $originalWhole ?></span>
+                                <span class="product-native-detail__price-original-fraction">.<?= $originalFraction ?></span>
+                            </span>
+                            <?php if ($campaignLabel !== ''): ?>
+                                <?php if ($campaignUrl !== ''): ?>
+                                    <a class="product-native-detail__price-campaign"
+                                       data-testid="product-price-campaign"
+                                       href="<?= $escape($campaignUrl) ?>"><?= $escape($campaignLabel) ?></a>
+                                <?php else: ?>
+                                    <span class="product-native-detail__price-campaign"
+                                          data-testid="product-price-campaign"><?= $escape($campaignLabel) ?></span>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        <?php endif; ?>
                     </div>
-                <?php else: ?>
+                    <?php if ($quoteOnly): ?>
+                        <p class="product-native-detail__quote-price"><?= __('仅询价商品：以上为参考活动价，不可直接加购') ?></p>
+                    <?php endif; ?>
+                <?php elseif ($quoteOnly): ?>
                     <p class="product-native-detail__quote-price"><?= __('联系询价') ?></p>
                 <?php endif; ?>
+
+                <w:slot id="product-selling-mode"
+                        name="<?= $escape(__('售卖模式')) ?>"
+                        accept="layout-product-selling-mode,product-selling-mode,b2b-selling-mode"
+                        multiple="true"
+                        position="content"
+                        wrapper="div"
+                        class="product-native-detail__selling-mode"
+                        weline-code="product.frontend.detail.selling_mode">
+                    <?php
+                    // Fail-soft: optional B2B module template. Prefer slot widget injection when registered.
+                    $b2bSellingMode = BP . 'app/code/Weline/B2B/view/templates/frontend/widgets/selling-mode-switcher.phtml';
+                    if (is_file($b2bSellingMode)) {
+                        include $b2bSellingMode;
+                    } else {
+                        echo $this->getHook('Weline_Product::frontend::product::detail::after-price');
+                    }
+                    ?>
+                </w:slot>
 
                 <?php if ($summaryBullets !== []): ?>
                     <ul class="product-native-detail__bullets">
@@ -538,12 +768,34 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                 <?php endif; ?>
             </div>
 
-            <aside class="product-native-detail__buybox" aria-label="<?= $escape(__('购买选项')) ?>">
-                <?php if (!$quoteOnly): ?>
+            <aside class="product-native-detail__buybox"
+                   aria-label="<?= $escape(__('购买选项')) ?>"
+                   data-deal-type="<?= $escape($dealDiscountType) ?>"
+                   data-deal-value="<?= $escape((string)$dealDiscountValue) ?>">
+                <?php if ($minor > 0): ?>
                     <div class="product-native-detail__buybox-price">
                         <span class="product-native-detail__price-symbol"><?= $escape($currencySymbol) ?></span>
                         <span class="product-native-detail__price-whole"><?= $priceWhole ?></span>
                         <span class="product-native-detail__price-fraction">.<?= $priceFraction ?></span>
+                        <?php if ($hasActiveDeal && $originalPriceMinor > $minor): ?>
+                            <?php
+                            $originalWholeBuybox = (int) floor($originalPriceMinor / 100);
+                            $originalFractionBuybox = sprintf('%02d', $originalPriceMinor % 100);
+                            ?>
+                            <span class="product-native-detail__price-original">
+                                <span class="product-native-detail__price-symbol"><?= $escape($currencySymbol) ?></span>
+                                <span class="product-native-detail__price-original-whole"><?= $originalWholeBuybox ?></span>
+                                <span class="product-native-detail__price-original-fraction">.<?= $originalFractionBuybox ?></span>
+                            </span>
+                            <?php if ($campaignLabel !== ''): ?>
+                                <?php if ($campaignUrl !== ''): ?>
+                                    <a class="product-native-detail__price-campaign"
+                                       href="<?= $escape($campaignUrl) ?>"><?= $escape($campaignLabel) ?></a>
+                                <?php else: ?>
+                                    <span class="product-native-detail__price-campaign"><?= $escape($campaignLabel) ?></span>
+                                <?php endif; ?>
+                            <?php endif; ?>
+                        <?php endif; ?>
                     </div>
                 <?php endif; ?>
 
@@ -586,6 +838,11 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                         <select id="<?= $escape($qtyFieldId) ?>"
                                 class="product-native-detail__qty-select"
                                 data-testid="product-qty"
+                                data-qty-min="1"
+                                data-qty-step="1"
+                                data-qty-max="<?= (int)$maxQty ?>"
+                                data-tob-moq="5"
+                                data-tob-qty-step="5"
                                 aria-label="<?= $escape(__('购买数量')) ?>">
                             <?php for ($quantity = 1; $quantity <= $maxQty; $quantity++): ?>
                                 <option value="<?= $quantity ?>"><?= $quantity ?></option>
@@ -603,16 +860,37 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                         class="product-native-detail__actions"
                         weline-code="product.frontend.detail.purchase_actions">
                     <?php if ($isPreviewMode): ?>
-                        <button type="button" class="product-native-detail__add" disabled>
-                            <?= $quoteOnly ? __('仅询价') : __('加入购物车') ?>
-                        </button>
-                        <?php if (!$quoteOnly): ?>
+                        <?php if ($quoteOnly): ?>
+                            <button type="button" class="product-native-detail__quote" disabled>
+                                <?= __('提交询价') ?>
+                            </button>
+                        <?php else: ?>
+                            <button type="button" class="product-native-detail__add" disabled>
+                                <?= __('加入购物车') ?>
+                            </button>
                             <button type="button" class="product-native-detail__buy-now" disabled>
                                 <?= __('立即结账') ?>
                             </button>
                         <?php endif; ?>
                     <?php endif; ?>
                 </w:slot>
+                <?= $this->getHook('Weline_Product::frontend::product::detail::after-add-to-cart') ?>
+                <button type="button"
+                        class="product-native-detail__quote"
+                        data-action="open-product-quote"
+                        data-testid="product-submit-quote"
+                        data-quote-submit-url="@url{'weline_product/frontend/api/quote-request'}"
+                        data-product-id="<?= (int)$productId ?>"
+                        data-sku="<?= $escape((string)($offer['sku'] ?? '')) ?>"
+                        data-global-offer-uuid="<?= $escape($offerUuid) ?>"
+                        data-currency="<?= $escape((string)($offer['currency'] ?? 'CNY')) ?>"
+                        data-reference-price-minor="<?= (int)$minor ?>"
+                        data-campaign-label="<?= $escape($campaignLabel) ?>"
+                        data-product-url="<?= $escape((string)($_SERVER['REQUEST_URI'] ?? '')) ?>"
+                        data-selection-label=""
+                        <?= $quoteOnly ? '' : 'hidden' ?>>
+                    <?= __('提交询价') ?>
+                </button>
                 <p class="product-native-detail__secure"><?= __('安全交易保障') ?></p>
                 <p class="product-native-detail__message" data-testid="detail-message" aria-live="polite"></p>
             </aside>
@@ -626,23 +904,37 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                          data-testid="product-specifications"
                          weline-code="product.frontend.detail.specifications">
                     <h2><?= __('技术细节') ?></h2>
-                    <table class="product-native-detail__spec-table">
-                        <tbody>
-                        <?php foreach ($specifications as $specification): ?>
-                            <?php
-                            $code = strtolower(trim((string)$specification['code']));
-                            $value = trim((string)$specification['value']);
-                            if ($code === 'product_type' && preg_match('/^[a-z0-9_]+$/D', $value)) {
-                                $value = ucwords(str_replace('_', ' ', $value));
-                            }
-                            ?>
-                            <tr>
-                                <th scope="row"><?= $escape($specificationLabel($code)) ?></th>
-                                <td><?= $escape($value) ?></td>
-                            </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
+                    <div class="product-native-detail__spec-clamp"
+                         data-testid="product-specifications-clamp"
+                         data-collapsed="1">
+                        <div class="product-native-detail__spec-clamp-body">
+                            <div class="product-native-detail__spec-grid" role="list">
+                                <?php foreach ($specifications as $specification): ?>
+                                    <?php
+                                    $code = strtolower(trim((string)$specification['code']));
+                                    $rawSpecLabel = trim((string)($specification['label'] ?? ''));
+                                    $value = trim((string)$specification['value']);
+                                    if ($code === 'product_type' && preg_match('/^[a-z0-9_]+$/D', $value)) {
+                                        $value = ucwords(str_replace('_', ' ', $value));
+                                    }
+                                    ?>
+                                    <div class="product-native-detail__spec-row" role="listitem">
+                                        <div class="product-native-detail__spec-label"><?= $escape($specificationLabel($code, $rawSpecLabel)) ?></div>
+                                        <div class="product-native-detail__spec-value"><?= $escape($value) ?></div>
+                                    </div>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <button type="button"
+                                class="product-native-detail__spec-more"
+                                data-testid="product-specifications-more"
+                                data-label-more="<?= $escape(__('展示更多')) ?>"
+                                data-label-less="<?= $escape(__('收起')) ?>"
+                                hidden
+                                aria-expanded="false">
+                            <?= __('展示更多') ?>
+                        </button>
+                    </div>
                 </section>
             <?php endif; ?>
 
@@ -659,6 +951,63 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         </div>
     <?php endif; ?>
 
+    <div class="product-native-detail__quote-modal"
+         data-product-quote-modal
+         hidden
+         data-testid="product-quote-modal">
+        <div class="product-native-detail__quote-backdrop" data-product-quote-close></div>
+        <div class="product-native-detail__quote-dialog" role="dialog" aria-modal="true" aria-labelledby="product-quote-title-<?= (int)$productId ?>">
+            <button type="button" class="product-native-detail__quote-close" data-product-quote-close aria-label="<?= $escape(__('关闭')) ?>">×</button>
+            <h2 id="product-quote-title-<?= (int)$productId ?>"><?= __('提交询价') ?></h2>
+            <p class="product-native-detail__quote-context">
+                <span data-quote-field="sku-label"><?= __('SKU') ?>: <strong data-quote-field="sku"><?= $escape((string)($offer['sku'] ?? '')) ?></strong></span>
+                <span data-quote-field="selection-wrap" hidden> · <span data-quote-field="selection"></span></span>
+                <span data-quote-field="price-wrap" <?= $minor > 0 ? '' : 'hidden' ?>> · <?= __('参考价') ?> <strong data-quote-field="price"><?= $escape(($offer['currency'] ?? 'CNY') . ' ' . number_format($minor / 100, 2)) ?></strong></span>
+                <span data-quote-field="campaign-wrap" <?= $campaignLabel !== '' ? '' : 'hidden' ?>> · <strong data-quote-field="campaign"><?= $escape($campaignLabel) ?></strong></span>
+            </p>
+            <form class="product-native-detail__quote-form" data-product-quote-form id="product-quote-request-form">
+                <label><?= __('联系人') ?> *
+                    <input type="text" name="contact_name" required maxlength="128" autocomplete="name">
+                </label>
+                <label><?= __('邮箱') ?>
+                    <input type="email" name="email" maxlength="255" autocomplete="email">
+                </label>
+                <label><?= __('手机') ?>
+                    <input type="tel" name="phone" maxlength="64" autocomplete="tel">
+                </label>
+                <div class="product-native-detail__quote-address" data-testid="product-quote-address">
+                    <w:theme:address
+                        levels="country,province,city"
+                        code="product-quote-address"
+                        searchable="true"
+                        cascade="true"
+                        district="true"
+                        postal="true"
+                        postal-lookup="true"
+                        detail="true" />
+                </div>
+                <label><?= __('需求数量') ?>
+                    <input type="number" name="quantity" min="1" max="9999" value="1">
+                </label>
+                <label><?= __('备注') ?>
+                    <textarea name="message" rows="3" maxlength="2000"></textarea>
+                </label>
+                <?php if ($quoteCaptchaHtml !== ''): ?>
+                    <div class="product-native-detail__quote-captcha" data-product-quote-captcha>
+                        <?= $quoteCaptchaHtml ?>
+                    </div>
+                <?php endif; ?>
+                <input type="text" name="company_website" class="product-native-detail__quote-honeypot" tabindex="-1" autocomplete="off" aria-hidden="true">
+                <p class="product-native-detail__quote-hint"><?= __('请至少填写邮箱或手机号。提交后我们会尽快联系您。') ?></p>
+                <p class="product-native-detail__quote-form-message" data-product-quote-message aria-live="polite"></p>
+                <div class="product-native-detail__quote-actions">
+                    <button type="button" class="product-native-detail__quote-cancel" data-product-quote-close><?= __('取消') ?></button>
+                    <button type="submit" class="product-native-detail__quote-submit"><?= __('提交询价') ?></button>
+                </div>
+            </form>
+        </div>
+    </div>
+
 </section>
 
 <?php if ($hasInteractiveVariants): ?>
@@ -669,16 +1018,16 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
 
 <style>
     .product-native-detail--amazon {
-        --amz-text: #0f1111;
-        --amz-link: #007185;
-        --amz-price: #b12704;
-        --amz-border: #d5d9d9;
-        --amz-bg-soft: #f7fafa;
-        --amz-stock: #067d62;
-        --amz-btn-cart: #ffd814;
-        --amz-btn-cart-hover: #f7ca00;
-        --amz-btn-buy: #ffa41c;
-        --amz-btn-buy-hover: #fa8900;
+        --amz-text: var(--color-text-primary, #1c1c1c);
+        --amz-link: var(--color-link, #3d6b78);
+        --amz-price: var(--color-primary, #b84a3c);
+        --amz-border: var(--color-border-default, #d4cfc5);
+        --amz-bg-soft: var(--color-bg-secondary, #ede9e1);
+        --amz-stock: var(--color-success, #4a7c59);
+        --amz-btn-cart: var(--color-primary-bg-subtle, #f8ede9);
+        --amz-btn-cart-hover: color-mix(in srgb, var(--color-primary, #b84a3c) 16%, #ffffff);
+        --amz-btn-buy: var(--color-primary, #b84a3c);
+        --amz-btn-buy-hover: var(--color-primary-hover, #963b30);
         box-sizing: border-box;
         width: min(100%, var(--weline-layout-content-max-width));
         max-width: 100%;
@@ -718,6 +1067,11 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         gap: 12px;
         align-items: flex-start;
     }
+    .product-native-detail__gallery:has(.product-native-detail__thumbs) {
+        display: grid;
+        grid-template-columns: 52px minmax(0, 1fr);
+        align-items: start;
+    }
     .product-native-detail__gallery:has(.product-native-detail__zoom-result:not([hidden])) {
         z-index: 50;
     }
@@ -725,7 +1079,23 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         display: flex;
         flex-direction: column;
         gap: 8px;
-        flex: 0 0 52px;
+        width: 52px;
+        /* Row height follows the stage; thumbs do not inflate the gallery. */
+        height: 0;
+        min-height: 100%;
+        max-height: 100%;
+        overflow-x: hidden;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        scrollbar-width: thin;
+        scrollbar-gutter: stable;
+    }
+    .product-native-detail__thumbs::-webkit-scrollbar {
+        width: 6px;
+    }
+    .product-native-detail__thumbs::-webkit-scrollbar-thumb {
+        background: rgba(15, 23, 42, 0.28);
+        border-radius: 999px;
     }
     .product-native-detail__thumb {
         width: 52px;
@@ -743,6 +1113,24 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         box-shadow: 0 0 0 1px #007185 inset;
     }
     .product-native-detail__thumb img { width: 100%; height: 100%; object-fit: contain; }
+    .product-native-detail__thumb.is-spec {
+        position: relative;
+    }
+    .product-native-detail__thumb-spec-badge {
+        position: absolute;
+        left: 2px;
+        top: 2px;
+        z-index: 1;
+        padding: 0 3px;
+        border-radius: 3px;
+        background: rgba(15, 23, 42, 0.78);
+        color: #fff;
+        font-size: 9px;
+        line-height: 1.35;
+        font-weight: 700;
+        pointer-events: none;
+        letter-spacing: 0;
+    }
     .product-native-detail__stage-wrap {
         position: relative;
         flex: 1;
@@ -759,8 +1147,46 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
     }
     .product-native-detail__primary-image {
         display: block;
-        width: 100%;
+        width: auto;
+        max-width: 100%;
         height: auto;
+        margin: 0 auto;
+    }
+    .product-native-detail__primary-video {
+        position: relative;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        background: #000;
+    }
+    .product-native-detail__video-frame,
+    .product-native-detail__video-file {
+        display: block;
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: #000;
+    }
+    .product-native-detail__thumb.is-video {
+        position: relative;
+    }
+    .product-native-detail__thumb-play,
+    .product-native-detail__thumb-video-label {
+        position: absolute;
+        inset: auto auto 0.35rem 0.35rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 1.25rem;
+        min-height: 1.25rem;
+        padding: 0.1rem 0.25rem;
+        border-radius: 999px;
+        background: rgba(0, 0, 0, 0.72);
+        color: #fff;
+        font-size: 0.7rem;
+        line-height: 1;
+    }
+    .product-native-detail__stage:has(.product-native-detail__primary-video:not([hidden])) {
+        cursor: default;
     }
     .product-native-detail__zoom-lens {
         position: absolute;
@@ -889,7 +1315,30 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
     .product-native-detail__price-symbol { font-size: 14px; vertical-align: top; margin-right: 1px; }
     .product-native-detail__price-whole { font-size: 28px; }
     .product-native-detail__price-fraction { font-size: 14px; vertical-align: top; }
-    .product-native-detail__quote-price { margin-bottom: 12px; font-size: 22px; font-weight: 700; }
+    .product-native-detail__price-original {
+        color: #565959;
+        text-decoration: line-through;
+        font-size: 14px;
+        margin-inline-start: 6px;
+    }
+    .product-native-detail__price-original .product-native-detail__price-symbol,
+    .product-native-detail__price-original-whole,
+    .product-native-detail__price-original-fraction {
+        font-size: 14px;
+        vertical-align: baseline;
+    }
+    .product-native-detail__price-campaign {
+        color: var(--color-primary, #b84a3c);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        white-space: nowrap;
+        margin-inline-start: 4px;
+    }
+    a.product-native-detail__price-campaign:hover {
+        text-decoration: underline;
+    }
+    .product-native-detail__quote-price { margin-bottom: 12px; font-size: 14px; font-weight: 500; color: #565959; }
     .product-native-detail__bullets {
         margin: 0 0 16px;
         padding-left: 18px;
@@ -1077,12 +1526,20 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         margin-bottom: 12px;
     }
     .product-native-detail__qty-label {
+        flex: 0 0 auto;
+        white-space: nowrap;
         color: #0f1111;
         font-size: 13px;
         font-weight: 700;
     }
     .product-native-detail__qty-select {
+        /* Override foundation reset select{inline-size:100%} so label is not crushed. */
+        flex: 0 0 auto;
+        inline-size: auto;
+        width: auto;
         min-width: 72px;
+        min-inline-size: 72px;
+        max-inline-size: none;
         min-height: 32px;
         padding: 4px 10px;
         border: 1px solid #888c8c;
@@ -1108,6 +1565,7 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
     }
     .product-native-detail__add,
     .product-native-detail__buy-now,
+    .product-native-detail__quote,
     .product-native-detail__cart {
         display: flex;
         min-height: 32px;
@@ -1124,23 +1582,33 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         box-shadow: 0 2px 5px rgba(213, 217, 217, .5);
     }
     .product-native-detail__add {
-        border-color: #fcd200;
+        border-color: var(--color-primary, #b84a3c);
         background: var(--amz-btn-cart);
-        color: var(--amz-text);
+        color: var(--color-primary-text-emphasis, #7a3028);
     }
     .product-native-detail__add:hover:not(:disabled) { background: var(--amz-btn-cart-hover); }
     .product-native-detail__add.is-loading {
         cursor: wait;
         opacity: 0.78;
     }
-    .product-native-detail__buy-now {
-        border-color: #ff8f00;
-        background: var(--amz-btn-buy);
+    .product-native-detail__quote {
+        border-color: #d5d9d9;
+        background: #fff;
         color: var(--amz-text);
+        width: 100%;
+        margin-bottom: 10px;
+    }
+    .product-native-detail__quote:hover:not(:disabled) { background: #f7fafa; }
+    .product-native-detail__quote[hidden] { display: none !important; }
+    .product-native-detail__buy-now {
+        border-color: var(--color-primary-dark, #963b30);
+        background: var(--amz-btn-buy);
+        color: var(--color-on-primary, #f7f4ef);
     }
     .product-native-detail__buy-now:hover:not(:disabled) { background: var(--amz-btn-buy-hover); }
     .product-native-detail__add:disabled,
-    .product-native-detail__buy-now:disabled {
+    .product-native-detail__buy-now:disabled,
+    .product-native-detail__quote:disabled {
         border-color: #d5d9d9;
         background: #f0f2f2;
         color: #565959;
@@ -1220,23 +1688,201 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         block-size: auto;
         margin-inline: auto;
     }
-    .product-native-detail__spec-table {
+    .product-native-detail__description-body .weline-detail-text--size-chart {
+        width: 100%;
+        margin: 0 0 20px;
+        border: 1px solid #e7e7e7;
+        border-radius: 8px;
+        overflow: hidden;
+        background: #fff;
+    }
+    .product-native-detail__description-body .weline-detail-text--size-chart > h3 {
+        margin: 0;
+        padding: 14px 16px 0;
+        font-size: 16px;
+        font-weight: 700;
+    }
+    .product-native-detail__description-body .weline-detail-text__note {
+        margin: 4px 0 0;
+        padding: 0 16px 12px;
+        color: #565959;
+        font-size: 13px;
+        border-bottom: 1px solid #e7e7e7;
+        background: #f7f8f8;
+    }
+    .product-native-detail__description-body .weline-detail-text__columns {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 0;
+    }
+    .product-native-detail__description-body .weline-detail-text__col {
+        min-width: 0;
+        border-right: 1px solid #e7e7e7;
+    }
+    .product-native-detail__description-body .weline-detail-text__col:last-child {
+        border-right: 0;
+    }
+    .product-native-detail__description-body .weline-detail-text__col > h4 {
+        margin: 0;
+        padding: 12px 14px;
+        font-size: 14px;
+        font-weight: 700;
+        background: #fafafa;
+        border-bottom: 1px solid #e7e7e7;
+    }
+    .product-native-detail__description-body .weline-detail-text__col table {
         width: 100%;
         border-collapse: collapse;
+    }
+    .product-native-detail__description-body .weline-detail-text__col td {
+        padding: 12px 14px;
+        border-bottom: 1px solid #e7e7e7;
+        vertical-align: middle;
+    }
+    .product-native-detail__description-body .weline-detail-text__col tr:last-child td {
+        border-bottom: 0;
+    }
+    .product-native-detail__description-body .weline-detail-text__col td:first-child {
+        color: #565959;
+        font-size: 13px;
+    }
+    .product-native-detail__description-body .weline-detail-text__col td:last-child {
+        width: 3.5rem;
+        text-align: right;
+        font-size: 17px;
+        font-weight: 700;
+    }
+    .product-native-detail__description-body .weline-detail-text__foot {
+        margin: 0;
+        padding: 12px 16px;
+        color: #565959;
+        font-size: 13px;
+        border-top: 1px solid #e7e7e7;
+        background: #fcfcfc;
+    }
+    @media (max-width: 720px) {
+        .product-native-detail__description-body .weline-detail-text__columns {
+            grid-template-columns: 1fr;
+        }
+        .product-native-detail__description-body .weline-detail-text__col {
+            border-right: 0;
+            border-bottom: 1px solid #e7e7e7;
+        }
+        .product-native-detail__description-body .weline-detail-text__col:last-child {
+            border-bottom: 0;
+        }
+    }
+    .product-native-detail__specifications {
+        container-type: inline-size;
+        container-name: product-specs;
+    }
+    .product-native-detail__spec-grid {
+        display: grid;
+        grid-template-columns: 1fr;
+        column-gap: 1.5rem;
+    }
+    @container product-specs (min-width: 36rem) {
+        .product-native-detail__spec-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+    @supports not (container-type: inline-size) {
+        @media (min-width: 720px) {
+            .product-native-detail__spec-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+    }
+    .product-native-detail__spec-row {
+        display: grid;
+        grid-template-columns: minmax(5.5rem, 34%) minmax(0, 1fr);
+        border-top: 1px solid #e7e7e7;
         font-size: 14px;
     }
-    .product-native-detail__spec-table th,
-    .product-native-detail__spec-table td {
+    .product-native-detail__spec-label,
+    .product-native-detail__spec-value {
         padding: 10px 12px;
-        border-top: 1px solid #e7e7e7;
         text-align: left;
         vertical-align: top;
+        overflow-wrap: anywhere;
     }
-    .product-native-detail__spec-table th {
-        width: 34%;
+    .product-native-detail__spec-label {
         color: #565959;
         font-weight: 400;
         background: var(--amz-bg-soft);
+    }
+    .product-native-detail__spec-clamp {
+        --product-spec-clamp-max: 15.5rem;
+        --product-spec-fade-size: 4.5rem;
+        position: relative;
+    }
+    .product-native-detail__spec-clamp-body {
+        overflow: hidden;
+    }
+    .product-native-detail__spec-clamp[data-collapsed="1"].is-overflow .product-native-detail__spec-clamp-body {
+        max-height: var(--product-spec-clamp-max);
+        -webkit-mask-image: linear-gradient(
+            to bottom,
+            #000 0,
+            #000 calc(100% - var(--product-spec-fade-size)),
+            transparent 100%
+        );
+        mask-image: linear-gradient(
+            to bottom,
+            #000 0,
+            #000 calc(100% - var(--product-spec-fade-size)),
+            transparent 100%
+        );
+        -webkit-mask-size: 100% 100%;
+        mask-size: 100% 100%;
+        -webkit-mask-repeat: no-repeat;
+        mask-repeat: no-repeat;
+    }
+    .product-native-detail__spec-more {
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 4px;
+        position: absolute;
+        left: 50%;
+        bottom: 0.85rem;
+        z-index: 2;
+        transform: translateX(-50%);
+        margin: 0;
+        padding: 0.2rem 0.75rem;
+        border: 0;
+        background: transparent;
+        color: var(--amz-link);
+        font: inherit;
+        cursor: pointer;
+    }
+    .product-native-detail__spec-more::after {
+        content: "▼";
+        font-size: 10px;
+        line-height: 1;
+    }
+    .product-native-detail__spec-clamp.is-overflow .product-native-detail__spec-more {
+        display: inline-flex;
+    }
+    .product-native-detail__spec-clamp[data-collapsed="0"].is-overflow {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+    }
+    .product-native-detail__spec-clamp[data-collapsed="0"] .product-native-detail__spec-clamp-body {
+        width: 100%;
+    }
+    .product-native-detail__spec-clamp[data-collapsed="0"] .product-native-detail__spec-more {
+        position: static;
+        transform: none;
+        margin-top: 10px;
+    }
+    .product-native-detail__spec-clamp[data-collapsed="0"] .product-native-detail__spec-more::after {
+        content: "▲";
+    }
+    .product-native-detail__spec-more:hover {
+        color: #c7511f;
+        text-decoration: underline;
     }
     @media (max-width: 992px) {
         .product-native-detail__hero-grid { grid-template-columns: 1fr; }
@@ -1247,15 +1893,140 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         .product-native-detail__zoom-result { display: none !important; }
     }
     @media (max-width: 640px) {
-        .product-native-detail__gallery { flex-direction: column-reverse; }
+        .product-native-detail__gallery,
+        .product-native-detail__gallery:has(.product-native-detail__thumbs) {
+            display: flex;
+            flex-direction: column-reverse;
+        }
         .product-native-detail__thumbs {
             flex-direction: row;
             flex-wrap: nowrap;
-            overflow-x: auto;
-            flex-basis: auto;
             width: 100%;
+            height: auto;
+            min-height: 0;
+            max-height: none;
+            overflow-x: auto;
+            overflow-y: hidden;
+            scrollbar-gutter: auto;
         }
         .product-native-detail__buybox { max-width: none; }
+        .product-native-detail__spec-label,
+        .product-native-detail__spec-value {
+            padding: 8px 10px;
+        }
+        .product-native-detail__spec-clamp {
+            --product-spec-clamp-max: 13.5rem;
+        }
+    }
+    .product-native-detail__quote-modal[hidden] { display: none !important; }
+    .product-native-detail__quote-modal {
+        position: fixed;
+        inset: 0;
+        z-index: 1200;
+        display: grid;
+        place-items: center;
+        padding: 1rem;
+    }
+    .product-native-detail__quote-backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(15, 17, 17, .55);
+    }
+    .product-native-detail__quote-dialog {
+        position: relative;
+        z-index: 1;
+        width: min(100%, 28rem);
+        max-height: calc(100vh - 2rem);
+        overflow: auto;
+        padding: 1.25rem 1.25rem 1rem;
+        border-radius: 8px;
+        background: #fff;
+        color: #0f1111;
+        box-shadow: 0 12px 40px rgba(0, 0, 0, .28);
+    }
+    .product-native-detail__quote-close {
+        position: absolute;
+        top: .5rem;
+        right: .75rem;
+        border: 0;
+        background: transparent;
+        font-size: 1.5rem;
+        line-height: 1;
+        cursor: pointer;
+        color: #565959;
+    }
+    .product-native-detail__quote-dialog h2 {
+        margin: 0 1.5rem .5rem 0;
+        font-size: 1.15rem;
+    }
+    .product-native-detail__quote-context {
+        margin: 0 0 1rem;
+        color: #565959;
+        font-size: 13px;
+        line-height: 1.45;
+    }
+    .product-native-detail__quote-form {
+        display: grid;
+        gap: .75rem;
+    }
+    .product-native-detail__quote-address {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    .product-native-detail__quote-address .w-address-shell,
+    .product-native-detail__quote-address .w-address {
+        width: 100%;
+    }
+    .product-native-detail__quote-form label {
+        display: grid;
+        gap: .3rem;
+        font-size: 13px;
+    }
+    .product-native-detail__quote-form input,
+    .product-native-detail__quote-form textarea {
+        width: 100%;
+        box-sizing: border-box;
+        padding: .55rem .65rem;
+        border: 1px solid #888c8c;
+        border-radius: 4px;
+        font: inherit;
+    }
+    .product-native-detail__quote-honeypot {
+        position: absolute !important;
+        left: -9999px !important;
+        opacity: 0 !important;
+        height: 0 !important;
+        width: 0 !important;
+    }
+    .product-native-detail__quote-hint,
+    .product-native-detail__quote-form-message {
+        margin: 0;
+        font-size: 12px;
+        color: #565959;
+    }
+    .product-native-detail__quote-form-message.is-error { color: #b12704; }
+    .product-native-detail__quote-form-message.is-success { color: #067d62; }
+    .product-native-detail__quote-actions {
+        display: flex;
+        gap: .5rem;
+        justify-content: flex-end;
+        margin-top: .25rem;
+    }
+    .product-native-detail__quote-cancel,
+    .product-native-detail__quote-submit {
+        min-height: 32px;
+        padding: 0 14px;
+        border-radius: 999px;
+        border: 1px solid #d5d9d9;
+        font: inherit;
+        font-size: 13px;
+        cursor: pointer;
+    }
+    .product-native-detail__quote-submit {
+        border-color: var(--color-primary, #b84a3c);
+        background: var(--amz-btn-buy, var(--color-primary, #b84a3c));
+        color: var(--color-on-primary, #f7f4ef);
     }
 </style>
 
@@ -1265,11 +2036,97 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
     const root = document.querySelector('[data-testid="storefront-product-detail"]');
     if (!root) return;
     const primaryImage = root.querySelector('.product-native-detail__primary-image');
+    const primaryVideo = root.querySelector('.product-native-detail__primary-video');
+
+    function constrainPrimaryImageScale() {
+        if (!primaryImage || primaryImage.hidden) {
+            return;
+        }
+        const naturalWidth = primaryImage.naturalWidth || 0;
+        if (naturalWidth < 1) {
+            primaryImage.style.maxWidth = '100%';
+            return;
+        }
+        // Never CSS-upscale past 1 CSS px per source px; HD assets still fill the stage.
+        primaryImage.style.maxWidth = 'min(100%, ' + naturalWidth + 'px)';
+    }
+
+    if (primaryImage) {
+        primaryImage.addEventListener('load', constrainPrimaryImageScale);
+        if (primaryImage.complete) {
+            constrainPrimaryImageScale();
+        }
+        window.addEventListener('resize', constrainPrimaryImageScale);
+    }
+
+    function renderGalleryVideo(type, src, poster, provider, mime) {
+        if (!primaryVideo) {
+            return;
+        }
+        primaryVideo.innerHTML = '';
+        if (type !== 'video' || !src) {
+            primaryVideo.hidden = true;
+            if (primaryImage) {
+                primaryImage.hidden = false;
+            }
+            return;
+        }
+        if (primaryImage) {
+            primaryImage.hidden = true;
+            if (poster) {
+                primaryImage.src = poster;
+            }
+        }
+        primaryVideo.hidden = false;
+        if (provider === 'youtube' || provider === 'vimeo') {
+            const frame = document.createElement('iframe');
+            frame.className = 'product-native-detail__video-frame';
+            frame.src = src;
+            frame.title = 'Product video';
+            frame.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share';
+            frame.setAttribute('allowfullscreen', 'allowfullscreen');
+            frame.loading = 'lazy';
+            frame.referrerPolicy = 'strict-origin-when-cross-origin';
+            primaryVideo.appendChild(frame);
+            return;
+        }
+        const video = document.createElement('video');
+        video.className = 'product-native-detail__video-file';
+        video.src = src;
+        video.controls = true;
+        video.playsInline = true;
+        if (poster) {
+            video.poster = poster;
+        }
+        if (mime) {
+            video.setAttribute('type', mime);
+        }
+        primaryVideo.appendChild(video);
+    }
+
+    let onGalleryThumbActivate = null;
 
     function bindGalleryThumb(thumb) {
         thumb.addEventListener('click', function () {
-            if (!primaryImage) return;
-            primaryImage.src = thumb.dataset.gallerySrc || primaryImage.src;
+            if (typeof onGalleryThumbActivate === 'function') {
+                const axis = thumb.dataset.galleryAxis || '';
+                const value = thumb.dataset.galleryValue || '';
+                if (axis !== '' && value !== '' && onGalleryThumbActivate(thumb)) {
+                    return;
+                }
+            }
+            const type = thumb.dataset.galleryType || 'image';
+            const src = thumb.dataset.gallerySrc || '';
+            const poster = thumb.dataset.galleryPoster || '';
+            const provider = thumb.dataset.galleryProvider || '';
+            const mime = thumb.dataset.galleryMime || '';
+            if (type === 'video') {
+                renderGalleryVideo('video', src, poster, provider, mime);
+            } else if (primaryImage) {
+                primaryImage.src = src || primaryImage.src;
+                primaryImage.hidden = false;
+                renderGalleryVideo('image', '', '', '', '');
+            }
             if (typeof syncImageZoomSource === 'function') {
                 syncImageZoomSource();
             }
@@ -1278,10 +2135,97 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                 item.classList.toggle('is-active', active);
                 item.setAttribute('aria-selected', active ? 'true' : 'false');
             });
+            if (typeof thumb.scrollIntoView === 'function') {
+                thumb.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            }
         });
     }
 
     root.querySelectorAll('[data-gallery-src]').forEach(bindGalleryThumb);
+    const initialThumb = root.querySelector('[data-gallery-src].is-active')
+        || root.querySelector('[data-gallery-src]');
+    if (initialThumb && (initialThumb.dataset.galleryType || 'image') === 'video') {
+        renderGalleryVideo(
+            'video',
+            initialThumb.dataset.gallerySrc || '',
+            initialThumb.dataset.galleryPoster || '',
+            initialThumb.dataset.galleryProvider || '',
+            initialThumb.dataset.galleryMime || ''
+        );
+    }
+
+    (function bindSpecificationsClamp() {
+        const clamp = root.querySelector('[data-testid="product-specifications-clamp"]');
+        const body = clamp ? clamp.querySelector('.product-native-detail__spec-clamp-body') : null;
+        const more = clamp ? clamp.querySelector('[data-testid="product-specifications-more"]') : null;
+        if (!clamp || !body || !more) {
+            return;
+        }
+
+        const labelMore = more.getAttribute('data-label-more') || more.textContent.trim() || '展示更多';
+        const labelLess = more.getAttribute('data-label-less') || '收起';
+
+        function clampLimitPx() {
+            const raw = getComputedStyle(clamp).getPropertyValue('--product-spec-clamp-max').trim();
+            const probe = document.createElement('div');
+            probe.style.cssText = 'position:absolute;visibility:hidden;height:' + (raw || '15.5rem');
+            clamp.appendChild(probe);
+            const px = probe.getBoundingClientRect().height;
+            probe.remove();
+            return px > 0 ? px : 248;
+        }
+
+        function setCollapsed(collapsed) {
+            clamp.setAttribute('data-collapsed', collapsed ? '1' : '0');
+            more.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+            more.textContent = collapsed ? labelMore : labelLess;
+            if (!collapsed) {
+                clamp.classList.add('is-overflow');
+                more.hidden = false;
+                return;
+            }
+            refresh();
+        }
+
+        function refresh() {
+            const overflow = body.scrollHeight > clampLimitPx() + 2;
+            const collapsed = clamp.getAttribute('data-collapsed') !== '0';
+            if (!overflow) {
+                clamp.classList.remove('is-overflow');
+                clamp.setAttribute('data-collapsed', '1');
+                more.hidden = true;
+                more.textContent = labelMore;
+                more.setAttribute('aria-expanded', 'false');
+                return;
+            }
+            clamp.classList.add('is-overflow');
+            more.hidden = false;
+            if (collapsed) {
+                clamp.setAttribute('data-collapsed', '1');
+                more.textContent = labelMore;
+                more.setAttribute('aria-expanded', 'false');
+            } else {
+                more.textContent = labelLess;
+                more.setAttribute('aria-expanded', 'true');
+            }
+        }
+
+        more.addEventListener('click', function () {
+            setCollapsed(clamp.getAttribute('data-collapsed') === '0');
+        });
+
+        refresh();
+        if (typeof ResizeObserver === 'function') {
+            const observer = new ResizeObserver(refresh);
+            observer.observe(body);
+            const section = clamp.closest('.product-native-detail__specifications');
+            if (section) {
+                observer.observe(section);
+            }
+        } else {
+            window.addEventListener('resize', refresh);
+        }
+    })();
 
     let syncImageZoomSource = null;
     (function bindImageZoom() {
@@ -1308,7 +2252,10 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         }
 
         function canZoom() {
-            return !window.matchMedia('(max-width: 992px)').matches
+            const videoVisible = primaryVideo && !primaryVideo.hidden;
+            return !videoVisible
+                && !primaryImage.hidden
+                && !window.matchMedia('(max-width: 992px)').matches
                 && primaryImage.naturalWidth > 0
                 && primaryImage.clientWidth > 0;
         }
@@ -1425,6 +2372,28 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
 
     const offers = Array.isArray(catalog.offers) ? catalog.offers : [];
     const axes = Array.isArray(catalog.axes) ? catalog.axes : [];
+    const baseImages = Array.isArray(catalog.base_images) ? catalog.base_images : [];
+    // Snapshot PHP-rendered product gallery before JS rebuilds thumbs (main images).
+    const pageProductImages = [];
+    root.querySelectorAll('.product-native-detail__thumbs [data-gallery-src]').forEach(function (el) {
+        const type = el.dataset.galleryType || 'image';
+        const src = String(el.dataset.gallerySrc || '').trim();
+        if (type === 'image' && src !== '' && pageProductImages.indexOf(src) < 0) {
+            pageProductImages.push(src);
+        }
+    });
+    const productVideos = <?= json_encode(array_values(array_map(
+        static function (array $video): array {
+            return [
+                'type' => 'video',
+                'src' => trim((string)($video['embed_url'] ?? $video['src'] ?? '')),
+                'poster' => trim((string)($video['poster'] ?? '')),
+                'provider' => strtolower(trim((string)($video['provider'] ?? 'file'))),
+                'mime_type' => trim((string)($video['mime_type'] ?? '')),
+            ];
+        },
+        $videos,
+    )), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     if (offers.length === 0 || axes.length === 0) {
         return;
     }
@@ -1547,14 +2516,15 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         }
     }
 
-    function isOfferSellable(offer) {
-        if (!offer || !offer.sellable) {
+    function isOfferPurchasable(offer) {
+        if (!offer || !offer.sellable || offer.quote_only) {
             return false;
         }
-        if (offer.quote_only) {
-            return true;
-        }
         return Math.max(0, Number(offer.stock) || 0) > 0;
+    }
+
+    function isOfferSellable(offer) {
+        return isOfferPurchasable(offer);
     }
 
     function isOptionAvailable(axisCode, axisValue, current) {
@@ -1565,12 +2535,24 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         });
     }
 
-    function isOptionSellable(axisCode, axisValue, current) {
+    function isOptionPurchasable(axisCode, axisValue, current) {
         const probe = Object.assign({}, current);
         probe[axisCode] = axisValue;
         return offers.some(function (offer) {
-            return combinationMatches(offer.combination || {}, probe) && isOfferSellable(offer);
+            return combinationMatches(offer.combination || {}, probe) && isOfferPurchasable(offer);
         });
+    }
+
+    function isOptionQuoteOnly(axisCode, axisValue, current) {
+        const probe = Object.assign({}, current);
+        probe[axisCode] = axisValue;
+        return offers.some(function (offer) {
+            return combinationMatches(offer.combination || {}, probe) && !!offer.quote_only;
+        });
+    }
+
+    function isOptionSellable(axisCode, axisValue, current) {
+        return isOptionPurchasable(axisCode, axisValue, current);
     }
 
     function resolveSelectionToInStock(desired, pinnedAxes) {
@@ -1591,14 +2573,17 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
             return desired;
         }
 
-        const sellable = candidates.filter(isOfferSellable);
-        const pool = sellable.length > 0 ? sellable : candidates;
+        const purchasable = candidates.filter(isOfferPurchasable);
+        const quoteOnly = candidates.filter(function (offer) { return !!offer.quote_only; });
+        const pool = purchasable.length > 0
+            ? purchasable
+            : (quoteOnly.length > 0 ? quoteOnly : candidates);
 
         let best = pool[0];
         let bestScore = -1;
         pool.forEach(function (offer) {
             const combo = normalizeSelection(offer.combination || {});
-            let score = isOfferSellable(offer) ? 1000 : 0;
+            let score = isOfferPurchasable(offer) ? 1000 : (!!offer.quote_only ? 500 : 0);
             Object.keys(desired).forEach(function (code) {
                 if (combo[code] === desired[code]) {
                     score += 10;
@@ -1630,11 +2615,73 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         }
     }
 
-    function renderPrice(minor, currency) {
-        const whole = Math.floor(Math.max(0, Number(minor) || 0) / 100);
-        const fraction = String(Math.max(0, Number(minor) || 0) % 100).padStart(2, '0');
-        const symbol = currencySymbol(currency);
+    function applyDealToMinor(minor) {
+        const type = String(root.getAttribute('data-deal-type') || buyboxDealType()).trim();
+        const value = Number(root.getAttribute('data-deal-value') || buyboxDealValue() || 0);
+        const catalog = Math.max(0, Number(minor) || 0);
+        if (!type || type === 'none' || !(value > 0) || catalog <= 0) {
+            return { minor: catalog, original: catalog, hasDeal: false };
+        }
+        let deal = catalog;
+        if (type === 'percentage' || type === 'percent' || type === 'pct') {
+            deal = Math.round(catalog * (1 - Math.min(100, value) / 100));
+        } else if (type === 'fixed_amount' || type === 'fixed' || type === 'amount') {
+            deal = Math.max(0, catalog - Math.round(value * 100));
+        }
+        return {
+            minor: deal,
+            original: catalog,
+            hasDeal: deal < catalog,
+        };
+    }
+
+    /**
+     * Prefer server Assembler fields. Never treat unit_price_minor (often already
+     * deal-baked by catalog projection) as catalog input — that stacks discounts.
+     */
+    function priceFromOffer(offer) {
+        const unit = Math.max(0, Number(offer && offer.unit_price_minor) || 0);
+        const catalog = Math.max(0, Number(offer && offer.catalog_price_minor) || 0);
+        const compare = Math.max(0, Number(offer && offer.compare_at_minor) || catalog || unit);
+        if (catalog > 0 && unit > 0) {
+            const original = compare > unit ? compare : catalog;
+            return {
+                minor: unit,
+                original: original,
+                hasDeal: unit < original,
+            };
+        }
+        if (catalog > 0) {
+            return applyDealToMinor(catalog);
+        }
+        // Legacy catalog rows without catalog_price_minor: unit is authoritative.
+        return { minor: unit, original: unit, hasDeal: false };
+    }
+
+    function buyboxDealType() {
+        const box = root.querySelector('.product-native-detail__buybox');
+        return box ? String(box.getAttribute('data-deal-type') || '') : '';
+    }
+
+    function buyboxDealValue() {
+        const box = root.querySelector('.product-native-detail__buybox');
+        return box ? String(box.getAttribute('data-deal-value') || '') : '';
+    }
+
+    function renderPrice(offerOrMinor, currency) {
+        const priced = (offerOrMinor && typeof offerOrMinor === 'object')
+            ? priceFromOffer(offerOrMinor)
+            : applyDealToMinor(offerOrMinor);
+        const displayCurrency = (offerOrMinor && typeof offerOrMinor === 'object')
+            ? (currency || offerOrMinor.currency)
+            : currency;
+        const whole = Math.floor(Math.max(0, Number(priced.minor) || 0) / 100);
+        const fraction = String(Math.max(0, Number(priced.minor) || 0) % 100).padStart(2, '0');
+        const symbol = currencySymbol(displayCurrency);
         root.querySelectorAll('.product-native-detail__price-symbol').forEach(function (node) {
+            if (node.closest('.product-native-detail__price-original')) {
+                return;
+            }
             node.textContent = symbol;
         });
         root.querySelectorAll('.product-native-detail__price-whole').forEach(function (node) {
@@ -1642,6 +2689,23 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         });
         root.querySelectorAll('.product-native-detail__price-fraction').forEach(function (node) {
             node.textContent = '.' + fraction;
+        });
+        root.querySelectorAll('.product-native-detail__price-original').forEach(function (node) {
+            node.hidden = !priced.hasDeal;
+            if (!priced.hasDeal) {
+                return;
+            }
+            const originalWhole = Math.floor(Math.max(0, Number(priced.original) || 0) / 100);
+            const originalFraction = String(Math.max(0, Number(priced.original) || 0) % 100).padStart(2, '0');
+            node.querySelectorAll('.product-native-detail__price-symbol').forEach(function (symbolNode) {
+                symbolNode.textContent = symbol;
+            });
+            node.querySelectorAll('.product-native-detail__price-original-whole').forEach(function (wholeNode) {
+                wholeNode.textContent = String(originalWhole);
+            });
+            node.querySelectorAll('.product-native-detail__price-original-fraction').forEach(function (fractionNode) {
+                fractionNode.textContent = '.' + originalFraction;
+            });
         });
     }
 
@@ -1679,6 +2743,14 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         return Array.isArray(option.gallery_images) ? option.gallery_images.slice() : [];
     }
 
+    function resolveOptionPreviewSrc(option, selected) {
+        const gallery = resolveOptionGallery(option, selected || {});
+        if (gallery.length > 0) {
+            return String(gallery[0] || '').trim();
+        }
+        return String(option.swatch_image || '').trim();
+    }
+
     function resolveSelectionPreview(current) {
         const gallery = resolveSelectionGallery(current);
         if (gallery.length > 0) {
@@ -1698,7 +2770,7 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                 if (String(option.value || '').trim() !== axisValue) {
                     continue;
                 }
-                const preview = String(option.swatch_image || '').trim();
+                const preview = resolveOptionPreviewSrc(option, selected);
                 if (preview !== '') {
                     return preview;
                 }
@@ -1723,49 +2795,231 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                     return;
                 }
                 const gallery = resolveOptionGallery(option, selected);
-                if (gallery.length === 0) {
+                const swatch = String(option.swatch_image || '').trim();
+                const optionImages = gallery.length > 0
+                    ? gallery.slice()
+                    : (swatch !== '' ? [swatch] : []);
+                if (optionImages.length === 0) {
                     return;
                 }
                 if (images.length === 0) {
-                    images = gallery.slice();
+                    images = optionImages.slice();
                     return;
                 }
                 const intersection = images.filter(function (src) {
-                    return gallery.indexOf(src) >= 0;
+                    return optionImages.indexOf(src) >= 0;
                 });
                 if (intersection.length > 0) {
                     images = intersection;
                 } else if (axisCode === 'color' && styleType !== '' && styleType !== 'set') {
                     return;
                 } else {
-                    images = gallery.slice();
+                    images = optionImages.slice();
                 }
             });
         });
         return images;
     }
 
-    function renderGallery(offer) {
+    function collectSpecGalleryItems(selected) {
+        const items = [];
+        const seen = {};
+        axes.forEach(function (axis) {
+            const axisCode = String(axis.code || '').trim();
+            if (!axisCode) {
+                return;
+            }
+            const options = Array.isArray(axis.options) ? axis.options : [];
+            options.forEach(function (option) {
+                const value = String(option.value || '').trim();
+                if (value === '') {
+                    return;
+                }
+                const src = resolveOptionPreviewSrc(option, selected);
+                if (src === '') {
+                    return;
+                }
+                const key = axisCode + '|' + value;
+                if (seen[key]) {
+                    return;
+                }
+                seen[key] = true;
+                items.push({
+                    type: 'image',
+                    src: src,
+                    poster: src,
+                    provider: '',
+                    mime_type: '',
+                    kind: 'spec',
+                    axis: axisCode,
+                    value: value,
+                    label: String(option.label || value).trim() || value,
+                });
+            });
+        });
+        return items;
+    }
+
+    function collectProductGalleryImages(offer) {
+        const images = [];
+        const seen = {};
+        function push(src) {
+            src = String(src || '').trim();
+            if (src === '' || seen[src]) {
+                return;
+            }
+            seen[src] = true;
+            images.push(src);
+        }
+        pageProductImages.forEach(push);
+        (Array.isArray(baseImages) ? baseImages : []).forEach(push);
+        if (offer) {
+            (Array.isArray(offer.images) ? offer.images : []).forEach(push);
+            push(offer.image || '');
+        }
+        return images;
+    }
+
+    function buildGalleryItems(offer) {
+        const selected = normalizeSelection(selection);
+        const galleryItems = [];
+        const productImages = collectProductGalleryImages(offer);
+
+        // Main product gallery first — never promote these to 「规格」.
+        productImages.forEach(function (src) {
+            galleryItems.push({
+                type: 'image',
+                src: src,
+                poster: src,
+                provider: '',
+                mime_type: '',
+                kind: 'product',
+            });
+        });
+
+        // Spec option images are appended with 「规格」 badge for reverse-select.
+        const usedSpecKeys = {};
+        collectSpecGalleryItems(selected).forEach(function (item) {
+            const key = item.axis + '|' + item.value;
+            if (usedSpecKeys[key]) {
+                return;
+            }
+            usedSpecKeys[key] = true;
+            galleryItems.push(item);
+        });
+
+        (Array.isArray(productVideos) ? productVideos : []).forEach(function (video) {
+            if (!video || !video.src) {
+                return;
+            }
+            galleryItems.push(Object.assign({ kind: 'video' }, video));
+        });
+
+        return galleryItems;
+    }
+
+    function activateGalleryItem(galleryItems, thumbs, activeIndex) {
+        const active = galleryItems[activeIndex] || galleryItems[0];
+        if (!active) {
+            return;
+        }
+        if (active.type === 'video') {
+            renderGalleryVideo(
+                'video',
+                active.src,
+                active.poster || '',
+                active.provider || '',
+                active.mime_type || ''
+            );
+        } else if (primaryImage) {
+            primaryImage.src = active.src;
+            primaryImage.hidden = false;
+            renderGalleryVideo('image', '', '', '', '');
+        }
+        if (typeof syncImageZoomSource === 'function') {
+            syncImageZoomSource();
+        }
+        if (!thumbs) {
+            return;
+        }
+        const buttons = thumbs.querySelectorAll('[data-gallery-src]');
+        buttons.forEach(function (item, index) {
+            const isActive = index === activeIndex;
+            item.classList.toggle('is-active', isActive);
+            item.setAttribute('aria-selected', isActive ? 'true' : 'false');
+            if (isActive && typeof item.scrollIntoView === 'function') {
+                item.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            }
+        });
+    }
+
+    function resolveGalleryActiveIndex(galleryItems, renderOptions) {
+        renderOptions = renderOptions || {};
+        const focusAxis = String(renderOptions.galleryFocusAxis || '').trim();
+        const focusValue = String(renderOptions.galleryFocusValue || '').trim();
+        const focusSrc = String(renderOptions.galleryFocusSrc || '').trim();
+        if (focusAxis !== '' && focusValue !== '') {
+            const byAxis = galleryItems.findIndex(function (item) {
+                return item.kind === 'spec'
+                    && String(item.axis || '') === focusAxis
+                    && String(item.value || '') === focusValue;
+            });
+            if (byAxis >= 0) {
+                return byAxis;
+            }
+        }
+        if (focusSrc !== '') {
+            // Prefer matching spec thumb when focusing a selection-driven src.
+            const bySpecSrc = galleryItems.findIndex(function (item) {
+                return item.kind === 'spec' && String(item.src || '') === focusSrc;
+            });
+            if (bySpecSrc >= 0) {
+                return bySpecSrc;
+            }
+            const bySrc = galleryItems.findIndex(function (item) {
+                return String(item.src || '') === focusSrc;
+            });
+            if (bySrc >= 0) {
+                return bySrc;
+            }
+        }
+        // Option click / URL selection: highlight the selected spec thumb.
+        if (focusAxis !== '' || focusValue !== '' || focusSrc !== '') {
+            const selected = normalizeSelection(selection);
+            const selectedSpec = galleryItems.findIndex(function (item) {
+                return item.kind === 'spec' && selected[item.axis] === item.value;
+            });
+            if (selectedSpec >= 0) {
+                return selectedSpec;
+            }
+        }
+        const preview = resolveSelectionPreview(selection);
+        if (preview !== '') {
+            const bySpecPreview = galleryItems.findIndex(function (item) {
+                return item.kind === 'spec' && String(item.src || '') === preview;
+            });
+            if (bySpecPreview >= 0) {
+                return bySpecPreview;
+            }
+        }
+        // Default: first main product image (not a 规格 thumb).
+        const firstProduct = galleryItems.findIndex(function (item) {
+            return item.kind === 'product';
+        });
+        if (firstProduct >= 0) {
+            return firstProduct;
+        }
+        return 0;
+    }
+
+    function renderGallery(offer, renderOptions) {
         if (!primaryImage || !offer) {
             return;
         }
-        let images = resolveSelectionGallery(selection);
-        if (images.length === 0) {
-            images = Array.isArray(offer.images) && offer.images.length
-                ? offer.images.slice()
-                : (offer.image ? [offer.image] : []);
-        }
-        if (images.length === 0) {
+        renderOptions = renderOptions || {};
+        const galleryItems = buildGalleryItems(offer);
+        if (galleryItems.length === 0) {
             return;
-        }
-
-        const preview = resolveSelectionPreview(selection);
-        if (preview !== '' && images.indexOf(preview) >= 0) {
-            images = [preview].concat(images.filter(function (src) {
-                return src !== preview;
-            }));
-        } else if (preview !== '') {
-            images = [preview].concat(images);
         }
 
         const gallery = root.querySelector('.product-native-detail__gallery');
@@ -1773,15 +3027,15 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
             return;
         }
 
+        const specBadgeLabel = <?= json_encode((string)__('规格'), JSON_UNESCAPED_UNICODE) ?>;
         let thumbs = gallery.querySelector('.product-native-detail__thumbs');
-        if (images.length <= 1) {
+        const activeIndex = resolveGalleryActiveIndex(galleryItems, renderOptions);
+
+        if (galleryItems.length <= 1) {
             if (thumbs) {
                 thumbs.remove();
             }
-            primaryImage.src = images[0];
-            if (typeof syncImageZoomSource === 'function') {
-                syncImageZoomSource();
-            }
+            activateGalleryItem(galleryItems, null, 0);
             return;
         }
 
@@ -1789,52 +3043,134 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
             thumbs = document.createElement('div');
             thumbs.className = 'product-native-detail__thumbs';
             thumbs.setAttribute('role', 'tablist');
-            thumbs.setAttribute('aria-label', <?= json_encode((string)__('选择图片'), JSON_UNESCAPED_UNICODE) ?>);
+            thumbs.setAttribute('aria-label', <?= json_encode((string)__('选择图片或视频'), JSON_UNESCAPED_UNICODE) ?>);
             gallery.insertBefore(thumbs, gallery.firstChild);
         }
 
         thumbs.innerHTML = '';
-        images.forEach(function (src, index) {
+        galleryItems.forEach(function (item, index) {
             const button = document.createElement('button');
             button.type = 'button';
             button.role = 'tab';
-            button.className = 'product-native-detail__thumb' + (index === 0 ? ' is-active' : '');
-            button.dataset.gallerySrc = src;
-            button.setAttribute('aria-selected', index === 0 ? 'true' : 'false');
-            const img = document.createElement('img');
-            img.src = src;
-            img.alt = '';
-            button.appendChild(img);
+            const isSpec = item.kind === 'spec';
+            button.className = 'product-native-detail__thumb'
+                + (index === activeIndex ? ' is-active' : '')
+                + (item.type === 'video' ? ' is-video' : '')
+                + (isSpec ? ' is-spec' : '');
+            button.dataset.galleryType = item.type || 'image';
+            button.dataset.gallerySrc = item.src || '';
+            button.dataset.galleryPoster = item.poster || '';
+            button.dataset.galleryProvider = item.provider || '';
+            button.dataset.galleryMime = item.mime_type || '';
+            if (isSpec) {
+                button.dataset.galleryAxis = item.axis || '';
+                button.dataset.galleryValue = item.value || '';
+                button.dataset.galleryKind = 'spec';
+            }
+            button.setAttribute('aria-selected', index === activeIndex ? 'true' : 'false');
+            const ariaLabel = isSpec
+                ? (specBadgeLabel + ': ' + (item.label || item.value || ''))
+                : (item.type === 'video'
+                    ? <?= json_encode((string)__('查看商品视频'), JSON_UNESCAPED_UNICODE) ?>
+                    : <?= json_encode((string)__('查看商品图片'), JSON_UNESCAPED_UNICODE) ?>);
+            button.setAttribute('aria-label', ariaLabel);
+            if (isSpec) {
+                const badge = document.createElement('span');
+                badge.className = 'product-native-detail__thumb-spec-badge';
+                badge.textContent = specBadgeLabel;
+                badge.setAttribute('aria-hidden', 'true');
+                button.appendChild(badge);
+            }
+            const thumbSrc = item.poster || (item.type === 'image' ? item.src : '');
+            if (thumbSrc) {
+                const img = document.createElement('img');
+                img.src = thumbSrc;
+                img.alt = '';
+                button.appendChild(img);
+            } else {
+                const label = document.createElement('span');
+                label.className = 'product-native-detail__thumb-video-label';
+                label.setAttribute('aria-hidden', 'true');
+                label.textContent = '▶';
+                button.appendChild(label);
+            }
+            if (item.type === 'video') {
+                const play = document.createElement('span');
+                play.className = 'product-native-detail__thumb-play';
+                play.setAttribute('aria-hidden', 'true');
+                play.textContent = '▶';
+                button.appendChild(play);
+            }
             bindGalleryThumb(button);
             thumbs.appendChild(button);
         });
-        primaryImage.src = images[0];
-        if (typeof syncImageZoomSource === 'function') {
-            syncImageZoomSource();
-        }
-        root.querySelectorAll('[data-gallery-src]').forEach(function (item) {
-            const active = item.dataset.gallerySrc === images[0];
-            item.classList.toggle('is-active', active);
-            item.setAttribute('aria-selected', active ? 'true' : 'false');
-        });
+        activateGalleryItem(galleryItems, thumbs, activeIndex);
     }
 
     function renderPurchaseButtons(offer) {
         const exactOffer = offer && findExactOffer(selection);
-        const sellable = !!(exactOffer && isOfferSellable(exactOffer) && exactOffer.global_offer_uuid);
+        const quoteOnly = !!(exactOffer && exactOffer.quote_only);
+        const purchasable = !!(exactOffer && isOfferPurchasable(exactOffer) && exactOffer.global_offer_uuid);
         root.querySelectorAll('[data-action="add"], [data-action="buy-now"]').forEach(function (button) {
             if (exactOffer) {
                 button.dataset.globalOfferUuid = exactOffer.global_offer_uuid || '';
                 button.dataset.productId = String(exactOffer.product_id || '');
                 button.dataset.providerCode = exactOffer.provider_code || 'product';
             }
-            button.disabled = !sellable;
+            button.hidden = quoteOnly;
+            button.disabled = quoteOnly || !purchasable;
         });
+        const quoteButton = root.querySelector('[data-action="open-product-quote"]');
+        if (quoteButton) {
+            quoteButton.hidden = !quoteOnly;
+            quoteButton.disabled = !quoteOnly || !exactOffer;
+            if (exactOffer) {
+                syncQuoteButtonContext(exactOffer);
+            }
+        }
         const skuElement = root.querySelector('[data-product-sku]');
         if (skuElement && exactOffer) {
             skuElement.textContent = 'SKU: ' + (exactOffer.sku || '');
         }
         syncPurchaseQty();
+    }
+
+    function selectionLabelFor(offer) {
+        const combo = normalizeSelection((offer && offer.combination) || selection || {});
+        const parts = [];
+        axes.forEach(function (axis) {
+            const code = String(axis.code || '').trim();
+            const value = String(combo[code] || '').trim();
+            if (!code || !value) {
+                return;
+            }
+            const option = (axis.options || []).find(function (row) {
+                return String(row.value || '').trim() === value;
+            });
+            parts.push(String((option && (option.label || option.value)) || value));
+        });
+        return parts.join(' · ');
+    }
+
+    function syncQuoteButtonContext(offer) {
+        const quoteButton = root.querySelector('[data-action="open-product-quote"]');
+        if (!quoteButton || !offer) {
+            return;
+        }
+        const priced = priceFromOffer(offer);
+        quoteButton.dataset.productId = String(offer.product_id || '');
+        quoteButton.dataset.sku = String(offer.sku || '');
+        quoteButton.dataset.globalOfferUuid = String(offer.global_offer_uuid || '');
+        quoteButton.dataset.currency = String(offer.currency || 'CNY');
+        quoteButton.dataset.referencePriceMinor = String(priced.minor || 0);
+        quoteButton.dataset.campaignLabel = String(
+            (root.querySelector('[data-testid="product-price-campaign"]') || {}).textContent
+            || quoteButton.dataset.campaignLabel
+            || ''
+        );
+        quoteButton.dataset.productUrl = window.location.pathname + window.location.search;
+        quoteButton.dataset.selectionLabel = selectionLabelFor(offer);
+        quoteButton.dataset.selectionJson = JSON.stringify(normalizeSelection(offer.combination || selection || {}));
     }
 
     function renderSelectionUi() {
@@ -1844,13 +3180,14 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
             const axisValue = button.dataset.variantValue || '';
             const selected = selection[axisCode] === axisValue;
             const exists = isOptionAvailable(axisCode, axisValue, selection);
-            const inStock = isOptionSellable(axisCode, axisValue, selection);
+            const purchasable = isOptionPurchasable(axisCode, axisValue, selection);
+            const quoteOnlyOption = isOptionQuoteOnly(axisCode, axisValue, selection);
             button.classList.toggle('is-selected', selected);
             button.classList.toggle('is-disabled', !exists);
-            button.classList.toggle('is-out-of-stock', exists && !inStock);
+            button.classList.toggle('is-out-of-stock', exists && !purchasable && !quoteOnlyOption);
             button.setAttribute('aria-current', selected ? 'true' : 'false');
             button.disabled = !exists;
-            if (exists && !inStock) {
+            if (exists && !purchasable && !quoteOnlyOption) {
                 const baseLabel = button.dataset.variantLabel || axisValue;
                 button.setAttribute('title', outOfStockLabel);
                 button.setAttribute('aria-label', baseLabel + ' · ' + outOfStockLabel);
@@ -1869,8 +3206,13 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         Object.keys(normalizeSelection(current)).forEach(function (axisCode) {
             params.set(axisCode, publicCodeFor(axisCode, current[axisCode]));
         });
-        const nextUrl = basePath + (params.toString() ? ('?' + params.toString()) : '');
-        if (window.location.pathname + window.location.search !== nextUrl) {
+        const existing = new URLSearchParams(window.location.search || '');
+        if (existing.get('quote') === '1') {
+            params.set('quote', '1');
+        }
+        const hash = window.location.hash || '';
+        const nextUrl = basePath + (params.toString() ? ('?' + params.toString()) : '') + hash;
+        if (window.location.pathname + window.location.search + window.location.hash !== nextUrl) {
             window.history.replaceState(null, '', nextUrl);
         }
     }
@@ -1918,8 +3260,12 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         renderSelectionUi();
         const offer = findBestOffer(selection);
         if (offer) {
-            renderGallery(offer);
-            renderPrice(offer.unit_price_minor, offer.currency);
+            renderGallery(offer, {
+                galleryFocusAxis: options.galleryFocusAxis || '',
+                galleryFocusValue: options.galleryFocusValue || '',
+                galleryFocusSrc: options.galleryFocusSrc || '',
+            });
+            renderPrice(offer);
             renderStock(offer);
         }
         renderPurchaseButtons(offer);
@@ -1927,6 +3273,30 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
             syncUrl(selection);
         }
     }
+
+    onGalleryThumbActivate = function (thumb) {
+        const axisCode = thumb.dataset.galleryAxis || '';
+        const axisValue = thumb.dataset.galleryValue || '';
+        if (axisCode === '' || axisValue === '') {
+            return false;
+        }
+        if (selection[axisCode] === axisValue) {
+            return false;
+        }
+        if (!isOptionAvailable(axisCode, axisValue, selection)) {
+            return false;
+        }
+        const nextSelection = Object.assign({}, selection);
+        nextSelection[axisCode] = axisValue;
+        applySelection(nextSelection, {
+            pinnedAxes: [axisCode],
+            galleryFocusAxis: axisCode,
+            galleryFocusValue: axisValue,
+            galleryFocusSrc: thumb.dataset.gallerySrc || '',
+        });
+        scheduleLiveAvailabilityRefresh();
+        return true;
+    };
 
     root.querySelectorAll('[data-variant-option]').forEach(function (button) {
         button.addEventListener('click', function () {
@@ -1943,7 +3313,11 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
                 return;
             }
             nextSelection[axisCode] = axisValue;
-            applySelection(nextSelection, { pinnedAxes: [axisCode] });
+            applySelection(nextSelection, {
+                pinnedAxes: [axisCode],
+                galleryFocusAxis: axisCode,
+                galleryFocusValue: axisValue,
+            });
             scheduleLiveAvailabilityRefresh();
         });
     });
@@ -1969,5 +3343,194 @@ $qtyFieldId = 'product-qty-' . max(0, $productId);
         applySelection(selection, { pinnedAxes: [] });
     }
     refreshLiveAvailability();
+})();
+</script>
+
+<script>
+(function () {
+    const root = document.querySelector('.product-native-detail--amazon[data-product-id="<?= (int)$productId ?>"]')
+        || document.querySelector('.product-native-detail--amazon');
+    if (!root) {
+        return;
+    }
+    const modal = root.querySelector('[data-product-quote-modal]');
+    const form = root.querySelector('[data-product-quote-form]');
+    const openButton = root.querySelector('[data-action="open-product-quote"]');
+    if (!modal || !form || !openButton) {
+        return;
+    }
+    const messageNode = modal.querySelector('[data-product-quote-message]');
+
+    function openModal() {
+        modal.hidden = false;
+        syncModalFromButton();
+        if (messageNode) {
+            messageNode.textContent = '';
+            messageNode.className = 'product-native-detail__quote-form-message';
+        }
+    }
+
+    function closeModal() {
+        modal.hidden = true;
+    }
+
+    function syncModalFromButton() {
+        const sku = openButton.dataset.sku || '';
+        const selection = openButton.dataset.selectionLabel || '';
+        const currency = openButton.dataset.currency || 'CNY';
+        const minor = Math.max(0, Number(openButton.dataset.referencePriceMinor) || 0);
+        const campaign = openButton.dataset.campaignLabel || '';
+        const skuNode = modal.querySelector('[data-quote-field="sku"]');
+        if (skuNode) {
+            skuNode.textContent = sku;
+        }
+        const selectionWrap = modal.querySelector('[data-quote-field="selection-wrap"]');
+        const selectionNode = modal.querySelector('[data-quote-field="selection"]');
+        if (selectionWrap && selectionNode) {
+            selectionWrap.hidden = selection === '';
+            selectionNode.textContent = selection;
+        }
+        const priceWrap = modal.querySelector('[data-quote-field="price-wrap"]');
+        const priceNode = modal.querySelector('[data-quote-field="price"]');
+        if (priceWrap && priceNode) {
+            priceWrap.hidden = minor <= 0;
+            priceNode.textContent = currency + ' ' + (minor / 100).toFixed(2);
+        }
+        const campaignWrap = modal.querySelector('[data-quote-field="campaign-wrap"]');
+        const campaignNode = modal.querySelector('[data-quote-field="campaign"]');
+        if (campaignWrap && campaignNode) {
+            campaignWrap.hidden = campaign === '';
+            campaignNode.textContent = campaign;
+        }
+    }
+
+    function idempotencyKey() {
+        const seed = String(Date.now()) + '-' + Math.random().toString(36).slice(2) + '-' + Math.random().toString(36).slice(2);
+        return seed.replace(/[^A-Za-z0-9._-]/g, '').slice(0, 64);
+    }
+
+    openButton.addEventListener('click', function () {
+        if (openButton.disabled || openButton.hidden) {
+            return;
+        }
+        openModal();
+    });
+    try {
+        const params = new URLSearchParams(window.location.search || '');
+        const wantsQuote = params.get('quote') === '1'
+            || (window.location.hash || '') === '#quote';
+        if (wantsQuote && !openButton.disabled && !openButton.hidden) {
+            openModal();
+            params.delete('quote');
+            const nextQuery = params.toString();
+            const nextUrl = window.location.pathname
+                + (nextQuery ? ('?' + nextQuery) : '');
+            window.history.replaceState({}, '', nextUrl);
+        }
+    } catch (error) {
+        // Ignore deep-link cleanup failures; CTA click still works.
+    }
+    modal.querySelectorAll('[data-product-quote-close]').forEach(function (node) {
+        node.addEventListener('click', closeModal);
+    });
+    form.addEventListener('submit', function (event) {
+        event.preventDefault();
+        const email = String((form.elements.email && form.elements.email.value) || '').trim();
+        const phone = String((form.elements.phone && form.elements.phone.value) || '').trim();
+        if (email === '' && phone === '') {
+            if (messageNode) {
+                messageNode.textContent = <?= json_encode((string)__('请填写邮箱或手机号'), JSON_UNESCAPED_UNICODE) ?>;
+                messageNode.className = 'product-native-detail__quote-form-message is-error';
+            }
+            return;
+        }
+        let selection = {};
+        try {
+            selection = JSON.parse(openButton.dataset.selectionJson || '{}') || {};
+        } catch (error) {
+            selection = {};
+        }
+        const payload = {
+            product_id: Number(openButton.dataset.productId || 0),
+            sku: String(openButton.dataset.sku || ''),
+            global_offer_uuid: String(openButton.dataset.globalOfferUuid || ''),
+            selection: selection,
+            reference_price_minor: Number(openButton.dataset.referencePriceMinor || 0),
+            currency: String(openButton.dataset.currency || 'CNY'),
+            campaign_label: String(openButton.dataset.campaignLabel || ''),
+            product_url: String(openButton.dataset.productUrl || (window.location.pathname + window.location.search)),
+            contact_name: String((form.elements.contact_name && form.elements.contact_name.value) || '').trim(),
+            email: email,
+            phone: phone,
+            quantity: Number((form.elements.quantity && form.elements.quantity.value) || 1),
+            message: String((form.elements.message && form.elements.message.value) || '').trim(),
+            address: (function () {
+                const pick = function (name) {
+                    const el = form.elements[name];
+                    return String((el && el.value) || '').trim();
+                };
+                return {
+                    postal_code: pick('postal_code'),
+                    country_code: pick('country_code'),
+                    country: pick('country'),
+                    province: pick('province'),
+                    city: pick('city'),
+                    district: pick('district'),
+                    street: pick('street'),
+                    address1: pick('address1'),
+                };
+            })(),
+            company_website: String((form.elements.company_website && form.elements.company_website.value) || ''),
+            locale: document.documentElement.lang || '',
+            idempotency_key: idempotencyKey(),
+            captcha_provider: String((form.elements.captcha_provider && form.elements.captcha_provider.value) || ''),
+            captcha_token: String((form.elements.captcha_token && form.elements.captcha_token.value) || ''),
+            captcha_response: String((form.elements.captcha_response && form.elements.captcha_response.value) || ''),
+        };
+        const submitUrl = openButton.dataset.quoteSubmitUrl || '';
+        if (!submitUrl) {
+            return;
+        }
+        const submitButton = form.querySelector('.product-native-detail__quote-submit');
+        if (submitButton) {
+            submitButton.disabled = true;
+        }
+        fetch(submitUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify(payload),
+        }).then(function (response) {
+            return response.json().catch(function () {
+                return { success: false, message: <?= json_encode((string)__('提交失败，请稍后重试。'), JSON_UNESCAPED_UNICODE) ?> };
+            }).then(function (data) {
+                return { ok: response.ok, data: data || {} };
+            });
+        }).then(function (result) {
+            if (messageNode) {
+                messageNode.textContent = String(result.data.message || (result.ok
+                    ? <?= json_encode((string)__('提交成功，我们会尽快联系您。'), JSON_UNESCAPED_UNICODE) ?>
+                    : <?= json_encode((string)__('提交失败，请稍后重试。'), JSON_UNESCAPED_UNICODE) ?>));
+                messageNode.className = 'product-native-detail__quote-form-message ' + (result.ok && result.data.success !== false ? 'is-success' : 'is-error');
+            }
+            if (result.ok && result.data.success !== false) {
+                form.reset();
+                setTimeout(closeModal, 1200);
+            }
+        }).catch(function () {
+            if (messageNode) {
+                messageNode.textContent = <?= json_encode((string)__('提交失败，请稍后重试。'), JSON_UNESCAPED_UNICODE) ?>;
+                messageNode.className = 'product-native-detail__quote-form-message is-error';
+            }
+        }).finally(function () {
+            if (submitButton) {
+                submitButton.disabled = false;
+            }
+        });
+    });
 })();
 </script>

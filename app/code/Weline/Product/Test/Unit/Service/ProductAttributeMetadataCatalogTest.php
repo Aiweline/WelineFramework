@@ -43,7 +43,45 @@ final class ProductAttributeMetadataCatalogTest extends TestCase
         $metadata = new StaticProductMetadataCatalog([$set]);
         $entity = (new ReflectionClass(ProductCatalogAttributeEntity::class))
             ->newInstanceWithoutConstructor();
-        $this->catalog = new ProductAttributeMetadataCatalog($metadata, $entity);
+        $optionStore = new class implements \Weline\Eav\Api\Attribute\Option\AttributeOptionStoreInterface {
+            public function register(\Weline\Eav\Api\Attribute\Option\AttributeOptionDefinition $definition): void
+            {
+            }
+
+            public function find(int $attributeId, string $code): ?\Weline\Eav\Api\Attribute\Option\AttributeOptionRecord
+            {
+                return null;
+            }
+
+            public function findInScope(
+                int $attributeId,
+                string $code,
+                int $scopeInstanceId,
+            ): ?\Weline\Eav\Api\Attribute\Option\AttributeOptionRecord {
+                return null;
+            }
+
+            public function ensureInScope(
+                int $eavEntityId,
+                int $attributeId,
+                int $scopeInstanceId,
+                string $code,
+                string $label,
+                string $swatchColor = '',
+                string $swatchImage = '',
+                string $swatchText = '',
+            ): \Weline\Eav\Api\Attribute\Option\AttributeOptionRecord {
+                throw new \RuntimeException('unused');
+            }
+
+            public function assertUsableByInstance(
+                int $optionId,
+                int $scopeInstanceId,
+            ): \Weline\Eav\Api\Attribute\Option\AttributeOptionRecord {
+                throw new \RuntimeException('unused');
+            }
+        };
+        $this->catalog = new ProductAttributeMetadataCatalog($metadata, $entity, $optionStore);
     }
 
     public function testEditorCatalogAddsProductValueTypesAndScopeStates(): void
@@ -99,6 +137,122 @@ final class ProductAttributeMetadataCatalogTest extends TestCase
             ['color' => '7', 'size' => '8'],
             $this->catalog->canonicalizeVariantCombination(['size' => 'xxl', 'color' => 'red']),
         );
+    }
+
+    public function testNormalizeRowsAcceptsPrivateOptionWhenProductIdProvided(): void
+    {
+        $shared = new AttributeOptionMetadata(7, '7', 'red', '红色', 7);
+        $private = new AttributeOptionMetadata(99, '99', 'zhang-fei', '张飞', 99);
+        $sharedAttributes = [
+            new AttributeMetadata(11, 3, 'color', '颜色', 'varchar', 'varchar', 'select', 5, 6, true, false, true, true, 11, [$shared]),
+        ];
+        $productAttributes = [
+            new AttributeMetadata(11, 3, 'color', '颜色', 'varchar', 'varchar', 'select', 5, 6, true, false, true, true, 11, [$shared, $private]),
+        ];
+        $sharedSet = new AttributeSetMetadata(
+            5,
+            3,
+            'default',
+            '默认',
+            5,
+            [new AttributeGroupMetadata(6, 3, 5, 'general', '常规', 6, $sharedAttributes)],
+        );
+        $productSet = new AttributeSetMetadata(
+            5,
+            3,
+            'default',
+            '默认',
+            5,
+            [new AttributeGroupMetadata(6, 3, 5, 'general', '常规', 6, $productAttributes)],
+        );
+        $metadata = new class ([$sharedSet], [$productSet]) implements AttributeMetadataCatalogInterface {
+            /** @param list<AttributeSetMetadata> $shared @param list<AttributeSetMetadata> $product */
+            public function __construct(private array $shared, private array $product)
+            {
+            }
+
+            public function catalog(EntityDefinitionInterface $entity): array
+            {
+                return $this->shared;
+            }
+
+            public function catalogForProduct(
+                EntityDefinitionInterface $entity,
+                int $productId,
+                string $freeSetCode = '__product_free',
+            ): array {
+                return $productId === 125 ? $this->product : $this->shared;
+            }
+
+            public function attributeIndexByEntityCode(string $entityCode): array
+            {
+                return [];
+            }
+        };
+        $entity = (new ReflectionClass(ProductCatalogAttributeEntity::class))
+            ->newInstanceWithoutConstructor();
+        $optionStore = new class implements \Weline\Eav\Api\Attribute\Option\AttributeOptionStoreInterface {
+            public function register(\Weline\Eav\Api\Attribute\Option\AttributeOptionDefinition $definition): void
+            {
+            }
+
+            public function find(int $attributeId, string $code): ?\Weline\Eav\Api\Attribute\Option\AttributeOptionRecord
+            {
+                return null;
+            }
+
+            public function findInScope(
+                int $attributeId,
+                string $code,
+                int $scopeInstanceId,
+            ): ?\Weline\Eav\Api\Attribute\Option\AttributeOptionRecord {
+                return null;
+            }
+
+            public function ensureInScope(
+                int $eavEntityId,
+                int $attributeId,
+                int $scopeInstanceId,
+                string $code,
+                string $label,
+                string $swatchColor = '',
+                string $swatchImage = '',
+                string $swatchText = '',
+            ): \Weline\Eav\Api\Attribute\Option\AttributeOptionRecord {
+                throw new \RuntimeException('unused');
+            }
+
+            public function assertUsableByInstance(
+                int $optionId,
+                int $scopeInstanceId,
+            ): \Weline\Eav\Api\Attribute\Option\AttributeOptionRecord {
+                throw new \RuntimeException('unused');
+            }
+        };
+        $catalog = new ProductAttributeMetadataCatalog($metadata, $entity, $optionStore);
+
+        $rows = $catalog->normalizeRows([
+            ['attribute_code' => 'color', 'value' => '99'],
+        ], 125);
+        self::assertSame('99', $rows[0]['value']);
+
+        try {
+            $catalog->normalizeRows([
+                ['attribute_code' => 'color', 'value' => '99'],
+            ]);
+            self::fail('Private option must be rejected without product scope.');
+        } catch (\InvalidArgumentException $exception) {
+            self::assertSame('product_attribute_option_invalid', $exception->getMessage());
+        }
+    }
+
+    public function testNormalizeRowsResolvesTruncatedCodeViaOptionLabel(): void
+    {
+        $rows = $this->catalog->normalizeRows([
+            // Fixture color option value=7 / code=red / label=红色 — truncated import code misses.
+            ['attribute_code' => 'color', 'value' => '红色'],
+        ]);
+        self::assertSame('7', $rows[0]['value']);
     }
 
     public function testClearedAndInheritRemainDistinct(): void

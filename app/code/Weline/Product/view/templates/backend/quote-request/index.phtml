@@ -1,0 +1,109 @@
+<?php
+/**
+ * @var \Weline\Framework\View\Template $this
+ * @var list<array<string,mixed>> $items
+ * @var string $status_filter
+ * @var string $status_new
+ * @var string $status_processed
+ */
+$escape = static fn(mixed $value): string => htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+$items = is_array($items ?? null) ? $items : [];
+$statusFilter = (string)($status_filter ?? '');
+$statusNew = (string)($status_new ?? 'new');
+$statusProcessed = (string)($status_processed ?? 'processed');
+?>
+<div class="w-card" weline-code="product.backend.quote_request.index">
+    <div class="w-card__header" style="display:flex;gap:1rem;align-items:center;justify-content:space-between;flex-wrap:wrap;">
+        <h1 class="w-card__title" style="margin:0;"><?= $escape(__('商品询价')) ?></h1>
+        <form method="get" action="@backend-url{'*/backend/quote-request/index'}" class="w-cluster" style="gap:.5rem;">
+            <select class="w-select" name="status">
+                <option value=""><?= $escape(__('全部状态')) ?></option>
+                <option value="<?= $escape($statusNew) ?>" <?= $statusFilter === $statusNew ? 'selected' : '' ?>><?= $escape(__('待处理')) ?></option>
+                <option value="<?= $escape($statusProcessed) ?>" <?= $statusFilter === $statusProcessed ? 'selected' : '' ?>><?= $escape(__('已处理')) ?></option>
+            </select>
+            <button class="w-button" type="submit"><?= $escape(__('筛选')) ?></button>
+        </form>
+    </div>
+    <div class="w-card__body" style="overflow:auto;">
+        <?php if ($items === []): ?>
+            <p class="w-text" data-tone="muted"><?= $escape(__('暂无询价单')) ?></p>
+        <?php else: ?>
+            <table class="w-table" style="width:100%;border-collapse:collapse;">
+                <thead>
+                <tr>
+                    <th><?= $escape(__('时间')) ?></th>
+                    <th><?= $escape(__('SKU')) ?></th>
+                    <th><?= $escape(__('联系人')) ?></th>
+                    <th><?= $escape(__('联系方式')) ?></th>
+                    <th><?= $escape(__('数量')) ?></th>
+                    <th><?= $escape(__('参考价')) ?></th>
+                    <th><?= $escape(__('状态')) ?></th>
+                    <th><?= $escape(__('操作')) ?></th>
+                </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($items as $item): ?>
+                    <?php
+                    $id = (int)($item['quote_request_id'] ?? 0);
+                    $status = (string)($item['status'] ?? $statusNew);
+                    $currency = (string)($item['currency'] ?? 'CNY');
+                    $minor = (int)($item['reference_price_minor'] ?? 0);
+                    $price = number_format($minor / 100, 2);
+                    $contact = trim((string)($item['email'] ?? ''));
+                    if ($contact === '') {
+                        $contact = trim((string)($item['phone'] ?? ''));
+                    } elseif (trim((string)($item['phone'] ?? '')) !== '') {
+                        $contact .= ' / ' . trim((string)$item['phone']);
+                    }
+                    $message = trim((string)($item['message'] ?? ''));
+                    $campaign = trim((string)($item['campaign_label'] ?? ''));
+                    $url = trim((string)($item['product_url'] ?? ''));
+                    $address = is_array($item['address'] ?? null) ? $item['address'] : [];
+                    $addressLine = trim(implode(' / ', array_filter([
+                        (string)($address['country'] ?? $address['country_code'] ?? ''),
+                        (string)($address['province'] ?? ''),
+                        (string)($address['city'] ?? ''),
+                        (string)($address['district'] ?? ''),
+                        (string)($address['address1'] ?? ''),
+                        (string)($address['postal_code'] ?? ''),
+                    ], static fn (string $part): bool => $part !== '')));
+                    ?>
+                    <tr>
+                        <td><?= $escape((string)($item['created_at'] ?? '')) ?></td>
+                        <td>
+                            <code><?= $escape((string)($item['sku'] ?? '')) ?></code>
+                            <?php if ($url !== ''): ?>
+                                <div><a href="<?= $escape($url) ?>" target="_blank" rel="noopener"><?= $escape(__('查看商品')) ?></a></div>
+                            <?php endif; ?>
+                            <?php if ($campaign !== ''): ?>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= $escape($campaign) ?></div>
+                            <?php endif; ?>
+                            <?php if ($message !== ''): ?>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= $escape($message) ?></div>
+                            <?php endif; ?>
+                            <?php if ($addressLine !== ''): ?>
+                                <div class="w-text" data-tone="muted" data-size="sm"><?= $escape(__('地址')) ?>: <?= $escape($addressLine) ?></div>
+                            <?php endif; ?>
+                        </td>
+                        <td><?= $escape((string)($item['contact_name'] ?? '')) ?></td>
+                        <td><?= $escape($contact) ?></td>
+                        <td><?= (int)($item['quantity'] ?? 1) ?></td>
+                        <td><?= $escape($currency . ' ' . $price) ?></td>
+                        <td><?= $escape($status === $statusProcessed ? __('已处理') : __('待处理')) ?></td>
+                        <td>
+                            <?php if ($status !== $statusProcessed): ?>
+                                <form method="post" action="@backend-url{'*/backend/quote-request/markProcessed'}">
+                                    <input type="hidden" name="quote_request_id" value="<?= $id ?>">
+                                    <button class="w-button" type="submit" data-size="sm"><?= $escape(__('标记已处理')) ?></button>
+                                </form>
+                            <?php else: ?>
+                                <span class="w-text" data-tone="muted">—</span>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                </tbody>
+            </table>
+        <?php endif; ?>
+    </div>
+</div>

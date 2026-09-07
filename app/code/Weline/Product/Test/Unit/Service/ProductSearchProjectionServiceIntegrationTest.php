@@ -148,7 +148,7 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
             $stream->__init();
             $transactions = new TransactionCoordinator();
 
-            $website = new WebsiteSummary(0, 'Default', 'default', 'https://example.test');
+            $website = new WebsiteSummary(0, 'Default', 'default', 'https://example.test:9555');
             $storeA = new StoreSummary(
                 11,
                 0,
@@ -235,6 +235,51 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
                     default => null,
                 },
             );
+            $identities->method('resolveProductsByUuids')->willReturn([
+                '00000000-0000-4000-8000-000000000301' => new ProductIdentityV2(
+                    301,
+                    '00000000-0000-4000-8000-000000000301',
+                    'P-000301',
+                    0,
+                    'builtin_configurable',
+                    'configurable',
+                    'published',
+                    3,
+                    'default_site',
+                ),
+            ]);
+            $identities->method('resolveOffersByUuids')->willReturnCallback(
+                static function (array $uuids): array {
+                    $map = [];
+                    foreach ($uuids as $uuid) {
+                        $uuid = strtolower(trim((string)$uuid));
+                        $identity = match ($uuid) {
+                            '00000000-0000-4000-8000-000000000401' => new OfferIdentityV2(
+                                401,
+                                $uuid,
+                                '00000000-0000-4000-8000-000000000301',
+                                'SKU-A',
+                                'published',
+                                4,
+                            ),
+                            '00000000-0000-4000-8000-000000000402' => new OfferIdentityV2(
+                                402,
+                                $uuid,
+                                '00000000-0000-4000-8000-000000000301',
+                                'SKU-B',
+                                'published',
+                                5,
+                            ),
+                            default => null,
+                        };
+                        if ($identity !== null) {
+                            $map[$uuid] = $identity;
+                        }
+                    }
+
+                    return $map;
+                },
+            );
             $service = new ProductSearchProjectionService(
                 $products,
                 $storeProducts,
@@ -312,6 +357,47 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
             self::assertSame('configurable', $full['documents'][0]['product_type']);
             self::assertSame('product/' . $productId, $full['documents'][0]['url']);
 
+            self::assertTrue(
+                class_exists(\Weline\Product\Extends\Module\Weline_Seo\SitemapUrlProvider\ProductSitemapUrlProvider::class),
+                'Published Product pages must have a discoverable sitemap URL provider.',
+            );
+            $publicUrls = new \Weline\Product\Service\ProductSitemapUrlService(
+                $products, $offers, $storeProducts, $storeOffers, $attributes, $websites, $stores,
+            );
+            $sitemap = new \Weline\Product\Extends\Module\Weline_Seo\SitemapUrlProvider\ProductSitemapUrlProvider(
+                $publicUrls, $websites,
+            );
+            self::assertSame([0], $sitemap->getWebsiteIds());
+            self::assertSame('Weline_Product', $sitemap->getModule());
+            self::assertSame(['https://example.test:9555/product/' . $productId], array_column($sitemap->getUrlsForWebsite(0), 'loc'));
+            $attributes->writeExplicit(0, 0, 'product', $productId, 'source_slug', '', 'public-product');
+            self::assertSame(['https://example.test:9555/product/public-product'], array_column($sitemap->getUrlsForWebsite(0), 'loc'));
+            $previousUrls = $publicUrls->getUrlsForProduct(0, $productId);
+            $attributes->writeExplicit(0, 0, 'product', $productId, 'source_slug', '', 'renamed-product');
+            self::assertSame(['https://example.test:9555/product/public-product'], array_column($previousUrls, 'loc'));
+            self::assertSame(['https://example.test:9555/product/renamed-product'], array_column($publicUrls->getUrlsForProduct(0, $productId), 'loc'));
+
+            $scopedStores = $this->createMock(StoreCatalogInterface::class);
+            $scopedStores->method('byWebsite')->with(0)->willReturn([
+                $storeA,
+                new StoreSummary(13, 0, 'mounted', 'Mounted', 'normal', false, true, 'active', null, 'https://example.test:9555/store'),
+                new StoreSummary(14, 0, 'independent', 'Independent', 'normal', false, true, 'active', null, 'https://shop.example.test/catalog'),
+                new StoreSummary(15, 0, 'dev', 'Dev', 'dev', false, true, 'active', null, 'https://example.test:9555/dev'),
+                new StoreSummary(16, 0, 'test', 'Test', 'test', false, true, 'active', null, 'https://example.test:9555/test'),
+            ]);
+            $scopedUrls = new \Weline\Product\Service\ProductSitemapUrlService(
+                $products, $offers, $storeProducts, $storeOffers, $attributes, $websites, $scopedStores,
+            );
+            self::assertSame([
+                'https://example.test:9555/product/renamed-product',
+                'https://example.test:9555/store/product/renamed-product',
+            ], array_column($scopedUrls->getUrlsForWebsite(0), 'loc'), 'A Website sitemap must remain single-origin and exclude noindex Store modes.');
+            self::assertSame([
+                'https://example.test:9555/product/renamed-product',
+                'https://example.test:9555/store/product/renamed-product',
+                'https://shop.example.test/catalog/product/renamed-product',
+            ], array_column($scopedUrls->getUrlsForProduct(0, $productId), 'loc'), 'Product events retain independently hosted normal Store URLs.');
+
             $storeOffers->select(0, 11, $offerBId, false);
             $afterOfferSelection = $service->snapshotWebsite(0);
             self::assertSame(3, $afterOfferSelection['document_count']);
@@ -327,6 +413,7 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
             );
 
             $storeProducts->select(0, 12, $productId, false);
+            self::assertSame([], $publicUrls->getUrlsForProduct(0, $productId, 12));
             self::assertSame(
                 2,
                 $transactions->run($connection, static fn(): int => $stream->next(0)),
@@ -379,6 +466,7 @@ final class ProductSearchProjectionServiceIntegrationTest extends TestCase
                 Product::schema_fields_SKU => 'PRODUCT-301-UPDATED',
             ]);
             $products->transition(0, $productId, 2, 'disabled');
+            self::assertSame([], $sitemap->getUrlsForWebsite(0));
 
             self::assertSame(
                 [

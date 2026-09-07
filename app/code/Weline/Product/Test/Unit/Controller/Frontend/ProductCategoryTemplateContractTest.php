@@ -24,8 +24,11 @@ final class ProductCategoryTemplateContractTest extends TestCase
         self::assertStringContainsString('$this->layoutType = \'category\'', $controller);
         self::assertStringContainsString("\$productIds = \$page['product_ids'];", $controller);
         self::assertStringContainsString('$productIds === []', $controller);
+        self::assertStringContainsString('$includeListingDetails = false;', $controller);
+        self::assertStringContainsString('getQueryParams()', $controller);
+        self::assertStringContainsString("str_starts_with(\$queryKey, 'af_')", $controller);
         self::assertStringContainsString(
-            'publishedOffersForProductIds($productIds, 120)',
+            'publishedOffersForProductIds($productIds, 120, $includeListingDetails)',
             $controller,
         );
         self::assertStringContainsString('Weline_Product::storefront_offers_filter', $controller);
@@ -42,15 +45,13 @@ final class ProductCategoryTemplateContractTest extends TestCase
         self::assertStringContainsString('data-testid="storefront-category-sort"', $template);
         self::assertStringContainsString('data-testid="storefront-category-grid"', $template);
         self::assertStringContainsString('amz-plp__results-bar', $template);
-        self::assertStringContainsString('amz-card', $template);
-        self::assertStringContainsString('class="amz-card__hit"', $template);
-        self::assertStringContainsString('data-testid="storefront-category-product-card-link"', $template);
-        self::assertStringContainsString("\$productPath = 'product/' . \$productId", $template);
-        self::assertStringContainsString("StorefrontOfferDetailQuery::params", $template);
-        self::assertStringContainsString('href="@url{$productUrl|$productUrlParams}"', $template);
+        self::assertStringContainsString('<w:product:card', $template);
+        self::assertStringContainsString('ProductCardRenderer::fromStorefrontOffer', $template);
+        self::assertStringContainsString('show-sku="true"', $template);
+        self::assertStringContainsString('weline-product-card-shelf', $template);
         self::assertStringContainsString('storefront_category_breadcrumbs', $template);
-        self::assertStringContainsString('partials/product/add-to-cart.phtml', $template);
-        self::assertStringContainsString('ProductCardAddToCartParams::fetchDictionaryFromOffer', $template);
+        self::assertStringNotContainsString('amz-card product-card', $template);
+        self::assertStringNotContainsString('ProductCardAddToCartParams::fetchDictionaryFromOffer', $template);
         self::assertStringNotContainsString("button.textContent = '", $template);
         self::assertStringNotContainsString('ObjectManager', $template);
     }

@@ -42,17 +42,42 @@ final class Catalog extends FrontendController
         // Catalog template owns sort/count toolbar; hide layout slot placeholder.
         $this->assign('showToolbar', false);
 
-        $offers = $this->catalog->publishedOffers();
+        $queryParams = $this->request->getParams() ?: [];
+        $includeListingDetails = false;
+        foreach ($queryParams as $queryKey => $queryValue) {
+            $queryKey = strtolower(trim((string)$queryKey));
+            $queryValue = is_array($queryValue) ? (string)reset($queryValue) : (string)$queryValue;
+            if (str_starts_with($queryKey, 'af_') && trim($queryValue) !== '') {
+                $includeListingDetails = true;
+                break;
+            }
+        }
+        $offers = $this->catalog->publishedOffers(1000, $includeListingDetails);
         $priceBucket = $this->listingFilter->normalizePriceBucket((string)$this->request->getParam('price', ''));
         $sort = $this->listingFilter->normalizeSort((string)$this->request->getParam('sort', ''));
         $filteredOffers = $this->listingFilter->apply($offers, $priceBucket, $sort);
         $filterEvent = [
             'offers' => $filteredOffers,
-            'query' => $this->request->getParams() ?: [],
+            'query' => $queryParams,
             'surface' => (string)$surface['code'],
         ];
         $this->events->dispatch('Weline_Product::storefront_offers_filter', $filterEvent);
         $filteredOffers = is_array($filterEvent['offers'] ?? null) ? $filterEvent['offers'] : $filteredOffers;
+
+        $attributeFilterParams = [];
+        foreach ($filterEvent['query'] as $key => $value) {
+            $key = strtolower(trim((string)$key));
+            if (!str_starts_with($key, 'af_')) {
+                continue;
+            }
+            $code = preg_replace('/[^a-z0-9_\-]/', '', substr($key, 3)) ?? '';
+            $raw = is_array($value) ? (string)reset($value) : (string)$value;
+            $raw = trim($raw);
+            if ($code === '' || $raw === '') {
+                continue;
+            }
+            $attributeFilterParams['af_' . $code] = $raw;
+        }
 
         $productsUrl = (string)$this->getUrl($surface['public_route']);
         $productsPath = parse_url($productsUrl, PHP_URL_PATH);
@@ -60,7 +85,16 @@ final class Catalog extends FrontendController
             $productsUrl = $productsPath;
         }
         $page = $this->listingFilter->normalizePage($this->request->getParam('page', 1));
-        $paged = $this->listingFilter->paginate($filteredOffers, $page);
+        // A diagnostic chain warmup only needs to hydrate the process-local
+        // router/template/slot/catalog chain. The normal storefront FPC
+        // warmup deliberately keeps the public page shape so it can safely
+        // publish the rendered response for later anonymous hits.
+        $isInternalStorefrontChainWarmup = (string)$this->request->getServer('WLS_INTERNAL_STOREFRONT_CHAIN_WARMUP') === '1';
+        $paged = $this->listingFilter->paginate(
+            $filteredOffers,
+            $page,
+            $isInternalStorefrontChainWarmup ? 1 : null,
+        );
         $pageOffers = $paged['items'];
         $sortOptions = [];
         foreach ([
@@ -69,7 +103,7 @@ final class Catalog extends FrontendController
             StorefrontCategoryListingFilter::SORT_PRICE_DESC => __('价格从高到低'),
             StorefrontCategoryListingFilter::SORT_NAME_ASC => __('名称 A-Z'),
         ] as $code => $label) {
-            $params = [];
+            $params = $attributeFilterParams;
             if ($priceBucket !== '') {
                 $params['price'] = $priceBucket;
             }
@@ -85,9 +119,9 @@ final class Catalog extends FrontendController
         }
 
         $pageOptions = [];
-        if ($paged['total_pages'] > 1) {
+        if (!$isInternalStorefrontChainWarmup && $paged['total_pages'] > 1) {
             for ($p = 1; $p <= $paged['total_pages']; $p++) {
-                $params = [];
+                $params = $attributeFilterParams;
                 if ($priceBucket !== '') {
                     $params['price'] = $priceBucket;
                 }

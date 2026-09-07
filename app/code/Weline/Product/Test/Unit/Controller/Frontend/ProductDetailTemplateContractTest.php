@@ -61,6 +61,11 @@ final class ProductDetailTemplateContractTest extends TestCase
         self::assertStringContainsString('Wholesale off-road motorcycle for dealer buyers.', $html);
         self::assertStringContainsString('Full dealer product description.', $html);
         self::assertStringContainsString('data-testid="product-specifications"', $html);
+        self::assertStringContainsString('data-testid="product-specifications-clamp"', $html);
+        self::assertStringContainsString('data-testid="product-specifications-more"', $html);
+        self::assertStringContainsString('product-native-detail__spec-clamp', $html);
+        self::assertStringContainsString('product-native-detail__spec-grid', $html);
+        self::assertStringContainsString('bindSpecificationsClamp', $html);
         self::assertStringContainsString('LONCIN YBS300 PRO', $html);
         self::assertStringContainsString('294.9 ml', $html);
         self::assertStringContainsString('/media/secondary.jpg', $html);
@@ -104,11 +109,35 @@ final class ProductDetailTemplateContractTest extends TestCase
             strpos($template, 'data-testid="product-specifications"'),
             '技术细节区块须排在关于该商品/详情之前',
         );
+        self::assertStringContainsString('data-testid="product-specifications"', $template);
+        self::assertStringContainsString('data-testid="product-specifications-clamp"', $template);
+        self::assertStringContainsString('product-native-detail__spec-grid', $template);
+        self::assertStringContainsString('container-name: product-specs', $template);
+        self::assertStringContainsString("__('展示更多')", $template);
+        self::assertStringContainsString("__('收起')", $template);
+        self::assertStringContainsString('data-label-less', $template);
+        self::assertStringContainsString('setCollapsed', $template);
+        self::assertStringContainsString('specification[\'label\']', $template);
+        self::assertStringContainsString('--product-spec-clamp-max', $template);
+        self::assertStringContainsString('mask-image', $template);
+        self::assertStringNotContainsString('linear-gradient(to bottom, rgba(255, 255, 255, 0), #fff', $template);
         self::assertStringContainsString(
             '$descriptionHtml !== \'\' ? $descriptionHtml : nl2br($escape($description), false)',
             $template,
         );
         self::assertStringContainsString('.product-native-detail__description-body img', $template);
+        self::assertStringContainsString('.weline-detail-text--size-chart', $template);
+        self::assertStringContainsString('.weline-detail-text__columns', $template);
+        self::assertStringContainsString('.product-native-detail__qty-label', $template);
+        self::assertMatchesRegularExpression(
+            '/\.product-native-detail__qty-label\s*\{[^}]*white-space:\s*nowrap/s',
+            $template,
+        );
+        self::assertStringContainsString('.product-native-detail__qty-select', $template);
+        self::assertMatchesRegularExpression(
+            '/\.product-native-detail__qty-select\s*\{[^}]*inline-size:\s*auto/s',
+            $template,
+        );
     }
 
     public function testDetailTemplateUsesPublishedOfferIdentityThroughCartQueryBin(): void
@@ -118,7 +147,16 @@ final class ProductDetailTemplateContractTest extends TestCase
         );
 
         self::assertStringContainsString('data-testid="storefront-product-detail"', $template);
+        self::assertStringContainsString('data-testid="product-gallery"', $template);
+        self::assertStringContainsString('data-testid="product-gallery-video"', $template);
+        self::assertStringContainsString('data-gallery-type', $template);
+        self::assertStringContainsString('renderGalleryVideo', $template);
+        self::assertStringContainsString('productVideos', $template);
         self::assertStringContainsString('data-image-zoom="1"', $template);
+        self::assertStringContainsString('product-native-detail__thumbs', $template);
+        self::assertStringContainsString('overflow-y: auto', $template);
+        self::assertStringContainsString('min-height: 100%', $template);
+        self::assertStringContainsString('height: 0', $template);
         self::assertStringContainsString('product-native-detail__zoom-lens', $template);
         self::assertStringContainsString('data-testid="product-image-zoom-result"', $template);
         self::assertStringContainsString('bindImageZoom', $template);
@@ -175,6 +213,18 @@ final class ProductDetailTemplateContractTest extends TestCase
         self::assertStringContainsString('isOfferSellable', $template);
         self::assertStringContainsString('resolveSelectionToInStock', $template);
         self::assertStringContainsString('resolveSelectionGallery', $template);
+        self::assertStringContainsString('catalog.base_images', $template);
+        self::assertStringContainsString('collectSpecGalleryItems', $template);
+        self::assertStringContainsString('collectProductGalleryImages', $template);
+        self::assertStringContainsString('pageProductImages', $template);
+        self::assertStringContainsString("kind: 'product'", $template);
+        self::assertStringContainsString('onGalleryThumbActivate', $template);
+        self::assertStringContainsString('galleryAxis', $template);
+        self::assertStringContainsString('galleryValue', $template);
+        self::assertStringContainsString('product-native-detail__thumb-spec-badge', $template);
+        self::assertStringContainsString('galleryFocusAxis', $template);
+        self::assertStringContainsString('never promote these to', $template);
+        self::assertStringContainsString('compactCatalogMedia', $controller);
         self::assertStringContainsString('gallery_by_color', $template);
         self::assertStringContainsString('resolveOptionGallery', $template);
         self::assertStringContainsString('全局 EAV 选项图板仅表示', (string)file_get_contents(
@@ -190,6 +240,8 @@ final class ProductDetailTemplateContractTest extends TestCase
         self::assertStringContainsString('publishedOffersForProduct', $service);
         self::assertStringContainsString('publishedOffersBySlug', $service);
         self::assertStringContainsString('livePublishedOffersForProduct', $service);
+        self::assertStringContainsString('resolveCatalogOffers', $service);
+        self::assertStringNotContainsString('$this->snapshots->resolve(', $service);
         self::assertStringContainsString('attachPrimarySupplier', $service);
         self::assertStringContainsString('supplier_name', $service);
         self::assertStringContainsString('VariantAvailability', (string)file_get_contents(

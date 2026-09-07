@@ -52,4 +52,19 @@
         pointer-events: none;
         opacity: 0.72;
     }
+
+    .w-product-layout-dialog {
+        width: min(28rem, calc(100vw - 2rem));
+        max-height: min(40rem, calc(100vh - 2rem));
+        padding: 0;
+        border: 0;
+        border-radius: var(--weline-radius-md, 0.5rem);
+        background: var(--weline-theme-surface, #fff);
+        color: inherit;
+        overflow: auto;
+    }
+
+    .w-product-layout-dialog__body {
+        padding: var(--weline-space-4, 1.25rem);
+    }
 }

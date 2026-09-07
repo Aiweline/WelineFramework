@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Framework\Context;
 use Weline\Framework\Http\Url;
 use Weline\Framework\Runtime\RequestContext;
 use Weline\Framework\Runtime\ScopeIdentity;
@@ -42,7 +43,14 @@ final class StorefrontProductWidgetCatalog
     public function cards(int $limit = 8): array
     {
         $limit = max(1, min(24, $limit));
-        $offers = $this->catalog->publishedOffers($limit * 3);
+        // Filtered listing pages already built the full projection in the
+        // controller. Reuse that cache entry in the recommendation Fiber so
+        // the widget does not rebuild the same catalog as a summary view.
+        if ($this->shouldUseListingProjection()) {
+            $offers = $this->catalog->publishedOffers($limit * 3, true);
+        } else {
+            $offers = $this->catalog->publishedOffers($limit * 3, false);
+        }
         usort(
             $offers,
             static fn(array $left, array $right): int => (int)($right['product_id'] ?? 0)
@@ -99,7 +107,7 @@ final class StorefrontProductWidgetCatalog
         // dedicated /best-sellers page is not empty when HF-* SKUs are absent.
         $pool = $this->cards(max($limit * 2, 24));
         if ($pool === []) {
-            $offers = $this->catalog->publishedOffers(max($limit * 3, 48));
+            $offers = $this->catalog->publishedOffers(max($limit * 3, 48), false);
             usort(
                 $offers,
                 static fn(array $left, array $right): int => (int)($right['product_id'] ?? 0)
@@ -192,6 +200,7 @@ final class StorefrontProductWidgetCatalog
             $offers = $this->catalog->publishedOffersForProductIds(
                 \array_keys($createdAtByProductId),
                 \max($limit * 3, 48),
+                false,
             );
             $offerByProductId = [];
             foreach ($offers as $offer) {
@@ -263,7 +272,7 @@ final class StorefrontProductWidgetCatalog
     {
         $limit = max(1, min(24, $limit));
         $excludeProductId = max(0, $excludeProductId);
-        $offers = $this->catalog->publishedOffers(max($limit * 4, 16));
+        $offers = $this->catalog->publishedOffers(max($limit * 4, 16), false);
         usort(
             $offers,
             static fn(array $left, array $right): int => (int)($right['product_id'] ?? 0)
@@ -305,7 +314,7 @@ final class StorefrontProductWidgetCatalog
 
         $seed = null;
         if ($seedProductId > 0) {
-            foreach ($this->catalog->publishedOffersForProductIds([$seedProductId], 4) as $offer) {
+            foreach ($this->catalog->publishedOffersForProductIds([$seedProductId], 4, false) as $offer) {
                 if ((int)($offer['product_id'] ?? 0) !== $seedProductId) {
                     continue;
                 }
@@ -354,9 +363,20 @@ final class StorefrontProductWidgetCatalog
         $name = trim((string)($offer['name'] ?? ''));
         $priceMinor = max(0, (int)($offer['unit_price_minor'] ?? 0));
         $price = round($priceMinor / 100, 2);
-        $originalPrice = $price > 0
-            ? round($price * (1.08 + (($productId % 4) * 0.04)), 2)
-            : 0.0;
+        $catalogMinor = max(0, (int)($offer['catalog_price_minor'] ?? 0));
+        $compareAtMinor = max(0, (int)($offer['compare_at_minor'] ?? 0));
+        $originalMinor = max($catalogMinor, $compareAtMinor);
+        if ($originalMinor <= $priceMinor) {
+            $originalMinor = 0;
+        }
+        $originalPrice = $originalMinor > 0 ? round($originalMinor / 100, 2) : 0.0;
+        $hasDeal = !empty($offer['has_deal']) || ($originalMinor > $priceMinor && $priceMinor > 0);
+        $currency = trim((string)($offer['currency'] ?? 'CNY'));
+        if ($currency === '') {
+            $currency = 'CNY';
+        }
+        $campaignLabel = trim((string)($offer['campaign_label'] ?? ''));
+        $campaignUrl = trim((string)($offer['campaign_url'] ?? ''));
         $image = trim((string)($offer['image'] ?? ''));
         if ($image === '' && isset($offer['images']) && is_array($offer['images'])) {
             foreach ($offer['images'] as $candidate) {
@@ -385,6 +405,11 @@ final class StorefrontProductWidgetCatalog
             'image_fallback' => $fallback,
             'price' => $price,
             'original_price' => $originalPrice,
+            'currency' => $currency,
+            'sku' => trim((string)($offer['sku'] ?? '')),
+            'has_deal' => $hasDeal,
+            'campaign_label' => $campaignLabel,
+            'campaign_url' => $campaignUrl,
             'rating' => min(5.0, 4.2 + (($productId % 5) * 0.15)),
             'review_count' => $reviewCount,
             'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
@@ -412,6 +437,33 @@ final class StorefrontProductWidgetCatalog
         $websiteCode = \trim(RequestContext::getWelineWebsiteCode());
 
         return ScopeIdentity::website($websiteId, $websiteCode !== '' ? $websiteCode : 'default');
+    }
+
+    private function shouldUseListingProjection(): bool
+    {
+        if (!Context::hasCurrent()) {
+            return false;
+        }
+
+        $query = Context::getCurrent()?->get('input.query', []);
+        if (!is_array($query)) {
+            return false;
+        }
+
+        foreach ($query as $key => $value) {
+            $key = strtolower(trim((string)$key));
+            if (!str_starts_with($key, 'af_')) {
+                continue;
+            }
+            if (is_array($value)) {
+                $value = reset($value);
+            }
+            if (trim((string)$value) !== '') {
+                return true;
+            }
+        }
+
+        return false;
     }
 
 }

@@ -77,7 +77,7 @@ final class BuiltInProductValidationTest extends TestCase
     }
 
 
-    public function testConfigurableRequiresEveryOfferToMatchTheSelectedAxes(): void
+    public function testConfigurableIgnoresProductLevelMultiselectsThatAreNotOfferAxes(): void
     {
         $context = new ProductValidationContext(
             productType: 'configurable',
@@ -120,8 +120,8 @@ final class BuiltInProductValidationTest extends TestCase
             'code',
         );
 
-        self::assertContains('variant_combination_axes_mismatch', $codes);
-        self::assertContains('variant_combination_value_required', $codes);
+        self::assertNotContains('variant_combination_axes_mismatch', $codes);
+        self::assertNotContains('variant_combination_value_required', $codes);
     }
 
     public function testDisabledHistoricalOfferDoesNotBlockConfigurablePublish(): void

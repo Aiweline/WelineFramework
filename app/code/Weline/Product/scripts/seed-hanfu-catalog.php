@@ -72,6 +72,7 @@ $treeIndex = ObjectManager::getInstance(StorefrontCategoryTreeIndex::class);
 $matrixSeed = ObjectManager::getInstance(ProductConfigurableMatrixSeedService::class);
 
 $hanfuLocale = 'zh_Hans_CN';
+$hanfuLocaleEn = 'en_US';
 $hanfuCodes = [
     '汉服' => 'hanfu',
     '形制分类' => 'style',
@@ -97,6 +98,31 @@ $hanfuCodes = [
     '纱雪纺' => 'chiffon',
     '规格商品专区' => 'spec-products',
 ];
+$hanfuNamesEn = [
+    '汉服' => 'Hanfu',
+    '形制分类' => 'Styles',
+    '明制' => 'Ming Style',
+    '唐制' => 'Tang Style',
+    '宋制' => 'Song Style',
+    '马面裙' => 'Mamian Skirt',
+    '对襟袄' => 'Duijin Jacket',
+    '云肩' => 'Cloud Collar',
+    '齐胸襦裙' => 'Qixiong Ruqun',
+    '诃子裙' => 'Hezi Skirt',
+    '褙子' => 'Beizi',
+    '百迭裙' => 'Baidie Skirt',
+    '用途分类' => 'Occasions',
+    '日常通勤' => 'Daily Wear',
+    '婚礼婚服' => 'Wedding',
+    '节日出游' => 'Festival',
+    '复原款' => 'Historical Restoration',
+    '材质分类' => 'Material',
+    '涤纶混纺' => 'Polyester Blend',
+    '真丝桑蚕' => 'Silk',
+    '织金妆花' => 'Zhijin Brocade',
+    '纱雪纺' => 'Chiffon',
+    '规格商品专区' => 'Spec Products',
+];
 
 $removedHanfuDuplicates = $categoryAdmin->dedupeSiblingsByLocalizedName($websiteId, 0, '汉服', $hanfuLocale);
 
@@ -104,22 +130,36 @@ $ensureCategory = static function (
     int $websiteId,
     int $parentId,
     string $name,
-) use ($categoryAdmin, $hanfuCodes, $hanfuLocale): int {
+) use ($categoryAdmin, $hanfuCodes, $hanfuLocale, $hanfuLocaleEn, $hanfuNamesEn): int {
+    $code = $hanfuCodes[$name] ?? '';
     $existingId = $categoryAdmin->findSiblingIdByLocalizedName($websiteId, $parentId, $name, $hanfuLocale);
     if ($existingId > 0) {
-        return $existingId;
+        $categoryId = $existingId;
+    } else {
+        $categoryId = (int)$categoryAdmin->save(
+            $websiteId,
+            0,
+            $parentId,
+            $name,
+            'active',
+            $code,
+            $hanfuLocale,
+        )['category_id'];
     }
-    $code = $hanfuCodes[$name] ?? '';
+    $enName = trim((string)($hanfuNamesEn[$name] ?? ''));
+    if ($enName !== '' && $categoryId > 0) {
+        $categoryAdmin->save(
+            $websiteId,
+            $categoryId,
+            $parentId,
+            $enName,
+            'active',
+            $code,
+            $hanfuLocaleEn,
+        );
+    }
 
-    return (int)$categoryAdmin->save(
-        $websiteId,
-        0,
-        $parentId,
-        $name,
-        'active',
-        $code,
-        $hanfuLocale,
-    )['category_id'];
+    return $categoryId;
 };
 
 $resolveStoreIds = static function (int $websiteId) use ($storeCatalog): array {

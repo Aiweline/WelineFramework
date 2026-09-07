@@ -51,14 +51,10 @@ final class StorefrontCategoryViewService
         $children = $this->tree->childrenOf($websiteId, $categoryId);
         $siblings = $this->tree->siblingsOf($websiteId, $parentId);
 
-        $productIds = [];
-        foreach ($this->categoryLinks->listByCategoryIds($websiteId, [$categoryId]) as $link) {
-            $productId = (int)($link['product_id'] ?? 0);
-            if ($productId > 0) {
-                $productIds[] = $productId;
-            }
-        }
-        $productIds = array_values(array_unique($productIds));
+        // A parent category represents the complete subtree. Resolve all of its
+        // links in one cached batch so the controller and Filters widget share
+        // the same product set instead of rebuilding it independently.
+        $productIds = $this->collectCategoryProductIds($websiteId, $categoryId);
 
         return [
             'category' => $category,
@@ -119,6 +115,52 @@ final class StorefrontCategoryViewService
             'product_ids' => [],
             'breadcrumbs' => $breadcrumbs,
         ];
+    }
+
+    /**
+     * @return list<int>
+     */
+    private function collectCategoryProductIds(int $websiteId, int $categoryId): array
+    {
+        $categoryId = max(0, $categoryId);
+        if ($categoryId <= 0) {
+            return [];
+        }
+
+        $index = $this->tree->forWebsite($websiteId);
+        $byParent = is_array($index['by_parent'] ?? null) ? $index['by_parent'] : [];
+        $queue = [$categoryId];
+        $seen = [$categoryId => true];
+        $categoryIds = [];
+
+        while ($queue !== []) {
+            $parentId = array_shift($queue);
+            if ($parentId === null) {
+                continue;
+            }
+            $categoryIds[] = (int)$parentId;
+            foreach ($byParent[(int)$parentId] ?? [] as $child) {
+                if (!is_array($child)) {
+                    continue;
+                }
+                $childId = (int)($child['id'] ?? 0);
+                if ($childId <= 0 || isset($seen[$childId])) {
+                    continue;
+                }
+                $seen[$childId] = true;
+                $queue[] = $childId;
+            }
+        }
+
+        $productIds = [];
+        foreach ($this->categoryLinks->listByCategoryIds($websiteId, $categoryIds) as $link) {
+            $productId = (int)($link['product_id'] ?? 0);
+            if ($productId > 0) {
+                $productIds[] = $productId;
+            }
+        }
+
+        return array_values(array_unique($productIds));
     }
 
     /**

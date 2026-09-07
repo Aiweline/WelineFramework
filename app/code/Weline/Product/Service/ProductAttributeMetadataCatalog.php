@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Weline\Product\Service;
 
+use Weline\Eav\Api\Attribute\Option\AttributeOptionStoreInterface;
 use Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface;
 use Weline\Eav\Api\Metadata\AttributeSetMetadata;
 use Weline\Product\Model\ProductCatalogAttributeEntity;
@@ -29,9 +30,18 @@ final class ProductAttributeMetadataCatalog
         'type_configuration' => true,
     ];
 
+    /**
+     * Input aliases (option code / prior value) resolved during ensureAndCanonicalizeVariantAxes
+     * for the current request — keeps combination remap in sync when ensure matched by label.
+     *
+     * @var array<int, array<string, array<string, string>>>
+     */
+    private array $ensuredOptionAliases = [];
+
     public function __construct(
         private readonly AttributeMetadataCatalogInterface $metadata,
         private readonly ProductCatalogAttributeEntity $entity,
+        private readonly AttributeOptionStoreInterface $optionStore,
     ) {
     }
 
@@ -74,9 +84,9 @@ final class ProductAttributeMetadataCatalog
      * @param list<array<string, mixed>> $rows
      * @return list<array<string, mixed>>
      */
-    public function normalizeRows(array $rows): array
+    public function normalizeRows(array $rows, ?int $productId = null): array
     {
-        $metadata = $this->metadataIndex();
+        $metadata = $this->metadataIndex($productId);
         $seen = [];
         $result = [];
 
@@ -133,6 +143,7 @@ final class ProductAttributeMetadataCatalog
                     $valueType,
                     $row['value'] ?? null,
                     $definition,
+                    $productId,
                 );
             } elseif ($scopeState === 'cleared') {
                 $normalized['value'] = null;
@@ -146,10 +157,10 @@ final class ProductAttributeMetadataCatalog
     /**
      * @return array<string, array<string, mixed>>
      */
-    private function metadataIndex(): array
+    private function metadataIndex(?int $productId = null): array
     {
         $index = [];
-        foreach ($this->editorCatalog() as $set) {
+        foreach ($this->editorCatalog($productId) as $set) {
             foreach ($set['groups'] as $group) {
                 foreach ($group['attributes'] as $attribute) {
                     $code = (string)($attribute['code'] ?? '');
@@ -164,15 +175,166 @@ final class ProductAttributeMetadataCatalog
     }
 
     /**
+     * Ensure custom axis options exist as shared-or-instance-private rows, then canonicalize.
+     *
+     * @param list<array{code:string,label?:string,options:list<mixed>}> $axes
+     * @return list<array{code:string,label:string,options:list<array{value:string,label:string}>}>
+     */
+    public function ensureAndCanonicalizeVariantAxes(int $productId, array $axes): array
+    {
+        if ($productId <= 0) {
+            throw new \InvalidArgumentException('product_id_required');
+        }
+        $metadata = $this->metadataIndex($productId);
+        $result = [];
+        foreach ($axes as $axis) {
+            if (!is_array($axis)) {
+                throw new \InvalidArgumentException('variant_axes_invalid');
+            }
+            $code = strtolower(trim((string)($axis['code'] ?? '')));
+            $definition = $metadata[$code] ?? null;
+            if ($code === '' || !is_array($definition)) {
+                throw new \InvalidArgumentException('product_attribute_unknown');
+            }
+            $attributeId = (int)($definition['id'] ?? 0);
+            $eavEntityId = (int)($definition['entity_id'] ?? 0);
+            if ($attributeId <= 0 || $eavEntityId <= 0) {
+                throw new \InvalidArgumentException('product_attribute_unknown');
+            }
+            $options = [];
+            foreach (is_array($axis['options'] ?? null) ? $axis['options'] : [] as $option) {
+                $input = is_array($option)
+                    ? trim((string)($option['value'] ?? $option['code'] ?? ''))
+                    : trim((string)$option);
+                $label = is_array($option)
+                    ? trim((string)($option['label'] ?? $option['name'] ?? ''))
+                    : '';
+                if ($input === '') {
+                    throw new \InvalidArgumentException('variant_option_invalid');
+                }
+                $optionCode = is_array($option)
+                    ? strtolower(trim((string)($option['code'] ?? '')))
+                    : '';
+                if ($optionCode === '') {
+                    $optionCode = preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/', strtolower($input)) === 1
+                        ? strtolower($input)
+                        : 'o' . substr(hash('sha256', $input), 0, 10);
+                }
+                if ($label === '') {
+                    $label = $input;
+                }
+                $swatchColor = is_array($option)
+                    ? trim((string)($option['swatch_color'] ?? $option['swatch'] ?? ''))
+                    : '';
+                $swatchImage = is_array($option)
+                    ? trim((string)($option['swatch_image'] ?? ''))
+                    : '';
+                $record = $this->optionStore->ensureInScope(
+                    $eavEntityId,
+                    $attributeId,
+                    $productId,
+                    $optionCode,
+                    $label,
+                    $swatchColor,
+                    $swatchImage,
+                );
+                $canonical = trim($record->value) !== '' ? $record->value : $record->code;
+                $options[] = [
+                    'value' => $canonical,
+                    'label' => $label !== '' ? $label : $canonical,
+                ];
+                foreach ([$input, $optionCode, $record->code, $canonical] as $alias) {
+                    $alias = trim((string)$alias);
+                    if ($alias === '') {
+                        continue;
+                    }
+                    $this->ensuredOptionAliases[$productId][$code][$alias] = $canonical;
+                    $this->ensuredOptionAliases[$productId][$code][strtolower($alias)] = $canonical;
+                }
+            }
+            $result[] = [
+                'code' => $code,
+                'label' => trim((string)($axis['label'] ?? $definition['label'] ?? $code)),
+                'options' => $options,
+            ];
+        }
+
+        return $result;
+    }
+
+    /**
+     * @param list<array{code:string,label?:string,options:list<mixed>}> $axes
+     */
+    public function ensureVariantAxisOptions(int $productId, array $axes): void
+    {
+        if ($productId <= 0) {
+            throw new \InvalidArgumentException('product_id_required');
+        }
+        $metadata = $this->metadataIndex($productId);
+        foreach ($axes as $axis) {
+            if (!is_array($axis)) {
+                throw new \InvalidArgumentException('variant_axes_invalid');
+            }
+            $code = strtolower(trim((string)($axis['code'] ?? '')));
+            $definition = $metadata[$code] ?? null;
+            if ($code === '' || !is_array($definition)) {
+                throw new \InvalidArgumentException('product_attribute_unknown');
+            }
+            $attributeId = (int)($definition['id'] ?? 0);
+            $eavEntityId = (int)($definition['entity_id'] ?? 0);
+            if ($attributeId <= 0 || $eavEntityId <= 0) {
+                throw new \InvalidArgumentException('product_attribute_unknown');
+            }
+            foreach (is_array($axis['options'] ?? null) ? $axis['options'] : [] as $option) {
+                $input = is_array($option)
+                    ? trim((string)($option['value'] ?? $option['code'] ?? ''))
+                    : trim((string)$option);
+                $label = is_array($option)
+                    ? trim((string)($option['label'] ?? $option['name'] ?? ''))
+                    : '';
+                if ($input === '') {
+                    throw new \InvalidArgumentException('variant_option_invalid');
+                }
+                $optionCode = is_array($option)
+                    ? strtolower(trim((string)($option['code'] ?? '')))
+                    : '';
+                if ($optionCode === '') {
+                    $optionCode = preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/', strtolower($input)) === 1
+                        ? strtolower($input)
+                        : 'o' . substr(hash('sha256', $input), 0, 10);
+                }
+                if ($label === '') {
+                    $label = $input;
+                }
+                $swatchColor = is_array($option)
+                    ? trim((string)($option['swatch_color'] ?? $option['swatch'] ?? ''))
+                    : '';
+                $swatchImage = is_array($option)
+                    ? trim((string)($option['swatch_image'] ?? ''))
+                    : '';
+                $this->optionStore->ensureInScope(
+                    $eavEntityId,
+                    $attributeId,
+                    $productId,
+                    $optionCode,
+                    $label,
+                    $swatchColor,
+                    $swatchImage,
+                );
+            }
+        }
+    }
+
+    /**
      * Convert configurable axes from option codes or IDs to the canonical EAV
      * option values stored by Product and Offer attribute rows.
      *
      * @param list<array{code:string,label?:string,options:list<mixed>}> $axes
      * @return list<array{code:string,label:string,options:list<array{value:string,label:string}>}>
      */
-    public function canonicalizeVariantAxes(array $axes): array
+    public function canonicalizeVariantAxes(array $axes, ?int $productId = null): array
     {
-        $metadata = $this->metadataIndex();
+        $metadata = $this->metadataIndex($productId);
         $result = [];
         foreach ($axes as $axis) {
             if (!is_array($axis)) {
@@ -191,7 +353,7 @@ final class ProductAttributeMetadataCatalog
                 if ($input === '') {
                     throw new \InvalidArgumentException('variant_option_invalid');
                 }
-                $canonical = $this->canonicalOption($input, $definition);
+                $canonical = $this->canonicalOption($input, $definition, $productId);
                 $label = is_array($option)
                     ? trim((string)($option['label'] ?? $option['name'] ?? ''))
                     : '';
@@ -214,9 +376,9 @@ final class ProductAttributeMetadataCatalog
      * @param array<string,mixed> $combination
      * @return array<string,string>
      */
-    public function canonicalizeVariantCombination(array $combination): array
+    public function canonicalizeVariantCombination(array $combination, ?int $productId = null): array
     {
-        $metadata = $this->metadataIndex();
+        $metadata = $this->metadataIndex($productId);
         $result = [];
         foreach ($combination as $code => $value) {
             $code = strtolower(trim((string)$code));
@@ -225,7 +387,19 @@ final class ProductAttributeMetadataCatalog
                 throw new \InvalidArgumentException('product_attribute_unknown');
             }
             $input = $this->scalarValue($value, 'product_attribute_option_invalid');
-            $result[$code] = $this->canonicalOption($input, $definition);
+            $aliases = ($productId !== null)
+                ? ($this->ensuredOptionAliases[$productId][$code] ?? [])
+                : [];
+            if (isset($aliases[$input])) {
+                $result[$code] = $aliases[$input];
+                continue;
+            }
+            $lower = strtolower($input);
+            if (isset($aliases[$lower])) {
+                $result[$code] = $aliases[$lower];
+                continue;
+            }
+            $result[$code] = $this->canonicalOption($input, $definition, $productId);
         }
         ksort($result, SORT_STRING);
 
@@ -314,8 +488,12 @@ final class ProductAttributeMetadataCatalog
     /**
      * @param array<string, mixed> $definition
      */
-    private function normalizeExplicitValue(string $valueType, mixed $value, array $definition): mixed
-    {
+    private function normalizeExplicitValue(
+        string $valueType,
+        mixed $value,
+        array $definition,
+        ?int $productId = null,
+    ): mixed {
         if ($value === null) {
             return null;
         }
@@ -323,8 +501,8 @@ final class ProductAttributeMetadataCatalog
         return match ($valueType) {
             'number' => $this->numberValue($value),
             'boolean' => $this->booleanValue($value),
-            'select' => $this->selectValue($value, $definition),
-            'multiselect' => $this->multiselectValue($value, $definition),
+            'select' => $this->selectValue($value, $definition, $productId),
+            'multiselect' => $this->multiselectValue($value, $definition, $productId),
             'date' => $this->scalarValue($value, 'product_attribute_date_invalid'),
             'json' => $value,
             default => $this->scalarValue($value, 'product_attribute_string_invalid'),
@@ -365,21 +543,21 @@ final class ProductAttributeMetadataCatalog
     /**
      * @param array<string, mixed> $definition
      */
-    private function selectValue(mixed $value, array $definition): ?string
+    private function selectValue(mixed $value, array $definition, ?int $productId = null): ?string
     {
         if ($value === '') {
             return null;
         }
         $value = $this->scalarValue($value, 'product_attribute_option_invalid');
 
-        return $this->canonicalOption($value, $definition);
+        return $this->canonicalOption($value, $definition, $productId);
     }
 
     /**
      * @param array<string, mixed> $definition
      * @return list<string>
      */
-    private function multiselectValue(mixed $value, array $definition): array
+    private function multiselectValue(mixed $value, array $definition, ?int $productId = null): array
     {
         if ($value === '' || $value === null) {
             return [];
@@ -390,6 +568,7 @@ final class ProductAttributeMetadataCatalog
             $canonical = $this->canonicalOption(
                 $this->scalarValue($item, 'product_attribute_option_invalid'),
                 $definition,
+                $productId,
             );
             $result[$canonical] = $canonical;
         }
@@ -400,8 +579,19 @@ final class ProductAttributeMetadataCatalog
     /**
      * @param array<string, mixed> $definition
      */
-    private function canonicalOption(string $value, array $definition): string
+    private function canonicalOption(string $value, array $definition, ?int $productId = null): string
     {
+        $attributeCode = strtolower(trim((string)($definition['code'] ?? '')));
+        if ($productId !== null && $attributeCode !== '') {
+            $aliases = $this->ensuredOptionAliases[$productId][$attributeCode] ?? [];
+            if (isset($aliases[$value])) {
+                return $aliases[$value];
+            }
+            $lower = strtolower($value);
+            if (isset($aliases[$lower])) {
+                return $aliases[$lower];
+            }
+        }
         $options = $definition['options'] ?? [];
         if (!is_array($options) || $options === []) {
             return $value;
@@ -411,8 +601,17 @@ final class ProductAttributeMetadataCatalog
                 continue;
             }
             $canonical = (string)($option['value'] ?? '');
-            if ($value === $canonical || $value === (string)($option['code'] ?? '')) {
-                return $canonical;
+            $optionId = (string)($option['id'] ?? $option['option_id'] ?? '');
+            $optionCode = (string)($option['code'] ?? '');
+            $optionLabel = trim((string)($option['label'] ?? $option['name'] ?? ''));
+            // Truncated import codes (ju-zhi-xian-wei-di-lun) often differ from the
+            // shared option code (ju-zhi-xian) while the Chinese label matches.
+            if ($value === $canonical
+                || $value === $optionCode
+                || ($optionId !== '' && $value === $optionId)
+                || ($optionLabel !== '' && $value === $optionLabel)
+            ) {
+                return $canonical !== '' ? $canonical : ($optionId !== '' ? $optionId : $value);
             }
         }
 

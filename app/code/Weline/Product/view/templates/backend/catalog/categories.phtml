@@ -101,7 +101,7 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
 };
 ?>
 <link rel="stylesheet" href="@static(Weline_Theme::ui/pages/weline-developer-catalogs.css)">
-<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-category-admin.css)?v=20260826-v1">
+<link rel="stylesheet" href="@static(Weline_Product::css/backend/product-category-admin.css)?v=20260905-layout-dialog-pad">
 
 <section
     class="w-backend-page w-catalog-admin w-product-category-admin"
@@ -228,6 +228,67 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
                             <span><?= $escape(__('启用分类')) ?></span>
                         </label>
 
+                        <?php if (!$isNew && $selectedId > 0): ?>
+                            <section
+                                class="w-stack"
+                                data-gap="md"
+                                data-category-product-layout-panel
+                                data-target-type="category_product_default"
+                                data-category-id="<?= $escape($selectedId) ?>"
+                                data-website-id="<?= $escape($websiteId) ?>"
+                                data-theme-editor-base="@backend-url('theme/backend/theme-editor')"
+                            >
+                                <header class="w-stack" data-gap="xs">
+                                    <h3><lang>默认产品布局</lang></h3>
+                                    <p data-tone="muted"><lang>该分类下商品若无产品专属选择，详情将使用此布局；定时只改有效 option，不写回永久选择。</lang></p>
+                                </header>
+                                <p data-tone="muted" data-category-product-layout-effective-text><lang>加载中…</lang></p>
+                                <div class="w-cluster" data-wrap="true" data-gap="sm">
+                                    <select class="w-select" data-category-product-layout-option aria-label="@lang(布局选项)"></select>
+                                    <button class="w-button" type="button" data-tone="primary" data-category-product-layout-save><lang>保存默认布局</lang></button>
+                                    <button class="w-button" type="button" data-category-product-layout-open-editor><lang>打开可视化编辑</lang></button>
+                                    <button class="w-button" type="button" data-category-product-layout-clear><lang>清除默认</lang></button>
+                                </div>
+                                <div class="w-stack" data-gap="sm">
+                                    <div class="w-cluster" data-justify="between">
+                                        <strong><lang>定时计划（目标=本分类）</lang></strong>
+                                        <button class="w-button" type="button" data-category-product-layout-schedule-add><lang>+ 添加定时</lang></button>
+                                    </div>
+                                    <p data-tone="muted"><lang>到点：切有效 option + 清本分类下全部关联商品详情/FPC</lang></p>
+                                    <table class="w-table">
+                                        <thead>
+                                            <tr>
+                                                <th><lang>名称</lang></th>
+                                                <th>option</th>
+                                                <th><lang>开始</lang></th>
+                                                <th><lang>结束</lang></th>
+                                                <th><lang>优先</lang></th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody data-category-product-layout-schedule-body>
+                                            <tr><td colspan="6" data-tone="muted"><lang>加载中…</lang></td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <dialog class="w-dialog w-product-layout-dialog" data-category-product-layout-schedule-dialog>
+                                    <div class="w-stack w-product-layout-dialog__body" data-gap="md">
+                                        <h4><lang>编辑定时布局</lang></h4>
+                                        <input type="hidden" name="schedule_id" value="0" data-category-layout-schedule-id>
+                                        <label class="w-field"><span class="w-field__label"><lang>名称</lang></span><input class="w-input" name="name" data-category-layout-schedule-name required></label>
+                                        <label class="w-field"><span class="w-field__label">layout_option</span><select class="w-select" name="layout_option" data-category-product-layout-schedule-option></select></label>
+                                        <label class="w-field"><span class="w-field__label"><lang>开始</lang></span><input class="w-input" type="datetime-local" name="starts_at" data-category-layout-schedule-starts required></label>
+                                        <label class="w-field"><span class="w-field__label"><lang>结束</lang></span><input class="w-input" type="datetime-local" name="ends_at" data-category-layout-schedule-ends required></label>
+                                        <label class="w-field"><span class="w-field__label"><lang>优先级</lang></span><input class="w-input" type="number" name="priority" value="10" data-category-layout-schedule-priority></label>
+                                        <footer class="w-cluster" data-justify="end" data-gap="sm">
+                                            <button class="w-button" type="button" data-category-layout-schedule-cancel><lang>取消</lang></button>
+                                            <button class="w-button" type="button" data-tone="primary" data-category-layout-schedule-submit><lang>保存计划</lang></button>
+                                        </footer>
+                                    </div>
+                                </dialog>
+                            </section>
+                        <?php endif; ?>
+
                         <footer class="w-catalog-form__actions w-cluster" data-justify="between">
                             <div>
                                 <?php if (!$isNew && $selectedId > 0): ?>
@@ -246,4 +307,4 @@ $renderTree = function (array $nodes) use (&$renderTree, $escape, $selectedId, $
     </div>
 </section>
 
-<script type="module" src="@static(Weline_Product::js/backend/product-category-admin.js)?v=20260826-v2"></script>
+<script type="module" src="@static(Weline_Product::js/backend/product-category-admin.js)?v=20260905-layout-no-nest"></script>

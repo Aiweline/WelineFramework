@@ -230,7 +230,7 @@ final class ProductCatalogEavBootstrap
     }
 
     /**
-     * 汉服属性集：规格轴（尺码/颜色/类型）走 EAV 选项定义，供 configurable 与前台筛选复用。
+     * 汉服属性集：规格轴（尺码/颜色/类型/角色/图款/配件）走 EAV 选项定义，供 configurable 与前台筛选复用。
      *
      * @return array{entity_id:int,set_id:int,groups:array<string,int>,attributes:int,options:int}
      */
@@ -329,6 +329,21 @@ final class ProductCatalogEavBootstrap
                     ['code' => 'skirt-red', 'label' => '红色妆花马面裙'],
                     ['code' => 'top-white', 'label' => '白色飞机袖'],
                 ],
+            ],
+            [
+                'code' => 'character',
+                'name' => '角色',
+                'options' => [],
+            ],
+            [
+                'code' => 'look_ref',
+                'name' => '图款',
+                'options' => [],
+            ],
+            [
+                'code' => 'prop',
+                'name' => '配件',
+                'options' => [],
             ],
         ];
 
@@ -444,6 +459,7 @@ final class ProductCatalogEavBootstrap
                 $name,
                 $normalizedOptions,
                 $multiple,
+                true,
             );
             if ($created['attribute_created']
                 || $this->ensurePlacementByCode($entityId, $code, $setId, $groupId)
@@ -805,6 +821,7 @@ final class ProductCatalogEavBootstrap
         string $name,
         array $options,
         bool $multiple = false,
+        bool $persistOptions = true,
     ): array {
         /** @var EavAttribute $attribute */
         $attribute = ObjectManager::getInstance(EavAttribute::class);
@@ -848,15 +865,17 @@ final class ProductCatalogEavBootstrap
 
         $attributeId = (int)$attribute->getAttributeId();
         $optionsAdded = 0;
-        foreach ($options as $option) {
-            if ($this->ensureOption(
-                $entityId,
-                $attributeId,
-                $option['code'],
-                $option['label'],
-                (string)($option['swatch'] ?? ''),
-            )) {
-                ++$optionsAdded;
+        if ($persistOptions) {
+            foreach ($options as $option) {
+                if ($this->ensureOption(
+                    $entityId,
+                    $attributeId,
+                    $option['code'],
+                    $option['label'],
+                    (string)($option['swatch'] ?? ''),
+                )) {
+                    ++$optionsAdded;
+                }
             }
         }
 
@@ -881,6 +900,7 @@ final class ProductCatalogEavBootstrap
         $existingOptions = $option->clearData()
             ->where(Option::schema_fields_eav_entity_id, $entityId)
             ->where(Option::schema_fields_attribute_id, $attributeId)
+            ->where(Option::schema_fields_scope_instance_id, Option::SCOPE_SHARED)
             ->order('main_table.' . Option::schema_fields_option_id)
             ->select()
             ->fetchArray();
@@ -909,6 +929,7 @@ final class ProductCatalogEavBootstrap
         } else {
             $option->where(Option::schema_fields_eav_entity_id, $entityId)
                 ->where(Option::schema_fields_attribute_id, $attributeId)
+                ->where(Option::schema_fields_scope_instance_id, Option::SCOPE_SHARED)
                 ->where(Option::schema_fields_code, $code)
                 ->find()
                 ->fetch();
@@ -935,6 +956,7 @@ final class ProductCatalogEavBootstrap
         $row = [
             Option::schema_fields_eav_entity_id => $entityId,
             Option::schema_fields_attribute_id => $attributeId,
+            Option::schema_fields_scope_instance_id => Option::SCOPE_SHARED,
             Option::schema_fields_code => $code,
             Option::schema_fields_value => $label,
         ];

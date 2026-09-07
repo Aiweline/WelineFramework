@@ -152,9 +152,9 @@ $reportPath = dirname(__DIR__, 5) . '/var/hanfu-1688/' . $runId . '/' . $artifac
 try {
     require dirname(__DIR__, 5) . '/app/bootstrap.php';
 
-    /** @var \Weline\Product\Service\HanfuCleanup\HanfuCatalogCleanupService $service */
+    /** @var \Weline\Product\Sample\HanfuCleanup\HanfuCatalogCleanupService $service */
     $service = \Weline\Framework\Manager\ObjectManager::getInstance(
-        \Weline\Product\Service\HanfuCleanup\HanfuCatalogCleanupService::class,
+        \Weline\Product\Sample\HanfuCleanup\HanfuCatalogCleanupService::class,
     );
     $result = match ($mode) {
         'dry-run' => $service->preview(0, $runId),

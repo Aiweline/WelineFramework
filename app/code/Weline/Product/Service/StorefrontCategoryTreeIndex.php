@@ -16,8 +16,6 @@ use Weline\Product\Repository\CategoryRepository;
 final class StorefrontCategoryTreeIndex
 {
     private const CACHE_POOL = 'weline_product_storefront_category_tree';
-    private const FRESH_TTL_SECONDS = 3600;
-    private const STALE_TTL_SECONDS = 86400;
 
     public function __construct(
         private readonly CategoryRepository $categories,
@@ -48,18 +46,25 @@ final class StorefrontCategoryTreeIndex
     {
         $websiteId = max(0, $websiteId);
         $logicalKey = self::logicalCacheKey($websiteId);
+        $locale = $locale !== '' ? $locale : (string)State::getLangLocal();
 
         /** @var array{by_id: array<int, array<string, mixed>>, by_parent: array<int, list<array<string, mixed>>>, by_path: array<string, int>} $index */
-        $index = $this->hotCache->remember(
-            self::CACHE_POOL,
+        $index = $this->hotCache->rememberPolicy(
+            StorefrontCatalogCacheCoordinator::categoryTreePolicy(),
             $logicalKey,
-            self::FRESH_TTL_SECONDS,
             fn(): array => $this->build($websiteId),
-            ['website' => true],
-            self::STALE_TTL_SECONDS,
         );
 
-        return $this->applyLocalizedNames($websiteId, $index, $locale);
+        // The shared website tree is immutable for the request, while its
+        // localized presentation is rebuilt from EAV attributes. Department
+        // navigation calls childrenOf() once per parent, so memoize that
+        // presentation for this request and keep the shared cache scope
+        // unchanged (website tree, locale-localized view).
+        return $this->hotCache->rememberForRequest(
+            'product.category_tree.localized',
+            serialize([$websiteId, $locale]),
+            fn(): array => $this->applyLocalizedNames($websiteId, $index, $locale),
+        );
     }
 
     /** @return list<array<string, mixed>> */
@@ -166,7 +171,10 @@ final class StorefrontCategoryTreeIndex
     public function invalidate(int $websiteId): void
     {
         $websiteId = max(0, $websiteId);
-        $this->hotCache->purgeProcessCacheForLogicalKey(self::logicalCacheKey($websiteId));
+        $this->hotCache->forgetPolicy(
+            StorefrontCatalogCacheCoordinator::categoryTreePolicy(),
+            self::logicalCacheKey($websiteId),
+        );
     }
 
     /**
@@ -228,7 +236,10 @@ final class StorefrontCategoryTreeIndex
             'banner' => '',
             'summary' => '',
             'description' => '',
-            'url' => $this->categoryUrl($path),
+            // URLs depend on the active locale/SEO context. Build only the
+            // localized projection's URL map so a cold website-tree load does
+            // not resolve every path twice.
+            'url' => '',
         ];
     }
 
@@ -268,11 +279,34 @@ final class StorefrontCategoryTreeIndex
         }
 
         $locale = $locale !== '' ? $locale : (string)State::getLangLocal();
-        $names = $this->categoryAttributes->readNameMap($websiteId, $categoryIds, $locale);
-        $images = $this->categoryAttributes->readImageMap($websiteId, $categoryIds, $locale);
-        $banners = $this->categoryAttributes->readBannerMap($websiteId, $categoryIds, $locale);
-        $summaries = $this->categoryAttributes->readSummaryMap($websiteId, $categoryIds, $locale);
-        $descriptions = $this->categoryAttributes->readDescriptionMap($websiteId, $categoryIds, $locale);
+        $presentation = $this->categoryAttributes->readPresentationMaps($websiteId, $categoryIds, $locale);
+        $names = $presentation['name'];
+        $images = $presentation['image'];
+        $banners = $presentation['banner'];
+        $summaries = $presentation['summary'];
+        $descriptions = $presentation['description'];
+
+        // The same category rows are held in both by_id and by_parent. URL
+        // generation also dispatches SEO rewrite resolution, so generate one
+        // URL per unique path and reuse it across both projections.
+        $categoryUrls = \Weline\Framework\Runtime\RequestLifecycleTrace::measurePhase(
+            'storefront.category_tree.urls',
+            function () use ($index): array {
+                $urls = [];
+                foreach ($index['by_id'] as $row) {
+                    if (!\is_array($row)) {
+                        continue;
+                    }
+                    $path = \trim((string)($row['path'] ?? ''));
+                    if (!\array_key_exists($path, $urls)) {
+                        $urls[$path] = $this->categoryUrl($path);
+                    }
+                }
+
+                return $urls;
+            },
+            ['categories' => \count($index['by_id'])],
+        );
 
         foreach ($index['by_id'] as $categoryId => &$row) {
             $id = (int)$categoryId;
@@ -284,7 +318,8 @@ final class StorefrontCategoryTreeIndex
             $row['banner'] = (string)($banners[$id] ?? '');
             $row['summary'] = (string)($summaries[$id] ?? '');
             $row['description'] = (string)($descriptions[$id] ?? '');
-            $row['url'] = $this->categoryUrl((string)($row['path'] ?? ''));
+            $path = \trim((string)($row['path'] ?? ''));
+            $row['url'] = $categoryUrls[$path] ?? $this->categoryUrl($path);
         }
         unset($row);
 
@@ -299,7 +334,8 @@ final class StorefrontCategoryTreeIndex
                 $row['banner'] = (string)($banners[$categoryId] ?? '');
                 $row['summary'] = (string)($summaries[$categoryId] ?? '');
                 $row['description'] = (string)($descriptions[$categoryId] ?? '');
-                $row['url'] = $this->categoryUrl((string)($row['path'] ?? ''));
+                $path = \trim((string)($row['path'] ?? ''));
+                $row['url'] = $categoryUrls[$path] ?? $this->categoryUrl($path);
             }
         }
         unset($children, $row);

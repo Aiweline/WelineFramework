@@ -20,6 +20,18 @@ interface ProductIdentityV2ResolverInterface
 
     public function resolveOfferBySku(string $sku): ?OfferIdentityV2;
 
+    /**
+     * @param list<string> $globalProductUuids
+     * @return array<string, ProductIdentityV2> keyed by normalized UUID
+     */
+    public function resolveProductsByUuids(array $globalProductUuids): array;
+
+    /**
+     * @param list<string> $globalOfferUuids
+     * @return array<string, OfferIdentityV2> keyed by normalized UUID
+     */
+    public function resolveOffersByUuids(array $globalOfferUuids): array;
+
     /** @return list<OfferIdentityV2> */
     public function listOffers(string $globalProductUuid, bool $onlyActive = true): array;
 }

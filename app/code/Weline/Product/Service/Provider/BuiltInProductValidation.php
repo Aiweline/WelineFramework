@@ -170,18 +170,16 @@ final class BuiltInProductValidation
                 }
             }
 
-            $axes = array_keys($allowedValuesByAxis);
-            if ($axes === []) {
-                foreach ($offers as $offer) {
-                    foreach (array_keys(self::resolveCombination($offer)) as $code) {
-                        $code = strtolower(trim((string)$code));
-                        if ($code !== '') {
-                            $axes[$code] = $code;
-                        }
+            $axes = [];
+            foreach ($offers as $offer) {
+                foreach (array_keys(self::resolveCombination($offer)) as $code) {
+                    $code = strtolower(trim((string)$code));
+                    if ($code !== '') {
+                        $axes[$code] = $code;
                     }
                 }
-                $axes = array_values($axes);
             }
+            $axes = $axes === [] ? array_keys($allowedValuesByAxis) : array_values($axes);
             if ($axes === []) {
                 $errors[] = self::issue(
                     'variant_axes_required',

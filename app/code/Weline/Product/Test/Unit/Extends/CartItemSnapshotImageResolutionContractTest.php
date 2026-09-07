@@ -28,4 +28,16 @@ final class CartItemSnapshotImageResolutionContractTest extends TestCase
             strpos($source, '$sku = trim((string)$offer->getData(Offer::schema_fields_SKU));'),
         );
     }
+
+    public function testResolverOptionSwatchesUseProductScopedEavCatalog(): void
+    {
+        $path = dirname(__DIR__, 3)
+            . '/extends/module/Weline_Cart/CartItemSnapshotProvider/ProductCatalogCartItemSnapshotResolver.php';
+        $source = (string)file_get_contents($path);
+        self::assertStringContainsString('catalogForProduct($entity, $productId)', $source);
+        self::assertStringContainsString("eavOptionSwatches(array_keys(\$selection), \$productId)", $source);
+        self::assertStringContainsString("\$eavSwatches['images']", $source);
+        self::assertStringContainsString("\$eavSwatches['colors']", $source);
+        self::assertStringContainsString('swatch_image', $source);
+    }
 }
