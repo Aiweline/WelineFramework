@@ -58,6 +58,18 @@ final class EavOptionsQuery implements EavOptionsQueryInterface
 
             $query = $this->attributeOption->reset()
                 ->where(Option::schema_fields_attribute_id, $this->eavAttribute->getAttributeId());
+            $scopeInstanceId = array_key_exists('scope_instance_id', $params)
+                ? (int)$params['scope_instance_id']
+                : Option::SCOPE_SHARED;
+            if ($scopeInstanceId > Option::SCOPE_SHARED) {
+                $query->where(
+                    Option::schema_fields_scope_instance_id,
+                    [Option::SCOPE_SHARED, $scopeInstanceId],
+                    'IN',
+                );
+            } else {
+                $query->where(Option::schema_fields_scope_instance_id, Option::SCOPE_SHARED);
+            }
             if ($search) {
                 $query->where(Option::schema_fields_value, ['like', '%' . $search . '%']);
             }
@@ -74,6 +86,7 @@ final class EavOptionsQuery implements EavOptionsQueryInterface
                         'id' => (int)($option[Option::schema_fields_option_id] ?? 0),
                         'code' => $option[Option::schema_fields_code] ?? '',
                         'value' => $option[Option::schema_fields_value] ?? '',
+                        'scope_instance_id' => (int)($option[Option::schema_fields_scope_instance_id] ?? Option::SCOPE_SHARED),
                         'swatch_image' => $option[Option::schema_fields_swatch_image] ?? null,
                         'swatch_color' => $option[Option::schema_fields_swatch_color] ?? null,
                         'swatch_text' => $option[Option::schema_fields_swatch_text] ?? null,

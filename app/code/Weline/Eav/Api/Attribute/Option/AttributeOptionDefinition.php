@@ -11,6 +11,11 @@ final readonly class AttributeOptionDefinition
         public int $attributeId,
         public string $code,
         public string $value,
+        public int $eavEntityId = 0,
+        public int $scopeInstanceId = 0,
+        public string $swatchColor = '',
+        public string $swatchImage = '',
+        public string $swatchText = '',
     ) {
     }
 }

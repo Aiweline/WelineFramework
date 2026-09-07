@@ -23,6 +23,7 @@ class Option extends \Weline\Framework\Database\Model
     public const fields_ID = 'option_id';
     public const fields_option_id = 'option_id';
     public const fields_eav_entity_id = 'eav_entity_id';
+    public const fields_scope_instance_id = 'scope_instance_id';
     public const fields_attribute_id = 'attribute_id';
     public const fields_code = 'code';
     public const fields_value = 'value';
@@ -33,6 +34,7 @@ class Option extends \Weline\Framework\Database\Model
     public const schema_fields_ID = 'option_id';
     public const schema_fields_option_id = 'option_id';
     public const schema_fields_eav_entity_id = 'eav_entity_id';
+    public const schema_fields_scope_instance_id = 'scope_instance_id';
     public const schema_fields_attribute_id = 'attribute_id';
     public const schema_fields_code = 'code';
     public const schema_fields_CODE = 'code';
@@ -41,8 +43,11 @@ class Option extends \Weline\Framework\Database\Model
     public const schema_fields_swatch_color = 'swatch_color';
     public const schema_fields_swatch_text = 'swatch_text';
 
-    public array $_unit_primary_keys = ['option_id', 'attribute_id', 'code'];
-    public array $_index_sort_keys = ['option_id', 'attribute_id', 'code'];
+    /** @see \Weline\Eav\Schema\EavAttributeOptionSchema::SCOPE_SHARED */
+    public const SCOPE_SHARED = 0;
+
+    public array $_unit_primary_keys = ['attribute_id', 'code', 'scope_instance_id'];
+    public array $_index_sort_keys = ['option_id', 'attribute_id', 'code', 'scope_instance_id'];
 
     // 表结构已迁移到 Schema/EavAttributeOptionSchema.php，由 Setup/Install.php 统一管理表创建；此处不再定义 setup/upgrade/install，使用父类空实现。
 
@@ -64,6 +69,19 @@ class Option extends \Weline\Framework\Database\Model
     function setEntityId(int $eav_entity_id): static
     {
         return $this->setData(self::schema_fields_eav_entity_id, $eav_entity_id);
+    }
+
+    function getScopeInstanceId(): int
+    {
+        return (int)$this->getData(self::schema_fields_scope_instance_id);
+    }
+
+    function setScopeInstanceId(int $scope_instance_id): static
+    {
+        return $this->setData(
+            self::schema_fields_scope_instance_id,
+            max(0, $scope_instance_id),
+        );
     }
 
     function getAttributeId(): int

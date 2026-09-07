@@ -29,6 +29,7 @@ Eav模型未设置实体名eav_entity_id_field_length常量或者未设置eav_en
 添加配置项失败！,"Failed to Add Configuration Item!"
 请选择要操作的配置项！,"Please select the configuration item to operate on!"
 配置项不存在！,"Configuration item does not exist!"
+实例私有选项不可在全局管理中删除！,实例私有选项不可在全局管理中删除！
 操作成功：,"Operation successful:"
 配置项删除失败，请联系管理员,"Failed to delete configuration item, please contact the administrator"
 操作成功！,"Operation successful!"
