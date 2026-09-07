@@ -5,6 +5,8 @@
     const MAGIC = [0x57, 0x51, 0x42, 0x31]; // WQB1
     const VERSION = 1;
     const MAX_DEPTH = 32;
+    const MAX_LIST_ITEMS = 2000;
+    const MAX_MAP_KEYS = 100;
     const MAX_STRING_BYTES = 2097152;
     const CONTENT_TYPE = 'application/x-weline-query-bin';
     const PROTOCOL = 'worker-query-bin-v1';
@@ -811,7 +813,7 @@
             return;
         }
         if (Array.isArray(value)) {
-            if (value.length > 200) throw new Error('List exceeds 200 item limit.');
+            if (value.length > MAX_LIST_ITEMS) throw new Error('List exceeds 2000 item limit.');
             writer.byte(0x07);
             writer.varuint(value.length);
             value.forEach((item) => encodeValue(writer, item, depth + 1));
@@ -819,7 +821,7 @@
         }
         if (typeof value === 'object') {
             const keys = Object.keys(value);
-            if (keys.length > 100) throw new Error('Map exceeds 100 key limit.');
+            if (keys.length > MAX_MAP_KEYS) throw new Error('Map exceeds 100 key limit.');
             writer.byte(0x08);
             writer.varuint(keys.length);
             keys.forEach((key) => {
@@ -883,7 +885,7 @@
         }
         if (type === 0x07) {
             const count = reader.varuint();
-            if (count > 200) throw new Error('List exceeds 200 item limit.');
+            if (count > MAX_LIST_ITEMS) throw new Error('List exceeds 2000 item limit.');
             const list = [];
             for (let i = 0; i < count; i += 1) {
                 list.push(decodeValue(reader, depth + 1));
@@ -892,7 +894,7 @@
         }
         if (type === 0x08) {
             const count = reader.varuint();
-            if (count > 100) throw new Error('Map exceeds 100 key limit.');
+            if (count > MAX_MAP_KEYS) throw new Error('Map exceeds 100 key limit.');
             const map = {};
             for (let i = 0; i < count; i += 1) {
                 const length = reader.varuint();
