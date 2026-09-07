@@ -47,18 +47,33 @@ class ProductCardSnapshotResolver
         $slug = trim((string)($offer['slug'] ?? ''));
         $url = $slug !== '' ? '/product/' . $slug : '/product/' . $productId;
 
+        $catalogMinor = max(0, (int)($offer['catalog_price_minor'] ?? 0));
+        $compareAtMinor = max(0, (int)($offer['compare_at_minor'] ?? 0));
+        $originalMinor = max($catalogMinor, $compareAtMinor);
+        if ($originalMinor <= (int) round($price * 100)) {
+            $originalMinor = 0;
+        }
+        $originalPrice = $originalMinor > 0 ? round($originalMinor / 100, 2) : 0.0;
+        $hasDeal = !empty($offer['has_deal']) || ($originalMinor > 0 && $price > 0 && $originalPrice > $price);
+
         return [
             'product_id' => $productId,
             'name' => (string)($offer['name'] ?? ''),
             'sku' => (string)($offer['sku'] ?? ''),
             'image' => (string)($offer['image'] ?? ''),
             'price' => $price,
+            'original_price' => $originalPrice,
+            'has_deal' => $hasDeal,
             'currency' => $currency,
             'formatted_price' => $currency . ' ' . number_format($price, 2),
             'short_description' => trim((string)($offer['short_description'] ?? $offer['description'] ?? '')),
             'url' => $url,
             'rating' => (float)($offer['rating'] ?? 0),
             'review_count' => (int)($offer['review_count'] ?? 0),
+            'sellable' => !empty($offer['sellable']),
+            'global_offer_uuid' => trim((string)($offer['global_offer_uuid'] ?? '')),
+            'campaign_label' => trim((string)($offer['campaign_label'] ?? '')),
+            'campaign_url' => trim((string)($offer['campaign_url'] ?? '')),
         ];
     }
 }
