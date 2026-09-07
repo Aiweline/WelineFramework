@@ -50,7 +50,8 @@ Option extends BackendController
             return $this->fetchJson($json);
         }
         $this->option->where('eav_entity_id', $eav_entity_id)
-            ->where('attribute_id', $attribute_id);
+            ->where('attribute_id', $attribute_id)
+            ->where(EavAttribute\Option::schema_fields_scope_instance_id, EavAttribute\Option::SCOPE_SHARED);
         if ($field && $search) {
             $this->option->where($field, $search);
             if ($limit) {
@@ -86,6 +87,7 @@ Option extends BackendController
         $optionModel = ObjectManager::getInstance(EavAttribute\Option::class);
         try {
             $result = $optionModel->setData($this->request->getPost())
+                ->setData(EavAttribute\Option::schema_fields_scope_instance_id, EavAttribute\Option::SCOPE_SHARED)
                 ->forceCheck(true,
                     [EavAttribute\Option::schema_fields_eav_entity_id, EavAttribute\Option::schema_fields_attribute_id,
                         EavAttribute\Option::schema_fields_CODE,]
@@ -113,6 +115,7 @@ Option extends BackendController
         $optionModel = ObjectManager::getInstance(EavAttribute\Option::class);
         try {
             $result       = $optionModel->setData($this->request->getPost())
+                ->setData(EavAttribute\Option::schema_fields_scope_instance_id, EavAttribute\Option::SCOPE_SHARED)
                 ->forceCheck(true,
                     [EavAttribute\Option::schema_fields_eav_entity_id, EavAttribute\Option::schema_fields_attribute_id, EavAttribute\Option::schema_fields_eav_entity_id]
                 )->save();
@@ -139,6 +142,10 @@ Option extends BackendController
                 $json['msg'] = __('配置项不存在！');
                 return $this->fetchJson($json);
             }
+            if ((int)$option->getData(EavAttribute\Option::schema_fields_scope_instance_id) > EavAttribute\Option::SCOPE_SHARED) {
+                $json['msg'] = __('实例私有选项不可在全局管理中删除！');
+                return $this->fetchJson($json);
+            }
             $option->delete()->fetch();
             $json['code'] = 1;
             $json['msg']  = __('操作成功：');
@@ -160,6 +167,7 @@ Option extends BackendController
             'code' => $code,
             'attribute_id' => $this->request->getPost('attribute_id'),
             'eav_entity_id' => $this->request->getPost('eav_entity_id'),
+            EavAttribute\Option::schema_fields_scope_instance_id => EavAttribute\Option::SCOPE_SHARED,
         ])->find()->fetch();
         if (!$option->getId()) {
             $json['msg'] = __('配置项不存在！');

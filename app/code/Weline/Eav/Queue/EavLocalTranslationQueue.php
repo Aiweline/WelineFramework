@@ -94,30 +94,13 @@ final class EavLocalTranslationQueue implements TaskConsumerInterface
         int $batchSize,
         array $content,
     ): int {
-        $result = w_query('queue', 'create', [
-            'class' => self::class,
-            'name' => (string)__('EAV 属性多语言 AI 翻译（实体 #%{1}）', [$entityId]),
-            'module' => 'Weline_Eav',
-            'content' => [
-                'entity_id' => $entityId,
-                'include_options' => $includeOptions,
-                'offset' => $offset,
-                'batch_size' => $batchSize,
-                'requested_by' => (string)($content['requested_by'] ?? 'queue'),
-            ],
-            'status' => 'pending',
-            'auto' => true,
-            'biz_key' => $this->queueService->buildBizKey($entityId) . ':offset:' . $offset,
-        ]);
-
-        if (is_array($result)) {
-            return (int)($result['queue_id'] ?? $result['id'] ?? 0);
-        }
-        if (is_object($result) && method_exists($result, 'getData')) {
-            return (int)($result->getData('queue_id') ?? 0);
-        }
-
-        return 0;
+        return $this->queueService->enqueueContinuation(
+            $entityId,
+            $includeOptions,
+            $offset,
+            $batchSize,
+            (string)($content['requested_by'] ?? 'queue'),
+        );
     }
 
     /**

@@ -474,7 +474,11 @@ class Manager extends BackendController
             
             if ($this->attributeTypeSupportsOptions($attribute)) {
                 $optionModel = \Weline\Framework\Manager\ObjectManager::getInstance(Option::class);
-                $attribute['options'] = $optionModel->where('attribute_id', $id)->select()->fetchArray();
+                $attribute['options'] = $optionModel
+                    ->where('attribute_id', $id)
+                    ->where(Option::schema_fields_scope_instance_id, Option::SCOPE_SHARED)
+                    ->select()
+                    ->fetchArray();
             } else {
                 $attribute['options'] = [];
             }
@@ -1002,6 +1006,7 @@ class Manager extends BackendController
         $optionModel = \Weline\Framework\Manager\ObjectManager::getInstance(Option::class);
         $rows = $optionModel
             ->where(Option::schema_fields_attribute_id, $ids, 'IN')
+            ->where(Option::schema_fields_scope_instance_id, Option::SCOPE_SHARED)
             ->select()
             ->fetchArray();
 
@@ -1483,10 +1488,16 @@ class Manager extends BackendController
                 if ((int)$option->getData(Option::schema_fields_attribute_id) !== $attributeId) {
                     continue;
                 }
+                // Never rewrite instance-private options from global attribute admin.
+                if ((int)$option->getData(Option::schema_fields_scope_instance_id) > Option::SCOPE_SHARED) {
+                    $keptIds[] = $optionId;
+                    continue;
+                }
             }
 
             $option->setData(Option::schema_fields_attribute_id, $attributeId);
             $option->setData(Option::schema_fields_eav_entity_id, $entityId);
+            $option->setData(Option::schema_fields_scope_instance_id, Option::SCOPE_SHARED);
             $option->setData(Option::schema_fields_code, $code);
             $option->setData(Option::schema_fields_value, $value !== '' ? $value : $code);
             $option->setData(Option::schema_fields_swatch_image, trim((string)($optionData['swatch_image'] ?? '')));
@@ -1505,6 +1516,7 @@ class Manager extends BackendController
         $existing = clone $optionModel;
         $existingRows = $existing
             ->where(Option::schema_fields_attribute_id, $attributeId)
+            ->where(Option::schema_fields_scope_instance_id, Option::SCOPE_SHARED)
             ->select()
             ->fetchArray();
         foreach ($existingRows as $row) {

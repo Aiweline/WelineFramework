@@ -21,6 +21,7 @@
 
 - 模块清单显式依赖 `Weline_Framework`、`Weline_Backend` 与 `Weline_I18n`；EAV 后台入口和本地化模型不能依靠未声明的隐式安装顺序。
 - 跨模块读取属性集、分组、类型和选项时，只能依赖 `Weline\Eav\Api\Metadata\AttributeMetadataCatalogInterface` 返回的不可变 DTO；ORM 模型和本地化回退仍由 Eav 内部拥有，消费模块不得直接查询 Eav 表。
+- 列表投影可通过可选 `AttributeMetadataPrefetchInterface::prefetchForProducts()` 预取全部候选商品的私有选项与自由分组/属性。实现只在已有请求上下文内按最多 200 个商品批量迭代读取，按原逐商品 `rows` 键写入统一 `eav.metadata` 请求缓存（含空结果）；不增加跨请求或消费模块私有缓存。原 `AttributeMetadataCatalogInterface`、未预取提供方、共享/私有选项与本地化 DTO 返回语义不变，预取不代替筛选、排序或分页。
 - Eav 模块内的传统实体可继续继承 `Weline\Eav\EavModel`。其他模块的新实体不得继承或引用 Eav 内部模型：实现 `Weline\Eav\Api\Entity\EntityDefinitionInterface`，通过 `EntityAttributeStoreInterface` 进行属性声明、值读写和动态值表装配。
 - EAV 实体注册不是手动建表后就结束。`Observer/UpgradeDefaultAttribute.php` 会在升级流程里扫描激活模块 `Model/` 下实现旧 `EavInterface` 或公开 `EntityDefinitionInterface` 的类，写入 `eav_entity`，并为每个实体兜底创建 `default` 属性集与属性组。
 - `attribute_id` 和 `eav_entity_id` 不是一回事：
@@ -33,6 +34,7 @@
 - `getAttributeGroup()` 在组不存在时会自动创建组；`default` 组/集是系统兜底语义，不要把“未配置组”理解成“没有 default”。
 - 属性前台行为靠元数据字段驱动：`frontend_is_visible`、`frontend_is_filterable`、`frontend_is_searchable`、`compare_mode`、`data_is_multiple`、`data_has_option`。需要过滤/搜索/对比高亮时，先改属性元数据，再接消费逻辑；`Weline_Compare` 通过 `AttributeMetadataCatalogInterface::attributeIndexByEntityCode('product')` 读取 `compare_mode`。
 - EAV 的本地化描述模型统一继承公开的 `Weline\I18n\Api\Localization\LocalModel`；旧 `Weline\I18n\LocalModel` 只用于历史兼容，新代码不得引用旧内部命名空间。
+- EAV 实体、属性集、属性组、属性和选项保存后会统一触发 `Weline_I18n` 的 LocalModel 异步翻译队列；队列只在 AI 全局开启且至少配置一个目标语言时创建，并按活动队列族去重。前台读取仍先用当前语言译文，缺失时回退原始值，禁止在商品请求内同步调用 AI。
 - 后台列表手动关联本地化描述表时，关联列必须取描述模型的 `schema_fields_ID`，不得假定它与业务主表或 EAV 元数据表的主键同名。
 - 后台属性表单的当前用户草稿只通过 `Weline\Backend\Api\UserData\BackendCurrentUserDataInterface` 读取和清理 `attribute` scope；Eav 不得查询 Backend 的用户数据 ORM 模型。
 - OffCanvas / iframe 外部嵌入（请求带 `isIframe`）或显式 `embed=1` 时，后台页面控制器在 `__init` 中切换为 `default.blank`，避免嵌套完整后台顶栏/侧栏。独立打开菜单入口仍使用 `default.default`。

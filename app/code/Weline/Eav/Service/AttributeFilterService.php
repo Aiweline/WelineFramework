@@ -43,10 +43,11 @@ class AttributeFilterService
     public function getFilterableAttributes(
         string $entityCode,
         array $entityIds,
-        array $attributeCodes = []
+        array $attributeCodes = [],
+        bool $includeOptions = true,
     ): array {
         if ($entityIds === []) {
-            return $this->getFilterableAttributeMetadata($entityCode, $attributeCodes);
+            return $this->getFilterableAttributeMetadata($entityCode, $attributeCodes, null, $includeOptions);
         }
 
         $entity = $this->getEntity($entityCode);
@@ -59,7 +60,7 @@ class AttributeFilterService
             return [];
         }
 
-        $result = $this->buildAttributeDataWithValues($attributes, $entityIds);
+        $result = $this->buildAttributeDataWithValues($attributes, $entityIds, $includeOptions);
 
         $eventData = [
             'entity_code' => $entityCode,
@@ -79,7 +80,8 @@ class AttributeFilterService
     public function getFilterableAttributeMetadata(
         string $entityCode,
         array $attributeCodes = [],
-        ?int $setId = null
+        ?int $setId = null,
+        bool $includeOptions = true,
     ): array {
         $entity = $this->getEntity($entityCode);
         if (!$entity) {
@@ -87,7 +89,8 @@ class AttributeFilterService
         }
 
         return $this->buildAttributeMetadataResult(
-            $this->getEntityAttributes($entity, $attributeCodes, true, false, $setId)
+            $this->getEntityAttributes($entity, $attributeCodes, true, false, $setId),
+            $includeOptions,
         );
     }
 
@@ -465,9 +468,12 @@ class AttributeFilterService
      * @param array<int, EavAttribute> $attributes
      * @return array<string, array<string, mixed>>
      */
-    private function buildAttributeMetadataResult(array $attributes): array
+    private function buildAttributeMetadataResult(array $attributes, bool $includeOptions = true): array
     {
         $result = [];
+        if ($includeOptions) {
+            $this->preloadAttributeOptions($attributes);
+        }
 
         foreach ($attributes as $attribute) {
             if (!$attribute instanceof EavAttribute || $this->resolveAttributeId($attribute) <= 0) {
@@ -477,7 +483,9 @@ class AttributeFilterService
             $attributeCode = $attribute->getCode();
             $result[$attributeCode] = [
                 'attribute' => $this->mapAttribute($attribute),
-                'options' => $attribute->hasOption() ? $this->getAttributeOptions($attribute) : [],
+                'options' => $includeOptions && $attribute->hasOption()
+                    ? $this->getAttributeOptions($attribute)
+                    : [],
                 'values' => [],
                 'counts' => [],
             ];
@@ -491,16 +499,24 @@ class AttributeFilterService
      * @param array<int, int|string> $entityIds
      * @return array<string, array<string, mixed>>
      */
-    private function buildAttributeDataWithValues(array $attributes, array $entityIds): array
+    private function buildAttributeDataWithValues(
+        array $attributes,
+        array $entityIds,
+        bool $includeOptions = true,
+    ): array
     {
         $result = [];
+        $valuesByAttribute = $this->getAttributeValuesInBatches($attributes, $entityIds);
+        if ($includeOptions) {
+            $this->preloadAttributeOptions($attributes, $valuesByAttribute);
+        }
 
-        foreach ($attributes as $attribute) {
+        foreach ($attributes as $index => $attribute) {
             if (!$attribute instanceof EavAttribute || $this->resolveAttributeId($attribute) <= 0) {
                 continue;
             }
 
-            $valuesData = $this->getAttributeValuesWithCounts($attribute, $entityIds);
+            $valuesData = $valuesByAttribute[$index] ?? ['values' => [], 'counts' => []];
             if ($valuesData['values'] === []) {
                 continue;
             }
@@ -508,7 +524,9 @@ class AttributeFilterService
             $attributeCode = $attribute->getCode();
             $result[$attributeCode] = [
                 'attribute' => $this->mapAttribute($attribute),
-                'options' => $attribute->hasOption() ? $this->getAttributeOptions($attribute) : [],
+                'options' => $includeOptions && $attribute->hasOption()
+                    ? $this->getAttributeOptions($attribute)
+                    : [],
                 'values' => $valuesData['values'],
                 'counts' => $valuesData['counts'],
             ];
@@ -565,6 +583,69 @@ class AttributeFilterService
     }
 
     /**
+     * @param array<int, EavAttribute> $attributes
+     * @param array<int, int|string> $entityIds
+     * @return array<int, array{values: list<string>, counts: array<string, int>}>
+     */
+    private function getAttributeValuesInBatches(array $attributes, array $entityIds): array
+    {
+        if ($entityIds === []) {
+            return [];
+        }
+
+        $groups = [];
+        foreach ($attributes as $index => $attribute) {
+            if (!$attribute instanceof EavAttribute || ($attributeId = $this->resolveAttributeId($attribute)) <= 0) {
+                continue;
+            }
+            $valueModel = $attribute->w_getValueModel();
+            $table = $valueModel->getTable();
+            $config = $valueModel->getConnection()->getConnector()->getConfigProvider();
+            // Match the configured database identity, not a transient model wrapper.
+            $key = serialize([
+                get_class($valueModel), $table,
+                $config->getDbType(), $config->getHostName(), $config->getHostPort(),
+                $config->getDatabase(),
+                method_exists($config, 'getData') ? (string)$config->getData('path') : '',
+                $config->getUsername(),
+            ]);
+            if (!isset($groups[$key])) {
+                $groups[$key] = ['model' => clone $valueModel, 'attributes' => []];
+            }
+            $groups[$key]['attributes'][$index] = $attributeId;
+        }
+
+        $result = [];
+        $entityIds = array_values(array_map('intval', $entityIds));
+        foreach ($groups as $group) {
+            $rows = $group['model']->reset()
+                ->fields(['attribute_id', 'value', 'COUNT(DISTINCT entity_id) as count'])
+                ->where('attribute_id', array_values(array_unique($group['attributes'])), 'in')
+                ->where('entity_id', $entityIds, 'in')
+                ->where('value', null, 'IS NOT NULL')
+                ->where('value', '', '!=')
+                ->group('attribute_id, value')
+                ->select()->fetchArray();
+            $byId = [];
+            foreach ($rows as $row) {
+                $value = (string)($row['value'] ?? '');
+                if ($value === '') {
+                    continue;
+                }
+                $attributeId = (int)($row['attribute_id'] ?? 0);
+                $byId[$attributeId]['values'][] = $value;
+                $byId[$attributeId]['counts'][$value] = (int)($row['count'] ?? 0);
+            }
+            // The same attribute ID can occur in another table or connection.
+            foreach ($group['attributes'] as $index => $attributeId) {
+                $result[$index] = $byId[$attributeId] ?? ['values' => [], 'counts' => []];
+            }
+        }
+
+        return $result;
+    }
+
+    /**
      * @param array<int, int|string> $entityIds
      * @return array{values:array<int, string>, counts:array<string, int>}
      */
@@ -611,28 +692,57 @@ class AttributeFilterService
             return [];
         }
 
-        $cacheKey = 'options_' . $attributeId;
+        $this->loadAttributeOptionsByIds([$attributeId]);
+        return $this->optionCache['options_' . $attributeId];
+    }
 
-        if (isset($this->optionCache[$cacheKey])) {
-            return $this->optionCache[$cacheKey];
+    /**
+     * @param array<int, EavAttribute> $attributes
+     * @param array<int, array{values: list<string>, counts: array<string, int>}>|null $valuesByAttribute
+     */
+    private function preloadAttributeOptions(array $attributes, ?array $valuesByAttribute = null): void
+    {
+        $attributeIds = [];
+        foreach ($attributes as $index => $attribute) {
+            if (!$attribute instanceof EavAttribute
+                || ($valuesByAttribute !== null && empty($valuesByAttribute[$index]['values']))
+                || !$attribute->hasOption()) {
+                continue;
+            }
+            $attributeIds[] = $this->resolveAttributeId($attribute);
+        }
+        $this->loadAttributeOptionsByIds($attributeIds);
+    }
+
+    /** @param list<int> $attributeIds */
+    private function loadAttributeOptionsByIds(array $attributeIds): void
+    {
+        $missing = [];
+        foreach ($attributeIds as $attributeId) {
+            if ($attributeId > 0 && !isset($this->optionCache['options_' . $attributeId])) {
+                $missing[$attributeId] = $attributeId;
+            }
+        }
+        if ($missing === []) {
+            return;
         }
 
         /** @var Option $optionModel */
         $optionModel = $this->freshModel(Option::class);
         $optionModel->fields('main_table.*')
-            ->where('main_table.' . Option::schema_fields_attribute_id, $attributeId)
+            ->where('main_table.' . Option::schema_fields_attribute_id, array_values($missing), 'in')
+            ->where('main_table.' . Option::schema_fields_scope_instance_id, Option::SCOPE_SHARED)
             ->order('main_table.' . Option::schema_fields_option_id);
 
         $results = $optionModel->select()->fetchArray();
-        $options = [];
-
+        $optionsByAttribute = array_fill_keys(array_keys($missing), []);
         foreach ($results as $row) {
-            $optionId = (string) ($row[Option::schema_fields_option_id] ?? '');
-            if ($optionId === '') {
+            $attributeId = (int)($row[Option::schema_fields_attribute_id] ?? 0);
+            $optionId = (string)($row[Option::schema_fields_option_id] ?? '');
+            if ($optionId === '' || !isset($optionsByAttribute[$attributeId])) {
                 continue;
             }
-
-            $options[$optionId] = [
+            $optionsByAttribute[$attributeId][$optionId] = [
                 'option_id' => $row[Option::schema_fields_option_id],
                 'code' => $row[Option::schema_fields_code] ?? '',
                 'value' => $row[Option::schema_fields_value] ?? '',
@@ -642,9 +752,9 @@ class AttributeFilterService
             ];
         }
 
-        $this->optionCache[$cacheKey] = $options;
-
-        return $options;
+        foreach ($optionsByAttribute as $attributeId => $options) {
+            $this->optionCache['options_' . $attributeId] = $options;
+        }
     }
 
     /**
