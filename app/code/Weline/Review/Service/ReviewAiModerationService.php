@@ -251,10 +251,21 @@ PROMPT;
     private function persistStatus(ProductReview $review, string $status, array $extra, string $now): void
     {
         $review
+            ->setData(
+                ProductReview::schema_fields_IS_ANONYMOUS,
+                $this->normalizeAnonymousFlag($review->getData(ProductReview::schema_fields_IS_ANONYMOUS)),
+            )
             ->setData(ProductReview::schema_fields_STATUS, $status)
             ->setData(ProductReview::schema_fields_EXTRA, json_encode($extra, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?: '{}')
             ->setData(ProductReview::schema_fields_UPDATED_AT, $now)
             ->save();
+    }
+
+    private function normalizeAnonymousFlag(mixed $value): bool
+    {
+        $normalized = filter_var($value, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE);
+
+        return $normalized ?? false;
     }
 
     private function notifyHuman(int $reviewId, string $reason): void

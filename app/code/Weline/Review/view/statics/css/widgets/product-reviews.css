@@ -199,6 +199,46 @@
     gap: var(--spacing-3, 0.75rem);
 }
 
+.weline-review__pager {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--spacing-3, 0.75rem);
+    margin-top: var(--spacing-3, 0.75rem);
+}
+
+.weline-review__pager[hidden] {
+    display: none !important;
+}
+
+.weline-review__pager-btn {
+    appearance: none;
+    border: var(--weline-theme-border-width, 1px) var(--weline-theme-border-style, solid) var(--wr-border);
+    border-radius: var(--wr-radius);
+    background: var(--wr-bg, var(--color-bg-primary, #fff));
+    color: var(--wr-fg, var(--color-text-primary, #1a1a1a));
+    padding: 0.4rem 0.9rem;
+    font: inherit;
+    font-size: var(--font-size-sm, 0.875rem);
+    cursor: pointer;
+}
+
+.weline-review__pager-btn:hover:not(:disabled) {
+    border-color: var(--color-accent, var(--wr-accent, #c45c26));
+    color: var(--color-accent, var(--wr-accent, #c45c26));
+}
+
+.weline-review__pager-btn:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.weline-review__pager-status {
+    color: var(--wr-muted);
+    font-size: var(--font-size-sm, 0.875rem);
+}
+
 .weline-review__item,
 .weline-review__empty {
     margin: 0;

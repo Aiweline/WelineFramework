@@ -10,7 +10,7 @@
 - `ReviewAdminService`：后台筛选、评分明细及审核动作。
 - `ReviewAiModerationService` 与 `Cron/AiModeration.php`：在可选 AI/Cron 能力存在时执行辅助审核。
 - `ReviewSeoFactsInterface` / `ProductReviewSeoProfileProvider`：在商品评论页向 Seo 注入当前语言的 `reviews` 与总体评分汇总（不手写 JSON-LD）。
-- `product-reviews` 部件（`extends/module/Weline_Widget/Weline_Review/widget.php`）：商品详情评论大部件；经 `default_injections` 注入布局 `product-reviews` 槽，布局只放容器、不直接加载部件。
+- `product-reviews` 部件（`extends/module/Weline_Widget/Weline_Review/widget.php`）：商品详情评论大部件；经 `default_injections` 注入布局 `product-reviews` 槽，布局只放容器、不直接加载部件。公开列表默认翻页（`page_size` 默认 10，上一页/下一页），不使用框内无限滚动。
 
 ## 关注边界
 
