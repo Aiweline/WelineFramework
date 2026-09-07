@@ -23,17 +23,19 @@ php app/code/Weline/Ai/Mcp/scripts/ensure-project-guidance.php
 
 | `mcp_init_check.verdict` | 含义 | Agent 做什么 |
 |--------------------------|------|--------------|
-| `ready` | MCP 初始化正确 | 确认本回合工具列表含 `prepare_project` → 调用它 |
+| `ready` | 本地 STDIO 引导就绪 | 确认本回合必需工具齐全 → 调用 `prepare_project` |
 | `host_install_needed` | 宿主未挂上 MCP | 执行 `host_mcp_install` steps → 重跑 ensure |
 | `host_repair_needed` | 代次/工具目录过期 | 按 `agent_next_action` 修复 → **新开 Agent 回合** → 重跑 ensure |
 | `blocked` | 不可继续 | 按 `blocker` 处理（如在 `master` 则 `git switch dev`） |
 
 **初始化完成标准**（全部满足才算 MCP 正确）：
 
-1. `mcp_init_check.correct === true`（即 `status=ready`）
+1. `status=ready` 且 `mcp_init_check.may_call_prepare_project === true`（本地引导就绪）
 2. `mcp_init_check.checks.stdio_probe === true`（STDIO 能列出完整工具）
-3. `mcp_init_check.checks.host_attached === true`（当前宿主已附着）
-4. **本回合**工具列表可见 `prepare_project`（不可见则新开回合，非 MCP 配置问题）
+3. **本回合**可调用 `prepare_project`、`submit_task_plan`、`get_task_plan`、`update_task_plan_progress`、`review_task_plan`、`get_edit_bundle`、`apply_compact_edit`；缺失时检查本地插件 `enabled_tools` 与 STDIO 目录一致，再刷新宿主工具目录
+4. 本回合实际 `prepare_project` 返回 `status=ready`
+
+脚本无法读取当前会话工具目录；`correct` / `host_attached` 为 `null` 表示未知，须由第 3–4 项补足，不能将 Cursor 安装状态当作 Codex 已附着。源码改动不要求重启整个宿主或中断其他任务；重新连接 MCP 子进程后验证工具目录。重试仍缺工具时按下方受限回退继续。
 
 通过后：`prepare_project`（仓库根 + 稳定 `client_session_id`）→ 读 `hard_constraints` → `resolve_task_context`。
 

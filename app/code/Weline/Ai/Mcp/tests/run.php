@@ -2662,6 +2662,14 @@ SH);
         'stdio MCP survives socket idle longer than default_socket_timeout',
     );
 
+    foreach (['edit-context-integrity.php', 'context-response-budget.php', 'host-detection.php', 'readiness-incremental-scope.php', 'index-directory-scope.php'] as $regression) {
+        $result = $runner->run([PHP_BINARY, __DIR__ . '/' . $regression], $root, '', 30);
+        check($result['exit_code'] === 0, 'targeted regression: ' . $regression);
+        if ($result['exit_code'] !== 0) {
+            fwrite(STDERR, $result['stdout'] . $result['stderr']);
+        }
+    }
+
     if ($mode === 'full') {
         $acceptance = $runner->run(
             [PHP_BINARY, __DIR__ . '/acceptance.php'],

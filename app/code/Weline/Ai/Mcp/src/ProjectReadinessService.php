@@ -61,7 +61,7 @@ final class ProjectReadinessService
             return $this->blocked($index, 'PROJECT_SCAN_FAILED', $exception->getMessage());
         }
 
-        $indexResult = $this->refreshIndex($index);
+        $indexResult = $this->refreshIndex($index, [], false);
         if ($indexResult['errors'] !== []) {
             return $this->blocked(
                 $index,
@@ -251,6 +251,7 @@ final class ProjectReadinessService
             );
         }
 
+        clearstatcache();
         $snapshot = $this->snapshot($index);
         if ($snapshot['conflicts'] !== []) {
             unset($this->readiness[$readinessId]);
@@ -276,7 +277,18 @@ final class ProjectReadinessService
             );
         }
 
-        $indexResult = $this->refreshIndex($index);
+        $paths = is_array($input['paths'] ?? null) ? $input['paths'] : [];
+        if (is_string($input['path'] ?? null)) {
+            $paths[] = $input['path'];
+        }
+        foreach ($snapshot['documents'] as $path => $hash) {
+            if (($record['documents'][$path] ?? null) !== $hash) {
+                $paths[] = $path;
+            }
+        }
+        $paths = Text::uniqueStrings(array_values(array_filter($paths, 'is_string')));
+        $inventoryChanged = !hash_equals((string) $record['module_inventory_hash'], (string) $snapshot['module_inventory_hash']);
+        $indexResult = $this->refreshIndex($index, $paths, $inventoryChanged);
         if ($indexResult['errors'] !== []) {
             unset($this->readiness[$readinessId]);
             throw new ToolException(
@@ -658,12 +670,45 @@ final class ProjectReadinessService
     }
 
     /** @return array<string,mixed> */
-    private function refreshIndex(ProjectIndex $index): array
+    private function refreshIndex(ProjectIndex $index, array $paths = [], bool $force = true): array
     {
         try {
-            $result = (new ProjectIndexer($index, $this->config, $this->runner))->index([
-                'mode' => $index->revision() > 0 ? 'incremental' : 'full',
-            ]);
+            $interval = $this->config->duration('index.refresh_interval');
+            $state = $index->state();
+            $lastCompletedAt = strtotime((string) ($state['last_completed_at'] ?? '')) ?: 0;
+            $persistedCurrent = (string) ($state['phase'] ?? '') === 'idle'
+                && (string) ($state['freshness'] ?? '') === 'current'
+                && $lastCompletedAt > 0
+                && $interval > 0
+                && time() - $lastCompletedAt < $interval;
+            $fullRefresh = $force || $index->revision() === 0 || !$persistedCurrent;
+            $targetPaths = [];
+            foreach ($paths as $path) {
+                try {
+                    $index->absolutePath($path);
+                } catch (Throwable) {
+                    // The requested tool reports invalid selectors without invalidating readiness.
+                    continue;
+                }
+                $targetPaths[] = $path;
+            }
+            $paths = $targetPaths;
+            $indexer = new ProjectIndexer($index, $this->config, $this->runner);
+            if ($fullRefresh) {
+                $result = $indexer->index(['mode' => $index->revision() > 0 ? 'incremental' : 'full']);
+                if ($paths !== []) {
+                    // Periodic discovery uses stat shortcuts; explicit targets still need hashes.
+                    $targetResult = $indexer->indexPaths($paths);
+                    $result['changed_paths'] = array_merge($result['changed_paths'] ?? [], $targetResult['changed_paths'] ?? []);
+                    $result['errors'] = array_merge($result['errors'] ?? [], $targetResult['errors'] ?? []);
+                    $result['freshness'] = $targetResult['freshness'] ?? $result['freshness'];
+                }
+            } elseif ($paths !== []) {
+                // Explicit paths are content-hashed even for same-size/same-mtime edits.
+                $result = $indexer->indexPaths($paths);
+            } else {
+                return ['freshness' => $index->state()['freshness'] ?? 'current', 'changed_paths' => [], 'errors' => []];
+            }
         } catch (Throwable $exception) {
             return [
                 'freshness' => 'stale',

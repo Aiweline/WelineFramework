@@ -446,7 +446,6 @@ final class IntelligenceService
 
             $groups = is_array($context['context'] ?? null) ? $context['context'] : [];
             $fragments = [];
-            $sources = [];
             foreach (['documents', 'rules', 'configuration', 'code'] as $group) {
                 foreach (is_array($groups[$group] ?? null) ? $groups[$group] : [] as $item) {
                     if (!is_array($item)) {
@@ -466,25 +465,9 @@ final class IntelligenceService
                         'token_estimate' => (int) ($item['token_estimate'] ?? 0),
                     ];
                     $fragments[] = $fragment;
-                    if ($path !== '') {
-                        $sources[$path] = [
-                            'path' => $path,
-                            'file_hash' => $fragment['file_hash'],
-                            'kind' => $group,
-                        ];
-                    }
                 }
             }
             $ruleSummaries = [];
-            foreach ($fragments as $fragment) {
-                if ($fragment['kind'] === 'rules') {
-                    $ruleSummaries[] = [
-                        'summary' => Text::truncate((string) $fragment['content'], 500),
-                        'source' => $fragment['path'],
-                        'file_hash' => $fragment['file_hash'],
-                    ];
-                }
-            }
             foreach ($learning as $item) {
                 if (!is_array($item)) {
                     continue;
@@ -498,41 +481,6 @@ final class IntelligenceService
                     ];
                 }
             }
-            $workflowCatalog = new GuidanceWorkflowCatalog();
-            $pinnedBudget = max(
-                384,
-                min(1_800, (int) ($this->config->get('guidance.pinned_token_budget', 1_200))),
-            );
-            $pinnedFragments = $workflowCatalog->pinnedFragments($retriever, $pinnedBudget);
-            $fragments = GuidanceWorkflowCatalog::mergeFragments($fragments, $pinnedFragments);
-            $sources = [];
-            foreach ($fragments as $fragment) {
-                $path = (string) ($fragment['path'] ?? '');
-                if ($path === '') {
-                    continue;
-                }
-                $sources[$path] = [
-                    'path' => $path,
-                    'file_hash' => (string) ($fragment['file_hash'] ?? ''),
-                    'kind' => (string) ($fragment['kind'] ?? 'documents'),
-                    'pinned' => (bool) ($fragment['pinned'] ?? false),
-                ];
-            }
-            foreach ($pinnedFragments as $pinned) {
-                if (!is_array($pinned)) {
-                    continue;
-                }
-                $content = trim((string) ($pinned['content'] ?? ''));
-                if ($content === '') {
-                    continue;
-                }
-                $ruleSummaries[] = [
-                    'summary' => Text::truncate($content, 500),
-                    'source' => (string) ($pinned['path'] ?? 'workflow_pin'),
-                    'file_hash' => (string) ($pinned['file_hash'] ?? ''),
-                    'pinned' => true,
-                ];
-            }
             $sessionId = trim((string) ($input['client_session_id'] ?? ''));
             $taskPlan = $this->readiness->taskPlan($index, $sessionId);
             $taskPlanStatus = $taskPlan === null
@@ -542,25 +490,9 @@ final class IntelligenceService
                     ['review' => TaskPlanWorkflow::reviewCompleteness($taskPlan)],
                 );
 
-            $workflowContract = GuidanceWorkflowCatalog::contract();
-            $activeSurfaceIds = GuidanceWorkflowCatalog::resolveActiveSurfaceIds($task);
-            $workflowContract['active_surface_ids'] = $activeSurfaceIds;
-            $workflowContract['matched_surfaces'] = GuidanceWorkflowCatalog::resolveActiveSurfaces($task);
-            $workflowContract['task_plan_gate'] = [
-                'required_on' => ['every_coding_user_requirement', 'before_get_edit_bundle', 'before_apply_compact_edit'],
-                'required_before' => ['get_edit_bundle', 'apply_compact_edit'],
-                'submit_tool' => 'submit_task_plan',
-                'get_tool' => 'get_task_plan',
-                'progress_tool' => 'update_task_plan_progress',
-                'review_tool' => 'review_task_plan',
-                'error_code' => TaskPlanGate::ERROR_PLAN_REQUIRED,
-                'hard_constraint' => 'user_requirement_full_workflow',
-                'plan_workflow' => TaskPlanWorkflow::blueprint(),
-                'closeout_requires' => 'review_task_plan.closeout_allowed=true',
-                'immediate_when_missing' => true,
-            ];
+            $workflowContract = GuidanceWorkflowCatalog::forTask($task);
 
-            return [
+            return ContextResponseBudget::fit([
                 'schema_version' => 'guidance-bundle.v1',
                 'request_id' => Ids::make('req'),
                 'guidance_id' => Ids::deterministic(
@@ -577,17 +509,7 @@ final class IntelligenceService
                 'session_directives' => $this->readiness->directives($index, $sessionId),
                 'task_plan' => $taskPlanStatus,
                 'rules' => $ruleSummaries,
-                'fragments' => $fragments,
-                'pinned_fragments' => $pinnedFragments,
-                'sources' => array_values($sources),
-                'token_usage' => [
-                    'budget' => $tokenBudget,
-                    'pinned_budget' => $pinnedBudget,
-                    'estimated' => array_sum(array_map(
-                        static fn (array $fragment): int => (int) $fragment['token_estimate'],
-                        $fragments,
-                    )),
-                ],
+                'fragments' => GuidanceWorkflowCatalog::mergeFragments($fragments, []),
                 'query' => [
                     'query_id' => (string) ($context['query_id'] ?? ''),
                     'result_count' => count($fragments),
@@ -600,10 +522,10 @@ final class IntelligenceService
                     'static_skill_files' => false,
                     'scan_fallback' => false,
                     'extension_point_selection_required' => true,
-                    'workflow_doc' => GuidanceWorkflowCatalog::contract()['authoritative_workflow_doc'],
+                    'workflow_doc' => HardConstraintsCatalog::AUTHORITATIVE_WORKFLOW_DOC,
                     'note' => 'Complete extension-point selection and plan before code changes. Use task-matched fragments and hashes; request another bounded query when evidence is insufficient.',
                 ],
-            ];
+            ], $tokenBudget);
         });
     }
 
@@ -952,9 +874,7 @@ final class IntelligenceService
                         : 0,
                 ];
                 $bundle['execution_run'] = $runs->completeBundle($runId, $index->projectId(), $bundle);
-                $workflowContract = GuidanceWorkflowCatalog::contract();
-                $workflowContract['active_surface_ids'] = GuidanceWorkflowCatalog::resolveActiveSurfaceIds($task);
-                $workflowContract['matched_surfaces'] = GuidanceWorkflowCatalog::resolveActiveSurfaces($task);
+                $workflowContract = GuidanceWorkflowCatalog::forTask($task);
                 $bundle['workflow_contract'] = $workflowContract;
                 $bundle['routing'] = array_replace(
                     is_array($bundle['routing'] ?? null) ? $bundle['routing'] : [],
