@@ -10,6 +10,7 @@
 !media/.gitkeep
 media/**
 !media/.gitkeep
+# theme_previews：ThemePreviewGenerator 截图缓存；禁止添加 !theme_previews 解除忽略
 !source/
 !source/**
 
@@ -18,6 +19,9 @@ media/**
 
 # 保留cli-server-router.php
 !cli-server-router.php
+
+# 保留站点 Web 入口（与 cli-server-router.php 同为 pub 白名单）
+!index.php
 
 # 保留 HTTP 状态回执页（站点可覆盖同路径文件）
 !errors/

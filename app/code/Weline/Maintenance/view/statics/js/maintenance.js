@@ -96,6 +96,15 @@ function probeUrl() {
         url.pathname = '/';
     }
     url.hash = '';
+    // Never replay one-time OAuth callback credentials (code/state) during recovery probes.
+    if (/\/customer\/account\/social-login\/(callback|start)(\/|$)/i.test(url.pathname)) {
+        ['code', 'state', 'error', 'error_description', 'scope', 'authuser', 'prompt', 'iss', 'hd']
+            .forEach((key) => url.searchParams.delete(key));
+        if (/\/callback(\/|$)/i.test(url.pathname)) {
+            url.pathname = '/';
+            url.search = '';
+        }
+    }
     url.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
     return url;
 }

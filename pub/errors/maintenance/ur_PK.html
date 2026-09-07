@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ur-PK" data-default-lang="zh_Hans_CN" data-w-wait-gift="1" data-w-wave-id="b8850aa87e6b06c4e5ec290785cf8a7e92de18bc02ab3082d68973310fa6789c">
+<html lang="ur-PK" data-default-lang="zh_Hans_CN" data-w-wait-gift="1" data-w-wave-id="b38cfb0ba363fe1b8a435252f459ec205cebb9c9dd7376b621bd3d35998cfd64">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -1566,7 +1566,7 @@
                 非常抱歉，网站正在升级维护，给您带来不便。<br>
                 不过也要恭喜您——若您愿意耐心等到升级完成，我们将发放一份补偿礼金。请先不要关闭本页，恢复后 10 分钟内会自动领取。            </p>
                             <p class="wave-badge">
-                    SYS 2.5.5 · Theme 原始布局                </p>
+                    SYS 2.5.18 · Theme 原始布局                </p>
             
             <div class="progress-container" aria-label="恢复检测中">
                 <div class="progress">
@@ -1760,6 +1760,15 @@
                 url.pathname = '/';
             }
             url.hash = '';
+            // Never replay one-time OAuth callback credentials (code/state) during recovery probes.
+            if (/\/customer\/account\/social-login\/(callback|start)(\/|$)/i.test(url.pathname)) {
+                ['code', 'state', 'error', 'error_description', 'scope', 'authuser', 'prompt', 'iss', 'hd']
+                    .forEach(function (key) { url.searchParams.delete(key); });
+                if (/\/callback(\/|$)/i.test(url.pathname)) {
+                    url.pathname = '/';
+                    url.search = '';
+                }
+            }
             url.searchParams.set('_maintenance_recovery_probe', String(Date.now()));
             return url;
         }

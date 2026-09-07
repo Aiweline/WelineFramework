@@ -6,8 +6,8 @@
         "retry_after": 60,
         "lang": "th_TH",
         "wait_gift_enabled": true,
-        "wave_id": "b8850aa87e6b06c4e5ec290785cf8a7e92de18bc02ab3082d68973310fa6789c",
-        "system_version": "2.5.5",
+        "wave_id": "b38cfb0ba363fe1b8a435252f459ec205cebb9c9dd7376b621bd3d35998cfd64",
+        "system_version": "2.5.18",
         "theme_version": "原始布局",
         "wait_gift_endpoints": {
             "issue": "\/maintenance\/frontend\/wait-gift\/issue",
