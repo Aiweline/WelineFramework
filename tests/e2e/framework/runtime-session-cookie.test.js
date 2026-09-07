@@ -6,10 +6,10 @@ const { resolveAdminSessionCookieNames } = require('./runtime');
 test('admin session bootstrap reuses the website-scoped cookie name emitted by the target host', () => {
   assert.deepEqual(
     resolveAdminSessionCookieNames('WELINE_SESSID_19810', [
-      { name: 'WELINE_SESSID_19810_w27', domain: 'p05113ef3.weline.test' },
-      { name: 'WELINE_SESSID_19810_w91', domain: 'another.weline.test' },
-      { name: 'UNRELATED_COOKIE', domain: 'p05113ef3.weline.test' },
-    ], ['p05113ef3.weline.test']),
+      { name: 'WELINE_SESSID_19810_w27', domain: 'p05113ef3.test.weline.com' },
+      { name: 'WELINE_SESSID_19810_w91', domain: 'another.test.weline.com' },
+      { name: 'UNRELATED_COOKIE', domain: 'p05113ef3.test.weline.com' },
+    ], ['p05113ef3.test.weline.com']),
     ['WELINE_SESSID_19810', 'WELINE_SESSID_19810_w27'],
   );
 });
@@ -17,8 +17,8 @@ test('admin session bootstrap reuses the website-scoped cookie name emitted by t
 test('admin session bootstrap accepts a parent-domain scoped cookie without hardcoding a website id', () => {
   assert.deepEqual(
     resolveAdminSessionCookieNames('WELINE_SESSID', [
-      { name: 'WELINE_SESSID_storefront', domain: '.weline.test' },
-    ], ['shop.weline.test']),
+      { name: 'WELINE_SESSID_storefront', domain: '.test.weline.com' },
+    ], ['shop.test.weline.com']),
     ['WELINE_SESSID', 'WELINE_SESSID_storefront'],
   );
 });
