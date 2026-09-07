@@ -57,6 +57,13 @@ class Index extends BackendController
         ));
 
         $selectedAccountId = max(0, (int)$this->request->getParam('account', 0));
+        $canPickAccount = $this->canPickAnyLocalMailbox();
+        if (!$canPickAccount) {
+            $ownAccountId = $this->resolveOwnLocalAccountId($mailboxAccounts);
+            if ($ownAccountId > 0) {
+                $selectedAccountId = $ownAccountId;
+            }
+        }
         $selectedAccount = null;
         foreach ($mailboxAccounts as $mailboxAccount) {
             if ((int)$mailboxAccount->getId() === $selectedAccountId) {
@@ -143,6 +150,17 @@ class Index extends BackendController
             ObjectManager::getInstance(\Weline\Mail\Service\StalwartManagementAdapter::class)
                 ->hasManagementCredential()
         );
+
+        $compose = $this->resolveComposeContext($selectedAccountId, $mailboxAccounts);
+        $this->assign('compose_open', $compose['open']);
+        $this->assign('compose_to', $compose['to']);
+        $this->assign('compose_subject', $compose['subject']);
+        $this->assign('compose_body', $compose['body']);
+        $this->assign('compose_source', $compose['source']);
+        $this->assign('compose_source_id', $compose['source_id']);
+        $this->assign('compose_account_id', $compose['account_id']);
+        $this->assign('compose_account_locked', $compose['account_locked']);
+        $this->assign('compose_can_pick_account', $compose['can_pick_account']);
 
         return $this->fetch('Weline_Mail::templates/Backend/Index/enterprise.phtml');
     }
@@ -501,13 +519,20 @@ class Index extends BackendController
             return $this->respondFormResult(405, __('无效的请求方法'));
         }
 
-        $service = ObjectManager::getInstance(\Weline\Mail\Service\MailAccountManagementService::class);
-        $result = $service->sendAs(
-            (int)$this->request->getPost('account_id', 0),
-            (string)$this->request->getPost('to_email', ''),
-            (string)$this->request->getPost('subject', ''),
-            (string)$this->request->getPost('body', '')
-        );
+        $requestedAccountId = (int)$this->request->getPost('account_id', 0);
+        $accountId = $this->resolveSendAsAccountId($requestedAccountId);
+        if ($accountId <= 0) {
+            return $this->respondFormResult(422, __('请选择已启用的本机企业邮箱账号'));
+        }
+
+        $to = trim((string)$this->request->getPost('to_email', ''));
+        $subject = trim((string)$this->request->getPost('subject', ''));
+        $body = (string)$this->request->getPost('body', '');
+        $source = preg_replace('/[^a-z0-9_]/', '', strtolower(trim((string)$this->request->getPost('source', '')))) ?: '';
+        $sourceId = max(0, (int)$this->request->getPost('source_id', 0));
+
+        $result = ObjectManager::getInstance(\Weline\Mail\Service\MailComposerService::class)
+            ->send($accountId, $to, $subject, $body, $source, $sourceId);
 
         return $this->respondFormResult(
             !empty($result['success']) ? 200 : (int)($result['code'] ?? 422),
@@ -647,5 +672,125 @@ class Index extends BackendController
     private function isFakeTestDomain(string $domain): bool
     {
         return str_ends_with($domain, '.invalid') || str_ends_with($domain, '.test');
+    }
+
+    /**
+     * @param list<object> $mailboxAccounts
+     * @return array{
+     *   open:bool,
+     *   to:string,
+     *   subject:string,
+     *   body:string,
+     *   source:string,
+     *   source_id:int,
+     *   account_id:int,
+     *   account_locked:bool,
+     *   can_pick_account:bool
+     * }
+     */
+    private function resolveComposeContext(int $selectedAccountId, array $mailboxAccounts): array
+    {
+        $canPick = $this->canPickAnyLocalMailbox();
+        $ownAccountId = $this->resolveOwnLocalAccountId($mailboxAccounts);
+        $accountId = $selectedAccountId;
+        $accountLocked = !$canPick;
+        if (!$canPick && $ownAccountId > 0) {
+            $accountId = $ownAccountId;
+        }
+
+        $open = (string)$this->request->getParam('compose', '') === '1'
+            || trim((string)$this->request->getParam('to', '')) !== ''
+            || trim((string)$this->request->getParam('source', '')) !== '';
+
+        return [
+            'open' => $open,
+            'to' => trim((string)$this->request->getParam('to', '')),
+            'subject' => trim((string)$this->request->getParam('subject', '')),
+            'body' => (string)$this->request->getParam('body', ''),
+            'source' => preg_replace('/[^a-z0-9_]/', '', strtolower(trim((string)$this->request->getParam('source', '')))) ?: '',
+            'source_id' => max(0, (int)$this->request->getParam('source_id', 0)),
+            'account_id' => $accountId,
+            'account_locked' => $accountLocked,
+            'can_pick_account' => $canPick,
+        ];
+    }
+
+    private function canPickAnyLocalMailbox(): bool
+    {
+        $userId = (int)($this->getLoginUserId() ?? 0);
+        if ($userId === 1) {
+            return true;
+        }
+        if ($userId <= 0) {
+            return false;
+        }
+        $ctx = \Weline\Backend\Model\BackendUser::getAclContext($userId);
+        $roleId = (int)($ctx['role_id'] ?? 0);
+        if ($roleId <= 0) {
+            return false;
+        }
+
+        try {
+            return ObjectManager::getInstance(
+                \Weline\Acl\Api\Authorization\ResourceAuthorizationServiceInterface::class
+            )->isSourceAllowed($roleId, 'Weline_Mail::mail_send_as');
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    /**
+     * @param list<object> $mailboxAccounts
+     */
+    private function resolveOwnLocalAccountId(array $mailboxAccounts): int
+    {
+        $email = $this->resolveBackendUserEmail();
+        if ($email === '') {
+            return 0;
+        }
+        foreach ($mailboxAccounts as $account) {
+            if (strtolower(trim((string)$account->getData(\Weline\Mail\Model\MailAccount::schema_fields_EMAIL))) === $email) {
+                return (int)$account->getId();
+            }
+        }
+        $resolved = ObjectManager::getInstance(\Weline\Mail\Service\MailSmtpAccountService::class)
+            ->resolveLocalMailboxByEmail($email);
+        if (!empty($resolved['local']) && is_array($resolved['mailbox'] ?? null)) {
+            return (int)($resolved['mailbox']['account_id'] ?? 0);
+        }
+
+        return 0;
+    }
+
+    private function resolveBackendUserEmail(): string
+    {
+        $userId = (int)($this->getLoginUserId() ?? 0);
+        if ($userId <= 0) {
+            return '';
+        }
+        try {
+            $user = ObjectManager::getInstance(\Weline\Backend\Model\BackendUser::class)->clear()->load($userId);
+            if ($user->getId()) {
+                return strtolower(trim((string)$user->getEmail()));
+            }
+        } catch (\Throwable) {
+        }
+
+        return '';
+    }
+
+    private function resolveSendAsAccountId(int $requestedAccountId): int
+    {
+        $smtp = ObjectManager::getInstance(\Weline\Mail\Service\MailSmtpAccountService::class);
+        if ($this->canPickAnyLocalMailbox()) {
+            return $smtp->getAccountConfig($requestedAccountId) !== null ? $requestedAccountId : 0;
+        }
+        $ownEmail = $this->resolveBackendUserEmail();
+        $resolved = $smtp->resolveLocalMailboxByEmail($ownEmail);
+        if (empty($resolved['local']) || !is_array($resolved['mailbox'] ?? null)) {
+            return 0;
+        }
+
+        return (int)($resolved['mailbox']['account_id'] ?? 0);
     }
 }

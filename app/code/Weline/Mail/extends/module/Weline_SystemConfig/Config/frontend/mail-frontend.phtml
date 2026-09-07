@@ -1,0 +1,26 @@
+<?php
+/**
+ * Mail frontend register SystemConfig fields.
+ * 企业邮箱仅注册申请；登录统一使用顾客账户登录，不提供独立企业邮箱登录开关。
+ */
+?>
+<div class="w-stack" style="gap:1rem;">
+    <w:config:field
+        key="mail/frontend_register/enabled"
+        label="开启前台企业邮箱注册"
+        type="switch"
+        value-type="bool"
+        default="0"
+        scope="global,website"
+        help="关闭时注册页与个人中心不展示企业邮箱申请入口；变更后自动清理前台登录/注册缓存。"
+    />
+    <w:config:field
+        key="mail/frontend_register/aux_email_verify"
+        label="辅助邮箱真人验证"
+        type="switch"
+        value-type="bool"
+        default="1"
+        scope="global,website"
+        help="开启后申请企业邮箱须先验证辅助邮箱验证码。"
+    />
+</div>

@@ -11,6 +11,7 @@ $escape = static fn(mixed $value): string => htmlspecialchars((string)$value, EN
 $accountService = ObjectManager::getInstance(MailCustomerAccountService::class);
 $customerId = $accountService->resolveFrontendCustomerId($user ?? $this->getData('user'));
 $accounts = $accountService->getActiveAccountsForCustomer($customerId);
+$managedAccounts = $accountService->getAccountsForCustomer($customerId);
 $selectedAccountId = max(0, (int)($this->request->getGet('mail_account', 0) ?? 0));
 $selectedAccount = null;
 foreach ($accounts as $candidate) {
@@ -28,6 +29,11 @@ if (!in_array($folder, ['inbox', 'sent'], true)) {
     $folder = 'inbox';
 }
 $messageId = trim((string)($this->request->getGet('mail_message', '') ?? ''));
+$composeTo = trim((string)($this->request->getGet('mail_to', '') ?? ''));
+$composeSubject = trim((string)($this->request->getGet('mail_subject', '') ?? ''));
+$composeBody = (string)($this->request->getGet('mail_body', '') ?? '');
+$composeOpen = $composeTo !== '' || $composeSubject !== '' || $composeBody !== ''
+    || (string)($this->request->getGet('mail_compose', '') ?? '') === '1';
 $messages = [];
 $selectedMessage = null;
 $mailError = null;
@@ -79,6 +85,35 @@ if ($selectedAccount) {
     }
 }
 $accountUrl = '/customer/account/index';
+$statusLabels = [
+    'pending' => __('待同步'),
+    'active' => __('已启用'),
+    'suspended' => __('已暂停'),
+];
+$replyUrl = '';
+if (is_array($selectedMessage)) {
+    $replyTarget = $folder === 'sent'
+        ? (string)($selectedMessage['to'] ?? '')
+        : (string)($selectedMessage['from'] ?? '');
+    $replySubject = trim((string)($selectedMessage['subject'] ?? ''));
+    if ($replySubject !== '' && !preg_match('/^re:\s*/i', $replySubject)) {
+        $replySubject = 'Re: ' . $replySubject;
+    }
+    $quotedBody = "\n\n---\n"
+        . __('发件人') . ': ' . (string)($selectedMessage['from'] ?? '') . "\n"
+        . __('收件人') . ': ' . (string)($selectedMessage['to'] ?? '') . "\n"
+        . __('主题') . ': ' . (string)($selectedMessage['subject'] ?? '') . "\n\n"
+        . (string)($selectedMessage['body'] ?? '');
+    $replyUrl = $accountUrl . '?' . http_build_query([
+        'mail_account' => $selectedAccountId,
+        'mail_folder' => $folder,
+        'mail_message' => (string)($selectedMessage['id'] ?? ''),
+        'mail_compose' => 1,
+        'mail_to' => $replyTarget,
+        'mail_subject' => $replySubject,
+        'mail_body' => $quotedBody,
+    ]) . '#mail';
+}
 
 ?>
 <style data-no-extract="true">
@@ -92,6 +127,8 @@ $accountUrl = '/customer/account/index';
 .weline-mail-client__toolbar{display:grid;grid-template-columns:minmax(12rem,1fr) auto;gap:var(--weline-space-3);align-items:end}
 .weline-mail-client__layout{display:grid;grid-template-columns:minmax(17rem,2fr) minmax(20rem,3fr);gap:var(--weline-space-4)}
 .weline-mail-client__panel{overflow:hidden}.weline-mail-client__panel-head,.weline-mail-client__reader-head,.weline-mail-client__compose{padding:var(--weline-space-4);border-bottom:1px solid var(--weline-color-border)}
+.weline-mail-client__reader-head{display:grid;gap:var(--weline-space-3)}
+.weline-mail-client__reader-actions{display:flex;flex-wrap:wrap;gap:var(--weline-space-2)}
 .weline-mail-client__row{display:block;padding:var(--weline-space-4);border-bottom:1px solid var(--weline-color-border);color:inherit;text-decoration:none}
 .weline-mail-client__row:hover,.weline-mail-client__row.is-active{background:var(--weline-color-surface-subtle)}
 .weline-mail-client__meta{display:flex;justify-content:space-between;gap:var(--weline-space-3);color:var(--weline-color-text-secondary);font-size:.82rem}
@@ -99,11 +136,15 @@ $accountUrl = '/customer/account/index';
 .weline-mail-client__reader-body{padding:var(--weline-space-5);white-space:pre-wrap;word-break:break-word;line-height:1.65}
 .weline-mail-client__empty{display:grid;place-items:center;min-height:14rem;padding:var(--weline-space-5);color:var(--weline-color-text-secondary);text-align:center}
 .weline-mail-client__compose-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--weline-space-3)}.weline-mail-client__compose-grid .is-wide{grid-column:1/-1}
-@media (max-width:767px){.weline-mail-client__hero,.weline-mail-client__meta{flex-direction:column}.weline-mail-client__toolbar,.weline-mail-client__layout,.weline-mail-client__compose-grid{grid-template-columns:1fr}}
+.weline-mail-client__accounts{display:grid;gap:var(--weline-space-3)}
+.weline-mail-client__account{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--weline-space-3);align-items:center;padding:var(--weline-space-3);border:1px solid var(--weline-color-border);border-radius:var(--weline-radius-md)}
+.weline-mail-client__account strong{display:block}.weline-mail-client__account span{color:var(--weline-color-text-secondary);font-size:.85rem}
+.weline-mail-client__badge{display:inline-flex;align-items:center;padding:.2rem .55rem;border-radius:999px;background:var(--weline-color-surface-subtle);font-size:.78rem}
+@media (max-width:767px){.weline-mail-client__hero,.weline-mail-client__meta,.weline-mail-client__account{flex-direction:column;grid-template-columns:1fr}.weline-mail-client__toolbar,.weline-mail-client__layout,.weline-mail-client__compose-grid{grid-template-columns:1fr}}
 @media (min-width:768px) and (max-width:1023px){.weline-mail-client__layout{grid-template-columns:minmax(15rem,1fr) minmax(18rem,1.4fr)}}
 @media (min-width:1024px){.weline-mail-client__layout{min-height:34rem}}
 </style>
-<div class="weline-mail-client">
+<div class="weline-mail-client" data-w-component="account-mail-client">
     <header class="weline-mail-client__hero">
         <div>
             <h2><?= __('我的企业邮箱') ?></h2>
@@ -137,15 +178,15 @@ $accountUrl = '/customer/account/index';
     </div>
 
     <div class="weline-mail-client__panel">
-        <details>
+        <details<?= $composeOpen ? ' open' : '' ?>>
             <summary class="weline-mail-client__compose"><?= __('写邮件') ?></summary>
             <div class="weline-mail-client__compose">
                 <w:form method="post" action="@frontend-url{'weline_mail/frontend/account/mail/send'}">
                     <div class="weline-mail-client__compose-grid">
                         <label class="w-field"><span class="w-field__label"><?= __('发件账号') ?></span><select class="w-select" name="account_id" required><?php foreach ($accounts as $account): ?><option value="<?= (int)$account->getId() ?>" <?= (int)$account->getId() === $selectedAccountId ? 'selected' : '' ?>><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?></option><?php endforeach; ?></select></label>
-                        <label class="w-field"><span class="w-field__label"><?= __('收件人') ?></span><input class="w-input" type="text" name="to_email" required placeholder="name@example.com"></label>
-                        <label class="w-field is-wide"><span class="w-field__label"><?= __('主题') ?></span><input class="w-input" type="text" name="subject" maxlength="180" required></label>
-                        <label class="w-field is-wide"><span class="w-field__label"><?= __('正文') ?></span><textarea class="w-textarea" name="body" rows="7" required></textarea></label>
+                        <label class="w-field"><span class="w-field__label"><?= __('收件人') ?></span><input class="w-input" type="text" name="to_email" required placeholder="name@example.com" value="<?= $escape($composeTo) ?>"></label>
+                        <label class="w-field is-wide"><span class="w-field__label"><?= __('主题') ?></span><input class="w-input" type="text" name="subject" maxlength="180" required value="<?= $escape($composeSubject) ?>"></label>
+                        <label class="w-field is-wide"><span class="w-field__label"><?= __('正文') ?></span><textarea class="w-textarea" name="body" rows="7" required><?= $escape($composeBody) ?></textarea></label>
                     </div>
                     <button class="w-button" data-tone="primary" type="submit"><?= __('发送邮件') ?></button>
                 </w:form>
@@ -179,6 +220,11 @@ $accountUrl = '/customer/account/index';
                 <header class="weline-mail-client__reader-head">
                     <h3><?= $escape($selectedMessage['subject'] ?? __('（无主题）')) ?></h3>
                     <div class="weline-mail-client__meta"><span><?= __('发件人') ?>：<?= $escape($selectedMessage['from'] ?? '') ?></span><span><?= __('收件人') ?>：<?= $escape($selectedMessage['to'] ?? '') ?></span></div>
+                    <?php if ($replyUrl !== ''): ?>
+                        <div class="weline-mail-client__reader-actions">
+                            <a class="w-button" data-tone="primary" href="<?= $escape($replyUrl) ?>" data-mail-action="reply"><?= __('回复') ?></a>
+                        </div>
+                    <?php endif; ?>
                 </header>
                 <div class="weline-mail-client__reader-body"><?= $escape($selectedMessage['body'] ?? '') ?></div>
             <?php else: ?>
@@ -186,4 +232,42 @@ $accountUrl = '/customer/account/index';
             <?php endif; ?>
         </article>
     </div>
+
+    <details class="weline-mail-client__panel">
+        <summary class="weline-mail-client__compose"><?= __('邮箱账号') ?></summary>
+        <div class="weline-mail-client__compose">
+            <?php if ($managedAccounts === []): ?>
+                <p class="weline-mail-client__empty" style="min-height:auto"><?= __('您还没有申请邮箱账号。') ?></p>
+            <?php else: ?>
+                <div class="weline-mail-client__accounts">
+                    <?php foreach ($managedAccounts as $account): ?>
+                        <?php
+                        $accountId = (int)$account->getId();
+                        $status = (string)$account->getData(MailAccount::schema_fields_STATUS);
+                        ?>
+                        <article class="weline-mail-client__account">
+                            <div>
+                                <strong><?= $escape($account->getData(MailAccount::schema_fields_EMAIL)) ?></strong>
+                                <span><?= $escape($account->getData(MailAccount::schema_fields_DISPLAY_NAME)) ?></span>
+                            </div>
+                            <span class="weline-mail-client__badge"><?= $statusLabels[$status] ?? $escape($status) ?></span>
+                            <div>
+                                <?php if ($status !== 'suspended'): ?>
+                                    <w:form method="post" action="@frontend-url{'weline_mail/frontend/account/mail/suspend'}">
+                                        <input type="hidden" name="account_id" value="<?= $accountId ?>">
+                                        <button class="w-button" data-variant="outline" type="submit" data-mail-action="suspend"><?= __('暂停') ?></button>
+                                    </w:form>
+                                <?php else: ?>
+                                    <w:form method="post" action="@frontend-url{'weline_mail/frontend/account/mail/resume'}">
+                                        <input type="hidden" name="account_id" value="<?= $accountId ?>">
+                                        <button class="w-button" data-variant="outline" type="submit" data-mail-action="resume"><?= __('恢复') ?></button>
+                                    </w:form>
+                                <?php endif; ?>
+                            </div>
+                        </article>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
+        </div>
+    </details>
 </div>

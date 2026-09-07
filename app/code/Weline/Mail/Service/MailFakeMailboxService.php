@@ -122,8 +122,14 @@ class MailFakeMailboxService
         return ['success' => true, 'message' => __('测试收件已写入收件箱')];
     }
 
-    public function sendFromAccount(int $accountId, string|array $to, string $subject, string $body): array
-    {
+    public function sendFromAccount(
+        int $accountId,
+        string|array $to,
+        string $subject,
+        string $body,
+        string $source = '',
+        int $sourceId = 0
+    ): array {
         if ($accountId <= 0) {
             return ['success' => false, 'message' => __('请选择已启用的测试邮箱账号')];
         }
@@ -137,6 +143,8 @@ class MailFakeMailboxService
         $recipients = $this->normalizeRecipients($to);
         $subject = trim($subject);
         $body = trim($body);
+        $source = preg_replace('/[^a-z0-9_]/', '', strtolower(trim($source))) ?: '';
+        $sourceId = max(0, $sourceId);
 
         if ($recipients === []) {
             return ['success' => false, 'message' => __('收件邮箱格式不正确')];
@@ -149,13 +157,37 @@ class MailFakeMailboxService
         $fromEmail = (string)$account->getData(MailAccount::schema_fields_EMAIL);
         $toEmailList = implode(', ', $recipients);
         $now = date('Y-m-d H:i:s');
-        $this->saveMessage($accountId, self::FOLDER_SENT, $fromEmail, $toEmailList, $subject, $body, true, 'sent', $now);
+        $this->saveMessage(
+            $accountId,
+            self::FOLDER_SENT,
+            $fromEmail,
+            $toEmailList,
+            $subject,
+            $body,
+            true,
+            'sent',
+            $now,
+            $source,
+            $sourceId
+        );
 
         $deliveredLocally = false;
         foreach ($recipients as $recipientEmail) {
             $recipient = $this->loadAccountByEmail($recipientEmail);
             if ($recipient && $this->isUsableFakeAccount($recipient)) {
-                $this->saveMessage((int)$recipient->getId(), self::FOLDER_INBOX, $fromEmail, $recipientEmail, $subject, $body, false, 'delivered', $now);
+                $this->saveMessage(
+                    (int)$recipient->getId(),
+                    self::FOLDER_INBOX,
+                    $fromEmail,
+                    $recipientEmail,
+                    $subject,
+                    $body,
+                    false,
+                    'delivered',
+                    $now,
+                    $source,
+                    $sourceId
+                );
                 $deliveredLocally = true;
             }
         }
@@ -230,7 +262,9 @@ class MailFakeMailboxService
         string $body,
         bool $isRead,
         string $deliveryStatus,
-        string $createdAt
+        string $createdAt,
+        string $source = '',
+        int $sourceId = 0
     ): void {
         /** @var MailMessage $message */
         $message = ObjectManager::getInstance(MailMessage::class);
@@ -243,8 +277,12 @@ class MailFakeMailboxService
             ->setData(MailMessage::schema_fields_BODY, $body)
             ->setData(MailMessage::schema_fields_IS_READ, $isRead ? 1 : 0)
             ->setData(MailMessage::schema_fields_DELIVERY_STATUS, $deliveryStatus)
-            ->setData(MailMessage::schema_fields_CREATED_AT, $createdAt)
-            ->save();
+            ->setData(MailMessage::schema_fields_CREATED_AT, $createdAt);
+        if ($source !== '') {
+            $message->setData(MailMessage::schema_fields_SOURCE, $source)
+                ->setData(MailMessage::schema_fields_SOURCE_ID, max(0, $sourceId));
+        }
+        $message->save();
     }
 
     private function limitSubject(string $subject): string

@@ -39,6 +39,9 @@ class MailAccount extends Model
     #[Col('varchar', 32, default: 'pending', comment: '账号状态')]
     public const schema_fields_STATUS = 'status';
 
+    #[Col('varchar', 255, nullable: true, comment: '本地登录密码哈希')]
+    public const schema_fields_PASSWORD_HASH = 'password_hash';
+
     #[Col('datetime', nullable: true, comment: '最后同步时间')]
     public const schema_fields_LAST_SYNCED_AT = 'last_synced_at';
 

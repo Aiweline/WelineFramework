@@ -1,0 +1,70 @@
+.w-mail-composer {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--weline-space-4, 1rem);
+  background: color-mix(in srgb, var(--color-bg-inverse, #111) 45%, transparent);
+}
+.w-mail-composer[hidden] { display: none !important; }
+.w-mail-composer__panel {
+  width: min(44rem, 100%);
+  max-height: min(90vh, 52rem);
+  overflow: auto;
+  background: var(--color-bg-surface, #fff);
+  color: var(--color-text, #111);
+  border-radius: var(--weline-radius-lg, .75rem);
+  box-shadow: var(--weline-shadow-lg, 0 12px 40px rgba(0,0,0,.2));
+  border: 1px solid var(--color-border, rgba(0,0,0,.08));
+}
+.w-mail-composer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--weline-space-3, .75rem);
+  padding: var(--weline-space-3, .75rem) var(--weline-space-4, 1rem);
+  border-bottom: 1px solid var(--color-border, rgba(0,0,0,.08));
+}
+.w-mail-composer__title { margin: 0; font-size: 1.1rem; }
+.w-mail-composer__body {
+  display: grid;
+  gap: var(--weline-space-4, 1rem);
+  padding: var(--weline-space-4, 1rem);
+}
+.w-mail-composer__section-title { margin: 0 0 .5rem; font-size: .95rem; }
+.w-mail-composer__thread-list {
+  display: grid;
+  gap: .65rem;
+  max-height: 14rem;
+  overflow: auto;
+  padding: .25rem;
+}
+.w-mail-composer__msg {
+  border: 1px solid var(--color-border, rgba(0,0,0,.08));
+  border-radius: var(--weline-radius-md, .5rem);
+  padding: .65rem .75rem;
+  background: var(--color-bg-muted, rgba(0,0,0,.02));
+}
+.w-mail-composer__msg-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+  font-size: .75rem;
+  color: var(--color-text-muted, #666);
+  margin-bottom: .35rem;
+}
+.w-mail-composer__msg-body {
+  white-space: pre-wrap;
+  font-size: .9rem;
+  margin: 0;
+}
+.w-mail-composer__form-wrap {
+  display: grid;
+  gap: var(--weline-space-3, .75rem);
+}
+.w-mail-composer__actions { display: flex; justify-content: flex-end; }
+@media (max-width: 640px) {
+  .w-mail-composer__panel { max-height: 95vh; }
+}
